@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><title>BugOS</title><style type="text/css" id="current-color-scheme">.ColorScheme-Text { color:#16171C; } .ColorScheme-Background { color:#FFFFFF; }</style><defs>
+<linearGradient id="merk-l" x1="0" y1="0" x2="0.7" y2="1"><stop offset="0" stop-color="#FF5C50"/><stop offset="1" stop-color="#E52F3E"/></linearGradient>
+<linearGradient id="merk-r" x1="0.3" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#EE3F49"/><stop offset="1" stop-color="#C41D3A"/></linearGradient>
+<mask id="merk-kop" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256"><rect width="256" height="256" fill="#fff"/><circle cx="128" cy="146" r="100" fill="#000"/></mask>
+<mask id="merk-schild" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256"><rect width="256" height="256" fill="#fff"/><rect x="124.5" y="0" width="7" height="256" fill="#000"/></mask>
+<clipPath id="merk-links"><rect x="0" y="0" width="128" height="256"/></clipPath>
+<clipPath id="merk-rechts"><rect x="128" y="0" width="128" height="256"/></clipPath>
+</defs>
+<circle cx="128" cy="60" r="44" class="ColorScheme-Text" fill="currentColor" mask="url(#merk-kop)"/><g class="ColorScheme-Background" fill="currentColor" mask="url(#merk-kop)"><ellipse cx="105" cy="39" rx="8.5" ry="6.5" transform="rotate(-28 105 39)"/><ellipse cx="151" cy="39" rx="8.5" ry="6.5" transform="rotate(28 151 39)"/></g>
+<g mask="url(#merk-schild)">
+<circle cx="128" cy="146" r="94" fill="url(#merk-l)" clip-path="url(#merk-links)"/>
+<circle cx="128" cy="146" r="94" fill="url(#merk-r)" clip-path="url(#merk-rechts)"/>
+<g fill="#16171C"><circle cx="90" cy="120" r="18"/><circle cx="166" cy="120" r="18"/><circle cx="88" cy="186" r="14"/><circle cx="168" cy="186" r="14"/></g>
+</g></svg>

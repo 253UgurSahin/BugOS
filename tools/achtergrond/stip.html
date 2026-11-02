@@ -1,0 +1,57 @@
+<!doctype html><html><body style="margin:0;background:#000">
+<canvas id="c"></canvas>
+<script>
+const q = new URLSearchParams(location.search);
+const W = +q.get('w') || 1920, H = +q.get('h') || 1080, donker = q.get('t') === 'donker', v = q.get('v') || 'a';
+const c = document.getElementById('c'); c.width = W; c.height = H;
+const x = c.getContext('2d'); const S = W / 1920;
+
+// Achtergrond
+let g = x.createLinearGradient(0, 0, W, H);
+if (donker) { g.addColorStop(0, '#0C0D11'); g.addColorStop(1, '#16141A'); } else { g.addColorStop(0, '#FDFCFC'); g.addColorStop(1, '#F6F0F0'); }
+x.fillStyle = g; x.fillRect(0, 0, W, H);
+function gloed(cx, cy, r, kleur) { const rg = x.createRadialGradient(cx, cy, 0, cx, cy, r); rg.addColorStop(0, kleur); rg.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = rg; x.fillRect(0, 0, W, H); }
+
+const licht = ['#FFE9E5', '#FFCFC6', '#FFAA9B', '#FF8270', '#F9584F', '#E8364A', '#C8203F'];
+const donk  = ['#2A0E18', '#45111F', '#6A1526', '#931A30', '#BF2339', '#E33A45', '#FF6656'];
+const kleuren = donker ? donk : licht;
+const V = {
+  a: { cx: 1.06, cy: 1.18, R: 1320, dx: -70, dy: -6, dr: 128 },
+  b: { cx: 1.12, cy: 0.98, R: 1180, dx: -90, dy: 30, dr: 118 },
+  c: { cx: 0.98, cy: 1.30, R: 1400, dx: -40, dy: -40, dr: 135 },
+}[v];
+gloed(W * 0.85, H * 0.85, 1100 * S, donker ? 'rgba(229,47,62,0.20)' : 'rgba(255,120,100,0.10)');
+
+for (let i = 0; i < kleuren.length; i++) {
+  const ccx = W * V.cx + i * V.dx * S, ccy = H * V.cy + i * V.dy * S, R = (V.R - i * V.dr) * S;
+  x.save();
+  x.beginPath(); x.arc(ccx, ccy, R, 0, Math.PI * 2);
+  const k = kleuren[i];
+  const lg = x.createLinearGradient(ccx - R, ccy - R, ccx + R * 0.2, ccy + R * 0.2);
+  lg.addColorStop(0, k); lg.addColorStop(1, kleuren[Math.min(kleuren.length - 1, i + 1)]);
+  x.shadowColor = donker ? 'rgba(0,0,0,0.55)' : 'rgba(150,30,45,0.22)';
+  x.shadowBlur = 90 * S; x.shadowOffsetX = -12 * S; x.shadowOffsetY = -6 * S;
+  x.fillStyle = lg; x.fill();
+  x.shadowColor = 'transparent';
+  // zachte lichtrand langs de bovenkant van elke laag
+  x.clip();
+  const rg = x.createRadialGradient(ccx + R * 0.03, ccy + R * 0.03, R * 0.955, ccx, ccy, R);
+  rg.addColorStop(0, 'rgba(255,255,255,0)'); rg.addColorStop(1, donker ? 'rgba(255,170,160,0.18)' : 'rgba(255,255,255,0.30)');
+  x.fillStyle = rg; x.fillRect(0, 0, W, H);
+  x.restore();
+}
+// Eén inktzwarte stip: de knipoog naar het lieveheersbeestje
+if (q.get('stip') !== 'nee') {
+  const sx = W * 0.775, sy = H * 0.70, sr = 64 * S;
+  x.save();
+  const sg = x.createRadialGradient(sx - sr * 0.35, sy - sr * 0.4, sr * 0.1, sx, sy, sr);
+  sg.addColorStop(0, '#34353C'); sg.addColorStop(1, '#101115');
+  x.shadowColor = 'rgba(60,0,15,0.45)'; x.shadowBlur = 40 * S; x.shadowOffsetY = 10 * S;
+  x.fillStyle = sg; x.beginPath(); x.arc(sx, sy, sr, 0, Math.PI * 2); x.fill();
+  x.restore();
+}
+const img = x.getImageData(0, 0, W, H), d = img.data; let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const st = donker ? 6 : 4; for (let i = 0; i < d.length; i += 4) { const n = (rnd() - 0.5) * st; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
+x.putImageData(img, 0, 0);
+document.title = 'klaar';
+</script></body></html>

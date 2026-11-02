@@ -1,24 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
-  <title>BugOS</title>
-  <!-- Pootjes -->
-  <g stroke="#1F2328" stroke-width="6" stroke-linecap="round">
-    <line x1="30" y1="62" x2="14" y2="54"/><line x1="98" y1="62" x2="114" y2="54"/>
-    <line x1="28" y1="82" x2="12" y2="84"/><line x1="100" y1="82" x2="116" y2="84"/>
-    <line x1="34" y1="102" x2="22" y2="114"/><line x1="94" y1="102" x2="106" y2="114"/>
-  </g>
-  <!-- Kopje met voelsprieten -->
-  <path d="M52 30 Q44 14 36 12 M76 30 Q84 14 92 12" fill="none" stroke="#1F2328" stroke-width="5" stroke-linecap="round"/>
-  <circle cx="35" cy="12" r="5" fill="#1F2328"/><circle cx="93" cy="12" r="5" fill="#1F2328"/>
-  <ellipse cx="64" cy="38" rx="22" ry="16" fill="#1F2328"/>
-  <circle cx="55" cy="35" r="4" fill="#FFFFFF"/><circle cx="73" cy="35" r="4" fill="#FFFFFF"/>
-  <!-- Schild: twee rode vleugels -->
-  <path d="M64 46 C34 46 24 70 26 86 C28 106 46 118 64 118 Z" fill="#D93A3A"/>
-  <path d="M64 46 C94 46 104 70 102 86 C100 106 82 118 64 118 Z" fill="#E5484D"/>
-  <line x1="64" y1="46" x2="64" y2="118" stroke="#1F2328" stroke-width="4"/>
-  <!-- Stippen -->
-  <g fill="#1F2328">
-    <circle cx="46" cy="70" r="7"/><circle cx="82" cy="70" r="7"/>
-    <circle cx="42" cy="94" r="6"/><circle cx="86" cy="94" r="6"/>
-    <circle cx="56" cy="106" r="4.5"/><circle cx="72" cy="106" r="4.5"/>
-  </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><title>BugOS</title><style type="text/css" id="current-color-scheme">.ColorScheme-Text { color:#16171C; } .ColorScheme-Background { color:#FFFFFF; }</style><defs>
+<linearGradient id="bugos-l" x1="0" y1="0" x2="0.7" y2="1"><stop offset="0" stop-color="#FF5C50"/><stop offset="1" stop-color="#E52F3E"/></linearGradient>
+<linearGradient id="bugos-r" x1="0.3" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#EE3F49"/><stop offset="1" stop-color="#C41D3A"/></linearGradient>
+<mask id="bugos-kop" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256"><rect width="256" height="256" fill="#fff"/><circle cx="128" cy="146" r="100" fill="#000"/></mask>
+<mask id="bugos-schild" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256"><rect width="256" height="256" fill="#fff"/><rect x="124.5" y="0" width="7" height="256" fill="#000"/></mask>
+<clipPath id="bugos-links"><rect x="0" y="0" width="128" height="256"/></clipPath>
+<clipPath id="bugos-rechts"><rect x="128" y="0" width="128" height="256"/></clipPath>
+</defs>
+<circle cx="128" cy="60" r="44" class="ColorScheme-Text" fill="currentColor" mask="url(#bugos-kop)"/><g class="ColorScheme-Background" fill="currentColor" mask="url(#bugos-kop)"><ellipse cx="105" cy="39" rx="8.5" ry="6.5" transform="rotate(-28 105 39)"/><ellipse cx="151" cy="39" rx="8.5" ry="6.5" transform="rotate(28 151 39)"/></g>
+<g mask="url(#bugos-schild)">
+<circle cx="128" cy="146" r="94" fill="url(#bugos-l)" clip-path="url(#bugos-links)"/>
+<circle cx="128" cy="146" r="94" fill="url(#bugos-r)" clip-path="url(#bugos-rechts)"/>
+<g fill="#16171C"><circle cx="90" cy="120" r="18"/><circle cx="166" cy="120" r="18"/><circle cx="88" cy="186" r="14"/><circle cx="168" cy="186" r="14"/></g>
+</g></svg>

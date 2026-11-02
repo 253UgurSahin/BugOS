@@ -43,5 +43,5 @@ for (var i = 0; i < bureaubladen.length; i++) {
     var d = bureaubladen[i];
     d.wallpaperPlugin = "org.kde.image";
     d.currentConfigGroup = ["Wallpaper", "org.kde.image", "General"];
-    d.writeConfig("Image", "file:///usr/share/wallpapers/bugos/contents/images/3840x2160.svg");
+    d.writeConfig("Image", "file:///usr/share/wallpapers/bugos/");
 }
