@@ -11,19 +11,20 @@ Staat wat je zoekt er niet bij? Dan zoek je verder in "Meer apps".
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, "/usr/lib/bugos/python")
 
 from bugos_ui import (  # noqa: E402
-    ROOD, TAAL, bestaat, draai, gewone_knop, hoofdknop, lettertype, maak_app, start, t, titel, uitleg,
+    TAAL, Banner, Chip, Held, Kaart, Knop, Zijbalk, Zoekveld, bestaat, draai, label, maak_app, merk_label,
+    raster, sectie, start, t, uitvoeren,
 )
 from PySide6.QtCore import QProcess, QSize, Qt  # noqa: E402
 from PySide6.QtGui import QIcon, QPixmap  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
-    QScrollArea, QVBoxLayout, QWidget,
+    QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
 )
 
 CATALOGUS = Path("/usr/share/bugos/winkel.json")
@@ -32,6 +33,8 @@ ICOON_MAPPEN = [
     Path("/var/lib/flatpak/appstream/flathub/x86_64/active/icons/64x64"),
     Path.home() / ".local/share/flatpak/appstream/flathub/x86_64/active/icons/128x128",
 ]
+if os.environ.get("BUGOS_APPICONEN"):
+    ICOON_MAPPEN.insert(0, Path(os.environ["BUGOS_APPICONEN"]))
 
 
 def lees_catalogus(pad: Path = CATALOGUS) -> dict:
@@ -39,6 +42,8 @@ def lees_catalogus(pad: Path = CATALOGUS) -> dict:
 
 
 def geinstalleerd() -> set[str]:
+    if os.environ.get("BUGOS_GEINSTALLEERD") is not None:  # voor screenshots
+        return set(filter(None, os.environ["BUGOS_GEINSTALLEERD"].split(",")))
     if not bestaat("flatpak"):
         return set()
     _, uit = draai("flatpak", "list", "--app", "--columns=application", timeout=20)
@@ -47,9 +52,10 @@ def geinstalleerd() -> set[str]:
 
 def icoon_voor(app_id: str) -> QIcon:
     for map_ in ICOON_MAPPEN:
-        png = map_ / f"{app_id}.png"
-        if png.is_file():
-            return QIcon(QPixmap(str(png)))
+        for ext in (".png", ".svg"):
+            bestand = map_ / f"{app_id}{ext}"
+            if bestand.is_file():
+                return QIcon(str(bestand)) if ext == ".svg" else QIcon(QPixmap(str(bestand)))
     return QIcon.fromTheme(app_id, QIcon.fromTheme("application-x-executable"))
 
 
@@ -62,48 +68,54 @@ def past(app: dict, zoek: str) -> bool:
     return all(w in hooi for w in zoek.lower().split())
 
 
-class AppKaart(QFrame):
+class AppKaart(Kaart):
     def __init__(self, app: dict, winkel: "Winkel"):
-        super().__init__()
+        super().__init__(marge=18, ruimte=14, richting="h")
         self.app = app
         self.winkel = winkel
-        self.setObjectName("kaart")
-        self.setMinimumHeight(118)
-        lay = QHBoxLayout(self)
-        lay.setContentsMargins(14, 12, 14, 12)
-        lay.setSpacing(14)
+        self.setMinimumHeight(112)
         plaatje = QLabel()
         plaatje.setPixmap(icoon_voor(app["id"]).pixmap(QSize(56, 56)))
         plaatje.setFixedSize(60, 60)
-        lay.addWidget(plaatje, 0, Qt.AlignmentFlag.AlignTop)
+        self.lay.addWidget(plaatje, 0, Qt.AlignmentFlag.AlignTop)
         blok = QVBoxLayout()
         blok.setSpacing(4)
-        naam = QLabel(app["naam"])
-        naam.setFont(lettertype(13, True))
-        blok.addWidget(naam)
-        blok.addWidget(uitleg(tekst(app), 10))
-        self.knop = gewone_knop("")
-        self.knop.setMinimumWidth(130)
-        self.knop.clicked.connect(self.klik)
+        kop_rij = QHBoxLayout()
+        kop_rij.setSpacing(8)
+        kop_rij.addWidget(label(app["naam"], "kop3", wrap=False))
+        self.chip = Chip(t("Geïnstalleerd", "Installed"), "goed")
+        kop_rij.addWidget(self.chip)
+        kop_rij.addStretch(1)
+        blok.addLayout(kop_rij)
+        blok.addWidget(label(tekst(app), "klein"))
+        blok.addStretch(1)
         rij = QHBoxLayout()
         rij.addStretch(1)
+        self.knop = Knop("", "hoofd")
+        self.knop.setMinimumWidth(124)
+        self.knop.clicked.connect(self.klik)
         rij.addWidget(self.knop)
-        blok.addStretch(1)
         blok.addLayout(rij)
-        lay.addLayout(blok, 1)
+        self.lay.addLayout(blok, 1)
         self.ververs()
 
     def ververs(self) -> None:
         bezig = self.winkel.bezig_met == self.app["id"]
+        er_al = self.app["id"] in self.winkel.installed
+        self.chip.setVisible(er_al and not bezig)
         if bezig:
-            self.knop.setText(t("Bezig...", "Working..."))
+            self.knop.setText(t("Bezig…", "Working…"))
             self.knop.setEnabled(False)
-        elif self.app["id"] in self.winkel.installed:
+        elif er_al:
             self.knop.setText(t("Openen", "Open"))
+            self.knop.setProperty("soort", "rand")
             self.knop.setEnabled(True)
         else:
             self.knop.setText(t("Installeren", "Install"))
+            self.knop.setProperty("soort", "hoofd")
             self.knop.setEnabled(self.winkel.bezig_met is None)
+        self.knop.style().unpolish(self.knop)
+        self.knop.style().polish(self.knop)
 
     def klik(self) -> None:
         if self.app["id"] in self.winkel.installed:
@@ -115,73 +127,84 @@ class AppKaart(QFrame):
 class Winkel(QWidget):
     def __init__(self, catalogus: dict, begin_zoek: str = "", begin_app: str = ""):
         super().__init__()
+        self.setObjectName("venster")
         self.cat = catalogus
         self.installed = geinstalleerd()
         self.bezig_met: str | None = None
         self.kaarten: list[AppKaart] = []
+        self.kolommen = 2
         self.setWindowTitle(t("BugOS Winkel", "BugOS Store"))
-        self.resize(1060, 720)
+        self.resize(1180, 800)
 
         hoofd = QHBoxLayout(self)
         hoofd.setContentsMargins(0, 0, 0, 0)
         hoofd.setSpacing(0)
 
-        # Links: de onderwerpen.
-        self.lijst = QListWidget()
-        self.lijst.setFixedWidth(230)
-        self.lijst.setIconSize(QSize(24, 24))
-        self.lijst.setFont(lettertype(12))
-        self.lijst.setStyleSheet(
-            "QListWidget{border:none;padding:12px 8px;}"
-            "QListWidget::item{padding:10px 8px;border-radius:10px;}"
-            f"QListWidget::item:selected{{background:{ROOD};color:white;}}"
-            "QListWidget::item:hover:!selected{background:palette(midlight);}")
+        # Links: de onderwerpen
+        zij = QWidget()
+        zij.setObjectName("zijkant")
+        zij.setFixedWidth(264)
+        z = QVBoxLayout(zij)
+        z.setContentsMargins(18, 22, 18, 18)
+        z.setSpacing(14)
+        z.addWidget(merk_label(30))
+        z.addWidget(sectie(t("Onderwerpen", "Topics")))
+        self.lijst = Zijbalk()
         for c in self.cat["categorieen"]:
-            item = QListWidgetItem(QIcon.fromTheme(c["icoon"]), c["nl" if TAAL == "nl" else "en"])
-            item.setData(Qt.ItemDataRole.UserRole, c["id"])
-            self.lijst.addItem(item)
+            self.lijst.voeg_toe(c["icoon"], c["nl" if TAAL == "nl" else "en"], c["id"])
         if self.installed:
-            item = QListWidgetItem(QIcon.fromTheme("emblem-checked"), t("Mijn apps", "My apps"))
-            item.setData(Qt.ItemDataRole.UserRole, "_mijn")
-            self.lijst.addItem(item)
+            self.lijst.voeg_toe("checkmark", t("Mijn apps", "My apps"), "_mijn")
         self.lijst.currentRowChanged.connect(lambda _: self.toon())
-        hoofd.addWidget(self.lijst)
+        z.addWidget(self.lijst, 1)
+        meer = Knop(t("Meer apps zoeken", "Search more apps"), "stil", "edit-find")
+        meer.clicked.connect(self.meer_apps)
+        z.addWidget(meer)
+        hoofd.addWidget(zij)
 
-        # Rechts: zoeken en de apps.
-        rechts = QVBoxLayout()
-        rechts.setContentsMargins(28, 24, 28, 20)
-        rechts.setSpacing(14)
-        self.kop = titel("")
-        rechts.addWidget(self.kop)
-        self.zoek = QLineEdit()
-        self.zoek.setPlaceholderText(t("Zoek een app, bijvoorbeeld \"muziek\" of \"Zoom\"",
-                                       "Search for an app, for example \"music\" or \"Zoom\""))
-        self.zoek.setMinimumHeight(44)
-        self.zoek.setClearButtonEnabled(True)
-        self.zoek.textChanged.connect(lambda _: self.toon())
-        rechts.addWidget(self.zoek)
-        self.melding = uitleg("", 11)
-        self.melding.hide()
-        rechts.addWidget(self.melding)
-
-        self.raster_widget = QWidget()
-        self.raster = QGridLayout(self.raster_widget)
-        self.raster.setContentsMargins(0, 0, 0, 0)
-        self.raster.setSpacing(12)
+        # Rechts: zoeken en de apps
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
-        scroll.setWidget(self.raster_widget)
-        rechts.addWidget(scroll, 1)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        rechts_w = QWidget()
+        rechts_w.setObjectName("pagina")
+        rechts = QVBoxLayout(rechts_w)
+        rechts.setContentsMargins(36, 26, 36, 28)
+        rechts.setSpacing(18)
+        self.zoek = Zoekveld(t("Zoek een app, bijvoorbeeld \"muziek\" of \"Zoom\"",
+                               "Search for an app, for example \"music\" or \"Zoom\""))
+        self.zoek.textChanged.connect(lambda _: self.toon())
+        rechts.addWidget(self.zoek)
 
-        onder = QHBoxLayout()
-        onder.addWidget(uitleg(t("Niet gevonden wat je zoekt? Er zijn duizenden andere apps.",
-                                 "Didn't find what you need? There are thousands of other apps."), 11), 1)
-        meer = hoofdknop(t("Meer apps zoeken", "Search more apps"))
-        meer.clicked.connect(self.meer_apps)
-        onder.addWidget(meer)
-        rechts.addLayout(onder)
-        hoofd.addLayout(rechts, 1)
+        self.held = Held(150)
+        hb = QVBoxLayout()
+        hb.setSpacing(6)
+        hb.addWidget(label(t("Apps voor alles wat je doet", "Apps for everything you do"), "titel"))
+        hb.addWidget(label(t("Bekende, veilige apps. Installeren met één klik, updates gaan vanzelf.",
+                             "Well-known, safe apps. Install with one click, updates are automatic."), "sub"))
+        hbw = QWidget()
+        hbw.setLayout(hb)
+        hbw.setMaximumWidth(520)
+        self.held.lay.addWidget(hbw)
+        self.held.lay.addStretch(1)
+        rechts.addWidget(self.held)
+
+        self.kop = label("", "kop2")
+        rechts.addWidget(self.kop)
+        self.melding = Banner()
+        rechts.addWidget(self.melding)
+        self.raster_widget, self.raster = raster(2, 14)
+        rechts.addWidget(self.raster_widget)
+
+        onder = Kaart("true", marge=20, ruimte=14, richting="h")
+        onder.lay.addWidget(label(t("Niet gevonden wat je zoekt? Er zijn duizenden andere apps.",
+                                    "Didn't find what you need? There are thousands of other apps."), "sub"), 1)
+        meer2 = Knop(t("Meer apps zoeken", "Search more apps"), "rand", "edit-find")
+        meer2.clicked.connect(self.meer_apps)
+        onder.lay.addWidget(meer2)
+        rechts.addWidget(onder)
+        rechts.addStretch(1)
+        scroll.setWidget(rechts_w)
+        hoofd.addWidget(scroll, 1)
 
         self.proces = QProcess(self)
         self.proces.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
@@ -194,16 +217,18 @@ class Winkel(QWidget):
             gevonden = next((a for a in self.cat["apps"] if a["id"] == begin_app), None)
             if gevonden:
                 self.zoek.setText(gevonden["naam"])
+        self.lijst.setFocus()
 
-    # ----------------------------------------------------------------
+    # ------------------------------------------------------------------
     def toon(self) -> None:
         for k in self.kaarten:
             self.raster.removeWidget(k)
             k.deleteLater()
         self.kaarten = []
         zoek = self.zoek.text().strip()
-        item = self.lijst.currentItem()
-        cat_id = item.data(Qt.ItemDataRole.UserRole) if item else "aanbevolen"
+        rij = self.lijst.currentRow()
+        cat_id = self.lijst.sleutel(rij) if rij >= 0 else "aanbevolen"
+        self.held.setVisible(not zoek and cat_id == "aanbevolen")
         if zoek:
             apps = [a for a in self.cat["apps"] if past(a, zoek)]
             self.kop.setText(t(f"Zoeken: {zoek}", f"Search: {zoek}"))
@@ -212,30 +237,32 @@ class Winkel(QWidget):
             self.kop.setText(t("Mijn apps", "My apps"))
         else:
             apps = [a for a in self.cat["apps"] if cat_id in a["cat"]]
+            item = self.lijst.item(rij)
             self.kop.setText(item.text() if item else "")
-        kolommen = 1 if self.width() < 760 else 2 if self.width() < 1200 else 3
         for i, app in enumerate(apps):
             kaart = AppKaart(app, self)
             self.kaarten.append(kaart)
-            self.raster.addWidget(kaart, i // kolommen, i % kolommen)
-        self.raster.setRowStretch(len(apps) // kolommen + 1, 1)
+            self.raster.addWidget(kaart, i // self.kolommen, i % self.kolommen)
+        for k in range(3):
+            self.raster.setColumnStretch(k, 1 if k < self.kolommen else 0)
         if not apps:
-            self.melding.setText(t("Niet in de BugOS-selectie. Druk op \"Meer apps zoeken\" om verder te zoeken.",
-                                   "Not in the BugOS selection. Press \"Search more apps\" to search further."))
-            self.melding.show()
-        elif self.bezig_met is None:
-            self.melding.hide()
+            self.melding.zet(t("Niet in de BugOS-selectie. Druk op \"Meer apps zoeken\" om verder te zoeken.",
+                               "Not in the BugOS selection. Press \"Search more apps\" to search further."), "info")
+        elif self.bezig_met is None and not self.melding.tekst.text().startswith("✅"):
+            self.melding.zet("")
 
     def resizeEvent(self, e):  # noqa: N802
         super().resizeEvent(e)
-        if self.kaarten:
-            self.toon()
+        nieuw = max(1, min(3, (self.width() - 264 - 72) // 330))
+        if nieuw != self.kolommen:
+            self.kolommen = nieuw
+            if self.kaarten:
+                self.toon()
 
     def installeer(self, app: dict) -> None:
         self.bezig_met = app["id"]
-        self.melding.setText(t(f"{app['naam']} wordt geïnstalleerd. Dit kan een paar minuten duren...",
-                               f"Installing {app['naam']}. This can take a few minutes..."))
-        self.melding.show()
+        self.melding.zet(t(f"{app['naam']} wordt geïnstalleerd. Dit kan een paar minuten duren…",
+                           f"Installing {app['naam']}. This can take a few minutes…"), "bezig")
         for k in self.kaarten:
             k.ververs()
         self.proces.start("flatpak", ["install", "-y", "--noninteractive", "flathub", app["id"]])
@@ -246,11 +273,11 @@ class Winkel(QWidget):
         self.bezig_met = None
         self.installed = geinstalleerd() | ({app_id} if code == 0 else set())
         if code == 0:
-            self.melding.setText(t(f"✅ {naam} is geïnstalleerd. Je vindt het in het startmenu.",
-                                   f"✅ {naam} is installed. You can find it in the start menu."))
+            self.melding.zet(t(f"✅ {naam} is geïnstalleerd. Je vindt het in het startmenu.",
+                               f"✅ {naam} is installed. You can find it in the start menu."), "goed")
         else:
-            self.melding.setText(t(f"❌ {naam} installeren lukte niet. Heb je internet? Probeer het nog eens.",
-                                   f"❌ Installing {naam} failed. Are you online? Please try again."))
+            self.melding.zet(t(f"{naam} installeren lukte niet. Heb je internet? Probeer het nog eens.",
+                               f"Installing {naam} failed. Are you online? Please try again."), "fout")
         for k in self.kaarten:
             k.ververs()
 
@@ -276,9 +303,7 @@ def main() -> int:
         start("plasma-discover", args[0])
         return 0
     app = maak_app("bugos-winkel", "bugos-winkel", sys.argv)
-    w = Winkel(catalogus, begin_zoek, begin_app)
-    w.show()
-    return app.exec()
+    return uitvoeren(app, Winkel(catalogus, begin_zoek, begin_app))
 
 
 if __name__ == "__main__":
