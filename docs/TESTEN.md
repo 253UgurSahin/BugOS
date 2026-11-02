@@ -10,11 +10,10 @@
 
 1. Ga naar **Actions**, dan **BugOS ISO maken**, dan **Run workflow**.
 2. Kies `bugos` (gewone pc) of `bugos-nvidia` (pc met een Nvidia-kaart).
-3. Bij "tag" vul je in:
-   - `latest` als alles al op `main` staat
-   - de naam van de branch (bijvoorbeeld `claude-tender-bell-x7qsr1`) om een testversie te proberen
-4. Na ongeveer 30 minuten staat er onderaan de pagina een download (**Artifacts**).
-5. Zet het ISO-bestand op een USB-stick met [Fedora Media Writer](https://fedoraproject.org/workstation/download) of [balenaEtcher](https://etcher.balena.io/).
+3. Laat "tag" op `latest` staan en "soort" op `live` (de "probeer eerst"-stick).
+4. Zet "publiceren" aan als de ISO een echte download moet worden (een GitHub Release). Laat hem uit om alleen te testen.
+5. Na ongeveer 30 tot 60 minuten staat de ISO onderaan de pagina (**Artifacts**), of bij **Releases** als je hebt gepubliceerd.
+6. Zet hem op een USB-stick met **BugOS Overstap** (Windows), [Fedora Media Writer](https://fedoraproject.org/workstation/download) of [balenaEtcher](https://etcher.balena.io/).
 
 ## Stap 3: Proberen in een virtuele pc (het veiligst)
 
@@ -46,6 +45,9 @@ Herstart daarna de computer. Wil je terug? Kies dan in het opstartmenu de vorige
 - [ ] Open **Er werkt iets niet** en zet het geluid op stil: krijg je een "Repareer"-knop?
 - [ ] Open **Back-up** en maak een back-up naar een USB-stick
 - [ ] Probeer op een Windows-pc **BugOS Overstap** (stap 1 en 2 zijn veilig, die veranderen niets aan je pc)
+- [ ] Open de **BugOS Winkel** en installeer iets
+- [ ] Zet in Instellingen → Aan en uit het **nieuwe startmenu** en het **snelmenu** aan. Werkt het niet? Zet het dan weer uit.
+- [ ] Start de "probeer eerst"-stick op: verschijnt het welkomstscherm met "Eerst proberen" en "BugOS installeren"?
 
 ## BugOS Overstap (voor Windows) downloaden
 

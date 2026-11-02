@@ -58,7 +58,7 @@ Het belangrijkste idee: **BugOS kan niet stuk.**
 4. Bij de volgende keer opstarten draait de nieuwe versie.
 5. Problemen? Dan kies je in het opstartmenu de vorige versie, en alles is weer zoals gisteren.
 
-## Wat zit er nu al in (versie 0.2)
+## Wat zit er nu al in (versie 0.3)
 
 ### Apps die je ziet
 
@@ -70,7 +70,10 @@ Het belangrijkste idee: **BugOS kan niet stuk.**
 | Back-up | `bugos-backup` | Je bestanden met één knop naar een USB-schijf, en ook weer terug. Er wordt nooit iets weggegooid. |
 | Bestanden van Windows | `bugos-overstap` | Zet de bestanden, bladwijzers en achtergrond terug die je met BugOS Overstap van Windows hebt meegenomen. |
 | Game-modus aan/uit | `bugos-spelmodus` | Volle kracht, meldingen stil en een FPS-teller. |
-| BugOS Winkel, Bestanden, Schijven | (KDE) | KDE-programma's met een simpele BugOS-naam. |
+| BugOS Winkel | `bugos-winkel` | 37 bekende, veilige apps in 10 onderwerpen, installeren met één klik. "Meer apps zoeken" opent de grote KDE-winkel. |
+| Startmenu (proef) | `org.bugos.startmenu` | Grote zoekbalk, vastgezette apps, recente bestanden, alle apps per onderwerp en aan/uit-knoppen. Aanzetten kan in Instellingen → Aan en uit. |
+| Snelmenu (proef) | `org.bugos.snelmenu` | Grote knoppen voor wifi, bluetooth, game-modus, donker, niet storen en het volume. Aanzetten kan in Instellingen. |
+| Meer apps, Bestanden, Schijven | (KDE) | KDE-programma's met een simpele BugOS-naam. |
 
 ### Wat op de achtergrond gebeurt
 
@@ -93,16 +96,16 @@ Het belangrijkste idee: **BugOS kan niet stuk.**
 1. Controleren: kan deze pc BugOS aan? Het kijkt naar 64-bit, geheugen, UEFI, ruimte, BitLocker en Nvidia.
 2. Meenemen: documenten, foto's, muziek, video's, bureaublad, downloads, bladwijzers en achtergrond gaan naar een USB-schijf.
 3. Ruimte maken: Windows wordt kleiner gemaakt, zodat BugOS ernaast past.
-4. USB-stick maken: het BugOS .iso-bestand gaat op een USB-stick.
+4. USB-stick maken: BugOS wordt vanzelf gedownload (de goede versie voor jouw videokaart), gecontroleerd en op de USB-stick gezet.
 
 ### De bakkerij (`.github/workflows/`)
 
 | Workflow | Wat het doet |
 |---|---|
 | `build.yml` | Bouwt BugOS (gewoon en Nvidia), bij elke verandering en elke nacht. |
-| `iso.yml` | Maakt op verzoek een ISO voor de USB-stick. |
+| `iso.yml` | Maakt op verzoek een USB-stick (ISO). Standaard is dat de "probeer eerst"-stick met het nieuwe installatieprogramma. Op verzoek zet hij de ISO in stukjes van minder dan 2 GB in een GitHub Release. |
 | `windows-overstap.yml` | Controleert het Windows-programma op een echte Windows-computer en pakt het in. Bij een versie-tag (zoals `v0.2`) maakt hij er een download van. |
-| `website.yml` | Zet de website (`website/`) online via GitHub Pages. |
+| `website.yml` | Zet de website (`website/`) online via GitHub Pages. Staat voorlopig op handmatig. |
 
 ## Het stappenplan
 
@@ -112,29 +115,33 @@ Het belangrijkste idee: **BugOS kan niet stuk.**
 - [x] Een ISO voor de USB-stick op verzoek
 - [x] De eerste eigen BugOS-onderdelen
 
-### Fase 2: De eigen jas 🟡
+### Fase 2: De eigen jas ✅ (startmenu en snelmenu nog als proef)
 - [x] **BugOS Instellingen** met grote tegels en een zoekbalk
 - [x] Een update-melding voor wie "zelf" kiest
-- [x] De Winkel heet "BugOS Winkel" en Dolphin heet "Bestanden"
+- [x] **BugOS Winkel** in eigen stijl, met veilige en geteste apps vooraan
 - [x] Vaste favorieten in het startmenu
-- [ ] **Eigen startmenu** als Plasma-onderdeel (QML). Eerst testen op een echte BugOS-pc. Tot die tijd gebruiken we het KDE-startmenu met BugOS-instellingen.
-- [ ] **Snelmenu** rechtsonder in BugOS-stijl. KDE heeft dit al, wij passen het later aan.
-- [ ] De BugOS Winkel echt in eigen stijl, met veilige en geteste apps vooraan
+- [x] **Eigen startmenu**. Het staat als proef aan te zetten in Instellingen; zodra het op een echte pc getest is, wordt het de standaard.
+- [x] **Snelmenu** in BugOS-stijl, ook als proef
 
-### Fase 3: Overstappen 🟡
-- [x] **Windows-overstap**: pc-controle, bestanden meenemen, ruimte maken en de USB-stick schrijven
+### Fase 3: Overstappen ✅ (het ondertekenen wacht op de manager)
+- [x] **Windows-overstap**: pc-controle, bestanden meenemen, ruimte maken, BugOS downloaden en de USB-stick schrijven
 - [x] In BugOS: de bestanden van Windows terugzetten met één knop
-- [ ] Het installatieprogramma (Anaconda) in BugOS-stijl
-- [ ] Een plek om het ISO-bestand te downloaden. GitHub staat maar 2 GB per bestand toe en de ISO is groter, dus we hebben iets als Cloudflare R2 of SourceForge nodig.
-- [ ] Het Windows-programma ondertekenen, zodat Windows geen waarschuwing geeft
+- [x] **"Probeer eerst"-USB-stick** met het nieuwe installatieprogramma (Anaconda WebUI). Het stelt weinig vragen, waarschuwt bij BitLocker en legt bij Nvidia het blauwe sleutel-scherm uit.
+- [x] Een downloadplek voor de ISO: GitHub Releases, in stukjes van minder dan 2 GB. BugOS Overstap plakt ze vanzelf aan elkaar.
+- [ ] **Het Windows-programma ondertekenen**, zodat Windows geen waarschuwing geeft. Dit kost normaal geld (een certificaat). Voor open-source projecten kan het gratis via [SignPath Foundation](https://signpath.org). Aanvragen moet de eigenaar van de repo doen, dus **dit is een taak voor de manager**.
 
-### Fase 4: Oppoetsen 🟡
+### Fase 4: Oppoetsen ✅ (op de punten voor de manager na)
 - [x] Hulp-app "Er werkt iets niet"
 - [x] Back-up met één knop
 - [x] Vertalen zonder programmeren (woordenboekjes per taal)
-- [x] Eigen website met een downloadknop
-- [ ] Vrijwilligers vinden voor vertalingen
-- [ ] Een eigen domeinnaam voor de website
+- [x] Eigen website met een downloadknop (staat klaar, maar is nog niet online)
+- [ ] Vrijwilligers vinden voor vertalingen (**manager**)
+- [ ] Een eigen domeinnaam voor de website (**manager**)
+
+### Daarna: testen op echte computers
+- [ ] De "probeer eerst"-stick op een echte pc proberen
+- [ ] Startmenu en snelmenu testen en daarna standaard maken
+- [ ] BugOS Overstap op een echte Windows-pc proberen (stap 3 en 4 eerst op een reserve-pc)
 
 ## Dingen om op te letten
 
