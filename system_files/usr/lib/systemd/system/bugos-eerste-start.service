@@ -3,6 +3,7 @@ Description=BugOS: standaard-apps klaarzetten na installatie
 Wants=network-online.target
 After=network-online.target
 ConditionPathExists=!/var/lib/bugos/eerste-start-klaar
+ConditionKernelCommandLine=!rd.live.image
 
 [Service]
 Type=oneshot

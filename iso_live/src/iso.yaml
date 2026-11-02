@@ -1,0 +1,11 @@
+label: "BugOS-Live"
+grub2:
+  default: 0
+  timeout: 5
+  entries:
+    - name: "BugOS proberen of installeren"
+      linux: "/images/pxeboot/vmlinuz quiet rhgb root=live:CDLABEL=BugOS-Live enforcing=0 rd.live.image"
+      initrd: "/images/pxeboot/initrd.img"
+    - name: "BugOS (veilige stand: eenvoudig beeld)"
+      linux: "/images/pxeboot/vmlinuz quiet rhgb root=live:CDLABEL=BugOS-Live enforcing=0 rd.live.image nomodeset"
+      initrd: "/images/pxeboot/initrd.img"

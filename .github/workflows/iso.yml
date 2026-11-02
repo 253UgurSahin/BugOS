@@ -1,7 +1,15 @@
 ---
 # BugOS USB-stick maken (ISO)
 # Druk in GitHub op "Actions" -> "BugOS ISO maken" -> "Run workflow".
-# Na ongeveer een half uur staat er een ISO-bestand klaar om te downloaden.
+#
+#   soort = live      -> "Probeer eerst"-stick: BugOS start meteen op, met een
+#                        knop "BugOS installeren" (aangeraden)
+#   soort = klassiek  -> alleen het installatieprogramma (oude manier)
+#
+#   publiceren = aan  -> de ISO komt als download in een GitHub Release.
+#                        GitHub staat maar 2 GB per bestand toe, dus de ISO
+#                        wordt in stukjes geknipt. BugOS Overstap (Windows)
+#                        plakt ze vanzelf weer aan elkaar.
 name: BugOS ISO maken
 
 on:
@@ -14,12 +22,132 @@ on:
         type: choice
         options: [bugos, bugos-nvidia]
       tag:
-        description: "Welke bouw (latest = hoofdversie)"
+        description: "Welke bouw (latest = hoofdversie, of de branchnaam met - in plaats van /)"
         required: true
         default: latest
+      soort:
+        description: "Soort stick"
+        required: true
+        default: live
+        type: choice
+        options: [live, klassiek]
+      publiceren:
+        description: "Als download publiceren (GitHub Release)"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
-  iso:
+  live:
+    if: inputs.soort == 'live'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ruimte maken op de bouwcomputer
+        uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
+        with:
+          remove-codeql: true
+
+      - name: Namen bepalen
+        id: naam
+        run: |
+          REGISTRY="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
+          echo "image=${REGISTRY}/${{ inputs.variant }}:${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          echo "datum=$(date -u +%Y.%m.%d)" >> "$GITHUB_OUTPUT"
+          if [ "${{ inputs.variant }}" = bugos-nvidia ]; then echo "soort=nvidia" >> "$GITHUB_OUTPUT"; else echo "soort=main" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Inloggen bij GitHub Packages
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login ghcr.io -u "${{ github.actor }}" --password-stdin --authfile /tmp/ghcr-auth.json
+          sudo cp /tmp/ghcr-auth.json /run/containers/0/auth.json 2>/dev/null || true
+
+      - name: BugOS ophalen
+        run: sudo podman pull --authfile /tmp/ghcr-auth.json "${{ steps.naam.outputs.image }}"
+
+      - name: Live-omgeving bouwen
+        run: |
+          sudo podman build \
+            --cap-add sys_admin --security-opt label=disable --squash \
+            --secret id=ghcr,src=/tmp/ghcr-auth.json \
+            --build-arg BASE_IMAGE="${{ steps.naam.outputs.image }}" \
+            --build-arg IMAGE_REF="${{ steps.naam.outputs.image }}" \
+            --build-arg BUGOS_VARIANT="${{ steps.naam.outputs.soort }}" \
+            -t localhost/bugos-live:latest iso_live
+          sudo podman rmi "${{ steps.naam.outputs.image }}" || true
+          df -h /
+
+      - name: ISO maken (Titanoboa)
+        id: iso
+        uses: ublue-os/titanoboa@5c457c3d0518bd17e754be0fd98a60d29d26abb4
+        with:
+          image-ref: localhost/bugos-live:latest
+
+      - name: Naam en controlegetal
+        id: klaar
+        run: |
+          mkdir -p uit
+          NAAM="BugOS-${{ steps.naam.outputs.soort }}-${{ steps.naam.outputs.datum }}.iso"
+          mv "${{ steps.iso.outputs.iso-dest }}" "uit/${NAAM}"
+          (cd uit && sha256sum "${NAAM}" | tee "${NAAM}.sha256")
+          ls -la uit
+          echo "naam=${NAAM}" >> "$GITHUB_OUTPUT"
+
+      - name: ISO klaarzetten om te downloaden (7 dagen)
+        if: ${{ !inputs.publiceren }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.klaar.outputs.naam }}
+          path: uit/
+          retention-days: 7
+          compression-level: 0
+
+      - name: In stukjes knippen (max 2 GB per bestand)
+        if: ${{ inputs.publiceren }}
+        run: |
+          cd uit
+          NAAM="${{ steps.klaar.outputs.naam }}"
+          split -b 1900M -d -a 2 "${NAAM}" "${NAAM}.deel"
+          rm "${NAAM}"
+          python3 - "$NAAM" <<'PY'
+          import hashlib, json, pathlib, sys
+          naam = sys.argv[1]
+          delen = sorted(p for p in pathlib.Path(".").glob(naam + ".deel*"))
+          info = {
+              "naam": naam,
+              "sha256": open(naam + ".sha256").read().split()[0],
+              "delen": [{"bestand": p.name, "grootte": p.stat().st_size,
+                         "sha256": hashlib.sha256(p.read_bytes()).hexdigest()} for p in delen],
+          }
+          pathlib.Path("bugos-iso.json").write_text(json.dumps(info, indent=2))
+          print(json.dumps(info, indent=2))
+          PY
+
+      - name: Publiceren als GitHub Release
+        if: ${{ inputs.publiceren }}
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          tag_name: iso-${{ steps.naam.outputs.soort }}-${{ steps.naam.outputs.datum }}-${{ github.run_number }}
+          name: BugOS ${{ steps.naam.outputs.soort }} ${{ steps.naam.outputs.datum }} (USB-stick)
+          make_latest: false
+          prerelease: true
+          files: uit/*
+          body: |
+            BugOS voor op een USB-stick (${{ steps.naam.outputs.soort }}).
+
+            **Makkelijkst:** gebruik BugOS Overstap op Windows. Die downloadt dit vanzelf en maakt de USB-stick.
+
+            **Zelf doen:** download alle `.deel`-bestanden en plak ze aan elkaar:
+            - Linux/macOS: `cat ${{ steps.klaar.outputs.naam }}.deel* > ${{ steps.klaar.outputs.naam }}`
+            - Windows: `copy /b ${{ steps.klaar.outputs.naam }}.deel00 + ${{ steps.klaar.outputs.naam }}.deel01 + ... ${{ steps.klaar.outputs.naam }}`
+
+            Controlegetal (SHA-256) staat in het `.sha256`-bestand.
+
+  klassiek:
+    if: inputs.soort == 'klassiek'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -58,7 +186,7 @@ jobs:
       - name: ISO klaarzetten om te downloaden
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.variant }}-${{ inputs.tag }}-iso
+          name: ${{ inputs.variant }}-${{ inputs.tag }}-klassiek-iso
           path: ${{ steps.build.outputs.output-directory }}
           if-no-files-found: error
           retention-days: 7

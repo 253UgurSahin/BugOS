@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=BugOS Live
+Exec=bugos-live
+Icon=bugos-logo
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=2
+NoDisplay=true

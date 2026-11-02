@@ -1,0 +1,59 @@
+#!/usr/bin/python3
+"""BugOS Live - eerste scherm op de USB-stick: proberen of installeren?"""
+
+import subprocess
+import sys
+
+sys.path.insert(0, "/usr/lib/bugos/python")
+
+from bugos_ui import gewone_knop, hoofdknop, maak_app, t, titel, uitleg  # noqa: E402
+from PySide6.QtCore import Qt  # noqa: E402
+from PySide6.QtGui import QIcon  # noqa: E402
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget  # noqa: E402
+
+
+def main() -> int:
+    app = maak_app("bugos-live", "bugos-live", sys.argv)
+    w = QWidget()
+    w.setWindowTitle("BugOS")
+    w.resize(720, 460)
+    lay = QVBoxLayout(w)
+    lay.setContentsMargins(40, 36, 40, 32)
+    lay.setSpacing(16)
+    logo = QLabel()
+    logo.setPixmap(QIcon.fromTheme("bugos-logo").pixmap(96, 96))
+    logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    lay.addWidget(logo)
+    kop = titel(t("Welkom bij BugOS 🐞", "Welcome to BugOS 🐞"), 24)
+    kop.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    lay.addWidget(kop)
+    tekst = uitleg(t(
+        "BugOS draait nu vanaf de USB-stick. Er is nog niets aan je computer veranderd.\n\n"
+        "Kijk gerust rond. Bevalt het? Druk dan op \"BugOS installeren\". "
+        "Die knop staat ook op het bureaublad.",
+        "BugOS is now running from the USB stick. Nothing on your computer has changed yet.\n\n"
+        "Feel free to look around. Like it? Then press \"Install BugOS\". "
+        "That button is also on the desktop."), 13)
+    tekst.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    lay.addWidget(tekst)
+    lay.addStretch(1)
+    rij = QHBoxLayout()
+    proberen = gewone_knop(t("Eerst proberen", "Try first"))
+    installeren = hoofdknop(t("BugOS installeren", "Install BugOS"))
+    proberen.clicked.connect(w.close)
+
+    def installeer() -> None:
+        subprocess.Popen(["liveinst"], start_new_session=True)
+        w.close()
+
+    installeren.clicked.connect(installeer)
+    rij.addWidget(proberen)
+    rij.addStretch(1)
+    rij.addWidget(installeren)
+    lay.addLayout(rij)
+    w.show()
+    return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

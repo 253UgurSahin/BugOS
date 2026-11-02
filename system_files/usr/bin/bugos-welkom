@@ -312,8 +312,14 @@ class Welkom(QWidget):
 
 
 def main() -> int:
-    if "--eerste-keer" in sys.argv and KLAAR.exists():
-        return 0
+    if "--eerste-keer" in sys.argv:
+        if KLAAR.exists():
+            return 0
+        try:
+            if "rd.live.image" in Path("/proc/cmdline").read_text():
+                return 0  # op de live-USB toont bugos-live het welkomstscherm
+        except OSError:
+            pass
     app = QApplication(sys.argv)
     app.setApplicationName("bugos-welkom")
     app.setDesktopFileName("bugos-welkom")

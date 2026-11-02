@@ -1,0 +1,21 @@
+# BugOS "Probeer eerst"-USB-stick (live ISO)
+# ===========================================
+# Jip-en-Janneke: we nemen de gewone BugOS en doen er een installatie-
+# programma bij. Van de USB-stick start je BugOS meteen op om te proberen.
+# Bevalt het? Dan druk je op "BugOS installeren".
+#
+# Gebouwd door .github/workflows/iso.yml; daarna maakt Titanoboa er een ISO van.
+# Bouwen kan alleen met:  --cap-add sys_admin --security-opt label=disable
+
+ARG BASE_IMAGE=ghcr.io/253ugursahin/bugos:latest
+FROM ${BASE_IMAGE}
+
+# Welke BugOS op de computer komt na het installeren.
+ARG IMAGE_REF=ghcr.io/253ugursahin/bugos:latest
+ARG BUGOS_VARIANT=main
+
+COPY src /src
+RUN --mount=type=secret,id=ghcr,required=false \
+    --mount=type=cache,target=/var/tmp/libdnf5,id=libdnf5 \
+    IMAGE_REF="${IMAGE_REF}" BUGOS_VARIANT="${BUGOS_VARIANT}" /src/build.sh
+RUN rm -rf /src

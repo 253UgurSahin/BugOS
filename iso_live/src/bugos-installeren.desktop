@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Install BugOS
+Name[nl]=BugOS installeren
+Comment=Put BugOS on this computer
+Comment[nl]=Zet BugOS op deze computer
+Exec=liveinst
+Icon=bugos-logo
+Categories=System;
+Terminal=false
