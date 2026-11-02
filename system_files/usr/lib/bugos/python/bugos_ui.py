@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 from PySide6.QtCore import (
-    Property, QEasingCurve, QPropertyAnimation, QRectF, QSize, Qt, Signal,
+    Property, QEasingCurve, QPointF, QPropertyAnimation, QRectF, QSize, Qt, Signal,
 )
 from PySide6.QtGui import (
     QColor, QFont, QFontDatabase, QIcon, QLinearGradient, QPainter, QPainterPath, QPalette, QPen, QPixmap,
@@ -335,6 +335,25 @@ def uitleg(tekst: str, punten: int = 12) -> QLabel:
     return label(tekst, "sub" if punten >= 12 else "klein", kopieerbaar=True)
 
 
+def wit_icoon(ic: QIcon, maat: int) -> QIcon:
+    """Maak een (eenkleurig) pictogram wit, voor op een rode knop."""
+    uit = QIcon()
+    for schaal in (1, 2):
+        bron = ic.pixmap(QSize(maat, maat), schaal)
+        if bron.isNull():
+            continue
+        wit = QPixmap(bron.size())
+        wit.setDevicePixelRatio(bron.devicePixelRatio())
+        wit.fill(Qt.GlobalColor.transparent)
+        q = QPainter(wit)
+        q.drawPixmap(0, 0, bron)
+        q.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+        q.fillRect(wit.rect(), QColor("#FFFFFF"))
+        q.end()
+        uit.addPixmap(wit)
+    return uit if not uit.isNull() else ic
+
+
 class Knop(QPushButton):
     """Knop in de BugOS-stijl. soort: "hoofd" (rood), "gewoon", "stil" of "rand"."""
 
@@ -344,7 +363,8 @@ class Knop(QPushButton):
         if groot:
             self.setProperty("groot", "true")
         if icoon:
-            self.setIcon(QIcon.fromTheme(icoon))
+            ic = QIcon.fromTheme(icoon)
+            self.setIcon(wit_icoon(ic, 18) if soort == "hoofd" else ic)
             self.setIconSize(QSize(18, 18))
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setMinimumHeight(48 if groot else 42)
@@ -382,10 +402,13 @@ class IcoonChip(QWidget):
     vol=False -> zachte tint met het pictogram in eigen kleuren
     """
 
+    TEKENS = ("vink", "uitroep", "kruis")
+
     def __init__(self, icoon: str, tint: str = "rood", maat: int = 44, icoon_maat: int | None = None,
                  vol: bool = True):
         super().__init__()
-        self.icoon = QIcon.fromTheme(icoon, QIcon.fromTheme("application-x-executable"))
+        self.teken = icoon if icoon in self.TEKENS else ""
+        self.icoon = QIcon() if self.teken else QIcon.fromTheme(icoon, QIcon.fromTheme("application-x-executable"))
         self.tint = QColor(TINTEN.get(tint, tint))
         self.vol = vol
         self.icoon_maat = icoon_maat or int(maat * (0.5 if vol else 0.62))
@@ -420,6 +443,9 @@ class IcoonChip(QWidget):
             verloop.setColorAt(0, self.tint.lighter(118))
             verloop.setColorAt(1, self.tint)
             p.fillPath(pad, verloop)
+            if self.teken:
+                self._teken(p, r)
+                return
             wit = self._wit(m)
             if not wit.isNull():
                 p.drawPixmap(QRectF(x, x, m, m), wit, QRectF())
@@ -428,6 +454,29 @@ class IcoonChip(QWidget):
             achter.setAlphaF(0.22 if DONKER else 0.13)
             p.fillPath(pad, achter)
             self.icoon.paint(p, int(x), int(x), m, m)
+
+
+    def _teken(self, p: QPainter, r: QRectF) -> None:
+        """Strakke eigen tekens: vinkje, uitroepteken of kruis (wit)."""
+        w = r.width()
+        pen = QPen(QColor("#FFFFFF"), max(2.0, w * 0.085))
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        cx, cy = r.center().x(), r.center().y()
+        if self.teken == "vink":
+            p.drawPolyline([QPointF(cx - w * 0.2, cy + w * 0.01), QPointF(cx - w * 0.05, cy + w * 0.16),
+                            QPointF(cx + w * 0.22, cy - w * 0.14)])
+        elif self.teken == "kruis":
+            d = w * 0.16
+            p.drawLine(QPointF(cx - d, cy - d), QPointF(cx + d, cy + d))
+            p.drawLine(QPointF(cx + d, cy - d), QPointF(cx - d, cy + d))
+        else:
+            p.drawLine(QPointF(cx, cy - w * 0.2), QPointF(cx, cy + w * 0.04))
+            p.setBrush(QColor("#FFFFFF"))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawEllipse(QPointF(cx, cy + w * 0.19), w * 0.055, w * 0.055)
 
 
 class Chip(QLabel):
@@ -620,6 +669,112 @@ class Tegel(QPushButton):
 
     def past_bij(self, zoek: str) -> bool:
         return all(woord in self.zoektekst for woord in zoek.lower().split())
+
+
+class KeuzeKaart(QPushButton):
+    """Een grote kaart die je kunt aanklikken om iets te kiezen."""
+
+    def __init__(self, inhoud: QWidget):
+        super().__init__()
+        self.setObjectName("keuze")
+        self.setCheckable(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(14, 14, 14, 14)
+        lay.setSizeConstraint(QVBoxLayout.SizeConstraint.SetMinimumSize)
+        lay.addWidget(inhoud)
+        inhoud.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+
+class SchijfKiezer(QWidget):
+    """Laat aangesloten schijven zien als kaarten om aan te klikken."""
+
+    gewijzigd = Signal()
+
+    def __init__(self, leeg_tekst: str):
+        super().__init__()
+        self.lay = QVBoxLayout(self)
+        self.lay.setContentsMargins(0, 0, 0, 0)
+        self.lay.setSpacing(10)
+        self.leeg_tekst = leeg_tekst
+        self.kaarten: dict[str, KeuzeKaart] = {}
+        from PySide6.QtWidgets import QButtonGroup
+        self.groep = QButtonGroup(self)
+        self.groep.buttonClicked.connect(lambda _: self.gewijzigd.emit())
+        self.leeg = Kaart(marge=22, ruimte=16, richting="h")
+        self.leeg.lay.addWidget(IcoonChip("drive-removable-media-usb", "grijs", 48))
+        blok = QVBoxLayout()
+        blok.setSpacing(2)
+        blok.addWidget(label(leeg_tekst, "kop3"))
+        blok.addWidget(label(t("BugOS ziet hem vanzelf verschijnen.", "BugOS will notice it automatically."), "klein"))
+        self.leeg.lay.addLayout(blok, 1)
+        self.lay.addWidget(self.leeg)
+
+    def zet(self, items: list[tuple[str, str, str]]) -> None:
+        """items: (sleutel, naam, extra uitleg)"""
+        huidig = self.gekozen()
+        sleutels = [i[0] for i in items]
+        if sleutels == list(self.kaarten):
+            return
+        for k in self.kaarten.values():
+            self.groep.removeButton(k)
+            self.lay.removeWidget(k)
+            k.deleteLater()
+        self.kaarten = {}
+        for sleutel, naam, extra in items:
+            binnen = QWidget()
+            r = QHBoxLayout(binnen)
+            r.setContentsMargins(4, 2, 4, 2)
+            r.setSpacing(14)
+            r.addWidget(IcoonChip("drive-removable-media-usb", "turkoois", 44))
+            b = QVBoxLayout()
+            b.setSpacing(2)
+            b.addWidget(label(naam, "kop3"))
+            b.addWidget(label(extra, "klein"))
+            r.addLayout(b, 1)
+            k = KeuzeKaart(binnen)
+            self.groep.addButton(k)
+            self.lay.addWidget(k)
+            self.kaarten[sleutel] = k
+        self.leeg.setVisible(not items)
+        if items:
+            (self.kaarten.get(huidig) or next(iter(self.kaarten.values()))).setChecked(True)
+        self.gewijzigd.emit()
+
+    def gekozen(self) -> str | None:
+        for sleutel, k in self.kaarten.items():
+            if k.isChecked():
+                return sleutel
+        return None
+
+    def setEnabled(self, aan: bool) -> None:  # noqa: N802
+        for k in self.kaarten.values():
+            k.setEnabled(aan)
+
+
+def schijf_info(pad: Path) -> str:
+    """'32 GB vrij van 64 GB' voor een schijf."""
+    try:
+        g = shutil.disk_usage(str(pad))
+        return t(f"{g.free / 1024**3:.0f} GB vrij van {g.total / 1024**3:.0f} GB",
+                 f"{g.free / 1024**3:.0f} GB free of {g.total / 1024**3:.0f} GB")
+    except OSError:
+        return ""
+
+
+def kop_met_icoon(icoon: str, tint: str, titel_tekst: str, sub: str) -> QWidget:
+    """Paginakop met een groot icoontegeltje ervoor."""
+    w = QWidget()
+    r = QHBoxLayout(w)
+    r.setContentsMargins(0, 0, 0, 0)
+    r.setSpacing(20)
+    r.addWidget(IcoonChip(icoon, tint, 72), 0, Qt.AlignmentFlag.AlignTop)
+    b = QVBoxLayout()
+    b.setSpacing(6)
+    b.addWidget(label(titel_tekst, "titel"))
+    b.addWidget(label(sub, "sub"))
+    r.addLayout(b, 1)
+    return w
 
 
 class Zoekveld(QLineEdit):

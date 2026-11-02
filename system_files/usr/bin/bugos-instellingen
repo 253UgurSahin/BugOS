@@ -111,7 +111,7 @@ def groepen(ga_naar) -> list[tuple[str, list[Tegel]]]:
               "schijf harde partitie usb formatteren", "grijs"),
         ]),
         (t("Persoonlijk", "Personal"), [
-            T("color-management", t("Licht of donker", "Light or dark"),
+            T("contrast", t("Licht of donker", "Light or dark"),
               t("Kleuren en achtergrond", "Colors and wallpaper"),
               lambda: kde_instelling("kcm_colors"), "thema donker licht kleur achtergrond wallpaper", "oranje"),
             T("languages", t("Taal en regio", "Language and region"),

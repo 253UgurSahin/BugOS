@@ -6,77 +6,102 @@ import sys
 
 sys.path.insert(0, "/usr/lib/bugos/python")
 
-from bugos_ui import gewone_knop, hoofdknop, maak_app, t, titel, uitleg  # noqa: E402
-from PySide6.QtCore import Qt, QTimer  # noqa: E402
-from PySide6.QtGui import QIcon  # noqa: E402
+from bugos_ui import Chip, Knop, achtergrond_pad, draai, label, maak_app, t, uitvoeren  # noqa: E402
+from PySide6.QtCore import QRectF, QTimer  # noqa: E402
+from PySide6.QtGui import QColor, QIcon, QLinearGradient, QPainter, QPixmap  # noqa: E402
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget  # noqa: E402
+
+
+class Live(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("BugOS")
+        self.resize(960, 600)
+        self.beeld = QPixmap(achtergrond_pad(donker=True))
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(56, 52, 56, 44)
+        lay.setSpacing(18)
+
+        logo = QLabel()
+        logo.setPixmap(QIcon.fromTheme("bugos-logo", QIcon("/usr/share/bugos/logo.svg")).pixmap(76, 76))
+        lay.addWidget(logo)
+        kop = label(t("Welkom bij BugOS", "Welcome to BugOS"), "groot")
+        kop.setStyleSheet("color:#FFFFFF;")
+        lay.addWidget(kop)
+        tekst = label(t("BugOS draait nu vanaf de USB-stick. Er is nog niets aan je computer veranderd.\n"
+                        "Kijk gerust rond. Bevalt het? Druk dan op \"BugOS installeren\".",
+                        "BugOS is now running from the USB stick. Nothing on your computer has changed yet.\n"
+                        "Feel free to look around. Like it? Then press \"Install BugOS\"."), "sub")
+        tekst.setStyleSheet("color:rgba(255,255,255,0.78);font-size:16px;")
+        tekst.setMaximumWidth(560)
+        lay.addWidget(tekst)
+
+        net_rij = QHBoxLayout()
+        net_rij.setSpacing(12)
+        self.chip = Chip("", "grijs")
+        net_rij.addWidget(self.chip)
+        self.wifi = Knop(t("Wifi kiezen", "Choose Wi-Fi"), "rand", "network-wireless")
+        self.wifi.setStyleSheet("QPushButton{color:#FFFFFF;border:1px solid rgba(255,255,255,0.35);background:transparent;}"
+                                "QPushButton:hover{background:rgba(255,255,255,0.10);}")
+        self.wifi.clicked.connect(lambda: subprocess.Popen(["systemsettings", "kcm_networkmanagement"],
+                                                           start_new_session=True))
+        net_rij.addWidget(self.wifi)
+        net_rij.addStretch(1)
+        lay.addLayout(net_rij)
+        lay.addStretch(1)
+
+        rij = QHBoxLayout()
+        rij.setSpacing(14)
+        proberen = Knop(t("Eerst proberen", "Try first"), "rand", groot=True)
+        proberen.setStyleSheet("QPushButton{color:#FFFFFF;border:1px solid rgba(255,255,255,0.35);background:rgba(255,255,255,0.06);}"
+                               "QPushButton:hover{background:rgba(255,255,255,0.14);}")
+        self.installeren = Knop(t("BugOS installeren", "Install BugOS"), "hoofd", groot=True)
+        self.installeren.setMinimumWidth(220)
+        proberen.clicked.connect(self.close)
+        self.installeren.clicked.connect(self.installeer)
+        rij.addWidget(proberen)
+        rij.addWidget(self.installeren)
+        rij.addStretch(1)
+        lay.addLayout(rij)
+
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.kijk_internet)
+        self.timer.start(3000)
+        self.kijk_internet()
+
+    def kijk_internet(self) -> None:
+        code, uit = draai("nmcli", "-t", "-f", "CONNECTIVITY", "general", timeout=5)
+        online = code == 0 and uit.strip() == "full"
+        self.installeren.setEnabled(online)
+        self.wifi.setVisible(not online)
+        self.chip.setText(t("✓  Je hebt internet, je kunt installeren", "✓  You are online, you can install") if online
+                          else t("Om te installeren heb je internet nodig", "You need internet to install"))
+        self.chip.setStyleSheet(Chip("", "goed" if online else "let_op").styleSheet())
+
+    def installeer(self) -> None:
+        subprocess.Popen(["liveinst"], start_new_session=True)
+        self.close()
+
+    def paintEvent(self, _e):  # noqa: N802
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        r = QRectF(self.rect())
+        p.fillRect(r, QColor("#0E0F13"))
+        if not self.beeld.isNull():
+            bw, bh = self.beeld.width(), self.beeld.height()
+            schaal = max(r.width() / bw, r.height() / bh)
+            dw, dh = bw * schaal, bh * schaal
+            p.drawPixmap(QRectF(r.right() - dw, r.bottom() - dh, dw, dh), self.beeld, QRectF(0, 0, bw, bh))
+        g = QLinearGradient(0, 0, r.width(), 0)
+        g.setColorAt(0, QColor(14, 15, 19, 245))
+        g.setColorAt(0.5, QColor(14, 15, 19, 200))
+        g.setColorAt(1, QColor(14, 15, 19, 20))
+        p.fillRect(r, g)
 
 
 def main() -> int:
     app = maak_app("bugos-live", "bugos-live", sys.argv)
-    w = QWidget()
-    w.setWindowTitle("BugOS")
-    w.resize(720, 460)
-    lay = QVBoxLayout(w)
-    lay.setContentsMargins(40, 36, 40, 32)
-    lay.setSpacing(16)
-    logo = QLabel()
-    logo.setPixmap(QIcon.fromTheme("bugos-logo").pixmap(96, 96))
-    logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    lay.addWidget(logo)
-    kop = titel(t("Welkom bij BugOS 🐞", "Welcome to BugOS 🐞"), 24)
-    kop.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    lay.addWidget(kop)
-    tekst = uitleg(t(
-        "BugOS draait nu vanaf de USB-stick. Er is nog niets aan je computer veranderd.\n\n"
-        "Kijk gerust rond. Bevalt het? Druk dan op \"BugOS installeren\". "
-        "Die knop staat ook op het bureaublad.",
-        "BugOS is now running from the USB stick. Nothing on your computer has changed yet.\n\n"
-        "Feel free to look around. Like it? Then press \"Install BugOS\". "
-        "That button is also on the desktop."), 13)
-    tekst.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    lay.addWidget(tekst)
-    net = uitleg("", 13)
-    net.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    lay.addWidget(net)
-    wifi = gewone_knop(t("📶  Wifi kiezen", "📶  Choose Wi-Fi"))
-    wifi.clicked.connect(lambda: subprocess.Popen(["systemsettings", "kcm_networkmanagement"], start_new_session=True))
-    lay.addWidget(wifi, 0, Qt.AlignmentFlag.AlignHCenter)
-    lay.addStretch(1)
-    rij = QHBoxLayout()
-    proberen = gewone_knop(t("Eerst proberen", "Try first"))
-    installeren = hoofdknop(t("BugOS installeren", "Install BugOS"))
-    proberen.clicked.connect(w.close)
-
-    def installeer() -> None:
-        subprocess.Popen(["liveinst"], start_new_session=True)
-        w.close()
-
-    installeren.clicked.connect(installeer)
-
-    def kijk_internet() -> None:
-        try:
-            uit = subprocess.run(["nmcli", "-t", "-f", "CONNECTIVITY", "general"],
-                                 capture_output=True, text=True, timeout=5).stdout.strip()
-        except (OSError, subprocess.SubprocessError):
-            uit = ""
-        online = uit == "full"
-        installeren.setEnabled(online)
-        wifi.setVisible(not online)
-        net.setText(t("✅ Je hebt internet. Je kunt installeren.", "✅ You are online. You can install.") if online else
-                    t("Om te installeren heb je internet nodig. Kies eerst je wifi (of steek een kabel in).",
-                      "To install you need internet. Choose your Wi-Fi first (or plug in a cable)."))
-
-    timer = QTimer()
-    timer.timeout.connect(kijk_internet)
-    timer.start(3000)
-    kijk_internet()
-    rij.addWidget(proberen)
-    rij.addStretch(1)
-    rij.addWidget(installeren)
-    lay.addLayout(rij)
-    w.show()
-    return app.exec()
+    return uitvoeren(app, Live())
 
 
 if __name__ == "__main__":

@@ -19,13 +19,13 @@ sys.path.insert(0, "/usr/lib/bugos/python")
 
 import bugos_ui  # noqa: E402
 from bugos_ui import (  # noqa: E402
-    CONFIG, Chip, Groep, IcoonChip, K, Kaart, Knop, SchakelRij, Tegel, achtergrond_pad, bestaat, draai,
+    CONFIG, Chip, Groep, IcoonChip, K, Kaart, KeuzeKaart, Knop, SchakelRij, Tegel, achtergrond_pad, bestaat, draai,
     label, maak_app, ronde_pixmap, start, t, uitvoeren,
 )
 from PySide6.QtCore import QLocale, QPointF, QRectF, QSize, Qt, QTimer  # noqa: E402
 from PySide6.QtGui import QColor, QFont, QIcon, QLinearGradient, QPainter, QPen, QPixmap  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QButtonGroup, QHBoxLayout, QLabel, QLayout, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
+    QButtonGroup, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 KLAAR = CONFIG / "welkom-klaar"
@@ -278,21 +278,6 @@ def voorbeeld(donker: bool, b: int = 300, h: int = 176) -> QPixmap:
     return ronde_pixmap(pm, 24)
 
 
-class Keuze(QPushButton):
-    """Een grote keuzekaart (zoals 'Licht' of 'Donker')."""
-
-    def __init__(self, inhoud: QWidget):
-        super().__init__()
-        self.setObjectName("keuze")
-        self.setCheckable(True)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(14, 14, 14, 14)
-        lay.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
-        lay.addWidget(inhoud)
-        inhoud.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-
-
 class Uiterlijk(Pagina):
     def __init__(self):
         super().__init__(t("Licht of donker?", "Light or dark?"),
@@ -310,7 +295,7 @@ class Uiterlijk(Pagina):
             plaat.setPixmap(voorbeeld(donker))
             b.addWidget(plaat)
             b.addWidget(label(naam, "kop3"))
-            k = Keuze(binnen)
+            k = KeuzeKaart(binnen)
             k.clicked.connect(lambda _=False, d=donker: self.kies(d))
             self.groep.addButton(k)
             self.knoppen[donker] = k
@@ -365,7 +350,7 @@ class Updates(Pagina):
         b.addLayout(kop_rij)
         b.addWidget(label(sub_t, "klein"))
         r.addLayout(b, 1)
-        k = Keuze(binnen)
+        k = KeuzeKaart(binnen)
         self.groep.addButton(k)
         self.lay.addWidget(k)
         return k

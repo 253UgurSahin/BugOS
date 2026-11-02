@@ -7,7 +7,7 @@
     {"id": "foto", "nl": "Foto en video", "en": "Photo and video", "icoon": "applications-graphics"},
     {"id": "muziek", "nl": "Muziek en film", "en": "Music and film", "icoon": "applications-multimedia"},
     {"id": "gamen", "nl": "Gamen", "en": "Gaming", "icoon": "applications-games"},
-    {"id": "praten", "nl": "Chatten en bellen", "en": "Chat and calls", "icoon": "internet-chat"},
+    {"id": "praten", "nl": "Chatten en bellen", "en": "Chat and calls", "icoon": "dialog-messages"},
     {"id": "leren", "nl": "Leren en kinderen", "en": "Learning and kids", "icoon": "applications-education"},
     {"id": "handig", "nl": "Handig", "en": "Useful", "icoon": "applications-utilities"},
     {"id": "programmeren", "nl": "Programmeren", "en": "Coding", "icoon": "applications-development"}

@@ -15,6 +15,7 @@ in, open dit programma en druk op één knop. Dan:
 """
 
 import getpass
+import os
 import html
 import json
 import subprocess
@@ -50,6 +51,9 @@ def gebruikersmap(xdg: str, standaard: str) -> Path:
 
 def zoek_overstap() -> list[Path]:
     """Zoek op alle aangesloten schijven naar de map BugOS-Overstap."""
+    if os.environ.get("BUGOS_SCHIJVEN"):  # voor tests en screenshots
+        return [Path(p) / MAP for p in os.environ["BUGOS_SCHIJVEN"].split(":")
+                if (Path(p) / MAP / "bugos-overstap.json").is_file()]
     gebruiker = getpass.getuser()
     gevonden = []
     for basis in (Path("/run/media") / gebruiker, Path("/media") / gebruiker, Path("/media")):
@@ -174,102 +178,135 @@ def zonder_venster(bron: Path) -> int:
 # ------------------------------------------------------------------ venster ----
 
 def venster() -> int:
-    from bugos_ui import hoofdknop, maak_app, titel, uitleg
+    from bugos_ui import (
+        Banner, Groep, IcoonChip, Knop, SchijfKiezer, Voortgang, kop_met_icoon, label, maak_app, pagina, sectie,
+        uitvoeren,
+    )
     from PySide6.QtCore import QProcess, QTimer
-    from PySide6.QtWidgets import QComboBox, QHBoxLayout, QProgressBar, QVBoxLayout, QWidget
+    from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
+
+    class Overstap(QWidget):
+        def __init__(self):
+            super().__init__()
+            self.setObjectName("venster")
+            self.setWindowTitle(t("Bestanden van Windows", "Files from Windows"))
+            self.resize(780, 700)
+            w, lay = pagina()
+            buiten = QVBoxLayout(self)
+            buiten.setContentsMargins(0, 0, 0, 0)
+            buiten.addWidget(w)
+            lay.addWidget(kop_met_icoon("folder-download", "blauw", t("Je bestanden van Windows", "Your files from Windows"),
+                                        t("Heb je met \"BugOS Overstap\" je bestanden op een USB-schijf gezet? "
+                                          "Steek die schijf in en druk op de knop.",
+                                          "Did you put your files on a USB drive with \"BugOS Overstap\"? "
+                                          "Plug in that drive and press the button.")))
+            wat = Groep()
+            for icoon, tint, kop_t, sub_t in (
+                ("folder-download", "blauw", t("Documenten, foto's, muziek en video's", "Documents, photos, music and videos"),
+                 t("Komen op de goede plek. Wat al op BugOS staat, wordt nooit overschreven.",
+                   "Go to the right place. What's already on BugOS is never overwritten.")),
+                ("favorite", "geel", t("Bladwijzers", "Bookmarks"),
+                 t("Van Chrome, Edge en Brave, klaar om in Firefox te zetten.", "From Chrome, Edge and Brave, ready for Firefox.")),
+                ("insert-image", "oranje", t("Je achtergrond", "Your wallpaper"),
+                 t("Je oude Windows-achtergrond wordt ook je BugOS-achtergrond.",
+                   "Your old Windows wallpaper becomes your BugOS wallpaper too.")),
+            ):
+                rij = QWidget()
+                r = QHBoxLayout(rij)
+                r.setContentsMargins(18, 12, 18, 12)
+                r.setSpacing(14)
+                r.addWidget(IcoonChip(icoon, tint, 36))
+                b = QVBoxLayout()
+                b.setSpacing(1)
+                b.addWidget(label(kop_t, "kop3"))
+                b.addWidget(label(sub_t, "klein"))
+                r.addLayout(b, 1)
+                wat.voeg(rij)
+            lay.addWidget(wat)
+            lay.addWidget(sectie(t("Kies de schijf", "Choose the drive")))
+            self.kiezer = SchijfKiezer(t("Steek de USB-schijf met je Windows-bestanden in…",
+                                         "Plug in the USB drive with your Windows files…"))
+            lay.addWidget(self.kiezer)
+            self.melding = Banner()
+            lay.addWidget(self.melding)
+            self.balk = Voortgang()
+            self.balk.hide()
+            lay.addWidget(self.balk)
+            lay.addStretch(1)
+            rij = QHBoxLayout()
+            rij.addStretch(1)
+            self.knop = Knop(t("Zet mijn bestanden terug", "Restore my files"), "hoofd", "folder-download", groot=True)
+            rij.addWidget(self.knop)
+            lay.addLayout(rij)
+
+            self.proces = QProcess(self)
+            self.proces.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+            self.proces.readyReadStandardOutput.connect(self.lees)
+            self.proces.finished.connect(self.klaar)
+            self.wachtrij: list[tuple[str, list[str]]] = []
+            self.bron: Path | None = None
+            self.knop.clicked.connect(self.begin)
+            self.kiezer.gewijzigd.connect(lambda: self.knop.setEnabled(self.kiezer.gekozen() is not None))
+            self.timer = QTimer(self)
+            self.timer.timeout.connect(self.ververs)
+            self.timer.start(3000)
+            self.ververs()
+            self.kiezer.setFocus()
+
+        def ververs(self) -> None:
+            if self.proces.state() != QProcess.ProcessState.NotRunning or self.balk.isVisible():
+                return
+            items = []
+            for m in zoek_overstap():
+                i = info(m)
+                items.append((str(m), m.parent.name,
+                              t(f"Van {i.get('gebruiker', '?')} op {i.get('computer', '?')}",
+                                f"From {i.get('gebruiker', '?')} on {i.get('computer', '?')}")))
+            self.kiezer.zet(items)
+            self.knop.setEnabled(self.kiezer.gekozen() is not None)
+
+        def volgende(self) -> None:
+            if not self.wachtrij:
+                gedaan = afronden(self.bron)
+                self.balk.setValue(100)
+                self.melding.zet(t("Klaar! Je bestanden staan op hun plek.", "Done! Your files are in place.")
+                                 + ("\n\n• " + "\n• ".join(gedaan) if gedaan else ""), "goed")
+                self.knop.setEnabled(True)
+                self.kiezer.setEnabled(True)
+                return
+            tekst, cmd = self.wachtrij.pop(0)
+            self.melding.zet(tekst, "bezig")
+            self.balk.setValue(0)
+            self.proces.start(cmd[0], cmd[1:])
+
+        def lees(self) -> None:
+            for stuk in bytes(self.proces.readAllStandardOutput()).decode(errors="ignore").replace("\r", "\n").split():
+                if stuk.endswith("%") and stuk[:-1].isdigit():
+                    self.balk.setValue(int(stuk[:-1]))
+
+        def klaar(self, code: int, _s) -> None:
+            if code not in (0, 24):
+                self.melding.zet(t("Het lukte niet helemaal. Zit de schijf er nog in? Probeer het opnieuw.",
+                                   "It did not fully work. Is the drive still plugged in? Try again."), "fout")
+                self.wachtrij.clear()
+                self.knop.setEnabled(True)
+                self.kiezer.setEnabled(True)
+                return
+            self.volgende()
+
+        def begin(self) -> None:
+            gekozen = self.kiezer.gekozen()
+            if not gekozen:
+                return
+            self.bron = Path(gekozen)
+            self.wachtrij[:] = stappen(self.bron)
+            self.knop.setEnabled(False)
+            self.kiezer.setEnabled(False)
+            self.balk.show()
+            self.volgende()
 
     app = maak_app("bugos-overstap", "bugos-overstap", sys.argv)
-    w = QWidget()
-    w.setWindowTitle(t("Bestanden van Windows", "Files from Windows"))
-    w.resize(700, 480)
-    lay = QVBoxLayout(w)
-    lay.setContentsMargins(32, 28, 32, 28)
-    lay.setSpacing(14)
-    lay.addWidget(titel(t("Je bestanden van Windows", "Your files from Windows")))
-    lay.addWidget(uitleg(t(
-        "Heb je met \"BugOS Overstap\" op Windows je bestanden op een USB-schijf gezet? Steek die schijf in. "
-        "Bestanden die al op BugOS staan worden nooit overschreven.",
-        "Did you put your files on a USB drive with \"BugOS Overstap\" on Windows? Plug in that drive. "
-        "Files already on BugOS are never overwritten."), 12))
-    keuze = QComboBox()
-    keuze.setMinimumHeight(40)
-    lay.addWidget(keuze)
-    melding = uitleg("", 12)
-    lay.addWidget(melding)
-    balk = QProgressBar()
-    balk.setRange(0, 100)
-    balk.hide()
-    lay.addWidget(balk)
-    lay.addStretch(1)
-    rij = QHBoxLayout()
-    rij.addStretch(1)
-    knop = hoofdknop(t("Zet mijn bestanden terug", "Restore my files"))
-    rij.addWidget(knop)
-    lay.addLayout(rij)
-
-    proces = QProcess()
-    proces.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
-    wachtrij: list[tuple[str, list[str]]] = []
-    huidige = {"bron": None}
-
-    def ververs() -> None:
-        if proces.state() != QProcess.ProcessState.NotRunning or balk.isVisible():
-            return
-        keuze.clear()
-        for m in zoek_overstap():
-            i = info(m)
-            keuze.addItem(f"💾  {m.parent.name}  —  {i.get('gebruiker', '?')} @ {i.get('computer', '?')}", str(m))
-        if keuze.count() == 0:
-            keuze.addItem(t("Steek de USB-schijf met je Windows-bestanden in...",
-                            "Plug in the USB drive with your Windows files..."), None)
-        knop.setEnabled(keuze.currentData() is not None)
-
-    def volgende() -> None:
-        if not wachtrij:
-            gedaan = afronden(huidige["bron"])
-            balk.setValue(100)
-            melding.setText("✅ " + t("Klaar! Je bestanden staan op hun plek.", "Done! Your files are in place.")
-                            + ("\n\n• " + "\n• ".join(gedaan) if gedaan else ""))
-            knop.setEnabled(True)
-            keuze.setEnabled(True)
-            return
-        tekst, cmd = wachtrij.pop(0)
-        melding.setText(tekst)
-        balk.setValue(0)
-        proces.start(cmd[0], cmd[1:])
-
-    def lees() -> None:
-        for stuk in bytes(proces.readAllStandardOutput()).decode(errors="ignore").replace("\r", "\n").split():
-            if stuk.endswith("%") and stuk[:-1].isdigit():
-                balk.setValue(int(stuk[:-1]))
-
-    def klaar(code: int, _s) -> None:
-        if code not in (0, 24):
-            melding.setText(t("❌ Het lukte niet helemaal. Zit de schijf er nog in? Probeer het opnieuw.",
-                              "❌ It did not fully work. Is the drive still plugged in? Try again."))
-            wachtrij.clear()
-            knop.setEnabled(True)
-            keuze.setEnabled(True)
-            return
-        volgende()
-
-    def begin() -> None:
-        huidige["bron"] = Path(keuze.currentData())
-        wachtrij[:] = stappen(huidige["bron"])
-        knop.setEnabled(False)
-        keuze.setEnabled(False)
-        balk.show()
-        volgende()
-
-    proces.readyReadStandardOutput.connect(lees)
-    proces.finished.connect(klaar)
-    knop.clicked.connect(begin)
-    timer = QTimer()
-    timer.timeout.connect(ververs)
-    timer.start(3000)
-    ververs()
-    w.show()
-    return app.exec()
+    return uitvoeren(app, Overstap())
 
 
 if __name__ == "__main__":

@@ -18,9 +18,7 @@ from typing import Callable, Optional
 
 sys.path.insert(0, "/usr/lib/bugos/python")
 
-from bugos_ui import (  # noqa: E402
-    bestaat, draai, gewone_knop, hoofdknop, kde_instelling, start, t, titel, uitleg,
-)
+from bugos_ui import bestaat, draai, kde_instelling, start, t  # noqa: E402
 
 OK, LET_OP, PROBLEEM, ONBEKEND = "ok", "let_op", "probleem", "onbekend"
 
@@ -32,6 +30,7 @@ class Uitslag:
     tekst: str
     repareer: Optional[Callable[[], None]] = None
     repareer_tekst: str = ""
+    icoon: str = ""
 
 
 # ------------------------------------------------------------- controles ----
@@ -185,9 +184,11 @@ def alles_controleren() -> list[Uitslag]:
     uitslagen = []
     for c in CONTROLES:
         try:
-            uitslagen.append(c())
+            u = c()
         except Exception as e:  # een controle mag de app nooit laten crashen
-            uitslagen.append(Uitslag(c.__name__, ONBEKEND, str(e)))
+            u = Uitslag(c.__name__, ONBEKEND, str(e))
+        u.icoon = ICONEN.get(c.__name__, "")
+        uitslagen.append(u)
     return uitslagen
 
 
@@ -195,86 +196,119 @@ def alles_controleren() -> list[Uitslag]:
 
 TEKEN = {OK: "✅", LET_OP: "⚠️", PROBLEEM: "❌", ONBEKEND: "❔"}
 
+ICONEN = {
+    "controle_internet": "network-wired", "controle_wifi": "network-wireless", "controle_bluetooth": "network-bluetooth",
+    "controle_geluid": "audio-volume-high", "controle_printer": "printer-symbolic",
+    "controle_opslag": "drive-harddisk-symbolic", "controle_updates": "system-software-update",
+}
+TINT = {OK: "groen", LET_OP: "oranje", PROBLEEM: "rood", ONBEKEND: "grijs"}
+
 
 def venster() -> int:
-    from bugos_ui import maak_app
+    from bugos_ui import (
+        Chip, Groep, IcoonChip, Kaart, Knop, label, maak_app, pagina, sectie, uitvoeren,
+    )
     from PySide6.QtCore import QTimer
-    from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget
+    from PySide6.QtWidgets import QApplication, QHBoxLayout, QScrollArea, QVBoxLayout, QWidget
+
+    class Hulp(QScrollArea):
+        def __init__(self):
+            super().__init__()
+            self.setObjectName("venster")
+            self.setWindowTitle(t("Er werkt iets niet", "Something is not working"))
+            self.resize(880, 760)
+            self.setWidgetResizable(True)
+            w, lay = pagina()
+            self.setWidget(w)
+            self.laatste: list[Uitslag] = []
+
+            # Samenvatting bovenaan
+            self.kaart = Kaart(marge=24, ruimte=18, richting="h")
+            self.chip_plek = QHBoxLayout()
+            self.kaart.lay.addLayout(self.chip_plek)
+            blok = QVBoxLayout()
+            blok.setSpacing(4)
+            self.kop = label(t("Even kijken…", "Let me check…"), "titel")
+            self.sub = label(t("BugOS loopt alles na. Dit duurt maar een paar seconden.",
+                               "BugOS is checking everything. This only takes a few seconds."), "sub")
+            blok.addWidget(self.kop)
+            blok.addWidget(self.sub)
+            self.kaart.lay.addLayout(blok, 1)
+            opnieuw = Knop(t("Opnieuw controleren", "Check again"), "rand", "view-refresh")
+            opnieuw.clicked.connect(self.vul)
+            self.kaart.lay.addWidget(opnieuw)
+            lay.addWidget(self.kaart)
+
+            lay.addWidget(sectie(t("Wat ik heb nagekeken", "What I checked")))
+            self.groep_plek = QVBoxLayout()
+            self.groep_plek.setSpacing(0)
+            lay.addLayout(self.groep_plek)
+
+            onder = QHBoxLayout()
+            self.kopieer_knop = Knop(t("Uitslag kopiëren", "Copy results"), "stil", "edit-copy")
+            self.kopieer_knop.clicked.connect(self.kopieer)
+            onder.addWidget(self.kopieer_knop)
+            onder.addWidget(label(t("Handig om naar iemand te sturen die je helpt.",
+                                    "Handy to send to someone who is helping you."), "klein"), 1)
+            lay.addLayout(onder)
+            lay.addStretch(1)
+            self.groep = None
+            QTimer.singleShot(60, self.vul)
+
+        def vul(self) -> None:
+            self.laatste = alles_controleren()
+            problemen = [u for u in self.laatste if u.stand in (PROBLEEM, LET_OP)]
+            n = len(problemen)
+            while self.chip_plek.count():
+                oud = self.chip_plek.takeAt(0).widget()
+                if oud:
+                    oud.deleteLater()
+            if not problemen:
+                self.chip_plek.addWidget(IcoonChip("vink", "groen", 64))
+                self.kop.setText(t("Alles ziet er goed uit", "Everything looks good"))
+                self.sub.setText(t("Werkt er toch iets niet? Start de computer opnieuw op; dat lost veel op.",
+                                   "Still something wrong? Restart the computer; that fixes a lot."))
+            else:
+                ernstig = any(u.stand == PROBLEEM for u in problemen)
+                self.chip_plek.addWidget(IcoonChip("uitroep", "rood" if ernstig else "oranje", 64))
+                self.kop.setText(t(f"{n} {'ding' if n == 1 else 'dingen'} om naar te kijken",
+                                   f"{n} {'thing' if n == 1 else 'things'} to look at"))
+                self.sub.setText(t("Druk op de knop ernaast, dan probeert BugOS het voor je op te lossen.",
+                                   "Press the button next to it and BugOS will try to fix it for you."))
+
+            if self.groep is not None:
+                self.groep_plek.removeWidget(self.groep)
+                self.groep.deleteLater()
+            self.groep = Groep()
+            volgorde = {PROBLEEM: 0, LET_OP: 1, ONBEKEND: 2, OK: 3}
+            for u in sorted(self.laatste, key=lambda x: volgorde[x.stand]):
+                rij = QWidget()
+                r = QHBoxLayout(rij)
+                r.setContentsMargins(18, 14, 18, 14)
+                r.setSpacing(14)
+                r.addWidget(IcoonChip(u.icoon or "help-contents", TINT[u.stand], 40))
+                b = QVBoxLayout()
+                b.setSpacing(2)
+                b.addWidget(label(u.naam, "kop3"))
+                b.addWidget(label(u.tekst, "klein"))
+                r.addLayout(b, 1)
+                if u.repareer:
+                    knop = Knop(u.repareer_tekst or t("Repareer", "Fix"), "hoofd" if u.stand == PROBLEEM else "rand")
+                    knop.clicked.connect(lambda _=False, f=u.repareer: (f(), QTimer.singleShot(2500, self.vul)))
+                    r.addWidget(knop)
+                else:
+                    r.addWidget(Chip({OK: t("In orde", "OK"), LET_OP: t("Let op", "Note"),
+                                      PROBLEEM: t("Probleem", "Problem"), ONBEKEND: t("Onbekend", "Unknown")}[u.stand],
+                                     {OK: "goed", LET_OP: "let_op", PROBLEEM: "fout", ONBEKEND: "grijs"}[u.stand]))
+                self.groep.voeg(rij)
+            self.groep_plek.addWidget(self.groep)
+
+        def kopieer(self) -> None:
+            QApplication.clipboard().setText(als_tekst(self.laatste))
+            self.kopieer_knop.setText(t("Gekopieerd ✓", "Copied ✓"))
 
     app = maak_app("bugos-hulp", "bugos-hulp", sys.argv)
-    hoofd = QWidget()
-    hoofd.setWindowTitle(t("Er werkt iets niet", "Something is not working"))
-    hoofd.resize(760, 680)
-    lay = QVBoxLayout(hoofd)
-    lay.setContentsMargins(32, 28, 32, 24)
-    lay.setSpacing(14)
-    lay.addWidget(titel(t("Er werkt iets niet?", "Something not working?")))
-    samenvatting = uitleg(t("Even kijken...", "Let me check..."), 13)
-    lay.addWidget(samenvatting)
-
-    lijst = QWidget()
-    lijst_lay = QVBoxLayout(lijst)
-    lijst_lay.setContentsMargins(0, 0, 0, 0)
-    lijst_lay.setSpacing(10)
-    scroll = QScrollArea()
-    scroll.setWidgetResizable(True)
-    scroll.setFrameShape(QScrollArea.Shape.NoFrame)
-    scroll.setWidget(lijst)
-    lay.addWidget(scroll, 1)
-
-    onder = QHBoxLayout()
-    opnieuw = hoofdknop(t("Opnieuw controleren", "Check again"))
-    hulp = gewone_knop(t("Uitslag kopiëren", "Copy results"))
-    onder.addWidget(hulp)
-    onder.addStretch(1)
-    onder.addWidget(opnieuw)
-    lay.addLayout(onder)
-    laatste: list[Uitslag] = []
-
-    def vul() -> None:
-        nonlocal laatste
-        while lijst_lay.count():
-            item = lijst_lay.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        laatste = alles_controleren()
-        problemen = [u for u in laatste if u.stand in (PROBLEEM, LET_OP)]
-        if not problemen:
-            samenvatting.setText(t("Alles ziet er goed uit! 🎉 Werkt er toch iets niet? Start de computer opnieuw op; dat lost veel op.",
-                                   "Everything looks good! 🎉 Still something wrong? Restart the computer; that fixes a lot."))
-        else:
-            n = len(problemen)
-            samenvatting.setText(t(f"Ik vond {n} {'ding' if n == 1 else 'dingen'} om naar te kijken. Druk op de knop ernaast om het te repareren.",
-                                   f"I found {n} {'thing' if n == 1 else 'things'} to look at. Press the button next to it to fix it."))
-        volgorde = {PROBLEEM: 0, LET_OP: 1, ONBEKEND: 2, OK: 3}
-        for u in sorted(laatste, key=lambda x: volgorde[x.stand]):
-            kaart = QFrame()
-            kaart.setObjectName("kaart")
-            rij = QHBoxLayout(kaart)
-            rij.setContentsMargins(16, 12, 16, 12)
-            teken = QLabel(TEKEN[u.stand])
-            teken.setStyleSheet("font-size: 22px;")
-            rij.addWidget(teken)
-            blok = QVBoxLayout()
-            blok.addWidget(titel(u.naam, 13))
-            blok.addWidget(uitleg(u.tekst, 11))
-            rij.addLayout(blok, 1)
-            if u.repareer:
-                knop = gewone_knop(u.repareer_tekst or t("Repareer", "Fix"))
-                knop.clicked.connect(lambda _=False, f=u.repareer: (f(), QTimer.singleShot(2500, vul)))
-                rij.addWidget(knop)
-            lijst_lay.addWidget(kaart)
-        lijst_lay.addStretch(1)
-
-    def kopieer() -> None:
-        app.clipboard().setText(als_tekst(laatste))
-        hulp.setText(t("Gekopieerd ✓", "Copied ✓"))
-
-    opnieuw.clicked.connect(vul)
-    hulp.clicked.connect(kopieer)
-    hoofd.show()
-    QTimer.singleShot(50, vul)
-    return app.exec()
+    return uitvoeren(app, Hulp())
 
 
 def als_tekst(uitslagen: list[Uitslag]) -> str:

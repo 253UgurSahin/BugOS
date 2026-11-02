@@ -57,6 +57,8 @@ def bron_mappen() -> list[Path]:
 
 def schijven() -> list[Path]:
     """Alle aangesloten USB-schijven en losse schijven waarop je mag schrijven."""
+    if os.environ.get("BUGOS_SCHIJVEN"):  # voor tests en screenshots
+        return [Path(p) for p in os.environ["BUGOS_SCHIJVEN"].split(":") if Path(p).is_dir()]
     gebruiker = getpass.getuser()
     gevonden = []
     for basis in (Path("/run/media") / gebruiker, Path("/media") / gebruiker, Path("/media")):
@@ -128,153 +130,161 @@ def zonder_venster(schijf: Path) -> int:
 # ------------------------------------------------------------------ venster ----
 
 def venster() -> int:
-    from bugos_ui import gewone_knop, hoofdknop, maak_app, titel, uitleg
+    from bugos_ui import (
+        Banner, Chip, Knop, SchijfKiezer, Voortgang, kop_met_icoon, maak_app, pagina, schijf_info,
+        sectie, uitvoeren,
+    )
     from PySide6.QtCore import QProcess, QTimer
-    from PySide6.QtWidgets import QComboBox, QHBoxLayout, QProgressBar, QVBoxLayout, QWidget
+    from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
+
+    class Backup(QWidget):
+        def __init__(self):
+            super().__init__()
+            self.setObjectName("venster")
+            self.setWindowTitle(t("BugOS Back-up", "BugOS Backup"))
+            self.resize(760, 640)
+            w, lay = pagina()
+            buiten = QVBoxLayout(self)
+            buiten.setContentsMargins(0, 0, 0, 0)
+            buiten.addWidget(w)
+            lay.addWidget(kop_met_icoon("backup", "turkoois", t("Back-up", "Backup"),
+                                        t("Zet je documenten, foto's, muziek, video's, bureaublad en downloads veilig "
+                                          "op een USB-schijf. Er wordt nooit iets weggegooid.",
+                                          "Keep your documents, photos, music, videos, desktop and downloads safe on a "
+                                          "USB drive. Nothing is ever deleted.")))
+            self.wanneer = Chip(laatste_backup(), "grijs")
+            lay.addWidget(self.wanneer)
+            lay.addWidget(sectie(t("Kies een schijf", "Choose a drive")))
+            self.kiezer = SchijfKiezer(t("Steek een USB-schijf in…", "Plug in a USB drive…"))
+            lay.addWidget(self.kiezer)
+            self.melding = Banner()
+            lay.addWidget(self.melding)
+            self.balk = Voortgang()
+            self.balk.hide()
+            lay.addWidget(self.balk)
+            lay.addStretch(1)
+            rij = QHBoxLayout()
+            self.terugzetten = Knop(t("Terugzetten", "Restore"), "rand", "edit-undo", groot=True)
+            self.maak = Knop(t("Maak back-up", "Make backup"), "hoofd", "backup", groot=True)
+            rij.addWidget(self.terugzetten)
+            rij.addStretch(1)
+            rij.addWidget(self.maak)
+            lay.addLayout(rij)
+
+            self.wachtrij: list[list[str]] = []
+            self.proces = QProcess(self)
+            self.proces.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+            self.proces.readyReadStandardOutput.connect(self.lees)
+            self.proces.finished.connect(self.klaar_met_een)
+            self.stand: dict = {"klus": "", "schijf": None}
+            self.maak.clicked.connect(self.maak_backup)
+            self.terugzetten.clicked.connect(self.zet_terug)
+            self.kiezer.gewijzigd.connect(self.knoppen)
+            self.timer = QTimer(self)
+            self.timer.timeout.connect(self.ververs_schijven)
+            self.timer.start(3000)
+            self.ververs_schijven()
+            self.kiezer.setFocus()
+
+        def gekozen(self) -> Path | None:
+            g = self.kiezer.gekozen()
+            return Path(g) if g else None
+
+        def knoppen(self) -> None:
+            if self.proces.state() != QProcess.ProcessState.NotRunning:
+                return
+            s = self.gekozen()
+            self.maak.setEnabled(s is not None)
+            self.terugzetten.setEnabled(s is not None and backup_doel(s).exists())
+
+        def ververs_schijven(self) -> None:
+            if self.proces.state() != QProcess.ProcessState.NotRunning:
+                return
+            items = []
+            for s in schijven():
+                extra = schijf_info(s)
+                if backup_doel(s).exists():
+                    extra += t("  ·  heeft al een back-up", "  ·  already has a backup")
+                items.append((str(s), s.name, extra))
+            self.kiezer.zet(items)
+            self.knoppen()
+
+        def volgende(self) -> None:
+            if not self.wachtrij:
+                self.klaar()
+                return
+            cmd = self.wachtrij.pop(0)
+            self.proces.start(cmd[0], cmd[1:])
+
+        def lees(self) -> None:
+            tekst = bytes(self.proces.readAllStandardOutput()).decode(errors="ignore")
+            for stuk in tekst.replace("\r", "\n").split():
+                if stuk.endswith("%") and stuk[:-1].isdigit():
+                    self.balk.setValue(int(stuk[:-1]))
+
+        def klaar_met_een(self, code: int, _status) -> None:
+            if code not in (0, 24):
+                self.melding.zet(t("Het lukte niet helemaal. Zit de schijf er nog in? Probeer het opnieuw.",
+                                   "It did not fully work. Is the drive still plugged in? Try again."), "fout")
+                self.wachtrij.clear()
+                self.stop(False)
+                return
+            self.volgende()
+
+        def klaar(self) -> None:
+            if self.stand["klus"] == "maak":
+                onthoud(self.stand["schijf"])
+                self.wanneer.setText(laatste_backup())
+                self.melding.zet(t("Klaar! Je bestanden staan veilig op de schijf. Je mag hem er nu uithalen.",
+                                   "Done! Your files are safe on the drive. You can unplug it now."), "goed")
+            else:
+                self.melding.zet(t("Klaar! Je bestanden staan weer op je computer.",
+                                   "Done! Your files are back on your computer."), "goed")
+            self.stop(True)
+
+        def stop(self, gelukt: bool) -> None:
+            self.balk.setValue(100 if gelukt else self.balk.value())
+            self.kiezer.setEnabled(True)
+            self.knoppen()
+
+        def bezig(self, tekst: str) -> None:
+            self.melding.zet(tekst, "bezig")
+            self.balk.setValue(0)
+            self.balk.show()
+            self.maak.setEnabled(False)
+            self.terugzetten.setEnabled(False)
+            self.kiezer.setEnabled(False)
+
+        def maak_backup(self) -> None:
+            schijf = self.gekozen()
+            if schijf is None:
+                return
+            mappen = bron_mappen()
+            past, nodig, vrij = ruimte_genoeg(schijf, mappen)
+            if not past:
+                self.melding.zet(t(f"Te weinig ruimte op de schijf: nodig {nodig / 1024**3:.1f} GB, vrij {vrij / 1024**3:.1f} GB.",
+                                   f"Not enough space on the drive: need {nodig / 1024**3:.1f} GB, free {vrij / 1024**3:.1f} GB."),
+                                 "fout")
+                return
+            doel = backup_doel(schijf)
+            doel.mkdir(parents=True, exist_ok=True)
+            self.stand.update(klus="maak", schijf=schijf)
+            self.wachtrij[:] = [rsync_maak(m, doel) for m in mappen]
+            self.bezig(t("Bezig met kopiëren… Haal de schijf er niet uit.", "Copying… Do not unplug the drive."))
+            self.volgende()
+
+        def zet_terug(self) -> None:
+            schijf = self.gekozen()
+            if schijf is None:
+                return
+            self.stand.update(klus="terug", schijf=schijf)
+            self.wachtrij[:] = [rsync_terug(backup_doel(schijf), Path.home())]
+            self.bezig(t("Bezig met terugzetten… Nieuwere bestanden op je computer blijven gewoon staan.",
+                         "Restoring… Newer files on your computer are kept."))
+            self.volgende()
 
     app = maak_app("bugos-backup", "bugos-backup", sys.argv)
-    w = QWidget()
-    w.setWindowTitle(t("BugOS Back-up", "BugOS Backup"))
-    w.resize(680, 460)
-    lay = QVBoxLayout(w)
-    lay.setContentsMargins(32, 28, 32, 28)
-    lay.setSpacing(14)
-    lay.addWidget(titel(t("Back-up", "Backup")))
-    lay.addWidget(uitleg(t(
-        "Zet je documenten, foto's, muziek, video's, bureaublad en downloads veilig op een USB-schijf. "
-        "Er wordt nooit iets weggegooid.",
-        "Keep your documents, photos, music, videos, desktop and downloads safe on a USB drive. "
-        "Nothing is ever deleted."), 12))
-    wanneer = uitleg(laatste_backup(), 12)
-    lay.addWidget(wanneer)
-
-    keuze = QComboBox()
-    keuze.setMinimumHeight(40)
-    lay.addWidget(keuze)
-    melding = uitleg("", 12)
-    lay.addWidget(melding)
-    balk = QProgressBar()
-    balk.setRange(0, 100)
-    balk.setMinimumHeight(26)
-    balk.hide()
-    lay.addWidget(balk)
-    lay.addStretch(1)
-
-    rij = QHBoxLayout()
-    terugzetten = gewone_knop(t("Terugzetten", "Restore"))
-    maak = hoofdknop(t("Maak back-up", "Make backup"))
-    rij.addWidget(terugzetten)
-    rij.addStretch(1)
-    rij.addWidget(maak)
-    lay.addLayout(rij)
-
-    wachtrij: list[list[str]] = []
-    proces = QProcess()
-    stand = {"klus": "", "schijf": None}
-
-    def ververs_schijven() -> None:
-        if proces.state() != QProcess.ProcessState.NotRunning:
-            return
-        huidig = keuze.currentData()
-        keuze.clear()
-        for s in schijven():
-            heeft = backup_doel(s).exists()
-            keuze.addItem(f"💾  {s.name}" + (t("  (heeft al een back-up)", "  (already has a backup)") if heeft else ""), str(s))
-        if keuze.count() == 0:
-            keuze.addItem(t("Steek een USB-schijf in...", "Plug in a USB drive..."), None)
-        elif huidig:
-            i = keuze.findData(huidig)
-            if i >= 0:
-                keuze.setCurrentIndex(i)
-        heeft_schijf = keuze.currentData() is not None
-        maak.setEnabled(heeft_schijf)
-        terugzetten.setEnabled(heeft_schijf and backup_doel(Path(keuze.currentData())).exists())
-
-    keuze.currentIndexChanged.connect(lambda _: terugzetten.setEnabled(
-        keuze.currentData() is not None and backup_doel(Path(keuze.currentData())).exists()))
-
-    def volgende() -> None:
-        if not wachtrij:
-            klaar()
-            return
-        cmd = wachtrij.pop(0)
-        proces.start(cmd[0], cmd[1:])
-
-    def lees() -> None:
-        tekst = bytes(proces.readAllStandardOutput()).decode(errors="ignore")
-        for stuk in tekst.replace("\r", "\n").split():
-            if stuk.endswith("%") and stuk[:-1].isdigit():
-                balk.setValue(int(stuk[:-1]))
-
-    def klaar_met_een(code: int, _status) -> None:
-        if code not in (0, 24):
-            melding.setText(t("❌ Het lukte niet helemaal. Zit de schijf er nog in? Probeer het opnieuw.",
-                              "❌ It did not fully work. Is the drive still plugged in? Try again."))
-            wachtrij.clear()
-            stop(False)
-            return
-        volgende()
-
-    def klaar() -> None:
-        if stand["klus"] == "maak":
-            onthoud(stand["schijf"])
-            wanneer.setText(laatste_backup())
-            melding.setText(t("✅ Klaar! Je bestanden staan veilig op de schijf. Je mag hem er nu uithalen.",
-                              "✅ Done! Your files are safe on the drive. You can unplug it now."))
-        else:
-            melding.setText(t("✅ Klaar! Je bestanden staan weer op je computer.",
-                              "✅ Done! Your files are back on your computer."))
-        stop(True)
-
-    def stop(gelukt: bool) -> None:
-        balk.setValue(100 if gelukt else balk.value())
-        maak.setEnabled(True)
-        terugzetten.setEnabled(True)
-        keuze.setEnabled(True)
-
-    def bezig(tekst: str) -> None:
-        melding.setText(tekst)
-        balk.setValue(0)
-        balk.show()
-        maak.setEnabled(False)
-        terugzetten.setEnabled(False)
-        keuze.setEnabled(False)
-
-    def maak_backup() -> None:
-        schijf = Path(keuze.currentData())
-        mappen = bron_mappen()
-        past, nodig, vrij = ruimte_genoeg(schijf, mappen)
-        if not past:
-            melding.setText(t(f"❌ Te weinig ruimte op de schijf: nodig {nodig / 1024**3:.1f} GB, vrij {vrij / 1024**3:.1f} GB.",
-                              f"❌ Not enough space on the drive: need {nodig / 1024**3:.1f} GB, free {vrij / 1024**3:.1f} GB."))
-            return
-        doel = backup_doel(schijf)
-        doel.mkdir(parents=True, exist_ok=True)
-        stand.update(klus="maak", schijf=schijf)
-        wachtrij[:] = [rsync_maak(m, doel) for m in mappen]
-        bezig(t("Bezig met kopiëren... Haal de schijf er niet uit.", "Copying... Do not unplug the drive."))
-        volgende()
-
-    def zet_terug() -> None:
-        schijf = Path(keuze.currentData())
-        stand.update(klus="terug", schijf=schijf)
-        wachtrij[:] = [rsync_terug(backup_doel(schijf), Path.home())]
-        bezig(t("Bezig met terugzetten... Nieuwere bestanden op je computer blijven gewoon staan.",
-                "Restoring... Newer files on your computer are kept."))
-        volgende()
-
-    proces.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
-    proces.readyReadStandardOutput.connect(lees)
-    proces.finished.connect(klaar_met_een)
-    maak.clicked.connect(maak_backup)
-    terugzetten.clicked.connect(zet_terug)
-
-    timer = QTimer()
-    timer.timeout.connect(ververs_schijven)
-    timer.start(3000)
-    ververs_schijven()
-    w.show()
-    return app.exec()
+    return uitvoeren(app, Backup())
 
 
 if __name__ == "__main__":

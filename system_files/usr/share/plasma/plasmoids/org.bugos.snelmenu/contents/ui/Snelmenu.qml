@@ -46,7 +46,7 @@ Rectangle {
             SnelKnop { wat: "wifi"; icoon: "network-wireless"; tekst: "Wifi"; extra: "kcm_networkmanagement" }
             SnelKnop { wat: "bluetooth"; icoon: "preferences-system-bluetooth"; tekst: "Bluetooth"; extra: "kcm_bluetooth" }
             SnelKnop { wat: "spel"; icoon: "input-gaming"; tekst: snel.tr("Game-modus", "Game mode") }
-            SnelKnop { wat: "donker"; icoon: "weather-clear-night"; tekst: snel.tr("Donker", "Dark") }
+            SnelKnop { wat: "donker"; icoon: "contrast"; tekst: snel.tr("Donker", "Dark") }
             SnelKnop { wat: "niet_storen"; icoon: "notifications-disabled"; tekst: snel.tr("Niet storen", "Do not disturb") }
             SnelKnop { wat: "stil"; icoon: "audio-volume-muted"; tekst: snel.tr("Geluid uit", "Mute") }
         }
