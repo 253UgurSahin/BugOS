@@ -7,7 +7,7 @@ import sys
 sys.path.insert(0, "/usr/lib/bugos/python")
 
 from bugos_ui import gewone_knop, hoofdknop, maak_app, t, titel, uitleg  # noqa: E402
-from PySide6.QtCore import Qt  # noqa: E402
+from PySide6.QtCore import Qt, QTimer  # noqa: E402
 from PySide6.QtGui import QIcon  # noqa: E402
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget  # noqa: E402
 
@@ -36,6 +36,12 @@ def main() -> int:
         "That button is also on the desktop."), 13)
     tekst.setAlignment(Qt.AlignmentFlag.AlignCenter)
     lay.addWidget(tekst)
+    net = uitleg("", 13)
+    net.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    lay.addWidget(net)
+    wifi = gewone_knop(t("📶  Wifi kiezen", "📶  Choose Wi-Fi"))
+    wifi.clicked.connect(lambda: subprocess.Popen(["systemsettings", "kcm_networkmanagement"], start_new_session=True))
+    lay.addWidget(wifi, 0, Qt.AlignmentFlag.AlignHCenter)
     lay.addStretch(1)
     rij = QHBoxLayout()
     proberen = gewone_knop(t("Eerst proberen", "Try first"))
@@ -47,6 +53,24 @@ def main() -> int:
         w.close()
 
     installeren.clicked.connect(installeer)
+
+    def kijk_internet() -> None:
+        try:
+            uit = subprocess.run(["nmcli", "-t", "-f", "CONNECTIVITY", "general"],
+                                 capture_output=True, text=True, timeout=5).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            uit = ""
+        online = uit == "full"
+        installeren.setEnabled(online)
+        wifi.setVisible(not online)
+        net.setText(t("✅ Je hebt internet. Je kunt installeren.", "✅ You are online. You can install.") if online else
+                    t("Om te installeren heb je internet nodig. Kies eerst je wifi (of steek een kabel in).",
+                      "To install you need internet. Choose your Wi-Fi first (or plug in a cable)."))
+
+    timer = QTimer()
+    timer.timeout.connect(kijk_internet)
+    timer.start(3000)
+    kijk_internet()
     rij.addWidget(proberen)
     rij.addStretch(1)
     rij.addWidget(installeren)

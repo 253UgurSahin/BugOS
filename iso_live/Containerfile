@@ -15,5 +15,4 @@ ARG IMAGE_REF=ghcr.io/253ugursahin/bugos:latest
 ARG BUGOS_VARIANT=main
 
 COPY src /src
-RUN --mount=type=secret,id=ghcr,required=false \
-    IMAGE_REF="${IMAGE_REF}" BUGOS_VARIANT="${BUGOS_VARIANT}" /src/build.sh && rm -rf /src
+RUN IMAGE_REF="${IMAGE_REF}" BUGOS_VARIANT="${BUGOS_VARIANT}" /src/build.sh && rm -rf /src

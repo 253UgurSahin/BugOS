@@ -13,12 +13,10 @@ mkdir -p "$(realpath /root)"
 mount -o remount,rw /proc/sys || true
 
 # ---------------------------------------------------------------------------
-# 1. De BugOS die geïnstalleerd gaat worden, alvast op de stick zetten.
-#    Dan kan installeren ook zonder internet.
+# 1. BugOS wordt tijdens het installeren van internet gehaald ($IMAGE_REF).
+#    Zo blijft de stick half zo groot. (Zonder internet installeren kan met
+#    de "klassieke" ISO.)
 # ---------------------------------------------------------------------------
-AUTH=()
-[ -f /run/secrets/ghcr ] && AUTH=(--authfile /run/secrets/ghcr)
-podman pull "${AUTH[@]}" "$IMAGE_REF"
 
 # ---------------------------------------------------------------------------
 # 2. Kernel: voor Secure Boot moet de live-stick een door Fedora ondertekende
@@ -118,7 +116,7 @@ run0 --user=liveuser yad --timeout=0 --text-info --no-buttons --width=640 --heig
     </tmp/anaconda.log
 %end
 
-ostreecontainer --url=${IMAGE_REF} --transport=containers-storage --no-signature-verification
+ostreecontainer --url=${IMAGE_REF} --transport=registry --no-signature-verification
 %include /usr/share/anaconda/post-scripts/bugos-updates.ks
 EOF
 
