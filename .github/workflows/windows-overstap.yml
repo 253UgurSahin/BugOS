@@ -11,8 +11,8 @@ on:
     paths: ["windows-overstap/**"]
   workflow_dispatch:
     inputs:
-      plaatjes_in_log:
-        description: "Plaatjes van het venster ook als tekst in het logboek zetten (om na te kijken zonder te downloaden)"
+      plaatjes_vastleggen:
+        description: "Plaatjes van het venster in de repo zetten (docs/beelden/overstap)"
         type: boolean
         default: false
 
@@ -65,20 +65,22 @@ jobs:
           }
           Get-ChildItem fotos -Recurse -File | Format-Table FullName, Length -AutoSize
 
-      - name: Plaatjes in het logboek (alleen als je daarom vraagt)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.plaatjes_in_log }}
+      - name: Plaatjes in de repo zetten (alleen als je daarom vraagt)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.plaatjes_vastleggen }}
         shell: powershell
         run: |
-          Add-Type -AssemblyName System.Drawing
-          $codec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq 'image/jpeg' }
-          $par = New-Object System.Drawing.Imaging.EncoderParameters(1)
-          $par.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter([System.Drawing.Imaging.Encoder]::Quality, [long]80)
-          Get-ChildItem fotos -Recurse -Filter 'overstap-*.png' | Sort-Object FullName | ForEach-Object {
-            $beeld = [System.Drawing.Image]::FromFile($_.FullName)
-            $ms = New-Object System.IO.MemoryStream
-            $beeld.Save($ms, $codec, $par); $beeld.Dispose()
-            Write-Output "PLAATJE $($_.Directory.Name)-$($_.BaseName) $([Convert]::ToBase64String($ms.ToArray()))"
-          }
+          $doel = 'docs\beelden\overstap'
+          New-Item -ItemType Directory -Force $doel | Out-Null
+          Copy-Item fotos\schaal-1\overstap-*.png $doel -Force
+          Copy-Item fotos\schaal-1.5\overstap-1.png (Join-Path $doel 'overstap-1-150procent.png') -Force
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add $doel
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Plaatjes van BugOS Overstap (gemaakt op Windows)"
+            git push origin "HEAD:${{ github.ref_name }}"
+          } else { Write-Output 'Geen veranderingen.' }
 
       - name: Plaatjes bewaren
         uses: actions/upload-artifact@v4
