@@ -52,6 +52,14 @@ jobs:
         with:
           remove-codeql: true
 
+      - name: Container-opslag naar de grote extra schijf (/mnt)
+        run: |
+          df -h / /mnt
+          sudo mkdir -p /mnt/containers/storage /mnt/containers/tmp
+          printf '[storage]\ndriver = "overlay"\ngraphroot = "/mnt/containers/storage"\nrunroot = "/run/containers/storage"\n' | sudo tee /etc/containers/storage.conf
+          echo "TMPDIR=/mnt/containers/tmp" >> "$GITHUB_ENV"
+          sudo podman info --format '{{ .Store.GraphRoot }}'
+
       - name: Namen bepalen
         id: naam
         run: |
@@ -70,7 +78,7 @@ jobs:
 
       - name: Live-omgeving bouwen
         run: |
-          sudo podman build \
+          sudo TMPDIR=/mnt/containers/tmp podman build \
             --cap-add sys_admin --security-opt label=disable --squash \
             --secret id=ghcr,src=/tmp/ghcr-auth.json \
             --build-arg BASE_IMAGE="${{ steps.naam.outputs.image }}" \
@@ -78,7 +86,8 @@ jobs:
             --build-arg BUGOS_VARIANT="${{ steps.naam.outputs.soort }}" \
             -t localhost/bugos-live:latest iso_live
           sudo podman rmi "${{ steps.naam.outputs.image }}" || true
-          df -h /
+          sudo podman image prune -f || true
+          df -h / /mnt
 
       - name: ISO maken (Titanoboa)
         id: iso
