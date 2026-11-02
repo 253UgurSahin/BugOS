@@ -4,304 +4,788 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>BugOS</title>
-<meta name="description" content="BugOS: een gratis computer-systeem dat werkt zoals je van Windows gewend bent, maar niet stuk kan. Voor oma, gamers en programmeurs.">
-<link rel="icon" href="logo.svg" type="image/svg+xml">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap">
+<meta name="description" content="BugOS is een gratis besturingssysteem dat werkt zoals je gewend bent, maar niet stuk kan. Voor oma, gamers en programmeurs.">
+<meta name="theme-color" content="#DE2F3E">
+<meta property="og:title" content="BugOS: de computer die gewoon werkt">
+<meta property="og:description" content="Gratis, veilig en zo makkelijk als Windows. Kan niet stuk, houdt zichzelf bij, en is fijn voor oma, gamers en programmeurs.">
+<meta property="og:image" content="assets/og.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preload" href="fonts/funnel-display.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/atkinson-hyperlegible-next.woff2" as="font" type="font/woff2" crossorigin>
 <style>
-html{color-scheme:light}
-body{margin:0}
-/* Layout: één rustige leeskolom met brede "banden" (huis, bakkerij, stappen); taakbalk-mockup als blikvanger bovenaan. */
-:root{
-  --bg:#FBF8F7; --surface:#FFFFFF; --sunk:#F3ECEA; --ink:#1F2328; --muted:#5E6670;
-  --line:#E6DCDA; --red:#D93A3A; --red-soft:#FBE3E1; --ok:#1A7F37; --warn:#9A6700;
-  --desk1:#FDE7E4; --desk2:#E9A39C; --bar:rgba(255,255,255,.82); --bar-ink:#1F2328;
-  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
-  --f-body:"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
-  --f-mono:"JetBrains Mono", ui-monospace, "Cascadia Mono", monospace;
+/* Opbouw: één brede kolom met afwisselende banden; opening met het echte bureaublad,
+   daarna een tegelraster, interactieve uitleg (tijdmachine, licht/donker-schuif) en download. */
+@font-face { font-family: "Funnel Display"; src: url("fonts/funnel-display.woff2") format("woff2"); font-weight: 300 800; font-display: swap; }
+@font-face { font-family: "Atkinson Hyperlegible Next"; src: url("fonts/atkinson-hyperlegible-next.woff2") format("woff2"); font-weight: 200 800; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("fonts/jetbrains-mono.woff2") format("woff2"); font-weight: 100 800; font-display: swap; }
+
+:root {
+  --bg: #FCFBFB; --bg2: #F5F2F2; --vlak: #FFFFFF; --vlak2: #FAF8F8;
+  --inkt: #16171C; --tekst2: #575C68; --tekst3: #868B96; --lijn: #E9E4E4; --lijn2: #DDD7D7;
+  --rood: #DE2F3E; --rood-diep: #B81E33; --koraal: #FF5C50; --rood-zacht: #FDECEC; --rood-tekst: #C1222F;
+  --groen: #12904F; --groen-zacht: #E2F4EA; --geel: #B26B00; --geel-zacht: #FFF3DA;
+  --nacht: #0E0F13; --nacht2: #17181D;
+  --schaduw: 0 1px 2px rgba(22,23,28,.04), 0 10px 30px rgba(22,23,28,.07);
+  --schaduw-groot: 0 2px 6px rgba(22,23,28,.05), 0 40px 90px rgba(120,20,35,.18);
+  --f-display: "Funnel Display", "Segoe UI", system-ui, sans-serif;
+  --f-tekst: "Atkinson Hyperlegible Next", "Segoe UI", system-ui, sans-serif;
+  --f-code: "JetBrains Mono", ui-monospace, "Cascadia Mono", Menlo, monospace;
+  --r-groot: 28px; --r: 20px; --r-klein: 14px;
+  color-scheme: light;
 }
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#16181D; --surface:#1E2128; --sunk:#252932; --ink:#F2F3F5; --muted:#A3AAB5;
-  --line:#343944; --red:#FF6B6B; --red-soft:#3A2224; --ok:#6ED28C; --warn:#F0C85A;
-  --desk1:#3A2A2E; --desk2:#7A3A38; --bar:rgba(28,30,36,.85); --bar-ink:#F2F3F5; color-scheme:dark}}
-:root[data-theme="dark"]{
-  --bg:#16181D; --surface:#1E2128; --sunk:#252932; --ink:#F2F3F5; --muted:#A3AAB5;
-  --line:#343944; --red:#FF6B6B; --red-soft:#3A2224; --ok:#6ED28C; --warn:#F0C85A;
-  --desk1:#3A2A2E; --desk2:#7A3A38; --bar:rgba(28,30,36,.85); --bar-ink:#F2F3F5; color-scheme:dark}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E0F13; --bg2: #121318; --vlak: #18191E; --vlak2: #1D1F25;
+    --inkt: #EDEEF1; --tekst2: #A6ABB6; --tekst3: #7C828E; --lijn: #25272E; --lijn2: #30333B;
+    --rood: #F04452; --rood-diep: #D22E3E; --koraal: #FF6A5E; --rood-zacht: #2B1519; --rood-tekst: #FF7C85;
+    --groen: #3FD17F; --groen-zacht: #13291D; --geel: #F2B544; --geel-zacht: #2F2612;
+    --schaduw: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+    --schaduw-groot: 0 2px 6px rgba(0,0,0,.4), 0 40px 90px rgba(0,0,0,.55);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E0F13; --bg2: #121318; --vlak: #18191E; --vlak2: #1D1F25;
+  --inkt: #EDEEF1; --tekst2: #A6ABB6; --tekst3: #7C828E; --lijn: #25272E; --lijn2: #30333B;
+  --rood: #F04452; --rood-diep: #D22E3E; --koraal: #FF6A5E; --rood-zacht: #2B1519; --rood-tekst: #FF7C85;
+  --groen: #3FD17F; --groen-zacht: #13291D; --geel: #F2B544; --geel-zacht: #2F2612;
+  --schaduw: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+  --schaduw-groot: 0 2px 6px rgba(0,0,0,.4), 0 40px 90px rgba(0,0,0,.55);
+  color-scheme: dark;
+}
 
-*{box-sizing:border-box}
-body{background:var(--bg);color:var(--ink);font:400 1.0625rem/1.65 var(--f-body);
-  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 64px}
-.wrap{max-width:68rem;margin:0 auto;display:grid;gap:72px}
-.col{max-width:44rem}
-h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.1}
-h1{font-size:clamp(2.6rem,7vw,4.6rem);font-weight:800;letter-spacing:-.02em}
-h2{font-size:clamp(1.6rem,3.4vw,2.2rem);font-weight:800;letter-spacing:-.01em}
-h3{font-size:1.15rem;font-weight:600}
-p{margin:0}
-.eyebrow{font:600 .78rem/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--red)}
-.lead{font-size:1.25rem;color:var(--muted);max-width:38rem}
-section{display:grid;gap:24px}
-.sec-head{display:grid;gap:10px}
-code{font-family:var(--f-mono);font-size:.88em;background:var(--sunk);padding:.1em .35em;border-radius:5px}
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { animation: none !important; transition: none !important; } }
+body { margin: 0; background: var(--bg); color: var(--inkt); font: 400 18px/1.6 var(--f-tekst); text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+img { max-width: 100%; height: auto; display: block; }
+a { color: inherit; }
+:focus-visible { outline: 3px solid var(--rood); outline-offset: 3px; border-radius: 8px; }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 650; letter-spacing: -0.025em; line-height: 1.05; margin: 0; text-wrap: balance; }
+h2 { font-size: clamp(34px, 4.6vw, 58px); }
+h3 { font-size: 23px; letter-spacing: -0.015em; line-height: 1.2; }
+p { margin: 0; }
+.wrap { max-width: 1200px; margin: 0 auto; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+.oogje { display: inline-flex; align-items: center; gap: 8px; font: 600 13px/1 var(--f-code); letter-spacing: .06em; text-transform: uppercase; color: var(--rood-tekst); }
+.oogje::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--rood); box-shadow: 0 0 0 4px var(--rood-zacht); }
+.lead { font-size: clamp(18px, 1.7vw, 21px); color: var(--tekst2); max-width: 40rem; }
+.sectie { padding-block: clamp(72px, 10vw, 128px); }
+.sectie-kop { display: grid; gap: 20px; max-width: 46rem; margin-bottom: clamp(36px, 5vw, 56px); }
+.midden { text-align: center; margin-inline: auto; justify-items: center; }
+.overslaan { position: absolute; left: 12px; top: -60px; background: var(--inkt); color: var(--bg); padding: 10px 16px; border-radius: 10px; z-index: 100; text-decoration: none; }
+.overslaan:focus { top: calc(12px + env(safe-area-inset-top, 0px)); }
 
-/* Hero */
-.hero{display:grid;gap:28px;padding-top:56px}
-.brand{display:flex;align-items:center;gap:16px}
-.brand svg{width:64px;height:64px;flex:none}
-.hero .lead strong{color:var(--ink)}
+/* knoppen */
+.knop { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; padding: 0 26px; border-radius: 999px; font: 600 17px/1 var(--f-tekst); text-decoration: none; border: 1px solid transparent; cursor: pointer; transition: transform .15s ease, background .15s ease, box-shadow .15s ease; white-space: nowrap; }
+.knop svg { width: 18px; height: 18px; flex: none; }
+.knop-rood { background: linear-gradient(180deg, var(--koraal), var(--rood) 70%); color: #fff; box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 8px 22px rgba(222,47,62,.32); }
+.knop-rood:hover { transform: translateY(-1px); box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 12px 28px rgba(222,47,62,.42); }
+.knop-rand { background: var(--vlak); color: var(--inkt); border-color: var(--lijn2); }
+.knop-rand:hover { background: var(--vlak2); transform: translateY(-1px); }
+.knop-klein { min-height: 42px; padding: 0 18px; font-size: 15px; }
 
-/* Bureaublad-mockup */
-.desk{border-radius:16px;overflow:hidden;border:1px solid var(--line);aspect-ratio:16/8;max-width:100%;
-  background:linear-gradient(135deg,var(--desk1),var(--desk2));position:relative;min-height:220px}
-.desk .hills{position:absolute;inset:auto 0 0 0;height:45%;background:
-  radial-gradient(120% 90% at 20% 100%, color-mix(in srgb,var(--red) 55%,transparent) 0 60%, transparent 61%),
-  radial-gradient(120% 90% at 85% 110%, color-mix(in srgb,var(--red) 40%,transparent) 0 60%, transparent 61%)}
-.win{position:absolute;left:8%;top:12%;width:min(56%,420px);background:var(--surface);border-radius:12px;
-  border:1px solid var(--line);box-shadow:0 18px 40px rgba(0,0,0,.18);padding:16px 18px;display:grid;gap:8px}
-.win .bar{display:flex;justify-content:space-between;align-items:center;font:600 .8rem var(--f-body);color:var(--muted)}
-.win .dots{display:flex;gap:10px;font:600 .8rem var(--f-mono);color:var(--muted)}
-.win h3{font-size:1.25rem}
-.win .choice{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.win .choice span{border-radius:10px;padding:14px 8px;text-align:center;font-weight:700;font-size:.9rem;border:2px solid var(--line)}
-.win .choice .l{background:#fff;color:#1F2328}
-.win .choice .d{background:#1C1E24;color:#F2F3F5;border-color:var(--red)}
-.taskbar{position:absolute;left:12px;right:12px;bottom:10px;height:48px;border-radius:14px;background:var(--bar);
-  backdrop-filter:blur(10px);display:flex;align-items:center;gap:10px;padding:0 12px;color:var(--bar-ink);border:1px solid var(--line)}
-.taskbar .start{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:var(--red-soft)}
-.taskbar .start svg{width:26px;height:26px}
-.taskbar .app{width:30px;height:30px;border-radius:8px;background:var(--sunk);border:1px solid var(--line)}
-.taskbar .spacer{flex:1}
-.taskbar .tray{font:600 .8rem var(--f-mono);display:flex;gap:12px;align-items:center;white-space:nowrap}
-.cap{font-size:.9rem;color:var(--muted)}
-@media (max-width:560px){.win{left:5%;width:90%;top:8%}.win .bar .dots{display:none}.taskbar .tray .hide-s{display:none}}
+/* kop (navigatie) */
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 60; background: color-mix(in srgb, var(--bg) 86%, transparent); }
+.kopbalk { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 50; background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(16px) saturate(1.3); -webkit-backdrop-filter: blur(16px) saturate(1.3); border-bottom: 1px solid color-mix(in srgb, var(--lijn) 70%, transparent); }
+.kopbalk .wrap { display: flex; align-items: center; gap: 20px; min-height: 68px; }
+.merk { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font: 650 23px/1 var(--f-display); letter-spacing: -0.03em; }
+.merk img { width: 34px; height: 34px; }
+.nav { display: flex; gap: 4px; margin-left: auto; }
+.nav a { text-decoration: none; color: var(--tekst2); font-size: 16px; padding: 8px 14px; border-radius: 999px; transition: color .15s, background .15s; }
+.nav a:hover { color: var(--inkt); background: var(--bg2); }
+.thema { width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--lijn2); background: var(--vlak); color: var(--inkt); display: grid; place-items: center; cursor: pointer; }
+.thema svg { width: 19px; height: 19px; }
+.menuknop { display: none; }
+@media (max-width: 860px) {
+  .nav { display: none; position: absolute; left: 0; right: 0; top: 100%; flex-direction: column; background: var(--bg); border-bottom: 1px solid var(--lijn); padding: 8px max(20px, env(safe-area-inset-right, 0px)) 16px max(20px, env(safe-area-inset-left, 0px)); }
+  .nav.open { display: flex; }
+  .nav a { padding: 14px 12px; font-size: 18px; }
+  .kopbalk .acties { margin-left: auto; }
+  .menuknop { display: grid; }
+  .kopbalk .knop-download { display: none; }
+}
+.acties { display: flex; align-items: center; gap: 10px; }
 
-/* Drie mensen */
-.people{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:16px}
-.person{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;display:grid;gap:8px;align-content:start}
-.person .who{font:600 .78rem var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--red)}
-.person ul{margin:0;padding-left:1.1em;display:grid;gap:4px}
+/* opening */
+.held { position: relative; padding-top: clamp(48px, 7vw, 92px); overflow: hidden; }
+.held::before { content: ""; position: absolute; inset: auto -20% -10% auto; width: min(1100px, 120vw); aspect-ratio: 1; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(closest-side, transparent 52%, color-mix(in srgb, var(--koraal) 14%, transparent) 53%, transparent 56%, color-mix(in srgb, var(--rood) 12%, transparent) 64%, transparent 67%, color-mix(in srgb, var(--rood) 9%, transparent) 75%, transparent 78%, color-mix(in srgb, var(--rood) 6%, transparent) 86%, transparent 89%);
+  transform: translate(10%, 18%); }
+.held .tekst { position: relative; display: grid; justify-items: center; text-align: center; gap: 24px; }
+.held h1 { font-size: clamp(46px, 8.2vw, 104px); letter-spacing: -0.04em; max-width: 14ch; }
+.held h1 em { font-style: normal; background: linear-gradient(100deg, var(--koraal), var(--rood) 55%, var(--rood-diep)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.held .lead { max-width: 38rem; }
+.held .knoppen { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 4px; }
+.vinkjes { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 22px; color: var(--tekst2); font-size: 15px; }
+.vinkjes span { display: inline-flex; align-items: center; gap: 8px; }
+.vinkjes svg { width: 18px; height: 18px; color: var(--groen); }
+.nieuw { display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; max-width: 100%; padding: 7px 8px 7px 16px; border-radius: 999px; background: var(--vlak); border: 1px solid var(--lijn); box-shadow: var(--schaduw); font-size: 15px; color: var(--tekst2); text-decoration: none; }
+.nieuw b { color: var(--inkt); font-weight: 600; }
+.nieuw span { background: var(--rood-zacht); color: var(--rood-tekst); border-radius: 999px; padding: 3px 10px; font-weight: 600; font-size: 13px; }
+.scherm { position: relative; margin-top: clamp(44px, 6vw, 72px); }
+.scherm .lijst { border-radius: clamp(12px, 1.6vw, 22px); overflow: hidden; box-shadow: var(--schaduw-groot); border: 1px solid var(--lijn); background: var(--nacht); }
+.scherm img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; }
+@media (prefers-reduced-motion: no-preference) {
+  .held .tekst > * { animation: op .7s cubic-bezier(.2,.7,.2,1) both; }
+  .held .tekst > *:nth-child(2) { animation-delay: .06s; } .held .tekst > *:nth-child(3) { animation-delay: .12s; }
+  .held .tekst > *:nth-child(4) { animation-delay: .18s; } .held .tekst > *:nth-child(5) { animation-delay: .24s; }
+  .scherm { animation: op 1s .25s cubic-bezier(.2,.7,.2,1) both; }
+  @keyframes op { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+}
 
-/* Huis */
-.house{display:grid;gap:0;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
-.layer{display:grid;grid-template-columns:minmax(9rem,14rem) 1fr;gap:16px;padding:18px 20px;align-items:start}
-.layer + .layer{border-top:1px solid var(--line)}
-.layer.top{background:var(--red-soft)}
-.layer.mid{background:var(--surface)}
-.layer.bot{background:var(--sunk)}
-.layer .name{display:grid;gap:2px}
-.layer .name small{font:400 .82rem var(--f-mono);color:var(--muted)}
-.chips{display:flex;flex-wrap:wrap;gap:6px}
-.chips span{font-size:.9rem;padding:3px 10px;border-radius:999px;border:1px solid var(--line);background:var(--bg)}
-.layer.top .chips span{border-color:color-mix(in srgb,var(--red) 35%,var(--line))}
-@media (max-width:560px){.layer{grid-template-columns:1fr}}
+/* bewijs-strook */
+.strook { padding-block: 44px 8px; }
+.strook ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.strook li { display: flex; gap: 14px; align-items: flex-start; padding: 18px; border-radius: var(--r); background: var(--vlak); border: 1px solid var(--lijn); }
+.strook .ic { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: #fff; }
+.strook .ic svg { width: 21px; height: 21px; }
+.strook b { display: block; font-size: 16px; line-height: 1.3; }
+.strook small { display: block; color: var(--tekst2); font-size: 14.5px; line-height: 1.4; margin-top: 2px; }
+@media (max-width: 960px) { .strook ul { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .strook ul { grid-template-columns: 1fr; } }
 
-/* Tabel */
-.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
-table{border-collapse:collapse;width:100%;min-width:34rem}
-th,td{text-align:left;padding:12px 16px;vertical-align:top;border-bottom:1px solid var(--line)}
-tr:last-child td{border-bottom:0}
-th{font:600 .78rem var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--sunk)}
-td:first-child{font-weight:700;white-space:nowrap}
-td:nth-child(3){color:var(--muted)}
+/* kan niet stuk */
+.twee { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(32px, 6vw, 80px); align-items: center; }
+@media (max-width: 900px) { .twee { grid-template-columns: 1fr; } }
+.lijstje { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 12px; }
+.lijstje li { display: flex; gap: 12px; align-items: flex-start; }
+.lijstje svg { flex: none; width: 24px; height: 24px; color: var(--groen); margin-top: 2px; }
+.tijd { border-radius: var(--r-groot); background: var(--nacht); color: #EDEEF1; padding: clamp(22px, 3vw, 32px); box-shadow: var(--schaduw-groot); position: relative; overflow: hidden; border: 1px solid #23252C; }
+.tijd::after { content: ""; position: absolute; right: -120px; bottom: -160px; width: 360px; height: 360px; border-radius: 50%; background: radial-gradient(closest-side, rgba(229,47,62,.35), transparent); pointer-events: none; }
+.tijd .titel { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; font: 600 13px/1 var(--f-code); letter-spacing: .08em; text-transform: uppercase; color: #8F95A1; }
+.versies { display: grid; gap: 10px; position: relative; z-index: 1; }
+.versie { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 14px; border: 1px solid #2B2E36; background: #16171C; transition: border-color .3s, background .3s, transform .3s; }
+.versie .bol { width: 12px; height: 12px; border-radius: 50%; background: #3A3E48; flex: none; transition: background .3s, box-shadow .3s; }
+.versie b { font-family: var(--f-code); font-size: 15px; font-weight: 600; }
+.versie small { margin-left: auto; color: #8F95A1; font-size: 14px; }
+.versie.aan { border-color: #F04452; background: #1D1417; }
+.versie.aan .bol { background: #F04452; box-shadow: 0 0 0 5px rgba(240,68,82,.18); }
+.meld { margin-top: 18px; display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 14px; font-size: 16px; line-height: 1.45; position: relative; z-index: 1; transition: background .3s, color .3s; }
+.meld svg { width: 22px; height: 22px; flex: none; margin-top: 1px; }
+.meld.goed { background: rgba(63,209,127,.12); color: #8BE3B1; }
+.meld.fout { background: rgba(240,68,82,.14); color: #FF9AA1; }
+.tijd .knoppen { margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap; position: relative; z-index: 1; }
+.tijd .knop-rand { background: transparent; color: #EDEEF1; border-color: #3A3E48; }
+.tijd .knop-rand:hover { background: rgba(255,255,255,.06); }
 
-/* Bakkerij */
-.flow{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));gap:12px;counter-reset:s}
-.flow li{counter-increment:s;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;gap:6px;align-content:start}
-.flow li::before{content:"Stap " counter(s);font:600 .75rem var(--f-mono);color:var(--red);letter-spacing:.06em;text-transform:uppercase}
-.flow li.safe{border-color:var(--ok)}
-.flow li.safe::before{content:"Vangnet";color:var(--ok)}
+/* tegelraster */
+.raster { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 18px; }
+.tegel { position: relative; border-radius: var(--r-groot); background: var(--vlak); border: 1px solid var(--lijn); padding: clamp(22px, 2.6vw, 30px); display: flex; flex-direction: column; gap: 12px; overflow: hidden; min-width: 0; transition: transform .2s ease, box-shadow .2s ease; }
+.tegel:hover { transform: translateY(-3px); box-shadow: var(--schaduw); }
+.tegel p { color: var(--tekst2); font-size: 16.5px; line-height: 1.5; }
+.tegel .ic { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; color: #fff; flex: none; }
+.tegel .ic svg { width: 24px; height: 24px; }
+.s2 { grid-column: span 2; } .s3 { grid-column: span 3; } .s4 { grid-column: span 4; }
+.tegel .beeld { margin: 8px calc(-1 * clamp(22px, 2.6vw, 30px)) calc(-1 * clamp(22px, 2.6vw, 30px)); margin-top: auto; padding-top: 12px; flex: 1 1 auto; display: flex; min-height: 200px; }
+.tegel .beeld img { flex: 1; min-height: 0; height: 100%; object-fit: cover; object-position: left top; border-top-left-radius: 14px; box-shadow: -1px -1px 0 var(--lijn); width: calc(100% - clamp(22px, 2.6vw, 30px)); margin-left: clamp(22px, 2.6vw, 30px); }
+.tegel.nacht { background: var(--nacht); border-color: #23252C; color: #EDEEF1; }
+.tegel.nacht p { color: #A6ABB6; }
+.tegel.rood { background: linear-gradient(160deg, #FF6A5A, #DE2F3E 55%, #A8153A); border: none; color: #fff; }
+.tegel.rood p { color: rgba(255,255,255,.88); }
+.exe-demo { margin-top: auto; display: grid; gap: 12px; }
+.map { display: grid; gap: 4px; padding: 10px; border-radius: 16px; border: 1px solid var(--lijn); background: var(--vlak); }
+.map-kop { display: flex; align-items: center; gap: 8px; padding: 2px 6px 6px; font: 600 12px/1 var(--f-code); letter-spacing: .06em; text-transform: uppercase; color: var(--tekst2); }
+.map-kop svg { width: 16px; height: 16px; }
+.map-rij { position: relative; display: flex; align-items: center; gap: 12px; padding: 7px 8px; border-radius: 10px; font-size: 14.5px; color: var(--tekst2); }
+.map-rij.gekozen { background: var(--rood-zacht); color: var(--inkt); font-weight: 600; }
+.map-rij .bestand { width: 32px; height: 32px; border-radius: 8px; background: var(--bg2); border: 1px solid var(--lijn); display: grid; place-items: center; font: 700 9.5px/1 var(--f-code); color: var(--tekst2); flex: none; }
+.map-rij.gekozen .bestand { background: var(--rood); border-color: var(--rood); color: #fff; }
+.map-rij .muis { position: absolute; right: 22px; top: 18px; width: 22px; height: 22px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.25)); }
+.dialoog { margin-top: auto; border-radius: 16px; background: var(--bg2); border: 1px solid var(--lijn); padding: 16px; display: grid; gap: 12px; font-size: 15px; }
+.dialoog .rij { display: flex; gap: 12px; align-items: center; }
+.dialoog .bestand { width: 40px; height: 40px; border-radius: 10px; background: var(--vlak); border: 1px solid var(--lijn); display: grid; place-items: center; font: 700 11px/1 var(--f-code); color: var(--tekst2); flex: none; }
+.dialoog .ja { justify-self: end; display: flex; gap: 8px; }
+.dialoog .ja span { padding: 8px 14px; border-radius: 999px; font-weight: 600; font-size: 14px; background: var(--vlak); border: 1px solid var(--lijn2); }
+.dialoog .ja span.r { background: var(--rood); border-color: var(--rood); color: #fff; }
+.terminal { margin-top: auto; border-radius: 16px; background: #0B0C0F; border: 1px solid #23252C; padding: 16px 18px; font: 14.5px/1.75 var(--f-code); color: #D7DAE0; overflow-x: auto; }
+.terminal .p { color: #FF7C85; } .terminal .c { color: #6B7280; } .terminal .g { color: #3FD17F; }
+.slot { font: 700 clamp(42px, 5vw, 64px)/1 var(--f-display); letter-spacing: -0.04em; margin-top: auto; }
+.meter { margin-top: auto; display: grid; gap: 10px; }
+.meter .balk { height: 12px; border-radius: 6px; background: var(--bg2); overflow: hidden; border: 1px solid var(--lijn); }
+.meter .balk span { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--koraal), var(--rood)); }
+.meter small { color: var(--tekst2); font-size: 14px; display: flex; justify-content: space-between; }
+@media (max-width: 1020px) { .raster { grid-template-columns: repeat(2, minmax(0, 1fr)); } .s2, .s3 { grid-column: span 1; } .s4 { grid-column: span 2; } }
+@media (max-width: 640px) { .raster { grid-template-columns: 1fr; } .s2, .s3, .s4 { grid-column: span 1; } }
 
-/* Onderdelen */
-.parts{display:grid;grid-template-columns:repeat(auto-fit,minmax(18rem,1fr));gap:2px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden}
-.part{background:var(--surface);padding:16px 18px;display:grid;gap:4px}
-.part code{justify-self:start;background:var(--red-soft);color:var(--ink)}
+/* licht/donker-schuif */
+.vergelijk { position: relative; border-radius: clamp(12px, 1.6vw, 22px); overflow: hidden; box-shadow: var(--schaduw-groot); border: 1px solid var(--lijn); aspect-ratio: 16 / 10; background: var(--nacht); }
+.vergelijk img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.vergelijk .licht { clip-path: inset(0 calc(100% - var(--pos, 50%)) 0 0); }
+.vergelijk .grens { position: absolute; top: 0; bottom: 0; left: var(--pos, 50%); width: 3px; margin-left: -1.5px; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.12), 0 0 24px rgba(0,0,0,.3); pointer-events: none; }
+.vergelijk .greep { position: absolute; top: 50%; left: var(--pos, 50%); width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: #fff; box-shadow: 0 6px 20px rgba(0,0,0,.25); display: grid; place-items: center; color: #16171C; pointer-events: none; }
+.vergelijk .greep svg { width: 26px; height: 26px; }
+.vergelijk input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; }
+.vergelijk input:focus-visible ~ .greep { outline: 3px solid var(--rood); outline-offset: 3px; }
+.vergelijk .label { position: absolute; top: 16px; padding: 6px 14px; border-radius: 999px; font: 600 14px/1.2 var(--f-tekst); background: rgba(14,15,19,.7); color: #fff; backdrop-filter: blur(8px); pointer-events: none; }
+.vergelijk .label.l { left: 16px; background: rgba(255,255,255,.85); color: #16171C; }
+.vergelijk .label.r { right: 16px; }
 
-/* Fases */
-.phases{display:grid;gap:14px}
-.phase{display:grid;grid-template-columns:7.5rem 1fr;gap:18px;padding:18px 20px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
-.phase .tag{display:grid;gap:6px;align-content:start}
-.pill{justify-self:start;font:600 .72rem var(--f-mono);letter-spacing:.06em;text-transform:uppercase;padding:4px 9px;border-radius:999px;border:1px solid currentColor}
-.pill.now{color:var(--ok)}
-.pill.next{color:var(--red)}
-.pill.later{color:var(--muted)}
-.phase ul{margin:0;padding-left:1.1em;display:grid;gap:4px}
-.phase li.done{color:var(--muted)}
-.phase li.done::marker{content:"✓  ";color:var(--ok)}
-@media (max-width:560px){.phase{grid-template-columns:1fr}}
+/* voor wie (tabbladen) */
+.tabs { display: inline-flex; gap: 6px; padding: 6px; border-radius: 999px; background: var(--bg2); border: 1px solid var(--lijn); margin-bottom: 28px; max-width: 100%; overflow-x: auto; }
+.tabs button { border: 0; background: transparent; color: var(--tekst2); font: 600 16px/1 var(--f-tekst); padding: 12px 20px; border-radius: 999px; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; }
+.tabs button svg { width: 18px; height: 18px; }
+.tabs .kort { display: none; }
+@media (max-width: 520px) { .tabs button { padding: 11px 16px; } .tabs button svg, .tabs .lang { display: none; } .tabs .kort { display: inline; } }
+.tabs button[aria-selected="true"] { background: var(--vlak); color: var(--inkt); box-shadow: var(--schaduw); }
+.paneel { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(28px, 5vw, 64px); align-items: center; }
+.paneel[hidden] { display: none; }
+.paneel h3 { font-size: clamp(28px, 3vw, 38px); }
+.paneel .lijstje { margin-top: 18px; }
+.paneel .foto { border-radius: var(--r); overflow: hidden; border: 1px solid var(--lijn); box-shadow: var(--schaduw-groot); background: var(--vlak); }
+@media (max-width: 900px) { .paneel { grid-template-columns: 1fr; } }
 
-/* Let op */
-.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));gap:16px}
-.note{border-left:3px solid var(--warn);padding:4px 0 4px 16px;display:grid;gap:4px}
-.note h3{font-size:1.02rem}
-.note p{color:var(--muted);font-size:.98rem}
+/* overstappen */
+.stappen { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; counter-reset: stap; }
+.stappen li { counter-increment: stap; border-radius: var(--r); background: var(--vlak); border: 1px solid var(--lijn); padding: 24px; display: grid; gap: 10px; align-content: start; position: relative; }
+.stappen li::before { content: counter(stap); font: 650 15px/1 var(--f-display); width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--rood-zacht); color: var(--rood-tekst); }
+.stappen h3 { font-size: 20px; }
+.stappen p { color: var(--tekst2); font-size: 16px; line-height: 1.5; }
+@media (max-width: 960px) { .stappen { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .stappen { grid-template-columns: 1fr; } }
+.overstap-band { margin-top: 28px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(24px, 4vw, 48px); align-items: center; padding: clamp(24px, 3vw, 36px); border-radius: var(--r-groot); background: var(--bg2); border: 1px solid var(--lijn); }
+.overstap-band .foto { border-radius: 16px; overflow: hidden; border: 1px solid var(--lijn); box-shadow: var(--schaduw); }
+@media (max-width: 860px) { .overstap-band { grid-template-columns: 1fr; } }
 
-footer{color:var(--muted);font-size:.92rem;border-top:1px solid var(--line);padding-top:20px;display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-between}
-a{color:var(--red);text-underline-offset:3px}
-a:focus-visible{outline:2px solid var(--red);outline-offset:2px;border-radius:3px}
-.knop{display:inline-block;background:var(--red);color:#fff;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:12px}
-.knop.licht{background:transparent;color:var(--red);border:2px solid var(--red)}
-.knop:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
-.person code{word-break:break-all}
+/* download */
+.donker-band { background: var(--nacht); color: #EDEEF1; position: relative; overflow: hidden; }
+.donker-band::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(14,15,19,.97) 0%, rgba(14,15,19,.88) 45%, rgba(14,15,19,.55) 100%), url("assets/stip-donker.webp") right bottom / cover no-repeat; pointer-events: none; }
+.donker-band .wrap { position: relative; }
+.donker-band .lead { color: #A6ABB6; }
+.donker-band .oogje { color: #FF7C85; }
+.donker-band .oogje::before { box-shadow: 0 0 0 4px rgba(240,68,82,.2); }
+.downloads { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.dl { border-radius: var(--r-groot); background: rgba(24,25,30,.82); border: 1px solid #2B2E36; padding: 28px; display: grid; gap: 14px; align-content: start; backdrop-filter: blur(10px); }
+.dl .ic { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; }
+.dl .ic img { width: 52px; height: 52px; }
+.dl p { color: #A6ABB6; font-size: 16px; }
+.dl .knop { justify-self: start; margin-top: 6px; }
+.downloads .dl { grid-template-rows: auto auto 1fr auto auto; align-content: stretch; }
+.dl .knop-rand { background: transparent; color: #EDEEF1; border-color: #3A3E48; }
+.dl .knop-rand:hover { background: rgba(255,255,255,.06); }
+.dl small { color: #7C828E; font-size: 14px; }
+@media (max-width: 960px) { .downloads { grid-template-columns: 1fr; } }
+.extra { margin-top: 18px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+@media (max-width: 860px) { .extra { grid-template-columns: 1fr; } }
+.code { display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 18px; border-radius: 14px; background: #0B0C0F; border: 1px solid #2B2E36; font: 14.5px/1.5 var(--f-code); color: #D7DAE0; min-width: 0; }
+.code code { white-space: normal; overflow-wrap: anywhere; flex: 1; min-width: 0; }
+.code button { flex: none; border: 1px solid #3A3E48; background: transparent; color: #EDEEF1; border-radius: 10px; padding: 8px 12px; font: 600 14px/1 var(--f-tekst); cursor: pointer; }
+.code button:hover { background: rgba(255,255,255,.06); }
+.eisen { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 18px; color: #A6ABB6; font-size: 15.5px; }
+.eisen b { color: #EDEEF1; font-weight: 600; }
+.let-op { margin-top: 18px; color: #A6ABB6; font-size: 15px; display: flex; gap: 10px; align-items: flex-start; }
+.let-op svg { width: 20px; height: 20px; color: #F2B544; flex: none; margin-top: 2px; }
+
+/* vragen */
+.vragen { display: grid; gap: 12px; max-width: 54rem; margin: 0 auto; }
+.vragen details { border-radius: var(--r); background: var(--vlak); border: 1px solid var(--lijn); padding: 0 24px; }
+.vragen summary { list-style: none; cursor: pointer; padding: 22px 0; font: 600 19px/1.35 var(--f-tekst); display: flex; justify-content: space-between; gap: 20px; align-items: center; }
+.vragen summary::-webkit-details-marker { display: none; }
+.vragen summary::after { content: ""; flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--bg2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23DE2F3E' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M12 6v12M6 12h12'/%3E%3C/svg%3E") center / 16px no-repeat; transition: transform .2s; }
+.vragen details[open] summary::after { transform: rotate(45deg); }
+.vragen details p { padding: 0 0 22px; color: var(--tekst2); font-size: 17px; max-width: 46rem; }
+
+/* slot-oproep */
+.oproep { text-align: center; display: grid; justify-items: center; gap: 22px; }
+.oproep .merkje { width: 84px; height: 84px; }
+
+/* voet */
+footer { border-top: 1px solid var(--lijn); padding-block: 56px calc(40px + env(safe-area-inset-bottom, 0px)); background: var(--bg2); }
+.voet { display: grid; grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)); gap: 32px; }
+.voet h4 { margin: 0 0 12px; font: 600 14px/1 var(--f-code); letter-spacing: .06em; text-transform: uppercase; color: var(--tekst3); }
+.voet ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.voet a { color: var(--tekst2); text-decoration: none; font-size: 16px; }
+.voet a:hover { color: var(--inkt); }
+.voet p { color: var(--tekst2); font-size: 16px; max-width: 22rem; margin-top: 14px; }
+.klein-print { margin-top: 44px; padding-top: 24px; border-top: 1px solid var(--lijn); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; color: var(--tekst3); font-size: 14.5px; }
+@media (max-width: 860px) { .voet { grid-template-columns: repeat(2, minmax(0, 1fr)); } .voet > div:first-child { grid-column: 1 / -1; } }
 </style>
+</head>
+<body>
+<a class="overslaan" href="#inhoud">Naar de inhoud</a>
 
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <symbol id="bug" viewBox="0 0 128 128">
-    <g stroke="#1F2328" stroke-width="6" stroke-linecap="round">
-      <line x1="30" y1="62" x2="14" y2="54"/><line x1="98" y1="62" x2="114" y2="54"/>
-      <line x1="28" y1="82" x2="12" y2="84"/><line x1="100" y1="82" x2="116" y2="84"/>
-      <line x1="34" y1="102" x2="22" y2="114"/><line x1="94" y1="102" x2="106" y2="114"/>
-    </g>
-    <path d="M52 30 Q44 14 36 12 M76 30 Q84 14 92 12" fill="none" stroke="#1F2328" stroke-width="5" stroke-linecap="round"/>
-    <circle cx="35" cy="12" r="5" fill="#1F2328"/><circle cx="93" cy="12" r="5" fill="#1F2328"/>
-    <ellipse cx="64" cy="38" rx="22" ry="16" fill="#1F2328"/>
-    <circle cx="55" cy="35" r="4" fill="#FFFFFF"/><circle cx="73" cy="35" r="4" fill="#FFFFFF"/>
-    <path d="M64 46 C34 46 24 70 26 86 C28 106 46 118 64 118 Z" fill="#D93A3A"/>
-    <path d="M64 46 C94 46 104 70 102 86 C100 106 82 118 64 118 Z" fill="#E5484D"/>
-    <line x1="64" y1="46" x2="64" y2="118" stroke="#1F2328" stroke-width="4"/>
-    <g fill="#1F2328"><circle cx="46" cy="70" r="7"/><circle cx="82" cy="70" r="7"/><circle cx="42" cy="94" r="6"/><circle cx="86" cy="94" r="6"/><circle cx="56" cy="106" r="4.5"/><circle cx="72" cy="106" r="4.5"/></g>
-  </symbol>
-</svg>
-
-<div class="wrap">
-
-<header class="hero">
-  <div class="brand"><svg role="img" aria-label="BugOS-logo, een lieveheersbeestje"><use href="#bug"/></svg><span class="eyebrow">Versie 0.2 · in de maak</span></div>
-  <h1>BugOS: een computer die niet stuk kan.</h1>
-  <p class="lead">Een gratis besturingssysteem dat werkt zoals je van Windows gewend bent. <strong>Zo simpel dat oma het snapt</strong>, en toch fijn voor gamers en programmeurs.</p>
-  <p><a class="knop" href="#download">Download BugOS</a></p>
-
-  <figure style="margin:0;display:grid;gap:10px">
-    <div class="desk" role="img" aria-label="Voorbeeld van het BugOS-bureaublad met het welkomstscherm en de taakbalk onderaan">
-      <div class="hills"></div>
-      <div class="win">
-        <div class="bar"><span>BugOS Welkom</span><span class="dots">Stap 3 van 6</span></div>
-        <h3>Licht of donker?</h3>
-        <div class="choice"><span class="l">Licht</span><span class="d">Donker ✓</span></div>
-      </div>
-      <div class="taskbar">
-        <div class="start"><svg aria-hidden="true"><use href="#bug"/></svg></div>
-        <div class="app"></div><div class="app"></div><div class="app"></div>
-        <div class="spacer"></div>
-        <div class="tray"><span class="hide-s">wifi</span><span class="hide-s">geluid</span><span>14:32</span></div>
-      </div>
+<header class="kopbalk">
+  <div class="wrap">
+    <a class="merk" href="#" aria-label="BugOS, naar boven"><img src="assets/bugos-merk.svg" alt="" width="34" height="34">BugOS</a>
+    <nav class="nav" id="nav" aria-label="Hoofdmenu">
+      <a href="#functies">Functies</a>
+      <a href="#voor-wie">Voor wie</a>
+      <a href="#overstappen">Overstappen</a>
+      <a href="#vragen">Vragen</a>
+    </nav>
+    <div class="acties">
+      <button class="thema" id="thema" type="button" aria-label="Wissel tussen licht en donker">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor"/></svg>
+      </button>
+      <button class="thema menuknop" id="menuknop" type="button" aria-label="Menu openen" aria-expanded="false" aria-controls="nav">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <a class="knop knop-rood knop-klein knop-download" href="#download">Download</a>
     </div>
-    <figcaption class="cap">Startknop links onder, klok rechts onder: alles zit waar je het verwacht. Het lieveheersbeestje is de startknop.</figcaption>
-  </figure>
+  </div>
 </header>
 
-<section>
-  <div class="sec-head"><span class="eyebrow">Voor wie</span><h2>Eén systeem, drie soorten mensen</h2></div>
-  <div class="people">
-    <div class="person"><span class="who">Oma</span><h3>Gewoon doen wat je wilt</h3>
-      <ul><li>Wifi en bluetooth met één klik</li><li>Foto's, films en muziek spelen meteen</li><li>Updates gaan vanzelf</li><li>Geen account, geen reclame</li></ul></div>
-    <div class="person"><span class="who">Gamer</span><h3>Spelen zonder gedoe</h3>
-      <ul><li>Steam met Proton staat klaar</li><li>Game-modus: volle kracht en een FPS-teller</li><li>Xbox- en PlayStation-controllers</li><li>Een aparte versie voor Nvidia-kaarten</li></ul></div>
-    <div class="person"><span class="who">Programmeur</span><h3>Eén schakelaar</h3>
-      <ul><li>Ontwikkelaarsmodus aan en weer uit</li><li>VS Code, git, Python, Node, Rust en Go</li><li>Podman, Docker-commando's en Distrobox</li><li>Een fijne terminal, nooit verplicht</li></ul></div>
+<main id="inhoud">
+
+<!-- ============================================================ OPENING -->
+<section class="held">
+  <div class="wrap">
+    <div class="tekst">
+      <a class="nieuw" href="#functies"><b>BugOS 0.3</b> Nieuw logo en design <span>Bekijk</span></a>
+      <h1>De computer die <em>gewoon werkt.</em></h1>
+      <p class="lead">BugOS is een gratis besturingssysteem dat werkt zoals je gewend bent. Het kan niet stuk, houdt zichzelf bij en is fijn voor oma, gamers en programmeurs.</p>
+      <div class="knoppen">
+        <a class="knop knop-rood" href="#download">Download BugOS
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12m0 0 5-5m-5 5-5-5M5 20h14"/></svg></a>
+        <a class="knop knop-rand" href="#niet-stuk">Hoe werkt het?</a>
+      </div>
+      <div class="vinkjes">
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Gratis, voor altijd</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Geen account nodig</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Kan naast Windows</span>
+      </div>
+    </div>
+    <div class="scherm">
+      <div class="lijst">
+        <img data-licht="assets/bureaublad-licht.webp" data-donker="assets/bureaublad-donker.webp" src="assets/bureaublad-licht.webp"
+             srcset="assets/bureaublad-licht-1440.webp 1440w, assets/bureaublad-licht.webp 2880w" sizes="(max-width: 1240px) 100vw, 1200px"
+             width="2880" height="1800" alt="Het BugOS-bureaublad: de BugOS Winkel staat open, met links het startmenu (Goedenavond, Oma) en onderaan de taakbalk met het lieveheersbeestje als startknop." fetchpriority="high">
+      </div>
+    </div>
   </div>
 </section>
 
-<section>
-  <div class="sec-head"><span class="eyebrow">Hoe het in elkaar zit</span><h2>Het huis in drie lagen</h2>
-    <p class="col">We bouwen niet alles zelf. De fundering en de motor bestaan al en zijn bewezen. Wij maken de jas: alles wat je ziet en aanraakt.</p></div>
-  <div class="house">
-    <div class="layer top"><div class="name"><h3>BugOS-jas</h3><small>van ons</small></div>
-      <div class="chips"><span>Startmenu</span><span>Taakbalk</span><span>Licht/donker-stijl</span><span>BugOS Welkom</span><span>Winkel</span><span>Game-modus</span><span>Ontwikkelaarsmodus</span><span>Lichte stand</span><span>.exe openen</span><span>.rpm/.deb in doosje</span><span>Updates-knop</span></div></div>
-    <div class="layer mid"><div class="name"><h3>KDE Plasma</h3><small>de motor</small></div>
-      <div class="chips"><span>Vensters</span><span>Wifi</span><span>Bluetooth</span><span>Verkenner (Dolphin)</span><span>Schijfbeheer</span><span>Geluid</span><span>Alle talen</span></div></div>
-    <div class="layer bot"><div class="name"><h3>Aurora · Fedora Atomic</h3><small>de fundering</small></div>
-      <div class="chips"><span>Drivers</span><span>Codecs voor films en muziek</span><span>Nvidia</span><span>Updates met terug-knop</span></div></div>
+<!-- ============================================================ STROOK -->
+<section class="strook" aria-label="Waarom BugOS">
+  <div class="wrap">
+    <ul>
+      <li><span class="ic" style="background:#14965A"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.2 8.2 8 9 4.8-.8 8-4.5 8-9V6z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg></span><span><b>Kan niet stuk</b><small>Elke update met een terugknop</small></span></li>
+      <li><span class="ic" style="background:#2F7BF5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><span><b>Vertrouwd</b><small>Startknop, taakbalk, zoals je gewend bent</small></span></li>
+      <li><span class="ic" style="background:#8B5CF6"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><span><b>Privé</b><small>Geen account, geen reclame, geen tracking</small></span></li>
+      <li><span class="ic" style="background:#DE2F3E"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/></svg></span><span><b>Gratis en open</b><small>GPL-3.0, gebouwd op Fedora en KDE</small></span></li>
+    </ul>
   </div>
 </section>
 
-<section>
-  <div class="sec-head"><span class="eyebrow">Samen besloten</span><h2>De keuzes</h2></div>
-  <div class="tbl"><table>
-    <thead><tr><th>Onderwerp</th><th>Keuze</th><th>Waarom</th></tr></thead>
-    <tbody>
-      <tr><td>Fundering</td><td>Fedora Atomic via Aurora</td><td>Elke update is een complete nieuwe versie. Mis? Dan kies je de vorige.</td></tr>
-      <tr><td>Schil</td><td>Eigen jas op de KDE-motor</td><td>Eerste versie in maanden, niet in jaren</td></tr>
-      <tr><td>Uiterlijk</td><td>Eigen stijl, licht of donker</td><td>Knoppen op vertrouwde plekken</td></tr>
-      <tr><td>Updates</td><td>Vanzelf, of zelf kiezen</td><td>Oma hoeft niks te doen, en wie wil kan zelf kiezen</td></tr>
-      <tr><td>Programma's</td><td>Winkel, plus dubbelklik op downloads</td><td>Zoals op je telefoon én zoals op Windows</td></tr>
-      <tr><td>Windows-apps</td><td>Dubbelklik op een .exe start Wine</td><td>Werkt het niet, dan krijg je een duidelijk alternatief</td></tr>
-      <tr><td>Talen</td><td>Alle talen van KDE</td><td>Eigen schermen eerst in het Nederlands en Engels</td></tr>
-      <tr><td>Installeren</td><td>USB-stick, ook naast Windows</td><td>Later ook een Windows-overstap-programma</td></tr>
-      <tr><td>Computers</td><td>Gewoon, Nvidia en oude pc's</td><td>De lichte stand gaat vanzelf aan</td></tr>
-      <tr><td>Privacy</td><td>Geen account, niks verzamelen</td><td>Je computer is van jou</td></tr>
-      <tr><td>Licentie</td><td>GPL-3.0</td><td>Altijd gratis en open</td></tr>
-    </tbody>
-  </table></div>
-</section>
-
-<section>
-  <div class="sec-head"><span class="eyebrow">Updates</span><h2>De bakkerij</h2>
-    <p class="col">Een update is bij BugOS als een vers brood: GitHub bakt elke nacht een complete nieuwe BugOS. Je computer pakt hem op de achtergrond en eet hem pas bij de volgende keer opstarten.</p></div>
-  <ol class="flow">
-    <li><h3>Wij passen iets aan</h3><p>Een verandering in de repo.</p></li>
-    <li><h3>GitHub bakt</h3><p>Een nieuwe BugOS, ook elke nacht voor beveiliging.</p></li>
-    <li><h3>Ophalen</h3><p>Je computer downloadt stil op de achtergrond.</p></li>
-    <li><h3>Herstarten</h3><p>Pas dan draait de nieuwe versie.</p></li>
-    <li class="safe"><h3>Terug naar gisteren</h3><p>Problemen? Kies bij het opstarten de vorige versie.</p></li>
-  </ol>
-</section>
-
-<section>
-  <div class="sec-head"><span class="eyebrow">Al gebouwd</span><h2>Wat er nu al in zit</h2></div>
-  <div class="parts">
-    <div class="part"><code>bugos-welkom</code><h3>BugOS Welkom</h3><p>Zes grote stappen: taal, wifi, licht/donker, updates, gamen/programmeren, klaar.</p></div>
-    <div class="part"><code>bugos-exe</code><h3>Windows-programma's</h3><p>Dubbelklik op een .exe. Is er een betere versie in de Winkel, dan biedt BugOS die eerst aan.</p></div>
-    <div class="part"><code>bugos-pakket</code><h3>Downloads van websites</h3><p>Een .rpm of .deb gaat eerst via de Winkel, en anders veilig in een doosje.</p></div>
-    <div class="part"><code>bugos-updates</code><h3>Updates-schakelaar</h3><p>Vanzelf of zelf. Plus "nu updaten" en "terug naar vorige".</p></div>
-    <div class="part"><code>bugos-spelmodus</code><h3>Game-modus</h3><p>Volle kracht, meldingen stil en een FPS-teller in games.</p></div>
-    <div class="part"><code>bugos-ontwikkelaar</code><h3>Ontwikkelaarsmodus</h3><p>VS Code, containers en een dev-doosje met programmeertalen.</p></div>
-    <div class="part"><code>bugos-lichte-stand</code><h3>Lichte stand</h3><p>Zet vanzelf de zware effecten uit bij minder dan 6 GB geheugen of 2 kernen.</p></div>
-    <div class="part"><code>org.bugos.desktop</code><h3>BugOS-stijl</h3><p>Taakbalk onderaan, het lieveheersbeestje als startknop, licht- en donker-kleuren.</p></div>
+<!-- ============================================================ KAN NIET STUK -->
+<section class="sectie" id="niet-stuk">
+  <div class="wrap twee">
+    <div class="sectie-kop" style="margin-bottom:0">
+      <span class="oogje">Onbreekbaar</span>
+      <h2>Gaat er iets mis? Eén klik, en het is weer gisteren.</h2>
+      <p class="lead">BugOS wordt in zijn geheel bijgewerkt, als één nieuwe versie. De vorige versie blijft gewoon bewaard. Werkt er na een update iets niet? Dan kies je bij het opstarten de versie van gisteren, en alles is weer zoals het was.</p>
+      <ul class="lijstje">
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Updates gaan vanzelf, stil op de achtergrond</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Pas actief als je opnieuw opstart, nooit midden in je werk</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Liever zelf kiezen? Eén schakelaar in Instellingen</li>
+      </ul>
+    </div>
+    <div class="tijd" aria-label="Probeer het zelf: de tijdmachine van BugOS">
+      <div class="titel"><span>Opstartmenu</span><span>Probeer het zelf</span></div>
+      <div class="versies" id="versies">
+        <div class="versie aan" data-versie="vandaag"><span class="bol"></span><b>BugOS 2026.11.02</b><small>vandaag</small></div>
+        <div class="versie" data-versie="gisteren"><span class="bol"></span><b>BugOS 2026.11.01</b><small>gisteren</small></div>
+      </div>
+      <div class="meld goed" id="meld" role="status" aria-live="polite">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+        <span id="meldtekst">Alles werkt. Je computer is bijgewerkt naar de nieuwste versie.</span>
+      </div>
+      <div class="knoppen">
+        <button class="knop knop-rand knop-klein" id="mis" type="button">Doe alsof er iets misgaat</button>
+        <button class="knop knop-rood knop-klein" id="terug" type="button" hidden>Kies gisteren</button>
+      </div>
+    </div>
   </div>
 </section>
 
-<section>
-  <div class="sec-head"><span class="eyebrow">Het stappenplan</span><h2>Van fundering tot overstap</h2></div>
-  <div class="phases">
-    <div class="phase"><div class="tag"><span class="pill now">Nu</span><h3>Fase 1 · Fundering</h3></div>
-      <ul><li class="done">Plan op papier</li><li class="done">Automatisch bouwen (gewoon en Nvidia)</li><li class="done">ISO voor de USB-stick</li><li class="done">Eerste eigen onderdelen</li><li>Eerste test in een virtuele pc</li></ul></div>
-    <div class="phase"><div class="tag"><span class="pill next">Volgende</span><h3>Fase 2 · De eigen jas</h3></div>
-      <ul><li>BugOS Instellingen met grote tegels</li><li>Eigen startmenu met grote zoekbalk</li><li>Snelmenu: wifi, geluid, helderheid en game-modus in één paneel</li><li>De BugOS Winkel in eigen stijl</li><li>Een update-melding voor wie "zelf" kiest</li></ul></div>
-    <div class="phase"><div class="tag"><span class="pill later">Daarna</span><h3>Fase 3 · Overstappen</h3></div>
-      <ul><li>Windows-overstap: maakt de USB-stick en neemt je foto's en documenten mee</li><li>Een installatieprogramma in BugOS-stijl</li><li>"Verdeel mijn schijf" om naast Windows te installeren</li></ul></div>
-    <div class="phase"><div class="tag"><span class="pill later">Later</span><h3>Fase 4 · Oppoetsen</h3></div>
-      <ul><li>Hulp-app "Er werkt iets niet"</li><li>Back-up met één knop</li><li>Een vertaal-community</li><li>Een eigen website met een downloadknop</li></ul></div>
+<!-- ============================================================ FUNCTIES -->
+<section class="sectie" id="functies" style="background:var(--bg2);border-block:1px solid var(--lijn)">
+  <div class="wrap">
+    <div class="sectie-kop">
+      <span class="oogje">Alles erin</span>
+      <h2>Alles wat je nodig hebt. Niks wat je niet snapt.</h2>
+      <p class="lead">Grote knoppen, gewone woorden en slimme hulpjes. Zodat je kunt doen waarvoor je achter de computer zit.</p>
+    </div>
+    <div class="raster">
+      <article class="tegel s4 groot">
+        <span class="ic" style="background:#DE2F3E"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1.2 11.1a2 2 0 0 1-2 1.9H8.2a2 2 0 0 1-2-1.9z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg></span>
+        <h3>De BugOS Winkel</h3>
+        <p>Bekende, veilige apps op één plek: Firefox, Spotify, Steam, LibreOffice en nog veel meer. Eén klik op Installeren en klaar. Updates gaan vanzelf.</p>
+        <div class="beeld"><img loading="lazy" data-licht="assets/winkel-licht.webp" data-donker="assets/winkel-donker.webp" src="assets/winkel-licht.webp" width="2360" height="1600" alt="De BugOS Winkel met aanbevolen apps zoals Firefox, VLC, LibreOffice, Spotify en Steam."></div>
+      </article>
+      <article class="tegel s2">
+        <span class="ic" style="background:#14965A"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5h.01"/></svg></span>
+        <h3>Er werkt iets niet?</h3>
+        <p>BugOS kijkt wifi, geluid, printer en meer na. Bij elk probleem staat een knop die het voor je oplost.</p>
+        <div class="beeld"><img loading="lazy" data-licht="assets/hulp-licht.webp" data-donker="assets/hulp-donker.webp" src="assets/hulp-licht.webp" width="1760" height="1520" alt="De hulp-app meldt: Alles ziet er goed uit, met een groen vinkje bij internet, wifi, bluetooth, geluid en printer."></div>
+      </article>
+      <article class="tegel s2">
+        <span class="ic" style="background:#2F7BF5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="8" height="7" rx="1"/><rect x="13" y="4" width="8" height="7" rx="1"/><rect x="3" y="13" width="8" height="7" rx="1"/><rect x="13" y="13" width="8" height="7" rx="1"/></svg></span>
+        <h3>Windows-programma's</h3>
+        <p>Dubbelklik op een <code>.exe</code> en hij start. Is er een betere versie voor BugOS? Dan stelt BugOS die voor.</p>
+        <div class="exe-demo" aria-hidden="true">
+          <div class="map">
+            <div class="map-kop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Downloads</div>
+            <div class="map-rij"><span class="bestand">PDF</span><span>Recept appeltaart.pdf</span></div>
+            <div class="map-rij gekozen"><span class="bestand">EXE</span><span>SpotifySetup.exe</span><svg class="muis" viewBox="0 0 24 24"><path d="M5 3l14 8-6.2 1.6L10 19z" fill="#16171C" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></svg></div>
+          </div>
+          <div class="dialoog">
+            <div class="rij"><span class="bestand">.exe</span><span>Dit lijkt op <b>Spotify</b>. Wil je de versie voor BugOS?</span></div>
+            <div class="ja"><span>Nee</span><span class="r">Ja, graag</span></div>
+          </div>
+        </div>
+      </article>
+      <article class="tegel s2 nacht">
+        <span class="ic" style="background:#8B5CF6"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9h12a4 4 0 0 1 4 4v2a3 3 0 0 1-5.2 2L15 15H9l-1.8 2A3 3 0 0 1 2 15v-2a4 4 0 0 1 4-4z"/><path d="M7 12v3M5.5 13.5h3M16 12.5h.01M18 14.5h.01"/></svg></span>
+        <h3>Gemaakt om te gamen</h3>
+        <p>Steam staat klaar, controllers werken meteen en de game-modus zet alles op volle kracht.</p>
+        <div class="beeld"><img loading="lazy" src="assets/snelmenu-donker.webp" width="840" height="800" alt="Het snelmenu met de game-modus aan."></div>
+      </article>
+      <article class="tegel s2">
+        <span class="ic" style="background:#0EA5A4"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg></span>
+        <h3>Back-up met één knop</h3>
+        <p>Steek een USB-schijf in, druk op de knop en je foto's en documenten staan veilig. Er wordt nooit iets weggegooid.</p>
+        <div class="beeld"><img loading="lazy" data-licht="assets/backup-licht.webp" data-donker="assets/backup-donker.webp" src="assets/backup-licht.webp" width="1520" height="1280" alt="De back-up-app met twee USB-schijven om uit te kiezen."></div>
+      </article>
+      <article class="tegel s3">
+        <span class="ic" style="background:#16171C"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 9-3 3 3 3M16 9l3 3-3 3M13.5 6l-3 12"/></svg></span>
+        <h3>Klaar voor programmeurs</h3>
+        <p>Eén schakelaar zet VS Code, containers en programmeertalen klaar. Elke Linux-versie in een eigen doosje, zonder je systeem te breken.</p>
+        <pre class="terminal" aria-label="Voorbeeld in de terminal"><span class="c"># Ontwikkelaarsmodus staat aan</span>
+<span class="p">$</span> distrobox enter dev
+<span class="p">$</span> python3 --version   <span class="g">Python 3.14</span>
+<span class="p">$</span> docker run hello-world   <span class="g">✓ werkt</span></pre>
+      </article>
+      <article class="tegel s3 rood">
+        <span class="ic" style="background:rgba(255,255,255,.2)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>
+        <h3>Jouw computer is van jou</h3>
+        <p>Geen account nodig, geen reclame, en BugOS stuurt niks over jou naar wie dan ook.</p>
+        <div class="slot">0 trackers</div>
+      </article>
+      <article class="tegel s3">
+        <span class="ic" style="background:#F2711C"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 14l4-4"/><path d="M3.5 18a9 9 0 1 1 17 0"/></svg></span>
+        <h3>Vlot op oudere computers</h3>
+        <p>Heeft je computer weinig geheugen? Dan zet BugOS vanzelf de lichte stand aan. Zware effecten uit, alles blijft vlot.</p>
+        <div class="meter" aria-hidden="true">
+          <div class="balk"><span style="width:34%"></span></div>
+          <small><span>4 GB is genoeg</span><span>8 GB aangeraden</span></small>
+        </div>
+      </article>
+      <article class="tegel s3">
+        <span class="ic" style="background:#E2457A"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></span>
+        <h3>In jouw taal</h3>
+        <p>Nederlands en Engels zijn helemaal klaar, en vrijwilligers kunnen BugOS zonder programmeren vertalen in elke taal.</p>
+        <div class="meter" aria-hidden="true">
+          <div class="balk"><span style="width:100%"></span></div>
+          <small><span>Nederlands</span><span>100%</span></small>
+        </div>
+      </article>
+    </div>
   </div>
 </section>
 
-<section>
-  <div class="sec-head"><span class="eyebrow">Eerlijk is eerlijk</span><h2>Om op te letten</h2></div>
-  <div class="notes">
-    <div class="note"><h3>Oudere Nvidia-kaarten</h3><p>De open Nvidia-driver werkt vanaf de GTX 16- en RTX 20-serie (ongeveer 2018). Voor oudere kaarten regelen we later iets.</p></div>
-    <div class="note"><h3>Héél oude pc's</h3><p>BugOS heeft een 64-bit computer met minstens 4 GB geheugen nodig. Pc's uit de tijd van Windows XP gaan niet.</p></div>
-    <div class="note"><h3>Niet elke .exe werkt</h3><p>Anti-cheat in sommige online games, Adobe en de nieuwste Office werken vaak niet via Wine. BugOS legt dan uit wat je wel kunt gebruiken.</p></div>
+<!-- ============================================================ LICHT / DONKER -->
+<section class="sectie">
+  <div class="wrap">
+    <div class="sectie-kop midden">
+      <span class="oogje">Licht of donker</span>
+      <h2>Mooi bij daglicht. Mooi 's avonds.</h2>
+      <p class="lead">Schuif maar eens heen en weer. Elke app, elk menu en de achtergrond doen mee.</p>
+    </div>
+    <div class="vergelijk" id="vergelijk">
+      <img src="assets/bureaublad-donker.webp" loading="lazy" width="2880" height="1800" alt="Het BugOS-bureaublad in donkere stand.">
+      <img class="licht" src="assets/bureaublad-licht.webp" loading="lazy" width="2880" height="1800" alt="Het BugOS-bureaublad in lichte stand.">
+      <span class="label l">Licht</span><span class="label r">Donker</span>
+      <input type="range" min="0" max="100" value="50" id="schuif" aria-label="Schuif tussen licht en donker">
+      <span class="grens"></span>
+      <span class="greep" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 7-5 5 5 5M15 7l5 5-5 5"/></svg></span>
+    </div>
   </div>
 </section>
 
-
-<section id="download">
-  <div class="sec-head"><span class="eyebrow">Downloaden</span><h2>BugOS op je computer</h2>
-    <p class="col">BugOS is nog in de maak (versie 0.x). Probeer het eerst in een virtuele pc of op een reservecomputer.</p></div>
-  <div class="people">
-    <div class="person"><span class="who">Stap 1 · op Windows</span><h3>BugOS Overstap</h3>
-      <p>Controleert je pc, neemt je bestanden mee en maakt de USB-stick.</p>
-      <p><a class="knop" href="https://github.com/253UgurSahin/BugOS/releases/latest">Download BugOS Overstap</a></p></div>
-    <div class="person"><span class="who">Stap 2 · de USB-stick</span><h3>BugOS (.iso)</h3>
-      <p>Kies de gewone versie, of de Nvidia-versie als je een Nvidia-videokaart hebt.</p>
-      <p><a class="knop licht" href="https://github.com/253UgurSahin/BugOS/blob/main/docs/TESTEN.md">Zo maak je de .iso</a></p></div>
-    <div class="person"><span class="who">Al Fedora Atomic?</span><h3>Overstappen zonder USB</h3>
-      <p>Typ in de terminal en herstart:</p>
-      <p><code>sudo bootc switch ghcr.io/253ugursahin/bugos:latest</code></p></div>
+<!-- ============================================================ VOOR WIE -->
+<section class="sectie" id="voor-wie" style="background:var(--bg2);border-block:1px solid var(--lijn)">
+  <div class="wrap">
+    <div class="sectie-kop">
+      <span class="oogje">Voor wie</span>
+      <h2>Eén BugOS. Voor iedereen in huis.</h2>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Kies wie je bent">
+      <button role="tab" id="tab-oma" aria-controls="p-oma" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/></svg><span class="lang">Voor oma</span><span class="kort">Oma</span></button>
+      <button role="tab" id="tab-gamer" aria-controls="p-gamer" aria-selected="false" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9h12a4 4 0 0 1 4 4v2a3 3 0 0 1-5.2 2L15 15H9l-1.8 2A3 3 0 0 1 2 15v-2a4 4 0 0 1 4-4z"/><path d="M7 12v3M5.5 13.5h3"/></svg><span class="lang">Voor gamers</span><span class="kort">Gamers</span></button>
+      <button role="tab" id="tab-dev" aria-controls="p-dev" aria-selected="false" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 9-3 3 3 3M16 9l3 3-3 3M13.5 6l-3 12"/></svg><span class="lang">Voor programmeurs</span><span class="kort">Programmeurs</span></button>
+    </div>
+    <div class="paneel" role="tabpanel" id="p-oma" aria-labelledby="tab-oma">
+      <div>
+        <h3>Gewoon doen wat je wilt.</h3>
+        <ul class="lijstje">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Een welkomstscherm dat alles stap voor stap uitlegt</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Wifi, bluetooth en printer met één klik</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Foto's, films en muziek spelen meteen af</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Grote knoppen en een letter die iedereen kan lezen</li>
+        </ul>
+      </div>
+      <div class="foto"><img loading="lazy" data-licht="assets/welkom-licht.webp" data-donker="assets/welkom-donker.webp" src="assets/welkom-licht.webp" width="2200" height="1360" alt="Het welkomstscherm van BugOS vraagt: Licht of donker?"></div>
+    </div>
+    <div class="paneel" role="tabpanel" id="p-gamer" aria-labelledby="tab-gamer" hidden>
+      <div>
+        <h3>Spelen zonder gedoe.</h3>
+        <ul class="lijstje">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Steam met Proton: duizenden Windows-games werken gewoon</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Game-modus: volle kracht, meldingen stil en een FPS-teller</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Xbox- en PlayStation-controllers werken meteen</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Een aparte versie met de Nvidia-driver al erin</li>
+        </ul>
+      </div>
+      <div class="foto"><img loading="lazy" data-licht="assets/startmenu-licht.webp" data-donker="assets/startmenu-donker.webp" src="assets/startmenu-licht.webp" width="1320" height="1280" alt="Het startmenu van BugOS met Steam, Spotify en VLC vastgezet."></div>
+    </div>
+    <div class="paneel" role="tabpanel" id="p-dev" aria-labelledby="tab-dev" hidden>
+      <div>
+        <h3>Eén schakelaar, en je kunt aan de slag.</h3>
+        <ul class="lijstje">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>VS Code, git, Python, Node.js, Rust en Go</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Podman met Docker-commando's, en Distrobox</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Een onveranderlijk systeem: je experimenten kunnen niets breken</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Open source: lees mee, help mee op GitHub</li>
+        </ul>
+      </div>
+      <div class="foto"><img loading="lazy" data-licht="assets/aanuit-licht.webp" data-donker="assets/aanuit-donker.webp" src="assets/aanuit-licht.webp" width="2240" height="1560" alt="Instellingen, Aan en uit: schakelaars voor updates, game-modus, ontwikkelaarsmodus en lichte stand."></div>
+    </div>
   </div>
 </section>
 
-<footer><span>BugOS · GPL-3.0 · gebouwd op Aurora, Fedora en KDE</span><a href="https://github.com/253UgurSahin/BugOS">Bekijk de code op GitHub</a></footer>
-</div>
+<!-- ============================================================ OVERSTAPPEN -->
+<section class="sectie" id="overstappen">
+  <div class="wrap">
+    <div class="sectie-kop">
+      <span class="oogje">Overstappen</span>
+      <h2>Van Windows naar BugOS in vier stappen.</h2>
+      <p class="lead">Het programmaatje BugOS Overstap doet het zware werk op je Windows-computer. Er gebeurt niks zonder dat jij op een knop drukt.</p>
+    </div>
+    <ol class="stappen">
+      <li><h3>Controleren</h3><p>Kan je computer BugOS aan? Overstap kijkt het voor je na.</p></li>
+      <li><h3>Meenemen</h3><p>Je documenten, foto's, muziek, bladwijzers en achtergrond gaan naar een USB-schijf.</p></li>
+      <li><h3>Ruimte maken</h3><p>Wil je Windows houden? Dan maakt Overstap ruimte zodat BugOS ernaast past.</p></li>
+      <li><h3>USB-stick maken</h3><p>BugOS wordt gedownload, gecontroleerd en op een USB-stick gezet.</p></li>
+    </ol>
+    <div class="overstap-band">
+      <div style="display:grid;gap:14px">
+        <h3>En in BugOS zet je alles terug met één knop.</h3>
+        <p style="color:var(--tekst2)">Steek de USB-schijf in, open "Bestanden van Windows" en druk op de knop. Je bestanden staan op de goede plek, en wat al op BugOS staat wordt nooit overschreven.</p>
+        <a class="knop knop-rand" style="justify-self:start" href="#download">BugOS Overstap downloaden</a>
+      </div>
+      <div class="foto"><img loading="lazy" data-licht="assets/overstap-licht.webp" data-donker="assets/overstap-donker.webp" src="assets/overstap-licht.webp" width="1560" height="1400" alt="De app Bestanden van Windows met de USB-stick van oma, klaar om terug te zetten."></div>
+    </div>
+  </div>
+</section>
 
+<!-- ============================================================ DOWNLOAD -->
+<section class="sectie donker-band" id="download">
+  <div class="wrap">
+    <div class="sectie-kop">
+      <span class="oogje">Download</span>
+      <h2>Download BugOS. Het is gratis.</h2>
+      <p class="lead">Probeer BugOS eerst vanaf een USB-stick: je computer verandert pas als jij op "BugOS installeren" drukt.</p>
+    </div>
+    <div class="downloads">
+      <div class="dl">
+        <span class="ic"><img src="assets/bugos-icoon.svg" alt=""></span>
+        <h3>BugOS</h3>
+        <p>Voor de meeste computers en laptops, met een Intel- of AMD-processor.</p>
+        <a class="knop knop-rood" href="https://github.com/253UgurSahin/BugOS/releases">Download (.iso)</a>
+        <small>Ongeveer 5,6 GB · 64-bit</small>
+      </div>
+      <div class="dl">
+        <span class="ic"><img src="assets/bugos-icoon.svg" alt=""></span>
+        <h3>BugOS voor Nvidia</h3>
+        <p>Heb je een Nvidia-videokaart (GTX 16 of RTX)? Dan zit de juiste driver er al in.</p>
+        <a class="knop knop-rand" href="https://github.com/253UgurSahin/BugOS/releases">Download (.iso)</a>
+        <small>Ongeveer 6 GB · 64-bit</small>
+      </div>
+      <div class="dl">
+        <span class="ic" style="background:#2F7BF5;color:#fff"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+        <h3>Nu nog op Windows?</h3>
+        <p>BugOS Overstap kiest de goede versie, neemt je bestanden mee en maakt de USB-stick voor je.</p>
+        <a class="knop knop-rand" href="https://github.com/253UgurSahin/BugOS/releases/latest">BugOS Overstap (.zip)</a>
+        <small>Voor Windows 10 en 11</small>
+      </div>
+    </div>
+    <div class="extra">
+      <div class="dl">
+        <h3 style="font-size:19px">Wat heb je nodig?</h3>
+        <ul class="eisen">
+          <li><b>64-bit</b> computer</li>
+          <li><b>4 GB</b> geheugen (8 GB beter)</li>
+          <li><b>40 GB</b> vrije ruimte</li>
+          <li><b>USB-stick</b> van 8 GB of meer</li>
+        </ul>
+      </div>
+      <div class="dl">
+        <h3 style="font-size:19px">Al Fedora Atomic of Bazzite?</h3>
+        <p>Stap over zonder USB-stick. Typ dit in de terminal en start opnieuw op:</p>
+        <div class="code"><code id="cmd">sudo bootc switch ghcr.io/253ugursahin/bugos:latest</code><button type="button" id="kopieer">Kopieer</button></div>
+      </div>
+    </div>
+    <p class="let-op"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>BugOS is nog in ontwikkeling (versie 0.3). Probeer het eerst op een reserve-computer of in een virtuele pc.</p>
+  </div>
+</section>
+
+<!-- ============================================================ VRAGEN -->
+<section class="sectie" id="vragen">
+  <div class="wrap">
+    <div class="sectie-kop midden">
+      <span class="oogje">Vragen</span>
+      <h2>Vragen die mensen vaak stellen</h2>
+    </div>
+    <div class="vragen">
+      <details><summary>Is BugOS echt gratis?</summary><p>Ja. BugOS is gratis en blijft gratis. De broncode is open (GPL-3.0), dus iedereen kan zien hoe het werkt. Er zit geen reclame in en je hebt geen account nodig.</p></details>
+      <details><summary>Werken mijn Windows-programma's?</summary><p>Veel wel. Dubbelklik op een .exe en BugOS start hem met Wine. Voor bekende programma's, zoals Spotify of Zoom, biedt BugOS meteen de echte BugOS-versie aan. Sommige programma's, zoals Adobe of de nieuwste Office, werken niet; daarvoor stelt BugOS een goed alternatief voor.</p></details>
+      <details><summary>Kan ik Windows houden?</summary><p>Ja. BugOS Overstap kan Windows een beetje kleiner maken, zodat BugOS ernaast past. Bij het opstarten kies je dan welke je wilt gebruiken.</p></details>
+      <details><summary>Wat als een update misgaat?</summary><p>Dan kies je bij het opstarten de versie van gisteren. Alles is dan weer zoals het was. Je kunt het ook doen vanuit Instellingen, met de knop "Terug naar vorige versie".</p></details>
+      <details><summary>Kan ik er goed op gamen?</summary><p>Zeker. Steam met Proton zit erin, controllers werken meteen en de game-modus haalt alles uit je computer. Spellen met strenge anti-cheat (sommige online shooters) werken soms niet; kijk dat even na op protondb.com.</p></details>
+      <details><summary>Werkt mijn printer?</summary><p>De meeste printers werken meteen. Werkt hij niet? Open dan "Er werkt iets niet": BugOS kijkt het na en helpt je de printer toe te voegen.</p></details>
+      <details><summary>Is BugOS veilig?</summary><p>Ja. Het systeem zelf kan niet worden aangepast door programma's, apps draaien in hun eigen afgeschermde ruimte en updates komen vanzelf. Daarnaast verzamelt BugOS niks over jou.</p></details>
+      <details><summary>Op welke computers werkt BugOS?</summary><p>Op de meeste computers en laptops van de laatste 15 jaar met een 64-bit processor en minstens 4 GB geheugen. Voor oudere computers zet BugOS vanzelf de lichte stand aan.</p></details>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ OPROEP -->
+<section class="sectie" style="padding-top:0">
+  <div class="wrap oproep">
+    <img class="merkje" src="assets/bugos-icoon.svg" alt="" width="84" height="84">
+    <h2>Klaar voor een computer die gewoon werkt?</h2>
+    <div class="knoppen" style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">
+      <a class="knop knop-rood" href="#download">Download BugOS</a>
+      <a class="knop knop-rand" href="https://github.com/253UgurSahin/BugOS">Bekijk op GitHub</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="voet">
+      <div>
+        <a class="merk" href="#"><img src="assets/bugos-merk.svg" alt="" width="34" height="34">BugOS</a>
+        <p>Een computer die gewoon werkt. Gratis, veilig en open, voor iedereen in huis.</p>
+      </div>
+      <div><h4>BugOS</h4><ul><li><a href="#functies">Functies</a></li><li><a href="#voor-wie">Voor wie</a></li><li><a href="#download">Download</a></li></ul></div>
+      <div><h4>Meedoen</h4><ul><li><a href="https://github.com/253UgurSahin/BugOS">GitHub</a></li><li><a href="https://github.com/253UgurSahin/BugOS/blob/main/docs/VERTALEN.md">Vertalen</a></li><li><a href="https://github.com/253UgurSahin/BugOS/blob/main/docs/HUISSTIJL.md">Huisstijl</a></li></ul></div>
+      <div><h4>Gebouwd op</h4><ul><li><a href="https://fedoraproject.org">Fedora</a></li><li><a href="https://kde.org">KDE Plasma</a></li><li><a href="https://universal-blue.org">Universal Blue</a></li></ul></div>
+    </div>
+    <div class="klein-print"><span>BugOS is vrije software onder de GPL-3.0-licentie.</span><span>Deze website gebruikt geen cookies en geen tracking.</span></div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  function opgeslagen() { try { return localStorage.getItem("bugos-thema"); } catch (e) { return null; } }
+  function bewaar(w) { try { localStorage.setItem("bugos-thema", w); } catch (e) {} }
+  function isDonker() {
+    var t = root.getAttribute("data-theme");
+    if (t) return t === "dark";
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+  function beelden() {
+    var d = isDonker();
+    document.querySelectorAll("img[data-licht]").forEach(function (img) {
+      var nieuw = d ? img.getAttribute("data-donker") : img.getAttribute("data-licht");
+      if (img.getAttribute("src") !== nieuw) {
+        img.setAttribute("src", nieuw);
+        if (img.hasAttribute("srcset")) img.setAttribute("srcset", d
+          ? "assets/bureaublad-donker-1440.webp 1440w, assets/bureaublad-donker.webp 2880w"
+          : "assets/bureaublad-licht-1440.webp 1440w, assets/bureaublad-licht.webp 2880w");
+      }
+    });
+  }
+  var keuze = opgeslagen();
+  if (keuze === "dark" || keuze === "light") root.setAttribute("data-theme", keuze);
+  beelden();
+  if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", beelden);
+  document.getElementById("thema").addEventListener("click", function () {
+    var nieuw = isDonker() ? "light" : "dark";
+    root.setAttribute("data-theme", nieuw);
+    bewaar(nieuw);
+    beelden();
+  });
+
+  // menu op de telefoon
+  var nav = document.getElementById("nav"), mk = document.getElementById("menuknop");
+  mk.addEventListener("click", function () {
+    var open = nav.classList.toggle("open");
+    mk.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  nav.addEventListener("click", function (e) { if (e.target.tagName === "A") { nav.classList.remove("open"); mk.setAttribute("aria-expanded", "false"); } });
+
+  // de tijdmachine
+  var mis = document.getElementById("mis"), terug = document.getElementById("terug"), meld = document.getElementById("meld"),
+      meldtekst = document.getElementById("meldtekst"), versies = document.querySelectorAll("#versies .versie");
+  var vink = '<path d="m5 12.5 4.5 4.5L19 7.5"/>', kruis = '<path d="M7 7l10 10M17 7 7 17"/>';
+  function zet(stand) {
+    var svg = meld.querySelector("svg");
+    if (stand === "kapot") {
+      meld.className = "meld fout"; svg.innerHTML = kruis;
+      meldtekst.textContent = "Oeps! Na de update doet de printer het niet meer.";
+      mis.hidden = true; terug.hidden = false; terug.focus();
+    } else if (stand === "gisteren") {
+      versies[0].classList.remove("aan"); versies[1].classList.add("aan");
+      meld.className = "meld goed"; svg.innerHTML = vink;
+      meldtekst.textContent = "Opgelost! Je computer is weer precies zoals gisteren. De printer werkt.";
+      terug.hidden = true; mis.hidden = false; mis.textContent = "Nog een keer";
+    } else {
+      versies[1].classList.remove("aan"); versies[0].classList.add("aan");
+      meld.className = "meld goed"; svg.innerHTML = vink;
+      meldtekst.textContent = "Alles werkt. Je computer is bijgewerkt naar de nieuwste versie.";
+      mis.textContent = "Doe alsof er iets misgaat";
+    }
+  }
+  var stap = "goed";
+  mis.addEventListener("click", function () {
+    if (stap === "gisteren") { stap = "goed"; zet("goed"); return; }
+    stap = "kapot"; zet("kapot");
+  });
+  terug.addEventListener("click", function () { stap = "gisteren"; zet("gisteren"); });
+
+  // licht/donker-schuif
+  var verg = document.getElementById("vergelijk"), schuif = document.getElementById("schuif");
+  function schuifNaar() { verg.style.setProperty("--pos", schuif.value + "%"); }
+  schuif.addEventListener("input", schuifNaar); schuifNaar();
+
+  // tabbladen
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
+  function kies(tab) {
+    tabs.forEach(function (t) {
+      var aan = t === tab;
+      t.setAttribute("aria-selected", aan ? "true" : "false");
+      t.tabIndex = aan ? 0 : -1;
+      document.getElementById(t.getAttribute("aria-controls")).hidden = !aan;
+    });
+  }
+  tabs.forEach(function (t, i) {
+    t.addEventListener("click", function () { kies(t); });
+    t.addEventListener("keydown", function (e) {
+      var j = e.key === "ArrowRight" ? (i + 1) % tabs.length : e.key === "ArrowLeft" ? (i - 1 + tabs.length) % tabs.length : -1;
+      if (j >= 0) { e.preventDefault(); kies(tabs[j]); tabs[j].focus(); }
+    });
+  });
+
+  // kopieerknop
+  var kop = document.getElementById("kopieer");
+  kop.addEventListener("click", function () {
+    var tekst = document.getElementById("cmd").textContent;
+    function gelukt() { kop.textContent = "Gekopieerd ✓"; setTimeout(function () { kop.textContent = "Kopieer"; }, 2000); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(tekst).then(gelukt, function () { selecteer(); });
+    } else { selecteer(); }
+    function selecteer() { var r = document.createRange(); r.selectNodeContents(document.getElementById("cmd")); var s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+  });
+})();
+</script>
+</body>
 </html>
