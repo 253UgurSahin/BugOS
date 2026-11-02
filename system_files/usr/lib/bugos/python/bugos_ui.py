@@ -20,8 +20,8 @@ import locale
 import os
 import shutil
 import subprocess
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Callable, Sequence
 
 from PySide6.QtCore import (
     Property, QEasingCurve, QPointF, QPropertyAnimation, QRectF, QSize, Qt, Signal,

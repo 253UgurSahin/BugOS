@@ -52,7 +52,7 @@ def woordmerk_pad(tekst: str = "BugOS", grootte: float = 100.0) -> tuple[str, fl
 
     pen = SVGPathPen(glyphs)
     x = 0.0
-    for info, pos in zip(buf.glyph_infos, buf.glyph_positions):
+    for info, pos in zip(buf.glyph_infos, buf.glyph_positions, strict=True):
         naam = namen[info.codepoint]
         # lettertype-eenheden -> onze eenheden; y omdraaien (SVG gaat naar beneden)
         tp = TransformPen(pen, (schaal, 0, 0, -schaal, (x + pos.x_offset) * schaal, cap * schaal))

@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="656" viewBox="0 0 880 656" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif">
+<rect width="880" height="656" rx="20" fill="#FFFFFF"/>
+<rect x="480.0" y="0" width="400.0" height="656" fill="#111216"/>
+<path d="M860 0 a20 20 0 0 1 20 20 V636 a20 20 0 0 1 -20 20 H480.0 V0 Z" fill="#111216"/>
+<text x="28" y="44" font-size="15" font-weight="700" fill="#16171C" letter-spacing="1">LICHT</text>
+<text x="508.0" y="44" font-size="15" font-weight="700" fill="#EDEEF1" letter-spacing="1">DONKER</text>
+<rect x="28" y="72" width="40" height="40" rx="10" fill="#DE2F3E" stroke="#E6E2E2"/>
+<text x="84" y="90" font-size="15" font-weight="600" fill="#16171C">Rood (accent)</text>
+<text x="84" y="108" font-size="13" fill="#5D6270">belangrijkste knop, selectie</text>
+<text x="460.0" y="98" font-size="14" fill="#5D6270" text-anchor="end" font-family="JetBrains Mono, Consolas, monospace">#DE2F3E</text>
+<rect x="508.0" y="72" width="40" height="40" rx="10" fill="#EA3B4B" stroke="#2B2E36"/>
+<text x="564.0" y="98" font-size="15" font-weight="600" fill="#EDEEF1">Rood (accent)</text>
+<text x="852" y="98" font-size="14" fill="#A3A8B4" text-anchor="end" font-family="JetBrains Mono, Consolas, monospace">#EA3B4B</text>
+<rect x="28" y="128" width="40" height="40" rx="10" fill="#FF5C50" stroke="#E6E2E2"/>
+<text x="84" y="146" font-size="15" font-weight="600" fill="#16171C">Koraal</text>
+<text x="84" y="164" font-size="13" fill="#5D6270">verloop met rood</text>
+<text x="460.0" y="154" font-size="14" fill="#5D6270" text-anchor="end" font-family="JetBrains Mono, Consolas, monospace">#FF5C50</text>
+<rect x="508.0" y="128" width="40" height="40" rx="10" fill="#FF6A5E" stroke="#2B2E36"/>
+<text x="564.0" y="154" font-size="15" font-weight="600" fill="#EDEEF1">Koraal</text>
+<text x="852" y="154" font-size="14" fill="#A3A8B4" text-anchor="end" font-family="JetBrains Mono, Consolas, monospace">#FF6A5E</text>
+<rect x="28" y="184" width="40" height="40" rx="10" fill="#16171C" stroke="#E6E2E2"/>
+<text x="84" y="202" font-size="15" font-weight="600" fill="#16171C">Inkt (tekst)</text>
+<text x="84" y="220" font-size="13" fill="#5D6270">gewone tekst</text>
+<text x="460.0" y="210" font-size="14" fill="#5D6270" text-anchor="end" font-family="JetBrains Mono, Consolas, monospace">#16171C</text>
+<rect x="508.0" y="184" width="40" height="40" rx="10" fill="#EDEEF1" stroke="#2B2E36"/>
+<text x="564.0" y="210" font-size="15" font-weight="600" fill="#EDEEF1">Inkt (tekst)</text>
+<text x="852" y="210" font-size="14" fill="#A3A8B4" text-anchor="end" font-family="JetBrains Mono, Consolas, monospace">#EDEEF1</text>
+<rect x="28" y="240" width="40" height="40" rx="10" fill="#5D6270" stroke="#E6E2E2"/>
+<text x="84" y="258" font-size="15" font-weight="600" fill="#16171C">Tekst 2</text>
+<text x="84" y="276" font-size="13" fill="#5D6270">uitleg, kleine tekst</text>
+<text x="460.0" y="266" font-size="14" fill="#5D6270" text-anchor="end" font-family="JetBrains Mono, Consolas, monospace">#5D6270</text>
+<rect x="508.0" y="240" width="40" height="40" rx="10" fill="#A3A8B4" stroke="#2B2E36"/>
+<text x="564.0" y="266" font-size="15" font-weight="600" fill="#EDEEF1">Tekst 2</text>
+<text x="852" y="266" font-size="14" fill="#A3A8B4" text-anchor="end" font-family="JetBrains Mono, Consolas, monospace">#A3A8B4</text>
+<rect x="28" y="296" width="40" height="40" rx="10" fill="#F6F5F5" stroke="#E6E2E2"/>
+<text x="84" y="314" font-size="15" font-weight="600" fill="#16171C">Achtergrond</text>
+<text x="84" y="332" font-size="13" fill="#5D6270">venster</text>
+<text x="460.0" y="322" font-size="14" fill="#5D6270" text-anchor="end" font-family="JetBrains Mono, Consolas, monospace">#F6F5F5</text>
+<rect x="508.0" y="296" width="40" height="40" rx="10" fill="#111216" stroke="#2B2E36"/>
+<text x="564.0" y="322" font-size="15" font-weight="600" fill="#EDEEF1">Achtergrond</text>
+<text x="852" y="322" font-size="14" fill="#A3A8B4" text-anchor="end" font-family="JetBrains Mono, Consolas, monospace">#111216</text>
+<rect x="28" y="352" width="40" height="40" rx="10" fill="#FFFFFF" stroke="#E6E2E2"/>
+<text x="84" y="370" font-size="15" font-weight="600" fill="#16171C">Vlak</text>
+<text x="84" y="388" font-size="13" fill="#5D6270">kaarten en vakken</text>
+<text x="460.0" y="378" font-size="14" fill="#5D6270" text-anchor="end" font-family="JetBrains Mono, Consolas, monospace">#FFFFFF</text>
+<rect x="508.0" y="352" width="40" height="40" rx="10" fill="#1C1E24" stroke="#2B2E36"/>
+<text x="564.0" y="378" font-size="15" font-weight="600" fill="#EDEEF1">Vlak</text>
+<text x="852" y="378" font-size="14" fill="#A3A8B4" text-anchor="end" font-family="JetBrains Mono, Consolas, monospace">#1C1E24</text>
+<rect x="28" y="408" width="40" height="40" rx="10" fill="#E6E2E2" stroke="#E6E2E2"/>
+<text x="84" y="426" font-size="15" font-weight="600" fill="#16171C">Rand</text>
+<text x="84" y="444" font-size="13" fill="#5D6270">lijntjes</text>
+<text x="460.0" y="434" font-size="14" fill="#5D6270" text-anchor="end" font-family="JetBrains Mono, Consolas, monospace">#E6E2E2</text>
+<rect x="508.0" y="408" width="40" height="40" rx="10" fill="#2B2E36" stroke="#2B2E36"/>
+<text x="564.0" y="434" font-size="15" font-weight="600" fill="#EDEEF1">Rand</text>
+<text x="852" y="434" font-size="14" fill="#A3A8B4" text-anchor="end" font-family="JetBrains Mono, Consolas, monospace">#2B2E36</text>
+<rect x="28" y="464" width="40" height="40" rx="10" fill="#14965A" stroke="#E6E2E2"/>
+<text x="84" y="482" font-size="15" font-weight="600" fill="#16171C">Goed</text>
+<text x="84" y="500" font-size="13" fill="#5D6270">alles werkt</text>
+<text x="460.0" y="490" font-size="14" fill="#5D6270" text-anchor="end" font-family="JetBrains Mono, Consolas, monospace">#14965A</text>
+<rect x="508.0" y="464" width="40" height="40" rx="10" fill="#3FD17F" stroke="#2B2E36"/>
+<text x="564.0" y="490" font-size="15" font-weight="600" fill="#EDEEF1">Goed</text>
+<text x="852" y="490" font-size="14" fill="#A3A8B4" text-anchor="end" font-family="JetBrains Mono, Consolas, monospace">#3FD17F</text>
+<rect x="28" y="520" width="40" height="40" rx="10" fill="#B86E00" stroke="#E6E2E2"/>
+<text x="84" y="538" font-size="15" font-weight="600" fill="#16171C">Let op</text>
+<text x="84" y="556" font-size="13" fill="#5D6270">even opletten</text>
+<text x="460.0" y="546" font-size="14" fill="#5D6270" text-anchor="end" font-family="JetBrains Mono, Consolas, monospace">#B86E00</text>
+<rect x="508.0" y="520" width="40" height="40" rx="10" fill="#F2B544" stroke="#2B2E36"/>
+<text x="564.0" y="546" font-size="15" font-weight="600" fill="#EDEEF1">Let op</text>
+<text x="852" y="546" font-size="14" fill="#A3A8B4" text-anchor="end" font-family="JetBrains Mono, Consolas, monospace">#F2B544</text>
+<rect x="28" y="576" width="40" height="40" rx="10" fill="#D3263A" stroke="#E6E2E2"/>
+<text x="84" y="594" font-size="15" font-weight="600" fill="#16171C">Fout</text>
+<text x="84" y="612" font-size="13" fill="#5D6270">er is iets mis</text>
+<text x="460.0" y="602" font-size="14" fill="#5D6270" text-anchor="end" font-family="JetBrains Mono, Consolas, monospace">#D3263A</text>
+<rect x="508.0" y="576" width="40" height="40" rx="10" fill="#FF6B70" stroke="#2B2E36"/>
+<text x="564.0" y="602" font-size="15" font-weight="600" fill="#EDEEF1">Fout</text>
+<text x="852" y="602" font-size="14" fill="#A3A8B4" text-anchor="end" font-family="JetBrains Mono, Consolas, monospace">#FF6B70</text>
+</svg>

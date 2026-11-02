@@ -15,6 +15,10 @@
 5. Na ongeveer 30 tot 60 minuten staat de ISO onderaan de pagina (**Artifacts**), of bij **Releases** als je hebt gepubliceerd.
 6. Zet hem op een USB-stick met **BugOS Overstap** (Windows), [Fedora Media Writer](https://fedoraproject.org/workstation/download) of [balenaEtcher](https://etcher.balena.io/).
 
+Zo ziet de "probeer eerst"-stick eruit als hij opstart:
+
+<img src="../website/assets/live.webp" width="640" alt="Welkom bij BugOS: kies Eerst proberen of BugOS installeren">
+
 ## Stap 3: Proberen in een virtuele pc (het veiligst)
 
 Een virtuele pc is een "computer in je computer". Je echte computer blijft dan helemaal zoals hij is.
@@ -48,6 +52,16 @@ Herstart daarna de computer. Wil je terug? Kies dan in het opstartmenu de vorige
 - [ ] Open de **BugOS Winkel** en installeer iets
 - [ ] Zet in Instellingen → Aan en uit het **nieuwe startmenu** en het **snelmenu** aan. Werkt het niet? Zet het dan weer uit.
 - [ ] Start de "probeer eerst"-stick op: verschijnt het welkomstscherm met "Eerst proberen" en "BugOS installeren"?
+
+### Het nieuwe design
+
+- [ ] Zie je het BugOS-beestje tijdens het opstarten (voordat je inlogt)?
+- [ ] Heeft het inlogscherm de donkere Stip-achtergrond?
+- [ ] Zie je na het inloggen het BugOS-opstartscherm (logo met drie bolletjes)?
+- [ ] Is de achtergrond licht bij licht en donker bij donker?
+- [ ] Ziet de tekst er overal netjes uit (lettertype Inter)? Zijn er geen vreemde of te kleine letters?
+- [ ] Vergrendel het scherm (Windows-toets + L): zie je de Stip-achtergrond?
+- [ ] BugOS Overstap op Windows: is het venster scherp, ook als Windows op 125% of 150% staat?
 
 ## BugOS Overstap (voor Windows) downloaden
 

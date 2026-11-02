@@ -87,11 +87,11 @@ Het belangrijkste idee: **BugOS kan niet stuk.**
 | Lichte stand | `bugos-lichte-stand` | Zet vanzelf de zware effecten uit op oude pc's. |
 | Eerste start | `bugos-eerste-start` | Zet LibreOffice, VLC en Steam klaar. |
 | Vertalingen | `vertalingen/*.json` | Elke taal kan erbij zonder code te schrijven (zie [VERTALEN.md](VERTALEN.md)). |
-| Stijl | `look-and-feel`, `color-schemes` | Taakbalk onderaan, BugOS-kleuren, logo, achtergrond en vaste favorieten in het startmenu. |
+| Stijl | `look-and-feel`, `color-schemes`, `bugos_ui.py` | Taakbalk onderaan, BugOS-kleuren voor licht en donker, de lettertypes, het logo, de achtergrond "Stip", het opstart-, inlog- en vergrendelscherm en vaste favorieten in het startmenu. Alle BugOS-apps gebruiken hetzelfde ontwerp (`bugos_ui.py`). Zie [HUISSTIJL.md](HUISSTIJL.md). |
 
 ### Voor Windows (`windows-overstap/`)
 
-**BugOS Overstap** werkt in vier stappen:
+**BugOS Overstap** heeft dezelfde look als BugOS (donkere zijbalk met de stappen, rode knoppen) en werkt in vier stappen:
 
 1. Controleren: kan deze pc BugOS aan? Het kijkt naar 64-bit, geheugen, UEFI, ruimte, BitLocker en Nvidia.
 2. Meenemen: documenten, foto's, muziek, video's, bureaublad, downloads, bladwijzers en achtergrond gaan naar een USB-schijf.
@@ -137,6 +137,15 @@ Het belangrijkste idee: **BugOS kan niet stuk.**
 - [x] Eigen website met een downloadknop (staat klaar, maar is nog niet online)
 - [ ] Vrijwilligers vinden voor vertalingen (**manager**)
 - [ ] Een eigen domeinnaam voor de website (**manager**)
+
+### Fase 5: Nieuw design ✅
+- [x] **Nieuw logo**: een lieveheersbeestje van simpele vormen, in kleur, één kleur en als app-icoon
+- [x] **Nieuwe achtergrond "Stip"**, licht en donker
+- [x] **Huisstijl** op papier: logo, kleuren, letters, vormen en hoe we praten ([HUISSTIJL.md](HUISSTIJL.md))
+- [x] **Alle BugOS-apps** opnieuw ontworpen, in licht en donker: Welkom, Instellingen, Winkel, Er werkt iets niet, Back-up, Bestanden van Windows en de "probeer eerst"-stick
+- [x] **Bureaublad**: nieuwe kleuren, eigen lettertypes, startmenu en snelmenu, opstartscherm, inlog- en vergrendelscherm, opstartlogo
+- [x] **Nieuwe website** met echte schermafbeeldingen, een probeer-het-zelf voor "terug naar gisteren" en een licht/donker-schuif
+- [x] **BugOS Overstap** (Windows) in de nieuwe stijl, scherp op schermen van 125% en 150%
 
 ### Voor de manager: wat er nodig is om BugOS uit te delen
 - [ ] De **repo** en de **pakketten** (`bugos`, `bugos-nvidia`) op **openbaar** zetten. Zonder dat:
