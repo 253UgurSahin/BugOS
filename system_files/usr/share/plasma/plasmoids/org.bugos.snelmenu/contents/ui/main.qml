@@ -51,7 +51,10 @@ PlasmoidItem {
         nederlands: root.nederlands
         icoonTekenaar: Kirigami.Icon {
             property string naam: ""
+            property bool wit: false
             source: naam
+            isMask: wit
+            color: "white"
         }
         onZet: (wat, waarde) => root.voerUit("bugos-start-data --zet " + wat + " " + waarde)
         onOpen: wat => {

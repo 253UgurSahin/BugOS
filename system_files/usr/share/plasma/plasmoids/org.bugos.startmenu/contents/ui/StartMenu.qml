@@ -1,8 +1,8 @@
 // BugOS startmenu - het menu zelf.
 //
-// Jip-en-Janneke: bovenaan een grote zoekbalk, daaronder je vastgezette apps
-// en je laatst geopende bestanden. "Alle apps" laat alles zien, op onderwerp.
-// Onderaan: je naam, Instellingen en de aan/uit-knoppen.
+// Jip-en-Janneke: bovenaan een begroeting en een grote zoekbalk, daaronder je
+// vastgezette apps en je laatst geopende bestanden. "Alle apps" laat alles
+// zien, op onderwerp. Onderaan: jij, Instellingen en de aan/uit-knoppen.
 //
 // Dit bestand gebruikt alleen gewone QtQuick, zodat het ook buiten Plasma
 // getest kan worden. main.qml koppelt het aan de taakbalk.
@@ -31,11 +31,31 @@ Rectangle {
     signal aanUit(string actie)
     signal sluiten()
 
-    readonly property color rood: "#D93A3A"
+    // Huisstijl
+    readonly property bool donker: palette.window.hslLightness < 0.5
+    readonly property color rood: donker ? "#EA3B4B" : "#DE2F3E"
+    readonly property color tekst: palette.windowText
+    readonly property color tekst2: Qt.rgba(tekst.r, tekst.g, tekst.b, 0.62)
+    readonly property color vlak: donker ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(0, 0, 0, 0.035)
+    readonly property color zweef: donker ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(0.87, 0.18, 0.24, 0.07)
+    readonly property color lijnkleur: Qt.rgba(tekst.r, tekst.g, tekst.b, 0.10)
+    readonly property string display: "Funnel Display"
+
     readonly property bool alleApps: stapel.currentIndex === 1
     property string zoekTekst: zoekveld.text.trim().toLowerCase()
 
     function tr(nl, en) { return nederlands ? nl : en }
+    function groet() {
+        const uur = new Date().getHours()
+        if (uur < 6) return tr("Goedenacht", "Good night")
+        if (uur < 12) return tr("Goedemorgen", "Good morning")
+        if (uur < 18) return tr("Goedemiddag", "Good afternoon")
+        return tr("Goedenavond", "Good evening")
+    }
+    function voornaam() {
+        const n = (gegevens.gebruiker && gegevens.gebruiker.naam) ? gegevens.gebruiker.naam : ""
+        return n.split(" ")[0]
+    }
     function gevonden() {
         if (zoekTekst === "") return []
         const woorden = zoekTekst.split(/\s+/)
@@ -51,8 +71,8 @@ Rectangle {
         zoekveld.forceActiveFocus()
     }
 
-    implicitWidth: 640
-    implicitHeight: 620
+    implicitWidth: 660
+    implicitHeight: 640
     color: palette.window
     SystemPalette { id: palette; colorGroup: SystemPalette.Active }
 
@@ -60,26 +80,57 @@ Rectangle {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 20
+        anchors.margins: 22
         spacing: 16
 
-        // ---------------------------------------------------- zoekbalk ---
+        // --------------------------------------------------- begroeting ---
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 12
+            Label {
+                text: menu.groet() + (menu.voornaam() ? ", " + menu.voornaam() : "")
+                font.family: menu.display
+                font.pixelSize: 26
+                font.weight: Font.DemiBold
+                color: menu.tekst
+                Layout.fillWidth: true
+                elide: Text.ElideRight
+            }
+            Label {
+                text: new Date().toLocaleDateString(Qt.locale(menu.nederlands ? "nl_NL" : Qt.locale().name), "dddd d MMMM")
+                color: menu.tekst2
+                font.pixelSize: 13
+            }
+        }
+
+        // ----------------------------------------------------- zoekbalk ---
         TextField {
             id: zoekveld
             Layout.fillWidth: true
-            Layout.preferredHeight: 48
-            font.pixelSize: 17
-            leftPadding: 16
-            placeholderText: menu.tr("Zoek een app of instelling...", "Search for an app or setting...")
+            Layout.preferredHeight: 50
+            font.pixelSize: 16
+            leftPadding: 48
+            color: menu.tekst
+            placeholderText: menu.tr("Zoek een app of instelling…", "Search for an app or setting…")
+            placeholderTextColor: menu.tekst2
             focus: true
             Accessible.name: placeholderText
             onAccepted: menu.openEerste()
             Keys.onDownPressed: zoekLijst.forceActiveFocus()
             background: Rectangle {
-                radius: 24
-                color: palette.base
+                radius: 25
+                color: menu.donker ? Qt.rgba(1, 1, 1, 0.06) : "#FFFFFF"
                 border.width: zoekveld.activeFocus ? 2 : 1
-                border.color: zoekveld.activeFocus ? menu.rood : Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.2)
+                border.color: zoekveld.activeFocus ? menu.rood : menu.lijnkleur
+            }
+            Loader {
+                x: 16
+                anchors.verticalCenter: parent.verticalCenter
+                width: 20
+                height: 20
+                sourceComponent: menu.icoonTekenaar
+                onLoaded: item.naam = "edit-find"
+                opacity: 0.6
             }
         }
 
@@ -102,7 +153,7 @@ Rectangle {
                 anchors.centerIn: parent
                 visible: zoekLijst.count === 0
                 text: menu.tr("Niks gevonden. Probeer een ander woord.", "Nothing found. Try another word.")
-                opacity: 0.7
+                color: menu.tekst2
                 font.pixelSize: 15
             }
         }
@@ -117,19 +168,19 @@ Rectangle {
 
             // Begin: vastgezet + recent
             ColumnLayout {
-                spacing: 12
+                spacing: 10
                 RowLayout {
                     Layout.fillWidth: true
-                    Label { text: menu.tr("Vastgezet", "Pinned"); font.pixelSize: 15; font.bold: true; Layout.fillWidth: true }
-                    Button {
-                        text: menu.tr("Alle apps  ›", "All apps  ›")
-                        flat: true
-                        onClicked: stapel.currentIndex = 1
+                    Kopje { text: menu.tr("Vastgezet", "Pinned"); Layout.fillWidth: true }
+                    PilKnop {
+                        tekst: menu.tr("Alle apps", "All apps")
+                        pijl: "›"
+                        onGeklikt: stapel.currentIndex = 1
                     }
                 }
                 GridLayout {
                     Layout.fillWidth: true
-                    columns: 4
+                    columns: 5
                     rowSpacing: 4
                     columnSpacing: 4
                     Repeater {
@@ -137,11 +188,9 @@ Rectangle {
                         delegate: AppTegel { app: modelData; Layout.fillWidth: true; Layout.preferredWidth: 1; Layout.minimumWidth: 0 }
                     }
                 }
-                Label {
+                Kopje {
                     text: menu.tr("Recent geopend", "Recently opened")
-                    font.pixelSize: 15
-                    font.bold: true
-                    Layout.topMargin: 8
+                    Layout.topMargin: 10
                     visible: menu.gegevens.recent.length > 0
                 }
                 GridLayout {
@@ -151,7 +200,7 @@ Rectangle {
                     columnSpacing: 8
                     Repeater {
                         model: menu.gegevens.recent
-                        delegate: BestandRegel { bestand: modelData; Layout.fillWidth: true }
+                        delegate: BestandRegel { bestand: modelData; Layout.fillWidth: true; Layout.preferredWidth: 1; Layout.minimumWidth: 0 }
                     }
                 }
                 Item { Layout.fillHeight: true }
@@ -162,8 +211,13 @@ Rectangle {
                 spacing: 8
                 RowLayout {
                     Layout.fillWidth: true
-                    Button { text: menu.tr("‹  Terug", "‹  Back"); flat: true; onClicked: stapel.currentIndex = 0 }
-                    Label { text: menu.tr("Alle apps", "All apps"); font.pixelSize: 15; font.bold: true; Layout.fillWidth: true }
+                    PilKnop {
+                        tekst: menu.tr("Terug", "Back")
+                        pijl: "‹"
+                        pijlVoor: true
+                        onGeklikt: stapel.currentIndex = 0
+                    }
+                    Kopje { text: menu.tr("Alle apps", "All apps"); Layout.fillWidth: true; Layout.leftMargin: 6 }
                 }
                 ListView {
                     id: alleLijst
@@ -175,11 +229,14 @@ Rectangle {
                     section.property: "groep"
                     section.delegate: Label {
                         required property string section
-                        text: section
-                        font.bold: true
-                        opacity: 0.7
-                        topPadding: 10
+                        text: section.toUpperCase()
+                        color: menu.tekst2
+                        font.pixelSize: 11
+                        font.weight: Font.DemiBold
+                        font.letterSpacing: 0.8
+                        topPadding: 12
                         bottomPadding: 4
+                        leftPadding: 8
                     }
                     delegate: AppRegel { width: alleLijst.width; app: modelData }
                     ScrollBar.vertical: ScrollBar {}
@@ -191,63 +248,104 @@ Rectangle {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 1
-            color: Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.15)
+            color: menu.lijnkleur
         }
         RowLayout {
             Layout.fillWidth: true
-            spacing: 6
+            spacing: 8
             Rectangle {
-                width: 36; height: 36; radius: 18
-                color: menu.rood
+                width: 38; height: 38; radius: 19
+                gradient: Gradient {
+                    GradientStop { position: 0.0; color: "#FF5C50" }
+                    GradientStop { position: 1.0; color: "#C41D3A" }
+                }
                 Label {
                     anchors.centerIn: parent
                     text: (menu.gegevens.gebruiker.naam || "?").charAt(0).toUpperCase()
                     color: "white"
-                    font.bold: true
-                    font.pixelSize: 16
+                    font.family: menu.display
+                    font.weight: Font.DemiBold
+                    font.pixelSize: 17
                 }
             }
             Label {
                 text: menu.gegevens.gebruiker.naam || ""
+                color: menu.tekst
                 font.pixelSize: 14
+                font.weight: Font.Medium
                 Layout.fillWidth: true
                 elide: Text.ElideRight
             }
-            OnderKnop { icoon: "preferences-system"; tekst: menu.tr("Instellingen", "Settings"); onGeklikt: { menu.start("/usr/share/applications/bugos-instellingen.desktop"); menu.sluiten() } }
+            OnderKnop { icoon: "configure"; tekst: menu.tr("Instellingen", "Settings"); onGeklikt: { menu.start("/usr/share/applications/bugos-instellingen.desktop"); menu.sluiten() } }
             OnderKnop { icoon: "system-lock-screen"; tekst: menu.tr("Vergrendelen", "Lock"); onGeklikt: { menu.aanUit("slot"); menu.sluiten() } }
             OnderKnop { icoon: "system-log-out"; tekst: menu.tr("Uitloggen", "Log out"); onGeklikt: { menu.aanUit("uitloggen"); menu.sluiten() } }
             OnderKnop { icoon: "system-reboot"; tekst: menu.tr("Herstarten", "Restart"); onGeklikt: { menu.aanUit("herstarten"); menu.sluiten() } }
-            OnderKnop { icoon: "system-shutdown"; tekst: menu.tr("Uitzetten", "Shut down"); onGeklikt: { menu.aanUit("uitzetten"); menu.sluiten() } }
+            OnderKnop { icoon: "system-shutdown"; tekst: menu.tr("Uitzetten", "Shut down"); rood: true; onGeklikt: { menu.aanUit("uitzetten"); menu.sluiten() } }
         }
     }
 
     // ---------------------------------------------------- bouwsteentjes ---
 
+    component Kopje: Label {
+        color: menu.tekst
+        font.pixelSize: 15
+        font.weight: Font.DemiBold
+    }
+
+    component PilKnop: AbstractButton {
+        id: pil
+        property string tekst
+        property string pijl: "›"
+        property bool pijlVoor: false
+        signal geklikt()
+        implicitHeight: 32
+        implicitWidth: rij.implicitWidth + 24
+        hoverEnabled: true
+        onClicked: geklikt()
+        Accessible.name: tekst
+        background: Rectangle {
+            radius: 16
+            color: pil.hovered || pil.activeFocus ? menu.zweef : menu.vlak
+        }
+        contentItem: Row {
+            id: rij
+            spacing: 6
+            leftPadding: 12
+            Label { visible: pil.pijlVoor; text: pil.pijl; color: menu.tekst; font.pixelSize: 15; anchors.verticalCenter: parent.verticalCenter }
+            Label { text: pil.tekst; color: menu.tekst; font.pixelSize: 13; font.weight: Font.Medium; anchors.verticalCenter: parent.verticalCenter }
+            Label { visible: !pil.pijlVoor; text: pil.pijl; color: menu.tekst; font.pixelSize: 15; anchors.verticalCenter: parent.verticalCenter }
+        }
+    }
+
     component AppTegel: AbstractButton {
         id: tegel
         property var app
-        implicitHeight: 96
+        implicitHeight: 98
         hoverEnabled: true
         Accessible.name: app.naam
         onClicked: { menu.start(app.pad); menu.sluiten() }
         background: Rectangle {
-            radius: 12
-            color: tegel.hovered || tegel.activeFocus ? Qt.rgba(0.85, 0.23, 0.23, 0.12) : "transparent"
+            radius: 14
+            color: tegel.hovered || tegel.activeFocus ? menu.zweef : "transparent"
         }
         contentItem: ColumnLayout {
-            spacing: 6
+            spacing: 8
             Loader {
                 Layout.alignment: Qt.AlignHCenter
-                Layout.preferredWidth: 44
-                Layout.preferredHeight: 44
+                Layout.topMargin: 6
+                Layout.preferredWidth: 46
+                Layout.preferredHeight: 46
                 sourceComponent: menu.icoonTekenaar
                 onLoaded: item.naam = Qt.binding(() => tegel.app.icoon)
+                scale: tegel.pressed ? 0.92 : 1.0
+                Behavior on scale { NumberAnimation { duration: 90 } }
             }
             Label {
                 text: tegel.app.naam
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
                 elide: Text.ElideRight
+                color: menu.tekst
                 font.pixelSize: 13
             }
         }
@@ -257,19 +355,19 @@ Rectangle {
         id: regel
         property var app
         property bool gemarkeerd: false
-        implicitHeight: 52
+        implicitHeight: 54
         hoverEnabled: true
         Accessible.name: app.naam
         onClicked: { menu.start(app.pad); menu.sluiten() }
         Keys.onReturnPressed: clicked()
         background: Rectangle {
-            radius: 10
-            color: regel.hovered || regel.gemarkeerd ? Qt.rgba(0.85, 0.23, 0.23, 0.12) : "transparent"
+            radius: 12
+            color: regel.hovered || regel.gemarkeerd ? menu.zweef : "transparent"
         }
         contentItem: RowLayout {
             spacing: 12
             Loader {
-                Layout.leftMargin: 8
+                Layout.leftMargin: 10
                 Layout.preferredWidth: 32
                 Layout.preferredHeight: 32
                 sourceComponent: menu.icoonTekenaar
@@ -278,11 +376,11 @@ Rectangle {
             ColumnLayout {
                 spacing: 0
                 Layout.fillWidth: true
-                Label { text: regel.app.naam; font.pixelSize: 14; elide: Text.ElideRight; Layout.fillWidth: true }
+                Label { text: regel.app.naam; color: menu.tekst; font.pixelSize: 14; font.weight: Font.Medium; elide: Text.ElideRight; Layout.fillWidth: true }
                 Label {
                     text: regel.app.uitleg || ""
                     visible: text !== ""
-                    opacity: 0.65
+                    color: menu.tekst2
                     font.pixelSize: 12
                     elide: Text.ElideRight
                     Layout.fillWidth: true
@@ -294,28 +392,32 @@ Rectangle {
     component BestandRegel: AbstractButton {
         id: bregel
         property var bestand
-        implicitHeight: 48
+        implicitHeight: 50
         hoverEnabled: true
         Accessible.name: bestand.naam
         onClicked: { menu.openBestand(bestand.pad); menu.sluiten() }
         background: Rectangle {
-            radius: 10
-            color: bregel.hovered ? Qt.rgba(0.85, 0.23, 0.23, 0.12) : "transparent"
+            radius: 12
+            color: bregel.hovered ? menu.zweef : "transparent"
         }
         contentItem: RowLayout {
             spacing: 10
-            Loader {
-                Layout.leftMargin: 6
-                Layout.preferredWidth: 28
-                Layout.preferredHeight: 28
-                sourceComponent: menu.icoonTekenaar
-                onLoaded: item.naam = "text-x-generic"
+            Rectangle {
+                Layout.leftMargin: 8
+                width: 34; height: 34; radius: 10
+                color: menu.vlak
+                Loader {
+                    anchors.centerIn: parent
+                    width: 22; height: 22
+                    sourceComponent: menu.icoonTekenaar
+                    onLoaded: item.naam = "text-x-generic"
+                }
             }
             ColumnLayout {
                 spacing: 0
                 Layout.fillWidth: true
-                Label { text: bregel.bestand.naam; font.pixelSize: 13; elide: Text.ElideMiddle; Layout.fillWidth: true }
-                Label { text: bregel.bestand.map; font.pixelSize: 11; opacity: 0.6; elide: Text.ElideMiddle; Layout.fillWidth: true }
+                Label { text: bregel.bestand.naam; color: menu.tekst; font.pixelSize: 13; elide: Text.ElideMiddle; Layout.fillWidth: true }
+                Label { text: bregel.bestand.map; color: menu.tekst2; font.pixelSize: 11; elide: Text.ElideMiddle; Layout.fillWidth: true }
             }
         }
     }
@@ -324,6 +426,7 @@ Rectangle {
         id: knop
         property string icoon
         property string tekst
+        property bool rood: false
         signal geklikt()
         implicitWidth: 40
         implicitHeight: 40
@@ -334,11 +437,15 @@ Rectangle {
         onClicked: geklikt()
         background: Rectangle {
             radius: 20
-            color: knop.hovered || knop.activeFocus ? Qt.rgba(0.85, 0.23, 0.23, 0.15) : "transparent"
+            color: knop.hovered || knop.activeFocus ? (knop.rood ? menu.rood : menu.zweef) : menu.vlak
         }
-        contentItem: Loader {
-            sourceComponent: menu.icoonTekenaar
-            onLoaded: item.naam = knop.icoon
+        contentItem: Item {
+            Loader {
+                anchors.centerIn: parent
+                width: 20; height: 20
+                sourceComponent: menu.icoonTekenaar
+                onLoaded: item.naam = knop.icoon
+            }
         }
     }
 

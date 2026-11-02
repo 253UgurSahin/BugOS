@@ -58,6 +58,43 @@ kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key ColorScheme BugOS
 # Dubbelklik om te openen, net als in Windows.
 kwriteconfig6 --file /etc/xdg/kdeglobals --group KDE --key SingleClick false
 
+# Lettertypes: Inter voor alles, JetBrains Mono voor code (meegeleverd in /usr/share/fonts/bugos).
+fc-cache -f /usr/share/fonts/bugos || true
+LETTER="Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
+for sleutel in font menuFont toolBarFont; do
+    kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key "$sleutel" "$LETTER"
+done
+kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key smallestReadableFont "Inter,8,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
+kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key fixed "JetBrains Mono,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
+kwriteconfig6 --file /etc/xdg/kdeglobals --group WM --key activeFont "Inter,10,-1,5,600,0,0,0,0,0,0,0,0,0,0,1"
+# Accentkleur: lieveheersbeestjesrood
+kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key AccentColor "222,47,62"
+
+# Opstartscherm na het inloggen (KSplash) uit ons look-and-feel-pakket
+kwriteconfig6 --file /etc/xdg/ksplashrc --group KSplash --key Engine KSplashQML
+kwriteconfig6 --file /etc/xdg/ksplashrc --group KSplash --key Theme org.bugos.desktop
+
+# Vergrendelscherm en inlogscherm: de BugOS-achtergrond
+kwriteconfig6 --file /etc/xdg/kscreenlockerrc --group Greeter --group Wallpaper --group org.kde.image --group General \
+    --key Image "file:///usr/share/wallpapers/bugos/"
+kwriteconfig6 --file /etc/xdg/kscreenlockerrc --group Greeter --group Wallpaper --group org.kde.image --group General \
+    --key PreviewImage "file:///usr/share/wallpapers/bugos/contents/screenshot.jpg"
+if [ -d /usr/share/sddm/themes/breeze ]; then
+    printf '[General]\nbackground=/usr/share/wallpapers/bugos/contents/images_dark/3840x2160.jpg\ntype=image\n' \
+        >/usr/share/sddm/themes/breeze/theme.conf.user
+fi
+
+# Opstartlogo (Plymouth): het BugOS-logo onderaan het opstartscherm.
+if [ -d /usr/share/plymouth/themes/spinner ]; then
+    install -m0644 /usr/share/bugos/plymouth-watermark.png /usr/share/plymouth/themes/spinner/watermark.png
+    KERNEL="$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d -printf '%P\n' | head -1)"
+    # Eerst naar een tijdelijk bestand: lukt het niet, dan blijft het oude gewoon staan.
+    if dracut --no-hostonly --kver "$KERNEL" --reproducible --zstd --add ostree -f /tmp/initramfs-bugos.img; then
+        install -m0600 /tmp/initramfs-bugos.img "/usr/lib/modules/$KERNEL/initramfs.img"
+    fi
+    rm -f /tmp/initramfs-bugos.img
+fi
+
 # 4b. Bekende KDE-programma's een simpele BugOS-naam geven in het startmenu.
 #     hernoem <bestand> <Nederlandse naam> <Engelse naam>
 hernoem() {
