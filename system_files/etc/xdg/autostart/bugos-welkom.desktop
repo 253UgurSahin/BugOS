@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=BugOS Welkom
+Exec=bugos-welkom --eerste-keer
+Icon=bugos-logo
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=2
+NoDisplay=true

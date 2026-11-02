@@ -1,0 +1,15 @@
+{
+    "KPackageStructure": "Plasma/LookAndFeel",
+    "KPlugin": {
+        "Authors": [{ "Name": "BugOS" }],
+        "Category": "",
+        "Description": "BugOS: knoppen waar je ze verwacht",
+        "Description[en]": "BugOS: buttons where you expect them",
+        "Id": "org.bugos.desktop",
+        "License": "GPL-3.0-or-later",
+        "Name": "BugOS",
+        "Version": "0.1",
+        "Website": "https://github.com/253UgurSahin/BugOS"
+    },
+    "X-Plasma-APIVersion": "2"
+}

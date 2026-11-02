@@ -1,0 +1,26 @@
+# Extra programma's in BugOS (bovenop Aurora).
+# Eén pakket per regel. Regels met # zijn uitleg.
+
+# --- Windows-programma's (.exe) ---
+wine
+wine-mono
+winetricks
+
+# --- Gamers ---
+gamemode
+mangohud
+steam-devices
+gamescope
+
+# --- Developers ---
+podman-docker
+distrobox
+git
+
+# --- Eigen BugOS-programma's hebben dit nodig ---
+python3-pyside6
+kdialog
+libnotify
+
+# --- Alle talen ---
+glibc-all-langpacks

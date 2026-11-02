@@ -1,0 +1,75 @@
+#!/usr/bin/bash
+# bugos-exe - een Windows-programma (.exe/.msi) openen met dubbelklik.
+#
+# Hoe werkt het (Jip-en-Janneke):
+#   1. Je dubbelklikt op een .exe.
+#   2. BugOS start hem via Wine (een "vertaler" van Windows naar Linux).
+#   3. Werkt het niet? Dan zegt BugOS netjes wat je in plaats daarvan kunt
+#      gebruiken, bijvoorbeeld LibreOffice in plaats van Word.
+
+# shellcheck source=system_files/usr/share/bugos/lib.sh
+. /usr/share/bugos/lib.sh
+
+BESTAND="${1:-}"
+if [ -z "$BESTAND" ] || [ ! -f "$BESTAND" ]; then
+    fout "$(t "Ik kan dit bestand niet vinden." "I cannot find this file.")"
+    exit 1
+fi
+
+NAAM="$(basename "$BESTAND")"
+ALTERNATIEVEN=/usr/share/bugos/alternatieven.txt
+
+# Is er een beter, echt Linux-alternatief? Dan dat eerst aanbieden.
+zoek_alternatief() {
+    local klein
+    klein="$(echo "$NAAM" | tr '[:upper:]' '[:lower:]')"
+    while IFS='|' read -r woord app id; do
+        case "$woord" in '#'* | '') continue ;; esac
+        if [[ "$klein" == *"$woord"* ]]; then
+            echo "$app|$id"
+            return 0
+        fi
+    done <"$ALTERNATIEVEN"
+    return 1
+}
+
+if ALT="$(zoek_alternatief)"; then
+    APP="${ALT%%|*}"
+    ID="${ALT##*|}"
+    if vraag "$(t \
+        "Dit lijkt op een programma waarvoor een betere versie voor BugOS bestaat: $APP.\n\nWil je $APP uit de BugOS Winkel halen?\n(Kies Nee om de Windows-versie toch te proberen.)" \
+        "This looks like a program that has a better version for BugOS: $APP.\n\nDo you want to get $APP from the BugOS Store?\n(Choose No to try the Windows version anyway.)")"; then
+        exec plasma-discover "appstream://$ID"
+    fi
+fi
+
+if ! command -v wine >/dev/null 2>&1; then
+    fout "$(t "Windows-programma's openen is nog niet klaar op deze computer." \
+        "Opening Windows programs is not set up on this computer yet.")"
+    exit 1
+fi
+
+# Elke gebruiker krijgt één eigen "Windows-map" voor zijn programma's.
+export WINEPREFIX="${WINEPREFIX:-$HOME/.local/share/bugos/windows}"
+if [ ! -d "$WINEPREFIX" ]; then
+    melding "$(t "Even geduld..." "Please wait...")" \
+        "$(t "De eerste keer zet BugOS alles klaar voor Windows-programma's. Dit duurt een minuutje." \
+            "The first time, BugOS prepares everything for Windows programs. This takes a minute.")"
+    WINEDEBUG=-all wineboot --init >/dev/null 2>&1
+fi
+
+START=$(date +%s)
+case "$NAAM" in
+*.msi | *.MSI) WINEDEBUG=-all wine msiexec /i "$BESTAND" ;;
+*) WINEDEBUG=-all wine start /wait /unix "$BESTAND" ;;
+esac
+CODE=$?
+DUUR=$(($(date +%s) - START))
+
+# Stopte het programma meteen met een fout? Dan vriendelijk uitleggen.
+if [ "$CODE" -ne 0 ] && [ "$DUUR" -lt 10 ]; then
+    fout "$(t \
+        "Helaas, \"$NAAM\" werkt niet op BugOS.\n\nTips:\n• Kijk in de BugOS Winkel of er een versie voor BugOS is.\n• Zoek op internet naar \"$NAAM alternatief Linux\".\n\nJe computer is niet kapot, er is niks veranderd." \
+        "Sorry, \"$NAAM\" does not work on BugOS.\n\nTips:\n• Check the BugOS Store for a BugOS version.\n• Search the internet for \"$NAAM alternative Linux\".\n\nYour computer is fine, nothing has changed.")"
+    exit 1
+fi

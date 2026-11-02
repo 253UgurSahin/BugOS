@@ -1,0 +1,95 @@
+---
+# BugOS bouwen
+# Jip-en-Janneke: elke keer als er iets verandert (en elke nacht), bouwt
+# GitHub een nieuwe BugOS. Computers met BugOS halen die vanzelf op als update.
+name: BugOS bouwen
+
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths-ignore: ["**.md", "docs/**"]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 3 * * *" # elke nacht, zodat beveiligingsupdates meekomen
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  controle:
+    name: Scripts controleren
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell-scripts nakijken (shellcheck)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck -x build_files/build.sh \
+            system_files/usr/share/bugos/lib.sh \
+            $(grep -l '^#!/usr/bin/bash' system_files/usr/bin/bugos-*)
+      - name: Python nakijken
+        run: python3 -m py_compile system_files/usr/bin/bugos-welkom
+
+  bouwen:
+    name: BugOS ${{ matrix.variant }}
+    needs: controle
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: main
+            image: bugos
+            base: ghcr.io/ublue-os/aurora:stable
+          - variant: nvidia
+            image: bugos-nvidia
+            base: ghcr.io/ublue-os/aurora-nvidia-open:stable
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ruimte maken op de bouwcomputer
+        uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
+
+      - name: Namen en labels bepalen
+        id: meta
+        run: |
+          REGISTRY="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
+          VERSIE="$(date -u +%Y.%m.%d)"
+          if [ "${GITHUB_REF_NAME}" = "${{ github.event.repository.default_branch }}" ]; then
+            TAGS="latest ${VERSIE}"
+          else
+            TAGS="$(echo "${GITHUB_REF_NAME}" | tr '/' '-' | tr '[:upper:]' '[:lower:]')"
+          fi
+          echo "registry=${REGISTRY}" >> "$GITHUB_OUTPUT"
+          echo "versie=${VERSIE}" >> "$GITHUB_OUTPUT"
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
+
+      - name: Bouwen
+        run: |
+          sudo podman build \
+            --build-arg BASE_IMAGE=${{ matrix.base }} \
+            --build-arg BUGOS_VARIANT=${{ matrix.variant }} \
+            --build-arg BUGOS_VERSION=${{ steps.meta.outputs.versie }} \
+            --label org.opencontainers.image.title="BugOS" \
+            --label org.opencontainers.image.description="BugOS: Linux zo makkelijk als Windows" \
+            --label org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}" \
+            --label org.opencontainers.image.licenses="GPL-3.0-or-later" \
+            --label containers.bootc=1 \
+            -t localhost/${{ matrix.image }}:build .
+
+      - name: Uploaden naar GitHub Packages
+        if: github.event_name != 'pull_request'
+        env:
+          REGISTRY: ${{ steps.meta.outputs.registry }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+          for tag in ${TAGS}; do
+            sudo podman push localhost/${{ matrix.image }}:build "${REGISTRY}/${{ matrix.image }}:${tag}"
+          done

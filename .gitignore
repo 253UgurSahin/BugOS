@@ -1,0 +1,4 @@
+output/
+*.iso
+*.qcow2
+__pycache__/

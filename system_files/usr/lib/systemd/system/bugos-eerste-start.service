@@ -1,0 +1,14 @@
+[Unit]
+Description=BugOS: standaard-apps klaarzetten na installatie
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=!/var/lib/bugos/eerste-start-klaar
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bugos-eerste-start
+Restart=on-failure
+RestartSec=5min
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,67 @@
+#!/usr/bin/bash
+# bugos-updates - kies hoe BugOS updates doet.
+#
+#   bugos-updates auto     -> stil op de achtergrond (standaard)
+#   bugos-updates hand     -> BugOS meldt "er zijn updates", jij kiest wanneer
+#   bugos-updates status   -> laat zien wat nu is ingesteld
+#   bugos-updates nu       -> nu meteen updaten
+#   bugos-updates terug    -> terug naar de vorige versie (bij problemen)
+#
+# Een update wordt altijd pas actief na opnieuw opstarten. Gaat er iets mis,
+# dan kies je bij het opstarten gewoon de vorige versie.
+
+# shellcheck source=system_files/usr/share/bugos/lib.sh
+. /usr/share/bugos/lib.sh
+
+CONF=/etc/bugos/updates.conf
+
+# Aurora gebruikt "uupd" (doet systeem + apps + containers in één keer).
+# Is die er niet, dan nemen we de gewone Fedora-dienst.
+if systemctl list-unit-files uupd.timer >/dev/null 2>&1; then
+    TIMER=uupd.timer
+else
+    TIMER=rpm-ostreed-automatic.timer
+fi
+
+als_beheerder() {
+    if [ "$(id -u)" -ne 0 ]; then
+        exec pkexec "$0" "$@"
+    fi
+}
+
+case "${1:-status}" in
+auto)
+    als_beheerder "$@"
+    mkdir -p /etc/bugos
+    echo "UPDATES=auto" >"$CONF"
+    systemctl enable --now "$TIMER"
+    t "Updates gaan nu vanzelf." "Updates are now automatic."
+    ;;
+hand)
+    als_beheerder "$@"
+    mkdir -p /etc/bugos
+    echo "UPDATES=hand" >"$CONF"
+    systemctl disable --now "$TIMER"
+    # De BugOS Winkel (Discover) blijft melden als er updates zijn.
+    t "Updates doe je nu zelf via de BugOS Winkel." "You now do updates yourself via the BugOS Store."
+    ;;
+nu)
+    als_beheerder "$@"
+    if command -v uupd >/dev/null 2>&1; then uupd; else rpm-ostree upgrade; fi
+    ;;
+terug)
+    als_beheerder "$@"
+    rpm-ostree rollback &&
+        t "Klaar. Start de computer opnieuw op om terug te gaan." "Done. Restart the computer to go back."
+    ;;
+status)
+    MODUS=auto
+    # shellcheck source=/dev/null
+    [ -f "$CONF" ] && . "$CONF" && MODUS="${UPDATES:-auto}"
+    echo "$MODUS"
+    ;;
+*)
+    echo "Gebruik: bugos-updates auto|hand|status|nu|terug" >&2
+    exit 2
+    ;;
+esac

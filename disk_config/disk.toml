@@ -1,0 +1,4 @@
+# Instellingen voor een virtuele-pc-schijf (om BugOS te testen zonder USB).
+[[customizations.filesystem]]
+mountpoint = "/"
+minsize = "30 GiB"

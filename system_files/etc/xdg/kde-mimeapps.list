@@ -1,0 +1,9 @@
+[Default Applications]
+application/x-ms-dos-executable=bugos-exe.desktop
+application/x-msdownload=bugos-exe.desktop
+application/x-msi=bugos-exe.desktop
+application/vnd.microsoft.portable-executable=bugos-exe.desktop
+application/x-rpm=bugos-pakket.desktop
+application/x-redhat-package-manager=bugos-pakket.desktop
+application/vnd.debian.binary-package=bugos-pakket.desktop
+application/x-deb=bugos-pakket.desktop

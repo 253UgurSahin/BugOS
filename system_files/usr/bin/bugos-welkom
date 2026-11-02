@@ -1,0 +1,333 @@
+#!/usr/bin/python3
+"""BugOS Welkom - het eerste scherm na het installeren.
+
+Jip-en-Janneke: een paar grote, simpele stappen.
+  1. Hallo + taal
+  2. Internet (wifi)
+  3. Licht of donker
+  4. Updates: vanzelf of zelf
+  5. Gamen / programmeren
+  6. Klaar!
+
+Gestart met --eerste-keer opent hij alleen als hij nog nooit is afgemaakt.
+"""
+
+import locale
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont, QIcon
+from PySide6.QtWidgets import (
+    QApplication,
+    QButtonGroup,
+    QCheckBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QRadioButton,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
+
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "bugos"
+KLAAR = CONFIG / "welkom-klaar"
+
+
+def _taal() -> str:
+    lang = os.environ.get("LC_MESSAGES") or os.environ.get("LANG") or ""
+    if not lang:
+        lang = (locale.getlocale()[0] or "")
+    return "nl" if lang.lower().startswith("nl") else "en"
+
+
+TAAL = _taal()
+
+
+def t(nl: str, en: str) -> str:
+    """Geef de tekst in de taal van de gebruiker."""
+    return nl if TAAL == "nl" else en
+
+
+def start(*cmd: str) -> None:
+    """Start een programma op de achtergrond; een fout mag de app niet laten crashen."""
+    try:
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        pass
+
+
+def heeft_internet() -> bool:
+    try:
+        uit = subprocess.run(
+            ["nmcli", "-t", "-f", "CONNECTIVITY", "general"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout.strip()
+        return uit == "full"
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def titel(tekst: str) -> QLabel:
+    label = QLabel(tekst)
+    font = QFont()
+    font.setPointSize(22)
+    font.setBold(True)
+    label.setFont(font)
+    label.setWordWrap(True)
+    return label
+
+
+def uitleg(tekst: str) -> QLabel:
+    label = QLabel(tekst)
+    font = QFont()
+    font.setPointSize(13)
+    label.setFont(font)
+    label.setWordWrap(True)
+    return label
+
+
+def grote_knop(tekst: str) -> QPushButton:
+    knop = QPushButton(tekst)
+    knop.setMinimumHeight(56)
+    knop.setMinimumWidth(140)
+    font = QFont()
+    font.setPointSize(13)
+    knop.setFont(font)
+    return knop
+
+
+class Pagina(QWidget):
+    def __init__(self, kop: str, tekst: str):
+        super().__init__()
+        self.lay = QVBoxLayout(self)
+        self.lay.setContentsMargins(48, 40, 48, 24)
+        self.lay.setSpacing(18)
+        self.lay.addWidget(titel(kop))
+        self.lay.addWidget(uitleg(tekst))
+
+    def klaar_met_vullen(self) -> None:
+        self.lay.addStretch(1)
+
+    def bij_volgende(self) -> None:
+        """Wordt aangeroepen als de gebruiker op Volgende drukt."""
+
+
+class Hallo(Pagina):
+    def __init__(self):
+        super().__init__(
+            t("Welkom bij BugOS 🐞", "Welcome to BugOS 🐞"),
+            t("Fijn dat je er bent! In een paar simpele stappen zetten we alles klaar. "
+              "Je kunt alles later nog veranderen.",
+              "Glad you're here! In a few simple steps we'll set everything up. "
+              "You can change everything later."),
+        )
+        knop = grote_knop(t("🌍  Andere taal kiezen", "🌍  Choose another language"))
+        knop.clicked.connect(lambda: start("systemsettings", "kcm_regionandlang"))
+        self.lay.addWidget(knop)
+        self.klaar_met_vullen()
+
+
+class Internet(Pagina):
+    def __init__(self):
+        super().__init__(
+            t("Internet", "Internet"),
+            t("Voor updates en de Winkel heb je internet nodig.",
+              "You need internet for updates and the Store."),
+        )
+        self.status = uitleg("")
+        self.lay.addWidget(self.status)
+        knop = grote_knop(t("📶  Wifi kiezen", "📶  Choose Wi-Fi"))
+        knop.clicked.connect(lambda: start("systemsettings", "kcm_networkmanagement"))
+        self.lay.addWidget(knop)
+        opnieuw = QPushButton(t("Opnieuw kijken", "Check again"))
+        opnieuw.clicked.connect(self.ververs)
+        self.lay.addWidget(opnieuw)
+        self.klaar_met_vullen()
+        self.ververs()
+
+    def ververs(self) -> None:
+        if heeft_internet():
+            self.status.setText(t("✅  Je bent verbonden met internet.", "✅  You are connected to the internet."))
+        else:
+            self.status.setText(t("❌  Nog geen internet. Kies hieronder je wifi.",
+                                  "❌  No internet yet. Choose your Wi-Fi below."))
+
+
+class Uiterlijk(Pagina):
+    def __init__(self):
+        super().__init__(
+            t("Licht of donker?", "Light or dark?"),
+            t("Kies wat jij fijn vindt om naar te kijken.", "Choose what you like to look at."),
+        )
+        rij = QHBoxLayout()
+        self.licht = grote_knop(t("☀️  Licht", "☀️  Light"))
+        self.donker = grote_knop(t("🌙  Donker", "🌙  Dark"))
+        self.licht.setStyleSheet("background:#FFFFFF;color:#1F2328;border:2px solid #D0D7DE;border-radius:12px;")
+        self.donker.setStyleSheet("background:#1C1E24;color:#F2F3F5;border:2px solid #3A3F4B;border-radius:12px;")
+        self.licht.setMinimumHeight(140)
+        self.donker.setMinimumHeight(140)
+        self.licht.clicked.connect(lambda: self.kies(False))
+        self.donker.clicked.connect(lambda: self.kies(True))
+        rij.addWidget(self.licht)
+        rij.addWidget(self.donker)
+        self.lay.addLayout(rij)
+        self.klaar_met_vullen()
+
+    def kies(self, donker: bool) -> None:
+        # Laat duidelijk zien wat er gekozen is.
+        self.licht.setText(t("☀️  Licht", "☀️  Light") + ("" if donker else "  ✔"))
+        self.donker.setText(t("🌙  Donker", "🌙  Dark") + ("  ✔" if donker else ""))
+        start("plasma-apply-colorscheme", "BugOSDonker" if donker else "BugOSLicht")
+        start("plasma-apply-desktoptheme", "breeze-dark" if donker else "default")
+
+
+class Updates(Pagina):
+    def __init__(self):
+        super().__init__(
+            t("Updates", "Updates"),
+            t("Updates houden je computer veilig. Ze worden pas actief als je de computer "
+              "opnieuw opstart. Gaat er ooit iets mis, dan kies je bij het opstarten gewoon de vorige versie.",
+              "Updates keep your computer safe. They only take effect after a restart. "
+              "If something ever goes wrong, just pick the previous version when starting up."),
+        )
+        self.auto = QRadioButton(t("Vanzelf, stil op de achtergrond (aangeraden)",
+                                   "Automatically, quietly in the background (recommended)"))
+        self.hand = QRadioButton(t("Ik wil zelf kiezen wanneer", "I want to choose when myself"))
+        for knop in (self.auto, self.hand):
+            f = knop.font()
+            f.setPointSize(13)
+            knop.setFont(f)
+            self.lay.addWidget(knop)
+        groep = QButtonGroup(self)
+        groep.addButton(self.auto)
+        groep.addButton(self.hand)
+        huidig = subprocess.run(["bugos-updates", "status"], capture_output=True, text=True).stdout.strip() \
+            if _bestaat("bugos-updates") else "auto"
+        self.begin = huidig or "auto"
+        (self.hand if self.begin == "hand" else self.auto).setChecked(True)
+        self.klaar_met_vullen()
+
+    def bij_volgende(self) -> None:
+        gekozen = "hand" if self.hand.isChecked() else "auto"
+        if gekozen != self.begin:
+            start("pkexec", "/usr/bin/bugos-updates", gekozen)
+            self.begin = gekozen
+
+
+class Extra(Pagina):
+    def __init__(self):
+        super().__init__(
+            t("Wat ga je doen?", "What will you do?"),
+            t("Vink aan wat bij jou past. Niks aanvinken mag ook.",
+              "Tick what fits you. Ticking nothing is fine too."),
+        )
+        self.gamer = QCheckBox(t("🎮  Ik ga gamen", "🎮  I'm going to play games"))
+        self.dev = QCheckBox(t("🛠️  Ik ga programmeren (Ontwikkelaarsmodus)", "🛠️  I'm going to code (Developer mode)"))
+        for vak in (self.gamer, self.dev):
+            f = vak.font()
+            f.setPointSize(13)
+            vak.setFont(f)
+            self.lay.addWidget(vak)
+        self.lay.addWidget(uitleg(t(
+            "Gamen: Steam staat al klaar. Zoek in het startmenu op \"Game-modus\" voor volle kracht.\n"
+            "Programmeren: BugOS zet VS Code, containers en programmeertalen voor je klaar.",
+            "Gaming: Steam is ready. Search the start menu for \"Game mode\" for full power.\n"
+            "Coding: BugOS sets up VS Code, containers and programming languages for you.")))
+        self.klaar_met_vullen()
+
+    def bij_volgende(self) -> None:
+        if self.dev.isChecked():
+            start("bugos-ontwikkelaar", "aan")
+        if self.gamer.isChecked():
+            start("steam")
+
+
+class Klaar(Pagina):
+    def __init__(self):
+        super().__init__(
+            t("Klaar! 🎉", "All done! 🎉"),
+            t("BugOS staat voor je klaar. Klik linksonder op het logo om je programma's te vinden.\n\n"
+              "Nieuwe programma's haal je in de BugOS Winkel.\n"
+              "Dit scherm kun je altijd terugvinden in het startmenu: \"BugOS Welkom\".",
+              "BugOS is ready for you. Click the logo at the bottom left to find your programs.\n\n"
+              "Get new programs from the BugOS Store.\n"
+              "You can always find this screen again in the start menu: \"BugOS Welcome\"."),
+        )
+        self.klaar_met_vullen()
+
+
+def _bestaat(programma: str) -> bool:
+    return any((Path(p) / programma).exists() for p in os.environ.get("PATH", "").split(os.pathsep))
+
+
+class Welkom(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle(t("BugOS Welkom", "BugOS Welcome"))
+        self.setWindowIcon(QIcon.fromTheme("bugos-logo"))
+        self.resize(820, 600)
+
+        self.stapels = QStackedWidget()
+        self.paginas = [Hallo(), Internet(), Uiterlijk(), Updates(), Extra(), Klaar()]
+        for p in self.paginas:
+            self.stapels.addWidget(p)
+
+        self.terug = grote_knop(t("Terug", "Back"))
+        self.volgende = grote_knop(t("Volgende", "Next"))
+        self.volgende.setDefault(True)
+        self.stap = QLabel()
+        self.stap.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.terug.clicked.connect(lambda: self.ga(-1))
+        self.volgende.clicked.connect(lambda: self.ga(+1))
+
+        onder = QHBoxLayout()
+        onder.setContentsMargins(48, 0, 48, 32)
+        onder.addWidget(self.terug)
+        onder.addStretch(1)
+        onder.addWidget(self.stap)
+        onder.addStretch(1)
+        onder.addWidget(self.volgende)
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.addWidget(self.stapels, 1)
+        lay.addLayout(onder)
+        self.ververs()
+
+    def ga(self, richting: int) -> None:
+        nu = self.stapels.currentIndex()
+        if richting > 0:
+            self.paginas[nu].bij_volgende()
+            if nu == len(self.paginas) - 1:
+                CONFIG.mkdir(parents=True, exist_ok=True)
+                KLAAR.touch()
+                self.close()
+                return
+        self.stapels.setCurrentIndex(max(0, min(len(self.paginas) - 1, nu + richting)))
+        self.ververs()
+
+    def ververs(self) -> None:
+        nu = self.stapels.currentIndex()
+        laatste = nu == len(self.paginas) - 1
+        self.terug.setEnabled(nu > 0)
+        self.volgende.setText(t("Aan de slag!", "Let's go!") if laatste else t("Volgende", "Next"))
+        self.stap.setText(t(f"Stap {nu + 1} van {len(self.paginas)}", f"Step {nu + 1} of {len(self.paginas)}"))
+
+
+def main() -> int:
+    if "--eerste-keer" in sys.argv and KLAAR.exists():
+        return 0
+    app = QApplication(sys.argv)
+    app.setApplicationName("bugos-welkom")
+    app.setDesktopFileName("bugos-welkom")
+    venster = Welkom()
+    venster.show()
+    return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

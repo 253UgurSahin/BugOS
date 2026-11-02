@@ -1,0 +1,24 @@
+# Als iemand een Windows-installatie opent waarvan de naam dit woord bevat,
+# biedt BugOS eerst de echte BugOS-versie (uit de Winkel) aan.
+# Opmaak: woord-in-bestandsnaam|Naam voor de gebruiker|Flathub-ID
+steam|Steam|com.valvesoftware.Steam
+discord|Discord|com.discordapp.Discord
+spotify|Spotify|com.spotify.Client
+chrome|Google Chrome|com.google.Chrome
+firefox|Firefox|org.mozilla.firefox
+vlc|VLC|org.videolan.VLC
+zoom|Zoom|us.zoom.Zoom
+teams|Microsoft Teams (web)|com.github.IsmaelMartinez.teams_for_linux
+office|LibreOffice|org.libreoffice.LibreOffice
+winword|LibreOffice|org.libreoffice.LibreOffice
+excel|LibreOffice|org.libreoffice.LibreOffice
+gimp|GIMP|org.gimp.GIMP
+obs-studio|OBS Studio|com.obsproject.Studio
+telegram|Telegram|org.telegram.desktop
+whatsapp|WhatsApp (web)|com.github.eneshecan.WhatsAppForLinux
+vscode|Visual Studio Code|com.visualstudio.code
+thunderbird|Thunderbird|org.mozilla.Thunderbird
+7z|Ark|org.kde.ark
+winrar|Ark|org.kde.ark
+epicgames|Heroic Games Launcher|com.heroicgameslauncher.hgl
+goggalaxy|Heroic Games Launcher|com.heroicgameslauncher.hgl

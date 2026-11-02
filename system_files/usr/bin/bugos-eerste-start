@@ -1,0 +1,27 @@
+#!/usr/bin/bash
+# bugos-eerste-start - draait één keer na installatie (als systeemdienst).
+#
+# Zet de standaard-apps uit de Winkel klaar: Steam (als die er nog niet is),
+# LibreOffice (kantoor) en VLC (films en muziek).
+# Lukt het niet (bijv. geen internet)? Dan probeert hij het de volgende keer
+# opnieuw bij het opstarten.
+
+set -u
+KLAAR=/var/lib/bugos/eerste-start-klaar
+mkdir -p /var/lib/bugos
+
+APPS=(
+    org.libreoffice.LibreOffice
+    org.videolan.VLC
+)
+# Steam als Flatpak alleen als de systeemversie ontbreekt.
+command -v steam >/dev/null 2>&1 || APPS+=(com.valvesoftware.Steam)
+
+flatpak remote-add --if-not-exists --system flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+
+if flatpak install --system --noninteractive --or-update flathub "${APPS[@]}"; then
+    touch "$KLAAR"
+else
+    echo "BugOS: apps installeren lukte nog niet, volgende keer opnieuw." >&2
+    exit 1
+fi
