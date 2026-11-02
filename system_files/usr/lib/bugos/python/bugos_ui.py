@@ -24,7 +24,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from PySide6.QtCore import (
-    Property, QEasingCurve, QPointF, QPropertyAnimation, QRectF, QSize, Qt, Signal,
+    Property, QByteArray, QEasingCurve, QPointF, QPropertyAnimation, QRectF, QSize, Qt, Signal,
 )
 from PySide6.QtGui import (
     QColor, QFont, QFontDatabase, QIcon, QLinearGradient, QPainter, QPainterPath, QPalette, QPen, QPixmap,
@@ -306,6 +306,73 @@ def kleur(naam: str) -> QColor:
     return QColor(K.get(naam, naam))
 
 
+# ============================================================ lijn-iconen ===
+# Eigen BugOS-pictogrammen: 24 x 24, lijn van 2, ronde uiteinden. Dezelfde
+# stijl als op de website, zodat alles één familie is. Gebruik: "lijn:naam".
+
+LIJN = {
+    "ster": '<path d="M12 3.6l2.6 5.2 5.7.8-4.1 4 1 5.7L12 16.6l-5.2 2.7 1-5.7-4.1-4 5.7-.8z"/>',
+    "wereld": '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.3 2.5 3.5 5.3 3.5 8.5s-1.2 6-3.5 8.5c-2.3-2.5-3.5-5.3-3.5-8.5s1.2-6 3.5-8.5z"/>',
+    "document": '<path d="M7 3.5h6.5l4.5 4.5v11.5a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1z"/><path d="M13.5 3.5V8H18M9 12.5h6M9 16h4"/>',
+    "foto": '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.5"/><path d="m4 17.5 5-4.5 3.5 3 3-2.5 4.5 4"/>',
+    "muziek": '<path d="M9 17.5V6.5l10-2v11"/><circle cx="6.5" cy="17.5" r="2.5"/><circle cx="16.5" cy="15.5" r="2.5"/>',
+    "spel": '<path d="M7 8.5h10a4.5 4.5 0 0 1 4.5 4.5v1a2.5 2.5 0 0 1-4.4 1.6L15.5 14h-7l-1.6 1.6A2.5 2.5 0 0 1 2.5 14v-1A4.5 4.5 0 0 1 7 8.5z"/><path d="M7.5 10.5v3M6 12h3M15.5 11.5h.01M17.5 12.5h.01"/>',
+    "praten": '<path d="M5.5 4.5h13a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H11l-4.5 3.5v-3.5h-1a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z"/>',
+    "leren": '<path d="M2.5 9.5 12 5l9.5 4.5L12 14z"/><path d="M6.5 11.5v4c1.4 1.5 3.3 2.5 5.5 2.5s4.1-1 5.5-2.5v-4M21.5 9.5v4.5"/>',
+    "handig": '<path d="M14.7 6.3a3.8 3.8 0 0 0 5 5L12 19a2.1 2.1 0 0 1-3-3l7.7-7.7a3.8 3.8 0 0 1-2-2z"/>',
+    "code": '<path d="m8.5 8-4 4 4 4M15.5 8l4 4-4 4M13.5 5.5l-3 13"/>',
+    "vink": '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+    "huis": '<path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1z"/>',
+    "schakelaar": '<rect x="2.5" y="7" width="19" height="10" rx="5"/><circle cx="16.5" cy="12" r="2.5"/>',
+    "computer": '<rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8.5 20h7M12 16.5V20"/>',
+    "wifi": '<path d="M2.8 9.2a13.5 13.5 0 0 1 18.4 0M5.8 12.6a9 9 0 0 1 12.4 0M8.9 16a4.6 4.6 0 0 1 6.2 0M12 19.4h.01"/>',
+    "bluetooth": '<path d="m7 7.5 10 9-5 4.5V3l5 4.5-10 9"/>',
+    "geluid": '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18.3 6.4a8 8 0 0 1 0 11.2"/>',
+    "printer": '<path d="M7 8.5V3.5h10v5"/><rect x="3.5" y="8.5" width="17" height="8" rx="2"/><path d="M7 13.5h10v7H7z"/>',
+    "opslag": '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M3.5 13.5h17M7.5 16.3h.01M10.5 16.3h.01"/>',
+    "verversen": '<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4v4.5H15"/>',
+    "schijf": '<rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M9.5 6.5h5M12 17.5h.01"/>',
+    "klok": '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    "terug": '<path d="M9 7 4.5 11.5 9 16"/><path d="M5 11.5h9.5a5 5 0 0 1 0 10H12"/>',
+    "film": '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="m10 9.5 4.5 2.5-4.5 2.5z"/>',
+    "download": '<path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/>',
+    "map": '<path d="M3.5 7a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>',
+}
+
+
+def lijn_pixmap(naam: str, kleur_: str | QColor, px: int, dikte: float = 2.0) -> QPixmap:
+    """Teken een BugOS-lijnicoon op px x px beeldpunten (doorzichtige achtergrond)."""
+    from PySide6.QtSvg import QSvgRenderer
+    k = QColor(K.get(kleur_, kleur_) if isinstance(kleur_, str) else kleur_).name()
+    svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="{k}" '
+           f'stroke-width="{dikte}" stroke-linecap="round" stroke-linejoin="round">{LIJN.get(naam, "")}</svg>')
+    pm = QPixmap(px, px)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    QSvgRenderer(QByteArray(svg.encode())).render(p)
+    p.end()
+    return pm
+
+
+def lijn_icoon(naam: str, kleur_: str | QColor = "tekst2", maat: int = 20,
+               gekozen: str | QColor | None = "accent") -> QIcon:
+    """Een QIcon van een lijnicoon; de gekozen stand (in een lijst) is rood."""
+    ic = QIcon()
+    for schaal in (1, 2, 3):
+        ic.addPixmap(lijn_pixmap(naam, kleur_, maat * schaal), QIcon.Mode.Normal)
+        if gekozen is not None:
+            ic.addPixmap(lijn_pixmap(naam, gekozen, maat * schaal), QIcon.Mode.Selected)
+    return ic
+
+
+def icoon(naam: str) -> QIcon:
+    """'lijn:naam' -> eigen lijnicoon, anders het pictogram uit het thema."""
+    if naam.startswith("lijn:"):
+        return lijn_icoon(naam[5:])
+    return QIcon.fromTheme(naam)
+
+
 # ============================================================= bouwstenen ===
 
 def lettertype(punten: int, vet: bool = False) -> QFont:
@@ -408,8 +475,10 @@ class IcoonChip(QWidget):
                  vol: bool = True):
         super().__init__()
         self.teken = icoon if icoon in self.TEKENS else ""
-        self.icoon = QIcon() if self.teken else QIcon.fromTheme(icoon, QIcon.fromTheme("application-x-executable"))
-        self.tint = QColor(TINTEN.get(tint, tint))
+        self.lijn = icoon[5:] if icoon.startswith("lijn:") else ""
+        self.icoon = QIcon() if (self.teken or self.lijn) else QIcon.fromTheme(icoon, QIcon.fromTheme("application-x-executable"))
+        self.neutraal = tint == "neutraal"
+        self.tint = QColor(K["tekst2"]) if self.neutraal else QColor(TINTEN.get(tint, tint))
         self.vol = vol
         self.icoon_maat = icoon_maat or int(maat * (0.5 if vol else 0.62))
         self.setFixedSize(maat, maat)
@@ -438,7 +507,8 @@ class IcoonChip(QWidget):
         pad.addRoundedRect(r, r.width() * 0.3, r.width() * 0.3)
         m = self.icoon_maat
         x = (self.width() - m) / 2
-        if self.vol:
+        dpr = self.devicePixelRatioF()
+        if self.vol and not self.neutraal:
             verloop = QLinearGradient(0, 0, 0, r.height())
             verloop.setColorAt(0, self.tint.lighter(118))
             verloop.setColorAt(1, self.tint)
@@ -446,14 +516,24 @@ class IcoonChip(QWidget):
             if self.teken:
                 self._teken(p, r)
                 return
+            if self.lijn:
+                p.drawPixmap(QRectF(x, x, m, m), lijn_pixmap(self.lijn, "#FFFFFF", int(m * dpr), 2.2), QRectF())
+                return
             wit = self._wit(m)
             if not wit.isNull():
                 p.drawPixmap(QRectF(x, x, m, m), wit, QRectF())
         else:
-            achter = QColor(self.tint)
-            achter.setAlphaF(0.22 if DONKER else 0.13)
-            p.fillPath(pad, achter)
-            self.icoon.paint(p, int(x), int(x), m, m)
+            if self.neutraal:
+                p.fillPath(pad, QColor(K["knop"]))
+            else:
+                achter = QColor(self.tint)
+                achter.setAlphaF(0.22 if DONKER else 0.13)
+                p.fillPath(pad, achter)
+            if self.lijn:
+                glyph = QColor(K["tekst2"]) if self.neutraal else self.tint
+                p.drawPixmap(QRectF(x, x, m, m), lijn_pixmap(self.lijn, glyph, int(m * dpr), 2.0), QRectF())
+            else:
+                self.icoon.paint(p, int(x), int(x), m, m)
 
 
     def _teken(self, p: QPainter, r: QRectF) -> None:
@@ -645,23 +725,24 @@ class Tegel(QPushButton):
         super().__init__()
         self.setObjectName("tegel")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setMinimumHeight(84)
+        # Vaste hoogte: ruimte voor de naam en twee regels uitleg (niets wordt afgeknipt).
+        self.setFixedHeight(102)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.zoektekst = f"{naam} {tekst} {zoekwoorden}".lower()
         self.setAccessibleName(naam)
         self.setAccessibleDescription(tekst)
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(16, 14, 16, 14)
+        lay.setContentsMargins(16, 16, 16, 16)
         lay.setSpacing(14)
-        lay.setSizeConstraint(QHBoxLayout.SizeConstraint.SetMinimumSize)
         chip = IcoonChip(icoon, tint, 44)
-        lay.addWidget(chip)
+        lay.addWidget(chip, 0, Qt.AlignmentFlag.AlignTop)
         blok = QVBoxLayout()
         blok.setSpacing(2)
         kop = label(naam, "kop3", wrap=False)
         sub = label(tekst, "klein")
         blok.addWidget(kop)
         blok.addWidget(sub)
+        blok.addStretch(1)
         lay.addLayout(blok, 1)
         for w in (chip, kop, sub):
             w.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -795,8 +876,8 @@ class Zijbalk(QListWidget):
         self.setIconSize(QSize(20, 20))
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
-    def voeg_toe(self, icoon: str, tekst: str, sleutel: str) -> QListWidgetItem:
-        it = QListWidgetItem(QIcon.fromTheme(icoon), tekst)
+    def voeg_toe(self, icoon_naam: str, tekst: str, sleutel: str) -> QListWidgetItem:
+        it = QListWidgetItem(icoon(icoon_naam), tekst)
         it.setData(Qt.ItemDataRole.UserRole, sleutel)
         it.setSizeHint(QSize(0, 44))
         self.addItem(it)

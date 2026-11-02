@@ -197,16 +197,16 @@ def alles_controleren() -> list[Uitslag]:
 TEKEN = {OK: "✅", LET_OP: "⚠️", PROBLEEM: "❌", ONBEKEND: "❔"}
 
 ICONEN = {
-    "controle_internet": "network-wired", "controle_wifi": "network-wireless", "controle_bluetooth": "network-bluetooth",
-    "controle_geluid": "audio-volume-high", "controle_printer": "printer-symbolic",
-    "controle_opslag": "drive-harddisk-symbolic", "controle_updates": "system-software-update",
+    "controle_internet": "lijn:wereld", "controle_wifi": "lijn:wifi", "controle_bluetooth": "lijn:bluetooth",
+    "controle_geluid": "lijn:geluid", "controle_printer": "lijn:printer",
+    "controle_opslag": "lijn:opslag", "controle_updates": "lijn:verversen",
 }
 TINT = {OK: "groen", LET_OP: "oranje", PROBLEEM: "rood", ONBEKEND: "grijs"}
 
 
 def venster() -> int:
     from bugos_ui import (
-        Chip, Groep, IcoonChip, Kaart, Knop, label, maak_app, pagina, sectie, uitvoeren,
+        K, Chip, Groep, IcoonChip, Kaart, Knop, label, maak_app, pagina, sectie, uitvoeren,
     )
     from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication, QHBoxLayout, QScrollArea, QVBoxLayout, QWidget
@@ -286,7 +286,9 @@ def venster() -> int:
                 r = QHBoxLayout(rij)
                 r.setContentsMargins(18, 14, 18, 14)
                 r.setSpacing(14)
-                r.addWidget(IcoonChip(u.icoon or "help-contents", TINT[u.stand], 40))
+                # Rustig: alleen wat aandacht nodig heeft krijgt kleur.
+                r.addWidget(IcoonChip(u.icoon or "lijn:vink", "neutraal" if u.stand == OK else TINT[u.stand], 40,
+                                      vol=False))
                 b = QVBoxLayout()
                 b.setSpacing(2)
                 b.addWidget(label(u.naam, "kop3"))
@@ -296,6 +298,9 @@ def venster() -> int:
                     knop = Knop(u.repareer_tekst or t("Repareer", "Fix"), "hoofd" if u.stand == PROBLEEM else "rand")
                     knop.clicked.connect(lambda _=False, f=u.repareer: (f(), QTimer.singleShot(2500, self.vul)))
                     r.addWidget(knop)
+                elif u.stand == OK:
+                    goed = label(f'<span style="color:{K["goed"]}">\u25CF</span>&nbsp; ' + t("In orde", "OK"), "klein", wrap=False)
+                    r.addWidget(goed)
                 else:
                     r.addWidget(Chip({OK: t("In orde", "OK"), LET_OP: t("Let op", "Note"),
                                       PROBLEEM: t("Probleem", "Problem"), ONBEKEND: t("Onbekend", "Unknown")}[u.stand],

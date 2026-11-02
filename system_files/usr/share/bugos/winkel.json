@@ -1,16 +1,16 @@
 {
   "_uitleg": "De apps die de BugOS Winkel vooraan laat zien. Alleen bekende, veilige apps van Flathub. id = Flathub-ID.",
   "categorieen": [
-    {"id": "aanbevolen", "nl": "Aanbevolen", "en": "Recommended", "icoon": "starred"},
-    {"id": "internet", "nl": "Internet", "en": "Internet", "icoon": "applications-internet"},
-    {"id": "kantoor", "nl": "Kantoor", "en": "Office", "icoon": "applications-office"},
-    {"id": "foto", "nl": "Foto en video", "en": "Photo and video", "icoon": "applications-graphics"},
-    {"id": "muziek", "nl": "Muziek en film", "en": "Music and film", "icoon": "applications-multimedia"},
-    {"id": "gamen", "nl": "Gamen", "en": "Gaming", "icoon": "applications-games"},
-    {"id": "praten", "nl": "Chatten en bellen", "en": "Chat and calls", "icoon": "dialog-messages"},
-    {"id": "leren", "nl": "Leren en kinderen", "en": "Learning and kids", "icoon": "applications-education"},
-    {"id": "handig", "nl": "Handig", "en": "Useful", "icoon": "applications-utilities"},
-    {"id": "programmeren", "nl": "Programmeren", "en": "Coding", "icoon": "applications-development"}
+    {"id": "aanbevolen", "nl": "Aanbevolen", "en": "Recommended", "icoon": "lijn:ster"},
+    {"id": "internet", "nl": "Internet", "en": "Internet", "icoon": "lijn:wereld"},
+    {"id": "kantoor", "nl": "Kantoor", "en": "Office", "icoon": "lijn:document"},
+    {"id": "foto", "nl": "Foto en video", "en": "Photo and video", "icoon": "lijn:foto"},
+    {"id": "muziek", "nl": "Muziek en film", "en": "Music and film", "icoon": "lijn:muziek"},
+    {"id": "gamen", "nl": "Gamen", "en": "Gaming", "icoon": "lijn:spel"},
+    {"id": "praten", "nl": "Chatten en bellen", "en": "Chat and calls", "icoon": "lijn:praten"},
+    {"id": "leren", "nl": "Leren en kinderen", "en": "Learning and kids", "icoon": "lijn:leren"},
+    {"id": "handig", "nl": "Handig", "en": "Useful", "icoon": "lijn:handig"},
+    {"id": "programmeren", "nl": "Programmeren", "en": "Coding", "icoon": "lijn:code"}
   ],
   "apps": [
     {"id": "org.mozilla.firefox", "naam": "Firefox", "cat": ["internet", "aanbevolen"], "nl": "Snelle, veilige internetbrowser.", "en": "Fast, safe web browser."},

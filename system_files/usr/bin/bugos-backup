@@ -131,18 +131,37 @@ def zonder_venster(schijf: Path) -> int:
 
 def venster() -> int:
     from bugos_ui import (
-        Banner, Chip, Knop, SchijfKiezer, Voortgang, kop_met_icoon, maak_app, pagina, schijf_info,
-        sectie, uitvoeren,
+        Banner, Chip, IcoonChip, Knop, SchijfKiezer, Voortgang, kop_met_icoon, label, maak_app, pagina,
+        raster, schijf_info, sectie, uitvoeren,
     )
     from PySide6.QtCore import QProcess, QTimer
-    from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
+    from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QWidget
+
+    def wat_mee_gaat() -> QWidget:
+        """Zes kleine kaartjes: deze mappen gaan mee in de back-up."""
+        namen = [("lijn:document", t("Documenten", "Documents")), ("lijn:foto", t("Afbeeldingen", "Pictures")),
+                 ("lijn:muziek", t("Muziek", "Music")), ("lijn:film", t("Video's", "Videos")),
+                 ("lijn:computer", t("Bureaublad", "Desktop")), ("lijn:download", t("Downloads", "Downloads"))]
+        w, g = raster(3, 10)
+        for i, (ic, naam) in enumerate(namen):
+            kaart = QFrame()
+            kaart.setProperty("kaart", True)
+            r = QHBoxLayout(kaart)
+            r.setContentsMargins(12, 10, 12, 10)
+            r.setSpacing(10)
+            r.addWidget(IcoonChip(ic, "neutraal", 32, vol=False))
+            r.addWidget(label(naam, "kop3", wrap=False), 1)
+            g.addWidget(kaart, i // 3, i % 3)
+        for k in range(3):
+            g.setColumnStretch(k, 1)
+        return w
 
     class Backup(QWidget):
         def __init__(self):
             super().__init__()
             self.setObjectName("venster")
             self.setWindowTitle(t("BugOS Back-up", "BugOS Backup"))
-            self.resize(760, 640)
+            self.resize(780, 720)
             w, lay = pagina()
             buiten = QVBoxLayout(self)
             buiten.setContentsMargins(0, 0, 0, 0)
@@ -154,6 +173,8 @@ def venster() -> int:
                                           "USB drive. Nothing is ever deleted.")))
             self.wanneer = Chip(laatste_backup(), "grijs")
             lay.addWidget(self.wanneer)
+            lay.addWidget(sectie(t("Dit gaat mee", "This is included")))
+            lay.addWidget(wat_mee_gaat())
             lay.addWidget(sectie(t("Kies een schijf", "Choose a drive")))
             self.kiezer = SchijfKiezer(t("Steek een USB-schijf in…", "Plug in a USB drive…"))
             lay.addWidget(self.kiezer)

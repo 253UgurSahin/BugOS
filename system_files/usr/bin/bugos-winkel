@@ -153,7 +153,7 @@ class Winkel(QWidget):
         for c in self.cat["categorieen"]:
             self.lijst.voeg_toe(c["icoon"], c["nl" if TAAL == "nl" else "en"], c["id"])
         if self.installed:
-            self.lijst.voeg_toe("checkmark", t("Mijn apps", "My apps"), "_mijn")
+            self.lijst.voeg_toe("lijn:vink", t("Mijn apps", "My apps"), "_mijn")
         self.lijst.currentRowChanged.connect(lambda _: self.toon())
         z.addWidget(self.lijst, 1)
         meer = Knop(t("Meer apps zoeken", "Search more apps"), "stil", "edit-find")
