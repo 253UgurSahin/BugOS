@@ -82,6 +82,10 @@ In [docs/TESTEN.md](docs/TESTEN.md) staat precies hoe.
 Nu nog op Windows? Het programmaatje **BugOS Overstap** (in [`windows-overstap/`](windows-overstap/))
 kijkt of je computer BugOS aankan, neemt je bestanden mee en maakt de USB-stick voor je.
 
+<p align="center">
+  <img src="docs/beelden/overstap/overstap-1.png" width="700" alt="BugOS Overstap op Windows, stap 1: kan mijn computer BugOS aan?">
+</p>
+
 ## Hoe is de repo ingedeeld?
 
 ```

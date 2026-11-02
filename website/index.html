@@ -246,6 +246,14 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .stappen p { color: var(--tekst2); font-size: 16px; line-height: 1.5; }
 @media (max-width: 960px) { .stappen { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 520px) { .stappen { grid-template-columns: 1fr; } }
+.win-venster { margin: 28px auto 0; max-width: 900px; border-radius: 10px; overflow: hidden; background: #FFFFFF; border: 1px solid var(--lijn); box-shadow: var(--schaduw-groot); }
+.win-balk { display: flex; align-items: center; gap: 10px; height: 36px; padding-left: 14px; background: #F3F3F3; color: #1F1F1F; font: 400 13px/1 "Segoe UI", system-ui, sans-serif; border-bottom: 1px solid #E5E5E5; }
+.win-balk img { width: 16px; height: 16px; }
+.win-knoppen { margin-left: auto; display: flex; height: 100%; }
+.win-knoppen span { width: 46px; display: grid; place-items: center; color: #1F1F1F; }
+.win-knoppen svg { width: 10px; height: 10px; }
+.win-venster > img { display: block; width: 100%; height: auto; }
+.win-venster figcaption { padding: 12px 16px; font-size: 15px; color: var(--tekst2); background: var(--vlak); border-top: 1px solid var(--lijn); }
 .overstap-band { margin-top: 28px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(24px, 4vw, 48px); align-items: center; padding: clamp(24px, 3vw, 36px); border-radius: var(--r-groot); background: var(--bg2); border: 1px solid var(--lijn); }
 .overstap-band .foto { border-radius: 16px; overflow: hidden; border: 1px solid var(--lijn); box-shadow: var(--schaduw); }
 @media (max-width: 860px) { .overstap-band { grid-template-columns: 1fr; } }
@@ -571,6 +579,11 @@ footer { border-top: 1px solid var(--lijn); padding-block: 56px calc(40px + env(
       <li><h3>Ruimte maken</h3><p>Wil je Windows houden? Dan maakt Overstap ruimte zodat BugOS ernaast past.</p></li>
       <li><h3>USB-stick maken</h3><p>BugOS wordt gedownload, gecontroleerd en op een USB-stick gezet.</p></li>
     </ol>
+    <figure class="win-venster">
+      <div class="win-balk" aria-hidden="true"><img src="assets/bugos-merk.svg" alt="">BugOS Overstap<div class="win-knoppen"><span><svg viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor"/></svg></span><span><svg viewBox="0 0 10 10"><rect x=".5" y=".5" width="9" height="9" fill="none" stroke="currentColor"/></svg></span><span><svg viewBox="0 0 10 10"><path d="M0 0l10 10M10 0 0 10" stroke="currentColor"/></svg></span></div></div>
+      <img loading="lazy" src="assets/overstap-windows.webp" width="1320" height="840" alt="BugOS Overstap op Windows, stap 1: Kan mijn computer BugOS aan? Met een groen vinkje bij 64-bit, geheugen, UEFI en ruimte.">
+      <figcaption>Zo ziet BugOS Overstap eruit op Windows: links de stappen, rechts wat er nu gebeurt.</figcaption>
+    </figure>
     <div class="overstap-band">
       <div style="display:grid;gap:14px">
         <h3>En in BugOS zet je alles terug met één knop.</h3>
