@@ -49,6 +49,23 @@ jobs:
           try { $gevonden = Get-IsoInfo 'main' } catch { "Downloads nog niet bereikbaar (repo is privé): $($_.Exception.Message)"; $gevonden = $null }
           if ($gevonden) { "Nieuwste ISO: $($gevonden.Versie) - $($gevonden.Info.delen.Count) stukjes" } else { "Nog geen ISO-release gevonden (dat is goed zolang er nog niets gepubliceerd is)." }
 
+      - name: Venster nakijken (plaatjes van elke pagina, 100% en 150%)
+        shell: powershell
+        timeout-minutes: 5
+        run: |
+          foreach ($schaal in @('1', '1.5')) {
+            $map = "$PWD\fotos\schaal-$schaal"
+            powershell.exe -NoProfile -ExecutionPolicy Bypass -File windows-overstap\BugOS-Overstap.ps1 -Taak Foto -FotoSchaal $schaal -FotoMap $map
+            if ($LASTEXITCODE -ne 0) { Write-Host "Het venster gaf een fout (schaal $schaal)."; exit 1 }
+          }
+          Get-ChildItem fotos -Recurse -File | Format-Table FullName, Length -AutoSize
+
+      - name: Plaatjes bewaren
+        uses: actions/upload-artifact@v4
+        with:
+          name: Overstap-plaatjes
+          path: fotos/
+
       - name: Inpakken
         uses: actions/upload-artifact@v4
         with:
