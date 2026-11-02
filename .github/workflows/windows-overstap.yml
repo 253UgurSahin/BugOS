@@ -46,7 +46,7 @@ jobs:
           Get-Controle | Format-Table -AutoSize -Wrap
           "Meeneem-grootte: {0:N1} GB" -f ((Get-MeeneemGrootte) / 1GB)
           "Soort voor deze pc: $(Get-IsoSoort)"
-          $gevonden = Get-IsoInfo 'main'
+          try { $gevonden = Get-IsoInfo 'main' } catch { "Downloads nog niet bereikbaar (repo is privé): $($_.Exception.Message)"; $gevonden = $null }
           if ($gevonden) { "Nieuwste ISO: $($gevonden.Versie) - $($gevonden.Info.delen.Count) stukjes" } else { "Nog geen ISO-release gevonden (dat is goed zolang er nog niets gepubliceerd is)." }
 
       - name: Inpakken
