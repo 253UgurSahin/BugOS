@@ -1,0 +1,307 @@
+#!/usr/bin/python3
+"""BugOS Instellingen - alle belangrijke instellingen op één scherm.
+
+Jip-en-Janneke: grote tegels voor wat je echt nodig hebt (wifi, geluid,
+scherm, printer...). Achter "Alle instellingen" zit de volledige KDE-versie
+voor wie meer wil.
+
+Gebruik:  bugos-instellingen [pagina]
+          pagina = start | schakelaars | over
+"""
+
+import json
+import os
+import platform
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/bugos/python")
+
+from bugos_ui import (  # noqa: E402
+    Schakelaar, Tegel, bestaat, draai, gewone_knop, kde_instelling, maak_app,
+    start, t, titel, uitleg,
+)
+from PySide6.QtCore import Qt  # noqa: E402
+from PySide6.QtWidgets import (  # noqa: E402
+    QGridLayout, QHBoxLayout, QLabel, QLineEdit, QScrollArea, QStackedWidget,
+    QVBoxLayout, QWidget,
+)
+
+
+# ------------------------------------------------------------- toestand ----
+
+def status_van(script: str) -> bool:
+    """Vraag een bugos-script of iets aan staat."""
+    if not bestaat(script):
+        return False
+    _, uit = draai(script, "status", timeout=5)
+    return uit.strip().endswith(("aan", "auto"))
+
+
+def zet_script(script: str, aan: bool, aan_woord: str = "aan", uit_woord: str = "uit") -> None:
+    start(script, aan_woord if aan else uit_woord)
+
+
+def systeem_info() -> list[tuple[str, str]]:
+    """Gegevens voor 'Over deze computer', in gewone taal."""
+    info: list[tuple[str, str]] = []
+    versie = "?"
+    try:
+        versie = json.loads(Path("/usr/share/bugos/image-info.json").read_text())["versie"]
+    except (OSError, ValueError, KeyError):
+        pass
+    info.append((t("BugOS-versie", "BugOS version"), versie))
+
+    try:
+        for regel in Path("/proc/cpuinfo").read_text().splitlines():
+            if regel.startswith("model name"):
+                info.append((t("Processor", "Processor"), regel.split(":", 1)[1].strip()))
+                break
+    except OSError:
+        pass
+    try:
+        kb = int(next(r for r in Path("/proc/meminfo").read_text().splitlines()
+                      if r.startswith("MemTotal")).split()[1])
+        info.append((t("Geheugen", "Memory"), f"{kb / 1024 / 1024:.0f} GB"))
+    except (OSError, StopIteration, ValueError):
+        pass
+    try:
+        st = os.statvfs(str(Path.home()))
+        vrij = st.f_bavail * st.f_frsize / 1024**3
+        totaal = st.f_blocks * st.f_frsize / 1024**3
+        info.append((t("Opslag", "Storage"),
+                     t(f"{vrij:.0f} GB vrij van {totaal:.0f} GB", f"{vrij:.0f} GB free of {totaal:.0f} GB")))
+    except OSError:
+        pass
+    code, uit = draai("hostname", timeout=3)
+    if code == 0:
+        info.append((t("Naam van deze computer", "Computer name"), uit.strip()))
+    info.append((t("Linux-kern", "Linux kernel"), platform.release()))
+    return info
+
+
+# ---------------------------------------------------------------- tegels ----
+
+def tegels(ga_naar) -> list[Tegel]:
+    T = Tegel
+    return [
+        T("network-wireless", t("Wifi en internet", "Wi-Fi and internet"),
+          t("Verbinden met wifi of een kabel", "Connect to Wi-Fi or cable"),
+          lambda: kde_instelling("kcm_networkmanagement"), "wifi netwerk internet wlan ethernet vpn"),
+        T("preferences-system-bluetooth", "Bluetooth",
+          t("Koptelefoon, muis of telefoon koppelen", "Pair headphones, mouse or phone"),
+          lambda: kde_instelling("kcm_bluetooth"), "koppelen pair oortjes"),
+        T("audio-volume-high", t("Geluid", "Sound"),
+          t("Volume, luidsprekers en microfoon", "Volume, speakers and microphone"),
+          lambda: kde_instelling("kcm_pulseaudio"), "audio volume speaker microfoon"),
+        T("video-display", t("Scherm", "Display"),
+          t("Grootte, helderheid en meer schermen", "Size, brightness and more screens"),
+          lambda: kde_instelling("kcm_kscreen"), "monitor resolutie beeldscherm schaal"),
+        T("preferences-desktop-color", t("Licht of donker", "Light or dark"),
+          t("Kleuren en achtergrond kiezen", "Choose colors and wallpaper"),
+          lambda: kde_instelling("kcm_colors"), "thema donker licht kleur achtergrond wallpaper"),
+        T("printer", t("Printers", "Printers"),
+          t("Printer toevoegen of kiezen", "Add or choose a printer"),
+          lambda: kde_instelling("kcm_printer_manager"), "printen scanner"),
+        T("system-software-update", t("Updates", "Updates"),
+          t("Vanzelf of zelf, nu updaten of terug", "Automatic or manual, update now or go back"),
+          lambda: ga_naar("schakelaars"), "update bijwerken versie terug rollback"),
+        T("input-gaming", t("Game-modus", "Game mode"),
+          t("Volle kracht voor games", "Full power for games"),
+          lambda: ga_naar("schakelaars"), "gamen spel steam fps"),
+        T("applications-development", t("Ontwikkelaarsmodus", "Developer mode"),
+          t("Programmeren: VS Code, containers en meer", "Coding: VS Code, containers and more"),
+          lambda: ga_naar("schakelaars"), "programmeren code dev docker"),
+        T("drive-harddisk", t("Schijven", "Disks"),
+          t("Schijven en USB-sticks beheren", "Manage disks and USB sticks"),
+          lambda: start("partitionmanager") if bestaat("partitionmanager") else kde_instelling("kcm_disks"),
+          "schijf harde partitie usb formatteren"),
+        T("document-save", t("Back-up", "Backup"),
+          t("Je bestanden veilig op een USB-schijf", "Your files safe on a USB drive"),
+          lambda: start("bugos-backup"), "back-up backup reservekopie"),
+        T("help-browser", t("Er werkt iets niet", "Something is not working"),
+          t("BugOS zoekt het probleem voor je", "BugOS finds the problem for you"),
+          lambda: start("bugos-hulp"), "hulp help probleem kapot repareren"),
+        T("preferences-desktop-locale", t("Taal en regio", "Language and region"),
+          t("Taal, tijd en datum", "Language, time and date"),
+          lambda: kde_instelling("kcm_regionandlang"), "taal language klok tijd datum"),
+        T("system-users", t("Gebruikers", "Users"),
+          t("Wachtwoord, naam en foto", "Password, name and picture"),
+          lambda: kde_instelling("kcm_users"), "account wachtwoord gebruiker"),
+        T("battery", t("Energie", "Power"),
+          t("Batterij en slaapstand", "Battery and sleep"),
+          lambda: kde_instelling("kcm_powerdevilprofilesconfig"), "batterij accu slaap stroom"),
+        T("computer", t("Over deze computer", "About this computer"),
+          t("Versie, processor en opslag", "Version, processor and storage"),
+          lambda: ga_naar("over"), "info versie systeem"),
+        T("preferences-other", t("Alle instellingen", "All settings"),
+          t("Voor wie alles wil zien", "For those who want to see everything"),
+          lambda: start("systemsettings"), "meer geavanceerd kde"),
+    ]
+
+
+class StartPagina(QWidget):
+    def __init__(self, ga_naar):
+        super().__init__()
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(32, 28, 32, 16)
+        lay.setSpacing(16)
+        lay.addWidget(titel(t("Instellingen", "Settings")))
+
+        self.zoek = QLineEdit()
+        self.zoek.setPlaceholderText(t("Zoek, bijvoorbeeld \"wifi\" of \"printer\"",
+                                       "Search, for example \"wifi\" or \"printer\""))
+        self.zoek.setMinimumHeight(44)
+        self.zoek.setClearButtonEnabled(True)
+        self.zoek.textChanged.connect(self.filter)
+        lay.addWidget(self.zoek)
+
+        self.niks = uitleg(t("Niks gevonden. Probeer een ander woord, of kies \"Alle instellingen\".",
+                             "Nothing found. Try another word, or choose \"All settings\"."))
+        self.niks.hide()
+        lay.addWidget(self.niks)
+
+        self.raster_widget = QWidget()
+        self.raster = QGridLayout(self.raster_widget)
+        self.raster.setSpacing(12)
+        self.raster.setContentsMargins(0, 0, 0, 0)
+        self.alle = tegels(ga_naar)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setWidget(self.raster_widget)
+        lay.addWidget(scroll, 1)
+        self.kolommen = 3
+        self.filter("")
+
+    def filter(self, zoek: str) -> None:
+        for tegel in self.alle:
+            self.raster.removeWidget(tegel)
+            tegel.hide()
+        zichtbaar = [x for x in self.alle if x.past_bij(zoek)]
+        for i, tegel in enumerate(zichtbaar):
+            self.raster.addWidget(tegel, i // self.kolommen, i % self.kolommen)
+            tegel.show()
+        self.raster.setRowStretch(len(zichtbaar) // self.kolommen + 1, 1)
+        self.niks.setVisible(not zichtbaar)
+
+    def resizeEvent(self, e):  # noqa: N802 (Qt-naam)
+        nieuw = 1 if self.width() < 560 else 2 if self.width() < 900 else 3
+        if nieuw != self.kolommen:
+            self.kolommen = nieuw
+            self.filter(self.zoek.text())
+        super().resizeEvent(e)
+
+
+class SchakelaarPagina(QWidget):
+    def __init__(self, terug):
+        super().__init__()
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(32, 28, 32, 28)
+        lay.setSpacing(14)
+        kop = QHBoxLayout()
+        knop = gewone_knop(t("← Terug", "← Back"))
+        knop.clicked.connect(terug)
+        kop.addWidget(knop)
+        kop.addStretch(1)
+        lay.addLayout(kop)
+        lay.addWidget(titel(t("Aan en uit", "On and off")))
+
+        upd = Schakelaar(
+            t("Updates vanzelf", "Automatic updates"),
+            t("Aan: BugOS houdt zichzelf stil bij. Uit: jij kiest wanneer (je krijgt een melding).",
+              "On: BugOS quietly keeps itself up to date. Off: you choose when (you get a notification)."),
+            status_van("bugos-updates"))
+        upd.omgezet.connect(lambda aan: start("pkexec", "/usr/bin/bugos-updates", "auto" if aan else "hand"))
+        lay.addWidget(upd)
+
+        rij = QHBoxLayout()
+        nu = gewone_knop(t("Nu updaten", "Update now"))
+        nu.clicked.connect(lambda: start("pkexec", "/usr/bin/bugos-updates", "nu"))
+        terugknop = gewone_knop(t("Terug naar vorige versie", "Go back to previous version"))
+        terugknop.clicked.connect(lambda: start("pkexec", "/usr/bin/bugos-updates", "terug"))
+        rij.addWidget(nu)
+        rij.addWidget(terugknop)
+        rij.addStretch(1)
+        lay.addLayout(rij)
+
+        spel = Schakelaar(
+            t("Game-modus", "Game mode"),
+            t("Volle kracht, meldingen stil en een FPS-teller in games.",
+              "Full power, quiet notifications and an FPS counter in games."),
+            status_van("bugos-spelmodus"))
+        spel.omgezet.connect(lambda aan: zet_script("bugos-spelmodus", aan))
+        lay.addWidget(spel)
+
+        dev = Schakelaar(
+            t("Ontwikkelaarsmodus", "Developer mode"),
+            t("Zet VS Code, containers en programmeertalen klaar. Uitzetten gooit niets weg.",
+              "Sets up VS Code, containers and programming languages. Turning off deletes nothing."),
+            status_van("bugos-ontwikkelaar"))
+        dev.omgezet.connect(lambda aan: zet_script("bugos-ontwikkelaar", aan))
+        lay.addWidget(dev)
+
+        licht = Schakelaar(
+            t("Lichte stand", "Light mode"),
+            t("Zware effecten uit, zodat een oudere computer vlot blijft.",
+              "Heavy effects off, so an older computer stays fast."),
+            status_van("bugos-lichte-stand"))
+        licht.omgezet.connect(lambda aan: zet_script("bugos-lichte-stand", aan))
+        lay.addWidget(licht)
+        lay.addStretch(1)
+
+
+class OverPagina(QWidget):
+    def __init__(self, terug):
+        super().__init__()
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(32, 28, 32, 28)
+        lay.setSpacing(14)
+        kop = QHBoxLayout()
+        knop = gewone_knop(t("← Terug", "← Back"))
+        knop.clicked.connect(terug)
+        kop.addWidget(knop)
+        kop.addStretch(1)
+        lay.addLayout(kop)
+        lay.addWidget(titel(t("Over deze computer", "About this computer")))
+        raster = QGridLayout()
+        raster.setHorizontalSpacing(24)
+        raster.setVerticalSpacing(10)
+        for i, (k, v) in enumerate(systeem_info()):
+            sleutel = QLabel(k)
+            sleutel.setStyleSheet("color: palette(placeholder-text);")
+            raster.addWidget(sleutel, i, 0, Qt.AlignmentFlag.AlignTop)
+            raster.addWidget(uitleg(v), i, 1)
+        raster.setColumnStretch(1, 1)
+        lay.addLayout(raster)
+        lay.addStretch(1)
+
+
+class Instellingen(QStackedWidget):
+    def __init__(self, begin: str = "start"):
+        super().__init__()
+        self.setWindowTitle(t("BugOS Instellingen", "BugOS Settings"))
+        self.resize(980, 700)
+        self.paginas = {
+            "start": StartPagina(self.ga_naar),
+            "schakelaars": SchakelaarPagina(lambda: self.ga_naar("start")),
+            "over": OverPagina(lambda: self.ga_naar("start")),
+        }
+        for p in self.paginas.values():
+            self.addWidget(p)
+        self.ga_naar(begin if begin in self.paginas else "start")
+
+    def ga_naar(self, naam: str) -> None:
+        self.setCurrentWidget(self.paginas[naam])
+
+
+def main() -> int:
+    app = maak_app("bugos-instellingen", "bugos-instellingen", sys.argv)
+    begin = sys.argv[1] if len(sys.argv) > 1 else "start"
+    venster = Instellingen(begin)
+    venster.show()
+    return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -257,6 +257,13 @@ class Klaar(Pagina):
               "Get new programs from the BugOS Store.\n"
               "You can always find this screen again in the start menu: \"BugOS Welcome\"."),
         )
+        windows = grote_knop(t("💾  Bestanden van mijn oude Windows-pc terugzetten",
+                               "💾  Restore files from my old Windows PC"))
+        windows.clicked.connect(lambda: start("bugos-overstap"))
+        self.lay.addWidget(windows)
+        instellingen = grote_knop(t("⚙️  Instellingen openen", "⚙️  Open Settings"))
+        instellingen.clicked.connect(lambda: start("bugos-instellingen"))
+        self.lay.addWidget(instellingen)
         self.klaar_met_vullen()
 
 

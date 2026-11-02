@@ -1,0 +1,52 @@
+---
+# De Windows-overstap nakijken en inpakken als zip om te downloaden.
+name: Windows-overstap
+
+on:
+  push:
+    paths: ["windows-overstap/**", ".github/workflows/windows-overstap.yml"]
+  pull_request:
+    paths: ["windows-overstap/**"]
+  workflow_dispatch:
+
+jobs:
+  controle:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Script nakijken (geen tikfouten)
+        shell: powershell
+        run: |
+          $fouten = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("$PWD\windows-overstap\BugOS-Overstap.ps1", [ref]$null, [ref]$fouten) | Out-Null
+          if ($fouten) { $fouten | Format-List; exit 1 }
+          Write-Host "Geen tikfouten gevonden."
+
+      - name: Script nakijken (PSScriptAnalyzer)
+        shell: powershell
+        run: |
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          $r = Invoke-ScriptAnalyzer -Path windows-overstap\BugOS-Overstap.ps1 -Severity Error
+          $r | Format-Table -AutoSize
+          if ($r) { exit 1 }
+
+      - name: Controle-stap proberen (alleen lezen, verandert niets)
+        shell: powershell
+        run: |
+          # Laad alleen de functies (zonder venster) en draai de pc-controle.
+          $code = Get-Content windows-overstap\BugOS-Overstap.ps1 -Raw -Encoding UTF8
+          $tot = $code.IndexOf('# ==================================================== beheerder-taken')
+          $param = $code.IndexOf('Set-StrictMode')
+          . ([scriptblock]::Create($code.Substring($param, $tot - $param)))
+          Get-Controle | Format-Table -AutoSize -Wrap
+          "Meeneem-grootte: {0:N1} GB" -f ((Get-MeeneemGrootte) / 1GB)
+
+      - name: Inpakken
+        uses: actions/upload-artifact@v4
+        with:
+          name: BugOS-Overstap
+          path: |
+            windows-overstap/BugOS-Overstap.ps1
+            windows-overstap/Start BugOS Overstap.bat
+            windows-overstap/LEESMIJ.txt

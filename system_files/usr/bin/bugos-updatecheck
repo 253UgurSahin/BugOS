@@ -1,0 +1,45 @@
+#!/usr/bin/bash
+# bugos-updatecheck - meldt "Er is een update" als je updates zelf doet.
+#
+# Draait één keer per dag vanzelf (bugos-updatecheck.timer).
+# Staan updates op "vanzelf"? Dan doet dit script niets.
+
+# shellcheck source=system_files/usr/share/bugos/lib.sh
+. /usr/share/bugos/lib.sh
+
+[ "$(bugos-updates status 2>/dev/null)" = hand ] || exit 0
+
+STATUS="$(rpm-ostree status --json 2>/dev/null)" || exit 0
+
+# Staat er al een update klaar die nog niet gebruikt wordt? Dan vragen om te herstarten.
+if [ "$(echo "$STATUS" | jq -r '.deployments[0].booted')" = false ]; then
+    melding "$(t "Update staat klaar" "Update is ready")" \
+        "$(t "Start de computer opnieuw op om de nieuwe versie te gebruiken." "Restart the computer to use the new version.")"
+    exit 0
+fi
+
+# Waar komt dit systeem vandaan, en welke versie draait nu?
+REF="$(echo "$STATUS" | jq -r '.deployments[] | select(.booted) | ."container-image-reference" // empty')"
+NU="$(echo "$STATUS" | jq -r '.deployments[] | select(.booted) | ."container-image-reference-digest" // empty')"
+[ -n "$REF" ] && [ -n "$NU" ] || exit 0
+# "ostree-image-signed:docker://ghcr.io/x/y:latest" -> "docker://ghcr.io/x/y:latest"
+BRON="docker://${REF##*docker://}"
+[[ "$REF" == *docker://* ]] || BRON="docker://${REF#*:}"
+
+NIEUW="$(skopeo inspect --format '{{.Digest}}' "$BRON" 2>/dev/null)" || exit 0
+[ -n "$NIEUW" ] && [ "$NIEUW" != "$NU" ] || exit 0
+
+KEUZE="$(notify-send --app-name=BugOS --icon=system-software-update --wait \
+    --action=nu="$(t "Nu updaten" "Update now")" --action=later="$(t "Later" "Later")" \
+    "$(t "Er is een nieuwe BugOS" "A new BugOS is available")" \
+    "$(t "Wil je nu updaten? Je kunt gewoon doorwerken." "Do you want to update now? You can keep working.")" 2>/dev/null)"
+
+if [ "$KEUZE" = nu ]; then
+    if pkexec /usr/bin/bugos-updates nu; then
+        melding "$(t "Update klaar ✅" "Update done ✅")" \
+            "$(t "Start de computer opnieuw op wanneer het jou uitkomt." "Restart the computer whenever it suits you.")"
+    else
+        fout "$(t "De update is niet gelukt. Er is niks veranderd; probeer het later opnieuw." \
+            "The update did not work. Nothing has changed; try again later.")"
+    fi
+fi

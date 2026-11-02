@@ -1,0 +1,7 @@
+[Unit]
+Description=BugOS: kijken of er een update is (als je updates zelf doet)
+After=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bugos-updatecheck

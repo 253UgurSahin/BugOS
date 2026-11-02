@@ -26,7 +26,7 @@ taken.writeConfig("launchers", [
     "applications:org.kde.dolphin.desktop",
     "applications:org.mozilla.firefox.desktop",
     "applications:org.kde.discover.desktop",
-    "applications:systemsettings.desktop"
+    "applications:bugos-instellingen.desktop"
 ]);
 
 panel.addWidget("org.kde.plasma.marginsseparator");

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Back-up
+Name[en]=Backup
+Comment=Je bestanden veilig op een USB-schijf
+Comment[en]=Your files safe on a USB drive
+Exec=bugos-backup
+Icon=document-save
+Categories=Utility;Archiving;
+Keywords=backup;back-up;reservekopie;usb;terugzetten;restore;
+Terminal=false

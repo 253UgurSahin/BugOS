@@ -1,0 +1,10 @@
+[Unit]
+Description=BugOS: elke dag kijken of er een update is
+
+[Timer]
+OnStartupSec=15min
+OnUnitActiveSec=1d
+Persistent=true
+
+[Install]
+WantedBy=timers.target

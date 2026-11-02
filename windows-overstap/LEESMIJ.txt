@@ -1,0 +1,14 @@
+BugOS Overstap
+==============
+
+Dit programmaatje helpt je om van Windows over te stappen naar BugOS.
+
+1. Pak de zip uit (rechtermuisknop -> Alles uitpakken).
+2. Dubbelklik op "Start BugOS Overstap.bat".
+3. Volg de stappen op het scherm.
+
+Er gebeurt niks zonder dat jij op een knop drukt.
+Voor "Ruimte maken" en "USB-stick maken" vraagt Windows om toestemming
+(beheerder). Dat is normaal.
+
+Vragen of problemen? https://github.com/253UgurSahin/BugOS/issues

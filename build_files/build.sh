@@ -58,12 +58,31 @@ kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key ColorScheme BugOS
 # Dubbelklik om te openen, net als in Windows.
 kwriteconfig6 --file /etc/xdg/kdeglobals --group KDE --key SingleClick false
 
+# 4b. Bekende KDE-programma's een simpele BugOS-naam geven in het startmenu.
+#     hernoem <bestand> <Nederlandse naam> <Engelse naam>
+hernoem() {
+    local f="/usr/share/applications/$1"
+    [ -f "$f" ] || return 0
+    awk -v nl="$2" -v en="$3" '
+        /^\[/ { hoofd = ($0 == "[Desktop Entry]") }
+        hoofd && /^Name(\[[^]]*\])?=/ { if (!gedaan) { print "Name=" en; print "Name[nl]=" nl; gedaan = 1 }; next }
+        { print }
+    ' "$f" >"$f.nieuw" && mv "$f.nieuw" "$f"
+}
+hernoem org.kde.discover.desktop "BugOS Winkel" "BugOS Store"
+hernoem org.kde.dolphin.desktop "Bestanden" "Files"
+hernoem systemsettings.desktop "Alle instellingen" "All settings"
+hernoem org.kde.partitionmanager.desktop "Schijven" "Disks"
+hernoem org.kde.konsole.desktop "Terminal" "Terminal"
+
 # 5. Bestandstypes koppelen: .exe -> bugos-exe, .rpm/.deb -> bugos-pakket.
 update-desktop-database /usr/share/applications || true
 
 # 6. Diensten aanzetten.
 systemctl enable bugos-eerste-start.service
 systemctl enable podman.socket || true
+# Elke gebruiker: dagelijks kijken of er een update is (doet alleen iets bij "zelf updaten").
+systemctl --global enable bugos-updatecheck.timer
 
 # 7. Standaard: updates automatisch (de gebruiker kan dit omzetten).
 mkdir -p /etc/bugos
@@ -71,3 +90,4 @@ echo "UPDATES=auto" >/etc/bugos/updates.conf
 
 # Opruimen zodat er geen extra softwarebronnen aan blijven staan.
 dnf5 clean all
+rm -rf /var/lib/dnf /run/dnf

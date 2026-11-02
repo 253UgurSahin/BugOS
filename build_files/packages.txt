@@ -18,6 +18,10 @@ distrobox
 git
 
 # --- Eigen BugOS-programma's hebben dit nodig ---
+jq
+skopeo
+rsync
+xdg-user-dirs
 python3-pyside6
 kdialog
 libnotify

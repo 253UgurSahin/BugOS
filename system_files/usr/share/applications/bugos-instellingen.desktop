@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Instellingen
+Name[en]=Settings
+Comment=Wifi, geluid, scherm, updates en meer
+Comment[en]=Wi-Fi, sound, display, updates and more
+Exec=bugos-instellingen
+Icon=preferences-system
+Categories=Settings;System;
+Keywords=instellingen;settings;wifi;bluetooth;geluid;scherm;printer;updates;
+Terminal=false

@@ -1,0 +1,278 @@
+#!/usr/bin/python3
+"""BugOS Overstap (BugOS-kant) - je bestanden van Windows terugzetten.
+
+Jip-en-Janneke: met het Windows-programma "BugOS Overstap" heb je je
+bestanden op een USB-schijf gezet (map "BugOS-Overstap"). Steek die schijf
+in, open dit programma en druk op één knop. Dan:
+  - komen je documenten, foto's, muziek, video's, bureaublad en downloads
+    op de goede plek;
+  - worden je bladwijzers van Chrome/Edge/Brave omgezet naar een bestand
+    dat je in Firefox kunt importeren;
+  - wordt je oude Windows-achtergrond ook je BugOS-achtergrond.
+
+  bugos-overstap                -> het venster
+  bugos-overstap --zet <map>    -> zonder venster
+"""
+
+import getpass
+import html
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/bugos/python")
+
+from bugos_ui import t  # noqa: E402
+
+MAP = "BugOS-Overstap"
+
+# Windows-mapnaam -> xdg-naam van de BugOS-map
+KOPPELING = {
+    "Documents": "DOCUMENTS",
+    "Pictures": "PICTURES",
+    "Music": "MUSIC",
+    "Videos": "VIDEOS",
+    "Desktop": "DESKTOP",
+    "Downloads": "DOWNLOAD",
+}
+
+
+def gebruikersmap(xdg: str, standaard: str) -> Path:
+    try:
+        uit = subprocess.run(["xdg-user-dir", xdg], capture_output=True, text=True, timeout=5).stdout.strip()
+        if uit and Path(uit) != Path.home():
+            return Path(uit)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return Path.home() / standaard
+
+
+def zoek_overstap() -> list[Path]:
+    """Zoek op alle aangesloten schijven naar de map BugOS-Overstap."""
+    gebruiker = getpass.getuser()
+    gevonden = []
+    for basis in (Path("/run/media") / gebruiker, Path("/media") / gebruiker, Path("/media")):
+        if basis.is_dir():
+            for schijf in basis.iterdir():
+                kandidaat = schijf / MAP
+                if (kandidaat / "bugos-overstap.json").is_file():
+                    gevonden.append(kandidaat)
+    return gevonden
+
+
+def info(map_: Path) -> dict:
+    try:
+        return json.loads((map_ / "bugos-overstap.json").read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return {}
+
+
+# --------------------------------------------------------- bladwijzers ----
+
+def _html_map(knoop: dict, diepte: int) -> list[str]:
+    inspring = "    " * diepte
+    regels = []
+    for kind in knoop.get("children", []):
+        naam = html.escape(kind.get("name", ""))
+        if kind.get("type") == "folder":
+            regels.append(f"{inspring}<DT><H3>{naam}</H3>")
+            regels.append(f"{inspring}<DL><p>")
+            regels.extend(_html_map(kind, diepte + 1))
+            regels.append(f"{inspring}</DL><p>")
+        elif kind.get("type") == "url":
+            url = html.escape(kind.get("url", ""), quote=True)
+            regels.append(f'{inspring}<DT><A HREF="{url}">{naam}</A>')
+    return regels
+
+
+def chrome_naar_html(bestanden: dict[str, Path]) -> str:
+    """Zet Chrome/Edge/Brave-bladwijzers om naar het standaard HTML-formaat
+    dat elke browser (Firefox, Chrome, ...) kan importeren."""
+    regels = [
+        "<!DOCTYPE NETSCAPE-Bookmark-file-1>",
+        '<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">',
+        "<TITLE>Bookmarks</TITLE>",
+        "<H1>Bookmarks</H1>",
+        "<DL><p>",
+    ]
+    for browser, pad in bestanden.items():
+        try:
+            data = json.loads(pad.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        regels.append(f"    <DT><H3>{html.escape(browser)}</H3>")
+        regels.append("    <DL><p>")
+        for wortel in data.get("roots", {}).values():
+            if isinstance(wortel, dict) and wortel.get("children"):
+                regels.append(f"        <DT><H3>{html.escape(wortel.get('name', ''))}</H3>")
+                regels.append("        <DL><p>")
+                regels.extend(_html_map(wortel, 3))
+                regels.append("        </DL><p>")
+        regels.append("    </DL><p>")
+    regels.append("</DL><p>")
+    return "\n".join(regels) + "\n"
+
+
+# ---------------------------------------------------------- terugzetten ----
+
+def stappen(bron: Path) -> list[tuple[str, list[str]]]:
+    """De kopieer-opdrachten, met een uitleg per stap."""
+    lijst = []
+    for win, xdg in KOPPELING.items():
+        if (bron / win).is_dir():
+            doel = gebruikersmap(xdg, win)
+            # --ignore-existing: wat al op BugOS staat, wordt nooit overschreven.
+            lijst.append((t(f"{win} terugzetten...", f"Restoring {win}..."),
+                          ["rsync", "-rt", "--ignore-existing", "--modify-window=2", "--info=progress2",
+                           "--no-inc-recursive", f"{bron / win}/", f"{doel}/"]))
+    return lijst
+
+
+def afronden(bron: Path) -> list[str]:
+    """Bladwijzers en achtergrond. Geeft een lijstje met wat er gedaan is."""
+    gedaan = []
+    bw = bron / "Bladwijzers"
+    jsons = {p.stem: p for p in sorted(bw.glob("*.json"))} if bw.is_dir() else {}
+    if jsons:
+        doel = gebruikersmap("DOCUMENTS", "Documents") / "Bladwijzers-van-Windows.html"
+        doel.parent.mkdir(parents=True, exist_ok=True)
+        doel.write_text(chrome_naar_html(jsons), encoding="utf-8")
+        gedaan.append(t(f"Je bladwijzers staan in {doel.name} (in Documenten). In Firefox: menu → Bladwijzers → "
+                        "Bladwijzers beheren → Importeren → HTML.",
+                        f"Your bookmarks are in {doel.name} (in Documents). In Firefox: menu → Bookmarks → "
+                        "Manage bookmarks → Import → HTML."))
+    if bw.is_dir() and (bw / "Firefox.jsonlz4").is_file():
+        doel = gebruikersmap("DOCUMENTS", "Documents") / "Firefox-bladwijzers.jsonlz4"
+        doel.write_bytes((bw / "Firefox.jsonlz4").read_bytes())
+        gedaan.append(t("Firefox-bladwijzers: Firefox → Bladwijzers beheren → Importeren → Herstellen → Bestand kiezen → "
+                        f"{doel.name}.",
+                        f"Firefox bookmarks: Firefox → Manage bookmarks → Import → Restore → Choose file → {doel.name}."))
+    achtergrond = bron / "achtergrond.jpg"
+    if achtergrond.is_file():
+        doel = gebruikersmap("PICTURES", "Pictures") / "Windows-achtergrond.jpg"
+        doel.parent.mkdir(parents=True, exist_ok=True)
+        doel.write_bytes(achtergrond.read_bytes())
+        try:
+            subprocess.run(["plasma-apply-wallpaperimage", str(doel)], capture_output=True, timeout=10)
+            gedaan.append(t("Je Windows-achtergrond is nu ook je BugOS-achtergrond.",
+                            "Your Windows wallpaper is now your BugOS wallpaper too."))
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return gedaan
+
+
+def zonder_venster(bron: Path) -> int:
+    for _, cmd in stappen(bron):
+        if subprocess.call(cmd, stdout=subprocess.DEVNULL) not in (0, 24):
+            return 1
+    for regel in afronden(bron):
+        print(regel)
+    return 0
+
+
+# ------------------------------------------------------------------ venster ----
+
+def venster() -> int:
+    from bugos_ui import hoofdknop, maak_app, titel, uitleg
+    from PySide6.QtCore import QProcess, QTimer
+    from PySide6.QtWidgets import QComboBox, QHBoxLayout, QProgressBar, QVBoxLayout, QWidget
+
+    app = maak_app("bugos-overstap", "bugos-overstap", sys.argv)
+    w = QWidget()
+    w.setWindowTitle(t("Bestanden van Windows", "Files from Windows"))
+    w.resize(700, 480)
+    lay = QVBoxLayout(w)
+    lay.setContentsMargins(32, 28, 32, 28)
+    lay.setSpacing(14)
+    lay.addWidget(titel(t("Je bestanden van Windows", "Your files from Windows")))
+    lay.addWidget(uitleg(t(
+        "Heb je met \"BugOS Overstap\" op Windows je bestanden op een USB-schijf gezet? Steek die schijf in. "
+        "Bestanden die al op BugOS staan worden nooit overschreven.",
+        "Did you put your files on a USB drive with \"BugOS Overstap\" on Windows? Plug in that drive. "
+        "Files already on BugOS are never overwritten."), 12))
+    keuze = QComboBox()
+    keuze.setMinimumHeight(40)
+    lay.addWidget(keuze)
+    melding = uitleg("", 12)
+    lay.addWidget(melding)
+    balk = QProgressBar()
+    balk.setRange(0, 100)
+    balk.hide()
+    lay.addWidget(balk)
+    lay.addStretch(1)
+    rij = QHBoxLayout()
+    rij.addStretch(1)
+    knop = hoofdknop(t("Zet mijn bestanden terug", "Restore my files"))
+    rij.addWidget(knop)
+    lay.addLayout(rij)
+
+    proces = QProcess()
+    proces.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+    wachtrij: list[tuple[str, list[str]]] = []
+    huidige = {"bron": None}
+
+    def ververs() -> None:
+        if proces.state() != QProcess.ProcessState.NotRunning or balk.isVisible():
+            return
+        keuze.clear()
+        for m in zoek_overstap():
+            i = info(m)
+            keuze.addItem(f"💾  {m.parent.name}  —  {i.get('gebruiker', '?')} @ {i.get('computer', '?')}", str(m))
+        if keuze.count() == 0:
+            keuze.addItem(t("Steek de USB-schijf met je Windows-bestanden in...",
+                            "Plug in the USB drive with your Windows files..."), None)
+        knop.setEnabled(keuze.currentData() is not None)
+
+    def volgende() -> None:
+        if not wachtrij:
+            gedaan = afronden(huidige["bron"])
+            balk.setValue(100)
+            melding.setText("✅ " + t("Klaar! Je bestanden staan op hun plek.", "Done! Your files are in place.")
+                            + ("\n\n• " + "\n• ".join(gedaan) if gedaan else ""))
+            knop.setEnabled(True)
+            keuze.setEnabled(True)
+            return
+        tekst, cmd = wachtrij.pop(0)
+        melding.setText(tekst)
+        balk.setValue(0)
+        proces.start(cmd[0], cmd[1:])
+
+    def lees() -> None:
+        for stuk in bytes(proces.readAllStandardOutput()).decode(errors="ignore").replace("\r", "\n").split():
+            if stuk.endswith("%") and stuk[:-1].isdigit():
+                balk.setValue(int(stuk[:-1]))
+
+    def klaar(code: int, _s) -> None:
+        if code not in (0, 24):
+            melding.setText(t("❌ Het lukte niet helemaal. Zit de schijf er nog in? Probeer het opnieuw.",
+                              "❌ It did not fully work. Is the drive still plugged in? Try again."))
+            wachtrij.clear()
+            knop.setEnabled(True)
+            keuze.setEnabled(True)
+            return
+        volgende()
+
+    def begin() -> None:
+        huidige["bron"] = Path(keuze.currentData())
+        wachtrij[:] = stappen(huidige["bron"])
+        knop.setEnabled(False)
+        keuze.setEnabled(False)
+        balk.show()
+        volgende()
+
+    proces.readyReadStandardOutput.connect(lees)
+    proces.finished.connect(klaar)
+    knop.clicked.connect(begin)
+    timer = QTimer()
+    timer.timeout.connect(ververs)
+    timer.start(3000)
+    ververs()
+    w.show()
+    return app.exec()
+
+
+if __name__ == "__main__":
+    if len(sys.argv) == 3 and sys.argv[1] == "--zet":
+        sys.exit(zonder_venster(Path(sys.argv[2])))
+    sys.exit(venster())

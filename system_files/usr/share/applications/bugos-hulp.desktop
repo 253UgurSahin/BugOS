@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Er werkt iets niet
+Name[en]=Something is not working
+Comment=BugOS zoekt het probleem en lost het op
+Comment[en]=BugOS finds and fixes the problem
+Exec=bugos-hulp
+Icon=help-browser
+Categories=System;Utility;
+Keywords=hulp;help;probleem;kapot;repareren;fix;troubleshoot;
+Terminal=false

@@ -31,7 +31,9 @@ jobs:
             system_files/usr/share/bugos/lib.sh \
             $(grep -l '^#!/usr/bin/bash' system_files/usr/bin/bugos-*)
       - name: Python nakijken
-        run: python3 -m py_compile system_files/usr/bin/bugos-welkom
+        run: |
+          python3 -m py_compile system_files/usr/lib/bugos/python/bugos_ui.py \
+            $(grep -l '^#!/usr/bin/python3' system_files/usr/bin/bugos-*)
 
   bouwen:
     name: BugOS ${{ matrix.variant }}
