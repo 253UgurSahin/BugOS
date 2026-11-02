@@ -138,6 +138,14 @@ Het belangrijkste idee: **BugOS kan niet stuk.**
 - [ ] Vrijwilligers vinden voor vertalingen (**manager**)
 - [ ] Een eigen domeinnaam voor de website (**manager**)
 
+### Voor de manager: wat er nodig is om BugOS uit te delen
+- [ ] De **repo** en de **pakketten** (`bugos`, `bugos-nvidia`) op **openbaar** zetten. Zonder dat:
+  - kan BugOS Overstap BugOS niet downloaden,
+  - kan de "probeer eerst"-stick niet installeren (die haalt BugOS van internet),
+  - en krijgen geïnstalleerde computers geen updates.
+- [ ] In **Settings** de standaard-branch op `main` zetten. Dan draait de nachtelijke bouw (met beveiligingsupdates) op `main`.
+- [ ] Ondertekenen via SignPath, vrijwilligers en een domeinnaam (zie hierboven).
+
 ### Daarna: testen op echte computers
 - [ ] De "probeer eerst"-stick op een echte pc proberen
 - [ ] Startmenu en snelmenu testen en daarna standaard maken
