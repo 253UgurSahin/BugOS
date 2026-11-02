@@ -23,7 +23,8 @@ class Live(QWidget):
         lay.setSpacing(18)
 
         logo = QLabel()
-        logo.setPixmap(QIcon.fromTheme("bugos-logo", QIcon("/usr/share/bugos/logo.svg")).pixmap(76, 76))
+        # Dit scherm is altijd donker: het logo met de lichte kop.
+        logo.setPixmap(QIcon("/usr/share/bugos/logo-donker.svg").pixmap(76, 76))
         lay.addWidget(logo)
         kop = label(t("Welkom bij BugOS", "Welcome to BugOS"), "groot")
         kop.setStyleSheet("color:#FFFFFF;")

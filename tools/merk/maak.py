@@ -25,6 +25,7 @@ ROOT = HIER.parent.parent
 LOGO = ROOT / "branding" / "logo"
 LETTER = ROOT / "branding" / "lettertypes" / "FunnelDisplay[wght].ttf"
 SYSTEEM_ICOON = ROOT / "system_files" / "usr" / "share" / "bugos" / "logo.svg"
+SYSTEEM_DONKER = ROOT / "system_files" / "usr" / "share" / "bugos" / "logo-donker.svg"
 
 GEWICHT = 650
 SPATIERING = -0.03  # em, iets strakker dan normaal
@@ -72,6 +73,7 @@ def main() -> int:
     LOGO.mkdir(parents=True, exist_ok=True)
     print("Merkteken:")
     schrijf("bugos-merk.svg", svg(merkteken("merk")))
+    schrijf("bugos-merk-donker.svg", svg(merkteken("merk", stijl="donker")))
     schrijf("bugos-merk-systeem.svg", svg(merkteken("merk", stijl="systeem"), stylesheet=True))
     schrijf("bugos-merk-inkt.svg", svg(merkteken("merk", stijl="mono", mono=INKT)))
     schrijf("bugos-merk-wit.svg", svg(merkteken("merk", stijl="mono", mono="#FFFFFF")))
@@ -94,14 +96,17 @@ def main() -> int:
     ty = 146 - (cap * tekst_schaal) / 2
     totaal_b = mh + tussen + tw
     totaal_h = max(256.0, ty + onder * tekst_schaal + 2)  # ruimte voor de staart van de g
-    for kleur, achtervoegsel in ((INKT, ""), ("#FFFFFF", "-wit")):
-        binnen = (merkteken(f"logo{achtervoegsel}") +
+    for kleur, achtervoegsel, stijl in ((INKT, "", "kleur"), ("#FFFFFF", "-wit", "donker")):
+        binnen = (merkteken(f"logo{achtervoegsel}", stijl=stijl) +
                   f'<path d="{pad}" fill="{kleur}" transform="translate({mh + tussen:.2f} {ty:.2f}) scale({tekst_schaal:.5f})"/>')
         schrijf(f"bugos-logo{achtervoegsel}.svg", svg(binnen, round(totaal_b, 2), round(totaal_h, 2)))
 
     # Het systeempictogram dat in BugOS wordt geïnstalleerd (kleurt mee met het thema).
     SYSTEEM_ICOON.write_text(svg(merkteken("bugos", stijl="systeem"), stylesheet=True), encoding="utf-8")
     print(f"  {SYSTEEM_ICOON.relative_to(ROOT)} (systeempictogram)")
+    # Voor schermen die altijd donker zijn (opstartscherm, probeer-eerst-stick).
+    SYSTEEM_DONKER.write_text(svg(merkteken("bugos", stijl="donker")), encoding="utf-8")
+    print(f"  {SYSTEEM_DONKER.relative_to(ROOT)} (voor donkere schermen)")
     return 0
 
 

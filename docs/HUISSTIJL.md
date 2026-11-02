@@ -25,6 +25,8 @@
   <img src="../branding/logo/bugos-icoon.svg" width="96" alt="Het BugOS-app-icoon, donker">
   &nbsp;&nbsp;
   <img src="../branding/logo/bugos-icoon-licht.svg" width="96" alt="Het BugOS-app-icoon, licht">
+  &nbsp;&nbsp;
+  <img src="beelden/merk-op-donker.svg" width="96" alt="Het BugOS-beestje voor een donkere achtergrond, met een licht kopje">
 </p>
 
 Ons logo is een **lieveheersbeestje**, gemaakt van simpele vormen:
@@ -42,9 +44,10 @@ Alle bestanden staan in [`branding/logo/`](../branding/logo/) (en als PNG in [`b
 | Bestand | Wanneer |
 |---|---|
 | `bugos-logo.svg` | Beestje met het woord BugOS, op een lichte achtergrond. **Dit is het gewone logo.** |
-| `bugos-logo-wit.svg` | Hetzelfde, op een donkere achtergrond of een foto. |
+| `bugos-logo-wit.svg` | Hetzelfde, op een donkere achtergrond of een foto. Het kopje is dan licht, zodat het niet verdwijnt. |
 | `bugos-merk.svg` | Alleen het beestje, in kleur. Als er weinig ruimte is. |
-| `bugos-merk-systeem.svg` | Binnen BugOS zelf: de zwarte delen kleuren mee met licht en donker. |
+| `bugos-merk-donker.svg` | Alleen het beestje, op een donkere achtergrond (licht kopje met donkere oogjes). |
+| `bugos-merk-systeem.svg` | Binnen BugOS zelf: het kopje kleurt mee met licht en donker. |
 | `bugos-merk-inkt.svg`, `-wit`, `-rood` | In één kleur, bijvoorbeeld voor een stempel, sticker of laser. |
 | `bugos-icoon.svg` | App-icoon: het beestje op een donkere, ronde tegel. |
 | `bugos-icoon-licht.svg` | App-icoon op een lichte tegel. |
@@ -53,6 +56,7 @@ Alle bestanden staan in [`branding/logo/`](../branding/logo/) (en als PNG in [`b
 ### Regels voor het logo
 
 - **Ruimte eromheen:** houd rondom minstens de breedte van de kop van het beestje vrij.
+- **Op donker:** gebruik altijd een variant voor donker (`-donker` of `-wit`). Het gewone beestje heeft een zwart kopje, en dat verdwijnt op een donkere achtergrond.
 - **Niet te klein:** het beestje minstens 16 beeldpunten, het logo met woord minstens 96 beeldpunten breed.
 - **Niet doen:** uitrekken of platdrukken, draaien, andere kleuren geven, een schaduw of rand eromheen,
   of het woord BugOS in een ander lettertype zetten.

@@ -47,7 +47,8 @@ class Zijpaneel(QWidget):
         self.stappen = stappen
         self.huidig = 0
         self.beeld = QPixmap(achtergrond_pad(donker=True))
-        self.logo = QIcon.fromTheme("bugos-logo", QIcon("/usr/share/bugos/logo.svg"))
+        # De zijbalk is altijd donker: het logo met de lichte kop.
+        self.logo = QIcon("/usr/share/bugos/logo-donker.svg")
         self.setFixedWidth(330)
 
     def zet(self, i: int) -> None:
@@ -269,7 +270,7 @@ def voorbeeld(donker: bool, b: int = 300, h: int = 176) -> QPixmap:
     # taakbalk
     p.setBrush(QColor(28, 30, 36, 220) if donker else QColor(255, 255, 255, 220))
     p.drawRoundedRect(QRectF(8, h - 24, b - 16, 18), 7, 7)
-    logo = QIcon.fromTheme("bugos-logo", QIcon("/usr/share/bugos/logo.svg"))
+    logo = QIcon("/usr/share/bugos/logo-donker.svg" if donker else "/usr/share/bugos/logo.svg")
     logo.paint(p, 15, h - 22, 14, 14)
     p.setBrush(lijn)
     for i in range(3):

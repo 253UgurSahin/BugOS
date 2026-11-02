@@ -46,7 +46,7 @@ Rectangle {
             id: merk
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.top: parent.top
-            source: "images/bugos-merk.svg"
+            source: "images/bugos-merk-donker.svg"
             sourceSize.width: 112
             sourceSize.height: 112
             smooth: true

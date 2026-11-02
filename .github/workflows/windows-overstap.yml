@@ -10,6 +10,11 @@ on:
   pull_request:
     paths: ["windows-overstap/**"]
   workflow_dispatch:
+    inputs:
+      plaatjes_in_log:
+        description: "Plaatjes van het venster ook als tekst in het logboek zetten (om na te kijken zonder te downloaden)"
+        type: boolean
+        default: false
 
 jobs:
   controle:
@@ -59,6 +64,21 @@ jobs:
             if ($LASTEXITCODE -ne 0) { Write-Host "Het venster gaf een fout (schaal $schaal)."; exit 1 }
           }
           Get-ChildItem fotos -Recurse -File | Format-Table FullName, Length -AutoSize
+
+      - name: Plaatjes in het logboek (alleen als je daarom vraagt)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.plaatjes_in_log }}
+        shell: powershell
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $codec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq 'image/jpeg' }
+          $par = New-Object System.Drawing.Imaging.EncoderParameters(1)
+          $par.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter([System.Drawing.Imaging.Encoder]::Quality, [long]80)
+          Get-ChildItem fotos -Recurse -Filter 'overstap-*.png' | Sort-Object FullName | ForEach-Object {
+            $beeld = [System.Drawing.Image]::FromFile($_.FullName)
+            $ms = New-Object System.IO.MemoryStream
+            $beeld.Save($ms, $codec, $par); $beeld.Dispose()
+            Write-Output "PLAATJE $($_.Directory.Name)-$($_.BaseName) $([Convert]::ToBase64String($ms.ToArray()))"
+          }
 
       - name: Plaatjes bewaren
         uses: actions/upload-artifact@v4

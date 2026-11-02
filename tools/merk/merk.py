@@ -13,6 +13,7 @@ Dit bestand maakt alleen SVG-tekst. tools/merk/maak.py schrijft de bestanden.
 from __future__ import annotations
 
 INKT = "#16171C"
+KOP_DONKER = "#F4F2F2"  # kop op een donkere achtergrond (warm wit)
 ROOD = {
     "l1": "#FF5C50",  # linkervleugel, boven
     "l2": "#E52F3E",  # linkervleugel, onder
@@ -40,6 +41,8 @@ def merkteken(uid: str = "bug", stijl: str = "kleur", mono: str | None = None) -
       "kleur"     - rode vleugels, inktzwarte kop en stippen, witte kopvlekjes
       "systeem"   - zoals kleur, maar kop volgt de tekstkleur van het thema en
                     de kopvlekjes de achtergrondkleur (KDE kleurt dit vanzelf)
+      "donker"    - voor een donkere achtergrond: lichte kop met inktkleurige
+                    kopvlekjes (zoals "systeem" in een donker thema)
       "mono"      - alles in één kleur (mono=...), vlekjes en spleet uitgespaard
     """
     kleuren = dict(ROOD)
@@ -51,6 +54,9 @@ def merkteken(uid: str = "bug", stijl: str = "kleur", mono: str | None = None) -
     if stijl == "systeem":
         kop_attr = 'class="ColorScheme-Text" fill="currentColor"'
         vlek_attr = 'class="ColorScheme-Background" fill="currentColor"'
+    elif stijl == "donker":
+        kop_attr = f'fill="{KOP_DONKER}"'
+        vlek_attr = f'fill="{INKT}"'
     else:
         kop_attr = f'fill="{(mono or INKT) if stijl == "mono" else INKT}"'
         vlek_attr = 'fill="#FFFFFF"'
