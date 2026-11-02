@@ -10,6 +10,7 @@ zodat alle apps er hetzelfde uitzien en hetzelfde praten:
 
 from __future__ import annotations
 
+import json
 import locale
 import os
 import shutil
@@ -35,19 +36,42 @@ CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "bug
 
 # ---------------------------------------------------------------- taal ----
 
+VERTALINGEN = Path("/usr/share/bugos/vertalingen")
+
+
 def _taal() -> str:
+    """Twee-letter taalcode van de gebruiker, bijv. "nl", "en", "de", "tr"."""
     lang = os.environ.get("LC_ALL") or os.environ.get("LC_MESSAGES") or os.environ.get("LANG") or ""
     if not lang:
         lang = locale.getlocale()[0] or ""
-    return "nl" if lang.lower().startswith("nl") else "en"
+    code = lang.split(".")[0].split("_")[0].lower()
+    return code if code.isalpha() and len(code) in (2, 3) else "en"
+
+
+def _catalogus(taal: str) -> dict[str, str]:
+    """Vertalingen van de community: Engelse tekst -> tekst in deze taal."""
+    if taal in ("nl", "en"):
+        return {}
+    try:
+        data = json.loads((VERTALINGEN / f"{taal}.json").read_text(encoding="utf-8"))
+        return {k: v for k, v in data.items() if isinstance(v, str) and v}
+    except (OSError, ValueError):
+        return {}
 
 
 TAAL = _taal()
+_CATALOGUS = _catalogus(TAAL)
 
 
 def t(nl: str, en: str) -> str:
-    """Geef de tekst in de taal van de gebruiker (Nederlands of Engels)."""
-    return nl if TAAL == "nl" else en
+    """Geef de tekst in de taal van de gebruiker.
+
+    Nederlands en Engels staan in de code zelf. Andere talen komen uit
+    /usr/share/bugos/vertalingen/<taal>.json (zie docs/VERTALEN.md).
+    Ontbreekt een vertaling, dan valt BugOS terug op Engels."""
+    if TAAL == "nl":
+        return nl
+    return _CATALOGUS.get(en, en)
 
 
 # ---------------------------------------------------- programma's starten ----

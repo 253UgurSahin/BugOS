@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BugOS</title>
+<meta name="description" content="BugOS: een gratis computer-systeem dat werkt zoals je van Windows gewend bent, maar niet stuk kan. Voor oma, gamers en programmeurs.">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+html{color-scheme:light}
+body{margin:0}
+/* Layout: één rustige leeskolom met brede "banden" (huis, bakkerij, stappen); taakbalk-mockup als blikvanger bovenaan. */
+:root{
+  --bg:#FBF8F7; --surface:#FFFFFF; --sunk:#F3ECEA; --ink:#1F2328; --muted:#5E6670;
+  --line:#E6DCDA; --red:#D93A3A; --red-soft:#FBE3E1; --ok:#1A7F37; --warn:#9A6700;
+  --desk1:#FDE7E4; --desk2:#E9A39C; --bar:rgba(255,255,255,.82); --bar-ink:#1F2328;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, "Cascadia Mono", monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#16181D; --surface:#1E2128; --sunk:#252932; --ink:#F2F3F5; --muted:#A3AAB5;
+  --line:#343944; --red:#FF6B6B; --red-soft:#3A2224; --ok:#6ED28C; --warn:#F0C85A;
+  --desk1:#3A2A2E; --desk2:#7A3A38; --bar:rgba(28,30,36,.85); --bar-ink:#F2F3F5; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#16181D; --surface:#1E2128; --sunk:#252932; --ink:#F2F3F5; --muted:#A3AAB5;
+  --line:#343944; --red:#FF6B6B; --red-soft:#3A2224; --ok:#6ED28C; --warn:#F0C85A;
+  --desk1:#3A2A2E; --desk2:#7A3A38; --bar:rgba(28,30,36,.85); --bar-ink:#F2F3F5; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:400 1.0625rem/1.65 var(--f-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 64px}
+.wrap{max-width:68rem;margin:0 auto;display:grid;gap:72px}
+.col{max-width:44rem}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.1}
+h1{font-size:clamp(2.6rem,7vw,4.6rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.4vw,2.2rem);font-weight:800;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:600}
+p{margin:0}
+.eyebrow{font:600 .78rem/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--red)}
+.lead{font-size:1.25rem;color:var(--muted);max-width:38rem}
+section{display:grid;gap:24px}
+.sec-head{display:grid;gap:10px}
+code{font-family:var(--f-mono);font-size:.88em;background:var(--sunk);padding:.1em .35em;border-radius:5px}
+
+/* Hero */
+.hero{display:grid;gap:28px;padding-top:56px}
+.brand{display:flex;align-items:center;gap:16px}
+.brand svg{width:64px;height:64px;flex:none}
+.hero .lead strong{color:var(--ink)}
+
+/* Bureaublad-mockup */
+.desk{border-radius:16px;overflow:hidden;border:1px solid var(--line);aspect-ratio:16/8;max-width:100%;
+  background:linear-gradient(135deg,var(--desk1),var(--desk2));position:relative;min-height:220px}
+.desk .hills{position:absolute;inset:auto 0 0 0;height:45%;background:
+  radial-gradient(120% 90% at 20% 100%, color-mix(in srgb,var(--red) 55%,transparent) 0 60%, transparent 61%),
+  radial-gradient(120% 90% at 85% 110%, color-mix(in srgb,var(--red) 40%,transparent) 0 60%, transparent 61%)}
+.win{position:absolute;left:8%;top:12%;width:min(56%,420px);background:var(--surface);border-radius:12px;
+  border:1px solid var(--line);box-shadow:0 18px 40px rgba(0,0,0,.18);padding:16px 18px;display:grid;gap:8px}
+.win .bar{display:flex;justify-content:space-between;align-items:center;font:600 .8rem var(--f-body);color:var(--muted)}
+.win .dots{display:flex;gap:10px;font:600 .8rem var(--f-mono);color:var(--muted)}
+.win h3{font-size:1.25rem}
+.win .choice{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.win .choice span{border-radius:10px;padding:14px 8px;text-align:center;font-weight:700;font-size:.9rem;border:2px solid var(--line)}
+.win .choice .l{background:#fff;color:#1F2328}
+.win .choice .d{background:#1C1E24;color:#F2F3F5;border-color:var(--red)}
+.taskbar{position:absolute;left:12px;right:12px;bottom:10px;height:48px;border-radius:14px;background:var(--bar);
+  backdrop-filter:blur(10px);display:flex;align-items:center;gap:10px;padding:0 12px;color:var(--bar-ink);border:1px solid var(--line)}
+.taskbar .start{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:var(--red-soft)}
+.taskbar .start svg{width:26px;height:26px}
+.taskbar .app{width:30px;height:30px;border-radius:8px;background:var(--sunk);border:1px solid var(--line)}
+.taskbar .spacer{flex:1}
+.taskbar .tray{font:600 .8rem var(--f-mono);display:flex;gap:12px;align-items:center;white-space:nowrap}
+.cap{font-size:.9rem;color:var(--muted)}
+@media (max-width:560px){.win{left:5%;width:90%;top:8%}.win .bar .dots{display:none}.taskbar .tray .hide-s{display:none}}
+
+/* Drie mensen */
+.people{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:16px}
+.person{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;display:grid;gap:8px;align-content:start}
+.person .who{font:600 .78rem var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--red)}
+.person ul{margin:0;padding-left:1.1em;display:grid;gap:4px}
+
+/* Huis */
+.house{display:grid;gap:0;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.layer{display:grid;grid-template-columns:minmax(9rem,14rem) 1fr;gap:16px;padding:18px 20px;align-items:start}
+.layer + .layer{border-top:1px solid var(--line)}
+.layer.top{background:var(--red-soft)}
+.layer.mid{background:var(--surface)}
+.layer.bot{background:var(--sunk)}
+.layer .name{display:grid;gap:2px}
+.layer .name small{font:400 .82rem var(--f-mono);color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips span{font-size:.9rem;padding:3px 10px;border-radius:999px;border:1px solid var(--line);background:var(--bg)}
+.layer.top .chips span{border-color:color-mix(in srgb,var(--red) 35%,var(--line))}
+@media (max-width:560px){.layer{grid-template-columns:1fr}}
+
+/* Tabel */
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:34rem}
+th,td{text-align:left;padding:12px 16px;vertical-align:top;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:0}
+th{font:600 .78rem var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--sunk)}
+td:first-child{font-weight:700;white-space:nowrap}
+td:nth-child(3){color:var(--muted)}
+
+/* Bakkerij */
+.flow{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));gap:12px;counter-reset:s}
+.flow li{counter-increment:s;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;gap:6px;align-content:start}
+.flow li::before{content:"Stap " counter(s);font:600 .75rem var(--f-mono);color:var(--red);letter-spacing:.06em;text-transform:uppercase}
+.flow li.safe{border-color:var(--ok)}
+.flow li.safe::before{content:"Vangnet";color:var(--ok)}
+
+/* Onderdelen */
+.parts{display:grid;grid-template-columns:repeat(auto-fit,minmax(18rem,1fr));gap:2px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.part{background:var(--surface);padding:16px 18px;display:grid;gap:4px}
+.part code{justify-self:start;background:var(--red-soft);color:var(--ink)}
+
+/* Fases */
+.phases{display:grid;gap:14px}
+.phase{display:grid;grid-template-columns:7.5rem 1fr;gap:18px;padding:18px 20px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.phase .tag{display:grid;gap:6px;align-content:start}
+.pill{justify-self:start;font:600 .72rem var(--f-mono);letter-spacing:.06em;text-transform:uppercase;padding:4px 9px;border-radius:999px;border:1px solid currentColor}
+.pill.now{color:var(--ok)}
+.pill.next{color:var(--red)}
+.pill.later{color:var(--muted)}
+.phase ul{margin:0;padding-left:1.1em;display:grid;gap:4px}
+.phase li.done{color:var(--muted)}
+.phase li.done::marker{content:"✓  ";color:var(--ok)}
+@media (max-width:560px){.phase{grid-template-columns:1fr}}
+
+/* Let op */
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));gap:16px}
+.note{border-left:3px solid var(--warn);padding:4px 0 4px 16px;display:grid;gap:4px}
+.note h3{font-size:1.02rem}
+.note p{color:var(--muted);font-size:.98rem}
+
+footer{color:var(--muted);font-size:.92rem;border-top:1px solid var(--line);padding-top:20px;display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-between}
+a{color:var(--red);text-underline-offset:3px}
+a:focus-visible{outline:2px solid var(--red);outline-offset:2px;border-radius:3px}
+.knop{display:inline-block;background:var(--red);color:#fff;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:12px}
+.knop.licht{background:transparent;color:var(--red);border:2px solid var(--red)}
+.knop:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.person code{word-break:break-all}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="bug" viewBox="0 0 128 128">
+    <g stroke="#1F2328" stroke-width="6" stroke-linecap="round">
+      <line x1="30" y1="62" x2="14" y2="54"/><line x1="98" y1="62" x2="114" y2="54"/>
+      <line x1="28" y1="82" x2="12" y2="84"/><line x1="100" y1="82" x2="116" y2="84"/>
+      <line x1="34" y1="102" x2="22" y2="114"/><line x1="94" y1="102" x2="106" y2="114"/>
+    </g>
+    <path d="M52 30 Q44 14 36 12 M76 30 Q84 14 92 12" fill="none" stroke="#1F2328" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="35" cy="12" r="5" fill="#1F2328"/><circle cx="93" cy="12" r="5" fill="#1F2328"/>
+    <ellipse cx="64" cy="38" rx="22" ry="16" fill="#1F2328"/>
+    <circle cx="55" cy="35" r="4" fill="#FFFFFF"/><circle cx="73" cy="35" r="4" fill="#FFFFFF"/>
+    <path d="M64 46 C34 46 24 70 26 86 C28 106 46 118 64 118 Z" fill="#D93A3A"/>
+    <path d="M64 46 C94 46 104 70 102 86 C100 106 82 118 64 118 Z" fill="#E5484D"/>
+    <line x1="64" y1="46" x2="64" y2="118" stroke="#1F2328" stroke-width="4"/>
+    <g fill="#1F2328"><circle cx="46" cy="70" r="7"/><circle cx="82" cy="70" r="7"/><circle cx="42" cy="94" r="6"/><circle cx="86" cy="94" r="6"/><circle cx="56" cy="106" r="4.5"/><circle cx="72" cy="106" r="4.5"/></g>
+  </symbol>
+</svg>
+
+<div class="wrap">
+
+<header class="hero">
+  <div class="brand"><svg role="img" aria-label="BugOS-logo, een lieveheersbeestje"><use href="#bug"/></svg><span class="eyebrow">Versie 0.2 · in de maak</span></div>
+  <h1>BugOS: een computer die niet stuk kan.</h1>
+  <p class="lead">Een gratis besturingssysteem dat werkt zoals je van Windows gewend bent. <strong>Zo simpel dat oma het snapt</strong>, en toch fijn voor gamers en programmeurs.</p>
+  <p><a class="knop" href="#download">Download BugOS</a></p>
+
+  <figure style="margin:0;display:grid;gap:10px">
+    <div class="desk" role="img" aria-label="Voorbeeld van het BugOS-bureaublad met het welkomstscherm en de taakbalk onderaan">
+      <div class="hills"></div>
+      <div class="win">
+        <div class="bar"><span>BugOS Welkom</span><span class="dots">Stap 3 van 6</span></div>
+        <h3>Licht of donker?</h3>
+        <div class="choice"><span class="l">Licht</span><span class="d">Donker ✓</span></div>
+      </div>
+      <div class="taskbar">
+        <div class="start"><svg aria-hidden="true"><use href="#bug"/></svg></div>
+        <div class="app"></div><div class="app"></div><div class="app"></div>
+        <div class="spacer"></div>
+        <div class="tray"><span class="hide-s">wifi</span><span class="hide-s">geluid</span><span>14:32</span></div>
+      </div>
+    </div>
+    <figcaption class="cap">Startknop links onder, klok rechts onder: alles zit waar je het verwacht. Het lieveheersbeestje is de startknop.</figcaption>
+  </figure>
+</header>
+
+<section>
+  <div class="sec-head"><span class="eyebrow">Voor wie</span><h2>Eén systeem, drie soorten mensen</h2></div>
+  <div class="people">
+    <div class="person"><span class="who">Oma</span><h3>Gewoon doen wat je wilt</h3>
+      <ul><li>Wifi en bluetooth met één klik</li><li>Foto's, films en muziek spelen meteen</li><li>Updates gaan vanzelf</li><li>Geen account, geen reclame</li></ul></div>
+    <div class="person"><span class="who">Gamer</span><h3>Spelen zonder gedoe</h3>
+      <ul><li>Steam met Proton staat klaar</li><li>Game-modus: volle kracht en een FPS-teller</li><li>Xbox- en PlayStation-controllers</li><li>Een aparte versie voor Nvidia-kaarten</li></ul></div>
+    <div class="person"><span class="who">Programmeur</span><h3>Eén schakelaar</h3>
+      <ul><li>Ontwikkelaarsmodus aan en weer uit</li><li>VS Code, git, Python, Node, Rust en Go</li><li>Podman, Docker-commando's en Distrobox</li><li>Een fijne terminal, nooit verplicht</li></ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="eyebrow">Hoe het in elkaar zit</span><h2>Het huis in drie lagen</h2>
+    <p class="col">We bouwen niet alles zelf. De fundering en de motor bestaan al en zijn bewezen. Wij maken de jas: alles wat je ziet en aanraakt.</p></div>
+  <div class="house">
+    <div class="layer top"><div class="name"><h3>BugOS-jas</h3><small>van ons</small></div>
+      <div class="chips"><span>Startmenu</span><span>Taakbalk</span><span>Licht/donker-stijl</span><span>BugOS Welkom</span><span>Winkel</span><span>Game-modus</span><span>Ontwikkelaarsmodus</span><span>Lichte stand</span><span>.exe openen</span><span>.rpm/.deb in doosje</span><span>Updates-knop</span></div></div>
+    <div class="layer mid"><div class="name"><h3>KDE Plasma</h3><small>de motor</small></div>
+      <div class="chips"><span>Vensters</span><span>Wifi</span><span>Bluetooth</span><span>Verkenner (Dolphin)</span><span>Schijfbeheer</span><span>Geluid</span><span>Alle talen</span></div></div>
+    <div class="layer bot"><div class="name"><h3>Aurora · Fedora Atomic</h3><small>de fundering</small></div>
+      <div class="chips"><span>Drivers</span><span>Codecs voor films en muziek</span><span>Nvidia</span><span>Updates met terug-knop</span></div></div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="eyebrow">Samen besloten</span><h2>De keuzes</h2></div>
+  <div class="tbl"><table>
+    <thead><tr><th>Onderwerp</th><th>Keuze</th><th>Waarom</th></tr></thead>
+    <tbody>
+      <tr><td>Fundering</td><td>Fedora Atomic via Aurora</td><td>Elke update is een complete nieuwe versie. Mis? Dan kies je de vorige.</td></tr>
+      <tr><td>Schil</td><td>Eigen jas op de KDE-motor</td><td>Eerste versie in maanden, niet in jaren</td></tr>
+      <tr><td>Uiterlijk</td><td>Eigen stijl, licht of donker</td><td>Knoppen op vertrouwde plekken</td></tr>
+      <tr><td>Updates</td><td>Vanzelf, of zelf kiezen</td><td>Oma hoeft niks te doen, en wie wil kan zelf kiezen</td></tr>
+      <tr><td>Programma's</td><td>Winkel, plus dubbelklik op downloads</td><td>Zoals op je telefoon én zoals op Windows</td></tr>
+      <tr><td>Windows-apps</td><td>Dubbelklik op een .exe start Wine</td><td>Werkt het niet, dan krijg je een duidelijk alternatief</td></tr>
+      <tr><td>Talen</td><td>Alle talen van KDE</td><td>Eigen schermen eerst in het Nederlands en Engels</td></tr>
+      <tr><td>Installeren</td><td>USB-stick, ook naast Windows</td><td>Later ook een Windows-overstap-programma</td></tr>
+      <tr><td>Computers</td><td>Gewoon, Nvidia en oude pc's</td><td>De lichte stand gaat vanzelf aan</td></tr>
+      <tr><td>Privacy</td><td>Geen account, niks verzamelen</td><td>Je computer is van jou</td></tr>
+      <tr><td>Licentie</td><td>GPL-3.0</td><td>Altijd gratis en open</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="eyebrow">Updates</span><h2>De bakkerij</h2>
+    <p class="col">Een update is bij BugOS als een vers brood: GitHub bakt elke nacht een complete nieuwe BugOS. Je computer pakt hem op de achtergrond en eet hem pas bij de volgende keer opstarten.</p></div>
+  <ol class="flow">
+    <li><h3>Wij passen iets aan</h3><p>Een verandering in de repo.</p></li>
+    <li><h3>GitHub bakt</h3><p>Een nieuwe BugOS, ook elke nacht voor beveiliging.</p></li>
+    <li><h3>Ophalen</h3><p>Je computer downloadt stil op de achtergrond.</p></li>
+    <li><h3>Herstarten</h3><p>Pas dan draait de nieuwe versie.</p></li>
+    <li class="safe"><h3>Terug naar gisteren</h3><p>Problemen? Kies bij het opstarten de vorige versie.</p></li>
+  </ol>
+</section>
+
+<section>
+  <div class="sec-head"><span class="eyebrow">Al gebouwd</span><h2>Wat er nu al in zit</h2></div>
+  <div class="parts">
+    <div class="part"><code>bugos-welkom</code><h3>BugOS Welkom</h3><p>Zes grote stappen: taal, wifi, licht/donker, updates, gamen/programmeren, klaar.</p></div>
+    <div class="part"><code>bugos-exe</code><h3>Windows-programma's</h3><p>Dubbelklik op een .exe. Is er een betere versie in de Winkel, dan biedt BugOS die eerst aan.</p></div>
+    <div class="part"><code>bugos-pakket</code><h3>Downloads van websites</h3><p>Een .rpm of .deb gaat eerst via de Winkel, en anders veilig in een doosje.</p></div>
+    <div class="part"><code>bugos-updates</code><h3>Updates-schakelaar</h3><p>Vanzelf of zelf. Plus "nu updaten" en "terug naar vorige".</p></div>
+    <div class="part"><code>bugos-spelmodus</code><h3>Game-modus</h3><p>Volle kracht, meldingen stil en een FPS-teller in games.</p></div>
+    <div class="part"><code>bugos-ontwikkelaar</code><h3>Ontwikkelaarsmodus</h3><p>VS Code, containers en een dev-doosje met programmeertalen.</p></div>
+    <div class="part"><code>bugos-lichte-stand</code><h3>Lichte stand</h3><p>Zet vanzelf de zware effecten uit bij minder dan 6 GB geheugen of 2 kernen.</p></div>
+    <div class="part"><code>org.bugos.desktop</code><h3>BugOS-stijl</h3><p>Taakbalk onderaan, het lieveheersbeestje als startknop, licht- en donker-kleuren.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="eyebrow">Het stappenplan</span><h2>Van fundering tot overstap</h2></div>
+  <div class="phases">
+    <div class="phase"><div class="tag"><span class="pill now">Nu</span><h3>Fase 1 · Fundering</h3></div>
+      <ul><li class="done">Plan op papier</li><li class="done">Automatisch bouwen (gewoon en Nvidia)</li><li class="done">ISO voor de USB-stick</li><li class="done">Eerste eigen onderdelen</li><li>Eerste test in een virtuele pc</li></ul></div>
+    <div class="phase"><div class="tag"><span class="pill next">Volgende</span><h3>Fase 2 · De eigen jas</h3></div>
+      <ul><li>BugOS Instellingen met grote tegels</li><li>Eigen startmenu met grote zoekbalk</li><li>Snelmenu: wifi, geluid, helderheid en game-modus in één paneel</li><li>De BugOS Winkel in eigen stijl</li><li>Een update-melding voor wie "zelf" kiest</li></ul></div>
+    <div class="phase"><div class="tag"><span class="pill later">Daarna</span><h3>Fase 3 · Overstappen</h3></div>
+      <ul><li>Windows-overstap: maakt de USB-stick en neemt je foto's en documenten mee</li><li>Een installatieprogramma in BugOS-stijl</li><li>"Verdeel mijn schijf" om naast Windows te installeren</li></ul></div>
+    <div class="phase"><div class="tag"><span class="pill later">Later</span><h3>Fase 4 · Oppoetsen</h3></div>
+      <ul><li>Hulp-app "Er werkt iets niet"</li><li>Back-up met één knop</li><li>Een vertaal-community</li><li>Een eigen website met een downloadknop</li></ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="eyebrow">Eerlijk is eerlijk</span><h2>Om op te letten</h2></div>
+  <div class="notes">
+    <div class="note"><h3>Oudere Nvidia-kaarten</h3><p>De open Nvidia-driver werkt vanaf de GTX 16- en RTX 20-serie (ongeveer 2018). Voor oudere kaarten regelen we later iets.</p></div>
+    <div class="note"><h3>Héél oude pc's</h3><p>BugOS heeft een 64-bit computer met minstens 4 GB geheugen nodig. Pc's uit de tijd van Windows XP gaan niet.</p></div>
+    <div class="note"><h3>Niet elke .exe werkt</h3><p>Anti-cheat in sommige online games, Adobe en de nieuwste Office werken vaak niet via Wine. BugOS legt dan uit wat je wel kunt gebruiken.</p></div>
+  </div>
+</section>
+
+
+<section id="download">
+  <div class="sec-head"><span class="eyebrow">Downloaden</span><h2>BugOS op je computer</h2>
+    <p class="col">BugOS is nog in de maak (versie 0.x). Probeer het eerst in een virtuele pc of op een reservecomputer.</p></div>
+  <div class="people">
+    <div class="person"><span class="who">Stap 1 · op Windows</span><h3>BugOS Overstap</h3>
+      <p>Controleert je pc, neemt je bestanden mee en maakt de USB-stick.</p>
+      <p><a class="knop" href="https://github.com/253UgurSahin/BugOS/releases/latest">Download BugOS Overstap</a></p></div>
+    <div class="person"><span class="who">Stap 2 · de USB-stick</span><h3>BugOS (.iso)</h3>
+      <p>Kies de gewone versie, of de Nvidia-versie als je een Nvidia-videokaart hebt.</p>
+      <p><a class="knop licht" href="https://github.com/253UgurSahin/BugOS/blob/main/docs/TESTEN.md">Zo maak je de .iso</a></p></div>
+    <div class="person"><span class="who">Al Fedora Atomic?</span><h3>Overstappen zonder USB</h3>
+      <p>Typ in de terminal en herstart:</p>
+      <p><code>sudo bootc switch ghcr.io/253ugursahin/bugos:latest</code></p></div>
+  </div>
+</section>
+
+<footer><span>BugOS · GPL-3.0 · gebouwd op Aurora, Fedora en KDE</span><a href="https://github.com/253UgurSahin/BugOS">Bekijk de code op GitHub</a></footer>
+</div>
+
+</html>

@@ -5,6 +5,7 @@ name: Windows-overstap
 on:
   push:
     paths: ["windows-overstap/**", ".github/workflows/windows-overstap.yml"]
+    tags: ["v*"]
   pull_request:
     paths: ["windows-overstap/**"]
   workflow_dispatch:
@@ -12,6 +13,8 @@ on:
 jobs:
   controle:
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -50,3 +53,15 @@ jobs:
             windows-overstap/BugOS-Overstap.ps1
             windows-overstap/Start BugOS Overstap.bat
             windows-overstap/LEESMIJ.txt
+
+      - name: Zip maken voor een release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: powershell
+        run: Compress-Archive -Path windows-overstap\* -DestinationPath BugOS-Overstap.zip
+
+      - name: Release maken (bij een versie-tag zoals v0.2)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: BugOS-Overstap.zip
+          generate_release_notes: true

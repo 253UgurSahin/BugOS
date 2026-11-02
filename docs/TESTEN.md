@@ -42,5 +42,18 @@ Herstart daarna de computer. Wil je terug? Kies dan in het opstartmenu de vorige
 - [ ] Dubbelklik op een `.exe` (bijvoorbeeld Notepad++)
 - [ ] Zoek "Game-modus" in het startmenu en zet hem aan en weer uit
 - [ ] Draai `bugos-updates status` in de terminal
+- [ ] Open **Instellingen** en zoek op "wifi"
+- [ ] Open **Er werkt iets niet** en zet het geluid op stil: krijg je een "Repareer"-knop?
+- [ ] Open **Back-up** en maak een back-up naar een USB-stick
+- [ ] Probeer op een Windows-pc **BugOS Overstap** (stap 1 en 2 zijn veilig, die veranderen niets aan je pc)
+
+## BugOS Overstap (voor Windows) downloaden
+
+- Ga naar **Actions**, dan **Windows-overstap**, kies de laatste groene run en download **BugOS-Overstap** onderaan.
+- Of maak een versie-tag (zoals `v0.2`). Dan staat hij bij **Releases** als zip.
+
+## De website aanzetten
+
+Ga naar **Settings**, dan **Pages**, en zet **Source** op **GitHub Actions**. Zodra alles op `main` staat, komt de website vanzelf online.
 
 Vind je iets raars? Maak een **Issue** aan op GitHub, of vertel het mij gewoon in de chat.

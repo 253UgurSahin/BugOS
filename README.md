@@ -25,6 +25,7 @@ Gaat er na een update iets mis? Dan kies je bij het opstarten de vorige versie, 
 
 - 📐 [De bouwtekening (het plan)](docs/PLAN.md)
 - 🧪 [BugOS proberen](docs/TESTEN.md)
+- 🌍 [BugOS vertalen](docs/VERTALEN.md)
 
 ## Hoe is de repo ingedeeld?
 
@@ -33,6 +34,9 @@ Containerfile          het bouwrecept
 build_files/           het bouwscript en de lijst met extra programma's
 system_files/          alles wat in BugOS komt (scripts, stijl, logo)
 disk_config/           instellingen voor de USB-stick (ISO)
+windows-overstap/      het Windows-programma om over te stappen
+website/               de BugOS-website
+tools/                 hulpjes voor de makers (bijv. vertalingen verzamelen)
 .github/workflows/     de "bakkerij" die BugOS automatisch bouwt
 docs/                  uitleg en plan
 ```

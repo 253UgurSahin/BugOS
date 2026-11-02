@@ -12,7 +12,6 @@ Jip-en-Janneke: een paar grote, simpele stappen.
 Gestart met --eerste-keer opent hij alleen als hij nog nooit is afgemaakt.
 """
 
-import locale
 import os
 import subprocess
 import sys
@@ -33,23 +32,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "bugos"
+sys.path.insert(0, "/usr/lib/bugos/python")
+from bugos_ui import CONFIG, t  # noqa: E402
+
 KLAAR = CONFIG / "welkom-klaar"
-
-
-def _taal() -> str:
-    lang = os.environ.get("LC_MESSAGES") or os.environ.get("LANG") or ""
-    if not lang:
-        lang = (locale.getlocale()[0] or "")
-    return "nl" if lang.lower().startswith("nl") else "en"
-
-
-TAAL = _taal()
-
-
-def t(nl: str, en: str) -> str:
-    """Geef de tekst in de taal van de gebruiker."""
-    return nl if TAAL == "nl" else en
 
 
 def start(*cmd: str) -> None:

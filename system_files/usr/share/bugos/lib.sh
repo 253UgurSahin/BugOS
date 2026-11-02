@@ -1,17 +1,32 @@
 # BugOS - gedeelde hulpjes voor alle bugos-* scripts.
 # shellcheck shell=bash
 
-# Taal kiezen: Nederlands als het systeem Nederlands is, anders Engels.
+# Taal van de gebruiker als twee letters, bijv. nl, en, de, tr.
 bugos_taal() {
-    case "${LC_MESSAGES:-${LANG:-}}" in
-    nl* | NL*) echo nl ;;
-    *) echo en ;;
-    esac
+    local lang="${LC_ALL:-${LC_MESSAGES:-${LANG:-en}}}"
+    lang="${lang%%.*}"
+    lang="${lang%%_*}"
+    echo "${lang,,}"
 }
 
 # t "Nederlandse tekst" "English text"  -> geeft de juiste taal terug.
+# Andere talen komen uit /usr/share/bugos/vertalingen/<taal>.json (Engels -> vertaling).
 t() {
-    if [ "$(bugos_taal)" = nl ]; then echo "$1"; else echo "$2"; fi
+    local taal bestand vertaald
+    taal="$(bugos_taal)"
+    if [ "$taal" = nl ]; then
+        echo "$1"
+        return
+    fi
+    bestand="/usr/share/bugos/vertalingen/$taal.json"
+    if [ "$taal" != en ] && [ -f "$bestand" ] && command -v jq >/dev/null 2>&1; then
+        vertaald="$(jq -r --arg k "$2" '.[$k] // empty' "$bestand" 2>/dev/null)"
+        if [ -n "$vertaald" ]; then
+            echo "$vertaald"
+            return
+        fi
+    fi
+    echo "$2"
 }
 
 # Kleine melding rechtsonder in beeld.
