@@ -45,7 +45,7 @@ if [ -n "$GEVONDEN" ] && [ "$GEVONDEN" != "No matches found" ]; then
     if vraag "$(t \
         "\"$NAAM\" staat ook in de BugOS Winkel. Dat is veiliger en krijgt vanzelf updates.\n\nWil je het uit de Winkel halen?" \
         "\"$NAAM\" is also in the BugOS Store. That is safer and updates automatically.\n\nDo you want to get it from the Store?")"; then
-        exec plasma-discover "appstream://$GEVONDEN"
+        exec bugos-winkel "appstream://$GEVONDEN"
     fi
 fi
 

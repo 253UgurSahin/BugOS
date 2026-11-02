@@ -1,2 +1,2 @@
 [General]
-Prepend=org.mozilla.firefox.desktop;org.kde.dolphin.desktop;org.kde.discover.desktop;bugos-instellingen.desktop;org.libreoffice.LibreOffice.writer.desktop;org.videolan.VLC.desktop;com.valvesoftware.Steam.desktop;bugos-hulp.desktop
+Prepend=org.mozilla.firefox.desktop;org.kde.dolphin.desktop;bugos-winkel.desktop;bugos-instellingen.desktop;org.libreoffice.LibreOffice.writer.desktop;org.videolan.VLC.desktop;com.valvesoftware.Steam.desktop;bugos-hulp.desktop

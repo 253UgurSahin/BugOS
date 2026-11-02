@@ -1,0 +1,18 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [{ "Name": "BugOS" }],
+        "Category": "Application Launchers",
+        "Description": "Het BugOS-startmenu: grote zoekbalk, vastgezette apps en recente bestanden",
+        "Description[en]": "The BugOS start menu: big search bar, pinned apps and recent files",
+        "Icon": "bugos-logo",
+        "Id": "org.bugos.startmenu",
+        "License": "GPL-3.0-or-later",
+        "Name": "BugOS Startmenu",
+        "Name[en]": "BugOS Start Menu",
+        "Version": "0.1",
+        "Website": "https://github.com/253UgurSahin/BugOS"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-Provides": ["org.kde.plasma.launchermenu"]
+}

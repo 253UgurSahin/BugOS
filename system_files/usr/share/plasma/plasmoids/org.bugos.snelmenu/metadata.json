@@ -1,0 +1,17 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [{ "Name": "BugOS" }],
+        "Category": "System Information",
+        "Description": "Snelle knoppen: wifi, bluetooth, game-modus, donker, niet storen en volume",
+        "Description[en]": "Quick buttons: Wi-Fi, Bluetooth, game mode, dark, do not disturb and volume",
+        "Icon": "configure",
+        "Id": "org.bugos.snelmenu",
+        "License": "GPL-3.0-or-later",
+        "Name": "BugOS Snelmenu",
+        "Name[en]": "BugOS Quick Menu",
+        "Version": "0.1",
+        "Website": "https://github.com/253UgurSahin/BugOS"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

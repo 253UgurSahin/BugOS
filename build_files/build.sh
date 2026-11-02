@@ -69,7 +69,7 @@ hernoem() {
         { print }
     ' "$f" >"$f.nieuw" && mv "$f.nieuw" "$f"
 }
-hernoem org.kde.discover.desktop "BugOS Winkel" "BugOS Store"
+hernoem org.kde.discover.desktop "Meer apps" "More apps"
 hernoem org.kde.dolphin.desktop "Bestanden" "Files"
 hernoem systemsettings.desktop "Alle instellingen" "All settings"
 hernoem org.kde.partitionmanager.desktop "Schijven" "Disks"

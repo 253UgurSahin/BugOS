@@ -1,0 +1,285 @@
+#!/usr/bin/python3
+"""BugOS Winkel - apps installeren met één klik.
+
+Jip-en-Janneke: links kies je een onderwerp (Internet, Kantoor, Gamen...),
+rechts zie je bekende, veilige apps. Druk op "Installeren" en klaar.
+Staat wat je zoekt er niet bij? Dan zoek je verder in "Meer apps".
+
+  bugos-winkel                       -> de winkel
+  bugos-winkel appstream://<id>      -> meteen naar die app
+  bugos-winkel --zoek <tekst>        -> meteen zoeken
+"""
+
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/bugos/python")
+
+from bugos_ui import (  # noqa: E402
+    ROOD, TAAL, bestaat, draai, gewone_knop, hoofdknop, lettertype, maak_app, start, t, titel, uitleg,
+)
+from PySide6.QtCore import QProcess, QSize, Qt  # noqa: E402
+from PySide6.QtGui import QIcon, QPixmap  # noqa: E402
+from PySide6.QtWidgets import (  # noqa: E402
+    QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
+    QScrollArea, QVBoxLayout, QWidget,
+)
+
+CATALOGUS = Path("/usr/share/bugos/winkel.json")
+ICOON_MAPPEN = [
+    Path("/var/lib/flatpak/appstream/flathub/x86_64/active/icons/128x128"),
+    Path("/var/lib/flatpak/appstream/flathub/x86_64/active/icons/64x64"),
+    Path.home() / ".local/share/flatpak/appstream/flathub/x86_64/active/icons/128x128",
+]
+
+
+def lees_catalogus(pad: Path = CATALOGUS) -> dict:
+    return json.loads(pad.read_text(encoding="utf-8"))
+
+
+def geinstalleerd() -> set[str]:
+    if not bestaat("flatpak"):
+        return set()
+    _, uit = draai("flatpak", "list", "--app", "--columns=application", timeout=20)
+    return {regel.strip() for regel in uit.splitlines() if regel.strip()}
+
+
+def icoon_voor(app_id: str) -> QIcon:
+    for map_ in ICOON_MAPPEN:
+        png = map_ / f"{app_id}.png"
+        if png.is_file():
+            return QIcon(QPixmap(str(png)))
+    return QIcon.fromTheme(app_id, QIcon.fromTheme("application-x-executable"))
+
+
+def tekst(app: dict) -> str:
+    return app.get("nl" if TAAL == "nl" else "en", app.get("en", ""))
+
+
+def past(app: dict, zoek: str) -> bool:
+    hooi = f"{app['naam']} {app.get('nl', '')} {app.get('en', '')} {app['id']}".lower()
+    return all(w in hooi for w in zoek.lower().split())
+
+
+class AppKaart(QFrame):
+    def __init__(self, app: dict, winkel: "Winkel"):
+        super().__init__()
+        self.app = app
+        self.winkel = winkel
+        self.setObjectName("kaart")
+        self.setMinimumHeight(118)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(14, 12, 14, 12)
+        lay.setSpacing(14)
+        plaatje = QLabel()
+        plaatje.setPixmap(icoon_voor(app["id"]).pixmap(QSize(56, 56)))
+        plaatje.setFixedSize(60, 60)
+        lay.addWidget(plaatje, 0, Qt.AlignmentFlag.AlignTop)
+        blok = QVBoxLayout()
+        blok.setSpacing(4)
+        naam = QLabel(app["naam"])
+        naam.setFont(lettertype(13, True))
+        blok.addWidget(naam)
+        blok.addWidget(uitleg(tekst(app), 10))
+        self.knop = gewone_knop("")
+        self.knop.setMinimumWidth(130)
+        self.knop.clicked.connect(self.klik)
+        rij = QHBoxLayout()
+        rij.addStretch(1)
+        rij.addWidget(self.knop)
+        blok.addStretch(1)
+        blok.addLayout(rij)
+        lay.addLayout(blok, 1)
+        self.ververs()
+
+    def ververs(self) -> None:
+        bezig = self.winkel.bezig_met == self.app["id"]
+        if bezig:
+            self.knop.setText(t("Bezig...", "Working..."))
+            self.knop.setEnabled(False)
+        elif self.app["id"] in self.winkel.installed:
+            self.knop.setText(t("Openen", "Open"))
+            self.knop.setEnabled(True)
+        else:
+            self.knop.setText(t("Installeren", "Install"))
+            self.knop.setEnabled(self.winkel.bezig_met is None)
+
+    def klik(self) -> None:
+        if self.app["id"] in self.winkel.installed:
+            start("flatpak", "run", self.app["id"])
+        else:
+            self.winkel.installeer(self.app)
+
+
+class Winkel(QWidget):
+    def __init__(self, catalogus: dict, begin_zoek: str = "", begin_app: str = ""):
+        super().__init__()
+        self.cat = catalogus
+        self.installed = geinstalleerd()
+        self.bezig_met: str | None = None
+        self.kaarten: list[AppKaart] = []
+        self.setWindowTitle(t("BugOS Winkel", "BugOS Store"))
+        self.resize(1060, 720)
+
+        hoofd = QHBoxLayout(self)
+        hoofd.setContentsMargins(0, 0, 0, 0)
+        hoofd.setSpacing(0)
+
+        # Links: de onderwerpen.
+        self.lijst = QListWidget()
+        self.lijst.setFixedWidth(230)
+        self.lijst.setIconSize(QSize(24, 24))
+        self.lijst.setFont(lettertype(12))
+        self.lijst.setStyleSheet(
+            "QListWidget{border:none;padding:12px 8px;}"
+            "QListWidget::item{padding:10px 8px;border-radius:10px;}"
+            f"QListWidget::item:selected{{background:{ROOD};color:white;}}"
+            "QListWidget::item:hover:!selected{background:palette(midlight);}")
+        for c in self.cat["categorieen"]:
+            item = QListWidgetItem(QIcon.fromTheme(c["icoon"]), c["nl" if TAAL == "nl" else "en"])
+            item.setData(Qt.ItemDataRole.UserRole, c["id"])
+            self.lijst.addItem(item)
+        if self.installed:
+            item = QListWidgetItem(QIcon.fromTheme("emblem-checked"), t("Mijn apps", "My apps"))
+            item.setData(Qt.ItemDataRole.UserRole, "_mijn")
+            self.lijst.addItem(item)
+        self.lijst.currentRowChanged.connect(lambda _: self.toon())
+        hoofd.addWidget(self.lijst)
+
+        # Rechts: zoeken en de apps.
+        rechts = QVBoxLayout()
+        rechts.setContentsMargins(28, 24, 28, 20)
+        rechts.setSpacing(14)
+        self.kop = titel("")
+        rechts.addWidget(self.kop)
+        self.zoek = QLineEdit()
+        self.zoek.setPlaceholderText(t("Zoek een app, bijvoorbeeld \"muziek\" of \"Zoom\"",
+                                       "Search for an app, for example \"music\" or \"Zoom\""))
+        self.zoek.setMinimumHeight(44)
+        self.zoek.setClearButtonEnabled(True)
+        self.zoek.textChanged.connect(lambda _: self.toon())
+        rechts.addWidget(self.zoek)
+        self.melding = uitleg("", 11)
+        self.melding.hide()
+        rechts.addWidget(self.melding)
+
+        self.raster_widget = QWidget()
+        self.raster = QGridLayout(self.raster_widget)
+        self.raster.setContentsMargins(0, 0, 0, 0)
+        self.raster.setSpacing(12)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setWidget(self.raster_widget)
+        rechts.addWidget(scroll, 1)
+
+        onder = QHBoxLayout()
+        onder.addWidget(uitleg(t("Niet gevonden wat je zoekt? Er zijn duizenden andere apps.",
+                                 "Didn't find what you need? There are thousands of other apps."), 11), 1)
+        meer = hoofdknop(t("Meer apps zoeken", "Search more apps"))
+        meer.clicked.connect(self.meer_apps)
+        onder.addWidget(meer)
+        rechts.addLayout(onder)
+        hoofd.addLayout(rechts, 1)
+
+        self.proces = QProcess(self)
+        self.proces.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        self.proces.finished.connect(self.klaar)
+
+        self.lijst.setCurrentRow(0)
+        if begin_zoek:
+            self.zoek.setText(begin_zoek)
+        if begin_app:
+            gevonden = next((a for a in self.cat["apps"] if a["id"] == begin_app), None)
+            if gevonden:
+                self.zoek.setText(gevonden["naam"])
+
+    # ----------------------------------------------------------------
+    def toon(self) -> None:
+        for k in self.kaarten:
+            self.raster.removeWidget(k)
+            k.deleteLater()
+        self.kaarten = []
+        zoek = self.zoek.text().strip()
+        item = self.lijst.currentItem()
+        cat_id = item.data(Qt.ItemDataRole.UserRole) if item else "aanbevolen"
+        if zoek:
+            apps = [a for a in self.cat["apps"] if past(a, zoek)]
+            self.kop.setText(t(f"Zoeken: {zoek}", f"Search: {zoek}"))
+        elif cat_id == "_mijn":
+            apps = [a for a in self.cat["apps"] if a["id"] in self.installed]
+            self.kop.setText(t("Mijn apps", "My apps"))
+        else:
+            apps = [a for a in self.cat["apps"] if cat_id in a["cat"]]
+            self.kop.setText(item.text() if item else "")
+        kolommen = 1 if self.width() < 760 else 2 if self.width() < 1200 else 3
+        for i, app in enumerate(apps):
+            kaart = AppKaart(app, self)
+            self.kaarten.append(kaart)
+            self.raster.addWidget(kaart, i // kolommen, i % kolommen)
+        self.raster.setRowStretch(len(apps) // kolommen + 1, 1)
+        if not apps:
+            self.melding.setText(t("Niet in de BugOS-selectie. Druk op \"Meer apps zoeken\" om verder te zoeken.",
+                                   "Not in the BugOS selection. Press \"Search more apps\" to search further."))
+            self.melding.show()
+        elif self.bezig_met is None:
+            self.melding.hide()
+
+    def resizeEvent(self, e):  # noqa: N802
+        super().resizeEvent(e)
+        if self.kaarten:
+            self.toon()
+
+    def installeer(self, app: dict) -> None:
+        self.bezig_met = app["id"]
+        self.melding.setText(t(f"{app['naam']} wordt geïnstalleerd. Dit kan een paar minuten duren...",
+                               f"Installing {app['naam']}. This can take a few minutes..."))
+        self.melding.show()
+        for k in self.kaarten:
+            k.ververs()
+        self.proces.start("flatpak", ["install", "-y", "--noninteractive", "flathub", app["id"]])
+
+    def klaar(self, code: int, _status) -> None:
+        app_id = self.bezig_met
+        naam = next((a["naam"] for a in self.cat["apps"] if a["id"] == app_id), app_id)
+        self.bezig_met = None
+        self.installed = geinstalleerd() | ({app_id} if code == 0 else set())
+        if code == 0:
+            self.melding.setText(t(f"✅ {naam} is geïnstalleerd. Je vindt het in het startmenu.",
+                                   f"✅ {naam} is installed. You can find it in the start menu."))
+        else:
+            self.melding.setText(t(f"❌ {naam} installeren lukte niet. Heb je internet? Probeer het nog eens.",
+                                   f"❌ Installing {naam} failed. Are you online? Please try again."))
+        for k in self.kaarten:
+            k.ververs()
+
+    def meer_apps(self) -> None:
+        zoek = self.zoek.text().strip()
+        if zoek:
+            start("plasma-discover", "--search", zoek)
+        else:
+            start("plasma-discover")
+
+
+def main() -> int:
+    args = sys.argv[1:]
+    begin_zoek = ""
+    begin_app = ""
+    if len(args) >= 2 and args[0] == "--zoek":
+        begin_zoek = " ".join(args[1:])
+    elif args and args[0].startswith("appstream://"):
+        begin_app = args[0][len("appstream://"):].removesuffix(".desktop")
+    catalogus = lees_catalogus()
+    if begin_app and not any(a["id"] == begin_app for a in catalogus["apps"]):
+        # Niet in onze selectie: open de grote winkel op die app.
+        start("plasma-discover", args[0])
+        return 0
+    app = maak_app("bugos-winkel", "bugos-winkel", sys.argv)
+    w = Winkel(catalogus, begin_zoek, begin_app)
+    w.show()
+    return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

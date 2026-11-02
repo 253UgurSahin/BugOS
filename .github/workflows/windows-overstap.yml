@@ -44,6 +44,9 @@ jobs:
           . ([scriptblock]::Create($code.Substring($param, $tot - $param)))
           Get-Controle | Format-Table -AutoSize -Wrap
           "Meeneem-grootte: {0:N1} GB" -f ((Get-MeeneemGrootte) / 1GB)
+          "Soort voor deze pc: $(Get-IsoSoort)"
+          $gevonden = Get-IsoInfo 'main'
+          if ($gevonden) { "Nieuwste ISO: $($gevonden.Versie) - $($gevonden.Info.delen.Count) stukjes" } else { "Nog geen ISO-release gevonden (dat is goed zolang er nog niets gepubliceerd is)." }
 
       - name: Inpakken
         uses: actions/upload-artifact@v4

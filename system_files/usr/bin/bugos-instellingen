@@ -30,11 +30,11 @@ from PySide6.QtWidgets import (  # noqa: E402
 
 # ------------------------------------------------------------- toestand ----
 
-def status_van(script: str) -> bool:
+def status_van(script: str, *voor: str) -> bool:
     """Vraag een bugos-script of iets aan staat."""
     if not bestaat(script):
         return False
-    _, uit = draai(script, "status", timeout=5)
+    _, uit = draai(script, *voor, "status", timeout=5)
     return uit.strip().endswith(("aan", "auto"))
 
 
@@ -193,10 +193,14 @@ class StartPagina(QWidget):
         super().resizeEvent(e)
 
 
-class SchakelaarPagina(QWidget):
+class SchakelaarPagina(QScrollArea):
     def __init__(self, terug):
         super().__init__()
-        lay = QVBoxLayout(self)
+        self.setWidgetResizable(True)
+        self.setFrameShape(QScrollArea.Shape.NoFrame)
+        binnen = QWidget()
+        self.setWidget(binnen)
+        lay = QVBoxLayout(binnen)
         lay.setContentsMargins(32, 28, 32, 28)
         lay.setSpacing(14)
         kop = QHBoxLayout()
@@ -248,6 +252,22 @@ class SchakelaarPagina(QWidget):
             status_van("bugos-lichte-stand"))
         licht.omgezet.connect(lambda aan: zet_script("bugos-lichte-stand", aan))
         lay.addWidget(licht)
+
+        startmenu = Schakelaar(
+            t("Nieuw BugOS-startmenu (proef)", "New BugOS start menu (trial)"),
+            t("Grote zoekbalk, vastgezette apps en recente bestanden. Uitzetten zet het gewone menu terug.",
+              "Big search bar, pinned apps and recent files. Turning off brings back the normal menu."),
+            status_van("bugos-paneel", "startmenu"))
+        startmenu.omgezet.connect(lambda aan: start("bugos-paneel", "startmenu", "aan" if aan else "uit"))
+        lay.addWidget(startmenu)
+
+        snelmenu = Schakelaar(
+            t("Snelmenu op de taakbalk (proef)", "Quick menu on the taskbar (trial)"),
+            t("Grote knoppen voor wifi, bluetooth, game-modus, donker en volume.",
+              "Big buttons for Wi-Fi, Bluetooth, game mode, dark and volume."),
+            status_van("bugos-paneel", "snelmenu"))
+        snelmenu.omgezet.connect(lambda aan: start("bugos-paneel", "snelmenu", "aan" if aan else "uit"))
+        lay.addWidget(snelmenu)
         lay.addStretch(1)
 
 

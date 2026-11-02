@@ -32,8 +32,15 @@ jobs:
             $(grep -l '^#!/usr/bin/bash' system_files/usr/bin/bugos-*)
       - name: Python nakijken
         run: |
-          python3 -m py_compile system_files/usr/lib/bugos/python/bugos_ui.py \
+          python3 -m py_compile system_files/usr/lib/bugos/python/bugos_ui.py iso_live/src/bugos-live \
             $(grep -l '^#!/usr/bin/python3' system_files/usr/bin/bugos-*)
+          shellcheck -x iso_live/src/build.sh system_files/usr/bin/bugos-paneel
+
+      - name: Menu's (QML) laden zonder Plasma
+        run: |
+          sudo apt-get install -y -qq libegl1 libgl1 libxkbcommon0 libfontconfig1 >/dev/null
+          pip install -q PySide6-Essentials
+          QT_QPA_PLATFORM=offscreen python3 tools/qml-test.py
 
   bouwen:
     name: BugOS ${{ matrix.variant }}

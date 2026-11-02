@@ -1,0 +1,62 @@
+{
+  "_uitleg": "De apps die de BugOS Winkel vooraan laat zien. Alleen bekende, veilige apps van Flathub. id = Flathub-ID.",
+  "categorieen": [
+    {"id": "aanbevolen", "nl": "Aanbevolen", "en": "Recommended", "icoon": "starred"},
+    {"id": "internet", "nl": "Internet", "en": "Internet", "icoon": "applications-internet"},
+    {"id": "kantoor", "nl": "Kantoor", "en": "Office", "icoon": "applications-office"},
+    {"id": "foto", "nl": "Foto en video", "en": "Photo and video", "icoon": "applications-graphics"},
+    {"id": "muziek", "nl": "Muziek en film", "en": "Music and film", "icoon": "applications-multimedia"},
+    {"id": "gamen", "nl": "Gamen", "en": "Gaming", "icoon": "applications-games"},
+    {"id": "praten", "nl": "Chatten en bellen", "en": "Chat and calls", "icoon": "internet-chat"},
+    {"id": "leren", "nl": "Leren en kinderen", "en": "Learning and kids", "icoon": "applications-education"},
+    {"id": "handig", "nl": "Handig", "en": "Useful", "icoon": "applications-utilities"},
+    {"id": "programmeren", "nl": "Programmeren", "en": "Coding", "icoon": "applications-development"}
+  ],
+  "apps": [
+    {"id": "org.mozilla.firefox", "naam": "Firefox", "cat": ["internet", "aanbevolen"], "nl": "Snelle, veilige internetbrowser.", "en": "Fast, safe web browser."},
+    {"id": "com.google.Chrome", "naam": "Google Chrome", "cat": ["internet"], "nl": "De browser van Google.", "en": "Google's web browser."},
+    {"id": "com.brave.Browser", "naam": "Brave", "cat": ["internet"], "nl": "Browser die reclame blokkeert.", "en": "Browser that blocks ads."},
+    {"id": "org.mozilla.Thunderbird", "naam": "Thunderbird", "cat": ["internet", "kantoor"], "nl": "E-mail en agenda.", "en": "Email and calendar."},
+
+    {"id": "org.libreoffice.LibreOffice", "naam": "LibreOffice", "cat": ["kantoor", "aanbevolen"], "nl": "Brieven, rekenbladen en presentaties. Opent ook Word- en Excel-bestanden.", "en": "Letters, spreadsheets and presentations. Also opens Word and Excel files."},
+    {"id": "org.onlyoffice.desktopeditors", "naam": "ONLYOFFICE", "cat": ["kantoor"], "nl": "Kantoorpakket dat veel op Microsoft Office lijkt.", "en": "Office suite that looks a lot like Microsoft Office."},
+    {"id": "org.kde.okular", "naam": "Okular", "cat": ["kantoor"], "nl": "PDF's lezen, invullen en ondertekenen.", "en": "Read, fill in and sign PDFs."},
+
+    {"id": "org.gimp.GIMP", "naam": "GIMP", "cat": ["foto"], "nl": "Foto's bewerken, zoals Photoshop.", "en": "Edit photos, like Photoshop."},
+    {"id": "org.kde.krita", "naam": "Krita", "cat": ["foto"], "nl": "Tekenen en schilderen.", "en": "Drawing and painting."},
+    {"id": "org.kde.kdenlive", "naam": "Kdenlive", "cat": ["foto"], "nl": "Video's monteren.", "en": "Edit videos."},
+    {"id": "com.obsproject.Studio", "naam": "OBS Studio", "cat": ["foto", "gamen"], "nl": "Je scherm opnemen of live streamen.", "en": "Record your screen or stream live."},
+
+    {"id": "org.videolan.VLC", "naam": "VLC", "cat": ["muziek", "aanbevolen"], "nl": "Speelt elke film en elk muziekbestand af.", "en": "Plays every movie and music file."},
+    {"id": "com.spotify.Client", "naam": "Spotify", "cat": ["muziek", "aanbevolen"], "nl": "Muziek en podcasts.", "en": "Music and podcasts."},
+    {"id": "org.kde.elisa", "naam": "Elisa", "cat": ["muziek"], "nl": "Je eigen muziek afspelen.", "en": "Play your own music."},
+    {"id": "org.audacityteam.Audacity", "naam": "Audacity", "cat": ["muziek"], "nl": "Geluid opnemen en bewerken.", "en": "Record and edit audio."},
+
+    {"id": "com.valvesoftware.Steam", "naam": "Steam", "cat": ["gamen", "aanbevolen"], "nl": "De grootste winkel voor pc-games. Veel Windows-games werken gewoon.", "en": "The biggest store for PC games. Many Windows games just work."},
+    {"id": "com.heroicgameslauncher.hgl", "naam": "Heroic", "cat": ["gamen"], "nl": "Je games van Epic, GOG en Amazon.", "en": "Your games from Epic, GOG and Amazon."},
+    {"id": "net.lutris.Lutris", "naam": "Lutris", "cat": ["gamen"], "nl": "Alle andere games op één plek.", "en": "All other games in one place."},
+    {"id": "org.prismlauncher.PrismLauncher", "naam": "Prism Launcher", "cat": ["gamen"], "nl": "Minecraft spelen.", "en": "Play Minecraft."},
+    {"id": "net.davidotek.pupgui2", "naam": "ProtonUp-Qt", "cat": ["gamen"], "nl": "Nieuwere Proton-versies voor lastige games.", "en": "Newer Proton versions for tricky games."},
+    {"id": "com.usebottles.bottles", "naam": "Bottles", "cat": ["gamen", "handig"], "nl": "Windows-programma's netjes in een eigen doosje.", "en": "Windows programs neatly in their own box."},
+
+    {"id": "com.discordapp.Discord", "naam": "Discord", "cat": ["praten", "gamen"], "nl": "Chatten en bellen met vrienden.", "en": "Chat and call with friends."},
+    {"id": "org.signal.Signal", "naam": "Signal", "cat": ["praten"], "nl": "Veilig berichten sturen.", "en": "Send messages securely."},
+    {"id": "org.telegram.desktop", "naam": "Telegram", "cat": ["praten"], "nl": "Berichten en groepen.", "en": "Messages and groups."},
+    {"id": "us.zoom.Zoom", "naam": "Zoom", "cat": ["praten"], "nl": "Videobellen.", "en": "Video calls."},
+    {"id": "com.github.IsmaelMartinez.teams_for_linux", "naam": "Teams for Linux", "cat": ["praten"], "nl": "Microsoft Teams (niet van Microsoft zelf).", "en": "Microsoft Teams (not made by Microsoft)."},
+
+    {"id": "org.kde.gcompris", "naam": "GCompris", "cat": ["leren"], "nl": "Meer dan 100 leerspelletjes voor kinderen.", "en": "Over 100 learning games for kids."},
+    {"id": "org.tuxpaint.Tuxpaint", "naam": "Tux Paint", "cat": ["leren"], "nl": "Tekenen voor kinderen.", "en": "Drawing for kids."},
+    {"id": "org.kde.marble", "naam": "Marble", "cat": ["leren"], "nl": "Wereldbol en kaarten.", "en": "Globe and maps."},
+
+    {"id": "org.keepassxc.KeePassXC", "naam": "KeePassXC", "cat": ["handig"], "nl": "Al je wachtwoorden veilig op één plek.", "en": "All your passwords safe in one place."},
+    {"id": "com.bitwarden.desktop", "naam": "Bitwarden", "cat": ["handig"], "nl": "Wachtwoordkluis, ook op je telefoon.", "en": "Password vault, also on your phone."},
+    {"id": "org.kde.kcalc", "naam": "Rekenmachine", "cat": ["handig"], "nl": "Gewoon een rekenmachine.", "en": "Just a calculator."},
+    {"id": "org.kde.filelight", "naam": "Filelight", "cat": ["handig"], "nl": "Zien wat je schijf vol maakt.", "en": "See what fills up your disk."},
+    {"id": "com.github.tchx84.Flatseal", "naam": "Flatseal", "cat": ["handig"], "nl": "Bepalen wat apps mogen (voor gevorderden).", "en": "Control what apps may do (advanced)."},
+
+    {"id": "com.visualstudio.code", "naam": "Visual Studio Code", "cat": ["programmeren"], "nl": "De populairste code-editor.", "en": "The most popular code editor."},
+    {"id": "com.jetbrains.IntelliJ-IDEA-Community", "naam": "IntelliJ IDEA", "cat": ["programmeren"], "nl": "Voor Java en Kotlin.", "en": "For Java and Kotlin."},
+    {"id": "io.podman_desktop.PodmanDesktop", "naam": "Podman Desktop", "cat": ["programmeren"], "nl": "Containers beheren met muisklikken.", "en": "Manage containers with clicks."}
+  ]
+}

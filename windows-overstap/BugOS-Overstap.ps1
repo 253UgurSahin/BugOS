@@ -207,7 +207,7 @@ function Invoke-Krimp([int] $gb) {
 # ========================================================== 4. USB-STICK ==
 
 function Get-UsbSchijven {
-    Get-Disk | Where-Object { $_.BusType -eq 'USB' -and $_.Size -gt 4GB -and -not $_.IsBoot -and -not $_.IsSystem }
+    Get-Disk | Where-Object { $_.BusType -eq 'USB' -and $_.Size -gt 7GB -and -not $_.IsBoot -and -not $_.IsSystem }
 }
 
 function Write-IsoNaarSchijf([string] $iso, [int] $nummer, [scriptblock] $Voortgang) {
@@ -246,6 +246,75 @@ function Write-IsoNaarSchijf([string] $iso, [int] $nummer, [scriptblock] $Voortg
         $bronStroom.Dispose()
     }
     Update-HostStorageCache -ErrorAction SilentlyContinue
+}
+
+# ========================================================== DOWNLOADEN ==
+
+$script:Repo = '253UgurSahin/BugOS'
+
+function Get-IsoSoort {
+    $gpu = (Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name) -join ' '
+    if ($gpu -match 'NVIDIA') { 'nvidia' } else { 'main' }
+}
+
+function Get-IsoInfo([string] $soort) {
+    # Zoek de nieuwste ISO-release van deze soort (tag: iso-<soort>-<datum>-<nr>).
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $releases = Invoke-RestMethod -UseBasicParsing -Uri "https://api.github.com/repos/$($script:Repo)/releases?per_page=50" -Headers @{ 'User-Agent' = 'BugOS-Overstap' }
+    $rel = $releases | Where-Object { $_.tag_name -like "iso-$soort-*" } | Sort-Object { [datetime]$_.published_at } -Descending | Select-Object -First 1
+    if (-not $rel) { return $null }
+    $jsonAsset = $rel.assets | Where-Object { $_.name -eq 'bugos-iso.json' } | Select-Object -First 1
+    if (-not $jsonAsset) { return $null }
+    $info = Invoke-RestMethod -UseBasicParsing -Uri $jsonAsset.browser_download_url -Headers @{ 'User-Agent' = 'BugOS-Overstap' }
+    $urls = @{}
+    foreach ($a in $rel.assets) { $urls[$a.name] = $a.browser_download_url }
+    [pscustomobject]@{ Info = $info; Urls = $urls; Versie = $rel.name }
+}
+
+function Save-BugOSIso([object] $gevonden, [string] $map, [scriptblock] $Voortgang) {
+    Add-Type -AssemblyName System.Net.Http
+    $info = $gevonden.Info
+    $doel = Join-Path $map $info.naam
+    $totaal = [int64](($info.delen | Measure-Object grootte -Sum).Sum)
+    $vrij = (Get-PSDrive (Split-Path $map -Qualifier).TrimEnd(':')).Free
+    if ($vrij -lt $totaal + 1GB) { throw (T "Te weinig ruimte: er is $([math]::Round($totaal / 1GB, 1)) GB nodig." "Not enough space: $([math]::Round($totaal / 1GB, 1)) GB is needed.") }
+
+    $client = New-Object System.Net.Http.HttpClient
+    $client.Timeout = [TimeSpan]::FromHours(6)
+    $client.DefaultRequestHeaders.UserAgent.ParseAdd('BugOS-Overstap')
+    $uit = [System.IO.File]::Create($doel)
+    $buffer = New-Object byte[] (1MB)
+    $klaar = 0L
+    $laatste = [DateTime]::MinValue
+    try {
+        foreach ($deel in $info.delen) {
+            # Alle stukjes worden direct achter elkaar in één bestand geschreven.
+            $antwoord = $client.GetAsync($gevonden.Urls[$deel.bestand], [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
+            [void]$antwoord.EnsureSuccessStatusCode()
+            $stroom = $antwoord.Content.ReadAsStreamAsync().Result
+            try {
+                while (($n = $stroom.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                    $uit.Write($buffer, 0, $n)
+                    $klaar += $n
+                    if (([DateTime]::Now - $laatste).TotalMilliseconds -gt 300) {
+                        $laatste = [DateTime]::Now
+                        & $Voortgang ([int](100 * $klaar / $totaal)) (T "Downloaden: $([math]::Round($klaar / 1GB, 1)) van $([math]::Round($totaal / 1GB, 1)) GB" "Downloading: $([math]::Round($klaar / 1GB, 1)) of $([math]::Round($totaal / 1GB, 1)) GB")
+                    }
+                }
+            } finally { $stroom.Dispose() }
+        }
+    } finally {
+        $uit.Dispose()
+        $client.Dispose()
+    }
+
+    & $Voortgang 100 (T 'Controleren of alles goed is overgekomen...' 'Checking that everything arrived correctly...')
+    $hash = (Get-FileHash -LiteralPath $doel -Algorithm SHA256).Hash
+    if ($hash -ne $info.sha256.ToUpper()) {
+        Remove-Item -LiteralPath $doel -Force
+        throw (T 'Het bestand is beschadigd overgekomen. Probeer het opnieuw.' 'The file arrived damaged. Please try again.')
+    }
+    return $doel
 }
 
 # ==================================================== beheerder-taken =====
@@ -406,9 +475,37 @@ $Paginas += {
 # --- Pagina 4: USB-stick ----------------------------------------------------
 $Paginas += {
     $kop.Text = (T 'De BugOS USB-stick maken' 'Make the BugOS USB stick')
-    Nieuw-Label (T "1. Download het BugOS-bestand (.iso). 2. Kies het hieronder. 3. Kies je USB-stick (minstens 8 GB).`nLet op: alles op die USB-stick wordt gewist!" "1. Download the BugOS file (.iso). 2. Choose it below. 3. Choose your USB stick (at least 8 GB).`nNote: everything on that USB stick will be erased!") 0 56 | Out-Null
+    Nieuw-Label (T "1. Druk op 'BugOS downloaden' (of kies zelf een .iso-bestand). 2. Kies je USB-stick (minstens 16 GB).`nLet op: alles op die USB-stick wordt gewist!" "1. Press 'Download BugOS' (or choose an .iso file yourself). 2. Choose your USB stick (at least 16 GB).`nNote: everything on that USB stick will be erased!") 0 56 | Out-Null
     $download = Nieuw-Knop (T 'BugOS downloaden' 'Download BugOS') 0 64
-    $download.Add_Click({ Start-Process 'https://github.com/253UgurSahin/BugOS/blob/main/docs/TESTEN.md' })
+    $script:W.downloadBalk = New-Object System.Windows.Forms.ProgressBar
+    $script:W.downloadBalk.SetBounds(250, 70, 440, 26); $script:W.downloadBalk.Visible = $false
+    $vlak.Controls.Add($script:W.downloadBalk)
+    $download.Add_Click({
+        $balk = $script:W.downloadBalk; $label = $script:W.isoLabel
+        $soort = Get-IsoSoort
+        try {
+            $label.Text = (T 'BugOS zoeken...' 'Looking for BugOS...'); [System.Windows.Forms.Application]::DoEvents()
+            $gevonden = Get-IsoInfo $soort
+        } catch { $gevonden = $null }
+        if (-not $gevonden) {
+            $label.Text = ''
+            Toon (T 'Er staat nog geen BugOS klaar om te downloaden. Probeer het later nog eens.' 'There is no BugOS ready to download yet. Please try again later.')
+            return
+        }
+        $groot = [math]::Round((($gevonden.Info.delen | Measure-Object grootte -Sum).Sum) / 1GB, 1)
+        $wat = if ($soort -eq 'nvidia') { T 'de versie voor Nvidia-videokaarten' 'the version for Nvidia graphics cards' } else { T 'de gewone versie' 'the normal version' }
+        if (-not (Vraag (T "Ik ga $($gevonden.Versie) downloaden ($wat, $groot GB) naar je map Downloads. Dit kan een tijdje duren. Doorgaan?" "I will download $($gevonden.Versie) ($wat, $groot GB) to your Downloads folder. This can take a while. Continue?"))) { $label.Text = ''; return }
+        $balk.Visible = $true; $verder.Enabled = $false
+        try {
+            $pad = Save-BugOSIso $gevonden (Get-BekendeMap 'Downloads') { param($p, $t) $balk.Value = [math]::Min(100, $p); $label.Text = $t; [System.Windows.Forms.Application]::DoEvents() }
+            $script:IsoGekozen = $pad
+            $label.Text = $pad
+        } catch {
+            Toon $_.Exception.Message 'Error'
+            $label.Text = (T 'Nog geen bestand gekozen.' 'No file chosen yet.')
+        }
+        $balk.Visible = $false; $verder.Enabled = $true
+    })
     $script:W.isoLabel = Nieuw-Label (T 'Nog geen bestand gekozen.' 'No file chosen yet.') 120 24 $Grijs
     $kies = Nieuw-Knop (T 'Kies .iso-bestand...' 'Choose .iso file...') 0 148
     $script:IsoGekozen = ''

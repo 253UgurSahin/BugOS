@@ -25,7 +25,7 @@ taken.currentConfigGroup = ["General"];
 taken.writeConfig("launchers", [
     "applications:org.kde.dolphin.desktop",
     "applications:org.mozilla.firefox.desktop",
-    "applications:org.kde.discover.desktop",
+    "applications:bugos-winkel.desktop",
     "applications:bugos-instellingen.desktop"
 ]);
 

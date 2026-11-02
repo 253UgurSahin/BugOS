@@ -39,7 +39,7 @@ if ALT="$(zoek_alternatief)"; then
     if vraag "$(t \
         "Dit lijkt op een programma waarvoor een betere versie voor BugOS bestaat: $APP.\n\nWil je $APP uit de BugOS Winkel halen?\n(Kies Nee om de Windows-versie toch te proberen.)" \
         "This looks like a program that has a better version for BugOS: $APP.\n\nDo you want to get $APP from the BugOS Store?\n(Choose No to try the Windows version anyway.)")"; then
-        exec plasma-discover "appstream://$ID"
+        exec bugos-winkel "appstream://$ID"
     fi
 fi
 
