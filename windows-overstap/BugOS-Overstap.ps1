@@ -23,6 +23,8 @@ param(
     [int] $KrimpGB = 0,
     [string] $IsoPad = '',
     [int] $SchijfNummer = -1,
+    # Taal kiezen (nl of en). Leeg = de taal van Windows.
+    [ValidateSet('', 'nl', 'en')] [string] $Taal = '',
     # Alleen voor de bouwstraat: plaatjes van elke pagina maken.
     [string] $FotoMap = '',
     [double] $FotoSchaal = 0
@@ -37,6 +39,7 @@ Add-Type -AssemblyName System.Drawing
 
 # ------------------------------------------------------------------ taal --
 $script:NL = (Get-Culture).TwoLetterISOLanguageName -eq 'nl'
+if ((Test-Path variable:Taal) -and $Taal) { $script:NL = $Taal -eq 'nl' }
 function T([string] $nl, [string] $en) { if ($script:NL) { $nl } else { $en } }
 
 function Test-Beheerder {
@@ -47,6 +50,7 @@ function Test-Beheerder {
 function Start-AlsBeheerder([string[]] $Argumenten) {
     $pad = $PSCommandPath
     $alles = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$pad`"") + $Argumenten
+    if ((Test-Path variable:Taal) -and $Taal) { $alles += @('-Taal', $Taal) }
     try {
         $p = Start-Process -FilePath 'powershell.exe' -ArgumentList $alles -Verb RunAs -PassThru -Wait
         return $p.ExitCode
@@ -1164,6 +1168,7 @@ if ($Taak -eq 'Foto') {
     for ($i = 0; $i -lt $Paginas.Count; $i++) {
         $script:Pagina = $i
         Toon-Pagina
+        $form.ActiveControl = $null
         [System.Windows.Forms.Application]::DoEvents()
         $bmp = New-Object System.Drawing.Bitmap((Px 880), (Px 560))
         $gr = [System.Drawing.Graphics]::FromImage($bmp); $gr.Clear($Wit); $gr.Dispose()

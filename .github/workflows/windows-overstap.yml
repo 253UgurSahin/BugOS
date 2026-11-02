@@ -60,7 +60,7 @@ jobs:
         run: |
           foreach ($schaal in @('1', '1.5')) {
             $map = "$PWD\fotos\schaal-$schaal"
-            powershell.exe -NoProfile -ExecutionPolicy Bypass -File windows-overstap\BugOS-Overstap.ps1 -Taak Foto -FotoSchaal $schaal -FotoMap $map
+            powershell.exe -NoProfile -ExecutionPolicy Bypass -File windows-overstap\BugOS-Overstap.ps1 -Taak Foto -Taal nl -FotoSchaal $schaal -FotoMap $map
             if ($LASTEXITCODE -ne 0) { Write-Host "Het venster gaf een fout (schaal $schaal)."; exit 1 }
           }
           Get-ChildItem fotos -Recurse -File | Format-Table FullName, Length -AutoSize
