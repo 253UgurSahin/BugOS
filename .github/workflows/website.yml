@@ -3,11 +3,12 @@
 # Eenmalig aanzetten: Settings -> Pages -> Source: "GitHub Actions".
 name: Website
 
+# Staat nu op handmatig. Automatisch maken: zet het "push"-blok hieronder terug.
 on:
-  push:
-    branches: [main]
-    paths: ["website/**", ".github/workflows/website.yml"]
   workflow_dispatch:
+#  push:
+#    branches: [main]
+#    paths: ["website/**", ".github/workflows/website.yml"]
 
 permissions:
   contents: read
