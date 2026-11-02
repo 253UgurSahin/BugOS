@@ -16,6 +16,5 @@ ARG BUGOS_VARIANT=main
 
 COPY src /src
 RUN --mount=type=secret,id=ghcr,required=false \
-    --mount=type=cache,target=/var/tmp/libdnf5,id=libdnf5 \
     IMAGE_REF="${IMAGE_REF}" BUGOS_VARIANT="${BUGOS_VARIANT}" /src/build.sh
 RUN rm -rf /src

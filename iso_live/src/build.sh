@@ -163,7 +163,7 @@ done
 systemctl --global disable bugos-updatecheck.timer 2>/dev/null || true
 
 # Het installatieprogramma heeft veel ruimte nodig in /var/tmp.
-rm -rf /var/tmp
+find /var/tmp -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
 mkdir -p /var/tmp
 cat >/etc/systemd/system/var-tmp.mount <<'EOF'
 [Unit]
