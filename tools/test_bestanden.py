@@ -118,6 +118,17 @@ for _ in range(50):
 klopt(venster.huidig == docs, "venster: opent in Documenten")
 klopt(venster.grote_titel.text() in ("Documenten", "Documents", "Documenten".lower()) or venster.grote_titel.text() != "",
       "venster: toont een titel")
+venster.ververs()
+for _ in range(50):
+    app.processEvents()
+venster.selecteer(docs / "map")
+klopt(venster.gekozen() == [docs / "map"], "kiezen: één map gekozen")
+klopt(not venster.keuzebalk.isHidden() and venster.keuzebalk.knoppen["naam"].isVisibleTo(venster.keuzebalk),
+      "kiezen: de knoppenbalk verschijnt, met Naam wijzigen")
+klopt(venster.keuzebalk.knoppen["terugzetten"].isHidden(), "kiezen: geen Zet terug buiten de prullenbak")
+venster.ga_naar(thuis)
+klopt(venster.gekozen() == [] and venster.keuzebalk.isHidden(), "andere map: niets blijft gekozen, balk weg")
+venster.terug()
 venster.open_prullenbak()
 klopt(venster.in_prullenbak and venster.lijst.model() is venster.bak_model, "venster: prullenbak opent")
 venster.terug()
