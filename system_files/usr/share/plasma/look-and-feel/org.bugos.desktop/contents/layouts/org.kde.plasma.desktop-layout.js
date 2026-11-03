@@ -23,7 +23,7 @@ start.writeConfig("global", "Alt+F1");
 var taken = panel.addWidget("org.kde.plasma.icontasks");
 taken.currentConfigGroup = ["General"];
 taken.writeConfig("launchers", [
-    "applications:org.kde.dolphin.desktop",
+    "applications:bugos-bestanden.desktop",
     "applications:org.mozilla.firefox.desktop",
     "applications:bugos-winkel.desktop",
     "applications:bugos-instellingen.desktop"

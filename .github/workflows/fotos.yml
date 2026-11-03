@@ -41,9 +41,9 @@ jobs:
           sleep 3
           BEELD="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${{ inputs.tag }}"
           mkdir -p docs/beelden/verkenner
-          maak() {  # naam thema map
+          maak() {  # naam thema map [programma]
             sudo podman run -d --name foto -e DISPLAY=:99 -v /tmp/.X11-unix:/tmp/.X11-unix \
-              -v "$PWD:/repo:ro" --entrypoint /usr/bin/bash "$BEELD" /repo/tools/fotos/verkenner.sh "$2" "$3"
+              -v "$PWD:/repo:ro" --entrypoint /usr/bin/bash "$BEELD" /repo/tools/fotos/verkenner.sh "$2" "$3" "${4:-bugos-bestanden}"
             sleep 30
             import -display :99 -window root -crop 2360x1480+0+0 +repage "docs/beelden/verkenner/$1.png"
             echo "--- logboek ($1) ---"; sudo podman logs foto 2>&1 | tail -25
@@ -53,6 +53,7 @@ jobs:
           maak documenten licht Documenten
           maak afbeeldingen donker Afbeeldingen
           maak afbeeldingen-licht licht Afbeeldingen
+          maak dolphin licht Afbeeldingen dolphin
           ls -la docs/beelden/verkenner
 
       - name: Foto's bewaren

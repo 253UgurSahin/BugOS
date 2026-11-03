@@ -7,3 +7,7 @@ application/x-rpm=bugos-pakket.desktop
 application/x-redhat-package-manager=bugos-pakket.desktop
 application/vnd.debian.binary-package=bugos-pakket.desktop
 application/x-deb=bugos-pakket.desktop
+inode/directory=bugos-bestanden.desktop
+
+[Added Associations]
+inode/directory=bugos-bestanden.desktop;org.kde.dolphin.desktop;

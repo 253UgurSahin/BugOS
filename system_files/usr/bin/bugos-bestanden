@@ -1,0 +1,1413 @@
+#!/usr/bin/python3
+"""BugOS Bestanden - je foto's, documenten en downloads. Simpel en mooi.
+
+Jip-en-Janneke:
+  - Links staan je vaste plekken (Thuis, Bureaublad, Documenten, Afbeeldingen,
+    Muziek, Video's, Downloads), je USB-sticks en de prullenbak.
+  - Rechts zie je grote tegels met een voorbeeldje van elk bestand.
+    Dubbelklik om iets te openen.
+  - Weggooien gaat altijd eerst naar de prullenbak. Daar zet je het terug.
+  - Meer knoppen nodig? Rechtermuisknop, of "Openen in Dolphin" voor gevorderden.
+
+Gebruik:  bugos-bestanden [map of bestand]
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+import urllib.parse
+import zipfile
+from datetime import datetime
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/bugos/python")
+
+from bugos_ui import (  # noqa: E402
+    K, Knop, Zijbalk, Zoekveld, label, lijn_icoon, lijn_pixmap, maak_app, merk_label, t, uitvoeren,
+)
+from PySide6.QtCore import (  # noqa: E402
+    QCollator, QDir, QMimeData, QModelIndex, QObject, QRectF, QRunnable, QSize, QSortFilterProxyModel,
+    QStorageInfo, Qt, QThread, QThreadPool, QTimer, QUrl, Signal,
+)
+from PySide6.QtGui import (  # noqa: E402
+    QColor, QDesktopServices, QFont, QFontMetrics, QImage, QImageReader, QKeySequence,
+    QLinearGradient, QPainter, QPainterPath, QPen, QPixmap, QShortcut, QStandardItem, QStandardItemModel,
+)
+from PySide6.QtWidgets import (  # noqa: E402
+    QAbstractItemView, QApplication, QFileSystemModel, QFrame, QHBoxLayout, QInputDialog, QLabel, QListView, QMenu,
+    QMessageBox, QPushButton, QStackedWidget, QStyle, QStyledItemDelegate, QVBoxLayout, QWidget,
+)
+
+PAD_ROL = int(Qt.ItemDataRole.UserRole) + 1        # = QFileSystemModel.FilePathRole
+INFO_ROL = int(Qt.ItemDataRole.UserRole) + 40     # prullenbak: pad van het .trashinfo-bestand
+HERKOMST_ROL = int(Qt.ItemDataRole.UserRole) + 41  # prullenbak: waar het vandaan kwam
+
+AFBEELDING = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tif", ".tiff", ".svg", ".avif", ".heic", ".ico"}
+ODF = {".odt", ".ods", ".odp", ".odg"}
+SOORTEN = {  # extensie -> (kleur, teken in het papiertje)
+    "pdf": ("#D3263A", "tekst"), "doc": ("#2F7BF5", "tekst"), "docx": ("#2F7BF5", "tekst"),
+    "odt": ("#2F7BF5", "tekst"), "rtf": ("#2F7BF5", "tekst"), "txt": ("#6B7280", "tekst"),
+    "md": ("#6B7280", "tekst"), "xls": ("#14965A", "tabel"), "xlsx": ("#14965A", "tabel"),
+    "ods": ("#14965A", "tabel"), "csv": ("#14965A", "tabel"), "ppt": ("#F2711C", "tekst"),
+    "pptx": ("#F2711C", "tekst"), "odp": ("#F2711C", "tekst"), "zip": ("#6B7280", "doos"),
+    "7z": ("#6B7280", "doos"), "rar": ("#6B7280", "doos"), "tar": ("#6B7280", "doos"), "gz": ("#6B7280", "doos"),
+    "exe": ("#8B5CF6", "doos"), "msi": ("#8B5CF6", "doos"), "iso": ("#6B7280", "doos"),
+    "mp3": ("#E2457A", "muziek"), "flac": ("#E2457A", "muziek"), "ogg": ("#E2457A", "muziek"),
+    "wav": ("#E2457A", "muziek"), "m4a": ("#E2457A", "muziek"), "mp4": ("#0EA5A4", "film"),
+    "mkv": ("#0EA5A4", "film"), "avi": ("#0EA5A4", "film"), "mov": ("#0EA5A4", "film"), "webm": ("#0EA5A4", "film"),
+}
+MAP_ROOD = ("#FF6A5A", "#E5303E", "#C82434")  # licht, midden, donker (achterkant)
+VERBERG_EXT = AFBEELDING | ODF | {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".rtf", ".md",
+                                  ".csv", ".mp3", ".flac", ".ogg", ".wav", ".m4a", ".mp4", ".mkv", ".avi", ".mov", ".webm"}
+
+
+def toon_naam(naam: str, is_map: bool) -> str:
+    """'Recept.odt' wordt 'Recept'. Programma's en onbekende bestanden houden hun extensie (veiliger)."""
+    p = Path(naam)
+    if not is_map and p.suffix.lower() in VERBERG_EXT and p.stem:
+        return p.stem
+    return naam
+
+
+# ================================================================ plekken ===
+
+def thuis() -> Path:
+    return Path.home()
+
+
+def xdg_map(sleutel: str, standaard: str) -> Path:
+    """Waar staat bijvoorbeeld 'Afbeeldingen'? Uit ~/.config/user-dirs.dirs (de taal van de gebruiker)."""
+    bestand = Path(os.environ.get("XDG_CONFIG_HOME", thuis() / ".config")) / "user-dirs.dirs"
+    try:
+        for regel in bestand.read_text(encoding="utf-8").splitlines():
+            if regel.startswith(f"XDG_{sleutel}_DIR="):
+                waarde = regel.split("=", 1)[1].strip().strip('"').replace("$HOME", str(thuis()))
+                pad = Path(waarde)
+                if pad != thuis():
+                    return pad
+    except OSError:
+        pass
+    return thuis() / standaard
+
+
+def plekken() -> list[tuple[str, str, str, Path]]:
+    """(sleutel, naam, lijn-icoon, pad) voor de vaste plekken."""
+    lijst = [("thuis", t("Thuis", "Home"), "huis", thuis())]
+    for sleutel, xdg, std, nl, en, ic in (
+        ("bureaublad", "DESKTOP", "Desktop", "Bureaublad", "Desktop", "computer"),
+        ("documenten", "DOCUMENTS", "Documents", "Documenten", "Documents", "document"),
+        ("afbeeldingen", "PICTURES", "Pictures", "Afbeeldingen", "Pictures", "foto"),
+        ("muziek", "MUSIC", "Music", "Muziek", "Music", "muziek"),
+        ("videos", "VIDEOS", "Videos", "Video's", "Videos", "film"),
+        ("downloads", "DOWNLOAD", "Downloads", "Downloads", "Downloads", "download"),
+    ):
+        lijst.append((sleutel, t(nl, en), ic, xdg_map(xdg, std)))
+    return lijst
+
+
+def bijzondere_mappen() -> dict[str, str]:
+    """Pad -> lijn-icoon, zodat 'Documenten' ook in het overzicht een eigen tekentje krijgt."""
+    return {str(p): ic for sleutel, _n, ic, p in plekken() if sleutel != "thuis"}
+
+
+def usb_volumes() -> list[tuple[str, str, str]]:
+    """(naam, map, apparaat) van USB-sticks en losse schijven die open (aangekoppeld) zijn."""
+    if os.environ.get("BUGOS_USB"):  # voor tests en schermafbeeldingen
+        return [(Path(p).name, p, "") for p in os.environ["BUGOS_USB"].split(":") if Path(p).is_dir()]
+    uit = []
+    for v in QStorageInfo.mountedVolumes():
+        wortel = v.rootPath()
+        if v.isValid() and v.isReady() and wortel.startswith(("/run/media/", "/media/")):
+            uit.append((v.displayName() or Path(wortel).name, wortel, bytes(v.device()).decode(errors="ignore")))
+    return uit
+
+
+def dichte_usb() -> list[tuple[str, str]]:
+    """(naam, apparaat) van USB-sticks die er wel zijn maar nog niet open staan."""
+    if os.environ.get("BUGOS_USB") is not None:
+        return []
+    try:
+        uit = subprocess.run(["lsblk", "-J", "-o", "PATH,LABEL,SIZE,HOTPLUG,MOUNTPOINT,FSTYPE,TYPE"],
+                             capture_output=True, text=True, timeout=3).stdout
+        lijst = []
+
+        def loop(apparaten: list[dict], hotplug: bool) -> None:
+            for a in apparaten:
+                hp = hotplug or bool(a.get("hotplug"))
+                if hp and a.get("fstype") and not a.get("mountpoint") and a.get("type") == "part":
+                    lijst.append((a.get("label") or t(f"USB-stick ({a.get('size')})", f"USB stick ({a.get('size')})"),
+                                  a["path"]))
+                loop(a.get("children") or [], hp)
+        loop(json.loads(uit).get("blockdevices", []), False)
+        return lijst
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return []
+
+
+def vrije_ruimte(pad: Path) -> str:
+    info = QStorageInfo(str(pad))
+    return mooie_maat(info.bytesAvailable()) if info.isValid() else ""
+
+
+def mooie_maat(n: int | float) -> str:
+    for eenheid in ("bytes", "kB", "MB", "GB", "TB"):
+        if n < 1000 or eenheid == "TB":
+            if eenheid == "bytes":
+                return f"{int(n)} bytes"
+            return f"{n:.1f} {eenheid}".replace(".", ",") if n < 10 else f"{n:.0f} {eenheid}"
+        n /= 1000
+    return ""
+
+
+# ========================================================= veilige acties ===
+
+def vrije_naam(doel: Path) -> Path:
+    """Bestaat 'doel' al? Dan 'Naam (2).jpg', 'Naam (3).jpg', ... Nooit iets overschrijven."""
+    if not doel.exists() and not doel.is_symlink():
+        return doel
+    stam, ext = (doel.name, "") if doel.is_dir() else (doel.stem, doel.suffix)
+    i = 2
+    while True:
+        kandidaat = doel.with_name(f"{stam} ({i}){ext}")
+        if not kandidaat.exists() and not kandidaat.is_symlink():
+            return kandidaat
+        i += 1
+
+
+def prullenbak() -> Path:
+    return Path(os.environ.get("XDG_DATA_HOME", thuis() / ".local" / "share")) / "Trash"
+
+
+def zelfde_schijf(a: Path, b: Path) -> bool:
+    try:
+        return os.stat(a).st_dev == os.stat(b).st_dev
+    except OSError:
+        return False
+
+
+def naar_prullenbak(pad: Path) -> tuple[Path, Path]:
+    """Zet iets in de prullenbak (volgens de freedesktop-afspraak, dus ook KDE ziet het).
+
+    Geeft (plek in de prullenbak, .trashinfo-bestand) terug, zodat het terug kan.
+    """
+    bak = prullenbak()
+    (bak / "files").mkdir(parents=True, exist_ok=True)
+    (bak / "info").mkdir(parents=True, exist_ok=True)
+    naam, i = pad.name, 2
+    while True:
+        info = bak / "info" / f"{naam}.trashinfo"
+        try:  # naam vastleggen: maak het info-bestand als eerste, alleen als het nog niet bestaat
+            fd = os.open(info, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except FileExistsError:
+            naam = f"{pad.stem} ({i}){pad.suffix}" if pad.is_file() else f"{pad.name} ({i})"
+            i += 1
+            continue
+        if (bak / "files" / naam).exists():
+            os.close(fd)
+            info.unlink(missing_ok=True)
+            naam = f"{pad.stem} ({i}){pad.suffix}" if pad.is_file() else f"{pad.name} ({i})"
+            i += 1
+            continue
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write("[Trash Info]\n")
+            f.write(f"Path={urllib.parse.quote(str(pad.absolute()))}\n")
+            f.write(f"DeletionDate={datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}\n")
+        doel = bak / "files" / naam
+        try:
+            os.rename(pad, doel)
+        except OSError:
+            info.unlink(missing_ok=True)
+            raise
+        return doel, info
+
+
+def lees_herkomst(info: Path) -> Path | None:
+    try:
+        for regel in info.read_text(encoding="utf-8").splitlines():
+            if regel.startswith("Path="):
+                return Path(urllib.parse.unquote(regel[5:].strip()))
+    except OSError:
+        pass
+    return None
+
+
+def terugzetten(bestand: Path, info: Path) -> Path:
+    """Zet iets uit de prullenbak terug waar het stond (of ernaast, als daar al iets staat)."""
+    herkomst = lees_herkomst(info) or (thuis() / bestand.name)
+    doel = vrije_naam(herkomst)
+    doel.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(bestand), str(doel))
+    info.unlink(missing_ok=True)
+    return doel
+
+
+def prullenbak_inhoud() -> list[tuple[Path, Path, Path | None]]:
+    """(bestand, info, herkomst) van alles in de prullenbak, nieuwste eerst."""
+    bak = prullenbak()
+    uit = []
+    for info in (bak / "info").glob("*.trashinfo"):
+        bestand = bak / "files" / info.name[: -len(".trashinfo")]
+        if bestand.exists() or bestand.is_symlink():
+            uit.append((bestand, info, lees_herkomst(info)))
+    uit.sort(key=lambda x: x[1].stat().st_mtime if x[1].exists() else 0, reverse=True)
+    return uit
+
+
+def prullenbak_legen() -> None:
+    bak = prullenbak()
+    for map_ in (bak / "files", bak / "info"):
+        if not map_.is_dir():
+            continue
+        for p in map_.iterdir():
+            if p.is_dir() and not p.is_symlink():
+                shutil.rmtree(p, ignore_errors=True)
+            else:
+                p.unlink(missing_ok=True)
+
+
+def zit_in(kind: Path, ouder: Path) -> bool:
+    try:
+        kind.resolve().relative_to(ouder.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def kopieer_een(bron: Path, doelmap: Path, verplaats: bool) -> Path | None:
+    """Kopieer of verplaats één ding naar 'doelmap'. Nooit overschrijven; nooit een map in zichzelf."""
+    if bron.is_dir() and zit_in(doelmap, bron):
+        raise ValueError(t(f"'{bron.name}' kan niet in zichzelf.", f"'{bron.name}' cannot go inside itself."))
+    if verplaats and bron.parent.resolve() == doelmap.resolve():
+        return bron  # staat er al
+    doel = vrije_naam(doelmap / bron.name)
+    if verplaats:
+        shutil.move(str(bron), str(doel))
+    elif bron.is_dir() and not bron.is_symlink():
+        shutil.copytree(bron, doel, symlinks=True)
+    else:
+        shutil.copy2(bron, doel, follow_symlinks=False)
+    return doel
+
+
+class Klus(QThread):
+    """Kopiëren of verplaatsen op de achtergrond, zodat het venster niet vastloopt."""
+
+    voortgang = Signal(int, int)
+    klaar = Signal(int, str)
+
+    def __init__(self, bronnen: list[Path], doelmap: Path, verplaats: bool):
+        super().__init__()
+        self.bronnen, self.doelmap, self.verplaats = bronnen, doelmap, verplaats
+
+    def run(self) -> None:
+        gelukt, fout = 0, ""
+        for i, bron in enumerate(self.bronnen):
+            self.voortgang.emit(i, len(self.bronnen))
+            try:
+                kopieer_een(bron, self.doelmap, self.verplaats)
+                gelukt += 1
+            except (OSError, ValueError, shutil.Error) as e:
+                fout = str(e)
+        self.klaar.emit(gelukt, fout)
+
+
+# ============================================================ voorbeelden ===
+
+def freedesktop_voorbeeld(pad: str) -> QImage:
+    """Heeft KDE of een ander programma al een voorbeeldje gemaakt? Gebruik dat."""
+    uri = QUrl.fromLocalFile(pad).toString(QUrl.ComponentFormattingOption.FullyEncoded)
+    naam = hashlib.md5(uri.encode()).hexdigest() + ".png"
+    cache = Path(os.environ.get("XDG_CACHE_HOME", thuis() / ".cache")) / "thumbnails"
+    for maat in ("xx-large", "x-large", "large", "normal"):
+        p = cache / maat / naam
+        if p.exists():
+            return QImage(str(p))
+    return QImage()
+
+
+def maak_voorbeeld(pad: str) -> QImage:
+    ext = Path(pad).suffix.lower()
+    if ext in AFBEELDING:
+        lezer = QImageReader(pad)
+        lezer.setAutoTransform(True)
+        maat = lezer.size()
+        if maat.isValid() and (maat.width() > 512 or maat.height() > 512):
+            lezer.setScaledSize(maat.scaled(QSize(512, 512), Qt.AspectRatioMode.KeepAspectRatio))
+        beeld = lezer.read()
+        if not beeld.isNull():
+            return beeld
+    if ext in ODF:
+        try:
+            with zipfile.ZipFile(pad) as z:
+                return QImage.fromData(z.read("Thumbnails/thumbnail.png"))
+        except (OSError, KeyError, zipfile.BadZipFile):
+            pass
+    return freedesktop_voorbeeld(pad)
+
+
+class Seinen(QObject):
+    klaar = Signal(str, QImage)
+
+
+class VoorbeeldTaak(QRunnable):
+    def __init__(self, pad: str, seinen: Seinen):
+        super().__init__()
+        self.pad, self.seinen = pad, seinen
+
+    def run(self) -> None:
+        try:
+            beeld = maak_voorbeeld(self.pad)
+        except Exception:  # een kapot bestand mag nooit de app laten vallen
+            beeld = QImage()
+        self.seinen.klaar.emit(self.pad, beeld)
+
+
+class Voorbeelden(QObject):
+    """Voorbeeldjes laden op de achtergrond en onthouden."""
+
+    bijgewerkt = Signal()
+
+    def __init__(self):
+        super().__init__()
+        self.cache: dict[str, QPixmap | None] = {}
+        self.bezig: set[str] = set()
+        self.pool = QThreadPool()
+        self.pool.setMaxThreadCount(2)
+        self.seinen = Seinen()
+        self.seinen.klaar.connect(self._klaar)
+        self.tik = QTimer(self)
+        self.tik.setSingleShot(True)
+        self.tik.setInterval(60)
+        self.tik.timeout.connect(self.bijgewerkt.emit)
+
+    def heeft_voorbeeld(self, pad: str) -> bool:
+        ext = Path(pad).suffix.lower()
+        return ext in AFBEELDING or ext in ODF or ext in (".pdf", ".mp4", ".mkv", ".webm", ".mov", ".avi")
+
+    def pixmap(self, pad: str) -> QPixmap | None:
+        if pad in self.cache:
+            return self.cache[pad]
+        if pad not in self.bezig and self.heeft_voorbeeld(pad):
+            self.bezig.add(pad)
+            self.pool.start(VoorbeeldTaak(pad, self.seinen))
+        return None
+
+    def _klaar(self, pad: str, beeld: QImage) -> None:
+        self.bezig.discard(pad)
+        self.cache[pad] = QPixmap.fromImage(beeld) if not beeld.isNull() else None
+        self.tik.start()
+
+    def vergeet(self) -> None:
+        self.cache.clear()
+
+
+# ================================================================ tekenen ===
+
+def teken_map(p: QPainter, r: QRectF, teken: str = "") -> None:
+    """Een rode BugOS-map (met eventueel een tekentje erop, zoals bij Documenten)."""
+    licht, midden, donker = (QColor(c) for c in MAP_ROOD)
+    w, h = r.width(), r.height()
+    straal = w * 0.085
+    tab = QPainterPath()
+    tab.addRoundedRect(QRectF(r.left(), r.top(), w * 0.44, h * 0.32), straal, straal)
+    p.fillPath(tab, donker)
+    achter = QPainterPath()
+    achter.addRoundedRect(QRectF(r.left(), r.top() + h * 0.1, w, h * 0.9), straal, straal)
+    p.fillPath(achter, donker)
+    voor = QPainterPath()
+    voor_r = QRectF(r.left(), r.top() + h * 0.24, w, h * 0.76)
+    voor.addRoundedRect(voor_r, straal, straal)
+    verloop = QLinearGradient(0, voor_r.top(), 0, voor_r.bottom())
+    verloop.setColorAt(0, licht)
+    verloop.setColorAt(1, midden)
+    p.fillPath(voor, verloop)
+    p.setPen(QPen(QColor(255, 255, 255, 80), 1.2))
+    p.drawLine(int(voor_r.left() + straal), int(voor_r.top() + 1), int(voor_r.right() - straal), int(voor_r.top() + 1))
+    if teken:
+        m = h * 0.38
+        dpr = p.device().devicePixelRatioF() if p.device() else 1.0
+        pm = lijn_pixmap(teken, QColor(255, 255, 255, 235), int(m * dpr), 2.2)
+        p.drawPixmap(QRectF(voor_r.center().x() - m / 2, voor_r.center().y() - m / 2 + h * 0.02, m, m), pm, QRectF())
+
+
+def teken_papier(p: QPainter, r: QRectF, ext: str) -> None:
+    """Een papiertje met een gekleurd labeltje (PDF, DOCX, ...)."""
+    kleur, soort = SOORTEN.get(ext, ("#8A8F9A", "tekst"))
+    w, h = r.width(), r.height()
+    hoek = w * 0.26
+    pad = QPainterPath()
+    pad.moveTo(r.left() + 6, r.top())
+    pad.lineTo(r.right() - hoek, r.top())
+    pad.lineTo(r.right(), r.top() + hoek)
+    pad.lineTo(r.right(), r.bottom() - 6)
+    pad.quadTo(r.right(), r.bottom(), r.right() - 6, r.bottom())
+    pad.lineTo(r.left() + 6, r.bottom())
+    pad.quadTo(r.left(), r.bottom(), r.left(), r.bottom() - 6)
+    pad.lineTo(r.left(), r.top() + 6)
+    pad.quadTo(r.left(), r.top(), r.left() + 6, r.top())
+    p.fillPath(pad, QColor(K["vlak"]))
+    p.setPen(QPen(QColor(K["rand_sterk"]), 1))
+    p.drawPath(pad)
+    vouw = QPainterPath()
+    vouw.moveTo(r.right() - hoek, r.top())
+    vouw.lineTo(r.right() - hoek, r.top() + hoek - 4)
+    vouw.quadTo(r.right() - hoek, r.top() + hoek, r.right() - hoek + 4, r.top() + hoek)
+    vouw.lineTo(r.right(), r.top() + hoek)
+    p.fillPath(vouw, QColor(K["knop"]))
+    p.drawPath(vouw)
+    dpr = p.device().devicePixelRatioF() if p.device() else 1.0
+    if soort in ("muziek", "film", "doos"):
+        icoon = {"muziek": "muziek", "film": "film", "doos": "map"}[soort]
+        m = w * 0.46
+        pm = lijn_pixmap(icoon, QColor(kleur), int(m * dpr), 2.0)
+        p.drawPixmap(QRectF(r.center().x() - m / 2, r.top() + h * 0.22, m, m), pm, QRectF())
+    else:
+        p.setPen(QPen(QColor(K["rand_sterk"]), 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        for i in range(4 if soort == "tekst" else 3):
+            y = r.top() + h * (0.26 + i * 0.11)
+            breed = 0.62 if i % 2 == 0 else 0.48
+            if soort == "tabel":
+                p.drawLine(int(r.left() + w * 0.18), int(y), int(r.left() + w * 0.82), int(y))
+            else:
+                p.drawLine(int(r.left() + w * 0.18), int(y), int(r.left() + w * (0.18 + breed)), int(y))
+    if ext:
+        f = QFont(p.font())
+        f.setPixelSize(max(9, int(w * 0.17)))
+        f.setWeight(QFont.Weight.Bold)
+        p.setFont(f)
+        tekst = ext.upper()[:4]
+        fm = QFontMetrics(f)
+        bw = fm.horizontalAdvance(tekst) + 10
+        label_r = QRectF(r.left() + w * 0.12, r.bottom() - h * 0.3, bw, h * 0.18)
+        lab = QPainterPath()
+        lab.addRoundedRect(label_r, 4, 4)
+        p.fillPath(lab, QColor(kleur))
+        p.setPen(QColor("#FFFFFF"))
+        p.drawText(label_r, Qt.AlignmentFlag.AlignCenter, tekst)
+
+
+def twee_regels(fm: QFontMetrics, tekst: str, breedte: int) -> list[str]:
+    """Naam over hoogstens twee regels, met ... als het niet past."""
+    if fm.horizontalAdvance(tekst) <= breedte:
+        return [tekst]
+    woorden, eerste = tekst.split(" "), ""
+    for i in range(len(woorden), 0, -1):
+        poging = " ".join(woorden[:i])
+        if fm.horizontalAdvance(poging) <= breedte:
+            eerste = poging
+            rest = " ".join(woorden[i:])
+            break
+    if not eerste:  # één lang woord: hard afbreken
+        n = len(tekst)
+        while n > 1 and fm.horizontalAdvance(tekst[:n]) > breedte:
+            n -= 1
+        eerste, rest = tekst[:n], tekst[n:]
+    return [eerste, fm.elidedText(rest, Qt.TextElideMode.ElideMiddle, breedte)] if rest else [eerste]
+
+
+class TegelTekenaar(QStyledItemDelegate):
+    """Tekent elk bestand als een tegel: voorbeeldje boven, naam eronder."""
+
+    TEGEL = QSize(148, 164)
+
+    def __init__(self, voorbeelden: Voorbeelden, bijzonder: dict[str, str]):
+        super().__init__()
+        self.voorbeelden = voorbeelden
+        self.bijzonder = bijzonder
+
+    def sizeHint(self, _optie, _index) -> QSize:  # noqa: N802
+        return self.TEGEL
+
+    def paint(self, p: QPainter, optie, index) -> None:
+        p.save()
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        r = QRectF(optie.rect).adjusted(5, 5, -5, -5)
+        gekozen = bool(optie.state & QStyle.StateFlag.State_Selected)
+        boven = bool(optie.state & QStyle.StateFlag.State_MouseOver)
+        if gekozen or boven:
+            vak = QPainterPath()
+            vak.addRoundedRect(r, 14, 14)
+            p.fillPath(vak, QColor(K["accent_zacht"] if gekozen else K["knop"]))
+            if gekozen:
+                p.setPen(QPen(QColor(K["accent_lijn"]), 1.2))
+                p.drawPath(vak)
+        pad = index.data(PAD_ROL) or ""
+        is_map = os.path.isdir(pad)
+        plek = QRectF(r.left() + 14, r.top() + 10, r.width() - 28, 92)
+        if is_map:
+            m = QRectF(0, 0, 84, 66)
+            m.moveCenter(plek.center())
+            teken_map(p, m, self.bijzonder.get(pad, ""))
+        else:
+            voorbeeld = self.voorbeelden.pixmap(pad)
+            if voorbeeld is not None and not voorbeeld.isNull():
+                maat = voorbeeld.size().scaled(plek.size().toSize(), Qt.AspectRatioMode.KeepAspectRatio)
+                doel = QRectF(0, 0, maat.width(), maat.height())
+                doel.moveCenter(plek.center())
+                schaduw = QPainterPath()
+                schaduw.addRoundedRect(doel.translated(0, 2), 7, 7)
+                p.fillPath(schaduw, QColor(0, 0, 0, 40))
+                rond = QPainterPath()
+                rond.addRoundedRect(doel, 7, 7)
+                p.setClipPath(rond)
+                p.drawPixmap(doel, voorbeeld, QRectF(voorbeeld.rect()))
+                p.setClipping(False)
+                p.setPen(QPen(QColor(0, 0, 0, 30), 1))
+                p.drawPath(rond)
+            elif Path(pad).suffix.lower() in AFBEELDING and pad in self.voorbeelden.bezig:
+                wacht = QPainterPath()
+                wacht.addRoundedRect(QRectF(plek.center().x() - 50, plek.center().y() - 36, 100, 72), 7, 7)
+                p.fillPath(wacht, QColor(K["knop"]))
+            else:
+                papier = QRectF(0, 0, 62, 80)
+                papier.moveCenter(plek.center())
+                teken_papier(p, papier, Path(pad).suffix.lower().lstrip("."))
+        naam = toon_naam(index.data(Qt.ItemDataRole.DisplayRole) or Path(pad).name, is_map)
+        f = QFont(optie.font)
+        f.setPixelSize(13)
+        if gekozen:
+            f.setWeight(QFont.Weight.DemiBold)
+        p.setFont(f)
+        fm = QFontMetrics(f)
+        regels = twee_regels(fm, naam, int(r.width() - 16))
+        p.setPen(QColor(K["tekst"]))
+        y = plek.bottom() + 10
+        for regel in regels:
+            p.drawText(QRectF(r.left() + 8, y, r.width() - 16, fm.height()), Qt.AlignmentFlag.AlignHCenter, regel)
+            y += fm.height()
+        p.restore()
+
+
+# ================================================================== model ===
+
+class Sorteerder(QSortFilterProxyModel):
+    """Mappen eerst, dan bestanden; 'Foto 2' voor 'Foto 10'. Zoeken binnen de open map."""
+
+    def __init__(self):
+        super().__init__()
+        self.zoek = ""
+        self.wortel = ""
+        self.collator = QCollator()
+        self.collator.setNumericMode(True)
+        self.collator.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+
+    def zet_zoek(self, tekst: str) -> None:
+        if hasattr(self, "beginFilterChange"):  # Qt 6.10 en nieuwer
+            self.beginFilterChange()
+            self.zoek = tekst.strip().lower()
+            self.endFilterChange()
+        else:
+            self.zoek = tekst.strip().lower()
+            self.invalidateFilter()
+
+    def filterAcceptsRow(self, rij: int, ouder: QModelIndex) -> bool:  # noqa: N802
+        if not self.zoek:
+            return True
+        bron = self.sourceModel()
+        if bron.filePath(ouder) != self.wortel:
+            return True
+        return self.zoek in bron.fileName(bron.index(rij, 0, ouder)).lower()
+
+    def lessThan(self, a: QModelIndex, b: QModelIndex) -> bool:  # noqa: N802
+        bron = self.sourceModel()
+        map_a, map_b = bron.isDir(a), bron.isDir(b)
+        if map_a != map_b:
+            return map_a
+        return self.collator.compare(bron.fileName(a), bron.fileName(b)) < 0
+
+
+# ================================================================ venster ===
+
+def stijl() -> str:
+    return f"""
+QPushButton#rond {{ min-width: 42px; max-width: 42px; min-height: 42px; max-height: 42px; border-radius: 21px;
+    background: {K['knop']}; border: none; padding: 0; }}
+QPushButton#rond:hover {{ background: {K['knop_hover']}; }}
+QPushButton#rond:disabled {{ background: transparent; }}
+QFrame#pad {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-radius: 14px; }}
+QPushButton#kruimel {{ background: transparent; border: none; border-radius: 8px; padding: 6px 8px;
+    font-size: 14px; color: {K['tekst2']}; }}
+QPushButton#kruimel:hover {{ background: {K['knop']}; color: {K['tekst']}; }}
+QPushButton#kruimel[laatste="true"] {{ color: {K['tekst']}; font-weight: 600; }}
+QListView#tegels {{ background: transparent; border: none; outline: 0; }}
+QFrame#melding {{ background: {K['knop']}; border-radius: 14px; }}
+QFrame#melding[soort="goed"] {{ background: {K['goed_zacht']}; }}
+QFrame#melding[soort="fout"] {{ background: {K['fout_zacht']}; }}
+"""
+
+
+class Melding(QFrame):
+    """Een korte melding bovenin, eventueel met een knop (bijvoorbeeld 'Ongedaan maken')."""
+
+    def __init__(self):
+        super().__init__()
+        self.setObjectName("melding")
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(16, 8, 8, 8)
+        lay.setSpacing(12)
+        self.tekst = label("", wrap=False)
+        self.knop = Knop("", "stil")
+        self.knop.setMinimumHeight(36)
+        lay.addWidget(self.tekst, 1)
+        lay.addWidget(self.knop)
+        self.actie = None
+        self.knop.clicked.connect(self._klik)
+        self.klok = QTimer(self)
+        self.klok.setSingleShot(True)
+        self.klok.timeout.connect(self.hide)
+        self.hide()
+
+    def toon(self, tekst: str, soort: str = "info", knop: str = "", actie=None, seconden: int = 7) -> None:
+        self.setProperty("soort", soort)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.tekst.setText(tekst)
+        self.knop.setText(knop)
+        self.knop.setVisible(bool(knop))
+        self.actie = actie
+        self.show()
+        if seconden:
+            self.klok.start(seconden * 1000)
+        else:
+            self.klok.stop()
+
+    def _klik(self) -> None:
+        actie, self.actie = self.actie, None
+        self.hide()
+        if actie:
+            actie()
+
+
+def ronde_knop(icoon_naam: str, tip: str) -> QPushButton:
+    k = QPushButton()
+    k.setObjectName("rond")
+    k.setIcon(lijn_icoon(icoon_naam, "tekst", 20, gekozen=None))
+    k.setIconSize(QSize(20, 20))
+    k.setToolTip(tip)
+    k.setAccessibleName(tip)
+    k.setCursor(Qt.CursorShape.PointingHandCursor)
+    return k
+
+
+class Bestanden(QWidget):
+    def __init__(self, start: Path | None = None, kies: Path | None = None):
+        super().__init__()
+        self.setObjectName("venster")
+        self.setWindowTitle(t("Bestanden", "Files"))
+        self.setStyleSheet(stijl())
+        self.resize(1120, 740)
+        self.terug_lijst: list[Path] = []
+        self.vooruit_lijst: list[Path] = []
+        self.huidig = thuis()
+        self.in_prullenbak = False
+        self.klus: Klus | None = None
+        self.laatst_weg: list[tuple[Path, Path]] = []
+
+        hoofd = QHBoxLayout(self)
+        hoofd.setContentsMargins(0, 0, 0, 0)
+        hoofd.setSpacing(0)
+
+        # --- links: plekken, USB-sticks en de prullenbak
+        zij = QWidget()
+        zij.setObjectName("zijkant")
+        zij.setFixedWidth(244)
+        zl = QVBoxLayout(zij)
+        zl.setContentsMargins(14, 22, 14, 14)
+        zl.setSpacing(12)
+        merk = merk_label(26)
+        merk.setContentsMargins(8, 0, 0, 8)
+        zl.addWidget(merk)
+        self.zijbalk = Zijbalk()
+        self.zijbalk.itemClicked.connect(self.zijbalk_klik)
+        self.zijbalk.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.zijbalk.customContextMenuRequested.connect(self.zijbalk_menu)
+        zl.addWidget(self.zijbalk, 1)
+        self.bak_lijst = Zijbalk()
+        self.bak_lijst.voeg_toe("lijn:prullenbak", t("Prullenbak", "Trash"), "prullenbak")
+        self.bak_lijst.setFixedHeight(48)
+        self.bak_lijst.itemClicked.connect(lambda _it: self.open_prullenbak())
+        zl.addWidget(self.bak_lijst)
+        hoofd.addWidget(zij)
+
+        # --- rechts: balk bovenin, tegels, regel onderin
+        rechts = QVBoxLayout()
+        rechts.setContentsMargins(26, 20, 26, 12)
+        rechts.setSpacing(14)
+        balk = QHBoxLayout()
+        balk.setSpacing(10)
+        self.terug_knop = ronde_knop("links", t("Terug", "Back"))
+        self.vooruit_knop = ronde_knop("rechts", t("Vooruit", "Forward"))
+        self.terug_knop.clicked.connect(self.terug)
+        self.vooruit_knop.clicked.connect(self.vooruit)
+        balk.addWidget(self.terug_knop)
+        balk.addWidget(self.vooruit_knop)
+        self.pad_vak = QFrame()
+        self.pad_vak.setObjectName("pad")
+        self.pad_vak.setFixedHeight(44)
+        self.pad_lay = QHBoxLayout(self.pad_vak)
+        self.pad_lay.setContentsMargins(8, 0, 8, 0)
+        self.pad_lay.setSpacing(0)
+        self.titel = label("", "kop3", wrap=False)
+        balk.addWidget(self.pad_vak, 1)
+        balk.addWidget(self.titel, 1)
+        self.zoek = Zoekveld(t("Zoek in deze map", "Search this folder"))
+        self.zoek.setFixedWidth(240)
+        self.zoek.setMinimumHeight(44)
+        self.zoek.setMaximumHeight(44)
+        self.zoek.textChanged.connect(self.zoeken)
+        balk.addWidget(self.zoek)
+        self.nieuw_knop = Knop(t("Nieuwe map", "New folder"), "gewoon", "lijn:map-plus")
+        self.nieuw_knop.clicked.connect(self.nieuwe_map)
+        self.uitwerp_knop = Knop(t("Veilig verwijderen", "Safely remove"), "gewoon", "lijn:uitwerpen")
+        self.uitwerp_knop.clicked.connect(self.uitwerpen_hier)
+        self.terugzet_knop = Knop(t("Zet terug", "Restore"), "gewoon", "lijn:terug")
+        self.terugzet_knop.clicked.connect(self.zet_terug)
+        self.leeg_knop = Knop(t("Prullenbak leegmaken", "Empty trash"), "gewoon", "lijn:prullenbak")
+        self.leeg_knop.clicked.connect(self.leegmaken)
+        for k in (self.nieuw_knop, self.uitwerp_knop, self.terugzet_knop, self.leeg_knop):
+            k.setMinimumHeight(44)
+            balk.addWidget(k)
+        rechts.addLayout(balk)
+
+        self.melding = Melding()
+        rechts.addWidget(self.melding)
+
+        kopblok = QVBoxLayout()
+        kopblok.setSpacing(2)
+        kopblok.setContentsMargins(4, 6, 0, 2)
+        self.grote_titel = label("", "titel", wrap=False)
+        self.status = label("", "sub", wrap=False)
+        kopblok.addWidget(self.grote_titel)
+        kopblok.addWidget(self.status)
+        rechts.addLayout(kopblok)
+
+        # het model: de echte bestanden op de schijf
+        self.model = QFileSystemModel(self)
+        self.model.setReadOnly(True)
+        self.verborgen = False
+        self.model.setFilter(QDir.Filter.AllEntries | QDir.Filter.NoDotAndDotDot)
+        self.sorteer = Sorteerder()
+        self.sorteer.setSourceModel(self.model)
+        self.sorteer.setDynamicSortFilter(True)
+        self.sorteer.sort(0)
+        self.bak_model = QStandardItemModel(self)
+
+        self.voorbeelden = Voorbeelden()
+        self.lijst = QListView()
+        self.lijst.setObjectName("tegels")
+        self.lijst.setViewMode(QListView.ViewMode.IconMode)
+        self.lijst.setResizeMode(QListView.ResizeMode.Adjust)
+        self.lijst.setMovement(QListView.Movement.Static)
+        self.lijst.setUniformItemSizes(True)
+        self.lijst.setGridSize(TegelTekenaar.TEGEL)
+        self.lijst.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.lijst.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.lijst.setDragEnabled(True)
+        self.lijst.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
+        self.lijst.setMouseTracking(True)
+        self.lijst.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.lijst.setItemDelegate(TegelTekenaar(self.voorbeelden, bijzondere_mappen()))
+        self.lijst.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.lijst.customContextMenuRequested.connect(self.menu)
+        self.lijst.activated.connect(self.openen)
+        self.voorbeelden.bijgewerkt.connect(self.lijst.viewport().update)
+        self.model.directoryLoaded.connect(lambda _p: self.ververs_staat())
+        self.sorteer.rowsInserted.connect(lambda *_: self.ververs_staat())
+        self.sorteer.rowsRemoved.connect(lambda *_: self.ververs_staat())
+        self.sorteer.layoutChanged.connect(lambda *_: self.ververs_staat())
+
+        self.leeg = QWidget()
+        ll = QVBoxLayout(self.leeg)
+        ll.addStretch(1)
+        self.leeg_beeld = QLabel()
+        self.leeg_beeld.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.leeg_kop = label("", "kop2")
+        self.leeg_kop.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.leeg_sub = label("", "sub")
+        self.leeg_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        for w in (self.leeg_beeld, self.leeg_kop, self.leeg_sub):
+            ll.addWidget(w)
+        ll.addStretch(2)
+        self.stapel = QStackedWidget()
+        self.stapel.addWidget(self.lijst)
+        self.stapel.addWidget(self.leeg)
+        rechts.addWidget(self.stapel, 1)
+
+        hoofd.addLayout(rechts, 1)
+
+        # sneltoetsen, net als in Windows
+        for toets, actie in (
+            (QKeySequence.StandardKey.Copy, self.kopieer), (QKeySequence.StandardKey.Cut, self.knip),
+            (QKeySequence.StandardKey.Paste, self.plak), (QKeySequence.StandardKey.Delete, self.weggooien),
+            (QKeySequence.StandardKey.Find, self.zoek.setFocus), (QKeySequence.StandardKey.Refresh, self.ververs),
+            (QKeySequence("F2"), self.hernoem), (QKeySequence("Backspace"), self.terug),
+            (QKeySequence("Alt+Left"), self.terug), (QKeySequence("Alt+Right"), self.vooruit),
+            (QKeySequence("Alt+Up"), self.omhoog), (QKeySequence("Ctrl+Shift+N"), self.nieuwe_map),
+            (QKeySequence("Ctrl+H"), self.wissel_verborgen),
+        ):
+            sc = QShortcut(QKeySequence(toets), self)
+            sc.activated.connect(lambda f=actie: f())
+        wis = QShortcut(QKeySequence("Escape"), self.zoek)
+        wis.activated.connect(self.zoek.clear)
+
+        self.vul_zijbalk()
+        self.apparaten = QTimer(self)
+        self.apparaten.timeout.connect(self.vul_zijbalk)
+        self.apparaten.start(3000)
+        self.ga_naar(start or thuis(), geschiedenis=False)
+        if kies:
+            QTimer.singleShot(400, lambda: self.selecteer(kies))
+
+    # ------------------------------------------------------------ zijbalk
+    def vul_zijbalk(self) -> None:
+        sleutels = ([f"plek:{p[0]}" for p in plekken()] + [f"usb:{v[1]}" for v in usb_volumes()]
+                    + [f"dicht:{d[1]}" for d in dichte_usb()])
+        if getattr(self, "_zijbalk_sleutels", None) == sleutels:
+            return
+        self._zijbalk_sleutels = sleutels
+        self.zijbalk.clear()
+        for sleutel, naam, ic, _pad in plekken():
+            self.zijbalk.voeg_toe(f"lijn:{ic}", naam, f"plek:{sleutel}")
+        usb, dicht = usb_volumes(), dichte_usb()
+        if usb or dicht:
+            self.zijbalk.voeg_kop(t("USB-sticks", "USB sticks"))
+            for naam, wortel, _dev in usb:
+                self.zijbalk.voeg_toe("lijn:usb", naam, f"usb:{wortel}")
+            for naam, dev in dicht:
+                self.zijbalk.voeg_toe("lijn:usb", naam, f"dicht:{dev}")
+        self.markeer_zijbalk()
+
+    def markeer_zijbalk(self) -> None:
+        self.zijbalk.clearSelection()
+        self.bak_lijst.clearSelection()
+        if self.in_prullenbak:
+            self.bak_lijst.setCurrentRow(0)
+            return
+        beste, lengte = "", -1
+        for sleutel, _n, _i, pad in plekken():
+            if (self.huidig == pad or zit_in(self.huidig, pad)) and len(str(pad)) > lengte:
+                beste, lengte = f"plek:{sleutel}", len(str(pad))
+        for _naam, wortel, _dev in usb_volumes():
+            if zit_in(self.huidig, Path(wortel)) and len(wortel) > lengte:
+                beste, lengte = f"usb:{wortel}", len(wortel)
+        if beste:
+            self.zijbalk.kies(beste)
+
+    def zijbalk_klik(self, item) -> None:
+        sleutel = item.data(Qt.ItemDataRole.UserRole) or ""
+        if sleutel.startswith("plek:"):
+            for s, _n, _i, pad in plekken():
+                if f"plek:{s}" == sleutel:
+                    pad.mkdir(parents=True, exist_ok=True)
+                    self.ga_naar(pad)
+        elif sleutel.startswith("usb:"):
+            self.ga_naar(Path(sleutel[4:]))
+        elif sleutel.startswith("dicht:"):
+            self.open_usb(sleutel[6:])
+
+    def zijbalk_menu(self, punt) -> None:
+        item = self.zijbalk.itemAt(punt)
+        sleutel = (item.data(Qt.ItemDataRole.UserRole) or "") if item else ""
+        if not sleutel.startswith("usb:"):
+            return
+        m = QMenu(self)
+        a = m.addAction(lijn_icoon("uitwerpen", "tekst", 18, gekozen=None), t("Veilig verwijderen", "Safely remove"))
+        a.triggered.connect(lambda _c=False: self.uitwerpen(sleutel[4:]))
+        m.exec(self.zijbalk.mapToGlobal(punt))
+
+    # -------------------------------------------------------- navigeren
+    def ga_naar(self, pad: Path, geschiedenis: bool = True) -> None:
+        pad = Path(pad)
+        if not pad.is_dir():
+            self.melding.toon(t(f"De map '{pad.name}' bestaat niet (meer).", f"The folder '{pad.name}' does not exist."), "fout")
+            return
+        if geschiedenis and (self.in_prullenbak or pad != self.huidig):
+            self.terug_lijst.append(Path("::prullenbak") if self.in_prullenbak else self.huidig)
+            self.vooruit_lijst.clear()
+        self.in_prullenbak = False
+        self.huidig = pad
+        self.zoek.blockSignals(True)
+        self.zoek.clear()
+        self.zoek.blockSignals(False)
+        self.sorteer.zet_zoek("")
+        self.sorteer.wortel = str(pad)
+        if self.lijst.model() is not self.sorteer:
+            self.lijst.setModel(self.sorteer)
+            self.lijst.selectionModel().selectionChanged.connect(lambda *_: self.ververs_staat())
+        bron = self.model.setRootPath(str(pad))
+        self.lijst.setRootIndex(self.sorteer.mapFromSource(bron))
+        self.lijst.scrollToTop()
+        self.voorbeelden.vergeet()
+        self.bouw_pad()
+        self.markeer_zijbalk()
+        self.ververs_staat()
+
+    def open_prullenbak(self, geschiedenis: bool = True) -> None:
+        if geschiedenis and not self.in_prullenbak:
+            self.terug_lijst.append(self.huidig)
+            self.vooruit_lijst.clear()
+        self.in_prullenbak = True
+        self.bak_model.clear()
+        for bestand, info, herkomst in prullenbak_inhoud():
+            it = QStandardItem(bestand.name)
+            it.setData(str(bestand), PAD_ROL)
+            it.setData(str(info), INFO_ROL)
+            it.setData(str(herkomst or ""), HERKOMST_ROL)
+            it.setToolTip(t(f"Kwam uit: {herkomst.parent if herkomst else '?'}", f"Came from: {herkomst.parent if herkomst else '?'}"))
+            it.setEditable(False)
+            self.bak_model.appendRow(it)
+        self.lijst.setModel(self.bak_model)
+        self.lijst.setRootIndex(QModelIndex())
+        self.lijst.selectionModel().selectionChanged.connect(lambda *_: self.ververs_staat())
+        self.bouw_pad()
+        self.markeer_zijbalk()
+        self.ververs_staat()
+
+    def terug(self) -> None:
+        if not self.terug_lijst:
+            return
+        vorige = self.terug_lijst.pop()
+        self.vooruit_lijst.append(Path("::prullenbak") if self.in_prullenbak else self.huidig)
+        self._spring(vorige)
+
+    def vooruit(self) -> None:
+        if not self.vooruit_lijst:
+            return
+        volgende = self.vooruit_lijst.pop()
+        self.terug_lijst.append(Path("::prullenbak") if self.in_prullenbak else self.huidig)
+        self._spring(volgende)
+
+    def _spring(self, doel: Path) -> None:
+        if str(doel) == "::prullenbak":
+            self.open_prullenbak(geschiedenis=False)
+        else:
+            self.ga_naar(doel, geschiedenis=False)
+
+    def omhoog(self) -> None:
+        if not self.in_prullenbak and self.huidig.parent != self.huidig:
+            self.ga_naar(self.huidig.parent)
+
+    def bouw_pad(self) -> None:
+        while self.pad_lay.count():
+            w = self.pad_lay.takeAt(0).widget()
+            if w:
+                w.deleteLater()
+        self.pad_vak.setVisible(not self.in_prullenbak)
+        self.titel.setVisible(self.in_prullenbak)
+        self.zoek.setVisible(not self.in_prullenbak)
+        self.nieuw_knop.setVisible(not self.in_prullenbak)
+        self.terugzet_knop.setVisible(self.in_prullenbak)
+        self.leeg_knop.setVisible(self.in_prullenbak)
+        op_usb = next((w for _n, w, _d in usb_volumes() if zit_in(self.huidig, Path(w))), None)
+        self.uitwerp_knop.setVisible(bool(op_usb) and not self.in_prullenbak)
+        self.terug_knop.setEnabled(bool(self.terug_lijst))
+        self.vooruit_knop.setEnabled(bool(self.vooruit_lijst))
+        if self.in_prullenbak:
+            self.titel.setText("")
+            self.grote_titel.setText(t("Prullenbak", "Trash"))
+            self.setWindowTitle(t("Prullenbak", "Trash"))
+            return
+        naam_hier = next((n for s_, n, _i, p_ in plekken() if p_ == self.huidig), None)
+        if naam_hier is None:
+            naam_hier = next((n for n, w, _d in usb_volumes() if Path(w) == self.huidig), self.huidig.name or "/")
+        self.grote_titel.setText(naam_hier)
+        self.setWindowTitle(f"{self.huidig.name or '/'} - {t('Bestanden', 'Files')}")
+        # Van waar tellen we? Thuis, een USB-stick, of de hele computer.
+        delen: list[tuple[str, Path]] = []
+        wortel_naam, wortel = t("Computer", "Computer"), Path("/")
+        for naam, w, _d in usb_volumes():
+            if zit_in(self.huidig, Path(w)):
+                wortel_naam, wortel = naam, Path(w)
+        if wortel == Path("/") and (self.huidig == thuis() or zit_in(self.huidig, thuis())):
+            wortel_naam, wortel = t("Thuis", "Home"), thuis()
+        delen.append((wortel_naam, wortel))
+        try:
+            rest = self.huidig.resolve().relative_to(wortel.resolve()).parts
+        except ValueError:
+            rest = self.huidig.parts[1:]
+        p = wortel
+        for deel in rest:
+            p = p / deel
+            delen.append((deel, p))
+        if len(delen) > 5:
+            delen = delen[:1] + [("…", delen[-4][1])] + delen[-3:]
+        for i, (naam, doel) in enumerate(delen):
+            if i:
+                pijl = QLabel()
+                pijl.setPixmap(lijn_icoon("rechts", "tekst3", 14, gekozen=None).pixmap(14, 14))
+                self.pad_lay.addWidget(pijl)
+            k = QPushButton(naam)
+            k.setObjectName("kruimel")
+            k.setProperty("laatste", "true" if i == len(delen) - 1 else "false")
+            k.setCursor(Qt.CursorShape.PointingHandCursor)
+            k.clicked.connect(lambda _=False, d=doel: self.ga_naar(d))
+            self.pad_lay.addWidget(k)
+        self.pad_lay.addStretch(1)
+
+    # ----------------------------------------------------------- inhoud
+    def ververs_staat(self) -> None:
+        model = self.lijst.model()
+        if model is None:
+            return
+        aantal = model.rowCount(self.lijst.rootIndex())
+        gekozen = len(self.gekozen())
+        if aantal == 0:
+            if self.in_prullenbak:
+                ic, kop, sub = "prullenbak", t("De prullenbak is leeg", "The trash is empty"), \
+                    t("Wat je weggooit, komt eerst hier. Je kunt het terugzetten.", "What you delete comes here first. You can restore it.")
+            elif self.sorteer.zoek:
+                ic, kop, sub = "map", t("Niks gevonden", "Nothing found"), \
+                    t(f"Er staat niks met '{self.zoek.text()}' in deze map.", f"Nothing with '{self.zoek.text()}' in this folder.")
+            else:
+                ic, kop, sub = "map", t("Deze map is leeg", "This folder is empty"), \
+                    t("Sleep er iets naartoe, of maak een nieuwe map.", "Drag something here, or make a new folder.")
+            self.leeg_beeld.setPixmap(lijn_icoon(ic, "tekst3", 56, gekozen=None).pixmap(56, 56))
+            self.leeg_kop.setText(kop)
+            self.leeg_sub.setText(sub)
+            self.stapel.setCurrentWidget(self.leeg)
+        else:
+            self.stapel.setCurrentWidget(self.lijst)
+        woord = t("ding" if aantal == 1 else "dingen", "item" if aantal == 1 else "items")
+        delen = [f"{aantal} {woord}"]
+        if gekozen:
+            delen.append(t(f"{gekozen} gekozen", f"{gekozen} selected"))
+        if not self.in_prullenbak:
+            vrij = vrije_ruimte(self.huidig)
+            if vrij:
+                delen.append(t(f"{vrij} vrij", f"{vrij} free"))
+        self.status.setText("  ·  ".join(delen))
+        self.terugzet_knop.setEnabled(bool(gekozen))
+        self.leeg_knop.setEnabled(aantal > 0)
+
+    def zoeken(self, tekst: str) -> None:
+        self.sorteer.zet_zoek(tekst)
+        self.ververs_staat()
+
+    def ververs(self) -> None:
+        if self.in_prullenbak:
+            self.open_prullenbak(geschiedenis=False)
+            return
+        self.voorbeelden.vergeet()
+        self.ga_naar(self.huidig, geschiedenis=False)
+
+    def wissel_verborgen(self) -> None:
+        self.verborgen = not self.verborgen
+        filter_ = QDir.Filter.AllEntries | QDir.Filter.NoDotAndDotDot
+        if self.verborgen:
+            filter_ |= QDir.Filter.Hidden
+        self.model.setFilter(filter_)
+
+    def gekozen(self) -> list[Path]:
+        sel = self.lijst.selectionModel()
+        if sel is None:
+            return []
+        return [Path(i.data(PAD_ROL)) for i in sel.selectedIndexes() if i.data(PAD_ROL)]
+
+    def selecteer(self, pad: Path) -> None:
+        if self.in_prullenbak:
+            return
+        idx = self.sorteer.mapFromSource(self.model.index(str(pad)))
+        if idx.isValid():
+            self.lijst.setCurrentIndex(idx)
+            self.lijst.scrollTo(idx)
+
+    def openen(self, index=None) -> None:
+        paden = [Path(index.data(PAD_ROL))] if index is not None and index.data(PAD_ROL) else self.gekozen()
+        if self.in_prullenbak:
+            self.melding.toon(t("Zet het eerst terug om het te openen.", "Restore it first to open it."))
+            return
+        for pad in paden[:10]:
+            if pad.is_dir():
+                self.ga_naar(pad)
+                return
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(pad)))
+
+    # ----------------------------------------------------------- menu
+    def menu(self, punt) -> None:
+        m = QMenu(self)
+
+        def actie(ic: str, tekst: str, doe, aan: bool = True) -> None:
+            a = m.addAction(lijn_icoon(ic, "tekst", 18, gekozen=None), tekst)
+            a.triggered.connect(lambda _c=False, f=doe: f())
+            a.setEnabled(aan)
+
+        index = self.lijst.indexAt(punt)
+        if index.isValid() and not self.lijst.selectionModel().isSelected(index):
+            self.lijst.setCurrentIndex(index)
+        gekozen = self.gekozen() if index.isValid() else []
+        if self.in_prullenbak:
+            actie("terug", t("Zet terug", "Restore"), self.zet_terug, bool(gekozen))
+            m.addSeparator()
+            actie("prullenbak", t("Prullenbak leegmaken", "Empty trash"), self.leegmaken,
+                  self.bak_model.rowCount() > 0)
+        elif gekozen:
+            actie("openen", t("Openen", "Open"), self.openen)
+            m.addSeparator()
+            actie("kopieer", t("Kopiëren", "Copy"), self.kopieer)
+            actie("schaar", t("Knippen", "Cut"), self.knip)
+            actie("potlood", t("Naam wijzigen", "Rename"), self.hernoem, len(gekozen) == 1)
+            m.addSeparator()
+            actie("prullenbak", t("Naar de prullenbak", "Move to trash"), self.weggooien)
+            if shutil.which("dolphin"):
+                m.addSeparator()
+                actie("oog", t("Openen in Dolphin (voor gevorderden)", "Open in Dolphin (advanced)"), self.in_dolphin)
+        else:
+            actie("plak", t("Plakken", "Paste"), self.plak, self.klembord_heeft_bestanden())
+            actie("map-plus", t("Nieuwe map", "New folder"), self.nieuwe_map)
+            if shutil.which("dolphin"):
+                m.addSeparator()
+                actie("oog", t("Openen in Dolphin (voor gevorderden)", "Open in Dolphin (advanced)"), self.in_dolphin)
+        m.exec(self.lijst.viewport().mapToGlobal(punt))
+
+    def in_dolphin(self) -> None:
+        subprocess.Popen(["dolphin", str(self.huidig)], start_new_session=True)
+
+    # ------------------------------------------- kopiëren en plakken
+    def _naar_klembord(self, knip: bool) -> None:
+        paden = self.gekozen()
+        if not paden or self.in_prullenbak:
+            return
+        data = QMimeData()
+        data.setUrls([QUrl.fromLocalFile(str(p)) for p in paden])
+        data.setData("application/x-kde-cutselection", b"1" if knip else b"0")
+        regels = ["cut" if knip else "copy"] + [QUrl.fromLocalFile(str(p)).toString() for p in paden]
+        data.setData("x-special/gnome-copied-files", "\n".join(regels).encode())
+        QApplication.clipboard().setMimeData(data)
+        n = len(paden)
+        self.melding.toon(t(f"{n} {'ding' if n == 1 else 'dingen'} {'geknipt' if knip else 'gekopieerd'}. Ga naar een map en kies Plakken.",
+                            f"{n} {'item' if n == 1 else 'items'} {'cut' if knip else 'copied'}. Go to a folder and choose Paste."))
+
+    def kopieer(self) -> None:
+        self._naar_klembord(False)
+
+    def knip(self) -> None:
+        self._naar_klembord(True)
+
+    def klembord_heeft_bestanden(self) -> bool:
+        data = QApplication.clipboard().mimeData()
+        return bool(data and data.hasUrls() and any(u.isLocalFile() for u in data.urls()))
+
+    def plak(self) -> None:
+        if self.in_prullenbak or not self.klembord_heeft_bestanden() or (self.klus and self.klus.isRunning()):
+            return
+        data = QApplication.clipboard().mimeData()
+        bronnen = [Path(u.toLocalFile()) for u in data.urls() if u.isLocalFile() and Path(u.toLocalFile()).exists()]
+        knip = bytes(data.data("application/x-kde-cutselection")).strip() == b"1" or \
+            bytes(data.data("x-special/gnome-copied-files")).startswith(b"cut")
+        if not bronnen:
+            return
+        self.klus = Klus(bronnen, self.huidig, knip)
+        self.klus.voortgang.connect(lambda i, n: self.melding.toon(
+            t(f"Bezig met {'verplaatsen' if knip else 'kopiëren'}: {i + 1} van {n}…", f"{'Moving' if knip else 'Copying'}: {i + 1} of {n}…"),
+            seconden=0))
+        self.klus.klaar.connect(lambda gelukt, fout: self._klus_klaar(gelukt, fout, knip))
+        self.klus.start()
+
+    def _klus_klaar(self, gelukt: int, fout: str, knip: bool) -> None:
+        if fout:
+            self.melding.toon(t(f"Niet alles lukte: {fout}", f"Not everything worked: {fout}"), "fout", seconden=12)
+        else:
+            self.melding.toon(t(f"Klaar: {gelukt} {'ding' if gelukt == 1 else 'dingen'} {'verplaatst' if knip else 'gekopieerd'}.",
+                                f"Done: {gelukt} {'item' if gelukt == 1 else 'items'} {'moved' if knip else 'copied'}."), "goed")
+        if knip:
+            QApplication.clipboard().clear()
+
+    # ------------------------------------------------------------ vragen
+    def vraag_tekst(self, titel: str, vraag: str, tekst: str) -> str | None:
+        d = QInputDialog(self)
+        d.setWindowTitle(titel)
+        d.setLabelText(vraag)
+        d.setTextValue(tekst)
+        d.setOkButtonText(t("Klaar", "OK"))
+        d.setCancelButtonText(t("Annuleren", "Cancel"))
+        d.resize(420, d.sizeHint().height())
+        return d.textValue().strip() if d.exec() else None
+
+    def vraag_ja(self, titel: str, tekst: str, ja: str) -> bool:
+        box = QMessageBox(self)
+        box.setWindowTitle(titel)
+        box.setText(tekst)
+        box.setIcon(QMessageBox.Icon.Warning)
+        ja_knop = box.addButton(ja, QMessageBox.ButtonRole.DestructiveRole)
+        nee = box.addButton(t("Annuleren", "Cancel"), QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(nee)
+        box.exec()
+        return box.clickedButton() is ja_knop
+
+    # ------------------------------------------- naam, map, weggooien
+    def hernoem(self) -> None:
+        paden = self.gekozen()
+        if len(paden) != 1 or self.in_prullenbak:
+            return
+        oud = paden[0]
+        nieuw = self.vraag_tekst(t("Naam wijzigen", "Rename"), t("Nieuwe naam:", "New name:"), oud.name)
+        if not nieuw or nieuw == oud.name:
+            return
+        if "/" in nieuw or nieuw in (".", ".."):
+            self.melding.toon(t("Een naam mag geen / bevatten.", "A name cannot contain /."), "fout")
+            return
+        doel = oud.with_name(nieuw)
+        if doel.exists():
+            self.melding.toon(t(f"Er staat al iets met de naam '{nieuw}'.", f"Something named '{nieuw}' already exists."), "fout")
+            return
+        try:
+            oud.rename(doel)
+        except OSError as e:
+            self.melding.toon(t(f"Naam wijzigen lukte niet: {e.strerror}", f"Rename failed: {e.strerror}"), "fout")
+
+    def nieuwe_map(self) -> None:
+        if self.in_prullenbak:
+            return
+        naam = self.vraag_tekst(t("Nieuwe map", "New folder"), t("Naam van de map:", "Folder name:"),
+                                t("Nieuwe map", "New folder"))
+        if not naam:
+            return
+        if "/" in naam:
+            self.melding.toon(t("Een naam mag geen / bevatten.", "A name cannot contain /."), "fout")
+            return
+        doel = vrije_naam(self.huidig / naam)
+        try:
+            doel.mkdir()
+            QTimer.singleShot(300, lambda: self.selecteer(doel))
+        except OSError as e:
+            self.melding.toon(t(f"De map maken lukte niet: {e.strerror}", f"Could not make the folder: {e.strerror}"), "fout")
+
+    def weggooien(self) -> None:
+        if self.in_prullenbak:
+            return
+        paden = self.gekozen()
+        if not paden:
+            return
+        ver = [p for p in paden if not zelfde_schijf(p, thuis())]
+        if ver:
+            if not self.vraag_ja(t("Echt weggooien?", "Really delete?"),
+                                 t("Dit staat op een USB-stick of een andere schijf. Weggooien kan daar niet ongedaan "
+                                   "worden. Echt weggooien?",
+                                   "This is on a USB stick or another drive. Deleting there cannot be undone. "
+                                   "Really delete?"),
+                                 t("Weggooien", "Delete")):
+                return
+        weg, fout = [], ""
+        for p in paden:
+            try:
+                if p in ver:
+                    if p.is_dir() and not p.is_symlink():
+                        shutil.rmtree(p)
+                    else:
+                        p.unlink()
+                else:
+                    weg.append(naar_prullenbak(p))
+            except OSError as e:
+                fout = e.strerror or str(e)
+        self.laatst_weg = weg
+        if fout:
+            self.melding.toon(t(f"Niet alles kon weg: {fout}", f"Not everything could be deleted: {fout}"), "fout")
+        elif weg:
+            n = len(weg)
+            self.melding.toon(t(f"{n} {'ding' if n == 1 else 'dingen'} naar de prullenbak.", f"{n} {'item' if n == 1 else 'items'} moved to the trash."),
+                              knop=t("Ongedaan maken", "Undo"), actie=self.ongedaan, seconden=10)
+
+    def ongedaan(self) -> None:
+        for bestand, info in self.laatst_weg:
+            try:
+                terugzetten(bestand, info)
+            except OSError:
+                pass
+        self.laatst_weg = []
+        self.melding.toon(t("Teruggezet.", "Restored."), "goed")
+
+    # ------------------------------------------------------ prullenbak
+    def zet_terug(self) -> None:
+        if not self.in_prullenbak:
+            return
+        sel = self.lijst.selectionModel().selectedIndexes()
+        n = 0
+        for i in sel:
+            try:
+                terugzetten(Path(i.data(PAD_ROL)), Path(i.data(INFO_ROL)))
+                n += 1
+            except OSError:
+                pass
+        self.open_prullenbak(geschiedenis=False)
+        if n:
+            self.melding.toon(t(f"{n} {'ding' if n == 1 else 'dingen'} teruggezet.", f"{n} {'item' if n == 1 else 'items'} restored."), "goed")
+
+    def leegmaken(self) -> None:
+        if self.vraag_ja(t("Prullenbak leegmaken?", "Empty the trash?"),
+                         t("Alles in de prullenbak wordt echt weggegooid. Dit kan niet ongedaan worden.",
+                           "Everything in the trash will be deleted for good. This cannot be undone."),
+                         t("Leegmaken", "Empty")):
+            prullenbak_legen()
+            self.open_prullenbak(geschiedenis=False)
+            self.melding.toon(t("De prullenbak is leeg.", "The trash is empty."), "goed")
+
+    # ------------------------------------------------------ USB-sticks
+    def open_usb(self, apparaat: str) -> None:
+        self.melding.toon(t("USB-stick openen…", "Opening USB stick…"), seconden=0)
+        QApplication.processEvents()
+        try:
+            uit = subprocess.run(["udisksctl", "mount", "-b", apparaat, "--no-user-interaction"],
+                                 capture_output=True, text=True, timeout=20)
+        except (OSError, subprocess.SubprocessError):
+            uit = None
+        self.vul_zijbalk()
+        if uit and uit.returncode == 0 and " at " in uit.stdout:
+            self.melding.hide()
+            self.ga_naar(Path(uit.stdout.rsplit(" at ", 1)[1].strip().rstrip(".")))
+        else:
+            self.melding.toon(t("Deze USB-stick kon niet open. Probeer hem opnieuw in te steken.",
+                                "This USB stick could not be opened. Try plugging it in again."), "fout")
+
+    def uitwerpen_hier(self) -> None:
+        for _n, wortel, _d in usb_volumes():
+            if zit_in(self.huidig, Path(wortel)):
+                self.uitwerpen(wortel)
+                return
+
+    def uitwerpen(self, wortel: str) -> None:
+        apparaat = next((d for _n, w, d in usb_volumes() if w == wortel), "")
+        if zit_in(self.huidig, Path(wortel)):
+            self.ga_naar(thuis())
+        ok = False
+        if apparaat:
+            try:
+                ok = subprocess.run(["udisksctl", "unmount", "-b", apparaat, "--no-user-interaction"],
+                                    capture_output=True, timeout=30).returncode == 0
+                if ok:
+                    subprocess.run(["udisksctl", "power-off", "-b", apparaat, "--no-user-interaction"],
+                                   capture_output=True, timeout=30)
+            except (OSError, subprocess.SubprocessError):
+                ok = False
+        self.vul_zijbalk()
+        if ok:
+            self.melding.toon(t("Je kunt de USB-stick er nu veilig uithalen.", "You can now safely remove the USB stick."), "goed")
+        else:
+            self.melding.toon(t("De USB-stick is nog bezig. Sluit wat erop openstaat en probeer het opnieuw.",
+                                "The USB stick is still busy. Close what is open on it and try again."), "fout")
+
+
+def start_pad(args: list[str]) -> tuple[Path | None, Path | None]:
+    """Map om te openen (en eventueel een bestand om te kiezen) uit de opdrachtregel."""
+    for a in args:
+        pad = Path(QUrl(a).toLocalFile()) if a.startswith("file:") else Path(a).expanduser()
+        if pad.is_dir():
+            return pad, None
+        if pad.exists():
+            return pad.parent, pad
+    return None, None
+
+
+def main() -> int:
+    app = maak_app("bugos-bestanden", "bugos-bestanden", sys.argv)
+    start, kies = start_pad(sys.argv[1:])
+    return uitvoeren(app, Bestanden(start, kies))
+
+
+if __name__ == "__main__":
+    sys.exit(main())

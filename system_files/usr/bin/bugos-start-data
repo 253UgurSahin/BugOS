@@ -27,7 +27,7 @@ HOME = Path.home()
 TAAL = (os.environ.get("LC_ALL") or os.environ.get("LC_MESSAGES") or os.environ.get("LANG") or "en")[:2].lower()
 
 STANDAARD_FAVORIETEN = [
-    "org.mozilla.firefox.desktop", "org.kde.dolphin.desktop", "bugos-winkel.desktop",
+    "org.mozilla.firefox.desktop", "bugos-bestanden.desktop", "bugos-winkel.desktop",
     "bugos-instellingen.desktop", "org.libreoffice.LibreOffice.writer.desktop",
     "org.videolan.VLC.desktop", "com.valvesoftware.Steam.desktop", "bugos-hulp.desktop",
 ]

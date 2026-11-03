@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Bestanden
+Name[en]=Files
+GenericName=Verkenner
+GenericName[en]=File manager
+Comment=Je foto's, documenten en downloads
+Comment[en]=Your photos, documents and downloads
+Exec=bugos-bestanden %U
+Icon=system-file-manager
+Categories=Qt;System;FileTools;FileManager;
+MimeType=inode/directory;
+Keywords=verkenner;bestanden;mappen;map;explorer;files;folder;documenten;foto;
+StartupWMClass=bugos-bestanden
+Terminal=false

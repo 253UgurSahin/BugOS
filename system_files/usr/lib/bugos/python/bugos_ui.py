@@ -239,6 +239,12 @@ QScrollBar::handle:vertical:hover {{ background: {k['tekst3']}; }}
 QScrollBar::add-line, QScrollBar::sub-line, QScrollBar::add-page, QScrollBar::sub-page {{ height: 0; background: none; }}
 QScrollBar:horizontal {{ height: 0; }}
 
+QMenu {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 12px; padding: 6px; }}
+QMenu::item {{ padding: 9px 22px 9px 12px; border-radius: 8px; color: {k['tekst']}; }}
+QMenu::item:selected {{ background: {k['knop']}; }}
+QMenu::item:disabled {{ color: {k['tekst3']}; }}
+QMenu::icon {{ padding-left: 8px; }}
+QMenu::separator {{ height: 1px; background: {k['rand']}; margin: 6px 8px; }}
 QToolTip {{ background: {k['tekst']}; color: {k['achter']}; border: none; border-radius: 8px; padding: 6px 10px; }}
 QCheckBox, QRadioButton {{ spacing: 10px; font-size: 15px; }}
 """
@@ -337,6 +343,18 @@ LIJN = {
     "film": '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="m10 9.5 4.5 2.5-4.5 2.5z"/>',
     "download": '<path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/>',
     "map": '<path d="M3.5 7a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>',
+    "map-plus": '<path d="M3.5 7a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/><path d="M12 10.5v6M9 13.5h6"/>',
+    "links": '<path d="m14.5 5.5-6.5 6.5 6.5 6.5"/>',
+    "rechts": '<path d="m9.5 5.5 6.5 6.5-6.5 6.5"/>',
+    "prullenbak": '<path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 12a1.5 1.5 0 0 0 1.5 1.5h6a1.5 1.5 0 0 0 1.5-1.5l1-12M10 11v6M14 11v6"/>',
+    "uitwerpen": '<path d="M12 4.5 4.5 13h15z"/><path d="M5 18.5h14"/>',
+    "usb": '<path d="M8 10.5V4.5h8v6"/><rect x="6" y="10.5" width="12" height="10" rx="2.5"/><path d="M10.5 7h.01M13.5 7h.01"/>',
+    "kopieer": '<rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/>',
+    "plak": '<rect x="5" y="4.5" width="14" height="16" rx="2"/><path d="M9 4.5V3.5h6v1M9 10h6M9 13.5h6M9 17h3"/>',
+    "schaar": '<circle cx="6.5" cy="7" r="2.5"/><circle cx="6.5" cy="17" r="2.5"/><path d="M8.7 8.3 19.5 18M8.7 15.7 19.5 6"/>',
+    "potlood": '<path d="M4.5 19.5 5.5 15 15.5 5a2.1 2.1 0 0 1 3 3l-10 10z"/><path d="m13.5 7 3 3"/>',
+    "openen": '<path d="M13.5 4.5h6v6M19.5 4.5 11 13M17.5 13.5v5a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V8A1.5 1.5 0 0 1 6 6.5h5"/>',
+    "oog": '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
 }
 
 
@@ -429,7 +447,10 @@ class Knop(QPushButton):
         self.setProperty("soort", soort)
         if groot:
             self.setProperty("groot", "true")
-        if icoon:
+        if icoon and icoon.startswith("lijn:"):
+            self.setIcon(lijn_icoon(icoon[5:], "#FFFFFF" if soort == "hoofd" else "tekst", 18, gekozen=None))
+            self.setIconSize(QSize(18, 18))
+        elif icoon:
             ic = QIcon.fromTheme(icoon)
             self.setIcon(wit_icoon(ic, 18) if soort == "hoofd" else ic)
             self.setIconSize(QSize(18, 18))
@@ -883,6 +904,20 @@ class Zijbalk(QListWidget):
         self.addItem(it)
         return it
 
+    def voeg_kop(self, tekst: str) -> QListWidgetItem:
+        """Een klein kopje (niet aan te klikken), bijvoorbeeld 'USB-STICKS'."""
+        it = QListWidgetItem(tekst.upper())
+        it.setFlags(Qt.ItemFlag.NoItemFlags)
+        f = it.font()
+        f.setPointSizeF(max(7.5, f.pointSizeF() * 0.78))
+        f.setWeight(QFont.Weight.DemiBold)
+        f.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 108)
+        it.setFont(f)
+        it.setForeground(QColor(K["tekst3"]))
+        it.setSizeHint(QSize(0, 34))
+        self.addItem(it)
+        return it
+
     def sleutel(self, rij: int) -> str:
         it = self.item(rij)
         return it.data(Qt.ItemDataRole.UserRole) if it else ""
@@ -894,6 +929,12 @@ class Zijbalk(QListWidget):
                 return
 
 
+def logo_icoon() -> QIcon:
+    """Het beestje voor het huidige thema: in donker met een licht kopje (anders verdwijnt het kopje)."""
+    pad = Path("/usr/share/bugos/logo-donker.svg" if DONKER else "/usr/share/bugos/logo.svg")
+    return QIcon(str(pad)) if pad.exists() else QIcon.fromTheme("bugos-logo")
+
+
 def merk_label(maat: int = 28, met_tekst: bool = True) -> QWidget:
     """Het BugOS-logo (lieveheersbeestje) met eventueel het woord 'BugOS'."""
     w = QWidget()
@@ -901,7 +942,7 @@ def merk_label(maat: int = 28, met_tekst: bool = True) -> QWidget:
     lay.setContentsMargins(0, 0, 0, 0)
     lay.setSpacing(10)
     logo = QLabel()
-    logo.setPixmap(QIcon.fromTheme("bugos-logo", QIcon("/usr/share/bugos/logo.svg")).pixmap(maat, maat))
+    logo.setPixmap(logo_icoon().pixmap(maat, maat))
     lay.addWidget(logo)
     if met_tekst:
         tekst = QLabel("BugOS")

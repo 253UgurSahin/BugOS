@@ -47,6 +47,9 @@ jobs:
           pip install -q PySide6-Essentials
           QT_QPA_PLATFORM=offscreen python3 tools/qml-test.py
 
+      - name: Bestanden testen (veilig weggooien, terugzetten, kopiëren)
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_bestanden.py
+
   bouwen:
     name: BugOS ${{ matrix.variant }}
     needs: controle
