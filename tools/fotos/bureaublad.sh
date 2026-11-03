@@ -268,6 +268,14 @@ mapfile -t BUGOS_ENV < <(env | grep '^BUGOS_' || true)
 chown -R oma:oma "$THUIS"
 mkdir -p /tmp/run-oma && chown oma:oma /tmp/run-oma && chmod 700 /tmp/run-oma
 
+# kwin_wayland heeft in het beeld extra rechten op het bestand zelf (cap_sys_nice). In een container
+# mag een gewone gebruiker zo'n bestand niet starten ("Actie is niet toegestaan"). Voor een foto zijn
+# die rechten niet nodig, dus halen we ze hier (alleen in deze wegwerpcontainer) van het bestand af.
+KWIN="$(command -v kwin_wayland || true)"
+if [ -n "$KWIN" ] && command -v setcap >/dev/null 2>&1; then
+    setcap -r "$KWIN" 2>/dev/null && stap "Extra rechten van $KWIN afgehaald (niet nodig voor een foto)" || true
+fi
+
 # Nu als oma, binnen één D-Bus-sessie (plasmashell, de activiteitenbeheerder en de menu's moeten
 # elkaar daarop kunnen vinden). Dit script roept zichzelf opnieuw aan voor deel 2 hierboven.
 stap "Klaargezet (thema $THEMA, scene $SCENE); nu als oma het bureaublad starten"

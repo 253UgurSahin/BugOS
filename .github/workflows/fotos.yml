@@ -142,7 +142,8 @@ jobs:
           maak_bureaublad() {  # naam thema scene
             # Het script start plasmashell (met de BugOS-taakbalk) en daarbij het gevraagde menu of scherm,
             # en blijft dan staan; na 75 s maken we een foto van het hele scherm (geen uitsnede).
-            sudo podman run -d --name foto -e DISPLAY=:99 ${VOORBEELD_VAN:+-e $VOORBEELD_VAN=1} \
+            # --cap-add=SYS_NICE: kwin_wayland vraagt dat recht (voor een vloeiend beeld); zonder mag hij niet starten.
+            sudo podman run -d --name foto --cap-add=SYS_NICE -e DISPLAY=:99 ${VOORBEELD_VAN:+-e $VOORBEELD_VAN=1} \
               -v /tmp/.X11-unix:/tmp/.X11-unix \
               -v "$PWD:/repo:ro" --entrypoint /usr/bin/bash "$BEELD" /repo/tools/fotos/bureaublad.sh "$2" "$3"
             sleep 100
