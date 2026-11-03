@@ -7,7 +7,7 @@ name: BugOS bouwen
 on:
   push:
     branches: [main, "claude/**"]
-    paths-ignore: ["**.md", "docs/**"]
+    paths-ignore: ["**.md", "docs/**", "tools/fotos/**", ".github/workflows/fotos.yml"]
   pull_request:
     branches: [main]
   schedule:

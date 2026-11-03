@@ -53,7 +53,7 @@ jobs:
           # RUIMTE=... ervoor: voorbeeldgetallen voor 'Deze computer'
           maak() {  # naam thema map [programma]
             sudo podman run -d --name foto -e DISPLAY=:99 -e "BUGOS_LSBLK=${NEP:-/repo/tools/fotos/geen-schijven.json}" \
-              ${RUIMTE:+-e BUGOS_RUIMTE=$RUIMTE} \
+              ${RUIMTE:+-e BUGOS_RUIMTE=$RUIMTE} ${VOORBEELD_VAN:+-e $VOORBEELD_VAN=1} \
               -v /tmp/.X11-unix:/tmp/.X11-unix \
               -v "$PWD:/repo:ro" --entrypoint /usr/bin/bash "$BEELD" /repo/tools/fotos/verkenner.sh "$2" "$3" "${4:-bugos-bestanden}"
             sleep 30
@@ -79,6 +79,12 @@ jobs:
           RUIMTE=$VOORBEELD maak computer-leeg licht computer:
           NEP=/repo/tools/fotos/schijven.json maak stick licht "/run/media/oma/Stick van oma"
           maak dolphin licht Afbeeldingen dolphin
+          # Taakbeheer en Instellingen, met voorbeeldgegevens (er wordt niets aan de computer veranderd)
+          VOORBEELD_VAN=BUGOS_TAKEN_VOORBEELD maak taakbeheer licht "arg:--programmas" bugos-taakbeheer
+          VOORBEELD_VAN=BUGOS_TAKEN_VOORBEELD maak taakbeheer-donker donker "arg:--prestaties" bugos-taakbeheer
+          VOORBEELD_VAN=BUGOS_INSTELLINGEN_VOORBEELD maak instellingen licht arg:start bugos-instellingen
+          VOORBEELD_VAN=BUGOS_INSTELLINGEN_VOORBEELD maak instellingen-wifi licht arg:wifi bugos-instellingen
+          VOORBEELD_VAN=BUGOS_INSTELLINGEN_VOORBEELD maak instellingen-donker donker arg:geluid bugos-instellingen
           ls -la docs/beelden/verkenner
 
       - name: Foto's bewaren

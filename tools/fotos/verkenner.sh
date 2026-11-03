@@ -1,5 +1,5 @@
 #!/usr/bin/bash
-# Start de verkenner (BugOS Bestanden, of Dolphin) voor een foto.
+# Start de verkenner (BugOS Bestanden, of Dolphin) of een ander BugOS-programma voor een foto.
 # Net als in een echte BugOS-sessie (KDE), zodat de BugOS-kleuren en -letters gelden.
 # Draait in het echte BugOS-beeld; de bouwstraat maakt dan een schermfoto.
 #
@@ -109,14 +109,16 @@ fi
 
 case "$MAP" in
     computer:* | /*) DOEL="$MAP" ;;
+    arg:*) DOEL="${MAP#arg:}" ;;  # voor andere programma's: gewoon dit woord (bv. arg:wifi)
     *) DOEL="$THUIS/$MAP" ;;
 esac
+# Alle BUGOS_-instellingen gaan mee naar het programma (bv. voorbeeldgegevens voor foto's).
+mapfile -t BUGOS_ENV < <(env | grep '^BUGOS_' || true)
 
 chown -R oma:oma "$THUIS"
 mkdir -p /tmp/run-oma && chown oma:oma /tmp/run-oma && chmod 700 /tmp/run-oma
 
 exec runuser -u oma -- env HOME="$THUIS" USER=oma XDG_RUNTIME_DIR=/tmp/run-oma DISPLAY="${DISPLAY:-:99}" \
     LANG=nl_NL.UTF-8 LANGUAGE=nl QT_SCALE_FACTOR=2 \
-    XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6 \
-    ${BUGOS_LSBLK:+BUGOS_LSBLK="$BUGOS_LSBLK"} ${BUGOS_RUIMTE:+BUGOS_RUIMTE="$BUGOS_RUIMTE"} \
+    XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6 "${BUGOS_ENV[@]}" \
     dbus-run-session -- "$PROGRAMMA" -qwindowgeometry 1180x740+0+0 "$DOEL"
