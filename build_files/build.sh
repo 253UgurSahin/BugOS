@@ -70,6 +70,40 @@ kwriteconfig6 --file /etc/xdg/kdeglobals --group WM --key activeFont "Inter,10,-
 # Accentkleur: lieveheersbeestjesrood
 kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key AccentColor "222,47,62"
 
+# De kleuren van "BugOS Licht" ook echt in de standaardinstellingen zetten.
+# Alleen de naam van het schema is niet genoeg: programma's zoals de verkenner
+# lezen de kleuren zelf uit kdeglobals. Zo is alles meteen in BugOS-kleuren.
+python3 - <<'PY'
+import configparser
+
+
+def lees(pad):
+    c = configparser.RawConfigParser(strict=False, interpolation=None)
+    c.optionxform = str
+    c.read(pad, encoding="utf-8")
+    return c
+
+
+schema = lees("/usr/share/color-schemes/BugOSLicht.colors")
+glob = lees("/etc/xdg/kdeglobals")
+for groep in schema.sections():
+    if groep == "General":
+        continue
+    if not glob.has_section(groep):
+        glob.add_section(groep)
+    for sleutel, waarde in schema.items(groep):
+        glob.set(groep, sleutel, waarde)
+with open("/etc/xdg/kdeglobals", "w", encoding="utf-8") as f:
+    glob.write(f, space_around_delimiters=False)
+PY
+
+# De verkenner (Dolphin, in BugOS "Bestanden"): rustig en duidelijk.
+kwriteconfig6 --file /etc/xdg/dolphinrc --group MainWindow --key MenuBar Disabled
+kwriteconfig6 --file /etc/xdg/dolphinrc --group General --key ShowZoomSlider false
+kwriteconfig6 --file /etc/xdg/dolphinrc --group General --key ShowSpaceInfo true
+kwriteconfig6 --file /etc/xdg/dolphinrc --group General --key RememberOpenedTabs false
+kwriteconfig6 --file /etc/xdg/dolphinrc --group General --key BrowseThroughArchives false
+
 # Opstartscherm na het inloggen (KSplash) uit ons look-and-feel-pakket
 kwriteconfig6 --file /etc/xdg/ksplashrc --group KSplash --key Engine KSplashQML
 kwriteconfig6 --file /etc/xdg/ksplashrc --group KSplash --key Theme org.bugos.desktop
