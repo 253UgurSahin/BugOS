@@ -1,5 +1,6 @@
 #!/usr/bin/bash
 # Start de verkenner (Dolphin, in BugOS "Bestanden") voor een foto.
+# Net als in een echte BugOS-sessie (KDE), zodat de BugOS-kleuren en -letters gelden.
 # Draait in het echte BugOS-beeld; de bouwstraat maakt dan een schermfoto.
 #
 # Gebruik: bash tools/fotos/verkenner.sh <licht|donker> [map]
@@ -71,4 +72,5 @@ mkdir -p /tmp/run-oma && chown oma:oma /tmp/run-oma && chmod 700 /tmp/run-oma
 
 exec runuser -u oma -- env HOME="$THUIS" USER=oma XDG_RUNTIME_DIR=/tmp/run-oma DISPLAY="${DISPLAY:-:99}" \
     LANG=nl_NL.UTF-8 LANGUAGE=nl QT_SCALE_FACTOR=2 \
+    XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6 \
     dbus-run-session -- dolphin -qwindowgeometry 1180x740+0+0 "$THUIS/$MAP"
