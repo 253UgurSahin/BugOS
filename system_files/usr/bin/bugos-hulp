@@ -133,7 +133,7 @@ def controle_printer() -> Uitslag:
                        lambda: kde_instelling("kcm_printer_manager"), t("Printer toevoegen", "Add printer"))
     if "disabled" in printers:
         return Uitslag(naam, LET_OP, t("Een printer staat op pauze.", "A printer is paused."),
-                       lambda: kde_instelling("kcm_printer_manager"), t("Printers bekijken", "View printers"))
+                       lambda: start("bugos-instellingen", "printers"), t("Printers bekijken", "View printers"))
     return Uitslag(naam, OK, t("Printer is klaar.", "Printer is ready."))
 
 

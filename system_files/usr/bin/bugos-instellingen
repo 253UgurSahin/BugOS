@@ -2,12 +2,14 @@
 """BugOS Instellingen: alles wat je nodig hebt, op één plek, in gewone woorden.
 
 Zoals Instellingen in Windows, maar rustiger: de dingen die je echt gebruikt (wifi,
-bluetooth, geluid, scherm, energie, uiterlijk, updates) regel je hier zelf. Klik op een
+bluetooth, printers, geluid, scherm, energie, uiterlijk, meldingen, muis, makkelijker zien,
+tijd en taal, inloggen, standaardprogramma's, updates) regel je hier zelf. Klik op een
 netwerk om te verbinden, op een luidspreker om die te gebruiken. Wie meer wil, vindt per
 onderdeel 'Meer instellingen (voor gevorderden)'.
 
 Gebruik:  bugos-instellingen [pagina]
-          pagina = start | wifi | bluetooth | geluid | scherm | energie | uiterlijk | updates | over
+          pagina = start | wifi | bluetooth | printers | geluid | scherm | energie | uiterlijk | meldingen
+                   | muis | zien | tijd | inloggen | programmas | updates | over
 """
 
 from __future__ import annotations
@@ -16,20 +18,21 @@ import json
 import os
 import platform
 import sys
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, "/usr/lib/bugos/python")
 
 import bugos_instellen as bi  # noqa: E402
 from bugos_ui import (  # noqa: E402
-    Chip, Groep, K, Kaart, KeuzeKaart, Knop, Pagina, Rij, Schuif, Venster, bestaat, draai, kde_instelling, label,
-    leeg_groep, lijn_icoon, maak_app, ronde_knop, sectie, start, t, uitvoeren,
+    TAAL, Chip, Groep, K, Kaart, KeuzeKaart, Knop, Pagina, Rij, Schuif, Venster, Zoekveld, bestaat, draai,
+    kde_instelling, label, leeg_groep, lijn_icoon, maak_app, ronde_knop, sectie, start, t, uitvoeren,
 )
 from PySide6.QtCore import QObject, QRunnable, QSize, Qt, QThreadPool, QTimer, Signal  # noqa: E402
 from PySide6.QtGui import QPixmap  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QApplication, QButtonGroup, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
-    QMenu, QPushButton, QSlider, QVBoxLayout, QWidget,
+    QAbstractItemView, QApplication, QButtonGroup, QDialog, QFileDialog, QFrame, QGridLayout, QHBoxLayout,
+    QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu, QPushButton, QSlider, QVBoxLayout, QWidget,
 )
 
 
@@ -135,6 +138,11 @@ QSlider::handle:horizontal {{ width: 22px; height: 22px; margin: -8px 0; border-
 QPushButton#plaatje {{ background: transparent; border: 2px solid transparent; border-radius: 16px; padding: 3px; }}
 QPushButton#plaatje:hover {{ border: 2px solid {K['rand_sterk']}; }}
 QPushButton#plaatje:checked {{ border: 2px solid {K['accent']}; }}
+QListWidget#keuzelijst {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-radius: 14px; padding: 6px;
+    outline: 0; font-size: 14px; }}
+QListWidget#keuzelijst::item {{ padding: 6px 12px; border-radius: 9px; color: {K['tekst']}; }}
+QListWidget#keuzelijst::item:hover {{ background: {K['knop']}; }}
+QListWidget#keuzelijst::item:selected {{ background: {K['accent_zacht']}; color: {K['accent']}; font-weight: 600; }}
 """
 
 
@@ -572,14 +580,41 @@ class EnergiePagina(Blad):
                                     "This computer cannot switch between saving and fast."), "sub")
         self.geen_profiel.hide()
         self.lay.addWidget(self.geen_profiel)
+        g = self.kaart(t("Scherm uit en slapen", "Screen off and sleep"))
+        self.scherm_uit = Keuzes([(300, t("5 min", "5 min")), (600, t("10 min", "10 min")), (1800, t("30 min", "30 min")),
+                                  (0, t("Nooit", "Never"))])
+        self.scherm_uit.gekozen.connect(lambda s: op_achtergrond(self, lambda: bi.zet_scherm_uit_na(s), lambda _u: None))
+        g.voeg(Rij("computer", t("Scherm uit als je niets doet", "Screen off when you do nothing"),
+                   t("Even met de muis bewegen en het is terug", "Move the mouse and it is back"), self.scherm_uit))
+        self.slaap = Keuzes([(900, t("15 min", "15 min")), (1800, t("30 min", "30 min")), (3600, t("1 uur", "1 hour")),
+                             (0, t("Nooit", "Never"))])
+        self.slaap.gekozen.connect(lambda s: op_achtergrond(self, lambda: bi.zet_slaap_na(s), lambda _u: None))
+        g.voeg(Rij("maan", t("Slaapstand als je niets doet", "Sleep when you do nothing"),
+                   t("Zuinig; alles staat er weer zodra je een toets indrukt",
+                     "Saves power; everything is back as soon as you press a key"), self.slaap))
+        self.aanuit = Keuzes([(bi.KNOP_VRAGEN, t("Vragen", "Ask")), (bi.KNOP_SLAPEN, t("Slapen", "Sleep")),
+                              (bi.KNOP_UIT, t("Uitzetten", "Shut down"))])
+        self.aanuit.gekozen.connect(lambda w: op_achtergrond(self, lambda: bi.zet_aanuit_knop(w), lambda _u: None))
+        g.voeg(Rij("aan", t("Als je op de aan/uit-knop drukt", "When you press the power button"), "", self.aanuit))
+        self.deksel = Keuzes([(bi.KNOP_SLAPEN, t("Slapen", "Sleep")), (bi.KNOP_SCHERM_UIT, t("Scherm uit", "Screen off")),
+                              (bi.KNOP_NIETS, t("Niets", "Nothing"))])
+        self.deksel.gekozen.connect(lambda w: op_achtergrond(self, lambda: bi.zet_deksel(w), lambda _u: None))
+        self.deksel_rij = Rij("laptop", t("Als je de laptop dichtklapt", "When you close the laptop"), "", self.deksel)
+        g.voeg(self.deksel_rij)
 
     def ververs(self) -> None:
-        op_achtergrond(self, lambda: (bi.batterij(), bi.energieprofiel()), self.toon)
+        op_achtergrond(self, lambda: (bi.batterij(), bi.energieprofiel(), bi.scherm_uit_na(), bi.slaap_na(),
+                                      bi.aanuit_knop(), bi.deksel()), self.toon)
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:
             return
-        bat, profiel = uitkomst
+        bat, profiel, scherm_uit, slaap, aanuit, deksel = uitkomst
+        self.scherm_uit.zet(dichtstbij(bi.SCHERM_UIT_KEUZES, scherm_uit))
+        self.slaap.zet(dichtstbij(bi.SLAAP_KEUZES, slaap))
+        self.aanuit.zet(aanuit if aanuit in (bi.KNOP_VRAGEN, bi.KNOP_SLAPEN, bi.KNOP_UIT) else bi.KNOP_VRAGEN)
+        self.deksel.zet(deksel if deksel in (bi.KNOP_SLAPEN, bi.KNOP_SCHERM_UIT, bi.KNOP_NIETS) else bi.KNOP_SLAPEN)
+        self.deksel_rij.setVisible(bat is not None)
         self.batterij_kaart.setVisible(bat is not None)
         if bat is not None:
             staat = t("vol", "full") if bat.vol else t("wordt opgeladen", "charging") if bat.laadt else \
@@ -667,6 +702,672 @@ class UiterlijkPagina(Blad):
                                              t("Foto's (*.jpg *.jpeg *.png *.webp)", "Photos (*.jpg *.jpeg *.png *.webp)"))
         if pad:
             self.zet_achtergrond(pad)
+
+
+# ================================================================ kiezen ===
+
+class KiesDialoog(QDialog):
+    """Een lijst om één ding uit te kiezen (tijdzone, taal), met een zoekveld als de lijst lang is."""
+
+    def __init__(self, ouder: QWidget, titel_tekst: str, items: list[tuple[object, str]], huidig: object = None,
+                 zoek_hint: str = ""):
+        super().__init__(ouder)
+        self.setWindowTitle(titel_tekst)
+        self.setMinimumWidth(460)
+        self.gekozen = huidig
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(24, 22, 24, 20)
+        lay.setSpacing(12)
+        lay.addWidget(label(titel_tekst, "kop2"))
+        self.zoekveld = None
+        if zoek_hint:
+            self.zoekveld = Zoekveld(zoek_hint)
+            self.zoekveld.textChanged.connect(self.filter)
+            lay.addWidget(self.zoekveld)
+        self.lijst = QListWidget()
+        self.lijst.setObjectName("keuzelijst")
+        self.lijst.setMinimumHeight(min(400, 42 * len(items) + 12))
+        for waarde, tekst in items:
+            it = QListWidgetItem(tekst)
+            it.setData(Qt.ItemDataRole.UserRole, waarde)
+            it.setSizeHint(QSize(0, 40))
+            self.lijst.addItem(it)
+            if waarde == huidig:
+                self.lijst.setCurrentItem(it)
+        self.lijst.itemDoubleClicked.connect(lambda _it: self.accept())
+        lay.addWidget(self.lijst, 1)
+        knoppen = QHBoxLayout()
+        knoppen.addStretch(1)
+        weg = Knop(t("Annuleren", "Cancel"), "stil")
+        weg.clicked.connect(self.reject)
+        ok = Knop(t("Kiezen", "Choose"), "hoofd")
+        ok.clicked.connect(self.accept)
+        ok.setDefault(True)
+        knoppen.addWidget(weg)
+        knoppen.addWidget(ok)
+        lay.addLayout(knoppen)
+        if self.lijst.currentItem() is not None:
+            self.lijst.scrollToItem(self.lijst.currentItem(), QAbstractItemView.ScrollHint.PositionAtCenter)
+
+    def filter(self, tekst: str) -> None:
+        woorden = tekst.lower().split()
+        for i in range(self.lijst.count()):
+            it = self.lijst.item(i)
+            it.setHidden(not all(w in it.text().lower() for w in woorden))
+
+    def accept(self) -> None:  # noqa: N802
+        it = self.lijst.currentItem()
+        if it is None or it.isHidden():
+            it = next((self.lijst.item(i) for i in range(self.lijst.count()) if not self.lijst.item(i).isHidden()),
+                      None)
+        if it is None:
+            return
+        self.gekozen = it.data(Qt.ItemDataRole.UserRole)
+        super().accept()
+
+
+class WachtwoordDialoog(QDialog):
+    """Twee keer het nieuwe wachtwoord typen; pas als ze gelijk zijn, kan het."""
+
+    MINIMUM = 6
+
+    def __init__(self, ouder: QWidget):
+        super().__init__(ouder)
+        self.setWindowTitle(t("Nieuw wachtwoord", "New password"))
+        self.setMinimumWidth(460)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(24, 22, 24, 20)
+        lay.setSpacing(10)
+        lay.addWidget(label(t("Kies een nieuw wachtwoord", "Choose a new password"), "kop2"))
+        lay.addWidget(label(t(f"Minstens {self.MINIMUM} tekens. Daarna vraagt BugOS nog één keer je huidige wachtwoord.",
+                              f"At least {self.MINIMUM} characters. BugOS then asks for your current password once more."),
+                            "klein"))
+        self.een = QLineEdit()
+        self.een.setEchoMode(QLineEdit.EchoMode.Password)
+        self.een.setPlaceholderText(t("Nieuw wachtwoord", "New password"))
+        self.twee = QLineEdit()
+        self.twee.setEchoMode(QLineEdit.EchoMode.Password)
+        self.twee.setPlaceholderText(t("Nog een keer", "Once more"))
+        lay.addWidget(self.een)
+        lay.addWidget(self.twee)
+        self.fout = label("", "klein")
+        self.fout.setStyleSheet(f"color: {K['fout']};")
+        lay.addWidget(self.fout)
+        knoppen = QHBoxLayout()
+        self.oog = Knop(t("Laten zien", "Show"), "stil", "lijn:oog")
+        self.oog.setCheckable(True)
+        self.oog.toggled.connect(self.laat_zien)
+        knoppen.addWidget(self.oog)
+        knoppen.addStretch(1)
+        weg = Knop(t("Annuleren", "Cancel"), "stil")
+        weg.clicked.connect(self.reject)
+        self.ok = Knop(t("Wachtwoord instellen", "Set password"), "hoofd")
+        self.ok.setEnabled(False)
+        self.ok.clicked.connect(self.accept)
+        knoppen.addWidget(weg)
+        knoppen.addWidget(self.ok)
+        lay.addLayout(knoppen)
+        self.een.textChanged.connect(self.controleer)
+        self.twee.textChanged.connect(self.controleer)
+
+    def laat_zien(self, aan: bool) -> None:
+        for veld in (self.een, self.twee):
+            veld.setEchoMode(QLineEdit.EchoMode.Normal if aan else QLineEdit.EchoMode.Password)
+
+    def controleer(self) -> None:
+        a, b = self.een.text(), self.twee.text()
+        self.ok.setEnabled(len(a) >= self.MINIMUM and a == b)
+        if a and len(a) < self.MINIMUM:
+            self.fout.setText(t("Nog te kort.", "Still too short."))
+        elif a and b and a != b:
+            self.fout.setText(t("De twee wachtwoorden zijn niet hetzelfde.", "The two passwords are not the same."))
+        else:
+            self.fout.setText("")
+
+    @property
+    def wachtwoord(self) -> str:
+        return self.een.text()
+
+
+def dichtstbij(keuzes: tuple, waarde: int) -> int:
+    """De keuze die het dichtst bij de waarde ligt (0 betekent 'nooit' en blijft 0)."""
+    if not waarde:
+        return 0
+    return min((k for k in keuzes if k), key=lambda k: abs(k - waarde))
+
+
+# ======================================================= makkelijker zien ===
+
+class ZienPagina(Blad):
+    sleutel, icoon = "zien", "oog"
+    titel_nl, titel_en = "Makkelijker zien", "Easier to see"
+    uitleg_nl = "Grotere letters, een grotere muisaanwijzer en een vergrootglas."
+    uitleg_en = "Bigger letters, a bigger mouse pointer and a magnifier."
+    zoekwoorden = ("zien ogen bril slecht groot grote letters tekst lettertype muisaanwijzer cursor vergrootglas inzoomen "
+                   "zoom toegankelijkheid plaktoetsen langzame toetsen schermlezer voorlezen")
+    kde = "kcm_access"
+
+    def bouw(self) -> None:
+        g = self.kaart()
+        self.tekst = schuifje(False, lambda aan: self.zet(bi.zet_grote_tekst, aan, t(
+            "Klaar. Programma's die al open staan, krijgen de nieuwe letters als je ze opnieuw opent.",
+            "Done. Programs that are already open get the new letters when you open them again.")))
+        g.voeg(Rij("letter", t("Grote letters", "Big letters"),
+                   t("In menu's, knoppen en vensters", "In menus, buttons and windows"), self.tekst))
+        self.aanwijzer = schuifje(False, lambda aan: self.zet(bi.zet_grote_aanwijzer, aan))
+        g.voeg(Rij("muis", t("Grote muisaanwijzer", "Big mouse pointer"), t("Twee keer zo groot", "Twice as big"),
+                   self.aanwijzer))
+        self.schud = schuifje(True, lambda aan: self.zet(bi.zet_schud_aanwijzer, aan))
+        g.voeg(Rij("zoek", t("Muisaanwijzer kwijt? Schud de muis", "Lost the pointer? Shake the mouse"),
+                   t("Dan wordt hij even groot, zodat je hem terugvindt", "It grows for a moment so you can find it"),
+                   self.schud))
+        g2 = self.kaart(t("Vergrootglas", "Magnifier"))
+        knoppen = QWidget()
+        kl = QHBoxLayout(knoppen)
+        kl.setContentsMargins(0, 0, 0, 0)
+        kl.setSpacing(8)
+        for tekst, stap in ((t("Dichterbij", "Closer"), 1), (t("Verder weg", "Further"), -1), (t("Gewoon", "Normal"), 0)):
+            k = Knop(tekst, "gewoon")
+            k.clicked.connect(lambda _c=False, s=stap: self.zoom(s))
+            kl.addWidget(k)
+        g2.voeg(Rij("oog", t("Het hele scherm dichterbij halen", "Bring the whole screen closer"),
+                    t("Of houd de Windows-toets ingedrukt en druk op + of −",
+                      "Or hold the Windows key and press + or −"), knoppen))
+        g3 = self.kaart(t("Toetsenbord en voorlezen", "Keyboard and reading aloud"))
+        self.plak = schuifje(False, lambda aan: self.zet(lambda a: bi.zet_toetshulp("plaktoetsen", a), aan))
+        g3.voeg(Rij("toetsenbord", t("Plaktoetsen", "Sticky keys"),
+                    t("Toetsen na elkaar in plaats van tegelijk: eerst Ctrl, dan C",
+                      "Keys one after the other instead of together: first Ctrl, then C"), self.plak))
+        self.langzaam = schuifje(False, lambda aan: self.zet(lambda a: bi.zet_toetshulp("langzame_toetsen", a), aan))
+        g3.voeg(Rij("klok", t("Langzame toetsen", "Slow keys"),
+                    t("Een toets telt pas als je hem even vasthoudt, tegen per ongeluk drukken",
+                      "A key only counts when you hold it a moment, against accidental presses"), self.langzaam))
+        self.lezer = schuifje(False, lambda aan: self.zet(lambda a: bi.zet_toetshulp("schermlezer", a), aan))
+        self.lezer_rij = Rij("geluid", t("Schermlezer", "Screen reader"),
+                             t("Leest voor wat op het scherm staat", "Reads aloud what is on the screen"), self.lezer)
+        g3.voeg(self.lezer_rij)
+
+    def ververs(self) -> None:
+        op_achtergrond(self, lambda: (bi.grote_tekst(), bi.grote_aanwijzer(), bi.schud_aanwijzer(),
+                                      bi.toetshulp("plaktoetsen"), bi.toetshulp("langzame_toetsen"),
+                                      bi.toetshulp("schermlezer"), bi.kan_schermlezer()), self.toon)
+
+    def toon(self, uitkomst) -> None:
+        if not uitkomst:
+            return
+        tekst, aanwijzer, schud, plak, langzaam, lezer, kan_lezer = uitkomst
+        for schuif, aan in ((self.tekst, tekst), (self.aanwijzer, aanwijzer), (self.schud, schud), (self.plak, plak),
+                            (self.langzaam, langzaam), (self.lezer, lezer)):
+            schuif.zet_stil(bool(aan))
+        self.lezer_rij.setVisible(bool(kan_lezer))
+
+    def zet(self, werk, aan: bool, tekst: str = "") -> None:
+        op_achtergrond(self, lambda: werk(aan), lambda _u: self.melding.toon(tekst, "goed") if tekst else None)
+
+    def zoom(self, stap: int) -> None:
+        op_achtergrond(self, lambda: bi.vergrootglas(stap), lambda ok: None if ok else self.melding.toon(
+            t("Dat lukte niet.", "That did not work."), "fout"))
+
+
+# ======================================================== muis en touchpad ===
+
+class MuisPagina(Blad):
+    sleutel, icoon = "muis", "muis"
+    titel_nl, titel_en = "Muis en touchpad", "Mouse and touchpad"
+    uitleg_nl = "Hoe snel de aanwijzer beweegt, en wat klikken en scrollen doen."
+    uitleg_en = "How fast the pointer moves, and what clicking and scrolling do."
+    zoekwoorden = "muis touchpad aanwijzer cursor snelheid linkshandig scrollen scrollrichting tikken klikken dubbelklik"
+    kde = "kcm_mouse"
+
+    def bouw(self) -> None:
+        self.vak = QWidget()
+        self.vak_lay = QVBoxLayout(self.vak)
+        self.vak_lay.setContentsMargins(0, 0, 0, 0)
+        self.vak_lay.setSpacing(14)
+        self.lay.addWidget(self.vak)
+        g = self.kaart(t("Klikken", "Clicking"))
+        self.dubbel = schuifje(True, lambda aan: op_achtergrond(self, lambda: bi.zet_dubbelklik(aan), lambda _u: None))
+        g.voeg(Rij("vink", t("Dubbelklikken om te openen", "Double-click to open"),
+                   t("Zoals in Windows. Uit: één klik opent een bestand of map.",
+                     "Like in Windows. Off: one click opens a file or folder."), self.dubbel))
+
+    def ververs(self) -> None:
+        op_achtergrond(self, lambda: (bi.aanwijzers(), bi.dubbelklik()), self.toon)
+
+    def toon(self, uitkomst) -> None:
+        if not uitkomst:
+            return
+        apparaten, dubbel = uitkomst
+        self.dubbel.zet_stil(bool(dubbel))
+        while self.vak_lay.count():
+            item = self.vak_lay.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        for a in apparaten:
+            self.vak_lay.addWidget(sectie(a.naam))
+            g = Groep()
+            g.lay.setContentsMargins(4, 4, 4, 4)
+            self.vak_lay.addWidget(g)
+            if a.touchpad and "aan" in a.kan:
+                g.voeg(Rij("schakelaar", t("Touchpad aan", "Touchpad on"), "",
+                           schuifje(a.aan, lambda aan, x=a: self.zet(x, "aan", aan))))
+            if "snelheid" in a.kan:
+                r = Regelaar(a.snelheid)
+                r.veranderd.connect(lambda w, x=a: self.zet(x, "snelheid", w))
+                g.voeg(Rij("muis", t("Snelheid van de aanwijzer", "Pointer speed"), "", r))
+            if a.touchpad and "tikken" in a.kan:
+                g.voeg(Rij("vink", t("Tikken om te klikken", "Tap to click"),
+                           t("Een tikje op het touchpad is een klik", "A tap on the touchpad is a click"),
+                           schuifje(a.tikken, lambda aan, x=a: self.zet(x, "tikken", aan))))
+            if "natuurlijk" in a.kan:
+                g.voeg(Rij("onder", t("Scrollen zoals op een telefoon", "Scroll like on a phone"),
+                           t("Veeg omhoog om naar boven te gaan", "Swipe up to go up") if a.touchpad else
+                           t("Wieltje naar je toe gaat omhoog", "Wheel towards you goes up"),
+                           schuifje(a.natuurlijk, lambda aan, x=a: self.zet(x, "natuurlijk", aan))))
+            if "linkshandig" in a.kan:
+                g.voeg(Rij("links", t("Linkshandig", "Left-handed"),
+                           t("Linker- en rechterknop omgewisseld", "Left and right buttons swapped"),
+                           schuifje(a.linkshandig, lambda aan, x=a: self.zet(x, "linkshandig", aan))))
+        if not apparaten:
+            g = Groep()
+            g.lay.setContentsMargins(4, 4, 4, 4)
+            g.voeg(Rij("muis", t("Geen muis of touchpad gevonden", "No mouse or touchpad found"),
+                       t("Sluit een muis aan; BugOS ziet hem vanzelf.", "Connect a mouse; BugOS sees it by itself.")))
+            self.vak_lay.addWidget(g)
+
+    def zet(self, a: bi.Aanwijzer, wat: str, waarde) -> None:
+        op_achtergrond(self, lambda: bi.zet_aanwijzer(a.sysnaam, wat, waarde), lambda ok: None if ok else
+                       self.melding.toon(t("Dat lukte niet.", "That did not work."), "fout"))
+
+
+# ============================================================ tijd en taal ===
+
+DAGEN = (("maandag", "Monday"), ("dinsdag", "Tuesday"), ("woensdag", "Wednesday"), ("donderdag", "Thursday"),
+         ("vrijdag", "Friday"), ("zaterdag", "Saturday"), ("zondag", "Sunday"))
+MAANDEN = (("januari", "January"), ("februari", "February"), ("maart", "March"), ("april", "April"), ("mei", "May"),
+           ("juni", "June"), ("juli", "July"), ("augustus", "August"), ("september", "September"),
+           ("oktober", "October"), ("november", "November"), ("december", "December"))
+
+
+def nu_tekst() -> str:
+    d = datetime.now().astimezone()
+    dag, maand = DAGEN[d.weekday()], MAANDEN[d.month - 1]
+    return t(f"{dag[0].capitalize()} {d.day} {maand[0]} {d.year} · {d:%H:%M}",
+             f"{dag[1]} {maand[1]} {d.day}, {d.year} · {d:%H:%M}")
+
+
+class TijdPagina(Blad):
+    sleutel, icoon = "tijd", "klok"
+    titel_nl, titel_en = "Tijd en taal", "Time and language"
+    uitleg_nl = "De klok, je tijdzone en de taal van BugOS."
+    uitleg_en = "The clock, your time zone and the language of BugOS."
+    zoekwoorden = "tijd klok datum tijdzone zomertijd wintertijd taal nederlands engels language land"
+    kde = "kcm_regionandlang"
+
+    def bouw(self) -> None:
+        g = self.kaart()
+        self.auto = schuifje(True, self.zet_auto)
+        self.klok_rij = Rij("klok", nu_tekst(), "", self.auto)
+        g.voeg(self.klok_rij)
+        self.tik = QTimer(self)
+        self.tik.setInterval(20000)
+        self.tik.timeout.connect(lambda: self.klok_rij.titel.setText(nu_tekst()))
+        self.tik.start()
+        zone_knop = Knop(t("Andere tijdzone…", "Other time zone…"), "gewoon")
+        zone_knop.clicked.connect(self.kies_zone)
+        self.zone_rij = Rij("wereld", t("Tijdzone", "Time zone"), "", zone_knop)
+        g.voeg(self.zone_rij)
+        g2 = self.kaart(t("Taal", "Language"))
+        taal_knop = Knop(t("Andere taal…", "Other language…"), "gewoon")
+        taal_knop.clicked.connect(self.kies_taal)
+        self.taal_rij = Rij("praten", t("Taal van BugOS", "Language of BugOS"), "", taal_knop)
+        g2.voeg(self.taal_rij)
+        self.lay.addWidget(label(t("Nederlands en Engels zijn compleet. In andere talen zijn KDE en de meeste "
+                                   "programma's vertaald; de BugOS-programma's zelf zijn dan in het Engels.",
+                                   "Dutch and English are complete. In other languages KDE and most programs are "
+                                   "translated; the BugOS programs themselves are then in English."), "klein"))
+
+    def ververs(self) -> None:
+        op_achtergrond(self, lambda: (bi.tijd(), bi.taal()), self.toon)
+
+    def toon(self, uitkomst) -> None:
+        if not uitkomst:
+            return
+        tijd, code = uitkomst
+        self.auto.zet_stil(tijd.auto)
+        self.klok_rij.titel.setText(nu_tekst())
+        self.klok_rij.zet_uitleg(t("Wordt vanzelf gelijkgezet via internet", "Set automatically over the internet")
+                                 if tijd.auto else t("Zet je zelf gelijk (bij 'Meer instellingen')",
+                                                     "You set it yourself (under 'More settings')"))
+        self.zone_rij.zet_uitleg(bi.mooie_zone(tijd.zone, TAAL == "nl"))
+        self.taal_rij.zet_uitleg(next((n for c, _l, n in bi.TALEN if c == code), code))
+
+    def zet_auto(self, aan: bool) -> None:
+        op_achtergrond(self, lambda: bi.zet_tijd_auto(aan), lambda ok: self.ververs() if ok else self.melding.toon(
+            t("Dat lukte niet.", "That did not work."), "fout"))
+
+    def kies_zone(self) -> None:
+        nl = TAAL == "nl"
+        huidig = bi.tijd().zone
+        d = KiesDialoog(self, t("Waar ben je?", "Where are you?"),
+                        [(z, bi.mooie_zone(z, nl)) for z in bi.tijdzones()], huidig,
+                        t("Zoek een stad, bijvoorbeeld Amsterdam", "Search a city, for example London"))
+        if not d.exec() or d.gekozen == huidig:
+            return
+        zone = d.gekozen
+        self.melding.toon(t("Tijdzone wordt gezet… BugOS vraagt misschien je wachtwoord.",
+                            "Setting the time zone… BugOS may ask for your password."), seconden=60)
+
+        def klaar(ok) -> None:
+            self.melding.toon(t(f"De klok staat nu op {bi.mooie_zone(zone, nl)}.",
+                                f"The clock is now set to {bi.mooie_zone(zone, nl)}.") if ok else
+                              t("Dat lukte niet.", "That did not work."), "goed" if ok else "fout")
+            self.ververs()
+
+        op_achtergrond(self, lambda: bi.zet_tijdzone(zone), klaar)
+
+    def kies_taal(self) -> None:
+        huidig = bi.taal()
+        d = KiesDialoog(self, t("Welke taal?", "Which language?"), [(c, n) for c, _l, n in bi.TALEN], huidig)
+        if not d.exec() or d.gekozen == huidig:
+            return
+        code = d.gekozen
+
+        def klaar(ok) -> None:
+            if ok:
+                self.melding.toon(t("Klaar. Meld je af en weer aan, dan is alles in die taal.",
+                                    "Done. Log out and back in, and everything is in that language."), "goed",
+                                  t("Nu afmelden", "Log out now"), bi.afmelden, seconden=0)
+            else:
+                self.melding.toon(t("Dat lukte niet.", "That did not work."), "fout")
+            self.ververs()
+
+        op_achtergrond(self, lambda: bi.zet_taal(code), klaar)
+
+
+# ================================================== inloggen en wachtwoord ===
+
+class InloggenPagina(Blad):
+    sleutel, icoon = "inloggen", "persoon"
+    titel_nl, titel_en = "Inloggen en wachtwoord", "Login and password"
+    uitleg_nl = "Jouw naam en wachtwoord, en wanneer het scherm op slot gaat."
+    uitleg_en = "Your name and password, and when the screen locks."
+    zoekwoorden = ("inloggen aanmelden wachtwoord account gebruiker naam beheerder op slot vergrendelen "
+                   "automatisch inloggen zonder wachtwoord")
+    kde = "kcm_users"
+
+    def bouw(self) -> None:
+        self.gebruiker: bi.Gebruiker | None = None
+        g = self.kaart()
+        rechts = QWidget()
+        rl = QHBoxLayout(rechts)
+        rl.setContentsMargins(0, 0, 0, 0)
+        rl.setSpacing(8)
+        ww = Knop(t("Wachtwoord wijzigen…", "Change password…"), "gewoon", "lijn:slot")
+        ww.clicked.connect(self.wijzig_wachtwoord)
+        rl.addWidget(ww)
+        rl.addWidget(meer_knop(lambda: [("potlood", t("Naam wijzigen…", "Change name…"), self.wijzig_naam)]))
+        self.ik = Rij("persoon", "…", "", rechts)
+        g.voeg(self.ik)
+        self.auto = schuifje(False, self.zet_auto)
+        g.voeg(Rij("aan", t("Inloggen zonder wachtwoord", "Log in without a password"),
+                   t("Handig thuis. Let op: iedereen die de computer aanzet, kan dan bij je bestanden.",
+                     "Handy at home. Note: anyone who turns on the computer can then reach your files."), self.auto))
+        g2 = self.kaart(t("Scherm op slot", "Screen lock"))
+        self.slot = Keuzes([(5, t("5 min", "5 min")), (15, t("15 min", "15 min")), (30, t("30 min", "30 min")),
+                            (0, t("Nooit", "Never"))])
+        self.slot.gekozen.connect(lambda m: op_achtergrond(self, lambda: bi.zet_slot_na(m), lambda _u: None))
+        g2.voeg(Rij("slot", t("Vanzelf op slot als je even weg bent", "Lock by itself when you step away"),
+                    t("Daarna is je wachtwoord nodig", "Your password is needed after that"), self.slot))
+        self.slot_slaap = schuifje(True, lambda aan: op_achtergrond(self, lambda: bi.zet_slot_na_slapen(aan),
+                                                                     lambda _u: None))
+        g2.voeg(Rij("maan", t("Wachtwoord vragen na de slaapstand", "Ask for the password after sleep"), "",
+                    self.slot_slaap))
+        nu = Knop(t("Nu op slot", "Lock now"), "gewoon", "lijn:slot")
+        nu.clicked.connect(lambda _c=False: bi.vergrendel())
+        g2.voeg(Rij("computer", t("Even weg?", "Stepping away?"), t("Zoals Windows-toets + L", "Like Windows key + L"),
+                    nu))
+        g3 = self.kaart(t("Andere mensen", "Other people"))
+        rij = Rij("persoon", t("Iemand toevoegen", "Add someone"),
+                  t("Een eigen account voor iemand anders, met eigen bestanden en instellingen",
+                    "A separate account for someone else, with their own files and settings"), klikbaar=True)
+        rij.geklikt.connect(lambda: kde_instelling("kcm_users"))
+        g3.voeg(rij)
+
+    def ververs(self) -> None:
+        op_achtergrond(self, lambda: (bi.gebruiker(), bi.slot_na(), bi.slot_na_slapen()), self.toon)
+
+    def toon(self, uitkomst) -> None:
+        if not uitkomst:
+            return
+        g, slot, slaap = uitkomst
+        self.gebruiker = g
+        self.ik.titel.setText(g.volledige_naam)
+        self.ik.zet_uitleg(t(f"Inlognaam: {g.naam}", f"Login name: {g.naam}") +
+                           (t(" · beheerder", " · administrator") if g.beheerder else ""))
+        self.auto.zet_stil(g.auto_inloggen)
+        self.slot.zet(dichtstbij(bi.SLOT_KEUZES, slot))
+        self.slot_slaap.zet_stil(bool(slaap))
+
+    def wijzig_naam(self) -> None:
+        nieuw, ok = QInputDialog.getText(self, t("Je naam", "Your name"),
+                                         t("Hoe heet je? Dit zie je op het inlogscherm.",
+                                           "What is your name? You see this on the login screen."),
+                                         text=self.gebruiker.volledige_naam if self.gebruiker else "")
+        nieuw = nieuw.strip()
+        if ok and nieuw:
+            op_achtergrond(self, lambda: bi.zet_volledige_naam(nieuw), lambda goed: (
+                self.melding.toon(t(f"Je heet nu {nieuw}.", f"You are now called {nieuw}.") if goed else
+                                  t("Dat lukte niet.", "That did not work."), "goed" if goed else "fout"),
+                self.ververs()))
+
+    def wijzig_wachtwoord(self) -> None:
+        d = WachtwoordDialoog(self)
+        if not d.exec():
+            return
+        nieuw = d.wachtwoord
+        self.melding.toon(t("Even geduld… BugOS vraagt eerst je huidige wachtwoord.",
+                            "One moment… BugOS first asks for your current password."), seconden=90)
+
+        def klaar(uitkomst) -> None:
+            goed = bool(uitkomst and uitkomst[0])
+            self.melding.toon(t("Je wachtwoord is veranderd.", "Your password has been changed.") if goed else
+                              t("Dat lukte niet. Klopte je huidige wachtwoord?",
+                                "That did not work. Was your current password right?"), "goed" if goed else "fout")
+
+        op_achtergrond(self, lambda: bi.zet_wachtwoord(nieuw), klaar)
+
+    def zet_auto(self, aan: bool) -> None:
+        naam = self.gebruiker.naam if self.gebruiker else ""
+        self.melding.toon(t("BugOS vraagt je wachtwoord…", "BugOS asks for your password…"), seconden=90)
+
+        def klaar(ok) -> None:
+            if ok:
+                self.melding.toon(t("Voortaan log je vanzelf in.", "From now on you log in automatically.") if aan else
+                                  t("Voortaan vraagt BugOS weer je wachtwoord.",
+                                    "From now on BugOS asks for your password again."), "goed")
+            else:
+                self.melding.toon(t("Dat lukte niet.", "That did not work."), "fout")
+            self.ververs()
+
+        op_achtergrond(self, lambda: bi.zet_auto_inloggen(aan, naam), klaar)
+
+
+# =============================================================== meldingen ===
+
+class MeldingenPagina(Blad):
+    sleutel, icoon = "meldingen", "bel"
+    titel_nl, titel_en = "Meldingen", "Notifications"
+    uitleg_nl = "De berichtjes rechtsonder in beeld, en wanneer ze stil moeten zijn."
+    uitleg_en = "The little messages in the corner, and when they should keep quiet."
+    zoekwoorden = "meldingen notificaties berichtjes pop-up popup niet storen stil geluid games films"
+    kde = "kcm_notifications"
+
+    def bouw(self) -> None:
+        g = self.kaart()
+        self.storen = schuifje(False, lambda aan: self.zet(bi.zet_niet_storen, aan))
+        g.voeg(Rij("maan", t("Niet storen", "Do not disturb"),
+                   t("Geen berichtjes in beeld tot je dit weer uitzet. Je vindt ze later terug in de lijst.",
+                     "No messages on screen until you turn this off again. You find them in the list later."),
+                   self.storen))
+        self.games = schuifje(True, lambda aan: self.zet(bi.zet_stil_bij_games, aan))
+        g.voeg(Rij("spel", t("Stil tijdens games en films", "Quiet during games and movies"),
+                   t("Als iets het hele scherm vult", "When something fills the whole screen"), self.games))
+        self.geluidje = schuifje(True, lambda aan: self.zet(bi.zet_meldingsgeluid, aan))
+        g.voeg(Rij("geluid", t("Geluidje bij een melding", "Sound with a notification"), "", self.geluidje))
+        g2 = self.kaart()
+        proef = Knop(t("Proefmelding", "Test notification"), "gewoon", "lijn:bel")
+        proef.clicked.connect(lambda _c=False: bi.proefmelding(
+            t("Hallo van BugOS", "Hello from BugOS"),
+            t("Zo ziet een melding eruit. Klik erop, of veeg hem weg.", "This is what a notification looks like.")))
+        g2.voeg(Rij("bel", t("Zo ziet een melding eruit", "See what a notification looks like"), "", proef))
+
+    def ververs(self) -> None:
+        op_achtergrond(self, lambda: (bi.niet_storen(), bi.stil_bij_games(), bi.meldingsgeluid()), self.toon)
+
+    def toon(self, uitkomst) -> None:
+        if not uitkomst:
+            return
+        for schuif, aan in zip((self.storen, self.games, self.geluidje), uitkomst):
+            schuif.zet_stil(bool(aan))
+
+    def zet(self, werk, aan: bool) -> None:
+        op_achtergrond(self, lambda: werk(aan), lambda _u: None)
+
+
+# ===================================================== standaardprogramma's ===
+
+class ProgrammasPagina(Blad):
+    sleutel, icoon = "programmas", "apps"
+    titel_nl, titel_en = "Standaardprogramma's", "Default programs"
+    uitleg_nl = "Welk programma opent wat: internet, e-mail, foto's, muziek, video's en documenten."
+    uitleg_en = "Which program opens what: internet, email, photos, music, videos and documents."
+    zoekwoorden = "standaard programma app browser internet e-mail mail foto's muziek video pdf openen met bestandstype"
+    kde = "kcm_componentchooser"
+
+    def bouw(self) -> None:
+        self.lijst = self.kaart(t("Klik op … om een ander programma te kiezen", "Click … to choose another program"))
+        self.rijen: dict[str, Rij] = {}
+        for sleutel, ic, (nl, en), _soorten in bi.SOORTEN:
+            rij = Rij(ic, t(nl, en), "…", meer_knop(lambda s=sleutel: self.keuzes(s)))
+            self.lijst.voeg(rij)
+            self.rijen[sleutel] = rij
+        alle = Knop(t("Alle bestandstypes (voor gevorderden)", "All file types (advanced)"), "stil", "lijn:code")
+        alle.clicked.connect(lambda _c=False: kde_instelling("kcm_filetypes"))
+        self.lay.addWidget(alle, 0, Qt.AlignmentFlag.AlignLeft)
+
+    def ververs(self) -> None:
+        def lees() -> dict[str, str]:
+            uit = {}
+            for sleutel, _ic, _namen, _soorten in bi.SOORTEN:
+                app = bi.standaard_app(sleutel)
+                naam = next((n for i, n in bi.apps_voor(sleutel, TAAL) if i == app), None) if app else None
+                uit[sleutel] = naam or (bi.app_naam(app, TAAL, ook_verborgen=True) if app and not bi.VOORBEELD else "")
+            return uit
+        op_achtergrond(self, lees, self.toon)
+
+    def toon(self, uitkomst) -> None:
+        if not uitkomst:
+            return
+        for sleutel, naam in uitkomst.items():
+            self.rijen[sleutel].zet_uitleg(naam or t("Nog niets gekozen", "Nothing chosen yet"))
+
+    def keuzes(self, sleutel: str) -> list:
+        huidig = bi.standaard_app(sleutel)
+        items = [("vink" if app == huidig else "apps", naam, (lambda a=app: self.kies(sleutel, a)))
+                 for app, naam in bi.apps_voor(sleutel, TAAL)]
+        return items or [("kruis", t("Geen programma gevonden. Kijk in de BugOS Winkel.",
+                                     "No program found. Have a look in the BugOS Store."), lambda: start("bugos-winkel"))]
+
+    def kies(self, sleutel: str, app: str) -> None:
+        op_achtergrond(self, lambda: bi.zet_standaard_app(sleutel, app), lambda ok: (
+            self.melding.toon(t("Klaar.", "Done.") if ok else t("Dat lukte niet.", "That did not work."),
+                              "goed" if ok else "fout"), self.ververs()))
+
+
+# ================================================================ printers ===
+
+STAAT_TEKST = {"klaar": ("Klaar om te printen", "Ready to print"), "bezig": ("Aan het printen", "Printing"),
+               "gestopt": ("Gestopt · staat hij aan en zit de kabel erin?", "Stopped · is it on and plugged in?")}
+
+
+class PrintersPagina(Blad):
+    sleutel, icoon = "printers", "printer"
+    titel_nl, titel_en = "Printers en scannen", "Printers and scanning"
+    uitleg_nl = "Je printers, wat er nog geprint moet worden, en scannen."
+    uitleg_en = "Your printers, what still has to be printed, and scanning."
+    zoekwoorden = "printer printen afdrukken scanner scannen wachtrij testpagina inkt papier"
+    kde = "kcm_printer_manager"
+
+    def bouw(self) -> None:
+        kop = QHBoxLayout()
+        kop.addWidget(sectie(t("Printers", "Printers")), 1)
+        nieuw = Knop(t("Printer toevoegen", "Add a printer"), "stil", "lijn:map-plus")
+        nieuw.clicked.connect(lambda _c=False: kde_instelling("kcm_printer_manager"))
+        kop.addWidget(nieuw)
+        self.lay.addLayout(kop)
+        self.lijst = self.kaart()
+        self.wacht_kaart = self.kaart(t("Wachtrij", "Queue"))
+        self.leeg_knop = Knop(t("Wachtrij leegmaken", "Clear the queue"), "gewoon", "lijn:kruis")
+        self.leeg_knop.clicked.connect(lambda _c=False: op_achtergrond(self, bi.wachtrij_leegmaken,
+                                                                       lambda _u: self.ververs()))
+        self.wacht_rij = Rij("document", "…", "", self.leeg_knop)
+        self.wacht_kaart.voeg(self.wacht_rij)
+        g = self.kaart(t("Scannen", "Scanning"))
+        self.scan_rij = Rij("foto", t("Iets scannen", "Scan something"), "", klikbaar=True)
+        self.scan_rij.geklikt.connect(self.scan)
+        g.voeg(self.scan_rij)
+        self.scanprogramma: str | None = None
+
+    def ververs(self) -> None:
+        op_achtergrond(self, lambda: (bi.printers(), bi.wachtrij(), bi.scanprogramma()), self.toon)
+
+    def toon(self, uitkomst) -> None:
+        if not uitkomst:
+            return
+        printers, wacht, scan = uitkomst
+        leeg_groep(self.lijst)
+        for p in printers:
+            rechts = QWidget()
+            rl = QHBoxLayout(rechts)
+            rl.setContentsMargins(0, 0, 0, 0)
+            rl.setSpacing(10)
+            if p.standaard:
+                rl.addWidget(Chip(t("Standaard", "Default"), "goed"))
+            rl.addWidget(meer_knop(lambda x=p: self.menu(x)))
+            self.lijst.voeg(Rij("printer", p.omschrijving, t(*STAAT_TEKST[p.staat]), rechts))
+        if not printers:
+            self.lijst.voeg(Rij("printer", t("Nog geen printer", "No printer yet"),
+                                t("Zet de printer aan en kies 'Printer toevoegen'. De meeste worden vanzelf gevonden.",
+                                  "Turn on the printer and choose 'Add a printer'. Most are found by themselves.")))
+        self.wacht_rij.titel.setText(t("Niets staat te wachten", "Nothing is waiting") if not wacht else
+                                     t("1 document staat te wachten", "1 document is waiting") if wacht == 1 else
+                                     t(f"{wacht} documenten staan te wachten", f"{wacht} documents are waiting"))
+        self.leeg_knop.setVisible(bool(wacht))
+        self.scanprogramma = scan
+        self.scan_rij.zet_uitleg(t("Opent het scanprogramma", "Opens the scanning program") if scan else
+                                 t("Geen scanprogramma gevonden. Zoek 'Skanpage' in de BugOS Winkel.",
+                                   "No scanning program found. Search 'Skanpage' in the BugOS Store."))
+
+    def menu(self, p: bi.Printer) -> list:
+        items = []
+        if not p.standaard:
+            items.append(("vink", t("Als standaard gebruiken", "Use as default"),
+                          lambda: op_achtergrond(self, lambda: bi.zet_standaard_printer(p.naam),
+                                                 lambda _u: self.ververs())))
+        items.append(("document", t("Testpagina printen", "Print a test page"), lambda: op_achtergrond(
+            self, lambda: bi.testpagina(p.naam), lambda ok: self.melding.toon(
+                t("De testpagina is onderweg.", "The test page is on its way.") if ok else
+                t("Dat lukte niet.", "That did not work."), "goed" if ok else "fout"))))
+        items.append(("code", t("Instellingen van deze printer (voor gevorderden)", "Printer settings (advanced)"),
+                      lambda: kde_instelling("kcm_printer_manager")))
+        return items
+
+    def scan(self) -> None:
+        if self.scanprogramma and not bi.VOORBEELD:
+            start(self.scanprogramma)
+        elif not self.scanprogramma:
+            start("bugos-winkel")
 
 
 # ======================================================= updates en meer ===
@@ -887,8 +1588,9 @@ class StartPagina(Blad):
         self.zoek_kaart.setVisible(bool(woorden))
 
 
-PAGINAS: list[type[Blad]] = [StartPagina, WifiPagina, BluetoothPagina, GeluidPagina, SchermPagina, EnergiePagina,
-                             UiterlijkPagina, UpdatesPagina, OverPagina]
+PAGINAS: list[type[Blad]] = [StartPagina, WifiPagina, BluetoothPagina, PrintersPagina, GeluidPagina, SchermPagina,
+                             EnergiePagina, UiterlijkPagina, MeldingenPagina, MuisPagina, ZienPagina, TijdPagina,
+                             InloggenPagina, ProgrammasPagina, UpdatesPagina, OverPagina]
 OUDE_NAMEN = {"schakelaars": "updates"}
 
 
@@ -897,11 +1599,13 @@ OUDE_NAMEN = {"schakelaars": "updates"}
 class Instellingen(Venster):
     def __init__(self, begin: str = "start"):
         super().__init__(t("Instellingen", "Settings"), zoeken=t("Zoek een instelling", "Search settings"),
-                         maat=(1120, 780))
+                         maat=(1120, 820))
         self.setStyleSheet(stijl())
         for klasse in PAGINAS:
             self.voeg_pagina(klasse.sleutel, klasse.icoon,
                              t("Start", "Home") if klasse is StartPagina else klasse.naam(), klasse(self))
+        for i in range(self.nav.count()):  # veel onderdelen: de regels iets dichter op elkaar
+            self.nav.item(i).setSizeHint(QSize(0, 40))
         self.onder_knop(t("Meer instellingen", "More settings"), "code", lambda: start("systemsettings"),
                         tip=t("Alle KDE-instellingen (voor gevorderden)", "All KDE settings (advanced)"))
         self.zoekveld.textChanged.connect(self.zoeken)

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Test van BugOS Instellingen: lezen we de uitvoer van nmcli, bluetoothctl, pactl en kscreen-doctor goed?
-En opent het venster met elke pagina (met voorbeeldgegevens, er verandert niets aan je computer)?
+"""Test van BugOS Instellingen: lezen we de uitvoer van nmcli, bluetoothctl, pactl, kscreen-doctor, busctl,
+timedatectl, lpstat en de KDE-bestanden goed? En opent het venster met elke pagina (met voorbeeldgegevens,
+er verandert niets aan je computer)?
 
 Gebruik:  QT_QPA_PLATFORM=offscreen python3 tools/test_instellingen.py
 """
@@ -97,6 +98,61 @@ bi.zet_wifi(True)
 klopt(bi.verbind("Buren", "geheim")[0] and next(n for n in bi.netwerken() if n.verbonden).naam == "Buren",
       "voorbeeld: verbinden met een ander netwerk")
 
+# 6b. de nieuwe onderdelen: lezen wat de computer zegt
+klopt(bi.lees_letter("Inter,12,-1,5,400,0,0,0,0,0,0,0,0,0,0,1") == ("Inter", 12) and bi.lees_letter("") == ("Inter", 10),
+      "zien: lettergrootte uit kdeglobals lezen")
+klopt(bi.letter("Inter", 12, 600).startswith("Inter,12,-1,5,600,"), "zien: lettertype opschrijven zoals KDE dat doet")
+busctl = ('{"type":"as","data":["event5","event7"]}\n'
+          '{"type":"a{sv}","data":[{"name":{"type":"s","data":"Logitech Muis"},"pointer":{"type":"b","data":true},'
+          '"touchpad":{"type":"b","data":false},"enabled":{"type":"b","data":true},"leftHanded":{"type":"b","data":true},'
+          '"naturalScroll":{"type":"b","data":false},"pointerAcceleration":{"type":"d","data":0.5},'
+          '"supportsLeftHanded":{"type":"b","data":true},"supportsPointerAcceleration":{"type":"b","data":true},'
+          '"supportsNaturalScroll":{"type":"b","data":true},"supportsTapToClick":{"type":"b","data":false}}]}\n')
+waarden = bi.lees_busctl(busctl)
+klopt(waarden[0] == ["event5", "event7"], "muis: de lijst met apparaten uit busctl")
+muis = bi.lees_aanwijzer("event5", waarden[1][0])
+klopt(muis is not None and muis.naam == "Logitech Muis" and muis.linkshandig and muis.snelheid == 75
+      and muis.kan == {"linkshandig", "natuurlijk", "snelheid"}, "muis: naam, linkshandig, snelheid 75%, wat hij kan")
+klopt(bi.lees_aanwijzer("event1", {"pointer": {"type": "b", "data": False}, "keyboard": {"type": "b", "data": True}})
+      is None, "muis: een toetsenbord is geen muis")
+tijd = bi.lees_timedatectl("Timezone=Europe/Amsterdam\nLocalRTC=no\nCanNTP=yes\nNTP=yes\nNTPSynchronized=yes\n")
+klopt(tijd.zone == "Europe/Amsterdam" and tijd.auto and tijd.gelijk, "tijd: tijdzone en 'vanzelf gelijkzetten'")
+klopt(bi.mooie_zone("Europe/Amsterdam") == "Amsterdam (Europa)"
+      and bi.mooie_zone("America/New_York") == "New York (Amerika)"
+      and bi.mooie_zone("America/Argentina/Buenos_Aires") == "Argentina / Buenos Aires (Amerika)"
+      and bi.mooie_zone("UTC") == "UTC", "tijd: tijdzones in gewone woorden")
+klopt(bi.lees_autologin(["[General]\nx=1\n", "[Autologin]\nUser=oma\nSession=plasma\n"], "oma")
+      and not bi.lees_autologin(["[Autologin]\nUser=opa\n"], "oma"), "inloggen: 'zonder wachtwoord' uit sddm lezen")
+hash_ = bi.versleutel("geheim123")
+klopt(hash_.startswith("$6$") and len(hash_) > 90, "inloggen: wachtwoord versleutelen zoals /etc/shadow")
+klopt(bi.lees_tot("2999,12,31,0,0,0") and not bi.lees_tot("2001,1,1,0,0,0") and not bi.lees_tot("")
+      and bi.lees_tot("2999-01-01T00:00:00") and not bi.lees_tot("onzin"),
+      "meldingen: 'niet storen tot' lezen (lijstje van KDE of ISO-tijd)")
+cache = "[MIME Cache]\napplication/pdf=org.kde.okular.desktop;firefox.desktop;\nimage/png=org.kde.gwenview.desktop;\n"
+klopt(bi.lees_mimeinfo(cache)["application/pdf"] == ["org.kde.okular.desktop", "firefox.desktop"],
+      "programma's: mimeinfo.cache lezen")
+klopt(bi.lees_desktop_naam("[Desktop Entry]\nName=Okular\nName[nl]=Okular (documenten)\n[Desktop Action x]\nName=Anders\n")
+      == "Okular (documenten)" and bi.lees_desktop_naam("[Desktop Entry]\nName=Geheim\nNoDisplay=true\n") is None,
+      "programma's: naam uit een .desktop-bestand; verborgen programma's niet")
+lp = ("printer HP_LaserJet is idle.  enabled since Mon 03 Nov 2026\n\tDescription: HP LaserJet van oma\n\tLocation: kamer\n"
+      "printer Canon_PIXMA disabled since Sun 02 Nov 2026 -\n\tPaused\n\tDescription: Canon PIXMA\n"
+      "printer Brother now printing Brother-12.  enabled since Mon\n")
+prs = bi.lees_lpstat(lp, "system default destination: HP_LaserJet\n")
+klopt([(p.omschrijving, p.staat, p.standaard) for p in prs]
+      == [("HP LaserJet van oma", "klaar", True), ("Canon PIXMA", "gestopt", False), ("Brother", "bezig", False)],
+      "printers: naam, of hij klaar is, en welke de standaard is")
+klopt(bi.lees_lpstat("", "no system default destination\n") == [], "printers: geen printers")
+bi.zet_grote_tekst(True)
+klopt(bi.grote_tekst(), "voorbeeld: grote letters aan")
+bi.zet_aanwijzer("event7", "tikken", False)
+klopt(not next(a for a in bi.aanwijzers() if a.touchpad).tikken, "voorbeeld: tikken om te klikken uit")
+bi.zet_slot_na(0)
+klopt(bi.slot_na() == 0, "voorbeeld: scherm nooit op slot")
+bi.zet_standaard_app("pdf", "firefox.desktop")
+klopt(bi.standaard_app("pdf") == "firefox.desktop", "voorbeeld: een ander programma voor PDF")
+bi.zet_standaard_printer("Canon_PIXMA")
+klopt([p.standaard for p in bi.printers()] == [False, True], "voorbeeld: een andere standaardprinter")
+
 # 7. het venster, met elke pagina
 lader = importlib.machinery.SourceFileLoader("instellingen", str(ROOT / "system_files" / "usr" / "bin" /
                                                                  "bugos-instellingen"))
@@ -124,6 +180,35 @@ klopt(venster.stapel.currentWidget() is venster.paginas["start"] and "Bluetooth"
 klopt(mod.Instellingen("schakelaars").stapel.currentWidget().sleutel == "updates", "oude naam 'schakelaars' werkt nog")
 klopt(mod.begin_pagina(["-qwindowgeometry", "1180x740+0+0", "wifi"]) == "wifi" and mod.begin_pagina([]) == "start",
       "startpagina: het woord 'wifi' wordt gevonden, ook na Qt-opties")
+muis_p = venster.paginas["muis"]
+klopt(len(muis_p.vak.findChildren(mod.Groep)) == 2 and len(muis_p.vak.findChildren(mod.Regelaar)) == 2,
+      "muis-pagina: een kaart voor de muis en een voor het touchpad, elk met een snelheidsschuif")
+klopt(venster.paginas["inloggen"].ik.titel.text() == "Oma" and "oma" in venster.paginas["inloggen"].ik.uitleg.text(),
+      "inloggen-pagina: naam en inlognaam")
+klopt(venster.paginas["programmas"].rijen["pdf"].uitleg.text() == "Firefox", "programma's-pagina: PDF opent nu met Firefox")
+printers_p = venster.paginas["printers"]
+klopt(len(printers_p.lijst.findChildren(mod.Rij)) == 2 and "wacht" in printers_p.wacht_rij.titel.text(),
+      "printers-pagina: twee printers en de wachtrij")
+klopt(venster.paginas["tijd"].zone_rij.uitleg.text() == "Amsterdam (Europa)", "tijd-pagina: de tijdzone in gewone woorden")
+energie_p = venster.paginas["energie"]
+klopt(energie_p.scherm_uit.knoppen[600].isChecked() and energie_p.slaap.knoppen[1800].isChecked()
+      and energie_p.deksel_rij.isVisibleTo(energie_p), "energie-pagina: scherm uit na 10 min, slapen na 30 min, dichtklappen")
+d = mod.KiesDialoog(venster, "Test", [(z, bi.mooie_zone(z)) for z in bi.tijdzones()], "Europe/Amsterdam", "zoek")
+d.filter("tok")
+zichtbaar = [d.lijst.item(i).text() for i in range(d.lijst.count()) if not d.lijst.item(i).isHidden()]
+klopt(zichtbaar == ["Tokyo (Azië)"], "kiezen: zoeken in de lijst met tijdzones")
+d.accept()
+klopt(d.gekozen == "Asia/Tokyo", "kiezen: Enter kiest wat je gevonden hebt")
+w = mod.WachtwoordDialoog(venster)
+w.een.setText("geheim1")
+w.twee.setText("geheim2")
+klopt(not w.ok.isEnabled() and w.fout.text(), "wachtwoord: niet hetzelfde, dan kan het niet")
+w.twee.setText("geheim1")
+klopt(w.ok.isEnabled() and w.wachtwoord == "geheim1", "wachtwoord: twee keer hetzelfde, dan kan het")
+venster.zoekveld.setText("wachtwoord")
+app.processEvents()
+gevonden = [r.titel.text() for r in venster.paginas["start"].zoek_kaart.findChildren(mod.Rij)]
+klopt("Inloggen en wachtwoord" in gevonden and "Wifi en internet" in gevonden, "zoeken: 'wachtwoord' vindt Inloggen en Wifi")
 QThreadPool.globalInstance().waitForDone(5000)
 venster.close()
 

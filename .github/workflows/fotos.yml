@@ -85,6 +85,9 @@ jobs:
           VOORBEELD_VAN=BUGOS_INSTELLINGEN_VOORBEELD maak instellingen licht arg:start bugos-instellingen
           VOORBEELD_VAN=BUGOS_INSTELLINGEN_VOORBEELD maak instellingen-wifi licht arg:wifi bugos-instellingen
           VOORBEELD_VAN=BUGOS_INSTELLINGEN_VOORBEELD maak instellingen-donker donker arg:geluid bugos-instellingen
+          VOORBEELD_VAN=BUGOS_INSTELLINGEN_VOORBEELD maak instellingen-zien licht arg:zien bugos-instellingen
+          VOORBEELD_VAN=BUGOS_INSTELLINGEN_VOORBEELD maak instellingen-muis licht arg:muis bugos-instellingen
+          VOORBEELD_VAN=BUGOS_INSTELLINGEN_VOORBEELD maak instellingen-inloggen donker arg:inloggen bugos-instellingen
           ls -la docs/beelden/verkenner
 
       - name: Foto's bewaren

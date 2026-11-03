@@ -163,7 +163,7 @@ class Hallo(Pagina):
         blok.addWidget(label(naam[:1].upper() + naam[1:], "kop2"))
         taal.lay.addLayout(blok, 1)
         knop = Knop(t("Andere taal", "Other language"), "rand")
-        knop.clicked.connect(lambda: start("systemsettings", "kcm_regionandlang"))
+        knop.clicked.connect(lambda: start("bugos-instellingen", "tijd"))
         taal.lay.addWidget(knop)
         self.lay.addWidget(taal)
 

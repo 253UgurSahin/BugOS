@@ -63,9 +63,9 @@ Gaat er na een update iets mis? Dan kies je bij het opstarten de versie van gist
     <td width="50%">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="website/assets/instellingen-donker.webp">
-        <img src="website/assets/instellingen-licht.webp" alt="BugOS Instellingen met grote tegels">
+        <img src="website/assets/instellingen-licht.webp" alt="BugOS Instellingen: alles in gewone woorden">
       </picture>
-      <p align="center"><b>Instellingen</b>: grote tegels en een zoekbalk</p>
+      <p align="center"><b>Instellingen</b>: wifi, geluid, printers, inloggen en meer, in gewone woorden</p>
     </td>
     <td width="50%">
       <picture>

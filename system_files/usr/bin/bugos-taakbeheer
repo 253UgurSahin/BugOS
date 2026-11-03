@@ -303,9 +303,9 @@ class Taakbeheer(Venster):
         self.voeg_pagina("prestaties", "grafiek", t("Prestaties", "Performance"), self.maak_prestaties())
         self.voeg_pagina("opstarten", "aan", t("Opstarten", "Startup"), self.maak_opstarten())
         if shutil.which("plasma-systemmonitor"):
-            self.onder_knop(t("Systeemmonitor (voor gevorderden)", "System Monitor (advanced)"), "code",
+            self.onder_knop(t("Systeemmonitor", "System Monitor"), "code",
                             lambda: subprocess.Popen(["plasma-systemmonitor"], start_new_session=True),
-                            tip=t("Alles tot in detail", "Everything in detail"))
+                            tip=t("Alles tot in detail (voor gevorderden)", "Everything in detail (advanced)"))
 
         # zweeft onderin zodra je een programma kiest
         self.balk = ActieBalk(self)
