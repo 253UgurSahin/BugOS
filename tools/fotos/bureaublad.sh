@@ -29,7 +29,7 @@ fout() {  # hiermee kan er geen goede foto komen; de bouwstraat zoekt in het log
     exit 1
 }
 
-# ---- Deel 3: draait binnen KWin (Wayland), als oma: plasmashell en de gevraagde scene ----
+# ---- Deel 3: met KWin erbij (Wayland), als oma: plasmashell en de gevraagde scene ----
 # Plasma 6.8 is Wayland-only: op een kaal X-scherm crasht plasmashell. Daarom draait KWin zelf in
 # een venster op het virtuele scherm (--x11-display) en daarbinnen plasmashell, net als op een echte pc.
 # KWin is er dan ook écht, dus het startmenu klapt gewoon op de taakbalk open (activateLauncherMenu)
@@ -71,7 +71,12 @@ in_kwin() {  # scene
             stap "Snelmenu openen als los venster (plasmawindowed org.bugos.snelmenu)"
             plasmawindowed org.bugos.snelmenu & ;;
         uitzetten)
+            # De greeter zelf alvast starten (in proefstand); daarna dezelfde D-Bus-vraag als het startmenu.
             stap "Uitzetscherm openen zoals 'Uitzetten' in het startmenu (org.kde.LogoutPrompt, proefstand)"
+            if [ -x /usr/libexec/ksmserver-logout-greeter ]; then
+                /usr/libexec/ksmserver-logout-greeter &
+                sleep 4
+            fi
             gdbus call --session --dest org.kde.LogoutPrompt --object-path /LogoutPrompt \
                 --method org.kde.LogoutPrompt.promptAll >/dev/null 2>&1 || stap "Let op: promptAll gaf een fout" ;;
     esac
@@ -81,7 +86,7 @@ in_kwin() {  # scene
 
 # ---- Deel 2: draait als oma, binnen één dbus-run-session (gestart onderaan dit bestand) ----
 bureaublad_tonen() {  # scene
-    local scene="$1" kam plasma_pid gewacht=0 antwoordt=nee greeter hulp kies=()
+    local scene="$1" kam plasma_pid kwin_pid kwin_code gewacht=0 antwoordt=nee greeter hulp kies=()
     export LANG=nl_NL.UTF-8 LANGUAGE=nl XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6
     stap "Bureaublad voor de foto: scene '$scene', scherm ${DISPLAY:-?}, als $(id -un)"
     stap "$(plasmashell --version 2>/dev/null | head -1 || true)"
@@ -103,13 +108,30 @@ bureaublad_tonen() {  # scene
 
     if command -v kwin_wayland >/dev/null 2>&1; then
         # De echte weg: KWin in een venster op het virtuele scherm (2560x1600, schaal 2 = net als
-        # de andere foto's), met zachte (software) tekening; daarbinnen deel 3 met plasmashell.
+        # de andere foto's), met zachte (software) tekening; daarbinnen plasmashell (in_kwin).
         stap "$(kwin_wayland --version 2>/dev/null | head -1 || true)"
-        stap "KWin starten in een venster op $DISPLAY (Wayland in X), met daarin plasmashell"
+        stap "D-Bus-sessie: ${DBUS_SESSION_BUS_ADDRESS:-(geen adres)}; namen op de bus: $(gdbus call --session \
+            --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.ListNames 2>/dev/null | tr ',' '\n' | wc -l)"
+        stap "KWin starten in een venster op $DISPLAY (Wayland in X), scherm 2560x1600 op schaal 2"
         export LIBGL_ALWAYS_SOFTWARE=1 QT_QUICK_BACKEND=software
-        exec kwin_wayland --x11-display "$DISPLAY" --width 2560 --height 1600 --scale 2 \
-            --no-lockscreen --no-global-shortcuts --socket wayland-foto \
-            --exit-with-session "bash $ZELF --in-kwin $scene"
+        kwin_wayland --x11-display "$DISPLAY" --width 2560 --height 1600 --scale 2 \
+            --no-lockscreen --no-global-shortcuts --socket wayland-foto &
+        kwin_pid=$!
+        gewacht=0
+        while [ "$gewacht" -lt 60 ]; do
+            [ -S "${XDG_RUNTIME_DIR:-/tmp}/wayland-foto" ] && break
+            kill -0 "$kwin_pid" 2>/dev/null || break
+            sleep 2
+            gewacht=$((gewacht + 2))
+        done
+        if [ -S "${XDG_RUNTIME_DIR:-/tmp}/wayland-foto" ]; then
+            stap "KWin is er (Wayland-scherm 'wayland-foto', na ongeveer $gewacht s)"
+            in_kwin "$scene"
+            return
+        fi
+        kwin_code=0
+        wait "$kwin_pid" || kwin_code=$?
+        stap "Let op: KWin kwam niet op (stopte met code $kwin_code); we proberen plasmashell rechtstreeks op het X-scherm"
     fi
 
     # Zonder KWin (oudere beelden): plasmashell rechtstreeks op het X-scherm.
@@ -161,10 +183,6 @@ bureaublad_tonen() {  # scene
     sleep infinity
 }
 
-if [ "${1:-}" = --in-kwin ]; then
-    in_kwin "${2:-taakbalk}"
-    exit 0
-fi
 if [ "${1:-}" = --als-oma ]; then
     bureaublad_tonen "${2:-taakbalk}"
     exit 0
