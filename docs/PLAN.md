@@ -39,9 +39,10 @@ Het belangrijkste idee: **BugOS kan niet stuk.**
 │  Startmenu · Taakbalk · Stijl · BugOS Welkom · Winkel   │
 │  Game-modus · Ontwikkelaarsmodus · Lichte stand         │
 │  .exe openen · .rpm/.deb installeren · Updates-knop     │
+│  Bestanden (de verkenner, met grote tegels)             │
 ├─────────────────────────────────────────────────────────┤
 │  🧱 KDE Plasma (de motor)                               │
-│  Vensters · Wifi · Bluetooth · Bestanden (Dolphin)      │
+│  Vensters · Wifi · Bluetooth · Dolphin (gevorderden)    │
 │  Schijfbeheer (KDE Partition Manager) · Geluid          │
 ├─────────────────────────────────────────────────────────┤
 │  🏠 Aurora / Fedora Atomic (de fundering)               │
@@ -73,7 +74,7 @@ Het belangrijkste idee: **BugOS kan niet stuk.**
 | BugOS Winkel | `bugos-winkel` | 37 bekende, veilige apps in 10 onderwerpen, installeren met één klik. "Meer apps zoeken" opent de grote KDE-winkel. |
 | Startmenu (proef) | `org.bugos.startmenu` | Grote zoekbalk, vastgezette apps, recente bestanden, alle apps per onderwerp en aan/uit-knoppen. Aanzetten kan in Instellingen → Aan en uit. |
 | Snelmenu (proef) | `org.bugos.snelmenu` | Grote knoppen voor wifi, bluetooth, game-modus, donker, niet storen en het volume. Aanzetten kan in Instellingen. |
-| Bestanden | `bugos-bestanden` | De verkenner: grote tegels met voorbeeldjes, links je vaste plekken en USB-sticks. Weggooien gaat eerst naar de prullenbak (met Ongedaan maken); nooit iets overschrijven. |
+| Bestanden | `bugos-bestanden` | De verkenner: grote tegels met voorbeeldjes, links je vaste plekken en USB-sticks. Kies je iets, dan staat onderin wat je ermee kunt (Openen, Kopiëren, Weggooien...). Weggooien gaat eerst naar de prullenbak (met Ongedaan maken); nooit iets overschrijven. |
 | Meer apps, Schijven, Dolphin | (KDE) | KDE-programma's met een simpele BugOS-naam. Dolphin is de verkenner voor gevorderden. |
 
 ### Wat op de achtergrond gebeurt
