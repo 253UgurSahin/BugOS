@@ -141,7 +141,7 @@ jobs:
           maak_bureaublad() {  # naam thema scene
             # Het script start plasmashell (met de BugOS-taakbalk) en daarbij het gevraagde menu of scherm,
             # en blijft dan staan; na 75 s maken we een foto van het hele scherm (geen uitsnede).
-            sudo podman run -d --name foto -e DISPLAY=:99 \
+            sudo podman run -d --name foto -e DISPLAY=:99 ${VOORBEELD_VAN:+-e $VOORBEELD_VAN=1} \
               -v /tmp/.X11-unix:/tmp/.X11-unix \
               -v "$PWD:/repo:ro" --entrypoint /usr/bin/bash "$BEELD" /repo/tools/fotos/bureaublad.sh "$2" "$3"
             sleep 75
@@ -173,8 +173,9 @@ jobs:
           maak_bureaublad taakbalk-donker donker taakbalk
           maak_bureaublad startmenu licht startmenu
           maak_bureaublad startmenu-donker donker startmenu
-          maak_bureaublad snelmenu licht snelmenu
-          maak_bureaublad snelmenu-donker donker snelmenu
+          # Snelmenu met voorbeeldstatus (de bouwcomputer heeft geen wifi of bluetooth)
+          VOORBEELD_VAN=BUGOS_SNEL_VOORBEELD maak_bureaublad snelmenu licht snelmenu
+          VOORBEELD_VAN=BUGOS_SNEL_VOORBEELD maak_bureaublad snelmenu-donker donker snelmenu
           maak_bureaublad uitzetten licht uitzetten
           ls -la docs/beelden/bureaublad
 

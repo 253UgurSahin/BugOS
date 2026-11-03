@@ -284,6 +284,10 @@ def volume_status() -> tuple[int | None, bool]:
 
 
 def snel_status() -> dict:
+    if os.environ.get("BUGOS_SNEL_VOORBEELD"):  # voor foto's en tests: niets aan de computer vragen
+        return {"wifi": True, "bluetooth": False, "spel": False,
+                "donker": kde_lees("kdeglobals", "General", "ColorScheme") == "BugOSDonker",
+                "volume": 60, "stil": False, "niet_storen": False}
     s: dict = {}
     s["wifi"] = draai("nmcli", "radio", "wifi").strip() == "enabled" if shutil.which("nmcli") else None
     bt = draai("bluetoothctl", "show") if shutil.which("bluetoothctl") else ""

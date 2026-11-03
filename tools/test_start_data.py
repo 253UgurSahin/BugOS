@@ -105,6 +105,9 @@ s = json.loads(draai("--snel"))
 klopt(s["donker"] is False and s["niet_storen"] is False and s["spel"] is True,
       "snel: BreezeDark telt niet als BugOS-donker, een verlopen 'tot' is niet meer niet storen, game-modus aan")
 
+s = json.loads(draai("--snel", env_extra={"BUGOS_SNEL_VOORBEELD": "1"}))
+klopt(s["wifi"] is True and s["volume"] == 60 and s["donker"] is False, "snel: voorbeeldstatus voor foto's")
+
 # 3. tray-status
 nep("nmcli", "wifi:connected\nethernet:unavailable\nloopback:unmanaged")
 (TMP / "sys" / "class" / "power_supply" / "BAT0").mkdir(parents=True)

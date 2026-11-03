@@ -28,7 +28,7 @@ jobs:
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
           shellcheck -x build_files/build.sh \
-            system_files/usr/share/bugos/lib.sh \
+            system_files/usr/share/bugos/lib.sh tools/fotos/*.sh \
             $(grep -l '^#!/usr/bin/bash' system_files/usr/bin/bugos-*)
       - name: Python nakijken
         run: |
