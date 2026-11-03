@@ -5,8 +5,10 @@
   </picture>
 </p>
 
-<h3 align="center">De computer die gewoon werkt.</h3>
-<p align="center">Gratis, kan niet stuk en fijn voor oma, gamers en programmeurs.</p>
+<p align="center">
+  <img src="docs/beelden/banner.webp" width="900" alt="BugOS: de computer die gewoon werkt. Een laptop met het BugOS-bureaublad op een donkere achtergrond.">
+</p>
+
 <p align="center">
   <a href="docs/TESTEN.md">Proberen</a> ·
   <a href="docs/PLAN.md">Het plan</a> ·
@@ -14,12 +16,13 @@
   <a href="docs/VERTALEN.md">Vertalen</a>
 </p>
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="website/assets/bureaublad-donker.webp">
-    <img src="website/assets/bureaublad-licht.webp" width="900" alt="Het BugOS-bureaublad met het startmenu en de BugOS Winkel">
-  </picture>
-</p>
+## Het verhaal
+
+Een *bug* is een foutje in een computer. Een lieveheersbeestje eet de beestjes op die je plantjes
+kapotmaken, en volgens oma brengt het geluk. Daarom is het ons logo: **BugOS ruimt de foutjes op**,
+zodat jij gewoon kunt doen waarvoor je achter de computer zit.
+
+> **De oma-test:** snapt oma het niet? Dan maken we het opnieuw.
 
 ## Wat is BugOS?
 

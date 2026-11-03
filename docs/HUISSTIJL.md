@@ -16,6 +16,15 @@
 2. **Eén rode knop per scherm.** Rood is voor het belangrijkste: daar moet je op drukken.
 3. **Altijd licht én donker.** Alles wat we maken, werkt in allebei.
 4. **Praat zoals tegen oma.** Korte zinnen, "je" en "jij", geen moeilijke woorden.
+5. **De stip.** Ons handtekeningetje: een rode punt achter de belangrijkste zin,
+   zoals de stip op een lieveheersbeestje. Spaarzaam gebruiken: één keer per pagina is genoeg.
+
+### De oma-test
+
+> Snapt oma het niet? Dan maken we het opnieuw.
+
+Dit is onze belangrijkste regel. Elke knop, elk woord en elk scherm moet erdoor.
+Wat oma snapt, snapt iedereen.
 
 ## Het logo
 
@@ -36,6 +45,17 @@ twee rode vleugels met een smalle spleet ertussen, een zwarte kop met twee witte
 **Waarom een lieveheersbeestje?** In computertaal is een *bug* een foutje.
 Een lieveheersbeestje is het vriendelijkste beestje dat er is, en het eet de echte
 beestjes op. Zo is BugOS ook: het ruimt de problemen voor je op.
+En volgens oma brengt een lieveheersbeestje geluk.
+
+**Elk onderdeel betekent iets:**
+
+| Onderdeel | Betekenis |
+|---|---|
+| Twee vleugels | Vandaag en gisteren. BugOS bewaart altijd de vorige versie. Gaat er iets mis, dan vlieg je op de andere. |
+| Vier stippen | Vier beloftes: het kan niet stuk, het is makkelijk, het is van jou en het is gratis. |
+| Een vriendelijke kop | Twee witte vlekjes, net als een echt lieveheersbeestje. BugOS is nooit eng. |
+
+Het hele beestje is getekend met ronde vormen en één rechte lijn: de spleet tussen de vleugels.
 
 ### Welk bestand gebruik ik?
 
@@ -111,8 +131,11 @@ node tools/achtergrond/maak.js achtergronden
 - **Rond, maar niet te rond.** Knoppen 12 beeldpunten, kaarten 16, grote vlakken 22 tot 28.
   Op de website zijn de knoppen helemaal rond.
 - **Ruimte:** we gebruiken stapjes van 4: 4, 8, 12, 16, 24, 32, 48.
-- **Icoontjes:** in BugOS de iconen van KDE (Breeze). Op de website simpele lijntjes-iconen
-  met ronde uiteinden. Een melding krijgt een gekleurd rondje met een wit teken.
+- **Icoontjes:** onze eigen **BugOS-lijniconen**: 24 × 24, lijn van 2, ronde uiteinden. Dezelfde set
+  zit in de apps (`LIJN` in [`bugos_ui.py`](../system_files/usr/lib/bugos/python/bugos_ui.py), te gebruiken
+  als `lijn:naam`) en op de website. Tegels in Instellingen hebben een gekleurd tegeltje met een wit teken.
+- **Alleen wat aandacht nodig heeft, krijgt kleur.** Gaat alles goed, dan blijft het rustig grijs met een
+  klein groen bolletje. Een probleem wordt oranje of rood, met een knop die het oplost.
 - **Geen emoji** in apps en op de website. Wel echte iconen.
 
 ## Zo praten we
@@ -139,5 +162,6 @@ node tools/achtergrond/maak.js achtergronden
 | Logo als PNG | `node tools/merk/png.js branding/logo/bugos-icoon.svg branding/png/bugos-icoon-512.png 512` |
 | Achtergrond "Stip" | `node tools/achtergrond/maak.js <map>` |
 | Kleurenkaart hierboven | `branding/kleuren.svg` (gewoon een SVG; pas de codes aan als de kleuren veranderen) |
+| Website | Pas `tools/website/pagina.html` aan en draai `python3 tools/website/bouw.py`. Die zet het echte logo en de opbouwtekening in `website/index.html`. |
 
 De PNG- en achtergrond-hulpjes gebruiken Chromium via [Playwright](https://playwright.dev).

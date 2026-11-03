@@ -1076,7 +1076,7 @@ $Paginas += {
 # --- Pagina 4: USB-stick ----------------------------------------------------
 $Paginas += {
     $kop.Text = (T 'De BugOS USB-stick maken' 'Make the BugOS USB stick')
-    $y = Nieuw-Tekst (T "Druk op 'BugOS downloaden' of kies zelf een .iso-bestand. Kies daarna je USB-stick (minstens 16 GB)." "Press 'Download BugOS' or choose an .iso file yourself. Then choose your USB stick (at least 16 GB).") 0
+    $y = Nieuw-Tekst (T "Druk op 'BugOS downloaden' of kies zelf een .iso-bestand. Kies daarna je USB-stick (minstens 8 GB)." "Press 'Download BugOS' or choose an .iso file yourself. Then choose your USB stick (at least 8 GB).") 0
     $y = Nieuw-Tekst (T 'Let op: alles op die USB-stick wordt gewist!' 'Note: everything on that USB stick will be erased!') ($y + 2) $Fout -Vet
     $download = Nieuw-Knop (T 'BugOS downloaden' 'Download BugOS') 0 ($y + 14) 200 'hoofd'
     $kies = Nieuw-Knop (T 'Kies .iso-bestand...' 'Choose .iso file...') 212 ($y + 14) 200
