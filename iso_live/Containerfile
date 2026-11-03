@@ -17,6 +17,10 @@ ARG BUGOS_VARIANT=main
 # De precieze versie (sha256:...) van IMAGE_REF, zodat de BugOS op de stick
 # exact dezelfde is als de live-omgeving. Leeg = gewoon de nieuwste van de tag.
 ARG IMAGE_DIGEST=
+# Alleen voor lokaal testen (tools/iso-lokaal.sh): waar de BugOS voor op de
+# stick vandaan komt, als dat niet IMAGE_REF zelf is.
+ARG IMAGE_SOURCE=
+ARG IMAGE_SOURCE_TLS=true
 
 COPY src /src
 # Het secret "ghcr" is het inlogbestand voor GitHub Packages (nodig zolang het
@@ -25,4 +29,5 @@ COPY src /src
 # (bij een openbaar pakket mag het bestand leeg zijn)
 RUN --mount=type=secret,id=ghcr,target=/run/secrets/ghcr \
     IMAGE_REF="${IMAGE_REF}" IMAGE_DIGEST="${IMAGE_DIGEST}" BUGOS_VARIANT="${BUGOS_VARIANT}" \
+    IMAGE_SOURCE="${IMAGE_SOURCE}" IMAGE_SOURCE_TLS="${IMAGE_SOURCE_TLS}" \
     /src/build.sh && rm -rf /src

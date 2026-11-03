@@ -44,9 +44,16 @@ fi
 # door iso.yml doorgegeven). Anders kan er tussendoor een nieuwere BugOS op
 # GitHub komen: dan installeer je iets anders dan je probeerde, en wordt de
 # stick twee keer zo groot (geen gelijke bestanden meer om te delen).
+# IMAGE_SOURCE (alleen voor lokaal testen): haal hem uit een andere opslagplaats,
+# bijvoorbeeld een eigen registry op localhost:5000 (dan IMAGE_SOURCE_TLS=false).
+# Op de stick krijgt hij daarna gewoon de naam IMAGE_REF. In iso.yml niet gebruikt.
+BRON="${IMAGE_SOURCE:-${IMAGE_REF%:*}}"
+if [ "${IMAGE_SOURCE_TLS:-true}" = false ]; then
+    AUTH_ARGS+=(--tls-verify=false)
+fi
 if [ -n "${IMAGE_DIGEST:-}" ]; then
-    podman pull "${AUTH_ARGS[@]}" "${IMAGE_REF%:*}@${IMAGE_DIGEST}"
-    podman tag "${IMAGE_REF%:*}@${IMAGE_DIGEST}" "$IMAGE_REF"
+    podman pull "${AUTH_ARGS[@]}" "${BRON}@${IMAGE_DIGEST}"
+    podman tag "${BRON}@${IMAGE_DIGEST}" "$IMAGE_REF"
     [ "$(podman image inspect --format '{{.Digest}}' "$IMAGE_REF")" = "$IMAGE_DIGEST" ]
 else
     podman pull "${AUTH_ARGS[@]}" "$IMAGE_REF"

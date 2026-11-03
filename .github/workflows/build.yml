@@ -34,7 +34,7 @@ jobs:
         run: |
           python3 -m py_compile system_files/usr/lib/bugos/python/*.py iso_live/src/bugos-live \
             $(grep -l '^#!/usr/bin/python3' system_files/usr/bin/bugos-*)
-          shellcheck -x iso_live/src/build.sh iso_live/src/bugos-installeren system_files/usr/bin/bugos-paneel
+          shellcheck -x iso_live/src/build.sh iso_live/src/bugos-installeren tools/iso-lokaal.sh system_files/usr/bin/bugos-paneel
 
       - name: Website is bijgewerkt (gebouwd uit tools/website/pagina.html)
         run: |
