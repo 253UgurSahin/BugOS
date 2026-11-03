@@ -52,6 +52,7 @@ jobs:
           maak thuismap licht ""
           maak documenten licht Documenten
           maak afbeeldingen donker Afbeeldingen
+          maak afbeeldingen-licht licht Afbeeldingen
           ls -la docs/beelden/verkenner
 
       - name: Foto's bewaren
