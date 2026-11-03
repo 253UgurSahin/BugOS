@@ -136,10 +136,11 @@ bureaublad_tonen() {  # scene
         stap "D-Bus-sessie: ${DBUS_SESSION_BUS_ADDRESS:-(geen adres)}; namen op de bus: $(gdbus call --session \
             --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.ListNames 2>/dev/null | tr ',' '\n' | wc -l)"
         # Virtueel scherm van 2560x1600 op schaal 2 (net als de andere foto's). De bouwcomputer heeft geen
-        # grafische kaart, dus KWin tekent met de processor (KWIN_COMPOSE=Q, zoals KDE's eigen tests).
+        # grafische kaart: KWIN_DRM_DEVICES wijst naar iets dat geen kaart is, en dan neemt KWin zijn
+        # software-tekenaar (llvmpipe) — zo draaien KDE's eigen tests ook.
         # KWIN_WAYLAND_NO_PERMISSION_CHECKS: zodat ook ons eigen fotoscriptje een schermfoto mag vragen.
         stap "KWin starten met een virtueel scherm van 2560x1600 op schaal 2 (tekenen met de processor)"
-        export LIBGL_ALWAYS_SOFTWARE=1 QT_QUICK_BACKEND=software KWIN_COMPOSE=Q KWIN_WAYLAND_NO_PERMISSION_CHECKS=1
+        export LIBGL_ALWAYS_SOFTWARE=1 QT_QUICK_BACKEND=software KWIN_DRM_DEVICES=/dev/null KWIN_WAYLAND_NO_PERMISSION_CHECKS=1
         kwin_wayland --virtual --width 2560 --height 1600 --scale 2 \
             --no-lockscreen --no-global-shortcuts --socket wayland-foto &
         kwin_pid=$!
