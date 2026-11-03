@@ -3,8 +3,8 @@
 # Druk in GitHub op "Actions" -> "BugOS ISO maken" -> "Run workflow".
 #
 #   soort = live      -> "Probeer eerst"-stick: BugOS start meteen op, met een
-#                        knop "BugOS installeren" (aangeraden). Installeren
-#                        haalt BugOS van internet, dus de stick is kleiner.
+#                        knop "BugOS installeren" (aangeraden). BugOS zelf zit
+#                        op de stick, dus installeren werkt ook zonder internet.
 #   soort = klassiek  -> alleen het installatieprogramma, werkt zonder internet
 #
 #   publiceren = aan  -> de ISO komt als download in een GitHub Release.
@@ -79,8 +79,11 @@ jobs:
 
       - name: Live-omgeving bouwen
         run: |
+          # --secret: het inlogbestand, zodat de bouw BugOS zelf op de stick kan zetten
+          # (iso_live/src/build.sh stap 1). Het komt niet in de ISO terecht.
           sudo TMPDIR=/mnt/containers/tmp podman build \
             --cap-add sys_admin --security-opt label=disable --squash \
+            --secret id=ghcr,src=/tmp/ghcr-auth.json \
             --build-arg BASE_IMAGE="${{ steps.naam.outputs.image }}" \
             --build-arg IMAGE_REF="${{ steps.naam.outputs.image }}" \
             --build-arg BUGOS_VARIANT="${{ steps.naam.outputs.soort }}" \

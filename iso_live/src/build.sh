@@ -13,10 +13,25 @@ mkdir -p "$(realpath /root)"
 mount -o remount,rw /proc/sys || true
 
 # ---------------------------------------------------------------------------
-# 1. BugOS wordt tijdens het installeren van internet gehaald ($IMAGE_REF).
-#    Zo blijft de stick half zo groot. (Zonder internet installeren kan met
-#    de "klassieke" ISO.)
+# 1. BugOS zelf op de stick zetten.
+#    Vroeger haalde het installatieprogramma BugOS tijdens het installeren van
+#    internet. Dat werkte niet zonder internet, niet zolang het pakket op
+#    GitHub privé is, en het duurde lang. Nu zit BugOS zelf op de stick (in de
+#    containeropslag van de live-omgeving) en installeert het programma vanaf
+#    daar. De stick wordt daar nauwelijks groter van: de live-omgeving ÍS al
+#    BugOS, en mksquashfs slaat bestanden die precies gelijk zijn maar één
+#    keer op.
+#    Het wachtwoord voor GitHub Packages komt als "secret" binnen (alleen
+#    tijdens het bouwen, het komt niet in de ISO): zie iso_live/Containerfile.
 # ---------------------------------------------------------------------------
+AUTH_ARGS=()
+if [ -s /run/secrets/ghcr ]; then
+    AUTH_ARGS=(--authfile /run/secrets/ghcr)
+fi
+podman pull "${AUTH_ARGS[@]}" "$IMAGE_REF"
+# Controle: staat hij er echt, en kan het installatieprogramma hem lezen?
+skopeo inspect --raw "containers-storage:${IMAGE_REF}" >/dev/null
+podman images
 
 # ---------------------------------------------------------------------------
 # 2. Kernel: voor Secure Boot moet de live-stick een door Fedora ondertekende
@@ -116,7 +131,8 @@ run0 --user=liveuser yad --timeout=0 --text-info --no-buttons --width=640 --heig
     </tmp/anaconda.log
 %end
 
-ostreecontainer --url=${IMAGE_REF} --transport=registry --no-signature-verification
+# BugOS vanaf de stick zelf installeren (zie stap 1): geen internet nodig.
+ostreecontainer --url=${IMAGE_REF} --transport=containers-storage --no-signature-verification
 %include /usr/share/anaconda/post-scripts/bugos-updates.ks
 EOF
 
@@ -148,17 +164,92 @@ fi
 # ---------------------------------------------------------------------------
 # Welkomstscherm met "Proberen" of "Installeren".
 install -Dm0644 "$SRC/bugos-live.desktop" /etc/xdg/autostart/bugos-live.desktop
-install -Dm0644 "$SRC/bugos-installeren.desktop" /usr/share/applications/bugos-installeren.desktop
 install -Dm0755 "$SRC/bugos-live" /usr/bin/bugos-live
-# Installeer-knop ook op het bureaublad van de live-gebruiker.
-install -Dm0755 "$SRC/bugos-installeren.desktop" /etc/skel/Desktop/bugos-installeren.desktop
+
+# Precies één installeer-knop, en die heet BugOS.
+# De live-scripts van Fedora (livesys-kde) zetten liveinst.desktop
+# ("Install to Hard Drive", met een leeg pictogram) vanzelf op het bureaublad
+# en in het menu. In plaats van er een tweede knop naast te zetten, maken we
+# van dát bestand de BugOS-knop. Zo staat er altijd maar één.
+install -Dm0644 "$SRC/bugos-installeren.desktop" /usr/share/applications/liveinst.desktop
+rm -f /usr/share/applications/bugos-installeren.desktop /etc/skel/Desktop/bugos-installeren.desktop
 
 # Dingen die op een live-stick niet horen te draaien.
+# flatpak-preinstall en brew-setup kwamen mee van Aurora: op de stick haalden
+# ze honderden MB aan apps en Homebrew binnen, in het geheugen (de stick kan
+# niet schrijven). Dat maakt hem traag en het geheugen kan vollopen. Na het
+# installeren draaien ze gewoon wel (dit geldt alleen voor de stick).
 for s in rpm-ostreed-automatic.timer uupd.timer rpm-ostree-countme.service \
-    bootloader-update.service bugos-eerste-start.service; do
+    bootloader-update.service bugos-eerste-start.service \
+    flatpak-preinstall.service brew-setup.service brew-update.timer brew-upgrade.timer; do
     systemctl disable "$s" 2>/dev/null || true
 done
 systemctl --global disable bugos-updatecheck.timer 2>/dev/null || true
+
+# Taal op de stick: Nederlands, met het Amerikaanse toetsenbord (dat gebruikt
+# bijna iedereen in Nederland). Zonder dit startte de stick in het Engels.
+# In het installatieprogramma kies je zelf de taal en het toetsenbord voor
+# de computer; Nederlands staat dan al klaar.
+echo "LANG=nl_NL.UTF-8" >/etc/locale.conf
+echo "KEYMAP=us" >/etc/vconsole.conf
+mkdir -p /etc/X11/xorg.conf.d
+cat >/etc/X11/xorg.conf.d/00-keyboard.conf <<'EOF'
+Section "InputClass"
+    Identifier "system-keyboard"
+    MatchIsKeyboard "on"
+    Option "XkbLayout" "us"
+EndSection
+EOF
+
+# Het installatieprogramma in BugOS-kleuren, met het lieveheersbeestje.
+# Het programma (Anaconda WebUI) haalt zijn logo en kleuren uit de
+# "branding" van Cockpit, en kiest die map op naam van het systeem (ID in
+# os-release, bij ons "aurora"). Die map bestond niet, dus kreeg je die van
+# Fedora: blauw, met de Aurora-"A" als logo.
+BRANDING=/usr/share/cockpit/branding/aurora
+mkdir -p "$BRANDING"
+install -m0644 /usr/share/bugos/merk/merk-donker-256.png "$BRANDING/logo.png"
+install -m0644 /usr/share/bugos/merk/merk-256.png "$BRANDING/apple-touch-icon.png"
+install -m0644 /usr/share/bugos/merk/merk-256.png "$BRANDING/favicon.ico"
+cat >"$BRANDING/branding.css" <<'EOF'
+/* BugOS: het installatieprogramma in de huisstijl (docs/HUISSTIJL.md). */
+#badge {
+    inline-size: 80px;
+    block-size: 80px;
+    background-image: url("logo.png");
+    background-size: contain;
+    background-repeat: no-repeat;
+}
+
+#brand::before {
+    content: "BugOS";
+}
+
+.anaconda {
+    /* De balk bovenaan: rustig donker (inkt), zodat rood alleen voor de knop is. */
+    --brand-default-light: #2A2B31;
+    --brand-default: #16171C;
+    --brand-default-dark: #0E0F13;
+
+    .logo {
+        background-image: url("logo.png");
+        /* Het programma maakt het logo normaal wit; ons beestje blijft in kleur. */
+        filter: none;
+        mix-blend-mode: normal;
+    }
+}
+
+:not(.pf-v6-theme-dark) .anaconda {
+    /* Knoppen en keuzes: lieveheersbeestjesrood. */
+    --pf-t--global--color--brand--default: #DE2F3E;
+    --pf-t--global--color--brand--hover: #C41D3A;
+}
+
+.pf-v6-theme-dark .anaconda {
+    --pf-t--global--color--brand--default: #EE3F49;
+    --pf-t--global--color--brand--hover: #DE2F3E;
+}
+EOF
 
 # Het installatieprogramma heeft veel ruimte nodig in /var/tmp.
 find /var/tmp -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true

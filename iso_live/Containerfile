@@ -2,7 +2,8 @@
 # ===========================================
 # Jip-en-Janneke: we nemen de gewone BugOS en doen er een installatie-
 # programma bij. Van de USB-stick start je BugOS meteen op om te proberen.
-# Bevalt het? Dan druk je op "BugOS installeren".
+# Bevalt het? Dan druk je op "BugOS installeren". BugOS zelf zit ook op de
+# stick, dus installeren kan zonder internet.
 #
 # Gebouwd door .github/workflows/iso.yml; daarna maakt Titanoboa er een ISO van.
 # Bouwen kan alleen met:  --cap-add sys_admin --security-opt label=disable
@@ -15,4 +16,9 @@ ARG IMAGE_REF=ghcr.io/253ugursahin/bugos:latest
 ARG BUGOS_VARIANT=main
 
 COPY src /src
-RUN IMAGE_REF="${IMAGE_REF}" BUGOS_VARIANT="${BUGOS_VARIANT}" /src/build.sh && rm -rf /src
+# Het secret "ghcr" is het inlogbestand voor GitHub Packages (nodig zolang het
+# pakket privé is). Het is er alleen tijdens deze stap en komt niet in de ISO.
+# Bouwen:  podman build --secret id=ghcr,src=<auth.json> ...
+# (bij een openbaar pakket mag het bestand leeg zijn)
+RUN --mount=type=secret,id=ghcr,target=/run/secrets/ghcr \
+    IMAGE_REF="${IMAGE_REF}" BUGOS_VARIANT="${BUGOS_VARIANT}" /src/build.sh && rm -rf /src

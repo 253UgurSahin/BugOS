@@ -52,6 +52,75 @@ EOF
 install -Dm0644 /usr/share/bugos/logo.svg /usr/share/icons/hicolor/scalable/apps/bugos-logo.svg
 install -Dm0644 /usr/share/bugos/logo.svg /usr/share/pixmaps/bugos-logo.svg
 
+# 3b. Alles wat de gebruiker nog als "Aurora" (of Fedora) ziet, wordt BugOS.
+#     BugOS is gebouwd op Aurora, maar dat hoeft niemand te zien: de computer
+#     heet overal BugOS. Technische velden (ID=aurora, VARIANT_ID, IMAGE_ID)
+#     laten we staan, want programma's als het installatieprogramma, ujust en
+#     bootc kijken daarnaar. Alleen wat op het scherm komt, passen we aan.
+
+# os-release: de velden die programma's laten zien ("Over dit systeem",
+# hostnamectl, het installatieprogramma). Daar stond "(Kinoite)" en "Kinoite".
+sed -i \
+    -e "s|^VERSION=.*|VERSION=\"${BUGOS_VERSION}\"|" \
+    -e "s|^VARIANT=.*|VARIANT=\"BugOS\"|" \
+    /usr/lib/os-release
+
+# Het "Welcome Center" van KDE (met "Welcome to Aurora" en het Aurora-logo)
+# verscheen bij de eerste keer inloggen en op de USB-stick. BugOS heeft een
+# eigen welkomstapp (bugos-welkom), dus deze gaat er helemaal uit. Geen
+# ander pakket heeft hem nodig (alleen plasma-workspace "raadt hem aan").
+# rpm -e in plaats van dnf remove: dan gaan er niet stilletjes andere
+# pakketten mee die toevallig alleen hierdoor waren binnengekomen.
+if rpm -q plasma-welcome >/dev/null 2>&1; then
+    rpm -e plasma-welcome
+fi
+# Aurora zet het echte programma onder een andere naam neer en zijn eigen
+# welkomsttekst in een losse map; die zijn van geen pakket, dus zelf weghalen.
+rm -f /usr/bin/plasma-welcome-original
+rm -rf /usr/share/plasma/plasma-welcome
+
+# De terminal begon met "Welcome to Aurora" en links naar Aurora
+# (ublue-motd). Weg ermee: een terminal hoort gewoon rustig te openen.
+rm -f /etc/profile.d/ublue-motd.sh
+# fastfetch/neofetch-aliassen wijzen naar Aurora's versie met Aurora-logo;
+# zonder deze aliassen draait gewoon de normale fastfetch.
+rm -f /etc/profile.d/ublue-fastfetch.sh
+
+# Aurora-meldingen ("Aurora IWD/ZFS deprecation") horen niet bij BugOS.
+# mask in plaats van disable: anders zet de "preset" bij de eerste start
+# ze misschien weer aan.
+for eenheid in aurora-iwd-deprecation-notifier.timer aurora-iwd-deprecation-notifier.service \
+    aurora-zfs-deprecation-notifier.timer aurora-zfs-deprecation-notifier.service; do
+    if [ -e "/usr/lib/systemd/system/$eenheid" ]; then
+        systemctl mask "$eenheid"
+    fi
+done
+
+# Logo's: veel programma's gebruiken vaste bestandsnamen voor "het logo van
+# dit systeem" (Over dit systeem, het installatieprogramma, sommige menu's).
+# Bij Aurora staat daar de Aurora-"A". Wij leggen er het lieveheersbeestje neer.
+MERK=/usr/share/bugos/merk
+for png in system-logo.png fedora-logo-sprite.png fedora-logo.png fedora_logo_med.png fedora-logo-small.png; do
+    install -Dm0644 "$MERK/merk-256.png" "/usr/share/pixmaps/$png"
+done
+# De "witte" versie is voor donkere achtergronden: het beestje met lichte kop.
+install -Dm0644 "$MERK/merk-donker-256.png" /usr/share/pixmaps/system-logo-white.png
+# fedora-logo.svg en fedora_whitelogo.svg waren verwijzingen naar de Aurora-banner.
+rm -f /usr/share/pixmaps/fedora-logo.svg /usr/share/pixmaps/fedora_whitelogo.svg /usr/share/pixmaps/aurora-banner.svg
+install -Dm0644 "$MERK/logo.svg" /usr/share/pixmaps/fedora-logo.svg
+install -Dm0644 "$MERK/logo-wit.svg" /usr/share/pixmaps/fedora_whitelogo.svg
+# Het algemene "logo van de distributie" (ook voor het pictogram start-here).
+install -Dm0644 "$MERK/merk.svg" /usr/share/icons/hicolor/scalable/distributor-logo.svg
+install -Dm0644 "$MERK/merk-inkt.svg" /usr/share/icons/hicolor/scalable/places/distributor-logo-symbolic.svg
+
+# "Over dit systeem" (KDE Info-centrum): ons logo en onze website.
+cat >/etc/xdg/kcm-about-distrorc <<EOF
+[General]
+LogoPath=/usr/share/pixmaps/system-logo.png
+Website=https://github.com/253UgurSahin/BugOS
+Variant=
+EOF
+
 # 4. BugOS-stijl als standaard voor nieuwe gebruikers.
 kwriteconfig6 --file /etc/xdg/kdeglobals --group KDE --key LookAndFeelPackage org.bugos.desktop
 kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key ColorScheme BugOSLicht

@@ -71,13 +71,21 @@ class Live(QWidget):
         self.kijk_internet()
 
     def kijk_internet(self) -> None:
+        """Laat zien of er internet is. Installeren kan altijd.
+
+        BugOS zit zelf op de stick, dus voor het installeren is geen internet
+        nodig. Internet is alleen handig om alvast rond te kijken (websites,
+        apps uit de Winkel). Daarom blijft de knop "BugOS installeren" altijd
+        aan, en is "Wifi kiezen" er alleen voor het gemak.
+        """
         code, uit = draai("nmcli", "-t", "-f", "CONNECTIVITY", "general", timeout=5)
         online = code == 0 and uit.strip() == "full"
-        self.installeren.setEnabled(online)
         self.wifi.setVisible(not online)
-        self.chip.setText(t("✓  Je hebt internet, je kunt installeren", "✓  You are online, you can install") if online
-                          else t("Om te installeren heb je internet nodig", "You need internet to install"))
-        self.chip.setStyleSheet(Chip("", "goed" if online else "let_op").styleSheet())
+        self.chip.setText(t("✓  Je hebt internet", "✓  You are online") if online
+                          else t("Geen internet? Geen probleem: BugOS installeert vanaf de stick",
+                                 "No internet? No problem: BugOS installs from the stick"))
+        # Allebei "goed": zonder internet is er niets mis.
+        self.chip.setStyleSheet(Chip("", "goed").styleSheet())
 
     def installeer(self) -> None:
         subprocess.Popen(["liveinst"], start_new_session=True)
