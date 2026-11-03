@@ -167,7 +167,7 @@ Het belangrijkste idee: **BugOS kan niet stuk.**
 - [ ] De "probeer eerst"-stick op een echte pc proberen
 - [x] Startmenu en snelmenu standaard (getest buiten Plasma: tools/qml-test.py, tools/test_start_data.py, tools/test_uitzetscherm.py)
 - [ ] Startmenu, snelmenu en uitzetscherm op een echte pc nalopen (Windows-toets, wifi kiezen, uitzetten) — zie TESTEN.md
-- [ ] Bureaublad-foto's uit het echte beeld: de fotoronde (`tools/fotos/bureaublad.sh`) start KWin en plasmashell in de container, maar de bouwcomputer heeft geen grafische kaart; de laatste stap (KWin's software-tekenaar) is nog niet bevestigd. Tot dan: foto's uit de fotostudio.
+- [ ] Bureaublad-foto's uit het echte beeld: de fotoronde (`tools/fotos/bureaublad.sh`) start KWin en plasmashell in de container, maar de bouwcomputer heeft geen grafische kaart; ook met KWin's software-tekenaar (KWIN_DRM_DEVICES) vond KWin 6.8 geen 'render device'. Volgende stap: testen op een echte pc of een VM met scherm. Tot dan: foto's uit de fotostudio.
 - [ ] BugOS Overstap op een echte Windows-pc proberen (stap 3 en 4 eerst op een reserve-pc)
 
 ## Dingen om op te letten
