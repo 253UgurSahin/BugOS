@@ -29,8 +29,9 @@ jobs:
 
       - name: BugOS ophalen
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          docker pull "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${{ inputs.tag }}"
+          # podman, net als bij het bouwen (docker kan niet zoveel lagen aan)
+          echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+          sudo podman pull "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${{ inputs.tag }}"
 
       - name: Foto's van de verkenner
         run: |
@@ -41,12 +42,12 @@ jobs:
           BEELD="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${{ inputs.tag }}"
           mkdir -p docs/beelden/verkenner
           maak() {  # naam thema map
-            docker run -d --name foto -e DISPLAY=:99 -v /tmp/.X11-unix:/tmp/.X11-unix \
+            sudo podman run -d --name foto -e DISPLAY=:99 -v /tmp/.X11-unix:/tmp/.X11-unix \
               -v "$PWD:/repo:ro" --entrypoint /usr/bin/bash "$BEELD" /repo/tools/fotos/verkenner.sh "$2" "$3"
             sleep 30
             import -display :99 -window root -crop 2360x1480+0+0 +repage "docs/beelden/verkenner/$1.png"
-            echo "--- logboek ($1) ---"; docker logs foto 2>&1 | tail -25
-            docker rm -f foto >/dev/null
+            echo "--- logboek ($1) ---"; sudo podman logs foto 2>&1 | tail -25
+            sudo podman rm -f foto >/dev/null
           }
           maak thuismap licht ""
           maak documenten licht Documenten
