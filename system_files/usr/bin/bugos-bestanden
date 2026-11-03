@@ -1201,6 +1201,7 @@ class Bestanden(QWidget):
     def closeEvent(self, e) -> None:  # noqa: N802
         self.apparaten.stop()
         self.voorbeelden.stop()
+        laat_klembord_los()
         super().closeEvent(e)
 
     def resizeEvent(self, e) -> None:  # noqa: N802
@@ -1315,7 +1316,7 @@ class Bestanden(QWidget):
         data.setData("application/x-kde-cutselection", b"1" if knip else b"0")
         regels = ["cut" if knip else "copy"] + [QUrl.fromLocalFile(str(p)).toString() for p in paden]
         data.setData("x-special/gnome-copied-files", "\n".join(regels).encode())
-        QApplication.clipboard().setMimeData(data)
+        zet_op_klembord(data)
         n = len(paden)
         self.melding.toon(t(f"{n} {'ding' if n == 1 else 'dingen'} {'geknipt' if knip else 'gekopieerd'}. Ga naar een map en kies Plakken.",
                             f"{n} {'item' if n == 1 else 'items'} {'cut' if knip else 'copied'}. Go to a folder and choose Paste."))
@@ -1529,6 +1530,32 @@ class Bestanden(QWidget):
                                 "The USB stick is still busy. Close what is open on it and try again."), "fout")
 
 
+_ONS_KLEMBORD: list[QMimeData] = []  # wat wij zelf op het klembord hebben gezet
+
+
+def zet_op_klembord(data: QMimeData) -> None:
+    _ONS_KLEMBORD[:] = [data]
+    QApplication.clipboard().setMimeData(data)
+
+
+def laat_klembord_los() -> None:
+    """Wat wij op het klembord zetten, ruimen we zelf op voordat het programma stopt.
+
+    Anders ruimt Qt het pas op als Python al weg is, en dan crasht het programma bij het
+    afsluiten. De klembordbeheerder van KDE heeft het al bewaard, dus plakken kan daarna nog.
+    """
+    klembord = QApplication.clipboard()
+    if klembord is None or not _ONS_KLEMBORD:
+        return
+    try:
+        nog_van_ons = klembord.ownsClipboard() or klembord.mimeData() is _ONS_KLEMBORD[0]
+    except RuntimeError:
+        nog_van_ons = False
+    _ONS_KLEMBORD.clear()
+    if nog_van_ons:
+        klembord.clear()
+
+
 def start_pad(args: list[str]) -> tuple[Path | None, Path | None]:
     """Map om te openen (en eventueel een bestand om te kiezen) uit de opdrachtregel."""
     for a in args:
@@ -1542,6 +1569,7 @@ def start_pad(args: list[str]) -> tuple[Path | None, Path | None]:
 
 def main() -> int:
     app = maak_app("bugos-bestanden", "bugos-bestanden", sys.argv)
+    app.aboutToQuit.connect(laat_klembord_los)
     start, kies = start_pad(sys.argv[1:])
     return uitvoeren(app, Bestanden(start, kies))
 
