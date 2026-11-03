@@ -1,0 +1,70 @@
+---
+# Foto's maken van het echte BugOS (bijvoorbeeld de verkenner), op een virtueel scherm.
+# Op verzoek: Actions -> BugOS-foto's -> Run workflow.
+name: BugOS-foto's
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Welke BugOS (tag van het beeld)"
+        default: "latest"
+      vastleggen:
+        description: "De foto's in de repo zetten (docs/beelden/verkenner)"
+        type: boolean
+        default: true
+
+jobs:
+  verkenner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: write
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ruimte maken op de bouwcomputer
+        uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
+
+      - name: BugOS ophalen
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker pull "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${{ inputs.tag }}"
+
+      - name: Foto's van de verkenner
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb imagemagick >/dev/null
+          Xvfb :99 -screen 0 2560x1600x24 -ac -nolisten tcp &
+          sleep 3
+          BEELD="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${{ inputs.tag }}"
+          mkdir -p docs/beelden/verkenner
+          maak() {  # naam thema map
+            docker run -d --name foto -e DISPLAY=:99 -v /tmp/.X11-unix:/tmp/.X11-unix \
+              -v "$PWD:/repo:ro" --entrypoint /usr/bin/bash "$BEELD" /repo/tools/fotos/verkenner.sh "$2" "$3"
+            sleep 30
+            import -display :99 -window root -crop 2360x1480+0+0 +repage "docs/beelden/verkenner/$1.png"
+            echo "--- logboek ($1) ---"; docker logs foto 2>&1 | tail -25
+            docker rm -f foto >/dev/null
+          }
+          maak thuismap licht ""
+          maak documenten licht Documenten
+          maak afbeeldingen donker Afbeeldingen
+          ls -la docs/beelden/verkenner
+
+      - name: Foto's bewaren
+        uses: actions/upload-artifact@v4
+        with:
+          name: verkenner-fotos
+          path: docs/beelden/verkenner/
+
+      - name: Foto's in de repo zetten
+        if: ${{ inputs.vastleggen }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/beelden/verkenner
+          if git diff --cached --quiet; then echo "Geen veranderingen."; exit 0; fi
+          git commit -m "Foto's van de verkenner (gemaakt met het echte BugOS)"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
