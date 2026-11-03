@@ -60,6 +60,7 @@ in_kwin() {  # scene
     fi
     sleep 10
     kill -0 "$plasma_pid" 2>/dev/null || stap "Let op: plasmashell is gestopt (zie de regels hierboven)"
+    pgrep -x kwin_wayland >/dev/null 2>&1 || stap "Let op: KWin draait niet meer (zie de regels hierboven)"
     case "$scene" in
         taakbalk)
             stap "Alleen de taakbalk; er gaat verder niets open" ;;
@@ -117,14 +118,18 @@ bureaublad_tonen() {  # scene
         kwin_wayland --x11-display "$DISPLAY" --width 2560 --height 1600 --scale 2 \
             --no-lockscreen --no-global-shortcuts --socket wayland-foto &
         kwin_pid=$!
+        # Pas als KWin zich op D-Bus meldt (org.kde.KWin) is hij echt klaar; het socket-bestand is er eerder.
         gewacht=0
         while [ "$gewacht" -lt 60 ]; do
-            [ -S "${XDG_RUNTIME_DIR:-/tmp}/wayland-foto" ] && break
+            if [ "$(gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus \
+                    --method org.freedesktop.DBus.NameHasOwner org.kde.KWin 2>/dev/null)" = "(true,)" ]; then
+                break
+            fi
             kill -0 "$kwin_pid" 2>/dev/null || break
             sleep 2
             gewacht=$((gewacht + 2))
         done
-        if [ -S "${XDG_RUNTIME_DIR:-/tmp}/wayland-foto" ]; then
+        if kill -0 "$kwin_pid" 2>/dev/null && [ -S "${XDG_RUNTIME_DIR:-/tmp}/wayland-foto" ]; then
             stap "KWin is er (Wayland-scherm 'wayland-foto', na ongeveer $gewacht s)"
             in_kwin "$scene"
             return
@@ -297,5 +302,6 @@ fi
 # Nu als oma, binnen één D-Bus-sessie (plasmashell, de activiteitenbeheerder en de menu's moeten
 # elkaar daarop kunnen vinden). Dit script roept zichzelf opnieuw aan voor deel 2 hierboven.
 stap "Klaargezet (thema $THEMA, scene $SCENE); nu als oma het bureaublad starten"
+# QT_LOGGING_TO_CONSOLE=1: KDE-programma's schrijven hun meldingen anders naar journald, en dat is er hier niet.
 exec runuser -u oma -- env HOME="$THUIS" USER=oma LOGNAME=oma XDG_RUNTIME_DIR=/tmp/run-oma DISPLAY="${DISPLAY:-:99}" \
-    ZELF="$ZELF" "${BUGOS_ENV[@]}" dbus-run-session -- bash "$ZELF" --als-oma "$SCENE"
+    QT_LOGGING_TO_CONSOLE=1 ZELF="$ZELF" "${BUGOS_ENV[@]}" dbus-run-session -- bash "$ZELF" --als-oma "$SCENE"
