@@ -322,7 +322,11 @@ mkdir -p /tmp/run-oma && chown oma:oma /tmp/run-oma && chmod 700 /tmp/run-oma
 # die rechten niet nodig, dus halen we ze hier (alleen in deze wegwerpcontainer) van het bestand af.
 KWIN="$(command -v kwin_wayland || true)"
 if [ -n "$KWIN" ] && command -v setcap >/dev/null 2>&1; then
-    setcap -r "$KWIN" 2>/dev/null && stap "Extra rechten van $KWIN afgehaald (niet nodig voor een foto)" || true
+    # Een echte if in plaats van "A && B || true": zo meldt shellcheck (SC2015)
+    # niets, en lukt het afhalen niet, dan gaat het script gewoon door.
+    if setcap -r "$KWIN" 2>/dev/null; then
+        stap "Extra rechten van $KWIN afgehaald (niet nodig voor een foto)"
+    fi
 fi
 
 # Nu als oma, binnen één D-Bus-sessie (plasmashell, de activiteitenbeheerder en de menu's moeten
