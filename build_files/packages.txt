@@ -30,10 +30,8 @@ libnotify
 # Firefox als gewoon programma: Aurora heeft geen browser in het systeem, en
 # de taakbalk en het startmenu van BugOS verwijzen naar Firefox.
 firefox
-# "Meer apps zoeken" in de BugOS Winkel opent KDE Discover (alleen Flatpak-apps;
-# systeemupdates doet BugOS zelf). Aurora had hier Bazaar, dat haalt build.sh weg.
-plasma-discover
-plasma-discover-flatpak
+# (KDE Discover voor "Meer apps zoeken" wordt apart geïnstalleerd in build.sh,
+# zonder de "aanbevolen" extra's: die zouden Fedora-pakketten laten zien.)
 
 # --- Alle talen ---
 glibc-all-langpacks

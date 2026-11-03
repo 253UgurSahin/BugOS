@@ -173,6 +173,38 @@ tekst = tekst[:eind] + nieuw + tekst[eind:]
 with gzip.open(pad, "wt", encoding="utf-8") as f:
     f.write(tekst)
 PY
+# Kies je in het installatieprogramma Engels, dan gebruikt het de Engelse
+# zinnen uit het programma zelf. Daar ook "Fedora" -> "BugOS" (alleen deze
+# zichtbare zinnen; de controles op de systeemnaam in de code blijven heel).
+WEBUI_JS=/usr/share/cockpit/anaconda-webui/index.js.gz
+zcat "$WEBUI_JS" | sed \
+    -e 's/Welcome to Fedora Linux/Welcome to BugOS/g' \
+    -e 's/Reinstall Fedora/Reinstall BugOS/g' \
+    -e 's/About Fedora/About BugOS/g' \
+    -e 's/Fedora linux requires at least/BugOS requires at least/g' \
+    | gzip -9 >"$WEBUI_JS.nieuw"
+mv "$WEBUI_JS.nieuw" "$WEBUI_JS"
+# Het Nederlandse woordenboek gebruikt de Engelse zin als sleutel. Nu de
+# Engelse zinnen veranderd zijn, ook de nieuwe sleutels toevoegen.
+python3 - <<'PY'
+import gzip
+import json
+
+pad = "/usr/share/cockpit/anaconda-webui/po.nl.js.gz"
+tekst = gzip.open(pad, "rt", encoding="utf-8").read()
+extra = {
+    "Welcome to BugOS": "Welkom bij BugOS",
+    "Reinstall BugOS": "BugOS opnieuw installeren",
+    "About BugOS": "Over BugOS",
+    "BugOS requires at least $0 of disk space.": "BugOS heeft minstens $0 schijfruimte nodig.",
+}
+eind = tekst.rstrip().rfind("\n});")
+assert eind > 0, "po.nl.js heeft een onbekende vorm"
+nieuw = "".join(",\n " + json.dumps(k, ensure_ascii=False) + ": [null, " + json.dumps(v, ensure_ascii=False) + "]"
+                for k, v in extra.items())
+with gzip.open(pad, "wt", encoding="utf-8") as f:
+    f.write(tekst[:eind] + nieuw + tekst[eind:])
+PY
 # Bewaakt dat er na de vervanging in onze eigen regels geen Fedora meer staat.
 if zcat /usr/share/cockpit/anaconda-webui/po.nl.js.gz | grep -q '\[null, "[^"]*Fedora'; then
     echo "Let op: er staat nog 'Fedora' in de Nederlandse teksten van het installatieprogramma" >&2

@@ -20,6 +20,18 @@ chmod 0755 /usr/bin/bugos-*
 mapfile -t PAKKETTEN < <(grep -vE '^\s*(#|$)' /ctx/packages.txt)
 dnf5 install -y --skip-unavailable "${PAKKETTEN[@]}"
 
+# KDE Discover voor "Meer apps zoeken" in de BugOS Winkel: alleen Flatpak-apps.
+# Zonder weak deps, anders komt PackageKit mee en toont Discover Fedora-
+# pakketten en "updates" die op BugOS (alleen-lezen systeem) niet kunnen.
+# Systeemupdates doet BugOS zelf. (Aurora had hier Bazaar; zie stap 3b.)
+dnf5 install -y --setopt=install_weak_deps=False plasma-discover plasma-discover-flatpak
+# Voor de zekerheid: waren ze er toch, dan samen weg (in één keer, omdat ze
+# van elkaar afhangen).
+mapfile -t TEVEEL < <(rpm -q --qf '%{NAME}\n' plasma-discover-packagekit plasma-discover-offline-updates 2>/dev/null | grep -v 'not installed' || true)
+if [ "${#TEVEEL[@]}" -gt 0 ]; then
+    rpm -e "${TEVEEL[@]}"
+fi
+
 # Steam als echt systeemprogramma (beste voor controllers en game-modus).
 # Lukt dat niet, dan zet bugos-eerste-start.service Steam later als Flatpak neer.
 dnf5 install -y --skip-unavailable steam || true

@@ -62,6 +62,8 @@ jobs:
       - name: Container-opslag op een gecomprimeerde schijf (/mnt)
         run: |
           df -h / /mnt
+          # mkfs.btrfs zit niet altijd op de bouwcomputer.
+          command -v mkfs.btrfs >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq btrfs-progs; }
           sudo truncate -s 110G /mnt/bugos-podman.img
           sudo mkfs.btrfs -q -f -m single -d single /mnt/bugos-podman.img
           LOOP="$(sudo losetup --find --show --direct-io=on /mnt/bugos-podman.img)"
