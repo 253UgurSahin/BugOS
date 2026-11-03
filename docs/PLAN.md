@@ -74,7 +74,7 @@ Het belangrijkste idee: **BugOS kan niet stuk.**
 | BugOS Winkel | `bugos-winkel` | 37 bekende, veilige apps in 10 onderwerpen, installeren met één klik. "Meer apps zoeken" opent de grote KDE-winkel. |
 | Startmenu (proef) | `org.bugos.startmenu` | Grote zoekbalk, vastgezette apps, recente bestanden, alle apps per onderwerp en aan/uit-knoppen. Aanzetten kan in Instellingen → Aan en uit. |
 | Snelmenu (proef) | `org.bugos.snelmenu` | Grote knoppen voor wifi, bluetooth, game-modus, donker, niet storen en het volume. Aanzetten kan in Instellingen. |
-| Bestanden | `bugos-bestanden` | De verkenner: grote tegels met voorbeeldjes, links je vaste plekken en USB-sticks. Kies je iets, dan staat onderin wat je ermee kunt (Openen, Kopiëren, Weggooien...). Weggooien gaat eerst naar de prullenbak (met Ongedaan maken); nooit iets overschrijven. |
+| Bestanden | `bugos-bestanden` | De verkenner: grote tegels met voorbeeldjes, links je vaste plekken en USB-sticks. Kies je iets, dan staat onderin wat je ermee kunt (Openen, Kopiëren, Weggooien...). Weggooien gaat eerst naar de prullenbak (met Ongedaan maken); nooit iets overschrijven. **Deze computer**: al je schijven (USB-stick, externe schijf, tweede schijf, Windows-schijf, sd-kaart, cd) met hoeveel ruimte er nog is; openen met één klik (ook op slot: KDE vraagt het wachtwoord) en veilig verwijderen van de hele stick. |
 | Meer apps, Schijven, Dolphin | (KDE) | KDE-programma's met een simpele BugOS-naam. Dolphin is de verkenner voor gevorderden. |
 
 ### Wat op de achtergrond gebeurt

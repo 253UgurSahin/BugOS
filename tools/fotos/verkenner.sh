@@ -6,7 +6,9 @@
 # Gebruik: bash tools/fotos/verkenner.sh <licht|donker> [map] [programma]
 #   map: welke map open moet staan, bijvoorbeeld Documenten (leeg = de thuismap).
 #        Een bestand mag ook: dan opent zijn map en is dat bestand gekozen.
+#        "computer:" opent de pagina Deze computer; een pad met / ervoor mag ook.
 #   programma: bugos-bestanden (standaard) of dolphin
+# Met BUGOS_LSBLK=<lijstje.json> ziet de verkenner nep-schijven (zie tools/fotos/schijven.json).
 set -euo pipefail
 
 THEMA="${1:-licht}"
@@ -70,10 +72,46 @@ with open(doel, "w", encoding="utf-8") as f:
 PY
 fi
 
+if [ -n "${BUGOS_LSBLK:-}" ]; then
+    # Nep-schijven voor de foto: maak de mappen waar ze 'open' staan, met wat op de stick.
+    python3 - "$BUGOS_LSBLK" <<'PY'
+import json
+import os
+import sys
+
+def alle(a):
+    yield a
+    for kind in a.get("children") or []:
+        yield from alle(kind)
+
+for schijf in json.load(open(sys.argv[1], encoding="utf-8"))["blockdevices"]:
+    for a in alle(schijf):
+        for plek in a.get("mountpoints") or []:
+            if plek and plek.startswith("/run/media/"):
+                os.makedirs(plek, exist_ok=True)
+PY
+    STICK="/run/media/oma/Stick van oma"
+    if [ -d "$STICK" ]; then
+        mkdir -p "$STICK/Foto's van de kleinkinderen"
+        cp "Afbeeldingen/Achtergrond Stip.jpg" "$STICK/Verjaardag Daan.jpg"
+        cp "Afbeeldingen/BugOS Welkom.webp" "$STICK/Kerst.webp"
+        cp "$REPO/tools/fotos/demo/Recepten oma.odt" "$STICK/"
+    fi
+    if [ -d /run/media/oma/Fotoschijf ]; then
+        mkdir -p /run/media/oma/Fotoschijf/{2019,2020,2021,2022}
+    fi
+    chown -R oma:oma /run/media/oma
+fi
+
+case "$MAP" in
+    computer:* | /*) DOEL="$MAP" ;;
+    *) DOEL="$THUIS/$MAP" ;;
+esac
+
 chown -R oma:oma "$THUIS"
 mkdir -p /tmp/run-oma && chown oma:oma /tmp/run-oma && chmod 700 /tmp/run-oma
 
 exec runuser -u oma -- env HOME="$THUIS" USER=oma XDG_RUNTIME_DIR=/tmp/run-oma DISPLAY="${DISPLAY:-:99}" \
     LANG=nl_NL.UTF-8 LANGUAGE=nl QT_SCALE_FACTOR=2 \
-    XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6 \
-    dbus-run-session -- "$PROGRAMMA" -qwindowgeometry 1180x740+0+0 "$THUIS/$MAP"
+    XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6 ${BUGOS_LSBLK:+BUGOS_LSBLK="$BUGOS_LSBLK"} \
+    dbus-run-session -- "$PROGRAMMA" -qwindowgeometry 1180x740+0+0 "$DOEL"

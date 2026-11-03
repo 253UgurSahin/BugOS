@@ -22,6 +22,7 @@ import subprocess
 import sys
 import urllib.parse
 import zipfile
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -31,17 +32,17 @@ from bugos_ui import (  # noqa: E402
     K, Knop, Zijbalk, Zoekveld, label, lijn_icoon, lijn_pixmap, maak_app, merk_label, t, uitvoeren,
 )
 from PySide6.QtCore import (  # noqa: E402
-    QCollator, QDir, QEvent, QMimeData, QModelIndex, QObject, QRectF, QRunnable, QSize, QSortFilterProxyModel,
-    QStorageInfo, Qt, QThread, QThreadPool, QTimer, QUrl, Signal,
+    QCollator, QDir, QEvent, QMimeData, QModelIndex, QObject, QProcess, QRectF, QRunnable, QSize,
+    QSortFilterProxyModel, QStorageInfo, Qt, QThread, QThreadPool, QTimer, QUrl, Signal,
 )
 from PySide6.QtGui import (  # noqa: E402
     QColor, QDesktopServices, QFont, QFontMetrics, QImage, QImageReader, QKeySequence,
     QLinearGradient, QPainter, QPainterPath, QPen, QPixmap, QShortcut, QStandardItem, QStandardItemModel,
 )
 from PySide6.QtWidgets import (  # noqa: E402
-    QAbstractItemView, QApplication, QFileSystemModel, QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QInputDialog,
-    QLabel, QListView, QMenu, QMessageBox, QPushButton, QStackedWidget, QStyle, QStyledItemDelegate, QVBoxLayout,
-    QWidget,
+    QAbstractItemView, QApplication, QFileSystemModel, QFrame, QGraphicsDropShadowEffect, QGridLayout, QHBoxLayout,
+    QInputDialog, QLabel, QListView, QMenu, QMessageBox, QProgressBar, QPushButton, QScrollArea, QStackedWidget, QStyle,
+    QStyledItemDelegate, QVBoxLayout, QWidget,
 )
 
 PAD_ROL = int(Qt.ItemDataRole.UserRole) + 1        # = QFileSystemModel.FilePathRole
@@ -116,38 +117,185 @@ def bijzondere_mappen() -> dict[str, str]:
     return {str(p): ic for sleutel, _n, ic, p in plekken() if sleutel != "thuis"}
 
 
-def usb_volumes() -> list[tuple[str, str, str]]:
-    """(naam, map, apparaat) van USB-sticks en losse schijven die open (aangekoppeld) zijn."""
-    if os.environ.get("BUGOS_USB"):  # voor tests en schermafbeeldingen
-        return [(Path(p).name, p, "") for p in os.environ["BUGOS_USB"].split(":") if Path(p).is_dir()]
-    uit = []
-    for v in QStorageInfo.mountedVolumes():
-        wortel = v.rootPath()
-        if v.isValid() and v.isReady() and wortel.startswith(("/run/media/", "/media/")):
-            uit.append((v.displayName() or Path(wortel).name, wortel, bytes(v.device()).decode(errors="ignore")))
-    return uit
+# ================================================================ schijven ===
+# Alles wat je kunt insteken of wat er extra in de computer zit: USB-sticks, externe
+# schijven, een tweede schijf, de oude Windows-schijf, een SD-kaartje of een cd.
+# De schijf waar BugOS zelf op staat heet gewoon "Deze computer".
+
+@dataclass
+class Schijf:
+    apparaat: str            # de partitie, bv. /dev/sdb1 (of /dev/sdb bij een stick zonder indeling)
+    naam: str                # wat je ziet, bv. "USB-stick van oma" of "USB-stick (16 GB)"
+    soort: str               # "stick", "extern", "intern", "kaart" of "cd"
+    station: str             # het hele apparaat (bv. /dev/sdb): dat gaat eruit bij veilig verwijderen
+    fs_apparaat: str = ""    # waar de bestanden echt op staan (bij een versleutelde schijf: het slot-apparaat)
+    wortel: str = ""         # waar hij open staat; leeg = nog dicht
+    grootte: int = 0         # in bytes
+    vrij: int | None = None  # in bytes, als hij open staat
+    op_slot: bool = False    # versleuteld en nog niet geopend
+    versleuteld: bool = False
+    fs: str = ""             # soort bestandssysteem, bv. ntfs, vfat, exfat
+
+    @property
+    def los(self) -> bool:
+        """Kun je hem eruit halen (en dus veilig verwijderen)?"""
+        return self.soort in ("stick", "extern", "kaart", "cd")
+
+    @property
+    def icoon(self) -> str:
+        return {"stick": "usb", "kaart": "kaart", "cd": "cd"}.get(self.soort, "opslag")
 
 
-def dichte_usb() -> list[tuple[str, str]]:
-    """(naam, apparaat) van USB-sticks die er wel zijn maar nog niet open staan."""
-    if os.environ.get("BUGOS_USB") is not None:
-        return []
+VERBORGEN_TYPES = {  # partities die je nooit hoeft te zien
+    "c12a7328-f81f-11d2-ba4b-00a0c93ec93b",  # EFI (opstarten)
+    "e3c9e316-0b5c-4db8-817d-f92df00215ae",  # Microsoft, gereserveerd
+    "de94bba4-06d1-4d40-a16a-bfd50179d6ac",  # Windows-herstel
+    "21686148-6449-6e6f-744e-656564454649",  # BIOS-opstart
+    "0xef", "0x27",                          # EFI en Windows-herstel (oude indeling)
+}
+VERBORGEN_FS = {"swap", "LVM2_member", "linux_raid_member", "zfs_member", "squashfs", "erofs"}
+SLOT_FS = {"crypto_LUKS", "BitLocker"}
+LSBLK = ["lsblk", "-J", "-b", "-o",
+         "NAME,PATH,TYPE,SIZE,FSTYPE,FSAVAIL,FSSIZE,LABEL,MODEL,RM,HOTPLUG,TRAN,MOUNTPOINTS,PARTTYPE"]
+
+
+def systeem_plek(plek: str) -> bool:
+    """Staat hier BugOS zelf? (/, /boot, /var, ... maar niet /var/mnt of /run/media)"""
+    if plek in ("/", "[SWAP]"):
+        return True
+    if plek.startswith(("/var/mnt/", "/var/media/", "/run/media/", "/media/", "/mnt/")):
+        return False
+    return any(plek == p or plek.startswith(p + "/")
+               for p in ("/sysroot", "/boot", "/efi", "/usr", "/etc", "/var", "/home", "/root", "/opt", "/srv"))
+
+
+def lees_lsblk() -> list[dict]:
+    nep = os.environ.get("BUGOS_LSBLK")  # voor tests en foto's: een vast lijstje in plaats van de echte schijven
     try:
-        uit = subprocess.run(["lsblk", "-J", "-o", "PATH,LABEL,SIZE,HOTPLUG,MOUNTPOINT,FSTYPE,TYPE"],
-                             capture_output=True, text=True, timeout=3).stdout
-        lijst = []
-
-        def loop(apparaten: list[dict], hotplug: bool) -> None:
-            for a in apparaten:
-                hp = hotplug or bool(a.get("hotplug"))
-                if hp and a.get("fstype") and not a.get("mountpoint") and a.get("type") == "part":
-                    lijst.append((a.get("label") or t(f"USB-stick ({a.get('size')})", f"USB stick ({a.get('size')})"),
-                                  a["path"]))
-                loop(a.get("children") or [], hp)
-        loop(json.loads(uit).get("blockdevices", []), False)
-        return lijst
+        if nep is not None:
+            return json.loads(Path(nep).read_text(encoding="utf-8")).get("blockdevices", []) if nep else []
+        uit = subprocess.run(LSBLK, capture_output=True, text=True, timeout=4).stdout
+        return json.loads(uit).get("blockdevices", [])
     except (OSError, subprocess.SubprocessError, ValueError):
         return []
+
+
+def _plekken_van(a: dict) -> list[str]:
+    return [m for m in (a.get("mountpoints") or [a.get("mountpoint")]) if m]
+
+
+def _alle(a: dict):
+    yield a
+    for kind in a.get("children") or []:
+        yield from _alle(kind)
+
+
+def _getal(waarde) -> int | None:
+    try:
+        return int(waarde) if waarde is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def schijven(apparaten: list[dict] | None = None) -> list[Schijf]:
+    """Alle schijven die je in Bestanden ziet (dus niet de schijf van BugOS zelf)."""
+    apparaten = lees_lsblk() if apparaten is None else apparaten
+    lijst: list[Schijf] = []
+    for station in apparaten:
+        if station.get("type") not in ("disk", "rom"):
+            continue  # geen loop-apparaten en dergelijke
+        naam = station.get("name") or ""
+        if naam.startswith(("zram", "loop", "ram", "nbd")):
+            continue
+        systeem = any(systeem_plek(m) for a in _alle(station) for m in _plekken_van(a))
+        grootte_station = _getal(station.get("size")) or 0
+        if station.get("type") == "rom":
+            soort = "cd"
+        elif naam.startswith("mmcblk") and not systeem:
+            soort = "kaart"
+        elif not systeem and (station.get("rm") or station.get("hotplug") or station.get("tran") == "usb"):
+            soort = "stick" if station.get("rm") or grootte_station <= 128 * 10**9 else "extern"
+        else:
+            soort = "intern"
+        kandidaten = [station] if station.get("fstype") and not station.get("children") else \
+            [k for k in station.get("children") or [] if k.get("type") == "part"]
+        for deel in kandidaten:
+            fs = deel.get("fstype") or ""
+            if not fs or fs in VERBORGEN_FS or (deel.get("parttype") or "").lower() in VERBORGEN_TYPES:
+                continue
+            grootte = _getal(deel.get("size")) or 0
+            fs_deel, versleuteld, op_slot = deel, fs in SLOT_FS, False
+            if versleuteld:
+                open_slot = next((k for k in deel.get("children") or [] if k.get("type") == "crypt"), None)
+                if open_slot is not None:
+                    fs_deel = open_slot
+                else:
+                    op_slot = True
+            plekken_ = _plekken_van(fs_deel)
+            if any(systeem_plek(m) for m in plekken_):
+                continue  # hier staat BugOS zelf op
+            if soort == "intern" and not plekken_ and grootte < 10**9:
+                continue  # kleine verborgen stukjes van de fabrikant
+            label = (fs_deel.get("label") or deel.get("label") or "").strip()
+            if label.upper() in ("NO NAME", "NO_NAME", "UNTITLED"):
+                label = ""
+            if not label:
+                maat = mooie_maat(grootte or grootte_station)
+                if soort == "intern" and fs in ("ntfs", "BitLocker"):
+                    label = t("Windows-schijf", "Windows drive")
+                else:
+                    label = {
+                        "stick": t(f"USB-stick ({maat})", f"USB stick ({maat})"),
+                        "extern": t("Externe schijf", "External drive"),
+                        "kaart": t(f"SD-kaart ({maat})", f"SD card ({maat})"),
+                        "cd": t("Cd of dvd", "CD or DVD"),
+                    }.get(soort, t(f"Schijf ({maat})", f"Drive ({maat})"))
+            wortel = plekken_[0] if plekken_ else ""
+            lijst.append(Schijf(
+                apparaat=deel.get("path") or f"/dev/{deel.get('name')}", naam=label, soort=soort,
+                station=station.get("path") or f"/dev/{naam}",
+                fs_apparaat=fs_deel.get("path") or f"/dev/{fs_deel.get('name')}", wortel=wortel,
+                grootte=_getal(fs_deel.get("fssize")) or grootte, vrij=_getal(fs_deel.get("fsavail")) if wortel else None,
+                op_slot=op_slot, versleuteld=versleuteld, fs=fs_deel.get("fstype") or fs))
+    gezien: dict[str, int] = {}
+    for s in lijst:  # twee keer dezelfde naam? Dan "USB-stick (16 GB) (2)"
+        gezien[s.naam] = gezien.get(s.naam, 0) + 1
+        if gezien[s.naam] > 1:
+            s.naam = f"{s.naam} ({gezien[s.naam]})"
+    return lijst
+
+
+def schijf_van(pad: Path, lijst: list[Schijf]) -> Schijf | None:
+    """Op welke (open) schijf staat deze map? De diepste wint."""
+    beste = None
+    for s in lijst:
+        if s.wortel and zit_in(pad, Path(s.wortel)) and (beste is None or len(s.wortel) > len(beste.wortel)):
+            beste = s
+    return beste
+
+
+def openen_stappen(s: Schijf) -> list[str]:
+    """Hoe zetten we deze schijf open? (Een wachtwoord vraagt KDE zelf, in een eigen venster.)"""
+    if s.op_slot:
+        return ["solid-hardware6", "mount", f"/org/freedesktop/UDisks2/block_devices/{Path(s.apparaat).name}"]
+    return ["udisksctl", "mount", "-b", s.fs_apparaat or s.apparaat]
+
+
+def uitwerp_stappen(lijst: list[Schijf], station: str) -> tuple[list[list[str]], list[str]]:
+    """Wat moet er gebeuren voor 'Veilig verwijderen'? Alle delen dicht, dan de stroom eraf.
+
+    Geeft (stappen die moeten lukken, laatste stap die mag mislukken)."""
+    stappen: list[list[str]] = []
+    for s in lijst:
+        if s.station != station:
+            continue
+        if s.wortel:
+            stappen.append(["udisksctl", "unmount", "-b", s.fs_apparaat or s.apparaat])
+        if s.versleuteld and not s.op_slot:
+            stappen.append(["udisksctl", "lock", "-b", s.apparaat])
+    if station.startswith("/dev/sr"):
+        return stappen, ["eject", station]
+    return stappen, ["udisksctl", "power-off", "-b", station]
 
 
 def vrije_ruimte(pad: Path) -> str:
@@ -654,6 +802,13 @@ QPushButton#balkknop:hover {{ background: {K['knop']}; }}
 QPushButton#balkknop:focus {{ background: {K['knop']}; }}
 QPushButton#balkknop[gevaar="true"] {{ color: {K['fout']}; }}
 QFrame#streep {{ background: {K['rand']}; min-width: 1px; max-width: 1px; border: none; }}
+QWidget#computer_binnen {{ background: transparent; }}
+QFrame#schijfkaart {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-radius: 18px; }}
+QFrame#schijfkaart:hover {{ border: 1px solid {K['rand_sterk']}; background: {K['vlak_hover']}; }}
+QLabel#schijfchip {{ background: {K['knop']}; border-radius: 14px; }}
+QProgressBar#vrij {{ background: {K['knop']}; border: none; border-radius: 4px; min-height: 8px; max-height: 8px; }}
+QProgressBar#vrij::chunk {{ background: {K['tekst2']}; border-radius: 4px; }}
+QProgressBar#vrij[vol="true"]::chunk {{ background: {K['accent']}; }}
 """
 
 
@@ -775,6 +930,56 @@ class Keuzebalk(QFrame):
         self.raise_()
 
 
+class SchijfKaart(QFrame):
+    """Eén schijf op de pagina 'Deze computer': naam, hoeveel ruimte er nog is, en eventueel uitwerpen."""
+
+    geklikt = Signal()
+
+    def __init__(self, icoon_naam: str, naam: str, uitleg: str, gebruikt: float | None, uitwerpen: bool):
+        super().__init__()
+        self.setObjectName("schijfkaart")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setMinimumHeight(104)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(18, 16, 14, 16)
+        lay.setSpacing(16)
+        chip = QLabel()
+        chip.setObjectName("schijfchip")
+        chip.setFixedSize(56, 56)
+        chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        chip.setPixmap(lijn_pixmap(icoon_naam, "tekst", 26 * 2).scaled(
+            26, 26, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        lay.addWidget(chip, 0, Qt.AlignmentFlag.AlignTop)
+        midden = QVBoxLayout()
+        midden.setSpacing(6)
+        kop = label(naam, "kop3", wrap=False)
+        midden.addWidget(kop)
+        self.balk = None
+        if gebruikt is not None:
+            balk = QProgressBar()
+            balk.setObjectName("vrij")
+            balk.setTextVisible(False)
+            balk.setRange(0, 1000)
+            balk.setValue(int(max(0.0, min(1.0, gebruikt)) * 1000))
+            balk.setProperty("vol", "true" if gebruikt >= 0.9 else "false")
+            midden.addWidget(balk)
+            self.balk = balk
+        midden.addWidget(label(uitleg, "sub"))
+        self.uitwerp_knop = None
+        if uitwerpen:
+            self.uitwerp_knop = Knop(t("Veilig verwijderen", "Safely remove"), "rand", "lijn:uitwerpen")
+            self.uitwerp_knop.setMinimumHeight(38)
+            midden.addSpacing(4)
+            midden.addWidget(self.uitwerp_knop, 0, Qt.AlignmentFlag.AlignLeft)
+        midden.addStretch(1)
+        lay.addLayout(midden, 1)
+
+    def mouseReleaseEvent(self, e) -> None:  # noqa: N802
+        if e.button() == Qt.MouseButton.LeftButton and self.rect().contains(e.position().toPoint()):
+            self.geklikt.emit()
+        super().mouseReleaseEvent(e)
+
+
 class Bestanden(QWidget):
     def __init__(self, start: Path | None = None, kies: Path | None = None):
         super().__init__()
@@ -788,6 +993,9 @@ class Bestanden(QWidget):
         self.in_prullenbak = False
         self.klus: Klus | None = None
         self.laatst_weg: list[tuple[Path, Path]] = []
+        self.in_computer = False                 # de pagina 'Deze computer' staat open
+        self.lijst_schijven: list[Schijf] = []   # USB-sticks en andere schijven
+        self.bezig: set[str] = set()             # schijven die nu open of dicht gaan
 
         hoofd = QHBoxLayout(self)
         hoofd.setContentsMargins(0, 0, 0, 0)
@@ -917,9 +1125,20 @@ class Bestanden(QWidget):
         for w in (self.leeg_beeld, self.leeg_kop, self.leeg_sub):
             ll.addWidget(w)
         ll.addStretch(2)
+        self.computer = QScrollArea()
+        self.computer.setFrameShape(QFrame.Shape.NoFrame)
+        self.computer.setWidgetResizable(True)
+        self.computer.viewport().setAutoFillBackground(False)
+        binnen = QWidget()
+        binnen.setObjectName("computer_binnen")
+        self.computer_lay = QVBoxLayout(binnen)
+        self.computer_lay.setContentsMargins(4, 4, 4, 4)
+        self.computer_lay.setSpacing(14)
+        self.computer.setWidget(binnen)
         self.stapel = QStackedWidget()
         self.stapel.addWidget(self.lijst)
         self.stapel.addWidget(self.leeg)
+        self.stapel.addWidget(self.computer)
         rechts.addWidget(self.stapel, 1)
 
         hoofd.addLayout(rechts, 1)
@@ -962,22 +1181,34 @@ class Bestanden(QWidget):
 
     # ------------------------------------------------------------ zijbalk
     def vul_zijbalk(self) -> None:
-        sleutels = ([f"plek:{p[0]}" for p in plekken()] + [f"usb:{v[1]}" for v in usb_volumes()]
-                    + [f"dicht:{d[1]}" for d in dichte_usb()])
+        """Vaste plekken, en daaronder 'Schijven': Deze computer, USB-sticks en andere schijven."""
+        oud, lijst = self.lijst_schijven, schijven()
+        self.lijst_schijven = lijst
+        sleutels = ([f"plek:{p[0]}:{p[1]}" for p in plekken()]
+                    + [f"{x.apparaat}|{x.naam}|{x.wortel}|{x.op_slot}" for x in lijst])
         if getattr(self, "_zijbalk_sleutels", None) == sleutels:
             return
         self._zijbalk_sleutels = sleutels
+        # Stond je in een schijf die nu dicht is of eruit is gehaald? Dan terug naar Thuis.
+        weg = None if self.in_prullenbak or self.in_computer else schijf_van(self.huidig, oud)
+        if weg and not any(x.wortel == weg.wortel for x in lijst):
+            nog_er = any(x.apparaat == weg.apparaat for x in lijst)
+            self.ga_naar(thuis(), geschiedenis=False)
+            self.melding.toon(t(f"'{weg.naam}' is dichtgegaan.", f"'{weg.naam}' was closed.") if nog_er else
+                              t(f"'{weg.naam}' is eruit gehaald.", f"'{weg.naam}' was removed."))
         self.zijbalk.clear()
         for sleutel, naam, ic, _pad in plekken():
             self.zijbalk.voeg_toe(f"lijn:{ic}", naam, f"plek:{sleutel}")
-        usb, dicht = usb_volumes(), dichte_usb()
-        if usb or dicht:
-            self.zijbalk.voeg_kop(t("USB-sticks", "USB sticks"))
-            for naam, wortel, _dev in usb:
-                self.zijbalk.voeg_toe("lijn:usb", naam, f"usb:{wortel}")
-            for naam, dev in dicht:
-                self.zijbalk.voeg_toe("lijn:usb", naam, f"dicht:{dev}")
+        self.zijbalk.voeg_kop(t("Schijven", "Drives"))
+        self.zijbalk.voeg_toe("lijn:laptop", t("Deze computer", "This computer"), "computer")
+        for x in lijst:
+            item = self.zijbalk.voeg_toe(f"lijn:{'slot' if x.op_slot else x.icoon}", x.naam, f"schijf:{x.apparaat}")
+            item.setToolTip(self.schijf_uitleg(x))
         self.markeer_zijbalk()
+        if self.in_computer:
+            self.vul_computer()
+        elif not self.in_prullenbak:
+            self.bouw_pad()
 
     def markeer_zijbalk(self) -> None:
         self.zijbalk.clearSelection()
@@ -985,15 +1216,21 @@ class Bestanden(QWidget):
         if self.in_prullenbak:
             self.bak_lijst.setCurrentRow(0)
             return
+        if self.in_computer:
+            self.zijbalk.kies("computer")
+            return
         beste, lengte = "", -1
         for sleutel, _n, _i, pad in plekken():
             if (self.huidig == pad or zit_in(self.huidig, pad)) and len(str(pad)) > lengte:
                 beste, lengte = f"plek:{sleutel}", len(str(pad))
-        for _naam, wortel, _dev in usb_volumes():
-            if zit_in(self.huidig, Path(wortel)) and len(wortel) > lengte:
-                beste, lengte = f"usb:{wortel}", len(wortel)
+        hier = schijf_van(self.huidig, self.lijst_schijven)
+        if hier and len(hier.wortel) > lengte:
+            beste = f"schijf:{hier.apparaat}"
         if beste:
             self.zijbalk.kies(beste)
+
+    def schijf(self, apparaat: str) -> Schijf | None:
+        return next((x for x in self.lijst_schijven if x.apparaat == apparaat), None)
 
     def zijbalk_klik(self, item) -> None:
         sleutel = item.data(Qt.ItemDataRole.UserRole) or ""
@@ -1002,19 +1239,25 @@ class Bestanden(QWidget):
                 if f"plek:{s}" == sleutel:
                     pad.mkdir(parents=True, exist_ok=True)
                     self.ga_naar(pad)
-        elif sleutel.startswith("usb:"):
-            self.ga_naar(Path(sleutel[4:]))
-        elif sleutel.startswith("dicht:"):
-            self.open_usb(sleutel[6:])
+        elif sleutel == "computer":
+            self.open_computer()
+        elif sleutel.startswith("schijf:"):
+            gevonden = self.schijf(sleutel[7:])
+            if gevonden:
+                self.open_schijf(gevonden)
 
     def zijbalk_menu(self, punt) -> None:
         item = self.zijbalk.itemAt(punt)
         sleutel = (item.data(Qt.ItemDataRole.UserRole) or "") if item else ""
-        if not sleutel.startswith("usb:"):
+        gevonden = self.schijf(sleutel[7:]) if sleutel.startswith("schijf:") else None
+        if gevonden is None:
             return
         m = QMenu(self)
-        a = m.addAction(lijn_icoon("uitwerpen", "tekst", 18, gekozen=None), t("Veilig verwijderen", "Safely remove"))
-        a.triggered.connect(lambda _c=False: self.uitwerpen(sleutel[4:]))
+        a = m.addAction(lijn_icoon("openen", "tekst", 18, gekozen=None), t("Openen", "Open"))
+        a.triggered.connect(lambda _c=False, g=gevonden: self.open_schijf(g))
+        if gevonden.los:
+            b = m.addAction(lijn_icoon("uitwerpen", "tekst", 18, gekozen=None), t("Veilig verwijderen", "Safely remove"))
+            b.triggered.connect(lambda _c=False, g=gevonden: self.uitwerpen(g.station))
         m.exec(self.zijbalk.mapToGlobal(punt))
 
     # -------------------------------------------------------- navigeren
@@ -1023,10 +1266,10 @@ class Bestanden(QWidget):
         if not pad.is_dir():
             self.melding.toon(t(f"De map '{pad.name}' bestaat niet (meer).", f"The folder '{pad.name}' does not exist."), "fout")
             return
-        if geschiedenis and (self.in_prullenbak or pad != self.huidig):
-            self.terug_lijst.append(Path("::prullenbak") if self.in_prullenbak else self.huidig)
+        if geschiedenis and (self.in_prullenbak or self.in_computer or pad != self.huidig):
+            self.terug_lijst.append(self.plek_nu())
             self.vooruit_lijst.clear()
-        self.in_prullenbak = False
+        self.in_prullenbak = self.in_computer = False
         self.huidig = pad
         self.zoek.blockSignals(True)
         self.zoek.clear()
@@ -1046,11 +1289,17 @@ class Bestanden(QWidget):
         self.markeer_zijbalk()
         self.ververs_staat()
 
+    def plek_nu(self) -> Path:
+        """Waar zijn we? (voor de terug- en vooruitknop)"""
+        if self.in_prullenbak:
+            return Path("::prullenbak")
+        return Path("::computer") if self.in_computer else self.huidig
+
     def open_prullenbak(self, geschiedenis: bool = True) -> None:
         if geschiedenis and not self.in_prullenbak:
-            self.terug_lijst.append(self.huidig)
+            self.terug_lijst.append(self.plek_nu())
             self.vooruit_lijst.clear()
-        self.in_prullenbak = True
+        self.in_prullenbak, self.in_computer = True, False
         self.bak_model.clear()
         for bestand, info, herkomst in prullenbak_inhoud():
             it = QStandardItem(bestand.name)
@@ -1071,24 +1320,26 @@ class Bestanden(QWidget):
         if not self.terug_lijst:
             return
         vorige = self.terug_lijst.pop()
-        self.vooruit_lijst.append(Path("::prullenbak") if self.in_prullenbak else self.huidig)
+        self.vooruit_lijst.append(self.plek_nu())
         self._spring(vorige)
 
     def vooruit(self) -> None:
         if not self.vooruit_lijst:
             return
         volgende = self.vooruit_lijst.pop()
-        self.terug_lijst.append(Path("::prullenbak") if self.in_prullenbak else self.huidig)
+        self.terug_lijst.append(self.plek_nu())
         self._spring(volgende)
 
     def _spring(self, doel: Path) -> None:
         if str(doel) == "::prullenbak":
             self.open_prullenbak(geschiedenis=False)
+        elif str(doel) == "::computer":
+            self.open_computer(geschiedenis=False)
         else:
             self.ga_naar(doel, geschiedenis=False)
 
     def omhoog(self) -> None:
-        if not self.in_prullenbak and self.huidig.parent != self.huidig:
+        if not self.in_prullenbak and not self.in_computer and self.huidig.parent != self.huidig:
             self.ga_naar(self.huidig.parent)
 
     def bouw_pad(self) -> None:
@@ -1096,32 +1347,33 @@ class Bestanden(QWidget):
             w = self.pad_lay.takeAt(0).widget()
             if w:
                 w.deleteLater()
-        self.pad_vak.setVisible(not self.in_prullenbak)
-        self.titel.setVisible(self.in_prullenbak)
-        self.zoek.setVisible(not self.in_prullenbak)
-        self.nieuw_knop.setVisible(not self.in_prullenbak)
+        in_map = not self.in_prullenbak and not self.in_computer
+        self.pad_vak.setVisible(in_map)
+        self.titel.setVisible(not in_map)
+        self.zoek.setVisible(in_map)
+        self.nieuw_knop.setVisible(in_map)
         self.ververs_plak()
         self.leeg_knop.setVisible(self.in_prullenbak)
-        op_usb = next((w for _n, w, _d in usb_volumes() if zit_in(self.huidig, Path(w))), None)
-        self.uitwerp_knop.setVisible(bool(op_usb) and not self.in_prullenbak)
+        hier = schijf_van(self.huidig, self.lijst_schijven) if in_map else None
+        self.uitwerp_knop.setVisible(bool(hier and hier.los))
         self.terug_knop.setEnabled(bool(self.terug_lijst))
         self.vooruit_knop.setEnabled(bool(self.vooruit_lijst))
-        if self.in_prullenbak:
+        if not in_map:
             self.titel.setText("")
-            self.grote_titel.setText(t("Prullenbak", "Trash"))
-            self.setWindowTitle(t("Prullenbak", "Trash"))
+            titel = t("Prullenbak", "Trash") if self.in_prullenbak else t("Deze computer", "This computer")
+            self.grote_titel.setText(titel)
+            self.setWindowTitle(titel)
             return
         naam_hier = next((n for s_, n, _i, p_ in plekken() if p_ == self.huidig), None)
         if naam_hier is None:
-            naam_hier = next((n for n, w, _d in usb_volumes() if Path(w) == self.huidig), self.huidig.name or "/")
+            naam_hier = hier.naam if hier and Path(hier.wortel) == self.huidig else (self.huidig.name or "/")
         self.grote_titel.setText(naam_hier)
         self.setWindowTitle(f"{self.huidig.name or '/'} - {t('Bestanden', 'Files')}")
-        # Van waar tellen we? Thuis, een USB-stick, of de hele computer.
+        # Van waar tellen we? Thuis, een schijf, of de hele computer.
         delen: list[tuple[str, Path]] = []
         wortel_naam, wortel = t("Computer", "Computer"), Path("/")
-        for naam, w, _d in usb_volumes():
-            if zit_in(self.huidig, Path(w)):
-                wortel_naam, wortel = naam, Path(w)
+        if hier:
+            wortel_naam, wortel = hier.naam, Path(hier.wortel)
         if wortel == Path("/") and (self.huidig == thuis() or zit_in(self.huidig, thuis())):
             wortel_naam, wortel = t("Thuis", "Home"), thuis()
         delen.append((wortel_naam, wortel))
@@ -1150,6 +1402,13 @@ class Bestanden(QWidget):
 
     # ----------------------------------------------------------- inhoud
     def ververs_staat(self) -> None:
+        if self.in_computer:
+            n = len(self.lijst_schijven) + 1
+            self.status.setText(t(f"{n} {'schijf' if n == 1 else 'schijven'}", f"{n} {'drive' if n == 1 else 'drives'}"))
+            self.stapel.setCurrentWidget(self.computer)
+            self.keuzebalk.toon(0, False)
+            self.plaats_keuzebalk()
+            return
         model = self.lijst.model()
         if model is None:
             return
@@ -1176,7 +1435,8 @@ class Bestanden(QWidget):
         if gekozen:
             delen.append(t(f"{gekozen} gekozen", f"{gekozen} selected"))
         if not self.in_prullenbak:
-            vrij = vrije_ruimte(self.huidig)
+            hier = schijf_van(self.huidig, self.lijst_schijven)
+            vrij = mooie_maat(hier.vrij) if hier and hier.vrij is not None else vrije_ruimte(self.huidig)
             if vrij:
                 delen.append(t(f"{vrij} vrij", f"{vrij} free"))
         self.status.setText("  ·  ".join(delen))
@@ -1215,7 +1475,7 @@ class Bestanden(QWidget):
         return super().event(e)
 
     def ververs_plak(self) -> None:
-        self.plak_knop.setVisible(not self.in_prullenbak and self.klembord_heeft_bestanden())
+        self.plak_knop.setVisible(not self.in_prullenbak and not self.in_computer and self.klembord_heeft_bestanden())
 
     def escape(self) -> None:
         if self.zoek.text():
@@ -1243,12 +1503,12 @@ class Bestanden(QWidget):
 
     def gekozen(self) -> list[Path]:
         sel = self.lijst.selectionModel()
-        if sel is None:
+        if sel is None or self.in_computer:
             return []
         return [Path(i.data(PAD_ROL)) for i in sel.selectedIndexes() if i.data(PAD_ROL)]
 
     def selecteer(self, pad: Path) -> None:
-        if self.in_prullenbak:
+        if self.in_prullenbak or self.in_computer:
             return
         idx = self.sorteer.mapFromSource(self.model.index(str(pad)))
         if idx.isValid():
@@ -1332,7 +1592,8 @@ class Bestanden(QWidget):
         return bool(data and data.hasUrls() and any(u.isLocalFile() for u in data.urls()))
 
     def plak(self) -> None:
-        if self.in_prullenbak or not self.klembord_heeft_bestanden() or (self.klus and self.klus.isRunning()):
+        if self.in_prullenbak or self.in_computer or not self.klembord_heeft_bestanden() or \
+                (self.klus and self.klus.isRunning()):
             return
         data = QApplication.clipboard().mimeData()
         bronnen = [Path(u.toLocalFile()) for u in data.urls() if u.isLocalFile() and Path(u.toLocalFile()).exists()]
@@ -1400,7 +1661,7 @@ class Bestanden(QWidget):
             self.melding.toon(t(f"Naam wijzigen lukte niet: {e.strerror}", f"Rename failed: {e.strerror}"), "fout")
 
     def nieuwe_map(self) -> None:
-        if self.in_prullenbak:
+        if self.in_prullenbak or self.in_computer:
             return
         naam = self.vraag_tekst(t("Nieuwe map", "New folder"), t("Naam van de map:", "Folder name:"),
                                 t("Nieuwe map", "New folder"))
@@ -1485,49 +1746,185 @@ class Bestanden(QWidget):
             self.open_prullenbak(geschiedenis=False)
             self.melding.toon(t("De prullenbak is leeg.", "The trash is empty."), "goed")
 
-    # ------------------------------------------------------ USB-sticks
-    def open_usb(self, apparaat: str) -> None:
-        self.melding.toon(t("USB-stick openen…", "Opening USB stick…"), seconden=0)
-        QApplication.processEvents()
-        try:
-            uit = subprocess.run(["udisksctl", "mount", "-b", apparaat, "--no-user-interaction"],
-                                 capture_output=True, text=True, timeout=20)
-        except (OSError, subprocess.SubprocessError):
-            uit = None
-        self.vul_zijbalk()
-        if uit and uit.returncode == 0 and " at " in uit.stdout:
-            self.melding.hide()
-            self.ga_naar(Path(uit.stdout.rsplit(" at ", 1)[1].strip().rstrip(".")))
-        else:
-            self.melding.toon(t("Deze USB-stick kon niet open. Probeer hem opnieuw in te steken.",
-                                "This USB stick could not be opened. Try plugging it in again."), "fout")
+    # --------------------------------------------- schijven en USB-sticks
+    def schijf_uitleg(self, x: Schijf) -> str:
+        maat = f"{mooie_maat(x.grootte)} · " if x.grootte else ""
+        if x.op_slot:
+            return maat + t("Op slot. Klik erop, dan vraagt BugOS om het wachtwoord.",
+                            "Locked. Click it and BugOS asks for the password.")
+        if not x.wortel:
+            return maat + t("Nog dicht. Klik om te openen.", "Closed. Click to open.")
+        if x.vrij is not None and x.grootte:
+            return t(f"{mooie_maat(x.vrij)} vrij van {mooie_maat(x.grootte)}",
+                     f"{mooie_maat(x.vrij)} free of {mooie_maat(x.grootte)}")
+        return t("Open", "Open")
+
+    def open_computer(self, geschiedenis: bool = True) -> None:
+        """De pagina 'Deze computer': al je schijven, en hoeveel ruimte er nog is (zoals 'Deze pc' in Windows)."""
+        if geschiedenis and not self.in_computer:
+            self.terug_lijst.append(self.plek_nu())
+            self.vooruit_lijst.clear()
+        if self.lijst.selectionModel() is not None:
+            self.lijst.selectionModel().clear()
+        self.in_computer, self.in_prullenbak = True, False
+        self.vul_computer()
+        self.bouw_pad()
+        self.markeer_zijbalk()
+        self.ververs_staat()
+
+    def vul_computer(self) -> None:
+        lay = self.computer_lay
+        while lay.count():
+            item = lay.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                while item.layout().count():
+                    w = item.layout().takeAt(0).widget()
+                    if w:
+                        w.deleteLater()
+        rooster = QGridLayout()
+        rooster.setHorizontalSpacing(14)
+        rooster.setVerticalSpacing(14)
+        rooster.setColumnStretch(0, 1)
+        rooster.setColumnStretch(1, 1)
+        eigen = QStorageInfo(str(thuis()))
+        totaal, vrij = eigen.bytesTotal(), eigen.bytesAvailable()
+        kaarten = [SchijfKaart("laptop", t("Je eigen bestanden", "Your own files"),
+                               t(f"{mooie_maat(vrij)} vrij van {mooie_maat(totaal)}",
+                                 f"{mooie_maat(vrij)} free of {mooie_maat(totaal)}") if totaal > 0 else "",
+                               1 - vrij / totaal if totaal > 0 else None, False)]
+        kaarten[0].geklikt.connect(lambda: self.ga_naar(thuis()))
+        for x in self.lijst_schijven:
+            gebruikt = 1 - x.vrij / x.grootte if x.wortel and x.vrij is not None and x.grootte else None
+            kaart = SchijfKaart("slot" if x.op_slot else x.icoon, x.naam, self.schijf_uitleg(x), gebruikt,
+                                x.los and bool(x.wortel))
+            kaart.geklikt.connect(lambda g=x: self.open_schijf(g))
+            if kaart.uitwerp_knop:
+                kaart.uitwerp_knop.clicked.connect(lambda _c=False, g=x: self.uitwerpen(g.station))
+            kaarten.append(kaart)
+        for i, kaart in enumerate(kaarten):
+            rooster.addWidget(kaart, i // 2, i % 2)
+        lay.addLayout(rooster)
+        if not self.lijst_schijven:
+            tip = label(t("Steek een USB-stick in, dan zie je hem hier.", "Plug in a USB stick and it shows up here."),
+                        "sub")
+            tip.setContentsMargins(6, 4, 0, 0)
+            lay.addWidget(tip)
+        lay.addStretch(1)
+
+    def draai(self, stappen: list[list[str]], klaar, laatste: list[str] | None = None) -> None:
+        """Voer opdrachten na elkaar uit, zonder dat het venster vastloopt (ook niet als KDE om een wachtwoord vraagt)."""
+        rij = [list(x) for x in stappen]
+        uitvoer: list[str] = []
+
+        def start(opdracht: list[str], verder) -> None:
+            proces = QProcess(self)
+            gedaan = []
+
+            def af(code: int, status) -> None:
+                if gedaan:
+                    return
+                gedaan.append(True)
+                uitvoer.append(bytes(proces.readAllStandardOutput()).decode(errors="ignore")
+                               + bytes(proces.readAllStandardError()).decode(errors="ignore"))
+                proces.deleteLater()
+                verder(code == 0 and status == QProcess.ExitStatus.NormalExit)
+
+            def fout(soort) -> None:
+                if soort == QProcess.ProcessError.FailedToStart and not gedaan:
+                    gedaan.append(True)
+                    proces.deleteLater()
+                    verder(False)
+
+            proces.finished.connect(af)
+            proces.errorOccurred.connect(fout)
+            proces.start(opdracht[0], opdracht[1:])
+
+        def volgende(ok: bool = True) -> None:
+            if not ok:
+                klaar(False, "".join(uitvoer))
+            elif rij:
+                start(rij.pop(0), volgende)
+            elif laatste:
+                start(laatste, lambda _ok: klaar(True, "".join(uitvoer)))
+            else:
+                klaar(True, "".join(uitvoer))
+
+        volgende()
+
+    def open_schijf(self, x: Schijf) -> None:
+        if x.wortel:
+            self.ga_naar(Path(x.wortel))
+            return
+        if x.apparaat in self.bezig:
+            return
+        opdracht = openen_stappen(x)
+        if not shutil.which(opdracht[0]):
+            self.melding.toon(t(f"'{x.naam}' kan hier niet open. Probeer Dolphin (voor gevorderden).",
+                                f"'{x.naam}' cannot be opened here. Try Dolphin (advanced)."), "fout")
+            return
+        self.bezig.add(x.apparaat)
+        self.melding.toon(t(f"'{x.naam}' openen…", f"Opening '{x.naam}'…"), seconden=0)
+
+        def klaar(ok: bool, uitvoer: str) -> None:
+            self.bezig.discard(x.apparaat)
+            self._zijbalk_sleutels = None
+            self.vul_zijbalk()
+            nu = self.schijf(x.apparaat)
+            if nu and nu.wortel:
+                self.melding.hide()
+                self.ga_naar(Path(nu.wortel))
+            elif ok and " at " in uitvoer:
+                self.melding.hide()
+                self.ga_naar(Path(uitvoer.rsplit(" at ", 1)[1].strip().rstrip(".")))
+            elif x.op_slot:
+                self.melding.toon(t("Openen lukte niet. Klopte het wachtwoord?",
+                                    "Opening did not work. Was the password right?"), "fout")
+            elif x.soort == "intern" and x.fs == "ntfs":
+                self.melding.toon(t("De Windows-schijf kon niet open. Zet Windows helemaal uit (niet in de slaapstand) "
+                                    "en probeer het opnieuw.",
+                                    "The Windows drive could not be opened. Shut Windows down fully (not sleep) "
+                                    "and try again."), "fout", seconden=14)
+            else:
+                self.melding.toon(t(f"'{x.naam}' kon niet open. Haal hem eruit en steek hem er opnieuw in.",
+                                    f"'{x.naam}' could not be opened. Unplug it and plug it in again."), "fout")
+
+        self.draai([opdracht], klaar)
 
     def uitwerpen_hier(self) -> None:
-        for _n, wortel, _d in usb_volumes():
-            if zit_in(self.huidig, Path(wortel)):
-                self.uitwerpen(wortel)
-                return
+        hier = schijf_van(self.huidig, self.lijst_schijven)
+        if hier and hier.los:
+            self.uitwerpen(hier.station)
 
-    def uitwerpen(self, wortel: str) -> None:
-        apparaat = next((d for _n, w, d in usb_volumes() if w == wortel), "")
-        if zit_in(self.huidig, Path(wortel)):
-            self.ga_naar(thuis())
-        ok = False
-        if apparaat:
-            try:
-                ok = subprocess.run(["udisksctl", "unmount", "-b", apparaat, "--no-user-interaction"],
-                                    capture_output=True, timeout=30).returncode == 0
-                if ok:
-                    subprocess.run(["udisksctl", "power-off", "-b", apparaat, "--no-user-interaction"],
-                                   capture_output=True, timeout=30)
-            except (OSError, subprocess.SubprocessError):
-                ok = False
-        self.vul_zijbalk()
-        if ok:
-            self.melding.toon(t("Je kunt de USB-stick er nu veilig uithalen.", "You can now safely remove the USB stick."), "goed")
-        else:
-            self.melding.toon(t("De USB-stick is nog bezig. Sluit wat erop openstaat en probeer het opnieuw.",
-                                "The USB stick is still busy. Close what is open on it and try again."), "fout")
+    def uitwerpen(self, station: str) -> None:
+        """Veilig verwijderen: alle delen van de stick dicht, dan de stroom eraf."""
+        if station in self.bezig:
+            return
+        delen = [x for x in self.lijst_schijven if x.station == station]
+        naam = delen[0].naam if delen else t("De schijf", "The drive")
+        stappen, laatste = uitwerp_stappen(self.lijst_schijven, station)
+        if not shutil.which("udisksctl"):
+            self.melding.toon(t("Veilig verwijderen kan hier niet.", "Safe removal is not available here."), "fout")
+            return
+        if not self.in_prullenbak and not self.in_computer and any(
+                x.wortel and zit_in(self.huidig, Path(x.wortel)) for x in delen):
+            self.ga_naar(thuis())  # zelf niet meer 'in' de stick staan
+        self.bezig.add(station)
+        self.melding.toon(t(f"'{naam}' veilig verwijderen…", f"Safely removing '{naam}'…"), seconden=0)
+
+        def klaar(ok: bool, _uitvoer: str) -> None:
+            self.bezig.discard(station)
+            self._zijbalk_sleutels = None
+            self.vul_zijbalk()
+            if ok:
+                self.melding.toon(t(f"Je kunt '{naam}' er nu veilig uithalen.", f"You can now safely remove '{naam}'."),
+                                  "goed")
+            else:
+                self.melding.toon(t(f"'{naam}' is nog bezig. Sluit wat erop openstaat en probeer het opnieuw.",
+                                    f"'{naam}' is still busy. Close what is open on it and try again."), "fout")
+
+        self.draai(stappen, klaar, laatste)
 
 
 _ONS_KLEMBORD: list[QMimeData] = []  # wat wij zelf op het klembord hebben gezet
@@ -1571,7 +1968,10 @@ def main() -> int:
     app = maak_app("bugos-bestanden", "bugos-bestanden", sys.argv)
     app.aboutToQuit.connect(laat_klembord_los)
     start, kies = start_pad(sys.argv[1:])
-    return uitvoeren(app, Bestanden(start, kies))
+    venster = Bestanden(start, kies)
+    if any(a.startswith("computer:") for a in sys.argv[1:]):  # bugos-bestanden computer:/
+        venster.open_computer(geschiedenis=False)
+    return uitvoeren(app, venster)
 
 
 if __name__ == "__main__":
