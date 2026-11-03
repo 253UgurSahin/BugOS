@@ -7,43 +7,40 @@
 #   • computer op volle kracht (stroomprofiel "prestaties")
 #   • meldingen even stil (niet storen)
 #   • FPS-teller (MangoHud) in Steam-games
-# Uit zet alles terug.
+# Uit zet alles terug zoals het was (ook niet storen: stond dat al aan, dan blijft het aan).
 
 # shellcheck source=system_files/usr/share/bugos/lib.sh
 . /usr/share/bugos/lib.sh
 
 MARKER="$BUGOS_CONFIG/spelmodus-aan"
+STOREN_MARKER="$BUGOS_CONFIG/niet-storen-voor-spelmodus"
 ENVFILE="${XDG_CONFIG_HOME:-$HOME/.config}/environment.d/90-bugos-spelmodus.conf"
-
-niet_storen() {
-    # $1 = true/false. KDE leest dit direct uit plasmanotifyrc.
-    if [ "$1" = true ]; then
-        kwriteconfig6 --file plasmanotifyrc --group DoNotDisturb --key Until "2099,1,1,0,0,0.000"
-    else
-        kwriteconfig6 --file plasmanotifyrc --group DoNotDisturb --key Until --delete
-    fi
-}
 
 aan() {
     mkdir -p "$BUGOS_CONFIG" "$(dirname "$ENVFILE")"
     powerprofilesctl get >"$BUGOS_CONFIG/stroomprofiel-voor-spelmodus" 2>/dev/null
     powerprofilesctl set performance 2>/dev/null
-    niet_storen true
+    # Melding eerst, anders wordt hij door 'niet storen' meteen stilgehouden.
+    melding "$(t "Game-modus staat aan" "Game mode is on")" \
+        "$(t "Volle kracht, meldingen stil, FPS-teller in games." "Full power, notifications muted, FPS counter in games.")"
+    niet_storen_status >"$STOREN_MARKER"
+    niet_storen_aan
     printf 'MANGOHUD=1\n' >"$ENVFILE"
     systemctl --user set-environment MANGOHUD=1 2>/dev/null
     touch "$MARKER"
-    melding "$(t "Game-modus staat AAN 🎮" "Game mode is ON 🎮")" \
-        "$(t "Volle kracht, meldingen stil, FPS-teller in games." "Full power, notifications muted, FPS counter in games.")"
 }
 
 uit() {
     local vorig
     vorig="$(cat "$BUGOS_CONFIG/stroomprofiel-voor-spelmodus" 2>/dev/null || echo balanced)"
     powerprofilesctl set "$vorig" 2>/dev/null
-    niet_storen false
-    rm -f "$ENVFILE" "$MARKER"
+    # Niet storen alleen uitzetten als het door de game-modus aan is gegaan.
+    if [ "$(cat "$STOREN_MARKER" 2>/dev/null)" != aan ]; then
+        niet_storen_uit
+    fi
+    rm -f "$ENVFILE" "$MARKER" "$STOREN_MARKER"
     systemctl --user unset-environment MANGOHUD 2>/dev/null
-    melding "$(t "Game-modus staat UIT" "Game mode is OFF")" ""
+    melding "$(t "Game-modus staat uit" "Game mode is off")" ""
 }
 
 case "${1:-wissel}" in

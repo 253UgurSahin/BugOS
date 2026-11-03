@@ -4,7 +4,6 @@
 import QtQuick
 import QtQuick.Layouts
 import org.kde.plasma.plasmoid
-import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasma5support as P5Support
 import org.kde.kirigami as Kirigami
 
@@ -15,7 +14,7 @@ PlasmoidItem {
     readonly property bool nederlands: Qt.locale().name.indexOf("nl") === 0
 
     preferredRepresentation: compactRepresentation
-    toolTipMainText: nederlands ? "Start" : "Start"
+    toolTipMainText: "Start"
     toolTipSubText: nederlands ? "Apps, bestanden en aan/uit" : "Apps, files and power"
     Plasmoid.icon: "bugos-logo"
 
@@ -26,7 +25,11 @@ PlasmoidItem {
         connectedSources: []
         onNewData: (bron, data) => {
             if (bron === "bugos-start-data") {
-                try { root.gegevens = JSON.parse(data["stdout"]) } catch (e) { console.warn("BugOS startmenu:", e) }
+                if (data["exit code"] === 0 && data["stdout"]) {
+                    try { root.gegevens = JSON.parse(data["stdout"]) } catch (e) { console.warn("BugOS startmenu:", e) }
+                } else {
+                    console.warn("BugOS startmenu: bugos-start-data gaf niets terug", data["stderr"] || "")
+                }
             }
             disconnectSource(bron)
         }
@@ -40,13 +43,20 @@ PlasmoidItem {
     compactRepresentation: MouseArea {
         id: knop
         hoverEnabled: true
+        activeFocusOnTab: true
+        Accessible.name: "Start"
+        Accessible.role: Accessible.Button
         onClicked: root.expanded = !root.expanded
+        Keys.onReturnPressed: root.expanded = !root.expanded
+        Keys.onEnterPressed: root.expanded = !root.expanded
+        Keys.onSpacePressed: root.expanded = !root.expanded
         Layout.minimumWidth: Kirigami.Units.iconSizes.medium
+        Layout.minimumHeight: Kirigami.Units.iconSizes.medium
         Kirigami.Icon {
             anchors.fill: parent
             anchors.margins: Kirigami.Units.smallSpacing
             source: "bugos-logo"
-            active: knop.containsMouse || root.expanded
+            active: knop.containsMouse || root.expanded || knop.activeFocus
         }
     }
 
@@ -65,7 +75,7 @@ PlasmoidItem {
         }
         onStart: pad => root.voerUit("bugos-start-data --start " + root.aanhalen(pad))
         onOpenBestand: pad => root.voerUit("bugos-start-data --open " + root.aanhalen(pad))
-        onAanUit: actie => root.voerUit("bugos-start-data --aan-uit " + actie)
+        onAanUit: actie => root.voerUit("bugos-start-data --aan-uit " + root.aanhalen(actie))
         onSluiten: root.expanded = false
         Connections {
             target: root

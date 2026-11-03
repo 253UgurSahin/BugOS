@@ -183,3 +183,10 @@ Alle BugOS-apps (Bestanden, Instellingen, Taakbeheer, Winkel) zitten in dezelfde
   grafiekjes en gekozen tegels zijn grijs; mappen hebben een zachte BugOS-tint.
 - **Meldingen** (`Melding`) staan bovenin de pagina en verdwijnen vanzelf, met eventueel één knop
   ("Ongedaan maken").
+
+## Het bureaublad
+
+- **Taakbalk** onderaan, zwevend en altijd zichtbaar. Links het lieveheersbeestje als startknop, dan de vastgezette apps, rechts het snelmenu (twee schuifjes), het systeemvak en de klok.
+- **Startmenu**: begroeting met je voornaam, één grote zoekbalk die apps én instellingen vindt, vastgezette apps als tegels, recente bestanden, en onderin jouw naam met de aan/uit-knoppen. Alleen "Uitzetten" kleurt rood als je erop wijst.
+- **Snelmenu**: zes grote tegels (aan = rood verloop, uit = rustig vlak) en een volumeschuif. Een pijltje bij een tegel opent de bijbehorende pagina van Instellingen.
+- **Uitzetscherm**: donker over het hele scherm, één vraag in gewone woorden ("Computer uitzetten?"), grote tegels en één rode tegel. "Toch niet" of Esc gaat terug.

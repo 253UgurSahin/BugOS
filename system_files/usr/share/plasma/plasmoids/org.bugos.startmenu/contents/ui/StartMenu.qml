@@ -43,6 +43,7 @@ Rectangle {
 
     readonly property bool alleApps: stapel.currentIndex === 1
     property string zoekTekst: zoekveld.text.trim().toLowerCase()
+    property string datumTekst: datum()
 
     function tr(nl, en) { return nederlands ? nl : en }
     function groet() {
@@ -56,10 +57,31 @@ Rectangle {
         const n = (gegevens.gebruiker && gegevens.gebruiker.naam) ? gegevens.gebruiker.naam : ""
         return n.split(" ")[0]
     }
+    function datum() {
+        return new Date().toLocaleDateString(Qt.locale(nederlands ? "nl_NL" : Qt.locale().name), "dddd d MMMM")
+    }
+    // Zoeken vindt apps én de pagina's van Instellingen (soort "instelling").
     function gevonden() {
         if (zoekTekst === "") return []
         const woorden = zoekTekst.split(/\s+/)
         return gegevens.apps.filter(a => woorden.every(w => (a.zoek || a.naam.toLowerCase()).indexOf(w) >= 0))
+    }
+    // "Alle apps" laat alleen echte programma's zien.
+    function alleAppsLijst() {
+        return gegevens.apps.filter(a => a.soort !== "instelling").slice()
+            .sort((a, b) => a.groep === b.groep ? a.naam.localeCompare(b.naam) : a.groep.localeCompare(b.groep))
+    }
+    // Typ je verder terwijl de lijst de focus heeft, dan gaat de tekst gewoon in het zoekveld.
+    function naarZoekveld(e) {
+        if (e.key === Qt.Key_Backspace) {
+            zoekveld.forceActiveFocus()
+            zoekveld.text = zoekveld.text.slice(0, -1)
+            e.accepted = true
+        } else if (e.text.length > 0 && e.text.trim() !== "" && e.key !== Qt.Key_Return && e.key !== Qt.Key_Enter) {
+            zoekveld.forceActiveFocus()
+            zoekveld.text += e.text
+            e.accepted = true
+        }
     }
     function openEerste() {
         const lijst = gevonden()
@@ -68,6 +90,7 @@ Rectangle {
     function terugNaarBegin() {
         zoekveld.text = ""
         stapel.currentIndex = 0
+        datumTekst = datum()
         zoekveld.forceActiveFocus()
     }
 
@@ -97,7 +120,7 @@ Rectangle {
                 elide: Text.ElideRight
             }
             Label {
-                text: new Date().toLocaleDateString(Qt.locale(menu.nederlands ? "nl_NL" : Qt.locale().name), "dddd d MMMM")
+                text: menu.datumTekst
                 color: menu.tekst2
                 font.pixelSize: 13
             }
@@ -106,6 +129,7 @@ Rectangle {
         // ----------------------------------------------------- zoekbalk ---
         TextField {
             id: zoekveld
+            objectName: "zoekveld"
             Layout.fillWidth: true
             Layout.preferredHeight: 50
             font.pixelSize: 16
@@ -116,7 +140,10 @@ Rectangle {
             focus: true
             Accessible.name: placeholderText
             onAccepted: menu.openEerste()
-            Keys.onDownPressed: zoekLijst.forceActiveFocus()
+            Keys.onDownPressed: event => {
+                if (zoekLijst.visible && zoekLijst.count > 0) { zoekLijst.currentIndex = 0; zoekLijst.forceActiveFocus() }
+                else event.accepted = false
+            }
             background: Rectangle {
                 radius: 25
                 color: menu.donker ? Qt.rgba(1, 1, 1, 0.06) : "#FFFFFF"
@@ -137,6 +164,7 @@ Rectangle {
         // ------------------------------------------------- zoekresultaat ---
         ListView {
             id: zoekLijst
+            objectName: "zoekLijst"
             visible: menu.zoekTekst !== ""
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -144,6 +172,10 @@ Rectangle {
             spacing: 2
             model: menu.zoekTekst !== "" ? menu.gevonden() : []
             keyNavigationEnabled: true
+            Keys.onPressed: event => {
+                if (event.key === Qt.Key_Up && currentIndex <= 0) { zoekveld.forceActiveFocus(); event.accepted = true }
+                else menu.naarZoekveld(event)
+            }
             delegate: AppRegel {
                 width: zoekLijst.width
                 app: modelData
@@ -166,44 +198,61 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
 
-            // Begin: vastgezet + recent
-            ColumnLayout {
-                spacing: 10
-                RowLayout {
-                    Layout.fillWidth: true
-                    Kopje { text: menu.tr("Vastgezet", "Pinned"); Layout.fillWidth: true }
-                    PilKnop {
-                        tekst: menu.tr("Alle apps", "All apps")
-                        pijl: "›"
-                        onGeklikt: stapel.currentIndex = 1
+            // Begin: vastgezet + recent (scrolt als het niet past, drukt nooit iets plat)
+            Flickable {
+                id: begin
+                clip: true
+                contentWidth: width
+                contentHeight: beginKolom.implicitHeight
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: ScrollBar { policy: begin.contentHeight > begin.height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff }
+                ColumnLayout {
+                    id: beginKolom
+                    width: begin.width
+                    spacing: 10
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Kopje { text: menu.tr("Vastgezet", "Pinned"); Layout.fillWidth: true }
+                        PilKnop {
+                            tekst: menu.tr("Alle apps", "All apps")
+                            pijl: "›"
+                            onGeklikt: stapel.currentIndex = 1
+                        }
+                    }
+                    GridLayout {
+                        Layout.fillWidth: true
+                        columns: 5
+                        rowSpacing: 4
+                        columnSpacing: 4
+                        Repeater {
+                            model: menu.gegevens.favorieten
+                            delegate: AppTegel {
+                                app: modelData
+                                Layout.fillWidth: true; Layout.preferredWidth: 1; Layout.minimumWidth: 0
+                                Layout.minimumHeight: implicitHeight
+                            }
+                        }
+                    }
+                    Kopje {
+                        text: menu.tr("Recent geopend", "Recently opened")
+                        Layout.topMargin: 10
+                        visible: menu.gegevens.recent.length > 0
+                    }
+                    GridLayout {
+                        Layout.fillWidth: true
+                        columns: 2
+                        rowSpacing: 2
+                        columnSpacing: 8
+                        Repeater {
+                            model: menu.gegevens.recent.slice(0, 6)
+                            delegate: BestandRegel {
+                                bestand: modelData
+                                Layout.fillWidth: true; Layout.preferredWidth: 1; Layout.minimumWidth: 0
+                                Layout.minimumHeight: implicitHeight
+                            }
+                        }
                     }
                 }
-                GridLayout {
-                    Layout.fillWidth: true
-                    columns: 5
-                    rowSpacing: 4
-                    columnSpacing: 4
-                    Repeater {
-                        model: menu.gegevens.favorieten
-                        delegate: AppTegel { app: modelData; Layout.fillWidth: true; Layout.preferredWidth: 1; Layout.minimumWidth: 0 }
-                    }
-                }
-                Kopje {
-                    text: menu.tr("Recent geopend", "Recently opened")
-                    Layout.topMargin: 10
-                    visible: menu.gegevens.recent.length > 0
-                }
-                GridLayout {
-                    Layout.fillWidth: true
-                    columns: 2
-                    rowSpacing: 2
-                    columnSpacing: 8
-                    Repeater {
-                        model: menu.gegevens.recent
-                        delegate: BestandRegel { bestand: modelData; Layout.fillWidth: true; Layout.preferredWidth: 1; Layout.minimumWidth: 0 }
-                    }
-                }
-                Item { Layout.fillHeight: true }
             }
 
             // Alle apps, per onderwerp
@@ -221,11 +270,13 @@ Rectangle {
                 }
                 ListView {
                     id: alleLijst
+                    objectName: "alleLijst"
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
                     spacing: 2
-                    model: menu.gegevens.apps.slice().sort((a, b) => a.groep === b.groep ? a.naam.localeCompare(b.naam) : a.groep.localeCompare(b.groep))
+                    keyNavigationEnabled: true
+                    model: menu.alleAppsLijst()
                     section.property: "groep"
                     section.delegate: Label {
                         required property string section
@@ -238,7 +289,7 @@ Rectangle {
                         bottomPadding: 4
                         leftPadding: 8
                     }
-                    delegate: AppRegel { width: alleLijst.width; app: modelData }
+                    delegate: AppRegel { width: alleLijst.width; app: modelData; gemarkeerd: ListView.isCurrentItem && alleLijst.activeFocus }
                     ScrollBar.vertical: ScrollBar {}
                 }
             }
@@ -254,22 +305,41 @@ Rectangle {
             Layout.fillWidth: true
             spacing: 8
             Rectangle {
+                id: avatar
                 width: 38; height: 38; radius: 19
+                readonly property string foto: (menu.gegevens.gebruiker && menu.gegevens.gebruiker.foto) ? menu.gegevens.gebruiker.foto : ""
                 gradient: Gradient {
                     GradientStop { position: 0.0; color: "#FF5C50" }
                     GradientStop { position: 1.0; color: "#C41D3A" }
                 }
                 Label {
                     anchors.centerIn: parent
-                    text: (menu.gegevens.gebruiker.naam || "?").charAt(0).toUpperCase()
+                    visible: fotoBeeld.status !== Image.Ready
+                    text: ((menu.gegevens.gebruiker && menu.gegevens.gebruiker.naam) || "?").charAt(0).toUpperCase()
                     color: "white"
                     font.family: menu.display
                     font.weight: Font.DemiBold
                     font.pixelSize: 17
                 }
+                // Eigen foto (als die er is): in een rond venstertje
+                Item {
+                    anchors.fill: parent
+                    clip: true
+                    visible: fotoBeeld.status === Image.Ready
+                    Image {
+                        id: fotoBeeld
+                        anchors.fill: parent
+                        source: avatar.foto === "" ? "" : "file://" + avatar.foto
+                        fillMode: Image.PreserveAspectCrop
+                        sourceSize.width: 76
+                        sourceSize.height: 76
+                        asynchronous: true
+                    }
+                }
+                Rectangle { anchors.fill: parent; radius: 19; color: "transparent"; border.width: 1; border.color: menu.lijnkleur }
             }
             Label {
-                text: menu.gegevens.gebruiker.naam || ""
+                text: (menu.gegevens.gebruiker && menu.gegevens.gebruiker.naam) || ""
                 color: menu.tekst
                 font.pixelSize: 14
                 font.weight: Font.Medium
@@ -302,6 +372,8 @@ Rectangle {
         implicitWidth: rij.implicitWidth + 24
         hoverEnabled: true
         onClicked: geklikt()
+        Keys.onReturnPressed: clicked()
+        Keys.onEnterPressed: clicked()
         Accessible.name: tekst
         background: Rectangle {
             radius: 16
@@ -324,6 +396,8 @@ Rectangle {
         hoverEnabled: true
         Accessible.name: app.naam
         onClicked: { menu.start(app.pad); menu.sluiten() }
+        Keys.onReturnPressed: clicked()
+        Keys.onEnterPressed: clicked()
         background: Rectangle {
             radius: 14
             color: tegel.hovered || tegel.activeFocus ? menu.zweef : "transparent"
@@ -360,6 +434,7 @@ Rectangle {
         Accessible.name: app.naam
         onClicked: { menu.start(app.pad); menu.sluiten() }
         Keys.onReturnPressed: clicked()
+        Keys.onEnterPressed: clicked()
         background: Rectangle {
             radius: 12
             color: regel.hovered || regel.gemarkeerd ? menu.zweef : "transparent"
@@ -396,6 +471,8 @@ Rectangle {
         hoverEnabled: true
         Accessible.name: bestand.naam
         onClicked: { menu.openBestand(bestand.pad); menu.sluiten() }
+        Keys.onReturnPressed: clicked()
+        Keys.onEnterPressed: clicked()
         background: Rectangle {
             radius: 12
             color: bregel.hovered ? menu.zweef : "transparent"
@@ -435,6 +512,8 @@ Rectangle {
         ToolTip.visible: hovered
         ToolTip.text: tekst
         onClicked: geklikt()
+        Keys.onReturnPressed: clicked()
+        Keys.onEnterPressed: clicked()
         background: Rectangle {
             radius: 20
             color: knop.hovered || knop.activeFocus ? (knop.rood ? menu.rood : menu.zweef) : menu.vlak

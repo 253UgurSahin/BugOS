@@ -3,11 +3,12 @@
 
 Het startmenu op de taakbalk (QML) roept dit aan en krijgt JSON terug.
 
-  bugos-start-data                 -> apps, favorieten, recente bestanden, gebruiker
-  bugos-start-data --start <pad>   -> start een app (.desktop-bestand)
+  bugos-start-data                 -> apps (ook de pagina's van Instellingen), favorieten, recente bestanden, gebruiker
+  bugos-start-data --start <pad>   -> start een app (.desktop-bestand) of 'instelling:<pagina>'
   bugos-start-data --open <pad>    -> open een bestand
   bugos-start-data --aan-uit <x>   -> uitloggen | herstarten | uitzetten | slot
   bugos-start-data --snel          -> status voor het snelmenu
+  bugos-start-data --tray          -> korte status voor een taakbalk-icoontje (internet, volume, batterij)
   bugos-start-data --zet <wat> <waarde>  -> snelmenu-knop omzetten
 """
 
@@ -20,11 +21,20 @@ import shutil
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 HOME = Path.home()
 TAAL = (os.environ.get("LC_ALL") or os.environ.get("LC_MESSAGES") or os.environ.get("LANG") or "en")[:2].lower()
+
+# Sommige programma's hebben twee namen: als rpm en als Flatpak. De eerste die bestaat, telt.
+ZELFDE_APP = {
+    "com.valvesoftware.Steam.desktop": ["steam.desktop"],
+    "steam.desktop": ["com.valvesoftware.Steam.desktop"],
+    "org.mozilla.firefox.desktop": ["firefox.desktop"],
+    "firefox.desktop": ["org.mozilla.firefox.desktop"],
+}
 
 STANDAARD_FAVORIETEN = [
     "org.mozilla.firefox.desktop", "bugos-bestanden.desktop", "bugos-winkel.desktop",
@@ -44,6 +54,25 @@ CATEGORIE = [
     ("Settings", "Instellingen", "Settings"),
     ("System", "Systeem", "System"),
     ("Utility", "Hulpmiddelen", "Utilities"),
+]
+
+# De pagina's van BugOS Instellingen, zodat zoeken in het startmenu ze ook vindt.
+# (pagina, nl, en, icoon, extra zoekwoorden)
+INSTELLINGEN = [
+    ("wifi", "Wifi en internet", "Wi-Fi and internet", "network-wireless", "wifi wlan internet netwerk wachtwoord network"),
+    ("bluetooth", "Bluetooth", "Bluetooth", "network-bluetooth", "bluetooth koptelefoon muis toetsenbord headphones"),
+    ("printers", "Printers en scannen", "Printers and scanning", "printer", "printer printen afdrukken scanner scannen print scan"),
+    ("geluid", "Geluid", "Sound", "audio-volume-high", "geluid volume luidspreker speaker koptelefoon sound audio"),
+    ("scherm", "Scherm", "Display", "video-display", "scherm beeldscherm helderheid nachtlicht groot grootte display brightness"),
+    ("energie", "Energie", "Power", "battery", "energie batterij accu slaapstand zuinig snel power battery sleep"),
+    ("uiterlijk", "Uiterlijk", "Appearance", "preferences-desktop-color", "uiterlijk licht donker thema achtergrond wallpaper dark light"),
+    ("meldingen", "Meldingen", "Notifications", "preferences-desktop-notification", "meldingen berichtjes niet storen notifications"),
+    ("muis", "Muis en touchpad", "Mouse and touchpad", "input-mouse", "muis touchpad aanwijzer cursor scrollen linkshandig mouse"),
+    ("zien", "Makkelijker zien", "Easier to see", "preferences-desktop-accessibility", "zien grote letters vergrootglas muisaanwijzer toegankelijkheid zoom"),
+    ("tijd", "Tijd en taal", "Time and language", "preferences-system-time", "tijd klok datum tijdzone taal language clock"),
+    ("inloggen", "Inloggen en wachtwoord", "Login and password", "system-lock-screen", "inloggen wachtwoord account gebruiker op slot vergrendelen login password"),
+    ("programmas", "Standaardprogramma's", "Default programs", "preferences-desktop-default-applications", "standaard programma browser e-mail openen met default apps"),
+    ("updates", "Updates en meer", "Updates and more", "system-software-update", "updates bijwerken versie game-modus ontwikkelaar taakbalk startmenu snelmenu"),
 ]
 
 
@@ -101,6 +130,7 @@ def lees_desktop(pad: Path) -> dict | None:
         "icoon": d.get("Icon", "application-x-executable"),
         "groep": groep,
         "zoek": " ".join([naam, lokaal("GenericName"), lokaal("Comment"), lokaal("Keywords"), d.get("Keywords", "")]).lower(),
+        "soort": "app",
     }
 
 
@@ -120,6 +150,24 @@ def alle_apps() -> list[dict]:
     return sorted((a for a in apps.values() if a), key=lambda a: a["naam"].lower())
 
 
+def instellingen_apps() -> list[dict]:
+    """De pagina's van BugOS Instellingen als 'apps', alleen voor het zoeken."""
+    uit = []
+    for pagina, nl, en, icoon, zoek in INSTELLINGEN:
+        naam = t(nl, en)
+        uit.append({
+            "id": f"instelling-{pagina}",
+            "pad": f"instelling:{pagina}",
+            "naam": naam,
+            "uitleg": t("Instellingen", "Settings"),
+            "icoon": icoon,
+            "groep": t("Instellingen", "Settings"),
+            "zoek": f"{naam} {nl} {en} {zoek}".lower(),
+            "soort": "instelling",
+        })
+    return uit
+
+
 def favorieten(apps: list[dict]) -> list[dict]:
     ids = list(STANDAARD_FAVORIETEN)
     eigen = HOME / ".config/bugos/favorieten.json"
@@ -134,7 +182,14 @@ def favorieten(apps: list[dict]) -> list[dict]:
         except configparser.Error:
             pass
     per_id = {a["id"]: a for a in apps}
-    return [per_id[i] for i in ids if i in per_id]
+    uit, gezien = [], set()
+    for i in ids:
+        for kandidaat in [i] + ZELFDE_APP.get(i, []):
+            if kandidaat in per_id and kandidaat not in gezien:
+                gezien.add(kandidaat)
+                uit.append(per_id[kandidaat])
+                break
+    return uit
 
 
 def recente_bestanden(max_aantal: int = 8) -> list[dict]:
@@ -182,28 +237,84 @@ def draai(*cmd: str) -> str:
         return ""
 
 
-def los_starten(*cmd: str) -> None:
-    subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+def los_starten(*cmd: str) -> bool:
+    try:
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        return True
+    except OSError as e:
+        print(f"bugos-start-data: {cmd[0]} kon niet starten: {e}", file=sys.stderr)
+        return False
 
 
 # ------------------------------------------------------------- snelmenu ----
+
+NIET_STOREN_TOT = "2999,12,31,0,0,0"  # dezelfde waarde als lib.sh en bugos_instellen.py
+
+
+def niet_storen_tot_in_toekomst(tekst: str) -> bool:
+    """KDE schrijft 'jaar,maand,dag,uur,min,sec' of een ISO-tijd. Is die nog niet voorbij?"""
+    tekst = tekst.strip()
+    if not tekst:
+        return False
+    nu = datetime.now().astimezone()
+    try:
+        delen = [int(float(x)) for x in tekst.split(",")]
+        if len(delen) >= 3:
+            return datetime(*delen[:6]).astimezone() > nu
+    except (ValueError, TypeError, OverflowError):
+        pass
+    try:
+        tot = datetime.fromisoformat(tekst.replace("Z", "+00:00"))
+        return (tot if tot.tzinfo else tot.astimezone()) > nu
+    except ValueError:
+        return False
+
+
+def kde_lees(bestand: str, groep: str, sleutel: str) -> str:
+    return draai("kreadconfig6", "--file", bestand, "--group", groep, "--key", sleutel).strip()
+
+
+def volume_status() -> tuple[int | None, bool]:
+    vol = draai("wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@") if shutil.which("wpctl") else ""
+    try:
+        procent = round(float(vol.split()[1]) * 100)
+    except (IndexError, ValueError):
+        procent = None
+    return procent, "MUTED" in vol
+
 
 def snel_status() -> dict:
     s: dict = {}
     s["wifi"] = draai("nmcli", "radio", "wifi").strip() == "enabled" if shutil.which("nmcli") else None
     bt = draai("bluetoothctl", "show") if shutil.which("bluetoothctl") else ""
     s["bluetooth"] = None if "Controller" not in bt else ("Powered: yes" in bt)
-    s["spel"] = draai("bugos-spelmodus", "status").strip() == "aan" if shutil.which("bugos-spelmodus") else False
-    kleur = draai("kreadconfig6", "--file", "kdeglobals", "--group", "General", "--key", "ColorScheme").strip()
-    s["donker"] = "donker" in kleur.lower() or "dark" in kleur.lower()
-    vol = draai("wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@") if shutil.which("wpctl") else ""
-    try:
-        s["volume"] = round(float(vol.split()[1]) * 100)
-    except (IndexError, ValueError):
-        s["volume"] = None
-    s["stil"] = "MUTED" in vol
-    dnd = draai("kreadconfig6", "--file", "plasmanotifyrc", "--group", "DoNotDisturb", "--key", "Until").strip()
-    s["niet_storen"] = bool(dnd)
+    s["spel"] = draai("bugos-spelmodus", "status").strip() == "aan" if shutil.which("bugos-spelmodus") else None
+    s["donker"] = kde_lees("kdeglobals", "General", "ColorScheme") == "BugOSDonker"
+    s["volume"], s["stil"] = volume_status()
+    s["niet_storen"] = niet_storen_tot_in_toekomst(kde_lees("plasmanotifyrc", "DoNotDisturb", "Until"))
+    return s
+
+
+def tray_status() -> dict:
+    """Korte status voor een icoontje op de taakbalk: internet, volume, batterij."""
+    s: dict = {"internet": "geen", "wifi": None, "volume": None, "stil": False, "batterij": None, "laadt": False}
+    if shutil.which("nmcli"):
+        s["wifi"] = draai("nmcli", "radio", "wifi").strip() == "enabled"
+        soorten = set()
+        for regel in draai("nmcli", "-t", "-f", "TYPE,STATE", "device").splitlines():
+            delen = regel.split(":")
+            if len(delen) >= 2 and delen[1] == "connected":
+                soorten.add(delen[0])
+        s["internet"] = "kabel" if "ethernet" in soorten else "wifi" if "wifi" in soorten else "geen"
+    s["volume"], s["stil"] = volume_status()
+    basis = Path(os.environ.get("BUGOS_SYS", "/sys")) / "class" / "power_supply"
+    for pad in sorted(basis.glob("BAT*")):
+        try:
+            s["batterij"] = int((pad / "capacity").read_text().strip())
+            s["laadt"] = (pad / "status").read_text().strip() == "Charging"
+            break
+        except (OSError, ValueError):
+            continue
     return s
 
 
@@ -219,31 +330,40 @@ def snel_zet(wat: str, waarde: str) -> None:
         draai("bugos-spelmodus", "aan" if aan else "uit")
     elif wat == "donker":
         draai("plasma-apply-colorscheme", "BugOSDonker" if aan else "BugOSLicht")
+        draai("plasma-apply-desktoptheme", "breeze-dark" if aan else "default")
     elif wat == "volume":
         try:
-            procent = max(0, min(150, int(waarde)))
+            procent = max(0, min(100, int(waarde)))
         except ValueError:
             return
+        # Alleen het volume; 'stil' blijft zoals het was (dat is een eigen knop).
         draai("wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", f"{procent / 100:.2f}")
-        draai("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "0")
     elif wat == "stil":
         draai("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "1" if aan else "0")
     elif wat == "niet_storen":
         if aan:
-            draai("kwriteconfig6", "--file", "plasmanotifyrc", "--group", "DoNotDisturb", "--key", "Until", "2099,1,1,0,0,0.000")
+            draai("kwriteconfig6", "--file", "plasmanotifyrc", "--group", "DoNotDisturb", "--key", "Until", "--notify",
+                  NIET_STOREN_TOT)
         else:
-            draai("kwriteconfig6", "--file", "plasmanotifyrc", "--group", "DoNotDisturb", "--key", "Until", "--delete")
+            draai("kwriteconfig6", "--file", "plasmanotifyrc", "--group", "DoNotDisturb", "--key", "Until", "--notify",
+                  "--delete")
 
 
 # ------------------------------------------------------------------ main ----
 
+def start(pad: str) -> None:
+    if pad.startswith("instelling:"):
+        pagina = pad.split(":", 1)[1]
+        los_starten("bugos-instellingen", pagina) if pagina else los_starten("bugos-instellingen")
+    elif shutil.which("kioclient"):
+        los_starten("kioclient", "exec", pad)
+    else:
+        los_starten("gio", "launch", pad)
+
+
 def main(args: list[str]) -> int:
     if len(args) == 2 and args[0] == "--start":
-        pad = args[1]
-        if shutil.which("kioclient"):
-            los_starten("kioclient", "exec", pad)
-        else:
-            los_starten("gio", "launch", pad)
+        start(args[1])
         return 0
     if len(args) == 2 and args[0] == "--open":
         los_starten("xdg-open", args[1])
@@ -256,10 +376,17 @@ def main(args: list[str]) -> int:
             "slot": ("loginctl", "lock-session"),
         }
         if args[1] in acties:
-            los_starten(*acties[args[1]])
+            cmd = acties[args[1]]
+            if cmd[0] == "qdbus6" and not shutil.which("qdbus6"):
+                cmd = ("gdbus", "call", "--session", "--dest", cmd[1], "--object-path", cmd[2], "--method",
+                       f"org.kde.LogoutPrompt.{cmd[3]}")
+            los_starten(*cmd)
         return 0
     if args == ["--snel"]:
         print(json.dumps(snel_status()))
+        return 0
+    if args == ["--tray"]:
+        print(json.dumps(tray_status()))
         return 0
     if len(args) == 3 and args[0] == "--zet":
         snel_zet(args[1], args[2])
@@ -267,7 +394,7 @@ def main(args: list[str]) -> int:
         return 0
     apps = alle_apps()
     print(json.dumps({
-        "apps": apps,
+        "apps": apps + instellingen_apps(),
         "favorieten": favorieten(apps),
         "recent": recente_bestanden(),
         "gebruiker": gebruiker(),

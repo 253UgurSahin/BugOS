@@ -53,6 +53,15 @@ jobs:
         run: QT_QPA_PLATFORM=offscreen python3 tools/test_taakbeheer.py
       - name: Instellingen testen (wifi, bluetooth, geluid, scherm lezen; elke pagina opent)
         run: QT_QPA_PLATFORM=offscreen python3 tools/test_instellingen.py
+      - name: Startmenu-gegevens testen (apps, instellingen zoeken, snelmenu-status; met nep-programma's)
+        run: python3 tools/test_start_data.py
+      - name: Uitzetscherm testen (laadt het, en kloppen de knoppen per situatie)
+        run: |
+          if [ -f tools/test_uitzetscherm.py ]; then
+            QT_QPA_PLATFORM=offscreen python3 tools/test_uitzetscherm.py
+          else
+            echo "Nog geen test voor het uitzetscherm."
+          fi
 
   bouwen:
     name: BugOS ${{ matrix.variant }}

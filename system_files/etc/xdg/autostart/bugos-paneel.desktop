@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=BugOS Taakbalk
+Name[en]=BugOS Taskbar
+Comment=Zet het BugOS-startmenu en het snelmenu op de taakbalk (één keer)
+Comment[en]=Puts the BugOS start menu and quick menu on the taskbar (once)
+Exec=bugos-paneel standaard
+Icon=bugos-logo
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=2
+NoDisplay=true

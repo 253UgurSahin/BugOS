@@ -1,12 +1,13 @@
 #!/usr/bin/bash
-# bugos-paneel - het BugOS-startmenu en -snelmenu aan of uit zetten op de taakbalk.
+# bugos-paneel - het BugOS-startmenu en -snelmenu op de taakbalk zetten of weghalen.
 #
 #   bugos-paneel startmenu aan|uit|status
 #   bugos-paneel snelmenu  aan|uit|status
+#   bugos-paneel standaard          (één keer, na het inloggen: allebei aan)
 #
-# Jip-en-Janneke: dit wisselt de startknop op de taakbalk om tussen het
-# gewone KDE-menu en het nieuwe BugOS-menu. Gaat er iets mis? "uit" zet
-# alles terug zoals het was.
+# Jip-en-Janneke: de startknop linksonder (het lieveheersbeestje) is het
+# BugOS-menu. "uit" zet het gewone KDE-menu terug, precies zoals BugOS het
+# had ingesteld. Alles is terug te draaien in Instellingen → Updates en meer → Taakbalk.
 
 # shellcheck source=system_files/usr/share/bugos/lib.sh
 . /usr/share/bugos/lib.sh
@@ -14,33 +15,73 @@
 WAT="${1:-}"
 ACTIE="${2:-status}"
 
-plasma_script() {
-    qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "$1" 2>/dev/null
+# Is het bureaublad (plasmashell) er? Anders heeft praten geen zin.
+bureaublad_er() {
+    [ "$(gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus \
+        --method org.freedesktop.DBus.NameHasOwner org.kde.plasmashell 2>/dev/null)" = "(true,)" ]
 }
 
-# Hulpje (JavaScript voor Plasma): vervang widget-soort A door B op elke taakbalk,
-# op dezelfde plek. Als A "" is, wordt B toegevoegd vóór "voor".
-JS_VERVANG='
+# Praat met het bureaublad via D-Bus. qdbus6 geeft het antwoord kaal terug;
+# gdbus zet er ('...',) omheen, dat halen we weg.
+plasma_script() {
+    local uit
+    if command -v qdbus6 >/dev/null 2>&1; then
+        qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "$1" 2>/dev/null
+        return
+    fi
+    uit="$(gdbus call --session --dest org.kde.plasmashell --object-path /PlasmaShell \
+        --method org.kde.PlasmaShell.evaluateScript "$1" 2>/dev/null)" || return 1
+    uit="${uit#(\'}"
+    uit="${uit%\',)}"
+    printf '%s\n' "$uit"
+}
+
+niet_bereikbaar() {
+    t "Het bureaublad (plasmashell) is niet bereikbaar." "The desktop (plasmashell) cannot be reached." >&2
+    exit 1
+}
+
+# JavaScript voor Plasma:
+#   vervang(oud, nieuw, voor): zet widget-soort 'nieuw' op de plek van 'oud' (of vóór 'voor' als oud "" is)
+#   weg(soort): haalt alle widgets van die soort weg
+#   heeft(soort): print aan of uit
+# Kickoff krijgt altijd de BugOS-instellingen terug; het BugOS-startmenu krijgt de sneltoets Alt+F1.
+JS='
+function zet_sneltoets(w) {
+    w.currentConfigGroup = ["Shortcuts"];
+    w.writeConfig("global", "Alt+F1");
+}
+function zet_kickoff(w) {
+    w.currentConfigGroup = ["General"];
+    w.writeConfig("icon", "bugos-logo");
+    w.writeConfig("favoritesDisplay", 0);
+    w.writeConfig("applicationsDisplay", 1);
+    w.writeConfig("showActionButtonCaptions", true);
+    zet_sneltoets(w);
+}
 function vervang(oud, nieuw, voor) {
     var ps = panels();
     var gedaan = 0;
     for (var i = 0; i < ps.length; i++) {
         var p = ps[i];
         var ws = p.widgets();
-        var doel = null, buur = null, alAanwezig = false;
+        var doel = null, buur = null, nieuwe = null;
         for (var j = 0; j < ws.length; j++) {
             if (oud !== "" && ws[j].type == oud) doel = ws[j];
             if (voor !== "" && ws[j].type == voor) buur = ws[j];
-            if (ws[j].type == nieuw) alAanwezig = true;
+            if (ws[j].type == nieuw) nieuwe = ws[j];
         }
-        if (alAanwezig) { gedaan++; continue; }
+        if (nieuwe !== null) {
+            if (doel !== null) doel.remove();   // niet allebei laten staan
+            if (nieuw == "org.bugos.startmenu") zet_sneltoets(nieuwe);
+            gedaan++;
+            continue;
+        }
         if (oud !== "" && doel === null) continue;
         if (oud === "" && buur === null) continue;
         var w = p.addWidget(nieuw);
-        if (nieuw == "org.kde.plasma.kickoff") {
-            w.currentConfigGroup = ["General"];
-            w.writeConfig("icon", "bugos-logo");
-        }
+        if (nieuw == "org.kde.plasma.kickoff") zet_kickoff(w);
+        if (nieuw == "org.bugos.startmenu") zet_sneltoets(w);
         p.currentConfigGroup = ["General"];
         var volgorde = String(p.readConfig("AppletOrder", "")).split(";").filter(function (x) { return x !== "" && x != String(w.id); });
         var plek = volgorde.indexOf(String(oud !== "" ? doel.id : buur.id));
@@ -71,31 +112,56 @@ function heeft(soort) {
 }
 '
 
+status_van() {
+    local uit
+    bureaublad_er || { echo uit; return; }
+    uit="$(plasma_script "$JS heeft(\"$1\");")"
+    [ "$uit" = aan ] && echo aan || echo uit
+}
+
 case "$WAT:$ACTIE" in
 startmenu:aan)
-    plasma_script "$JS_VERVANG vervang(\"org.kde.plasma.kickoff\", \"org.bugos.startmenu\", \"\");" >/dev/null
-    melding "$(t "Nieuw startmenu staat aan" "New start menu is on")" \
-        "$(t "Bevalt het niet? Zet het uit in Instellingen." "Don't like it? Turn it off in Settings.")"
+    bureaublad_er || niet_bereikbaar
+    plasma_script "$JS vervang(\"org.kde.plasma.kickoff\", \"org.bugos.startmenu\", \"\");" >/dev/null || niet_bereikbaar
+    melding "$(t "BugOS-startmenu staat aan" "BugOS start menu is on")" \
+        "$(t "Liever het gewone KDE-menu? Zet het uit in Instellingen." "Prefer the regular KDE menu? Turn it off in Settings.")"
     ;;
 startmenu:uit)
-    plasma_script "$JS_VERVANG vervang(\"org.bugos.startmenu\", \"org.kde.plasma.kickoff\", \"\");" >/dev/null
+    bureaublad_er || niet_bereikbaar
+    plasma_script "$JS vervang(\"org.bugos.startmenu\", \"org.kde.plasma.kickoff\", \"\");" >/dev/null || niet_bereikbaar
     ;;
 startmenu:status)
-    uit="$(plasma_script "$JS_VERVANG heeft(\"org.bugos.startmenu\");")"
-    echo "${uit:-uit}"
+    status_van org.bugos.startmenu
     ;;
 snelmenu:aan)
-    plasma_script "$JS_VERVANG vervang(\"\", \"org.bugos.snelmenu\", \"org.kde.plasma.systemtray\");" >/dev/null
+    bureaublad_er || niet_bereikbaar
+    plasma_script "$JS vervang(\"\", \"org.bugos.snelmenu\", \"org.kde.plasma.systemtray\");" >/dev/null || niet_bereikbaar
     ;;
 snelmenu:uit)
-    plasma_script "$JS_VERVANG weg(\"org.bugos.snelmenu\");" >/dev/null
+    bureaublad_er || niet_bereikbaar
+    plasma_script "$JS weg(\"org.bugos.snelmenu\");" >/dev/null || niet_bereikbaar
     ;;
 snelmenu:status)
-    uit="$(plasma_script "$JS_VERVANG heeft(\"org.bugos.snelmenu\");")"
-    echo "${uit:-uit}"
+    status_van org.bugos.snelmenu
+    ;;
+standaard:*)
+    # Eén keer per gebruiker (bij het inloggen): zet het BugOS-startmenu en het snelmenu
+    # op de taakbalk. Daarna beslist de gebruiker zelf in Instellingen; dit draait niet opnieuw.
+    MARKER="$BUGOS_CONFIG/paneel-standaard-1"
+    [ -f "$MARKER" ] && exit 0
+    for _ in $(seq 1 30); do
+        bureaublad_er && break
+        sleep 2
+    done
+    bureaublad_er || exit 0  # volgende keer opnieuw proberen
+    if [ "$(status_van org.kde.plasma.kickoff)" = aan ]; then
+        plasma_script "$JS vervang(\"org.kde.plasma.kickoff\", \"org.bugos.startmenu\", \"\");" >/dev/null
+    fi
+    plasma_script "$JS vervang(\"\", \"org.bugos.snelmenu\", \"org.kde.plasma.systemtray\");" >/dev/null
+    mkdir -p "$BUGOS_CONFIG" && touch "$MARKER"
     ;;
 *)
-    echo "Gebruik: bugos-paneel startmenu|snelmenu aan|uit|status" >&2
+    echo "Gebruik: bugos-paneel startmenu|snelmenu aan|uit|status, of bugos-paneel standaard" >&2
     exit 2
     ;;
 esac

@@ -8,16 +8,11 @@ panel.height = 2 * Math.floor(gridUnit * 2.6 / 2);
 panel.hiding = "none";
 panel.floating = true;
 
-// Startknop met het BugOS-logo.
-var start = panel.addWidget("org.kde.plasma.kickoff");
-start.currentConfigGroup = ["General"];
-start.writeConfig("icon", "bugos-logo");
-start.writeConfig("favoritesDisplay", 0);
-start.writeConfig("applicationsDisplay", 1);
-start.writeConfig("showActionButtonCaptions", true);
+// Startknop: het BugOS-startmenu (het lieveheersbeestje). Alt+F1 opent het ook;
+// de Windows-toets werkt via Plasma zelf (het menu meldt zich als startmenu).
+var start = panel.addWidget("org.bugos.startmenu");
 start.currentConfigGroup = ["Shortcuts"];
 start.writeConfig("global", "Alt+F1");
-
 
 // Vastgezette programma's en open vensters.
 var taken = panel.addWidget("org.kde.plasma.icontasks");
@@ -30,6 +25,8 @@ taken.writeConfig("launchers", [
 ]);
 
 panel.addWidget("org.kde.plasma.marginsseparator");
+// Snelmenu: grote knoppen voor wifi, bluetooth, geluid, donker en niet storen.
+panel.addWidget("org.bugos.snelmenu");
 panel.addWidget("org.kde.plasma.systemtray");
 var klok = panel.addWidget("org.kde.plasma.digitalclock");
 klok.currentConfigGroup = ["Appearance"];

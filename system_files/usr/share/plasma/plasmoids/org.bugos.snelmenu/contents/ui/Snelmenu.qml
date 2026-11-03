@@ -2,7 +2,8 @@
 //
 // Jip-en-Janneke: rechtsonder op de taakbalk. Eén klik en je ziet grote
 // knoppen voor wifi, bluetooth, game-modus, donker, niet storen en geluid,
-// plus een schuif voor het volume.
+// plus een schuif voor het volume. Het pijltje naast een knop opent de
+// bijbehorende pagina van BugOS Instellingen (bijv. een wifi-netwerk kiezen).
 // Alleen gewone QtQuick, zodat het buiten Plasma getest kan worden.
 
 import QtQuick
@@ -23,7 +24,10 @@ Rectangle {
     }
 
     signal zet(string wat, string waarde)
-    signal open(string wat)
+    signal open(string wat)   // "instellingen" of een pagina: wifi, bluetooth, geluid, meldingen
+
+    // Nog geen status binnen? Dan zeggen we dat, in plaats van grijze knoppen.
+    readonly property bool leeg: Object.keys(status).length === 0
 
     // Huisstijl
     readonly property bool donker: palette.window.hslLightness < 0.5
@@ -31,6 +35,7 @@ Rectangle {
     readonly property color tekst: palette.windowText
     readonly property color tekst2: Qt.rgba(tekst.r, tekst.g, tekst.b, 0.62)
     readonly property color vlak: donker ? Qt.rgba(1, 1, 1, 0.06) : "#FFFFFF"
+    readonly property color vlakZweef: donker ? Qt.rgba(1, 1, 1, 0.11) : "#F6EFEF"
     readonly property color lijnkleur: Qt.rgba(tekst.r, tekst.g, tekst.b, 0.10)
 
     function tr(nl, en) { return nederlands ? nl : en }
@@ -70,17 +75,25 @@ Rectangle {
                 }
             }
         }
+        Label {
+            objectName: "evenKijken"
+            visible: snel.leeg
+            text: snel.tr("Even kijken…", "One moment…")
+            color: snel.tekst2
+            font.pixelSize: 13
+            Layout.topMargin: -8
+        }
 
         GridLayout {
             Layout.fillWidth: true
             columns: 3
             rowSpacing: 10
             columnSpacing: 10
-            SnelKnop { wat: "wifi"; icoon: "network-wireless"; tekst: "Wifi"; extra: "kcm_networkmanagement" }
-            SnelKnop { wat: "bluetooth"; icoon: "network-bluetooth"; tekst: "Bluetooth"; extra: "kcm_bluetooth" }
+            SnelKnop { wat: "wifi"; icoon: "network-wireless"; tekst: "Wifi"; extra: "wifi" }
+            SnelKnop { wat: "bluetooth"; icoon: "network-bluetooth"; tekst: "Bluetooth"; extra: "bluetooth" }
             SnelKnop { wat: "spel"; icoon: "input-gamepad"; tekst: snel.tr("Game-modus", "Game mode") }
             SnelKnop { wat: "donker"; icoon: "contrast"; tekst: snel.tr("Donker", "Dark") }
-            SnelKnop { wat: "niet_storen"; icoon: "notifications-disabled"; tekst: snel.tr("Niet storen", "Do not disturb") }
+            SnelKnop { wat: "niet_storen"; icoon: "notifications-disabled"; tekst: snel.tr("Niet storen", "Do not disturb"); extra: "meldingen" }
             SnelKnop { wat: "stil"; icoon: "audio-volume-muted"; tekst: snel.tr("Geluid uit", "Mute") }
         }
 
@@ -110,9 +123,10 @@ Rectangle {
                     from: 0
                     to: 100
                     stepSize: 5
-                    value: snel.status.volume || 0
                     Accessible.name: snel.tr("Volume", "Volume")
                     onMoved: verzend.restart()
+                    // Nieuwe status pas overnemen als je niet aan het schuiven bent
+                    Binding { target: volume; property: "value"; value: snel.status.volume || 0; when: !volume.pressed }
                     Timer { id: verzend; interval: 150; onTriggered: snel.zet("volume", String(Math.round(volume.value))) }
                     background: Rectangle {
                         x: volume.leftPadding
@@ -148,7 +162,33 @@ Rectangle {
                     Layout.preferredWidth: 40
                     horizontalAlignment: Text.AlignRight
                 }
+                Pijltje { naar: "geluid"; Accessible.name: snel.tr("Meer over geluid", "More about sound") }
             }
+        }
+    }
+
+    // Klein rond pijltje: opent de bijbehorende pagina van Instellingen.
+    component Pijltje: AbstractButton {
+        id: pijl
+        property string naar
+        implicitWidth: 28; implicitHeight: 28
+        hoverEnabled: true
+        Accessible.name: snel.tr("Meer", "More")
+        ToolTip.visible: hovered
+        ToolTip.text: Accessible.name
+        onClicked: snel.open(naar)
+        Keys.onReturnPressed: clicked()
+        Keys.onEnterPressed: clicked()
+        background: Rectangle {
+            radius: 14
+            color: pijl.hovered || pijl.activeFocus ? Qt.rgba(snel.tekst.r, snel.tekst.g, snel.tekst.b, 0.10) : "transparent"
+        }
+        contentItem: Label {
+            text: "›"
+            color: snel.tekst2
+            font.pixelSize: 20
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
         }
     }
 
@@ -169,11 +209,14 @@ Rectangle {
         Accessible.checkable: true
         Accessible.checked: aan
         onClicked: snel.zet(wat, aan ? "uit" : "aan")
-        onPressAndHold: if (extra !== "") snel.open(extra)
+        Keys.onReturnPressed: clicked()
+        Keys.onEnterPressed: clicked()
         opacity: enabled ? 1 : 0.45
+        scale: pressed ? 0.96 : 1.0
+        Behavior on scale { NumberAnimation { duration: 90 } }
         background: Rectangle {
             radius: 18
-            color: knop.aan ? "transparent" : snel.vlak
+            color: knop.aan ? "transparent" : (knop.hovered ? snel.vlakZweef : snel.vlak)
             border.width: knop.aan || snel.donker ? 0 : 1
             border.color: snel.lijnkleur
             Rectangle {
@@ -191,6 +234,22 @@ Rectangle {
                 color: "transparent"
                 border.width: knop.activeFocus ? 2 : 0
                 border.color: snel.tekst
+            }
+            // Pijltje naar de bijbehorende pagina van Instellingen (bijv. een netwerk kiezen)
+            Pijltje {
+                visible: knop.extra !== ""
+                naar: knop.extra
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: 6
+                Accessible.name: snel.tr("Meer over ", "More about ") + knop.tekst.toLowerCase()
+                contentItem: Label {
+                    text: "›"
+                    color: knop.aan ? "white" : snel.tekst2
+                    font.pixelSize: 20
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
             }
         }
         contentItem: ColumnLayout {

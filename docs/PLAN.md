@@ -72,8 +72,10 @@ Het belangrijkste idee: **BugOS kan niet stuk.**
 | Bestanden van Windows | `bugos-overstap` | Zet de bestanden, bladwijzers en achtergrond terug die je met BugOS Overstap van Windows hebt meegenomen. |
 | Game-modus aan/uit | `bugos-spelmodus` | Volle kracht, meldingen stil en een FPS-teller. |
 | BugOS Winkel | `bugos-winkel` | 37 bekende, veilige apps in 10 onderwerpen, installeren met één klik. "Meer apps zoeken" opent de grote KDE-winkel. |
-| Startmenu (proef) | `org.bugos.startmenu` | Grote zoekbalk, vastgezette apps, recente bestanden, alle apps per onderwerp en aan/uit-knoppen. Aanzetten kan in Instellingen → Aan en uit. |
-| Snelmenu (proef) | `org.bugos.snelmenu` | Grote knoppen voor wifi, bluetooth, game-modus, donker, niet storen en het volume. Aanzetten kan in Instellingen. |
+| Startmenu | `org.bugos.startmenu` | De startknop linksonder (het lieveheersbeestje), standaard. Begroeting, grote zoekbalk die apps én de pagina's van Instellingen vindt, vastgezette apps, recente bestanden, alle apps per onderwerp, en onderin Instellingen, Vergrendelen, Afmelden, Herstarten en Uitzetten. Alt+F1 en de Windows-toets openen het. Liever het KDE-menu? Instellingen → Updates en meer → Taakbalk. |
+| Snelmenu | `org.bugos.snelmenu` | Naast het systeemvak, standaard. Grote knoppen voor wifi, bluetooth, game-modus, donker, niet storen en geluid uit, plus de volumeschuif; het pijltje bij een knop opent de bijbehorende pagina van Instellingen (bijvoorbeeld een wifi-netwerk kiezen). |
+| Uitzetscherm | `uitzetscherm/Logout.qml` | Het scherm bij Uitzetten, Herstarten of Afmelden: grote tegels Slaapstand, Opnieuw opstarten, Uitzetten (rood), Afmelden en een knop "Toch niet". Via het startmenu telt het 30 seconden af en zegt dat in gewone woorden. Komt in het shell-pakket van Plasma én in de BugOS-look-and-feel. |
+| Taakbalk klaarzetten | `bugos-paneel` | Zet het BugOS-startmenu en het snelmenu op de taakbalk (`standaard`, één keer na het inloggen, ook voor wie al een taakbalk had), of één van de twee aan/uit (`startmenu|snelmenu aan|uit|status`). "Uit" zet het KDE-menu terug zoals BugOS het had ingesteld. |
 | Bestanden | `bugos-bestanden` | De verkenner: grote tegels met voorbeeldjes, links je vaste plekken en USB-sticks. Kies je iets, dan staat onderin wat je ermee kunt (Openen, Kopiëren, Weggooien...). Weggooien gaat eerst naar de prullenbak (met Ongedaan maken); nooit iets overschrijven. **Deze computer**: al je schijven (USB-stick, externe schijf, tweede schijf, Windows-schijf, sd-kaart, cd) met hoeveel ruimte er nog is; openen met één klik (ook op slot: KDE vraagt het wachtwoord) en veilig verwijderen van de hele stick. Per stick of schijf (knop '…'): naam wijzigen, controleren en repareren, leegmaken. Een **nieuwe, lege schijf**: 'In gebruik nemen' (indelen en formatteren, zoals Schijfbeheer in Windows); daarna is hij er altijd. Schijfbeheer (KDE Partition Manager) voor gevorderden. |
 | Taakbeheer | `bugos-taakbeheer` | Zoals Taakbeheer in Windows (Ctrl+Shift+Esc), maar simpeler: bovenaan in gewone woorden hoe het gaat (met een tip als het druk is), open programma's met 'Sluiten' (netjes, en geforceerd als hij niet reageert), prestaties met grafiekjes (processor met temperatuur, geheugen, schijf, internet, videokaart) en programma's die meestarten aan/uit. Onderdelen van BugOS zelf kun je niet per ongeluk stoppen. |
 | Schijven openen | `bugos-schijven-openen` | Opent na het inloggen de schijven die in de computer zitten, zodat ze er altijd zijn (zoals D: in Windows). Zonder wachtwoord voor beheerders (polkit-regel). |
@@ -120,13 +122,13 @@ Het belangrijkste idee: **BugOS kan niet stuk.**
 - [x] Een ISO voor de USB-stick op verzoek
 - [x] De eerste eigen BugOS-onderdelen
 
-### Fase 2: De eigen jas ✅ (startmenu en snelmenu nog als proef)
+### Fase 2: De eigen jas ✅
 - [x] **BugOS Instellingen** met grote tegels en een zoekbalk
 - [x] Een update-melding voor wie "zelf" kiest
 - [x] **BugOS Winkel** in eigen stijl, met veilige en geteste apps vooraan
 - [x] Vaste favorieten in het startmenu
-- [x] **Eigen startmenu**. Het staat als proef aan te zetten in Instellingen; zodra het op een echte pc getest is, wordt het de standaard.
-- [x] **Snelmenu** in BugOS-stijl, ook als proef
+- [x] **Eigen startmenu**, standaard op de taakbalk (het KDE-menu blijft te kiezen in Instellingen)
+- [x] **Snelmenu** in BugOS-stijl, standaard naast het systeemvak
 
 ### Fase 3: Overstappen ✅ (het ondertekenen wacht op de manager)
 - [x] **Windows-overstap**: pc-controle, bestanden meenemen, ruimte maken, BugOS downloaden en de USB-stick schrijven
@@ -163,7 +165,8 @@ Het belangrijkste idee: **BugOS kan niet stuk.**
 
 ### Daarna: testen op echte computers
 - [ ] De "probeer eerst"-stick op een echte pc proberen
-- [ ] Startmenu en snelmenu testen en daarna standaard maken
+- [x] Startmenu en snelmenu standaard; de fotoronde fotografeert nu het echte bureaublad (plasmashell in het BugOS-beeld)
+- [ ] Startmenu, snelmenu en uitzetscherm op een echte pc nalopen (Windows-toets, wifi kiezen, uitzetten)
 - [ ] BugOS Overstap op een echte Windows-pc proberen (stap 3 en 4 eerst op een reserve-pc)
 
 ## Dingen om op te letten

@@ -50,6 +50,37 @@ info() {
     kdialog --title BugOS --msgbox "$(printf '%b' "$1")" 2>/dev/null || echo "$1"
 }
 
+# Niet storen (geen berichtjes in beeld). Eén plek voor alle scripts;
+# Instellingen (bugos_instellen.py) schrijft precies dezelfde waarde.
+NIET_STOREN_TOT="2999,12,31,0,0,0"
+niet_storen_aan() {
+    kwriteconfig6 --file plasmanotifyrc --group DoNotDisturb --key Until --notify "$NIET_STOREN_TOT" 2>/dev/null
+}
+niet_storen_uit() {
+    kwriteconfig6 --file plasmanotifyrc --group DoNotDisturb --key Until --notify --delete 2>/dev/null
+}
+# Print "aan" als niet storen aanstaat (er staat een tot-tijd die nog niet voorbij is), anders "uit".
+niet_storen_status() {
+    local tot dag vandaag j m d
+    tot="$(kreadconfig6 --file plasmanotifyrc --group DoNotDisturb --key Until 2>/dev/null)"
+    if [ -z "$tot" ]; then
+        echo uit
+        return
+    fi
+    vandaag="$(date +%Y%m%d)"
+    case "$tot" in
+    *,*)
+        IFS=, read -r j m d _ <<<"$tot"
+        dag="$(printf '%04d%02d%02d' "$j" "$m" "$d" 2>/dev/null)"
+        ;;
+    *)
+        dag="${tot:0:10}"
+        dag="${dag//-/}"
+        ;;
+    esac
+    if [ -n "$dag" ] && [ "$dag" -ge "$vandaag" ] 2>/dev/null; then echo aan; else echo uit; fi
+}
+
 # Plek waar BugOS onthoudt wat de gebruiker heeft gekozen.
 # shellcheck disable=SC2034 # wordt gebruikt door de scripts die dit inladen
 BUGOS_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/bugos"

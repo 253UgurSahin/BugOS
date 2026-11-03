@@ -70,7 +70,7 @@ def op_achtergrond(ouder: QObject, werk, klaar) -> None:
 def status_van(script: str, *voor: str) -> bool:
     """Vraag een bugos-script of iets aan staat."""
     if bi.VOORBEELD:
-        return script == "bugos-updates"
+        return script in ("bugos-updates", "bugos-paneel")
     if not bestaat(script):
         return False
     _, uit = draai(script, *voor, "status", timeout=5)
@@ -1412,13 +1412,14 @@ class UpdatesPagina(Blad):
                   "Heavy effects off, so an older computer stays fast."))):
             g.voeg(Rij(ic, t(nl, en), t(unl, uen),
                        schuifje(status_van(script), lambda aan, s=script: zet_script(s, aan))))
-        g = self.kaart(t("Probeer iets nieuws", "Try something new"))
+        g = self.kaart(t("Taakbalk", "Taskbar"))
         for onderdeel, ic, (nl, en), (unl, uen) in (
-                ("startmenu", "apps", ("Nieuw BugOS-startmenu", "New BugOS start menu"),
-                 ("Grote zoekbalk, vastgezette apps en recente bestanden.", "Big search, pinned apps, recent files.")),
+                ("startmenu", "apps", ("BugOS-startmenu", "BugOS start menu"),
+                 ("Uit: het gewone KDE-menu. Alt+F1 of de Windows-toets opent het.",
+                  "Off: the regular KDE menu. Alt+F1 or the Windows key opens it.")),
                 ("snelmenu", "schakelaar", ("Snelmenu op de taakbalk", "Quick menu on the taskbar"),
-                 ("Grote knoppen voor wifi, bluetooth, game-modus en volume.",
-                  "Big buttons for Wi-Fi, Bluetooth, game mode and volume."))):
+                 ("Grote knoppen voor wifi, bluetooth, geluid, donker en niet storen.",
+                  "Big buttons for Wi-Fi, Bluetooth, sound, dark and do not disturb."))):
             g.voeg(Rij(ic, t(nl, en), t(unl, uen), schuifje(
                 status_van("bugos-paneel", onderdeel),
                 lambda aan, o=onderdeel: None if bi.VOORBEELD else start("bugos-paneel", o, "aan" if aan else "uit"))))

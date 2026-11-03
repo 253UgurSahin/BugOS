@@ -50,7 +50,10 @@ Herstart daarna de computer. Wil je terug? Kies dan in het opstartmenu de vorige
 - [ ] Open **Back-up** en maak een back-up naar een USB-stick
 - [ ] Probeer op een Windows-pc **BugOS Overstap** (stap 1 en 2 zijn veilig, die veranderen niets aan je pc)
 - [ ] Open de **BugOS Winkel** en installeer iets
-- [ ] Zet in Instellingen → Aan en uit het **nieuwe startmenu** en het **snelmenu** aan. Werkt het niet? Zet het dan weer uit.
+- [ ] Het lieveheersbeestje linksonder is het **BugOS-startmenu**: zoek "wifi" en open de pagina; de Windows-toets opent het menu
+- [ ] Het **snelmenu** (twee schuifjes, naast het systeemvak): zet wifi uit en aan; het pijltje bij Wifi opent Instellingen
+- [ ] Uitzetten via het startmenu: je ziet het **BugOS-uitzetscherm** met grote tegels; "Toch niet" gaat terug
+- [ ] Liever het KDE-menu? Instellingen → Updates en meer → Taakbalk: zet het BugOS-startmenu uit en weer aan
 - [ ] Start de "probeer eerst"-stick op: verschijnt het welkomstscherm met "Eerst proberen" en "BugOS installeren"?
 
 ### Het nieuwe design
