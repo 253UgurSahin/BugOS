@@ -94,11 +94,11 @@ schermfoto() {  # uit.png
     rm -f "$uit"
     if command -v spectacle >/dev/null 2>&1; then
         stap "Schermfoto met Spectacle"
-        timeout 40 spectacle --background --nonotify --fullscreen --output "$uit" 2>&1 | head -5 || true
+        timeout 40 spectacle --background --nonotify --fullscreen --output "$uit" 2>&1 | head -20 || true
     fi
     if [ ! -s "$uit" ]; then
         stap "Schermfoto via KWin's D-Bus (schermfoto.py)"
-        timeout 60 python3 "$(dirname "$ZELF")/schermfoto.py" "$uit" 2>&1 | head -5 || true
+        timeout 60 python3 "$(dirname "$ZELF")/schermfoto.py" "$uit" 2>&1 | head -20 || true
     fi
     if [ -s "$uit" ]; then
         stap "Schermfoto staat klaar: $uit ($(stat -c %s "$uit") bytes)"
@@ -135,10 +135,11 @@ bureaublad_tonen() {  # scene
         stap "$(kwin_wayland --version 2>/dev/null | head -1 || true)"
         stap "D-Bus-sessie: ${DBUS_SESSION_BUS_ADDRESS:-(geen adres)}; namen op de bus: $(gdbus call --session \
             --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.ListNames 2>/dev/null | tr ',' '\n' | wc -l)"
-        # Virtueel scherm van 2560x1600 op schaal 2 (net als de andere foto's); zachte (software) tekening.
+        # Virtueel scherm van 2560x1600 op schaal 2 (net als de andere foto's). De bouwcomputer heeft geen
+        # grafische kaart, dus KWin tekent met de processor (KWIN_COMPOSE=Q, zoals KDE's eigen tests).
         # KWIN_WAYLAND_NO_PERMISSION_CHECKS: zodat ook ons eigen fotoscriptje een schermfoto mag vragen.
-        stap "KWin starten met een virtueel scherm van 2560x1600 op schaal 2"
-        export LIBGL_ALWAYS_SOFTWARE=1 QT_QUICK_BACKEND=software KWIN_WAYLAND_NO_PERMISSION_CHECKS=1
+        stap "KWin starten met een virtueel scherm van 2560x1600 op schaal 2 (tekenen met de processor)"
+        export LIBGL_ALWAYS_SOFTWARE=1 QT_QUICK_BACKEND=software KWIN_COMPOSE=Q KWIN_WAYLAND_NO_PERMISSION_CHECKS=1
         kwin_wayland --virtual --width 2560 --height 1600 --scale 2 \
             --no-lockscreen --no-global-shortcuts --socket wayland-foto &
         kwin_pid=$!

@@ -46,7 +46,7 @@ def main() -> int:
     fds = Gio.UnixFDList.new()
     idx = fds.append(schrijf)
     os.close(schrijf)
-    opties = GLib.Variant("a{sv}", {"include-cursor": GLib.Variant("b", False)})
+    opties = {"include-cursor": GLib.Variant("b", False)}
     antwoord = None
     for methode, args in (("CaptureActiveScreen", GLib.Variant("(a{sv}h)", (opties, idx))),
                           ("CaptureWorkspace", GLib.Variant("(a{sv}h)", (opties, idx)))):
