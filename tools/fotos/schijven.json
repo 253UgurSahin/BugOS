@@ -50,6 +50,18 @@
    ]
   },
   {
+   "name": "sda",
+   "path": "/dev/sda",
+   "type": "disk",
+   "size": 2000398934016,
+   "rm": false,
+   "hotplug": false,
+   "tran": "sata",
+   "mountpoints": [
+    null
+   ]
+  },
+  {
    "name": "sdb",
    "path": "/dev/sdb",
    "type": "disk",

@@ -32,7 +32,7 @@ jobs:
             $(grep -l '^#!/usr/bin/bash' system_files/usr/bin/bugos-*)
       - name: Python nakijken
         run: |
-          python3 -m py_compile system_files/usr/lib/bugos/python/bugos_ui.py iso_live/src/bugos-live \
+          python3 -m py_compile system_files/usr/lib/bugos/python/*.py iso_live/src/bugos-live \
             $(grep -l '^#!/usr/bin/python3' system_files/usr/bin/bugos-*)
           shellcheck -x iso_live/src/build.sh system_files/usr/bin/bugos-paneel
 

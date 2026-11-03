@@ -30,6 +30,7 @@ spec = importlib.util.spec_from_loader("bestanden", lader)
 b = importlib.util.module_from_spec(spec)
 sys.modules["bestanden"] = b  # nodig voor @dataclass
 lader.exec_module(b)
+import bugos_schijven as sch  # noqa: E402  (schijven herkennen en beheren)
 
 fouten = 0
 
@@ -151,6 +152,12 @@ NEP = [
                "mountpoints": ["/run/media/oma/Back-up"]}]},
          {"name": "sde2", "path": "/dev/sde2", "type": "part", "size": 250000000000, "fstype": "exfat",
           "label": "Films", "mountpoints": [None]}]},
+    {"name": "sdf", "path": "/dev/sdf", "type": "disk", "size": 1000204886016, "rm": False, "hotplug": False,
+     "tran": "sata", "mountpoints": [None]},
+    {"name": "sdg", "path": "/dev/sdg", "type": "disk", "size": 2000398934016, "rm": False, "hotplug": False,
+     "tran": "sata", "mountpoints": [None], "children": [
+         {"name": "sdg1", "path": "/dev/sdg1", "type": "part", "size": 2000397795328, "fstype": "LVM2_member",
+          "mountpoints": [None]}]},
     {"name": "sr0", "path": "/dev/sr0", "type": "rom", "size": 700000000, "rm": True, "fstype": "iso9660",
      "label": "Vakantie 2019", "mountpoints": [None]},
     {"name": "zram0", "path": "/dev/zram0", "type": "disk", "size": 8589934592, "fstype": "swap",
@@ -158,10 +165,35 @@ NEP = [
     {"name": "loop0", "path": "/dev/loop0", "type": "loop", "size": 100000, "fstype": "squashfs",
      "mountpoints": ["/var/lib/iets"]},
 ]
-lijst = b.schijven(NEP)
+lijst = sch.schijven(NEP)
 per = {x.apparaat: x for x in lijst}
-klopt(sorted(per) == ["/dev/sda1", "/dev/sdb1", "/dev/sdc1", "/dev/sdd", "/dev/sde1", "/dev/sde2", "/dev/sr0"],
-      "schijven: de schijf van BugOS zelf (met alles erop), swap en loop zie je niet")
+klopt(sorted(per) == ["/dev/sda1", "/dev/sdb1", "/dev/sdc1", "/dev/sdd", "/dev/sde1", "/dev/sde2", "/dev/sdf",
+                      "/dev/sr0"],
+      "schijven: de schijf van BugOS zelf (met alles erop), LVM, swap en loop zie je niet")
+f = per["/dev/sdf"]
+klopt(f.nieuw and f.soort == "intern" and f.naam == "Nieuwe schijf (1,0 TB)" and not f.los,
+      "nieuwe schijf in de computer: 'Nieuwe schijf (1,0 TB)', nog niet in gebruik")
+st = sch.klaarmaak_stappen(f, "Opslag")
+klopt(st[0][st[0].index("--object-path") + 1].endswith("/sdf") and st[0][-3].endswith("Block.Format")
+      and st[0][-2] == "'gpt'",
+      "in gebruik nemen (in de computer): eerst een nieuwe indeling (GPT)")
+klopt(st[1][-8].endswith("CreatePartitionAndFormat") and st[1][-7:-5] == ["1048576", "0"] and st[1][-2] == "'ext4'"
+      and "take-ownership" in st[1][-1] and "'Opslag'" in st[1][-1],
+      "in gebruik nemen: één stuk over de hele schijf, ext4, en van jou")
+klopt(st[2] == ["udisksctl", "mount", "-b", "/dev/sdf1"], "in gebruik nemen: daarna meteen open")
+nieuwe_stick = sch.Schijf(apparaat="/dev/sdh", naam="USB-stick (16 GB)", soort="stick", station="/dev/sdh", nieuw=True)
+st = sch.klaarmaak_stappen(nieuwe_stick, "USB-stick")
+klopt(st[0][-2] == "'dos'" and st[1][-5] == "'0x07'" and st[1][-2] == "'exfat'",
+      "in gebruik nemen (stick): exFAT, zodat hij ook op Windows, Mac en tv's werkt")
+klopt(sch.eerste_deel("/dev/nvme1n1") == "/dev/nvme1n1p1" and sch.eerste_deel("/dev/sdb") == "/dev/sdb1",
+      "eerste stuk: sdb1, maar nvme1n1p1")
+proef = [sch.Schijf("/dev/sdx1", "Data", "intern", "/dev/sdx", "/dev/sdx1", fs="ntfs"),
+         sch.Schijf("/dev/sdy1", "Open", "intern", "/dev/sdy", "/dev/sdy1", wortel="/run/media/oma/Open", fs="ext4"),
+         sch.Schijf("/dev/sdz1", "Stick", "stick", "/dev/sdz", "/dev/sdz1", fs="vfat"),
+         sch.Schijf("/dev/sdw1", "Slot", "intern", "/dev/sdw", "/dev/sdw1", op_slot=True, fs="crypto_LUKS"),
+         sch.Schijf("/dev/sdv", "Nieuw", "intern", "/dev/sdv", nieuw=True)]
+klopt(sch.auto_open_stappen(proef) == [["udisksctl", "mount", "-b", "/dev/sdx1", "--no-user-interaction"]],
+      "bij het opstarten: alleen dichte schijven in de computer gaan vanzelf open (geen sticks, slot of nieuw)")
 klopt(per["/dev/sda1"].naam == "Data" and per["/dev/sda1"].soort == "intern" and per["/dev/sda1"].vrij == 612000000000,
       "schijven: tweede schijf in de computer, open, met vrije ruimte")
 klopt(per["/dev/sdb1"].soort == "stick" and per["/dev/sdb1"].wortel == "/run/media/oma/OMA" and per["/dev/sdb1"].los,
@@ -175,30 +207,30 @@ e = per["/dev/sde1"]
 klopt(e.naam == "Back-up" and e.versleuteld and not e.op_slot and e.fs_apparaat == "/dev/mapper/luks-1234",
       "schijven: geopende versleutelde schijf houdt zijn naam")
 klopt(per["/dev/sr0"].soort == "cd" and per["/dev/sr0"].naam == "Vakantie 2019", "schijven: cd met naam")
-stappen, laatste = b.uitwerp_stappen(lijst, "/dev/sde")
+stappen, laatste = sch.uitwerp_stappen(lijst, "/dev/sde")
 klopt(stappen == [["udisksctl", "unmount", "-b", "/dev/mapper/luks-1234"], ["udisksctl", "lock", "-b", "/dev/sde1"]]
       and laatste == ["udisksctl", "power-off", "-b", "/dev/sde"],
       "veilig verwijderen: eerst alle delen dicht (ook op slot), dan de stroom eraf")
-klopt(b.openen_stappen(c)[:2] == ["solid-hardware6", "mount"] and c.apparaat.endswith("sdc1"),
+klopt(sch.openen_stappen(c)[:2] == ["solid-hardware6", "mount"] and c.apparaat.endswith("sdc1"),
       "openen: schijf op slot via KDE (die vraagt het wachtwoord)")
-klopt(b.openen_stappen(per["/dev/sdd"]) == ["udisksctl", "mount", "-b", "/dev/sdd"], "openen: gewone stick via udisks")
+klopt(sch.openen_stappen(per["/dev/sdd"]) == ["udisksctl", "mount", "-b", "/dev/sdd"], "openen: gewone stick via udisks")
 klopt(b.schijf_van(Path("/run/media/oma/OMA/Foto's"), lijst) is per["/dev/sdb1"], "schijf_van: map op de stick")
-klopt(b.systeem_plek("/var/home") and not b.systeem_plek("/var/mnt/data") and not b.systeem_plek("/run/media/oma/x"),
+klopt(sch.systeem_plek("/var/home") and not sch.systeem_plek("/var/mnt/data") and not sch.systeem_plek("/run/media/oma/x"),
       "systeemplekken: /var/home wel, /var/mnt en /run/media niet")
 klopt(e.udisks_fs.endswith("/block_devices/dm_2d0") and e.udisks_deel.endswith("/block_devices/sde1"),
       "udisks: 'dm-0' wordt 'dm_2d0' (zo heet hij daar)")
-klopt(b.gvariant_tekst("Oma's stick") == "'Oma\\'s stick'", "naam wijzigen: een ' in de naam gaat goed mee")
+klopt(sch.gvariant_tekst("Oma's stick") == "'Oma\\'s stick'", "naam wijzigen: een ' in de naam gaat goed mee")
 oma = per["/dev/sdb1"]
-st = b.hernoem_stappen(oma, "Foto's")
+st = sch.hernoem_stappen(oma, "Foto's")
 klopt(st[0] == ["udisksctl", "unmount", "-b", "/dev/sdb1"] and "Filesystem.SetLabel" in st[1][-3]
       and st[1][-2] == "'Foto\\'s'" and st[2] == ["udisksctl", "mount", "-b", "/dev/sdb1"],
       "naam wijzigen: dicht, naam erop, weer open")
-st = b.leegmaak_stappen(e, "Back-up")
+st = sch.leegmaak_stappen(e, "Back-up")
 klopt(st[0] == ["udisksctl", "unmount", "-b", "/dev/mapper/luks-1234"] and st[1] == ["udisksctl", "lock", "-b", "/dev/sde1"]
-      and st[2][st[2].index("--object-path") + 1].endswith("/sde1") and "exfat" in st[2]
+      and st[2][st[2].index("--object-path") + 1].endswith("/sde1") and "'exfat'" in st[2]
       and st[3] == ["udisksctl", "mount", "-b", "/dev/sde1"],
       "leegmaken: dicht, op slot, het hele stuk opnieuw (exFAT), weer open")
-klopt(b.repareer_stappen(per["/dev/sdd"])[0][-2].endswith("Filesystem.Repair"),
+klopt(sch.repareer_stappen(per["/dev/sdd"])[0][-2].endswith("Filesystem.Repair"),
       "repareren: een dichte stick hoeft niet eerst dicht")
 
 (TMP / "tel" / "binnen").mkdir(parents=True)
