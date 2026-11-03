@@ -118,6 +118,24 @@ if [ -d /usr/share/sddm/themes/breeze ]; then
         >/usr/share/sddm/themes/breeze/theme.conf.user
 fi
 
+# 4a. Uitzetscherm: het scherm met "Uitzetten", "Opnieuw opstarten" en
+#     "Afmelden" dat je ziet als je via het startmenu uitzet. Plasma 6 laadt
+#     dat scherm (Logout.qml) uit het SHELL-pakket org.kde.plasma.desktop, niet
+#     uit het look-and-feel-pakket; oudere en andere paden kijken juist in het
+#     look-and-feel-pakket. Daarom zetten we onze versie op allebei de plekken.
+#     Het origineel van KDE blijft ernaast staan als Logout.qml.kde (om terug
+#     te kunnen kijken); Plasma gebruikt dat bestand niet.
+UITZET=/usr/share/bugos/uitzetscherm/Logout.qml
+UITZET_SHELL=/usr/share/plasma/shells/org.kde.plasma.desktop/contents/logout
+if [ -d "$UITZET_SHELL" ]; then
+    if [ -f "$UITZET_SHELL/Logout.qml" ] && [ ! -f "$UITZET_SHELL/Logout.qml.kde" ]; then
+        cp -a "$UITZET_SHELL/Logout.qml" "$UITZET_SHELL/Logout.qml.kde"
+    fi
+    install -m0644 "$UITZET" "$UITZET_SHELL/Logout.qml"
+fi
+mkdir -p /usr/share/plasma/look-and-feel/org.bugos.desktop/contents/logout
+install -m0644 "$UITZET" /usr/share/plasma/look-and-feel/org.bugos.desktop/contents/logout/Logout.qml
+
 # Opstartlogo (Plymouth): het BugOS-logo onderaan het opstartscherm.
 if [ -d /usr/share/plymouth/themes/spinner ]; then
     install -m0644 /usr/share/bugos/plymouth-watermark.png /usr/share/plymouth/themes/spinner/watermark.png
