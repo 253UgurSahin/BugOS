@@ -37,7 +37,9 @@ jobs:
         run: |
           # Bestanden gebruikt deze om schijven te openen, te ontgrendelen en veilig te verwijderen.
           sudo podman run --rm --entrypoint /usr/bin/bash "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${{ inputs.tag }}" \
-            -c 'for p in lsblk udisksctl gdbus solid-hardware6 eject mkfs.exfat fsck.exfat mkfs.vfat partitionmanager; do printf "%-16s %s\n" "$p" "$(command -v "$p" || echo ONTBREEKT)"; done'
+            -c 'mis=0; for p in lsblk udisksctl gdbus mkfs.exfat; do command -v "$p" >/dev/null || { echo "::error::$p ontbreekt in BugOS"; mis=1; }; done
+                for p in solid-hardware6 eject fsck.exfat mkfs.vfat partitionmanager nmcli bluetoothctl pactl kscreen-doctor powerprofilesctl; do
+                  command -v "$p" >/dev/null || echo "::warning::$p ontbreekt in BugOS"; done; echo "Hulpmiddelen gecontroleerd."; exit $mis'
 
       - name: Foto's van de verkenner
         run: |
@@ -56,8 +58,14 @@ jobs:
               -v "$PWD:/repo:ro" --entrypoint /usr/bin/bash "$BEELD" /repo/tools/fotos/verkenner.sh "$2" "$3" "${4:-bugos-bestanden}"
             sleep 30
             import -display :99 -window root -crop 2360x1480+0+0 +repage "docs/beelden/verkenner/$1.png"
-            echo "--- logboek ($1) ---"; sudo podman logs foto 2>&1 | tail -25
+            echo "--- logboek ($1) ---"
+            sudo podman logs foto 2>&1 | grep -v -e keysym -e xkbcomp -e 'dbus-daemon' -e portal | tail -15 || true
             sudo podman rm -f foto >/dev/null
+            # Een zwarte foto (het programma startte niet) is heel klein: dan stoppen we, zodat hij niet in de repo komt.
+            if [ "$(stat -c %s "docs/beelden/verkenner/$1.png")" -lt 20000 ]; then
+              echo "::error::De foto '$1' is leeg: het programma startte niet (zie het logboek hierboven)."
+              exit 1
+            fi
           }
           maak thuismap licht ""
           maak documenten licht Documenten

@@ -101,7 +101,10 @@ PY
     if [ -d /run/media/oma/Fotoschijf ]; then
         mkdir -p /run/media/oma/Fotoschijf/{2019,2020,2021,2022}
     fi
-    chown -R oma:oma /run/media/oma
+    # Alleen als er nep-schijven 'open' staan (bij een lege lijst bestaat deze map niet).
+    if [ -d /run/media/oma ]; then
+        chown -R oma:oma /run/media/oma
+    fi
 fi
 
 case "$MAP" in
