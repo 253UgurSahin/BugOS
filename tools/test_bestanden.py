@@ -128,6 +128,24 @@ klopt(not venster.keuzebalk.isHidden() and venster.keuzebalk.knoppen["naam"].isV
 klopt(venster.keuzebalk.knoppen["terugzetten"].isHidden(), "kiezen: geen Zet terug buiten de prullenbak")
 venster.ga_naar(thuis)
 klopt(venster.gekozen() == [] and venster.keuzebalk.isHidden(), "andere map: niets blijft gekozen, balk weg")
+
+# kopiëren en plakken via het venster
+klopt(venster.plak_knop.isHidden(), "plakken: geen knop zolang er niets gekopieerd is")
+venster.ga_naar(docs)
+for _ in range(50):
+    app.processEvents()
+venster.selecteer(docs / "map")
+venster.kopieer()
+app.processEvents()
+klopt(not venster.plak_knop.isHidden(), "plakken: knop verschijnt na Kopiëren")
+venster.ga_naar(doel)
+venster.plak()
+if venster.klus:
+    venster.klus.wait(10000)
+for _ in range(20):
+    app.processEvents()
+klopt((doel / "map (3)" / "binnen.txt").read_text() == "binnenin" and (docs / "map").exists(),
+      "plakken: kopie als 'map (3)', het origineel blijft staan")
 venster.terug()
 venster.open_prullenbak()
 klopt(venster.in_prullenbak and venster.lijst.model() is venster.bak_model, "venster: prullenbak opent")
