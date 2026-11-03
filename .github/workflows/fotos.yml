@@ -53,6 +53,7 @@ jobs:
           maak documenten licht Documenten
           maak afbeeldingen donker Afbeeldingen
           maak afbeeldingen-licht licht Afbeeldingen
+          maak gekozen licht "Afbeeldingen/Achtergrond Stip.jpg"
           maak dolphin licht Afbeeldingen dolphin
           ls -la docs/beelden/verkenner
 

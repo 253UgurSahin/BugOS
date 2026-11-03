@@ -1,10 +1,11 @@
 #!/usr/bin/bash
-# Start de verkenner (Dolphin, in BugOS "Bestanden") voor een foto.
+# Start de verkenner (BugOS Bestanden, of Dolphin) voor een foto.
 # Net als in een echte BugOS-sessie (KDE), zodat de BugOS-kleuren en -letters gelden.
 # Draait in het echte BugOS-beeld; de bouwstraat maakt dan een schermfoto.
 #
 # Gebruik: bash tools/fotos/verkenner.sh <licht|donker> [map] [programma]
-#   map: welke map open moet staan, bijvoorbeeld Documenten (leeg = de thuismap)
+#   map: welke map open moet staan, bijvoorbeeld Documenten (leeg = de thuismap).
+#        Een bestand mag ook: dan opent zijn map en is dat bestand gekozen.
 #   programma: bugos-bestanden (standaard) of dolphin
 set -euo pipefail
 
