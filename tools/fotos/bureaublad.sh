@@ -12,11 +12,11 @@
 #   snelmenu:  daarbij het BugOS-snelmenu open
 #   uitzetten: daarbij het uitzetscherm (zoals na "Uitzetten" in het startmenu)
 #
-# Hoe het werkt: zonder vensterbeheerder (KWin) kan plasmashell een menu niet zelf openklappen.
-# Daarom tonen we de menu's met plasmawindowed (dat laat een applet als gewoon venster zien) en
-# het uitzetscherm met de echte ksmserver-logout-greeter in proefstand (PLASMA_SESSION_GUI_TEST).
-# Zonder ~/.config/plasma-org.kde.plasma.desktop-appletsrc bouwt plasmashell de taakbalk uit het
-# look-and-feel-pakket in kdeglobals; BugOS zet dat in /etc/xdg/kdeglobals (org.bugos.desktop).
+# Hoe het werkt: KWin draait in een venster op het virtuele scherm (Wayland in X) en daarbinnen
+# plasmashell, net als op een echte pc. Het startmenu gaat open zoals de Windows-toets dat doet,
+# het uitzetscherm via dezelfde D-Bus-vraag als 'Uitzetten' in het startmenu (in proefstand, zonder
+# logind: PLASMA_SESSION_GUI_TEST). Zonder ~/.config/plasma-org.kde.plasma.desktop-appletsrc bouwt
+# plasmashell de taakbalk uit het look-and-feel-pakket in kdeglobals (org.bugos.desktop).
 # Alle BUGOS_-instellingen in de omgeving gaan mee naar de programma's.
 set -euo pipefail
 
@@ -29,10 +29,59 @@ fout() {  # hiermee kan er geen goede foto komen; de bouwstraat zoekt in het log
     exit 1
 }
 
+# ---- Deel 3: draait binnen KWin (Wayland), als oma: plasmashell en de gevraagde scene ----
+# Plasma 6.8 is Wayland-only: op een kaal X-scherm crasht plasmashell. Daarom draait KWin zelf in
+# een venster op het virtuele scherm (--x11-display) en daarbinnen plasmashell, net als op een echte pc.
+# KWin is er dan ook écht, dus het startmenu klapt gewoon op de taakbalk open (activateLauncherMenu)
+# en het uitzetscherm komt schermvullend, via dezelfde D-Bus-vraag als 'Uitzetten' in het startmenu.
+in_kwin() {  # scene
+    local scene="$1" plasma_pid gewacht=0 antwoordt=nee
+    export QT_QPA_PLATFORM=wayland WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-foto}" XDG_SESSION_TYPE=wayland
+    export QT_QUICK_BACKEND=software PLASMA_SESSION_GUI_TEST=1
+    unset QT_SCALE_FACTOR  # KWin zelf geeft de schaal (2) door aan alle programma's
+    # Programma's die D-Bus later start (greeter, kglobalaccel) krijgen dezelfde omgeving.
+    dbus-update-activation-environment --all 2>/dev/null || true
+    stap "In KWin (Wayland-scherm '$WAYLAND_DISPLAY'): plasmashell starten"
+    plasmashell --no-respawn &
+    plasma_pid=$!
+    while [ "$gewacht" -lt 90 ]; do
+        if gdbus call --session --dest org.kde.plasmashell --object-path /PlasmaShell \
+                --method org.freedesktop.DBus.Peer.Ping >/dev/null 2>&1; then
+            antwoordt=ja
+            break
+        fi
+        sleep 2
+        gewacht=$((gewacht + 2))
+    done
+    if [ "$antwoordt" = ja ]; then
+        stap "plasmashell antwoordt (na ongeveer $gewacht s); 10 s wachten tot de taakbalk er staat"
+    else
+        stap "Let op: plasmashell antwoordt na 90 s nog niet; we proberen het toch"
+    fi
+    sleep 10
+    kill -0 "$plasma_pid" 2>/dev/null || stap "Let op: plasmashell is gestopt (zie de regels hierboven)"
+    case "$scene" in
+        taakbalk)
+            stap "Alleen de taakbalk; er gaat verder niets open" ;;
+        startmenu)
+            stap "Startmenu openen zoals de Windows-toets dat doet (activateLauncherMenu)"
+            gdbus call --session --dest org.kde.plasmashell --object-path /PlasmaShell \
+                --method org.kde.PlasmaShell.activateLauncherMenu >/dev/null 2>&1 || stap "Let op: activateLauncherMenu gaf een fout" ;;
+        snelmenu)
+            stap "Snelmenu openen als los venster (plasmawindowed org.bugos.snelmenu)"
+            plasmawindowed org.bugos.snelmenu & ;;
+        uitzetten)
+            stap "Uitzetscherm openen zoals 'Uitzetten' in het startmenu (org.kde.LogoutPrompt, proefstand)"
+            gdbus call --session --dest org.kde.LogoutPrompt --object-path /LogoutPrompt \
+                --method org.kde.LogoutPrompt.promptAll >/dev/null 2>&1 || stap "Let op: promptAll gaf een fout" ;;
+    esac
+    stap "Klaar voor de foto; alles blijft staan tot de bouwstraat de container weghaalt"
+    sleep infinity
+}
+
 # ---- Deel 2: draait als oma, binnen één dbus-run-session (gestart onderaan dit bestand) ----
 bureaublad_tonen() {  # scene
     local scene="$1" kam plasma_pid gewacht=0 antwoordt=nee greeter hulp kies=()
-    export QT_QPA_PLATFORM=xcb QT_QUICK_BACKEND=software QT_SCALE_FACTOR=2
     export LANG=nl_NL.UTF-8 LANGUAGE=nl XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6
     stap "Bureaublad voor de foto: scene '$scene', scherm ${DISPLAY:-?}, als $(id -un)"
     stap "$(plasmashell --version 2>/dev/null | head -1 || true)"
@@ -52,11 +101,23 @@ bureaublad_tonen() {  # scene
         stap "Let op: geen kactivitymanagerd en geen D-Bus-dienst ervoor; plasmashell kan daardoor stoppen"
     fi
 
+    if command -v kwin_wayland >/dev/null 2>&1; then
+        # De echte weg: KWin in een venster op het virtuele scherm (2560x1600, schaal 2 = net als
+        # de andere foto's), met zachte (software) tekening; daarbinnen deel 3 met plasmashell.
+        stap "$(kwin_wayland --version 2>/dev/null | head -1 || true)"
+        stap "KWin starten in een venster op $DISPLAY (Wayland in X), met daarin plasmashell"
+        export LIBGL_ALWAYS_SOFTWARE=1 QT_QUICK_BACKEND=software
+        exec kwin_wayland --x11-display "$DISPLAY" --width 2560 --height 1600 --scale 2 \
+            --no-lockscreen --no-global-shortcuts --socket wayland-foto \
+            --exit-with-session "bash $ZELF --in-kwin $scene"
+    fi
+
+    # Zonder KWin (oudere beelden): plasmashell rechtstreeks op het X-scherm.
+    stap "Geen kwin_wayland; plasmashell rechtstreeks op het X-scherm proberen"
+    export QT_QPA_PLATFORM=xcb QT_QUICK_BACKEND=software QT_SCALE_FACTOR=2
     stap "plasmashell starten"
     plasmashell --no-respawn &
     plasma_pid=$!
-
-    # Wachten tot plasmashell op D-Bus antwoordt (hoogstens 60 s), daarna nog even voor het tekenen.
     while [ "$gewacht" -lt 60 ]; do
         if gdbus call --session --dest org.kde.plasmashell --object-path /PlasmaShell \
                 --method org.freedesktop.DBus.Peer.Ping >/dev/null 2>&1; then
@@ -78,19 +139,15 @@ bureaublad_tonen() {  # scene
         taakbalk)
             stap "Alleen de taakbalk; er gaat verder niets open" ;;
         startmenu)
-            # Maten zijn in punten; met QT_SCALE_FACTOR=2 is het venster op de foto twee keer zo groot:
-            # 660x640 punten (de maat van het startmenu) wordt 1320x1280 beeldpunten, op (60,120).
+            # Maten zijn in punten; met QT_SCALE_FACTOR=2 is het venster op de foto twee keer zo groot.
             stap "Startmenu openen (plasmawindowed org.bugos.startmenu)"
             plasmawindowed org.bugos.startmenu -qwindowgeometry 660x640+30+60 & ;;
         snelmenu)
-            # 410x380 punten wordt 820x760 beeldpunten, op (1500,500): rechts, waar het snelmenu zit.
             stap "Snelmenu openen (plasmawindowed org.bugos.snelmenu)"
             plasmawindowed org.bugos.snelmenu -qwindowgeometry 410x380+750+250 & ;;
         uitzetten)
             # In proefstand toont de greeter alle knoppen zonder logind; --windowed slaat de focusbewaker
-            # over (die sluit het venster anders na 3 s). Met --choose vraagt hij "Wat wil je doen?" (alle
-            # tegels, geen aftelling); zonder toont hij alleen "Afmelden?", of telt hij af en is hij weg
-            # voor de foto. We geven --choose alleen mee als deze greeter het kent.
+            # over (die sluit het venster anders na 3 s). Met --choose vraagt hij "Wat wil je doen?".
             greeter=/usr/libexec/ksmserver-logout-greeter
             hulp="$("$greeter" --help 2>&1 || true)"
             case "$hulp" in
@@ -104,6 +161,10 @@ bureaublad_tonen() {  # scene
     sleep infinity
 }
 
+if [ "${1:-}" = --in-kwin ]; then
+    in_kwin "${2:-taakbalk}"
+    exit 0
+fi
 if [ "${1:-}" = --als-oma ]; then
     bureaublad_tonen "${2:-taakbalk}"
     exit 0
@@ -211,4 +272,4 @@ mkdir -p /tmp/run-oma && chown oma:oma /tmp/run-oma && chmod 700 /tmp/run-oma
 # elkaar daarop kunnen vinden). Dit script roept zichzelf opnieuw aan voor deel 2 hierboven.
 stap "Klaargezet (thema $THEMA, scene $SCENE); nu als oma het bureaublad starten"
 exec runuser -u oma -- env HOME="$THUIS" USER=oma LOGNAME=oma XDG_RUNTIME_DIR=/tmp/run-oma DISPLAY="${DISPLAY:-:99}" \
-    "${BUGOS_ENV[@]}" dbus-run-session -- bash "$ZELF" --als-oma "$SCENE"
+    ZELF="$ZELF" "${BUGOS_ENV[@]}" dbus-run-session -- bash "$ZELF" --als-oma "$SCENE"

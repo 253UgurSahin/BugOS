@@ -123,6 +123,7 @@ jobs:
           sudo podman run --rm --entrypoint /usr/bin/bash "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${{ inputs.tag }}" \
             -c 'mis=0; for p in plasmashell plasmawindowed gdbus; do command -v "$p" >/dev/null || { echo "::error::$p ontbreekt in BugOS"; mis=1; }; done
                 command -v qdbus6 >/dev/null || echo "::warning::qdbus6 ontbreekt in BugOS"
+                command -v kwin_wayland >/dev/null || echo "::warning::kwin_wayland ontbreekt in BugOS (nodig voor een echte bureaubladfoto)"
                 command -v kactivitymanagerd >/dev/null || [ -x /usr/libexec/kactivitymanagerd ] || echo "::warning::kactivitymanagerd ontbreekt in BugOS (plasmashell heeft hem nodig)"
                 for b in /usr/libexec/ksmserver-logout-greeter /usr/share/dbus-1/services/org.kde.ActivityManager.service \
                          /usr/share/plasma/plasmoids/org.bugos.startmenu /usr/share/plasma/plasmoids/org.bugos.snelmenu \
@@ -144,7 +145,7 @@ jobs:
             sudo podman run -d --name foto -e DISPLAY=:99 ${VOORBEELD_VAN:+-e $VOORBEELD_VAN=1} \
               -v /tmp/.X11-unix:/tmp/.X11-unix \
               -v "$PWD:/repo:ro" --entrypoint /usr/bin/bash "$BEELD" /repo/tools/fotos/bureaublad.sh "$2" "$3"
-            sleep 75
+            sleep 100
             import -display :99 -window root "docs/beelden/bureaublad/$1.png"
             # Het logboek van de container bewaren we in een bestand, om er hieronder een paar keer in te kijken.
             sudo podman logs foto 2>&1 | tee /tmp/logboek-foto.txt >/dev/null || true
@@ -152,7 +153,7 @@ jobs:
             echo "--- logboek ($1): de stappen van het script ---"
             grep -E '^(\[[0-9:]+\] |FOUT: )' /tmp/logboek-foto.txt || true
             echo "--- logboek ($1): de laatste regels ---"
-            grep -v -e keysym -e xkbcomp -e 'dbus-daemon' -e portal /tmp/logboek-foto.txt | tail -20 || true
+            grep -v -e keysym -e xkbcomp -e 'dbus-daemon' -e portal -e '^$' /tmp/logboek-foto.txt | tail -60 || true
             if grep -q '^FOUT: ' /tmp/logboek-foto.txt; then
               echo "::error::Foto '$1': $(grep -m1 '^FOUT: ' /tmp/logboek-foto.txt | cut -c7-)"
               exit 1
