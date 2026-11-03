@@ -145,7 +145,8 @@ NEP = [
      "tran": "usb", "mountpoints": [None], "children": [
          {"name": "sde1", "path": "/dev/sde1", "type": "part", "size": 250000000000, "fstype": "crypto_LUKS",
           "mountpoints": [None], "children": [
-              {"name": "luks-1234", "path": "/dev/mapper/luks-1234", "type": "crypt", "size": 249983000000,
+              {"name": "luks-1234", "kname": "dm-0", "path": "/dev/mapper/luks-1234", "type": "crypt",
+               "size": 249983000000,
                "fstype": "ext4", "label": "Back-up", "fsavail": 180000000000, "fssize": 245000000000,
                "mountpoints": ["/run/media/oma/Back-up"]}]},
          {"name": "sde2", "path": "/dev/sde2", "type": "part", "size": 250000000000, "fstype": "exfat",
@@ -184,6 +185,21 @@ klopt(b.openen_stappen(per["/dev/sdd"]) == ["udisksctl", "mount", "-b", "/dev/sd
 klopt(b.schijf_van(Path("/run/media/oma/OMA/Foto's"), lijst) is per["/dev/sdb1"], "schijf_van: map op de stick")
 klopt(b.systeem_plek("/var/home") and not b.systeem_plek("/var/mnt/data") and not b.systeem_plek("/run/media/oma/x"),
       "systeemplekken: /var/home wel, /var/mnt en /run/media niet")
+klopt(e.udisks_fs.endswith("/block_devices/dm_2d0") and e.udisks_deel.endswith("/block_devices/sde1"),
+      "udisks: 'dm-0' wordt 'dm_2d0' (zo heet hij daar)")
+klopt(b.gvariant_tekst("Oma's stick") == "'Oma\\'s stick'", "naam wijzigen: een ' in de naam gaat goed mee")
+oma = per["/dev/sdb1"]
+st = b.hernoem_stappen(oma, "Foto's")
+klopt(st[0] == ["udisksctl", "unmount", "-b", "/dev/sdb1"] and "Filesystem.SetLabel" in st[1][-3]
+      and st[1][-2] == "'Foto\\'s'" and st[2] == ["udisksctl", "mount", "-b", "/dev/sdb1"],
+      "naam wijzigen: dicht, naam erop, weer open")
+st = b.leegmaak_stappen(e, "Back-up")
+klopt(st[0] == ["udisksctl", "unmount", "-b", "/dev/mapper/luks-1234"] and st[1] == ["udisksctl", "lock", "-b", "/dev/sde1"]
+      and st[2][st[2].index("--object-path") + 1].endswith("/sde1") and "exfat" in st[2]
+      and st[3] == ["udisksctl", "mount", "-b", "/dev/sde1"],
+      "leegmaken: dicht, op slot, het hele stuk opnieuw (exFAT), weer open")
+klopt(b.repareer_stappen(per["/dev/sdd"])[0][-2].endswith("Filesystem.Repair"),
+      "repareren: een dichte stick hoeft niet eerst dicht")
 
 (TMP / "tel" / "binnen").mkdir(parents=True)
 (TMP / "tel" / "a.bin").write_bytes(b"x" * 100_000)
@@ -251,8 +267,13 @@ klopt([x.naam for x in venster.lijst_schijven] == ["Stick van oma"], "venster: d
 venster.open_computer()
 klopt(venster.in_computer and venster.stapel.currentWidget() is venster.computer
       and venster.grote_titel.text() == "Deze computer", "Deze computer: de pagina opent")
-tegels = venster.computer.widget().findChildren(b.ApparaatTegel)
-klopt(len(tegels) == 1 and tegels[0].uitwerp_knop is not None, "Deze computer: de stick, met 'Veilig verwijderen'")
+tegels = venster.computer.widget().findChildren(b.SchijfRij)
+klopt(len(tegels) == 1 and tegels[0].uitwerp_knop is not None and tegels[0].meer is not None,
+      "Deze computer: de stick, met 'Veilig verwijderen' en een knop voor meer")
+menu = venster.schijf_menu(venster.lijst_schijven[0])
+klopt([a.text() for a in menu.actions() if a.text()] == ["Openen", "Naam wijzigen…", "Controleren en repareren",
+                                                          "Leegmaken (alles wissen)…", "Veilig verwijderen"],
+      "beheer: openen, naam wijzigen, repareren, leegmaken, veilig verwijderen")
 klopt(venster.ruimte_balk is not None and venster.status.text() == "1 aangesloten", "Deze computer: ruimte bovenaan, en 1 aangesloten")
 tegels[0].geklikt.emit()
 klopt(venster.huidig == stick and not venster.in_computer and not venster.uitwerp_knop.isHidden()
@@ -269,7 +290,7 @@ venster.vul_zijbalk()
 venster.open_computer()
 for _ in range(20):
     app.processEvents()
-leeg = [x for x in venster.computer.widget().findChildren(b.ApparaatTegel) if x.property("leeg") == "true"]
+leeg = [x for x in venster.computer.widget().findChildren(b.SchijfRij) if x.property("leeg") == "true"]
 klopt(len(leeg) == 1, "Deze computer zonder stick: 'Steek een USB-stick in' (en verder niets)")
 
 # 12. opdrachten op de achtergrond (openen, veilig verwijderen): het venster loopt niet vast

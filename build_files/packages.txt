@@ -28,3 +28,8 @@ libnotify
 
 # --- Alle talen ---
 glibc-all-langpacks
+
+# Schijven: USB-sticks leegmaken (exFAT, werkt overal), repareren, en Schijfbeheer voor gevorderden
+exfatprogs
+dosfstools
+kde-partitionmanager

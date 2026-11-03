@@ -37,7 +37,7 @@ jobs:
         run: |
           # Bestanden gebruikt deze om schijven te openen, te ontgrendelen en veilig te verwijderen.
           sudo podman run --rm --entrypoint /usr/bin/bash "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${{ inputs.tag }}" \
-            -c 'for p in lsblk udisksctl solid-hardware6 eject; do printf "%-16s %s\n" "$p" "$(command -v "$p" || echo ONTBREEKT)"; done'
+            -c 'for p in lsblk udisksctl gdbus solid-hardware6 eject mkfs.exfat fsck.exfat mkfs.vfat partitionmanager; do printf "%-16s %s\n" "$p" "$(command -v "$p" || echo ONTBREEKT)"; done'
 
       - name: Foto's van de verkenner
         run: |

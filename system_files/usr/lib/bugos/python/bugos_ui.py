@@ -361,6 +361,7 @@ LIJN = {
              '<path d="M10 7V9.5M13 7V9.5M16 7V9.5"/>',
     "cd": '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.5"/>',
     "slot": '<rect x="5.5" y="10.5" width="13" height="10" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
+    "meer": '<circle cx="5.5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18.5" cy="12" r="1.2"/>',
 }
 
 
@@ -970,11 +971,9 @@ def achtergrond_pad(donker: bool | None = None) -> str:
 class Held(QFrame):
     """Een brede kaart met een stukje van de BugOS-achtergrond erachter."""
 
-    def __init__(self, hoogte: int = 150, marge: int = 28, wit: float = 0.40, overgang: float = 0.22):
+    def __init__(self, hoogte: int = 150, marge: int = 28):
         super().__init__()
         self.setMinimumHeight(hoogte)
-        self.wit = wit            # tot waar (0..1) de kaart wit blijft, zodat de tekst goed leesbaar is
-        self.overgang = overgang  # hoe breed het verloop naar de achtergrond is
         self.beeld = QPixmap(achtergrond_pad())
         self.lay = QHBoxLayout(self)
         self.lay.setContentsMargins(marge, marge, marge, marge)
@@ -997,8 +996,7 @@ class Held(QFrame):
             p.drawPixmap(QRectF(r.right() - dw, r.bottom() - dh * 0.82, dw, dh), self.beeld, QRectF(0, 0, bw, bh))
             overgang = QLinearGradient(r.left(), 0, r.right(), 0)
             basis = QColor(K["vlak"])
-            w, o = self.wit, self.overgang
-            for pos, alfa in ((0.0, 0.97), (w, 0.9), (min(w + o, 0.98), 0.15), (min(w + o * 1.8, 1.0), 0.0)):
+            for pos, alfa in ((0.0, 0.97), (0.40, 0.9), (0.62, 0.15), (0.8, 0.0)):
                 c = QColor(basis)
                 c.setAlphaF(alfa)
                 overgang.setColorAt(pos, c)
