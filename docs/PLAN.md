@@ -66,7 +66,7 @@ Het belangrijkste idee: **BugOS kan niet stuk.**
 | App in het startmenu | Bestand | Wat het doet |
 |---|---|---|
 | BugOS Welkom | `bugos-welkom` | Het eerste scherm: taal, wifi, licht of donker, updates, gamen of programmeren, en bestanden van Windows terugzetten. |
-| Instellingen | `bugos-instellingen` | Grote tegels met een zoekbalk: wifi, bluetooth, geluid, scherm, printers, updates, schijven en meer. Plus een pagina met aan/uit-knoppen en "Over deze computer". |
+| Instellingen | `bugos-instellingen` | Zoals Instellingen in Windows, maar rustiger. Start: snelle schuifjes (wifi, bluetooth, nachtlicht, donker) en het volume. Eigen pagina's in gewone woorden: Wifi en internet (netwerken, verbinden met wachtwoord), Bluetooth (apparaten verbinden), Geluid (volume, welke luidspreker), Scherm (helderheid, nachtlicht, grootte), Energie (zuinig/gebalanceerd/snel, batterij), Uiterlijk (licht/donker, achtergrond), Updates en meer, Over deze computer. Zoeken over alles. Per pagina 'Meer instellingen (voor gevorderden)' naar KDE. |
 | Er werkt iets niet | `bugos-hulp` | Controleert internet, wifi, bluetooth, geluid, printer, opslag en updates. Bij elk probleem staat een knop "Repareer". |
 | Back-up | `bugos-backup` | Je bestanden met één knop naar een USB-schijf, en ook weer terug. Er wordt nooit iets weggegooid. |
 | Bestanden van Windows | `bugos-overstap` | Zet de bestanden, bladwijzers en achtergrond terug die je met BugOS Overstap van Windows hebt meegenomen. |
