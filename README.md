@@ -75,6 +75,22 @@ Gaat er na een update iets mis? Dan kies je bij het opstarten de versie van gist
       <p align="center"><b>Welkom</b>: alles stap voor stap ingesteld</p>
     </td>
   </tr>
+  <tr>
+    <td width="50%">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="website/assets/verkenner-donker.webp">
+        <img src="website/assets/verkenner-licht.webp" alt="Bestanden, de verkenner van BugOS, met de map Afbeeldingen">
+      </picture>
+      <p align="center"><b>Bestanden</b>: je foto's en documenten, net als in Windows</p>
+    </td>
+    <td width="50%">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="website/assets/backup-donker.webp">
+        <img src="website/assets/backup-licht.webp" alt="Back-up met één knop naar een USB-schijf">
+      </picture>
+      <p align="center"><b>Back-up</b>: met één knop naar een USB-schijf</p>
+    </td>
+  </tr>
 </table>
 
 ## Proberen
