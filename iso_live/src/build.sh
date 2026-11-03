@@ -16,52 +16,46 @@ mount -o remount,rw /proc/sys || true
 # 1. BugOS zelf op de stick zetten.
 #    Vroeger haalde het installatieprogramma BugOS tijdens het installeren van
 #    internet. Dat werkte niet zonder internet, niet zolang het pakket op
-#    GitHub privé is, en het duurde lang. Nu zit BugOS zelf op de stick (in de
-#    containeropslag van de live-omgeving) en installeert het programma vanaf
-#    daar. De stick wordt daar nauwelijks groter van: de live-omgeving ÍS al
-#    BugOS, en mksquashfs slaat bestanden die precies gelijk zijn maar één
-#    keer op.
+#    GitHub privé is, en het duurde lang. Nu zit BugOS zelf op de stick en
+#    installeert het programma vanaf daar.
+#    Hoe: als "OCI-map" (de ingepakte lagen, precies zoals ze in GitHub
+#    Packages staan) in /var/lib/bugos-stick/bugos. Het installatieprogramma
+#    leest die rechtstreeks (ostreecontainer --transport=oci).
+#    Waarom niet uitgepakt in de containeropslag (zoals Aurora en Bazzite)?
+#    BugOS haalt bestanden van Aurora weg; die "verwijderd"-merktekens
+#    (whiteouts) kan de opslag binnen deze bouwstap niet aanmaken ("open
+#    /etc/.wh.bazaar: invalid argument"). Een OCI-map wordt niet uitgepakt,
+#    dus dat probleem bestaat dan niet. Nadeel: de stick wordt een paar GB
+#    groter, omdat de ingepakte lagen niet met de live-omgeving gedeeld worden.
 #    Het wachtwoord voor GitHub Packages komt als "secret" binnen (alleen
 #    tijdens het bouwen, het komt niet in de ISO): zie iso_live/Containerfile.
-#    Belangrijk:
-#    - De opslag staat op de gewone plek (/var/lib/containers/storage), net
-#      als bij Aurora en Bazzite. Andere plekken gaven bij hen fouten.
-#    - De live-omgeving draait zelf op "overlayfs". Daarop kan de opslag
-#      alleen werken met fuse-overlayfs; zonder dat faalt zowel deze stap als
-#      het installeren ("'overlay' is not supported over overlayfs").
-#    - Start het ingebouwde beeld nooit met "podman run" op de stick: het is
-#      alleen bedoeld om te installeren (lezen gaat goed, starten niet).
 # ---------------------------------------------------------------------------
-rpm -q fuse-overlayfs || {
-    echo "fuse-overlayfs ontbreekt: zonder kan BugOS niet vanaf de stick installeren" >&2
-    exit 1
-}
-AUTH_ARGS=()
+STICK_OCI=/var/lib/bugos-stick/bugos
+SKOPEO_ARGS=()
 if [ -s /run/secrets/ghcr ]; then
-    AUTH_ARGS=(--authfile /run/secrets/ghcr)
+    SKOPEO_ARGS+=(--src-authfile /run/secrets/ghcr)
+fi
+# IMAGE_SOURCE (alleen voor lokaal testen): haal hem uit een andere opslagplaats,
+# bijvoorbeeld een eigen registry op localhost:5000 (dan IMAGE_SOURCE_TLS=false).
+# In iso.yml niet gebruikt: daar is de bron gewoon IMAGE_REF.
+BRON="${IMAGE_SOURCE:-${IMAGE_REF%:*}}"
+if [ "${IMAGE_SOURCE_TLS:-true}" = false ]; then
+    SKOPEO_ARGS+=(--src-tls-verify=false)
 fi
 # Precies dezelfde versie als waar de live-omgeving op gebouwd is (IMAGE_DIGEST,
 # door iso.yml doorgegeven). Anders kan er tussendoor een nieuwere BugOS op
-# GitHub komen: dan installeer je iets anders dan je probeerde, en wordt de
-# stick twee keer zo groot (geen gelijke bestanden meer om te delen).
-# IMAGE_SOURCE (alleen voor lokaal testen): haal hem uit een andere opslagplaats,
-# bijvoorbeeld een eigen registry op localhost:5000 (dan IMAGE_SOURCE_TLS=false).
-# Op de stick krijgt hij daarna gewoon de naam IMAGE_REF. In iso.yml niet gebruikt.
-BRON="${IMAGE_SOURCE:-${IMAGE_REF%:*}}"
-if [ "${IMAGE_SOURCE_TLS:-true}" = false ]; then
-    AUTH_ARGS+=(--tls-verify=false)
-fi
+# GitHub komen, en installeer je iets anders dan je op de stick probeerde.
 if [ -n "${IMAGE_DIGEST:-}" ]; then
-    podman pull "${AUTH_ARGS[@]}" "${BRON}@${IMAGE_DIGEST}"
-    podman tag "${BRON}@${IMAGE_DIGEST}" "$IMAGE_REF"
-    [ "$(podman image inspect --format '{{.Digest}}' "$IMAGE_REF")" = "$IMAGE_DIGEST" ]
+    BRON_REF="${BRON}@${IMAGE_DIGEST}"
 else
-    podman pull "${AUTH_ARGS[@]}" "$IMAGE_REF"
+    BRON_REF="${BRON}:${IMAGE_REF##*:}"
 fi
-# Controles: de gewone plek, en kan het installatieprogramma hem lezen?
-[ "$(podman info --format '{{.Store.GraphRoot}}')" = /var/lib/containers/storage ]
-skopeo inspect --raw "containers-storage:${IMAGE_REF}" >/dev/null
-podman images
+rm -rf "$STICK_OCI"
+mkdir -p "$(dirname "$STICK_OCI")"
+skopeo copy "${SKOPEO_ARGS[@]}" "docker://${BRON_REF}" "oci:${STICK_OCI}"
+# Controle: kan het installatieprogramma hem lezen, en is het een bootc-beeld?
+skopeo inspect "oci:${STICK_OCI}" --format '{{index .Labels "containers.bootc"}}' | grep -qx 1
+du -sh "$STICK_OCI"
 
 # ---------------------------------------------------------------------------
 # 2. Kernel: voor Secure Boot moet de live-stick een door Fedora ondertekende
@@ -245,13 +239,13 @@ run0 --user=liveuser --setenv=WAYLAND_DISPLAY=wayland-0 --setenv=DISPLAY=:0 \\
 %end
 
 # BugOS vanaf de stick zelf installeren (zie stap 1): geen internet nodig.
-ostreecontainer --url=${IMAGE_REF} --transport=containers-storage --no-signature-verification
+ostreecontainer --url=/var/lib/bugos-stick/bugos --transport=oci --no-signature-verification
 %include /usr/share/anaconda/post-scripts/bugos-updates.ks
 EOF
 
 # Na het installeren: updates voortaan van GitHub halen. BugOS kwam van de
-# stick (containers-storage); zonder dit zou de computer later in zijn eigen
-# lege opslag naar updates zoeken. bootc switch --mutate-in-place past alleen
+# stick (OCI-map); zonder dit zou de computer later in die map op de stick
+# naar updates zoeken. bootc switch --mutate-in-place past alleen
 # die verwijzing aan, er wordt niets gedownload.
 cat >/usr/share/anaconda/post-scripts/bugos-updates.ks <<EOF
 %post --erroronfail --log=/tmp/bugos_logs/bootc-switch.log
