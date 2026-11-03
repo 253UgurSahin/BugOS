@@ -8,7 +8,8 @@
 #        Een bestand mag ook: dan opent zijn map en is dat bestand gekozen.
 #        "computer:" opent de pagina Deze computer; een pad met / ervoor mag ook.
 #   programma: bugos-bestanden (standaard) of dolphin
-# Met BUGOS_LSBLK=<lijstje.json> ziet de verkenner nep-schijven (zie tools/fotos/schijven.json).
+# Met BUGOS_LSBLK=<lijstje.json> ziet de verkenner nep-schijven (zie tools/fotos/schijven.json),
+# met BUGOS_RUIMTE=totaal,vrij,afbeeldingen,videos,documenten,muziek,downloads voorbeeldgetallen.
 set -euo pipefail
 
 THEMA="${1:-licht}"
@@ -113,5 +114,6 @@ mkdir -p /tmp/run-oma && chown oma:oma /tmp/run-oma && chmod 700 /tmp/run-oma
 
 exec runuser -u oma -- env HOME="$THUIS" USER=oma XDG_RUNTIME_DIR=/tmp/run-oma DISPLAY="${DISPLAY:-:99}" \
     LANG=nl_NL.UTF-8 LANGUAGE=nl QT_SCALE_FACTOR=2 \
-    XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6 ${BUGOS_LSBLK:+BUGOS_LSBLK="$BUGOS_LSBLK"} \
+    XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6 \
+    ${BUGOS_LSBLK:+BUGOS_LSBLK="$BUGOS_LSBLK"} ${BUGOS_RUIMTE:+BUGOS_RUIMTE="$BUGOS_RUIMTE"} \
     dbus-run-session -- "$PROGRAMMA" -qwindowgeometry 1180x740+0+0 "$DOEL"

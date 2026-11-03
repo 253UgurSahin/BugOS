@@ -20,6 +20,8 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
+import time
 import urllib.parse
 import zipfile
 from dataclasses import dataclass
@@ -29,15 +31,16 @@ from pathlib import Path
 sys.path.insert(0, "/usr/lib/bugos/python")
 
 from bugos_ui import (  # noqa: E402
-    K, Knop, Zijbalk, Zoekveld, label, lijn_icoon, lijn_pixmap, maak_app, merk_label, t, uitvoeren,
+    K, Held, Knop, Zijbalk, Zoekveld, label, lijn_icoon, lijn_pixmap, maak_app, merk_label, sectie, t, uitvoeren,
 )
 from PySide6.QtCore import (  # noqa: E402
-    QCollator, QDir, QEvent, QMimeData, QModelIndex, QObject, QProcess, QRectF, QRunnable, QSize,
+    QCollator, QDir, QEvent, QMimeData, QModelIndex, QObject, QPointF, QProcess, QRectF, QRunnable, QSize,
     QSortFilterProxyModel, QStorageInfo, Qt, QThread, QThreadPool, QTimer, QUrl, Signal,
 )
 from PySide6.QtGui import (  # noqa: E402
-    QColor, QDesktopServices, QFont, QFontMetrics, QImage, QImageReader, QKeySequence,
-    QLinearGradient, QPainter, QPainterPath, QPen, QPixmap, QShortcut, QStandardItem, QStandardItemModel,
+    QColor, QConicalGradient, QDesktopServices, QFont, QFontMetrics, QIcon, QImage, QImageReader, QKeySequence,
+    QLinearGradient, QPainter, QPainterPath, QPen, QPixmap, QRadialGradient, QShortcut, QStandardItem,
+    QStandardItemModel,
 )
 from PySide6.QtWidgets import (  # noqa: E402
     QAbstractItemView, QApplication, QFileSystemModel, QFrame, QGraphicsDropShadowEffect, QGridLayout, QHBoxLayout,
@@ -211,12 +214,14 @@ def schijven(apparaten: list[dict] | None = None) -> list[Schijf]:
         grootte_station = _getal(station.get("size")) or 0
         if station.get("type") == "rom":
             soort = "cd"
-        elif naam.startswith("mmcblk") and not systeem:
+        elif naam.startswith("mmcblk"):
             soort = "kaart"
-        elif not systeem and (station.get("rm") or station.get("hotplug") or station.get("tran") == "usb"):
+        elif station.get("rm") or station.get("hotplug") or station.get("tran") == "usb":
             soort = "stick" if station.get("rm") or grootte_station <= 128 * 10**9 else "extern"
         else:
             soort = "intern"
+        if systeem:
+            continue  # de schijf van BugOS zelf: daar staat alles al onder 'Thuis'
         kandidaten = [station] if station.get("fstype") and not station.get("children") else \
             [k for k in station.get("children") or [] if k.get("type") == "part"]
         for deel in kandidaten:
@@ -241,15 +246,12 @@ def schijven(apparaten: list[dict] | None = None) -> list[Schijf]:
                 label = ""
             if not label:
                 maat = mooie_maat(grootte or grootte_station)
-                if soort == "intern" and fs in ("ntfs", "BitLocker"):
-                    label = t("Windows-schijf", "Windows drive")
-                else:
-                    label = {
-                        "stick": t(f"USB-stick ({maat})", f"USB stick ({maat})"),
-                        "extern": t("Externe schijf", "External drive"),
-                        "kaart": t(f"SD-kaart ({maat})", f"SD card ({maat})"),
-                        "cd": t("Cd of dvd", "CD or DVD"),
-                    }.get(soort, t(f"Schijf ({maat})", f"Drive ({maat})"))
+                label = {
+                    "stick": t(f"USB-stick ({maat})", f"USB stick ({maat})"),
+                    "extern": t("Externe schijf", "External drive"),
+                    "kaart": t(f"SD-kaart ({maat})", f"SD card ({maat})"),
+                    "cd": t("Cd of dvd", "CD or DVD"),
+                }.get(soort, t(f"Schijf ({maat})", f"Drive ({maat})"))
             wortel = plekken_[0] if plekken_ else ""
             lijst.append(Schijf(
                 apparaat=deel.get("path") or f"/dev/{deel.get('name')}", naam=label, soort=soort,
@@ -263,6 +265,79 @@ def schijven(apparaten: list[dict] | None = None) -> list[Schijf]:
         if gezien[s.naam] > 1:
             s.naam = f"{s.naam} ({gezien[s.naam]})"
     return lijst
+
+
+STOP = threading.Event()  # gaat aan als het venster dichtgaat: dan stopt het tellen meteen
+
+
+def mapgrootte(pad: Path, max_items: int = 500_000) -> int:
+    """Hoeveel ruimte gebruikt deze map (met alles erin)? Blijft op dezelfde schijf; volgt geen snelkoppelingen."""
+    try:
+        apparaat = os.stat(pad).st_dev
+    except OSError:
+        return 0
+    totaal, rij, gezien = 0, [str(pad)], 0
+    while rij and gezien < max_items and not STOP.is_set():
+        try:
+            with os.scandir(rij.pop()) as inhoud:
+                for e in inhoud:
+                    gezien += 1
+                    try:
+                        st = e.stat(follow_symlinks=False)
+                    except OSError:
+                        continue
+                    if st.st_dev != apparaat:
+                        continue
+                    if e.is_dir(follow_symlinks=False):
+                        rij.append(e.path)
+                    elif e.is_file(follow_symlinks=False):
+                        totaal += st.st_blocks * 512
+        except OSError:
+            continue
+    return totaal
+
+
+class Telsein(QObject):
+    klaar = Signal(object)
+
+
+class Teller(QRunnable):
+    """Telt op de achtergrond hoe groot je Afbeeldingen, Video's, enzovoort zijn."""
+
+    def __init__(self, mappen: list[tuple[str, Path]], sein: Telsein):
+        super().__init__()
+        self.mappen, self.sein = mappen, sein
+
+    def run(self) -> None:
+        uitslag = {sleutel: mapgrootte(pad) for sleutel, pad in self.mappen}
+        try:
+            self.sein.klaar.emit(uitslag)
+        except RuntimeError:  # het venster is al dicht
+            pass
+
+
+def voorbeeld_ruimte() -> list[int] | None:
+    """Voor foto's: BUGOS_RUIMTE=totaal,vrij,afbeeldingen,videos,documenten,muziek,downloads (in bytes)."""
+    try:
+        getallen = [int(float(x)) for x in os.environ.get("BUGOS_RUIMTE", "").split(",") if x.strip()]
+    except ValueError:
+        return None
+    return getallen if len(getallen) == 7 else None
+
+
+def eigen_ruimte() -> tuple[int, int]:
+    """(totaal, vrij) van de schijf waar je eigen bestanden op staan."""
+    nep = voorbeeld_ruimte()
+    if nep:
+        return nep[0], nep[1]
+    info = QStorageInfo(str(thuis()))
+    return max(info.bytesTotal(), 0), max(info.bytesAvailable(), 0)
+
+
+RUIMTE_SOORTEN = (  # (sleutel uit plekken(), kleur)
+    ("afbeeldingen", "accent"), ("videos", "#0EA5A4"), ("documenten", "#2F7BF5"),
+    ("muziek", "#E2457A"), ("downloads", "#8B5CF6"),
+)
 
 
 def schijf_van(pad: Path, lijst: list[Schijf]) -> Schijf | None:
@@ -647,6 +722,140 @@ def teken_papier(p: QPainter, r: QRectF, ext: str) -> None:
         p.drawText(label_r, Qt.AlignmentFlag.AlignCenter, tekst)
 
 
+def teken_schaduw(p: QPainter, x: float, y: float, breedte: float, hoogte: float, sterkte: int = 50) -> None:
+    """Een zachte ronde schaduw onder een apparaatje."""
+    p.save()
+    p.translate(x, y)
+    p.scale(1.0, hoogte / breedte)
+    g = QRadialGradient(QPointF(0, 0), breedte / 2)
+    g.setColorAt(0, QColor(0, 0, 0, sterkte))
+    g.setColorAt(1, QColor(0, 0, 0, 0))
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(g)
+    p.drawEllipse(QPointF(0, 0), breedte / 2, breedte / 2)
+    p.restore()
+
+
+def teken_apparaat(p: QPainter, r: QRectF, soort: str, op_slot: bool = False) -> None:
+    """Een getekend apparaatje, net als de rode mappen: USB-stick, schijf, SD-kaart of cd."""
+    p.save()
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setPen(Qt.PenStyle.NoPen)
+    cx, cy = r.center().x(), r.center().y()
+    donker = QColor(K["achter"]).lightness() < 128
+
+    def rood_verloop(vak: QRectF) -> QLinearGradient:
+        g = QLinearGradient(vak.topLeft(), vak.bottomRight())
+        g.setColorAt(0, QColor(MAP_ROOD[0]))
+        g.setColorAt(0.55, QColor(MAP_ROOD[1]))
+        g.setColorAt(1, QColor(MAP_ROOD[2]))
+        return g
+
+    if soort == "stick":
+        b = min(r.width() * 0.26, r.height() * 0.34)
+        lijf = QRectF(cx - b / 2, cy - b * 0.5, b, b * 1.7)
+        stekker = QRectF(cx - b * 0.33, lijf.top() - b * 0.6, b * 0.66, b * 0.66)
+        teken_schaduw(p, cx, lijf.bottom() + 2, b * 1.9, b * 0.3)
+        metaal = QLinearGradient(stekker.topLeft(), stekker.topRight())
+        for pos, c in ((0, "#B9BEC6"), (0.45, "#F3F4F6"), (1, "#A3A9B2")):
+            metaal.setColorAt(pos, QColor(c))
+        vorm = QPainterPath()
+        vorm.addRoundedRect(stekker, b * 0.07, b * 0.07)
+        p.fillPath(vorm, metaal)
+        for dx in (-0.14, 0.14):
+            p.fillRect(QRectF(cx + dx * b - b * 0.07, stekker.top() + stekker.height() * 0.28, b * 0.14,
+                              stekker.height() * 0.2), QColor("#6E747E"))
+        vorm = QPainterPath()
+        vorm.addRoundedRect(lijf, b * 0.26, b * 0.26)
+        p.fillPath(vorm, rood_verloop(lijf))
+        glans = QPainterPath()
+        glans.addRoundedRect(QRectF(lijf.left() + b * 0.15, lijf.top() + b * 0.18, b * 0.1, lijf.height() * 0.5),
+                             b * 0.05, b * 0.05)
+        p.fillPath(glans, QColor(255, 255, 255, 80))
+        p.setBrush(QColor(255, 255, 255, 240))
+        p.drawEllipse(QPointF(cx, lijf.bottom() - b * 0.45), b * 0.13, b * 0.13)  # de stip van BugOS
+        hoek = QPointF(cx + b * 0.62, lijf.bottom() - b * 0.1)
+    elif soort == "kaart":
+        b = min(r.width() * 0.3, r.height() * 0.4)
+        kaart = QRectF(cx - b / 2, cy - b * 0.68, b, b * 1.36)
+        teken_schaduw(p, cx, kaart.bottom() + 2, b * 1.7, b * 0.26)
+        afgeknipt = b * 0.3
+        vorm = QPainterPath()
+        vorm.moveTo(kaart.left() + b * 0.1, kaart.top())
+        vorm.lineTo(kaart.right() - afgeknipt, kaart.top())
+        vorm.lineTo(kaart.right(), kaart.top() + afgeknipt)
+        vorm.lineTo(kaart.right(), kaart.bottom() - b * 0.1)
+        vorm.quadTo(kaart.right(), kaart.bottom(), kaart.right() - b * 0.1, kaart.bottom())
+        vorm.lineTo(kaart.left() + b * 0.1, kaart.bottom())
+        vorm.quadTo(kaart.left(), kaart.bottom(), kaart.left(), kaart.bottom() - b * 0.1)
+        vorm.lineTo(kaart.left(), kaart.top() + b * 0.1)
+        vorm.quadTo(kaart.left(), kaart.top(), kaart.left() + b * 0.1, kaart.top())
+        p.fillPath(vorm, rood_verloop(kaart))
+        for i in range(4):
+            p.fillRect(QRectF(kaart.left() + b * (0.14 + i * 0.15), kaart.top() + b * 0.1, b * 0.09, b * 0.24),
+                       QColor("#F2CD74"))
+        p.setBrush(QColor(255, 255, 255, 240))
+        p.drawEllipse(QPointF(cx, kaart.bottom() - b * 0.36), b * 0.13, b * 0.13)
+        hoek = QPointF(cx + b * 0.6, kaart.bottom() - b * 0.08)
+    elif soort == "cd":
+        straal = min(r.width(), r.height()) * 0.38
+        teken_schaduw(p, cx, cy + straal * 0.92, straal * 2.0, straal * 0.34, 40)
+        zilver = QRadialGradient(QPointF(cx - straal * 0.3, cy - straal * 0.3), straal * 1.4)
+        for pos, c in ((0, "#FFFFFF"), (0.5, "#E3E6EB"), (1, "#BFC4CC")):
+            zilver.setColorAt(pos, QColor(c))
+        p.setBrush(zilver)
+        p.drawEllipse(QPointF(cx, cy), straal, straal)
+        regenboog = QConicalGradient(QPointF(cx, cy), 35)
+        for pos, c in ((0, "#FF7AA2"), (0.2, "#FFD36E"), (0.4, "#7CE0C3"), (0.6, "#7AA7FF"), (0.8, "#C69CFF"),
+                       (1, "#FF7AA2")):
+            kleur_ = QColor(c)
+            kleur_.setAlpha(75)
+            regenboog.setColorAt(pos, kleur_)
+        p.setBrush(regenboog)
+        p.drawEllipse(QPointF(cx, cy), straal, straal)
+        p.setBrush(QColor(255, 255, 255, 150))
+        p.drawEllipse(QPointF(cx, cy), straal * 0.34, straal * 0.34)
+        p.setBrush(QColor(K["knop"]))
+        p.drawEllipse(QPointF(cx, cy), straal * 0.13, straal * 0.13)
+        hoek = QPointF(cx + straal * 0.72, cy + straal * 0.72)
+    else:  # externe of interne schijf: een kastje
+        b = min(r.width() * 0.5, r.height() * 1.0)
+        kast = QRectF(cx - b / 2, cy - b * 0.31, b, b * 0.62)
+        teken_schaduw(p, cx, kast.bottom() + 2, b * 1.25, b * 0.16)
+        if soort == "extern":
+            boven, onder = ("#5E636E", "#363941") if donker else ("#545862", "#2B2E35")
+        else:
+            boven, onder = ("#D6D3D3", "#A9A5A5") if donker else ("#FBFAFA", "#DAD6D6")
+        g = QLinearGradient(kast.topLeft(), kast.bottomLeft())
+        g.setColorAt(0, QColor(boven))
+        g.setColorAt(1, QColor(onder))
+        vorm = QPainterPath()
+        vorm.addRoundedRect(kast, b * 0.12, b * 0.12)
+        p.fillPath(vorm, g)
+        p.setPen(QPen(QColor(255, 255, 255, 70 if soort == "extern" else 200), 1.2))
+        p.drawLine(QPointF(kast.left() + b * 0.12, kast.top() + 1.2), QPointF(kast.right() - b * 0.12, kast.top() + 1.2))
+        if soort != "extern":
+            p.setPen(QPen(QColor(0, 0, 0, 28), 1))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawPath(vorm)
+        p.setPen(Qt.PenStyle.NoPen)
+        lampje = QRectF(kast.right() - b * 0.24, kast.bottom() - b * 0.14, b * 0.12, b * 0.04)
+        gloed = QColor(K["accent"])
+        gloed.setAlpha(70)
+        p.setBrush(gloed)
+        p.drawRoundedRect(lampje.adjusted(-3, -3, 3, 3), 4, 4)
+        p.setBrush(QColor(K["accent"]))
+        p.drawRoundedRect(lampje, 2, 2)
+        hoek = QPointF(kast.right() - b * 0.02, kast.bottom() - b * 0.02)
+    if op_slot:  # een slotje op de hoek
+        p.setPen(QPen(QColor(K["vlak"]), 3))
+        p.setBrush(QColor(K["tekst"]))
+        p.drawEllipse(hoek, 14, 14)
+        p.drawPixmap(QRectF(hoek.x() - 8, hoek.y() - 8.5, 16, 16), lijn_pixmap("slot", QColor(K["vlak"]), 48),
+                     QRectF(0, 0, 48, 48))
+    p.restore()
+
+
 def twee_regels(fm: QFontMetrics, tekst: str, breedte: int) -> list[str]:
     """Naam over hoogstens twee regels, met ... als het niet past."""
     if fm.horizontalAdvance(tekst) <= breedte:
@@ -803,12 +1012,16 @@ QPushButton#balkknop:focus {{ background: {K['knop']}; }}
 QPushButton#balkknop[gevaar="true"] {{ color: {K['fout']}; }}
 QFrame#streep {{ background: {K['rand']}; min-width: 1px; max-width: 1px; border: none; }}
 QWidget#computer_binnen {{ background: transparent; }}
-QFrame#schijfkaart {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-radius: 18px; }}
-QFrame#schijfkaart:hover {{ border: 1px solid {K['rand_sterk']}; background: {K['vlak_hover']}; }}
-QLabel#schijfchip {{ background: {K['knop']}; border-radius: 14px; }}
-QProgressBar#vrij {{ background: {K['knop']}; border: none; border-radius: 4px; min-height: 8px; max-height: 8px; }}
-QProgressBar#vrij::chunk {{ background: {K['tekst2']}; border-radius: 4px; }}
-QProgressBar#vrij[vol="true"]::chunk {{ background: {K['accent']}; }}
+QFrame#apparaat {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-radius: 22px; }}
+QFrame#apparaat:hover {{ border: 1px solid {K['rand_sterk']}; }}
+QFrame#apparaat[leeg="true"] {{ background: transparent; border: 2px dashed {K['rand_sterk']}; }}
+QProgressBar#dun {{ background: {K['knop']}; border: none; border-radius: 3px; min-height: 6px; max-height: 6px; }}
+QProgressBar#dun::chunk {{ background: {K['tekst2']}; border-radius: 3px; }}
+QProgressBar#dun[vol="true"]::chunk {{ background: {K['accent']}; }}
+QPushButton#legenda {{ background: transparent; border: none; border-radius: 10px; padding: 5px 10px 5px 6px;
+    text-align: left; font-size: 14px; font-weight: 500; color: {K['tekst']}; }}
+QPushButton#legenda:hover {{ background: {K['knop']}; }}
+QPushButton#legenda:disabled {{ color: {K['tekst2']}; }}
 """
 
 
@@ -930,54 +1143,129 @@ class Keuzebalk(QFrame):
         self.raise_()
 
 
-class SchijfKaart(QFrame):
-    """Eén schijf op de pagina 'Deze computer': naam, hoeveel ruimte er nog is, en eventueel uitwerpen."""
+class RuimteBalk(QWidget):
+    """Eén brede balk: elk stukje kleur is een soort bestanden; het lichte deel is nog vrij."""
+
+    def __init__(self):
+        super().__init__()
+        self.setFixedHeight(16)
+        self.delen: list[tuple[float, QColor]] = []
+
+    def zet(self, delen: list[tuple[float, QColor]]) -> None:
+        self.delen = delen
+        self.update()
+
+    def paintEvent(self, _e) -> None:  # noqa: N802
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        r = QRectF(self.rect())
+        spoor = QPainterPath()
+        spoor.addRoundedRect(r, r.height() / 2, r.height() / 2)
+        p.fillPath(spoor, QColor(K["knop"]))
+        p.setClipPath(spoor)
+        x = r.left()
+        for deel, kleur_ in self.delen:
+            breedte = r.width() * max(0.0, deel)
+            if breedte < 0.5:
+                continue
+            p.fillRect(QRectF(x, r.top(), breedte, r.height()), kleur_)
+            x += breedte
+            p.fillRect(QRectF(x - 1, r.top(), 2, r.height()), QColor(K["vlak"]))  # een dun naadje
+        p.end()
+
+
+class ApparaatBeeld(QWidget):
+    """Het getekende apparaatje, op een zacht 'podium'."""
+
+    def __init__(self, soort: str, op_slot: bool = False, vaag: bool = False):
+        super().__init__()
+        self.soort, self.op_slot, self.vaag = soort, op_slot, vaag
+        self.setFixedHeight(104)
+
+    def paintEvent(self, _e) -> None:  # noqa: N802
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        r = QRectF(self.rect())
+        if not self.vaag:
+            podium = QPainterPath()
+            podium.addRoundedRect(r, 16, 16)
+            p.fillPath(podium, QColor(K["knop"]))
+        else:
+            p.setOpacity(0.35)
+        teken_apparaat(p, r.adjusted(8, 10, -8, -6), self.soort, self.op_slot)
+        p.end()
+
+
+class ApparaatTegel(QFrame):
+    """Een USB-stick of schijf op de pagina 'Deze computer'."""
 
     geklikt = Signal()
 
-    def __init__(self, icoon_naam: str, naam: str, uitleg: str, gebruikt: float | None, uitwerpen: bool):
+    def __init__(self, soort: str, naam: str, uitleg: str, gebruikt: float | None = None,
+                 uitwerpen: bool = False, op_slot: bool = False, leeg: bool = False):
         super().__init__()
-        self.setObjectName("schijfkaart")
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setMinimumHeight(104)
-        lay = QHBoxLayout(self)
-        lay.setContentsMargins(18, 16, 14, 16)
-        lay.setSpacing(16)
-        chip = QLabel()
-        chip.setObjectName("schijfchip")
-        chip.setFixedSize(56, 56)
-        chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        chip.setPixmap(lijn_pixmap(icoon_naam, "tekst", 26 * 2).scaled(
-            26, 26, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-        lay.addWidget(chip, 0, Qt.AlignmentFlag.AlignTop)
-        midden = QVBoxLayout()
-        midden.setSpacing(6)
+        self.setObjectName("apparaat")
+        if leeg:
+            self.setProperty("leeg", "true")
+        else:
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setMinimumHeight(232)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(12, 12, 12, 14)
+        lay.setSpacing(4)
+        lay.addWidget(ApparaatBeeld(soort, op_slot, vaag=leeg))
+        lay.addSpacing(8)
         kop = label(naam, "kop3", wrap=False)
-        midden.addWidget(kop)
+        kop.setContentsMargins(6, 0, 6, 0)
+        lay.addWidget(kop)
+        onder = label(uitleg, "klein")
+        onder.setContentsMargins(6, 0, 6, 0)
+        lay.addWidget(onder)
         self.balk = None
         if gebruikt is not None:
             balk = QProgressBar()
-            balk.setObjectName("vrij")
+            balk.setObjectName("dun")
             balk.setTextVisible(False)
             balk.setRange(0, 1000)
             balk.setValue(int(max(0.0, min(1.0, gebruikt)) * 1000))
             balk.setProperty("vol", "true" if gebruikt >= 0.9 else "false")
-            midden.addWidget(balk)
+            lay.addSpacing(6)
+            houder = QHBoxLayout()
+            houder.setContentsMargins(6, 0, 6, 0)
+            houder.addWidget(balk)
+            lay.addLayout(houder)
             self.balk = balk
-        midden.addWidget(label(uitleg, "sub"))
+        lay.addStretch(1)
         self.uitwerp_knop = None
         if uitwerpen:
-            self.uitwerp_knop = Knop(t("Veilig verwijderen", "Safely remove"), "rand", "lijn:uitwerpen")
-            self.uitwerp_knop.setMinimumHeight(38)
-            midden.addSpacing(4)
-            midden.addWidget(self.uitwerp_knop, 0, Qt.AlignmentFlag.AlignLeft)
-        midden.addStretch(1)
-        lay.addLayout(midden, 1)
+            self.uitwerp_knop = Knop(t("Veilig verwijderen", "Safely remove"), "gewoon", "lijn:uitwerpen")
+            self.uitwerp_knop.setMinimumHeight(40)
+            lay.addSpacing(10)
+            lay.addWidget(self.uitwerp_knop)
 
     def mouseReleaseEvent(self, e) -> None:  # noqa: N802
         if e.button() == Qt.MouseButton.LeftButton and self.rect().contains(e.position().toPoint()):
             self.geklikt.emit()
         super().mouseReleaseEvent(e)
+
+
+def stip_icoon(kleur_: QColor, hol: bool = False) -> QIcon:
+    """Een rond gekleurd stipje voor de uitleg bij de ruimtebalk (hol = een rondje, voor 'Vrij')."""
+    beeld = QPixmap(36, 36)
+    beeld.fill(Qt.GlobalColor.transparent)
+    p = QPainter(beeld)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    if hol:
+        p.setPen(QPen(QColor(K["tekst3"]), 4))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawEllipse(QRectF(8, 8, 20, 20))
+    else:
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(kleur_)
+        p.drawEllipse(QRectF(6, 6, 24, 24))
+    p.end()
+    beeld.setDevicePixelRatio(3)
+    return QIcon(beeld)
 
 
 class Bestanden(QWidget):
@@ -996,6 +1284,11 @@ class Bestanden(QWidget):
         self.in_computer = False                 # de pagina 'Deze computer' staat open
         self.lijst_schijven: list[Schijf] = []   # USB-sticks en andere schijven
         self.bezig: set[str] = set()             # schijven die nu open of dicht gaan
+        self.ruimte: dict[str, int] | None = None  # hoe groot Afbeeldingen, Video's, ... zijn (geteld)
+        self.ruimte_tijd = 0.0
+        self.telsein = Telsein(self)
+        self.telsein.klaar.connect(self._geteld)
+        self.tellen_bezig = False
 
         hoofd = QHBoxLayout(self)
         hoofd.setContentsMargins(0, 0, 0, 0)
@@ -1403,8 +1696,9 @@ class Bestanden(QWidget):
     # ----------------------------------------------------------- inhoud
     def ververs_staat(self) -> None:
         if self.in_computer:
-            n = len(self.lijst_schijven) + 1
-            self.status.setText(t(f"{n} {'schijf' if n == 1 else 'schijven'}", f"{n} {'drive' if n == 1 else 'drives'}"))
+            n = len(self.lijst_schijven)
+            self.status.setText(t(f"{n} aangesloten", f"{n} connected") if n else
+                                t("Niets aangesloten", "Nothing connected"))
             self.stapel.setCurrentWidget(self.computer)
             self.keuzebalk.toon(0, False)
             self.plaats_keuzebalk()
@@ -1461,6 +1755,8 @@ class Bestanden(QWidget):
     def closeEvent(self, e) -> None:  # noqa: N802
         self.apparaten.stop()
         self.voorbeelden.stop()
+        STOP.set()
+        QThreadPool.globalInstance().waitForDone(2000)
         laat_klembord_los()
         super().closeEvent(e)
 
@@ -1773,6 +2069,7 @@ class Bestanden(QWidget):
         self.ververs_staat()
 
     def vul_computer(self) -> None:
+        """Bovenaan: hoeveel ruimte je computer nog heeft. Daaronder: USB-sticks en andere schijven."""
         lay = self.computer_lay
         while lay.count():
             item = lay.takeAt(0)
@@ -1783,35 +2080,122 @@ class Bestanden(QWidget):
                     w = item.layout().takeAt(0).widget()
                     if w:
                         w.deleteLater()
+
+        # --- de computer zelf: groot getal, gekleurde balk, en wat de kleuren zijn
+        totaal, vrij = eigen_ruimte()
+        nep = voorbeeld_ruimte()
+        if nep and self.ruimte is None:
+            self.ruimte = dict(zip([sl for sl, _k in RUIMTE_SOORTEN], nep[2:]))
+            self.ruimte_tijd = time.monotonic()
+        held = Held(196, 28, wit=0.56, overgang=0.12)
+        links = QVBoxLayout()
+        links.setSpacing(0)
+        regel = QHBoxLayout()
+        regel.setSpacing(12)
+        regel.addWidget(label(t(f"{mooie_maat(vrij)} vrij", f"{mooie_maat(vrij)} free"), "groot", wrap=False),
+                        0, Qt.AlignmentFlag.AlignBottom)
+        van = label(t(f"van de {mooie_maat(totaal)} op deze computer", f"of {mooie_maat(totaal)} on this computer"),
+                    "sub", wrap=False)
+        van.setContentsMargins(0, 0, 0, 9)
+        regel.addWidget(van, 0, Qt.AlignmentFlag.AlignBottom)
+        regel.addStretch(1)
+        links.addLayout(regel)
+        links.addSpacing(16)
+        self.ruimte_balk = RuimteBalk()
+        links.addWidget(self.ruimte_balk)
+        links.addSpacing(10)
+        self.legenda = QGridLayout()
+        self.legenda.setHorizontalSpacing(4)
+        self.legenda.setVerticalSpacing(0)
+        links.addLayout(self.legenda)
+        links.addStretch(1)
+        held.lay.addLayout(links, 3)
+        held.lay.addStretch(2)
+        lay.addWidget(held)
+        self.ruimte_totaal, self.ruimte_vrij = totaal, vrij
+        self.toon_ruimte()
+        if not self.tellen_bezig and (self.ruimte is None or time.monotonic() - self.ruimte_tijd > 120):
+            self.tellen_bezig = True
+            mappen = [(sl, pad) for sl, _n, _i, pad in plekken() if sl in dict(RUIMTE_SOORTEN)]
+            QThreadPool.globalInstance().start(Teller(mappen, self.telsein))
+
+        # --- USB-sticks en schijven
+        lay.addSpacing(6)
+        lay.addWidget(sectie(t("USB-sticks en schijven", "USB sticks and drives")))
         rooster = QGridLayout()
         rooster.setHorizontalSpacing(14)
         rooster.setVerticalSpacing(14)
-        rooster.setColumnStretch(0, 1)
-        rooster.setColumnStretch(1, 1)
-        eigen = QStorageInfo(str(thuis()))
-        totaal, vrij = eigen.bytesTotal(), eigen.bytesAvailable()
-        kaarten = [SchijfKaart("laptop", t("Je eigen bestanden", "Your own files"),
-                               t(f"{mooie_maat(vrij)} vrij van {mooie_maat(totaal)}",
-                                 f"{mooie_maat(vrij)} free of {mooie_maat(totaal)}") if totaal > 0 else "",
-                               1 - vrij / totaal if totaal > 0 else None, False)]
-        kaarten[0].geklikt.connect(lambda: self.ga_naar(thuis()))
+        for kolom in range(3):
+            rooster.setColumnStretch(kolom, 1)
+        tegels: list[ApparaatTegel] = []
         for x in self.lijst_schijven:
             gebruikt = 1 - x.vrij / x.grootte if x.wortel and x.vrij is not None and x.grootte else None
-            kaart = SchijfKaart("slot" if x.op_slot else x.icoon, x.naam, self.schijf_uitleg(x), gebruikt,
-                                x.los and bool(x.wortel))
-            kaart.geklikt.connect(lambda g=x: self.open_schijf(g))
-            if kaart.uitwerp_knop:
-                kaart.uitwerp_knop.clicked.connect(lambda _c=False, g=x: self.uitwerpen(g.station))
-            kaarten.append(kaart)
-        for i, kaart in enumerate(kaarten):
-            rooster.addWidget(kaart, i // 2, i % 2)
+            tegel = ApparaatTegel(x.soort, x.naam, self.schijf_uitleg(x), gebruikt, x.los and bool(x.wortel), x.op_slot)
+            tegel.geklikt.connect(lambda g=x: self.open_schijf(g))
+            if tegel.uitwerp_knop:
+                tegel.uitwerp_knop.clicked.connect(lambda _c=False, g=x: self.uitwerpen(g.station))
+            tegels.append(tegel)
+        if not tegels:
+            tegels.append(ApparaatTegel("stick", t("Nog niets aangesloten", "Nothing plugged in yet"),
+                                        t("Steek een USB-stick in. Hij verschijnt hier vanzelf.",
+                                          "Plug in a USB stick. It shows up here by itself."), leeg=True))
+        for i, tegel in enumerate(tegels):
+            rooster.addWidget(tegel, i // 3, i % 3)
         lay.addLayout(rooster)
-        if not self.lijst_schijven:
-            tip = label(t("Steek een USB-stick in, dan zie je hem hier.", "Plug in a USB stick and it shows up here."),
-                        "sub")
-            tip.setContentsMargins(6, 4, 0, 0)
-            lay.addWidget(tip)
         lay.addStretch(1)
+
+    def toon_ruimte(self) -> None:
+        """Kleur de balk: Afbeeldingen, Video's, ... en de rest (BugOS en apps). Wat over is, is vrij."""
+        totaal, vrij = self.ruimte_totaal, self.ruimte_vrij
+        if totaal <= 0:
+            return
+        gebruikt = max(totaal - vrij, 0)
+        while self.legenda.count():
+            w = self.legenda.takeAt(0).widget()
+            if w:
+                w.deleteLater()
+        namen = {sl: (naam, pad) for sl, naam, _i, pad in plekken()}
+        delen: list[tuple[float, QColor]] = []
+        items: list[tuple[QColor, str, Path | None]] = []
+        if self.ruimte:
+            som = sum(self.ruimte.values())
+            schaal = min(1.0, gebruikt / som) if som else 1.0
+            for sl, kl in RUIMTE_SOORTEN:
+                grootte = self.ruimte.get(sl, 0) * schaal
+                if grootte < max(totaal * 0.002, 50 * 10**6):
+                    continue  # te klein om te zien: telt mee bij de rest
+                kleur_ = QColor(K["accent"] if kl == "accent" else kl)
+                delen.append((grootte / totaal, kleur_))
+                items.append((kleur_, f"{namen[sl][0]}  {mooie_maat(grootte)}", namen[sl][1]))
+            rest = max(gebruikt - sum(d * totaal for d, _k in delen), 0)
+            grijs = QColor(K["tekst3"])
+            delen.append((rest / totaal, grijs))
+            items.append((grijs, t(f"BugOS en apps  {mooie_maat(rest)}", f"BugOS and apps  {mooie_maat(rest)}"), None))
+        else:
+            grijs = QColor(K["tekst3"])
+            delen.append((gebruikt / totaal, grijs))
+            items.append((grijs, t(f"In gebruik  {mooie_maat(gebruikt)}  (bezig met tellen…)",
+                                   f"In use  {mooie_maat(gebruikt)}  (counting…)"), None))
+        self.ruimte_balk.zet(delen)
+        kolommen = 3 if len(items) > 4 else max(len(items), 1)
+        for i, (kleur_, tekst, pad) in enumerate(items):
+            k = QPushButton(tekst)
+            k.setObjectName("legenda")
+            k.setIcon(stip_icoon(kleur_, hol=pad == "vrij"))
+            k.setIconSize(QSize(12, 12))
+            if isinstance(pad, Path):
+                k.setCursor(Qt.CursorShape.PointingHandCursor)
+                k.setToolTip(t(f"Open {pad.name}", f"Open {pad.name}"))
+                k.clicked.connect(lambda _c=False, d=pad: self.ga_naar(d))
+            else:
+                k.setEnabled(False)
+            self.legenda.addWidget(k, i // kolommen, i % kolommen)
+
+    def _geteld(self, uitslag: dict) -> None:
+        self.tellen_bezig = False
+        self.ruimte, self.ruimte_tijd = uitslag, time.monotonic()
+        if self.in_computer:
+            self.toon_ruimte()
 
     def draai(self, stappen: list[list[str]], klaar, laatste: list[str] | None = None) -> None:
         """Voer opdrachten na elkaar uit, zonder dat het venster vastloopt (ook niet als KDE om een wachtwoord vraagt)."""
@@ -1881,11 +2265,6 @@ class Bestanden(QWidget):
             elif x.op_slot:
                 self.melding.toon(t("Openen lukte niet. Klopte het wachtwoord?",
                                     "Opening did not work. Was the password right?"), "fout")
-            elif x.soort == "intern" and x.fs == "ntfs":
-                self.melding.toon(t("De Windows-schijf kon niet open. Zet Windows helemaal uit (niet in de slaapstand) "
-                                    "en probeer het opnieuw.",
-                                    "The Windows drive could not be opened. Shut Windows down fully (not sleep) "
-                                    "and try again."), "fout", seconden=14)
             else:
                 self.melding.toon(t(f"'{x.naam}' kon niet open. Haal hem eruit en steek hem er opnieuw in.",
                                     f"'{x.naam}' could not be opened. Unplug it and plug it in again."), "fout")

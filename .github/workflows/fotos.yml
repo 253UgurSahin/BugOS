@@ -47,8 +47,12 @@ jobs:
           sleep 3
           BEELD="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${{ inputs.tag }}"
           mkdir -p docs/beelden/verkenner
-          maak() {  # naam thema map [programma]   (met NEP=<lijstje.json> ervoor: nep-schijven)
-            sudo podman run -d --name foto -e DISPLAY=:99 ${NEP:+-e BUGOS_LSBLK=$NEP} -v /tmp/.X11-unix:/tmp/.X11-unix \
+          # NEP=<lijstje.json> ervoor: nep-schijven (anders geen; de schijven van de bouwcomputer horen er niet bij)
+          # RUIMTE=... ervoor: voorbeeldgetallen voor 'Deze computer'
+          maak() {  # naam thema map [programma]
+            sudo podman run -d --name foto -e DISPLAY=:99 -e "BUGOS_LSBLK=${NEP:-/repo/tools/fotos/geen-schijven.json}" \
+              ${RUIMTE:+-e BUGOS_RUIMTE=$RUIMTE} \
+              -v /tmp/.X11-unix:/tmp/.X11-unix \
               -v "$PWD:/repo:ro" --entrypoint /usr/bin/bash "$BEELD" /repo/tools/fotos/verkenner.sh "$2" "$3" "${4:-bugos-bestanden}"
             sleep 30
             import -display :99 -window root -crop 2360x1480+0+0 +repage "docs/beelden/verkenner/$1.png"
@@ -60,9 +64,11 @@ jobs:
           maak afbeeldingen donker Afbeeldingen
           maak afbeeldingen-licht licht Afbeeldingen
           maak gekozen licht "Afbeeldingen/Achtergrond Stip.jpg"
-          # Deze computer, met nep-schijven (een USB-stick, een fotoschijf en de Windows-schijf)
-          NEP=/repo/tools/fotos/schijven.json maak computer licht computer:
-          NEP=/repo/tools/fotos/schijven.json maak computer-donker donker computer:
+          # Deze computer, met nep-schijven (een USB-stick en een fotoschijf) en voorbeeldgetallen
+          VOORBEELD=512e9,286e9,48e9,96e9,6e9,12e9,9e9
+          NEP=/repo/tools/fotos/schijven.json RUIMTE=$VOORBEELD maak computer licht computer:
+          NEP=/repo/tools/fotos/schijven.json RUIMTE=$VOORBEELD maak computer-donker donker computer:
+          RUIMTE=$VOORBEELD maak computer-leeg licht computer:
           NEP=/repo/tools/fotos/schijven.json maak stick licht "/run/media/oma/Stick van oma"
           maak dolphin licht Afbeeldingen dolphin
           ls -la docs/beelden/verkenner

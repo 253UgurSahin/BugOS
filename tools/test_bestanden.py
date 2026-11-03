@@ -159,11 +159,8 @@ NEP = [
 ]
 lijst = b.schijven(NEP)
 per = {x.apparaat: x for x in lijst}
-klopt(sorted(per) == ["/dev/nvme0n1p5", "/dev/sda1", "/dev/sdb1", "/dev/sdc1", "/dev/sdd", "/dev/sde1", "/dev/sde2",
-                      "/dev/sr0"], "schijven: BugOS zelf, opstart- en herstelstukjes, swap en loop zie je niet")
-w = per["/dev/nvme0n1p5"]
-klopt(w.naam == "Windows-schijf" and w.soort == "intern" and not w.wortel and not w.los,
-      "schijven: Windows naast BugOS heet 'Windows-schijf', dicht, niet uit te werpen")
+klopt(sorted(per) == ["/dev/sda1", "/dev/sdb1", "/dev/sdc1", "/dev/sdd", "/dev/sde1", "/dev/sde2", "/dev/sr0"],
+      "schijven: de schijf van BugOS zelf (met alles erop), swap en loop zie je niet")
 klopt(per["/dev/sda1"].naam == "Data" and per["/dev/sda1"].soort == "intern" and per["/dev/sda1"].vrij == 612000000000,
       "schijven: tweede schijf in de computer, open, met vrije ruimte")
 klopt(per["/dev/sdb1"].soort == "stick" and per["/dev/sdb1"].wortel == "/run/media/oma/OMA" and per["/dev/sdb1"].los,
@@ -187,6 +184,11 @@ klopt(b.openen_stappen(per["/dev/sdd"]) == ["udisksctl", "mount", "-b", "/dev/sd
 klopt(b.schijf_van(Path("/run/media/oma/OMA/Foto's"), lijst) is per["/dev/sdb1"], "schijf_van: map op de stick")
 klopt(b.systeem_plek("/var/home") and not b.systeem_plek("/var/mnt/data") and not b.systeem_plek("/run/media/oma/x"),
       "systeemplekken: /var/home wel, /var/mnt en /run/media niet")
+
+(TMP / "tel" / "binnen").mkdir(parents=True)
+(TMP / "tel" / "a.bin").write_bytes(b"x" * 100_000)
+(TMP / "tel" / "binnen" / "b.bin").write_bytes(b"x" * 50_000)
+klopt(b.mapgrootte(TMP / "tel") >= 150_000, "ruimte tellen: ook wat in submappen staat telt mee")
 
 # 10. het venster start en toont de mappen (zonder scherm)
 from PySide6.QtWidgets import QApplication  # noqa: E402
@@ -249,9 +251,10 @@ klopt([x.naam for x in venster.lijst_schijven] == ["Stick van oma"], "venster: d
 venster.open_computer()
 klopt(venster.in_computer and venster.stapel.currentWidget() is venster.computer
       and venster.grote_titel.text() == "Deze computer", "Deze computer: de pagina opent")
-kaarten = venster.computer.widget().findChildren(b.SchijfKaart)
-klopt(len(kaarten) == 2 and kaarten[1].uitwerp_knop is not None, "Deze computer: eigen bestanden en de stick (met uitwerpknop)")
-kaarten[1].geklikt.emit()
+tegels = venster.computer.widget().findChildren(b.ApparaatTegel)
+klopt(len(tegels) == 1 and tegels[0].uitwerp_knop is not None, "Deze computer: de stick, met 'Veilig verwijderen'")
+klopt(venster.ruimte_balk is not None and venster.status.text() == "1 aangesloten", "Deze computer: ruimte bovenaan, en 1 aangesloten")
+tegels[0].geklikt.emit()
 klopt(venster.huidig == stick and not venster.in_computer and not venster.uitwerp_knop.isHidden()
       and venster.grote_titel.text() == "Stick van oma", "stick openen: naam bovenin en 'Veilig verwijderen'")
 venster.terug()
@@ -262,6 +265,12 @@ venster.vul_zijbalk()
 klopt(venster.huidig == thuis and "eruit gehaald" in venster.melding.tekst.text(),
       "stick eruit getrokken: terug naar Thuis, met een melding")
 os.environ["BUGOS_LSBLK"] = ""
+venster.vul_zijbalk()
+venster.open_computer()
+for _ in range(20):
+    app.processEvents()
+leeg = [x for x in venster.computer.widget().findChildren(b.ApparaatTegel) if x.property("leeg") == "true"]
+klopt(len(leeg) == 1, "Deze computer zonder stick: 'Steek een USB-stick in' (en verder niets)")
 
 # 12. opdrachten op de achtergrond (openen, veilig verwijderen): het venster loopt niet vast
 from PySide6.QtCore import QElapsedTimer  # noqa: E402

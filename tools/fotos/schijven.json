@@ -1,27 +1,107 @@
 {
-  "blockdevices": [
-    {"name": "nvme0n1", "path": "/dev/nvme0n1", "type": "disk", "size": 512110190592, "rm": false, "hotplug": false,
-     "tran": "nvme", "mountpoints": [null], "children": [
-       {"name": "nvme0n1p1", "path": "/dev/nvme0n1p1", "type": "part", "size": 629145600, "fstype": "vfat",
-        "parttype": "c12a7328-f81f-11d2-ba4b-00a0c93ec93b", "mountpoints": ["/boot/efi"]},
-       {"name": "nvme0n1p2", "path": "/dev/nvme0n1p2", "type": "part", "size": 1073741824, "fstype": "ext4",
-        "label": "boot", "mountpoints": ["/boot"]},
-       {"name": "nvme0n1p3", "path": "/dev/nvme0n1p3", "type": "part", "size": 256000000000, "fstype": "btrfs",
-        "label": "fedora", "mountpoints": ["/var/home", "/var", "/sysroot"]},
-       {"name": "nvme0n1p4", "path": "/dev/nvme0n1p4", "type": "part", "size": 254000000000, "fstype": "ntfs",
-        "parttype": "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7", "mountpoints": [null]}
-     ]},
-    {"name": "sdb", "path": "/dev/sdb", "type": "disk", "size": 15931539456, "rm": true, "hotplug": true,
-     "tran": "usb", "mountpoints": [null], "children": [
-       {"name": "sdb1", "path": "/dev/sdb1", "type": "part", "size": 15930490880, "fstype": "exfat",
-        "label": "Stick van oma", "fsavail": 11800000000, "fssize": 15926000000,
-        "mountpoints": ["/run/media/oma/Stick van oma"]}
-     ]},
-    {"name": "sdc", "path": "/dev/sdc", "type": "disk", "size": 1000204886016, "rm": false, "hotplug": true,
-     "tran": "usb", "mountpoints": [null], "children": [
-       {"name": "sdc1", "path": "/dev/sdc1", "type": "part", "size": 1000202788864, "fstype": "ntfs",
-        "label": "Fotoschijf", "fsavail": 312000000000, "fssize": 1000202788864,
-        "mountpoints": ["/run/media/oma/Fotoschijf"]}
-     ]}
-  ]
+ "blockdevices": [
+  {
+   "name": "nvme0n1",
+   "path": "/dev/nvme0n1",
+   "type": "disk",
+   "size": 512110190592,
+   "rm": false,
+   "hotplug": false,
+   "tran": "nvme",
+   "mountpoints": [
+    null
+   ],
+   "children": [
+    {
+     "name": "nvme0n1p1",
+     "path": "/dev/nvme0n1p1",
+     "type": "part",
+     "size": 629145600,
+     "fstype": "vfat",
+     "parttype": "c12a7328-f81f-11d2-ba4b-00a0c93ec93b",
+     "mountpoints": [
+      "/boot/efi"
+     ]
+    },
+    {
+     "name": "nvme0n1p2",
+     "path": "/dev/nvme0n1p2",
+     "type": "part",
+     "size": 1073741824,
+     "fstype": "ext4",
+     "label": "boot",
+     "mountpoints": [
+      "/boot"
+     ]
+    },
+    {
+     "name": "nvme0n1p3",
+     "path": "/dev/nvme0n1p3",
+     "type": "part",
+     "size": 509000000000,
+     "fstype": "btrfs",
+     "label": "fedora",
+     "mountpoints": [
+      "/var/home",
+      "/var",
+      "/sysroot"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "sdb",
+   "path": "/dev/sdb",
+   "type": "disk",
+   "size": 15931539456,
+   "rm": true,
+   "hotplug": true,
+   "tran": "usb",
+   "mountpoints": [
+    null
+   ],
+   "children": [
+    {
+     "name": "sdb1",
+     "path": "/dev/sdb1",
+     "type": "part",
+     "size": 15930490880,
+     "fstype": "exfat",
+     "label": "Stick van oma",
+     "fsavail": 11800000000,
+     "fssize": 15926000000,
+     "mountpoints": [
+      "/run/media/oma/Stick van oma"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "sdc",
+   "path": "/dev/sdc",
+   "type": "disk",
+   "size": 1000204886016,
+   "rm": false,
+   "hotplug": true,
+   "tran": "usb",
+   "mountpoints": [
+    null
+   ],
+   "children": [
+    {
+     "name": "sdc1",
+     "path": "/dev/sdc1",
+     "type": "part",
+     "size": 1000202788864,
+     "fstype": "ntfs",
+     "label": "Fotoschijf",
+     "fsavail": 312000000000,
+     "fssize": 1000202788864,
+     "mountpoints": [
+      "/run/media/oma/Fotoschijf"
+     ]
+    }
+   ]
+  }
+ ]
 }
