@@ -25,7 +25,7 @@ aan)
     # De sessie van KDE (plasma op Wayland); de naam staat in /usr/share/wayland-sessions.
     SESSIE=plasma
     if [ ! -f /usr/share/wayland-sessions/plasma.desktop ]; then
-        EERSTE="$(ls /usr/share/wayland-sessions/*.desktop 2>/dev/null | head -1 || true)"
+        EERSTE="$(find /usr/share/wayland-sessions -maxdepth 1 -name '*.desktop' 2>/dev/null | sort | head -1 || true)"
         [ -n "$EERSTE" ] && SESSIE="$(basename -s .desktop "$EERSTE")"
     fi
     mkdir -p /etc/sddm.conf.d
