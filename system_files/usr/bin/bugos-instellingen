@@ -2,8 +2,9 @@
 """BugOS Instellingen: alles wat je nodig hebt, op één plek, in gewone woorden.
 
 Zoals Instellingen in Windows, maar rustiger: de dingen die je echt gebruikt (wifi,
-bluetooth, geluid, scherm, energie, uiterlijk, updates) regel je hier zelf, met één
-schuifje of knop. Wie meer wil, vindt per onderdeel 'Meer instellingen (voor gevorderden)'.
+bluetooth, geluid, scherm, energie, uiterlijk, updates) regel je hier zelf. Klik op een
+netwerk om te verbinden, op een luidspreker om die te gebruiken. Wie meer wil, vindt per
+onderdeel 'Meer instellingen (voor gevorderden)'.
 
 Gebruik:  bugos-instellingen [pagina]
           pagina = start | wifi | bluetooth | geluid | scherm | energie | uiterlijk | updates | over
@@ -21,14 +22,14 @@ sys.path.insert(0, "/usr/lib/bugos/python")
 
 import bugos_instellen as bi  # noqa: E402
 from bugos_ui import (  # noqa: E402
-    Chip, Groep, K, Kaart, KeuzeKaart, Knop, Schuif, Zijbalk, Zoekveld, bestaat, draai, kde_instelling, label,
-    lijn_icoon, maak_app, merk_label, sectie, start, t, uitvoeren,
+    Chip, Groep, K, Kaart, KeuzeKaart, Knop, Pagina, Rij, Schuif, Venster, bestaat, draai, kde_instelling, label,
+    leeg_groep, lijn_icoon, maak_app, ronde_knop, sectie, start, t, uitvoeren,
 )
 from PySide6.QtCore import QObject, QRunnable, QSize, Qt, QThreadPool, QTimer, Signal  # noqa: E402
 from PySide6.QtGui import QPixmap  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
     QApplication, QButtonGroup, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
-    QPushButton, QScrollArea, QSlider, QStackedWidget, QVBoxLayout, QWidget,
+    QMenu, QPushButton, QSlider, QVBoxLayout, QWidget,
 )
 
 
@@ -120,12 +121,7 @@ def systeem_info() -> list[tuple[str, str]]:
 
 def stijl() -> str:
     return f"""
-QFrame#rij {{ background: transparent; border-radius: 12px; }}
-QFrame#rij[klikbaar="true"]:hover {{ background: {K['knop']}; }}
 QFrame#snel {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-radius: 18px; }}
-QFrame#melding {{ background: {K['knop']}; border-radius: 14px; }}
-QFrame#melding[soort="goed"] {{ background: {K['goed_zacht']}; }}
-QFrame#melding[soort="fout"] {{ background: {K['fout_zacht']}; }}
 QPushButton#keus {{ background: transparent; border: none; border-radius: 10px; padding: 8px 14px; font-size: 14px;
     font-weight: 600; color: {K['tekst2']}; }}
 QPushButton#keus:hover {{ color: {K['tekst']}; }}
@@ -140,53 +136,6 @@ QPushButton#plaatje {{ background: transparent; border: 2px solid transparent; b
 QPushButton#plaatje:hover {{ border: 2px solid {K['rand_sterk']}; }}
 QPushButton#plaatje:checked {{ border: 2px solid {K['accent']}; }}
 """
-
-
-class Rij(QFrame):
-    """Eén regel: icoontje, naam, uitleg en rechts een schuifje of knop."""
-
-    geklikt = Signal()
-
-    def __init__(self, icoon: str, titel: str, uitleg: str = "", rechts: QWidget | None = None, klikbaar: bool = False):
-        super().__init__()
-        self.setObjectName("rij")
-        self.setProperty("klikbaar", "true" if klikbaar else "false")
-        if klikbaar:
-            self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setMinimumHeight(64)
-        lay = QHBoxLayout(self)
-        lay.setContentsMargins(16, 10, 14, 10)
-        lay.setSpacing(14)
-        self.icoon = QLabel()
-        self.zet_icoon(icoon)
-        lay.addWidget(self.icoon, 0, Qt.AlignmentFlag.AlignVCenter)
-        blok = QVBoxLayout()
-        blok.setSpacing(2)
-        self.titel = label(titel, "kop3", wrap=False)
-        self.uitleg = label(uitleg, "klein")
-        self.uitleg.setVisible(bool(uitleg))
-        blok.addWidget(self.titel)
-        blok.addWidget(self.uitleg)
-        lay.addLayout(blok, 1)
-        self.rechts = rechts
-        if rechts is not None:
-            lay.addWidget(rechts, 0, Qt.AlignmentFlag.AlignVCenter)
-        if klikbaar:
-            pijl = QLabel()
-            pijl.setPixmap(lijn_icoon("rechts", "tekst3", 16, gekozen=None).pixmap(16, 16))
-            lay.addWidget(pijl)
-
-    def zet_icoon(self, naam: str) -> None:
-        self.icoon.setPixmap(lijn_icoon(naam, "tekst2", 22, gekozen=None).pixmap(22, 22))
-
-    def zet_uitleg(self, tekst: str) -> None:
-        self.uitleg.setText(tekst)
-        self.uitleg.setVisible(bool(tekst))
-
-    def mouseReleaseEvent(self, e) -> None:  # noqa: N802
-        if self.property("klikbaar") == "true" and e.button() == Qt.MouseButton.LeftButton:
-            self.geklikt.emit()
-        super().mouseReleaseEvent(e)
 
 
 class Keuzes(QFrame):
@@ -223,19 +172,15 @@ class Regelaar(QWidget):
 
     veranderd = Signal(int)
 
-    def __init__(self, waarde: int = 50, laag: str = "", hoog: str = ""):
+    def __init__(self, waarde: int = 50):
         super().__init__()
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(12)
-        if laag:
-            ic = QLabel()
-            ic.setPixmap(lijn_icoon(laag, "tekst3", 18, gekozen=None).pixmap(18, 18))
-            lay.addWidget(ic)
         self.balk = QSlider(Qt.Orientation.Horizontal)
         self.balk.setRange(0, 100)
         self.balk.setValue(waarde)
-        self.balk.setMinimumWidth(240)
+        self.balk.setMinimumWidth(220)
         self.balk.setCursor(Qt.CursorShape.PointingHandCursor)
         lay.addWidget(self.balk, 1)
         self.getal = label(f"{waarde}%", "kop3", wrap=False)
@@ -261,32 +206,24 @@ def schuifje(aan: bool, omgezet) -> Schuif:
     return s
 
 
-class Melding(QFrame):
-    """Een korte melding bovenaan (bijvoorbeeld 'Verbonden met Thuis')."""
-
-    def __init__(self):
-        super().__init__()
-        self.setObjectName("melding")
-        lay = QHBoxLayout(self)
-        lay.setContentsMargins(16, 10, 16, 10)
-        self.tekst = label("", wrap=True)
-        lay.addWidget(self.tekst, 1)
-        self.klok = QTimer(self)
-        self.klok.setSingleShot(True)
-        self.klok.timeout.connect(self.hide)
-        self.hide()
-
-    def toon(self, tekst: str, soort: str = "info", seconden: int = 6) -> None:
-        self.setProperty("soort", soort)
-        self.style().unpolish(self)
-        self.style().polish(self)
-        self.tekst.setText(tekst)
-        self.show()
-        self.klok.start(seconden * 1000)
+def menu_bij(knop: QWidget, items: list[tuple[str, str, object]]) -> None:
+    """Een klein menu onder een knop: [(icoon, tekst, actie), ...]."""
+    m = QMenu(knop)
+    for ic, tekst, actie in items:
+        a = m.addAction(lijn_icoon(ic, "tekst", 18, gekozen=None), tekst)
+        a.triggered.connect(lambda _c=False, f=actie: f())
+    m.exec(knop.mapToGlobal(knop.rect().bottomLeft()))
 
 
-class Pagina(QScrollArea):
-    """Een pagina: grote titel, een zin uitleg, en daaronder kaarten met regels."""
+def meer_knop(items_maker) -> QPushButton:
+    """Een '…'-knopje dat een menu opent (items_maker geeft de lijst voor menu_bij)."""
+    k = ronde_knop("meer", t("Meer", "More"), klein=True)
+    k.clicked.connect(lambda _c=False: menu_bij(k, items_maker()))
+    return k
+
+
+class Blad(Pagina):
+    """Een pagina van Instellingen: titel, uitleg, kaarten, en onderaan de weg naar KDE voor gevorderden."""
 
     sleutel = ""
     icoon = ""
@@ -296,28 +233,14 @@ class Pagina(QScrollArea):
     kde = ""  # het KDE-onderdeel achter 'Meer instellingen (voor gevorderden)'
 
     def __init__(self, venster: Instellingen):
-        super().__init__()
+        super().__init__(self.naam(), t(self.uitleg_nl, self.uitleg_en) if self.uitleg_nl else "")
         self.venster = venster
-        self.setFrameShape(QFrame.Shape.NoFrame)
-        self.setWidgetResizable(True)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        binnen = QWidget()
-        binnen.setObjectName("pagina")
-        self.lay = QVBoxLayout(binnen)
-        self.lay.setContentsMargins(40, 32, 40, 28)
-        self.lay.setSpacing(14)
-        self.lay.addWidget(label(self.naam(), "titel", wrap=False))
-        if self.uitleg_nl:
-            self.lay.addWidget(label(t(self.uitleg_nl, self.uitleg_en), "sub"))
-        self.melding = Melding()
-        self.lay.addWidget(self.melding)
-        self.setWidget(binnen)
         self.bouw()
         if self.kde:
             meer = Knop(t("Meer instellingen (voor gevorderden)", "More settings (advanced)"), "stil", "lijn:code")
             meer.clicked.connect(lambda _c=False: kde_instelling(self.kde))
             self.lay.addWidget(meer, 0, Qt.AlignmentFlag.AlignLeft)
-        self.lay.addStretch(1)
+        self.klaar()
 
     @classmethod
     def naam(cls) -> str:
@@ -326,24 +249,6 @@ class Pagina(QScrollArea):
     def bouw(self) -> None:
         pass
 
-    def ververs(self) -> None:
-        """Wordt aangeroepen als je de pagina opent."""
-
-    def kaart(self, kop: str = "") -> Groep:
-        if kop:
-            self.lay.addWidget(sectie(kop))
-        g = Groep()
-        g.lay.setContentsMargins(4, 4, 4, 4)
-        self.lay.addWidget(g)
-        return g
-
-
-def leeg_groep(g: Groep) -> None:
-    while g.lay.count():
-        item = g.lay.takeAt(0)
-        if item.widget():
-            item.widget().deleteLater()
-
 
 # ================================================================== wifi ===
 
@@ -351,11 +256,11 @@ def sterkte_woord(n: int) -> str:
     return t("Sterk", "Strong") if n >= 70 else t("Goed", "Good") if n >= 45 else t("Zwak", "Weak")
 
 
-class WifiPagina(Pagina):
+class WifiPagina(Blad):
     sleutel, icoon = "wifi", "wifi"
     titel_nl, titel_en = "Wifi en internet", "Wi-Fi and internet"
-    uitleg_nl = "Kies een netwerk om te verbinden. BugOS onthoudt het wachtwoord."
-    uitleg_en = "Choose a network to connect. BugOS remembers the password."
+    uitleg_nl = "Klik op een netwerk om te verbinden. BugOS onthoudt het wachtwoord."
+    uitleg_en = "Click a network to connect. BugOS remembers the password."
     zoekwoorden = "wifi wlan internet netwerk draadloos wachtwoord kabel ethernet verbinding"
     kde = "kcm_networkmanagement"
 
@@ -390,16 +295,16 @@ class WifiPagina(Pagina):
                               (t("Niet verbonden", "Not connected") if aan else t("Uit", "Off")))
         leeg_groep(self.lijst)
         for n in netwerken:
+            slot = t(" · met wachtwoord", " · with password") if n.beveiligd else t(" · open netwerk", " · open network")
             if n.verbonden:
-                knop = Knop(t("Verbreken", "Disconnect"), "gewoon")
-                knop.clicked.connect(lambda _c=False, x=n: self.verbreek(x))
+                meer = meer_knop(lambda x=n: [("kruis", t("Verbreken", "Disconnect"), lambda: self.verbreek(x))])
+                self.lijst.voeg(Rij("vink", n.naam, t("Verbonden · ", "Connected · ") + sterkte_woord(n.sterkte) + slot,
+                                    meer))
             else:
-                knop = Knop(t("Verbinden", "Connect"), "gewoon")
-                knop.clicked.connect(lambda _c=False, x=n: self.verbind(x))
-            knop.setMinimumHeight(38)
-            uitleg = (t("Verbonden · ", "Connected · ") if n.verbonden else "") + sterkte_woord(n.sterkte) + \
-                (t(" · met wachtwoord", " · with password") if n.beveiligd else t(" · open netwerk", " · open network"))
-            self.lijst.voeg(Rij("slot" if n.beveiligd else "wifi", n.naam, uitleg, knop))
+                rij = Rij("slot" if n.beveiligd else "wifi", n.naam, sterkte_woord(n.sterkte) + slot, klikbaar=True,
+                          pijl=False)
+                rij.geklikt.connect(lambda x=n: self.verbind(x))
+                self.lijst.voeg(rij)
         if not netwerken:
             self.lijst.voeg(Rij("wifi", t("Geen netwerken gevonden", "No networks found") if aan else
                                 t("Wifi staat uit", "Wi-Fi is off"),
@@ -449,11 +354,11 @@ def apparaat_icoon(soort: str) -> str:
     return "bluetooth"
 
 
-class BluetoothPagina(Pagina):
+class BluetoothPagina(Blad):
     sleutel, icoon = "bluetooth", "bluetooth"
     titel_nl, titel_en = "Bluetooth", "Bluetooth"
-    uitleg_nl = "Koptelefoons, muizen, toetsenborden en telefoons zonder draad."
-    uitleg_en = "Headphones, mice, keyboards and phones without a cable."
+    uitleg_nl = "Koptelefoons, muizen, toetsenborden en telefoons zonder draad. Klik op een apparaat om te verbinden."
+    uitleg_en = "Headphones, mice, keyboards and phones without a cable. Click a device to connect."
     zoekwoorden = "bluetooth koptelefoon oortjes muis toetsenbord telefoon koppelen draadloos"
     kde = "kcm_bluetooth"
 
@@ -484,14 +389,16 @@ class BluetoothPagina(Pagina):
                                else t("Aan", "On")) if aan else t("Uit", "Off"))
         leeg_groep(self.lijst)
         for a in apparaten:
-            knop = Knop(t("Verbreken", "Disconnect") if a.verbonden else t("Verbinden", "Connect"), "gewoon")
-            knop.setMinimumHeight(38)
-            knop.setEnabled(aan)
-            knop.clicked.connect(lambda _c=False, x=a: self.verbind(x))
-            uitleg = t("Verbonden", "Connected") if a.verbonden else t("Niet verbonden", "Not connected")
-            if a.batterij is not None:
-                uitleg += t(f" · batterij {a.batterij}%", f" · battery {a.batterij}%")
-            self.lijst.voeg(Rij(apparaat_icoon(a.soort), a.naam, uitleg, knop))
+            batterij = t(f" · batterij {a.batterij}%", f" · battery {a.batterij}%") if a.batterij is not None else ""
+            if a.verbonden:
+                meer = meer_knop(lambda x=a: [("kruis", t("Verbreken", "Disconnect"), lambda: self.verbind(x)),
+                                              ("prullenbak", t("Vergeten", "Forget"), lambda: self.vergeet(x))])
+                self.lijst.voeg(Rij("vink", a.naam, t("Verbonden", "Connected") + batterij, meer))
+            else:
+                rij = Rij(apparaat_icoon(a.soort), a.naam, t("Niet verbonden", "Not connected") + batterij,
+                          klikbaar=aan, pijl=False)
+                rij.geklikt.connect(lambda x=a: self.verbind(x))
+                self.lijst.voeg(rij)
         if not apparaten:
             self.lijst.voeg(Rij("bluetooth", t("Nog niets gekoppeld", "Nothing paired yet"),
                                 t("Kies 'Nieuw apparaat koppelen' en zet je apparaat in koppelstand.",
@@ -514,10 +421,13 @@ class BluetoothPagina(Pagina):
 
         op_achtergrond(self, lambda: bi.bt_verbind(a.adres, not a.verbonden), klaar)
 
+    def vergeet(self, a: bi.Apparaat) -> None:
+        op_achtergrond(self, lambda: bi.bt_vergeet(a.adres), lambda _u: self.ververs())
+
 
 # ================================================================ geluid ===
 
-class GeluidPagina(Pagina):
+class GeluidPagina(Blad):
     sleutel, icoon = "geluid", "geluid"
     titel_nl, titel_en = "Geluid", "Sound"
     uitleg_nl = "Hoe hard, en waar het geluid uit komt."
@@ -533,7 +443,8 @@ class GeluidPagina(Pagina):
         self.stil = schuifje(False, lambda aan: op_achtergrond(self, lambda: bi.zet_stil(aan), lambda _u: None))
         g.voeg(Rij("kruis", t("Geluid uit", "Mute"), t("Alles even stil", "Everything quiet for a moment"),
                    self.stil))
-        self.lijst = self.kaart(t("Waar komt het geluid uit?", "Where does the sound come from?"))
+        self.lijst = self.kaart(t("Waar komt het geluid uit? Klik om te kiezen.",
+                                  "Where does the sound come from? Click to choose."))
 
     def ververs(self) -> None:
         op_achtergrond(self, bi.geluid, self.toon)
@@ -547,13 +458,12 @@ class GeluidPagina(Pagina):
         leeg_groep(self.lijst)
         for u in uitgangen:
             if u.standaard:
-                rechts = Chip(t("In gebruik", "In use"), "goed")
+                self.lijst.voeg(Rij("vink", u.omschrijving, "", Chip(t("In gebruik", "In use"), "goed")))
             else:
-                rechts = Knop(t("Gebruiken", "Use"), "gewoon")
-                rechts.setMinimumHeight(38)
-                rechts.clicked.connect(lambda _c=False, x=u: op_achtergrond(
-                    self, lambda: bi.kies_uitgang(x.naam), lambda _u: self.ververs()))
-            self.lijst.voeg(Rij("geluid", u.omschrijving, "", rechts))
+                rij = Rij("geluid", u.omschrijving, "", klikbaar=True, pijl=False)
+                rij.geklikt.connect(lambda x=u: op_achtergrond(self, lambda: bi.kies_uitgang(x.naam),
+                                                               lambda _u: self.ververs()))
+                self.lijst.voeg(rij)
         if not uitgangen:
             self.lijst.voeg(Rij("geluid", t("Geen luidsprekers gevonden", "No speakers found"),
                                 t("Sluit een koptelefoon of luidspreker aan.", "Connect headphones or a speaker.")))
@@ -561,7 +471,7 @@ class GeluidPagina(Pagina):
 
 # ================================================================ scherm ===
 
-class SchermPagina(Pagina):
+class SchermPagina(Blad):
     sleutel, icoon = "scherm", "computer"
     titel_nl, titel_en = "Scherm", "Display"
     uitleg_nl = "Helderheid, warm licht voor de avond, en hoe groot alles is."
@@ -579,8 +489,7 @@ class SchermPagina(Pagina):
         g.voeg(Rij("maan", t("Nachtlicht", "Night light"),
                    t("'s Avonds warmer licht, prettiger voor je ogen", "Warmer light in the evening, easier on your eyes"),
                    self.nacht))
-        self.lay.addWidget(sectie(t("Grootte", "Size")))
-        g2 = self.kaart()
+        g2 = self.kaart(t("Grootte", "Size"))
         self.grootte = Keuzes([(1.0, "100%"), (1.25, "125%"), (1.5, "150%"), (1.75, "175%"), (2.0, "200%")])
         self.grootte.gekozen.connect(self.zet_grootte)
         g2.voeg(Rij("computer", t("Alles groter of kleiner", "Make everything bigger or smaller"),
@@ -617,7 +526,22 @@ PROFIEL_TEKST = {
 }
 
 
-class EnergiePagina(Pagina):
+def keuze_kaart(icoon_naam: str, naam: str, uitleg_tekst: str) -> KeuzeKaart:
+    inhoud = QWidget()
+    il = QVBoxLayout(inhoud)
+    il.setContentsMargins(4, 4, 4, 4)
+    il.setSpacing(6)
+    plaatje = QLabel()
+    plaatje.setPixmap(lijn_icoon(icoon_naam, "tekst", 24, gekozen=None).pixmap(24, 24))
+    il.addWidget(plaatje)
+    il.addWidget(label(naam, "kop3", wrap=False))
+    il.addWidget(label(uitleg_tekst, "klein"))
+    kaart = KeuzeKaart(inhoud)
+    kaart.setMinimumHeight(112)
+    return kaart
+
+
+class EnergiePagina(Blad):
     sleutel, icoon = "energie", "batterij"
     titel_nl, titel_en = "Energie", "Power"
     uitleg_nl = "Zuinig of snel, en hoe het met de batterij gaat."
@@ -636,17 +560,7 @@ class EnergiePagina(Pagina):
         groep = QButtonGroup(self)
         for profiel in bi.PROFIELEN:
             (nl, en), (unl, uen), ic = PROFIEL_TEKST[profiel]
-            inhoud = QWidget()
-            il = QVBoxLayout(inhoud)
-            il.setContentsMargins(4, 4, 4, 4)
-            il.setSpacing(6)
-            plaatje = QLabel()
-            plaatje.setPixmap(lijn_icoon(ic, "accent", 26, gekozen=None).pixmap(26, 26))
-            il.addWidget(plaatje)
-            il.addWidget(label(t(nl, en), "kop3", wrap=False))
-            il.addWidget(label(t(unl, uen), "klein"))
-            kaart = KeuzeKaart(inhoud)
-            kaart.setMinimumHeight(116)
+            kaart = keuze_kaart(ic, t(nl, en), t(unl, uen))
             kaart.clicked.connect(lambda _c=False, p=profiel: self.zet_profiel(p))
             groep.addButton(kaart)
             self.profielen[profiel] = kaart
@@ -685,7 +599,7 @@ class EnergiePagina(Pagina):
 
 # ============================================================= uiterlijk ===
 
-class UiterlijkPagina(Pagina):
+class UiterlijkPagina(Blad):
     sleutel, icoon = "uiterlijk", "palet"
     titel_nl, titel_en = "Uiterlijk", "Appearance"
     uitleg_nl = "Licht of donker, en de achtergrond van je bureaublad."
@@ -701,17 +615,7 @@ class UiterlijkPagina(Pagina):
         self.thema: dict[bool, KeuzeKaart] = {}
         for donker, (nl, en), (unl, uen) in ((False, ("Licht", "Light"), ("Fris en helder", "Fresh and bright")),
                                              (True, ("Donker", "Dark"), ("Rustig voor je ogen", "Calm for your eyes"))):
-            inhoud = QWidget()
-            il = QVBoxLayout(inhoud)
-            il.setContentsMargins(4, 4, 4, 4)
-            il.setSpacing(6)
-            plaatje = QLabel()
-            plaatje.setPixmap(lijn_icoon("maan" if donker else "zon", "accent", 26, gekozen=None).pixmap(26, 26))
-            il.addWidget(plaatje)
-            il.addWidget(label(t(nl, en), "kop3", wrap=False))
-            il.addWidget(label(t(unl, uen), "klein"))
-            kaart = KeuzeKaart(inhoud)
-            kaart.setMinimumHeight(116)
+            kaart = keuze_kaart("maan" if donker else "zon", t(nl, en), t(unl, uen))
             kaart.setMinimumWidth(220)
             kaart.clicked.connect(lambda _c=False, d=donker: self.zet_thema(d))
             groep.addButton(kaart)
@@ -719,7 +623,6 @@ class UiterlijkPagina(Pagina):
             rij.addWidget(kaart, 1)
         rij.addStretch(1)
         self.lay.addLayout(rij)
-        self.lay.addSpacing(6)
         self.lay.addWidget(sectie(t("Achtergrond", "Background")))
         plaatjes = QHBoxLayout()
         plaatjes.setSpacing(12)
@@ -768,7 +671,7 @@ class UiterlijkPagina(Pagina):
 
 # ======================================================= updates en meer ===
 
-class UpdatesPagina(Pagina):
+class UpdatesPagina(Blad):
     sleutel, icoon = "updates", "verversen"
     titel_nl, titel_en = "Updates en meer", "Updates and more"
     uitleg_nl = "Zet dingen aan of uit met één tik. Je kunt het altijd terugdraaien."
@@ -834,7 +737,7 @@ class UpdatesPagina(Pagina):
 
 # ===================================================== over deze computer ===
 
-class OverPagina(Pagina):
+class OverPagina(Blad):
     sleutel, icoon = "over", "laptop"
     titel_nl, titel_en = "Over deze computer", "About this computer"
     zoekwoorden = "over versie processor geheugen naam computer systeem info"
@@ -874,7 +777,7 @@ class OverPagina(Pagina):
 
 # ================================================================= start ===
 
-class StartPagina(Pagina):
+class StartPagina(Blad):
     sleutel, icoon = "start", "huis"
     titel_nl, titel_en = "Instellingen", "Settings"
     uitleg_nl = "Alles op één plek, in gewone woorden."
@@ -924,11 +827,7 @@ class StartPagina(Pagina):
         self.zoek_kaart.hide()
         self.lay.addWidget(self.zoek_kaart)
         # alle onderdelen, met hoe ze nu staan
-        self.alles_kop = sectie(t("Alle instellingen", "All settings"))
-        self.lay.addWidget(self.alles_kop)
-        self.alles = Groep()
-        self.alles.lay.setContentsMargins(4, 4, 4, 4)
-        self.lay.addWidget(self.alles)
+        self.alles = self.kaart(t("Alle instellingen", "All settings"))
         self.rijen: dict[str, Rij] = {}
         for klasse in PAGINAS[1:]:
             rij = Rij(klasse.icoon, klasse.naam(), t(klasse.uitleg_nl, klasse.uitleg_en) if klasse.uitleg_nl else "",
@@ -961,8 +860,7 @@ class StartPagina(Pagina):
             self.rijen["wifi"].zet_uitleg(t(f"Verbonden met {nu.naam}", f"Connected to {nu.naam}"))
         gebruikt = next((u for u in uitgangen if u.standaard), None)
         if gebruikt:
-            self.rijen["geluid"].zet_uitleg(t(f"{volume}% · {gebruikt.omschrijving}", f"{volume}% · "
-                                              f"{gebruikt.omschrijving}"))
+            self.rijen["geluid"].zet_uitleg(f"{volume}% · {gebruikt.omschrijving}")
 
     def zet_snel(self, sleutel: str, aan: bool) -> None:
         werk = {"wifi": lambda: bi.zet_wifi(aan), "bt": lambda: bi.zet_bt(aan),
@@ -989,75 +887,30 @@ class StartPagina(Pagina):
         self.zoek_kaart.setVisible(bool(woorden))
 
 
-PAGINAS: list[type[Pagina]] = [StartPagina, WifiPagina, BluetoothPagina, GeluidPagina, SchermPagina, EnergiePagina,
-                               UiterlijkPagina, UpdatesPagina, OverPagina]
+PAGINAS: list[type[Blad]] = [StartPagina, WifiPagina, BluetoothPagina, GeluidPagina, SchermPagina, EnergiePagina,
+                             UiterlijkPagina, UpdatesPagina, OverPagina]
 OUDE_NAMEN = {"schakelaars": "updates"}
 
 
 # ================================================================ venster ===
 
-class Instellingen(QWidget):
+class Instellingen(Venster):
     def __init__(self, begin: str = "start"):
-        super().__init__()
-        self.setObjectName("venster")
-        self.setWindowTitle(t("Instellingen", "Settings"))
+        super().__init__(t("Instellingen", "Settings"), zoeken=t("Zoek een instelling", "Search settings"),
+                         maat=(1120, 780))
         self.setStyleSheet(stijl())
-        self.resize(1120, 780)
-        self.setMinimumSize(920, 600)
-        hoofd = QHBoxLayout(self)
-        hoofd.setContentsMargins(0, 0, 0, 0)
-        hoofd.setSpacing(0)
-
-        zij = QWidget()
-        zij.setObjectName("zijkant")
-        zij.setFixedWidth(272)
-        z = QVBoxLayout(zij)
-        z.setContentsMargins(18, 22, 18, 18)
-        z.setSpacing(14)
-        merk = merk_label(28)
-        merk.setContentsMargins(6, 0, 0, 4)
-        z.addWidget(merk)
-        self.zoekveld = Zoekveld(t("Zoek een instelling", "Search settings"))
+        for klasse in PAGINAS:
+            self.voeg_pagina(klasse.sleutel, klasse.icoon,
+                             t("Start", "Home") if klasse is StartPagina else klasse.naam(), klasse(self))
+        self.onder_knop(t("Meer instellingen", "More settings"), "code", lambda: start("systemsettings"),
+                        tip=t("Alle KDE-instellingen (voor gevorderden)", "All KDE settings (advanced)"))
         self.zoekveld.textChanged.connect(self.zoeken)
-        z.addWidget(self.zoekveld)
-        self.nav = Zijbalk()
-        for klasse in PAGINAS:
-            self.nav.voeg_toe(f"lijn:{klasse.icoon}", klasse.naam() if klasse is not StartPagina else
-                              t("Start", "Home"), klasse.sleutel)
-        z.addWidget(self.nav, 1)
-        alles = Knop(t("Meer instellingen", "More settings"), "stil", "lijn:code")
-        alles.setToolTip(t("Alle KDE-instellingen (voor gevorderden)", "All KDE settings (advanced)"))
-        alles.clicked.connect(lambda _c=False: start("systemsettings"))
-        z.addWidget(alles)
-        hoofd.addWidget(zij)
-
-        self.stapel = QStackedWidget()
-        self.paginas: dict[str, Pagina] = {}
-        for klasse in PAGINAS:
-            p = klasse(self)
-            self.paginas[klasse.sleutel] = p
-            self.stapel.addWidget(p)
-        hoofd.addWidget(self.stapel, 1)
-        self.nav.currentRowChanged.connect(lambda i: self.toon(self.nav.sleutel(i)))
         begin = OUDE_NAMEN.get(begin, begin)
         self.ga_naar(begin if begin in self.paginas else "start")
         self.nav.setFocus()  # niet meteen in het zoekveld
 
-    def toon(self, sleutel: str) -> None:
-        pagina = self.paginas.get(sleutel)
-        if pagina is None:
-            return
-        self.stapel.setCurrentWidget(pagina)
-        pagina.ververs()
-
-    def ga_naar(self, sleutel: str) -> None:
-        if self.nav.sleutel(self.nav.currentRow()) == sleutel:
-            self.toon(sleutel)
-        else:
-            self.nav.kies(sleutel)
-
     def zoeken(self, tekst: str) -> None:
-        if tekst and self.stapel.currentWidget() is not self.paginas["start"]:
+        if tekst and self.huidige() != "start":
             self.ga_naar("start")
         self.paginas["start"].zoek(tekst)
 

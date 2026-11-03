@@ -29,14 +29,15 @@ from pathlib import Path
 sys.path.insert(0, "/usr/lib/bugos/python")
 
 from bugos_ui import (  # noqa: E402
-    K, Knop, Zijbalk, Zoekveld, label, lijn, lijn_icoon, lijn_pixmap, maak_app, merk_label, sectie, t, uitvoeren,
+    ActieBalk, K, Knop, Melding, Venster, Zijbalk, Zoekveld, label, lijn, lijn_icoon, lijn_pixmap, maak_app,
+    ronde_knop, sectie, t, uitvoeren,
 )
 from bugos_schijven import (  # noqa: E402
     MAX_NAAM, Schijf, hernoem_stappen, klaarmaak_stappen, leegmaak_stappen, mooie_maat, openen_stappen,
     repareer_stappen, schijven, uitwerp_stappen,
 )
 from PySide6.QtCore import (  # noqa: E402
-    QCollator, QDir, QEvent, QMimeData, QModelIndex, QObject, QProcess, QRectF, QRunnable, QSize,
+    QCollator, QDir, QEvent, QMimeData, QModelIndex, QObject, QPoint, QProcess, QRect, QRectF, QRunnable, QSize,
     QSortFilterProxyModel, QStorageInfo, Qt, QThread, QThreadPool, QTimer, QUrl, Signal,
 )
 from PySide6.QtGui import (  # noqa: E402
@@ -44,9 +45,9 @@ from PySide6.QtGui import (  # noqa: E402
     QLinearGradient, QPainter, QPainterPath, QPen, QPixmap, QShortcut, QStandardItem, QStandardItemModel,
 )
 from PySide6.QtWidgets import (  # noqa: E402
-    QAbstractItemView, QApplication, QFileSystemModel, QFrame, QGraphicsDropShadowEffect, QGridLayout, QHBoxLayout,
-    QInputDialog, QLabel, QListView, QMenu, QMessageBox, QProgressBar, QPushButton, QScrollArea, QStackedWidget, QStyle,
-    QStyledItemDelegate, QVBoxLayout, QWidget,
+    QAbstractItemView, QApplication, QFileSystemModel, QFrame, QGridLayout, QHBoxLayout, QInputDialog, QLabel,
+    QListView, QMenu, QMessageBox, QProgressBar, QPushButton, QScrollArea, QStackedWidget, QStyle, QStyledItemDelegate,
+    QVBoxLayout, QWidget,
 )
 
 PAD_ROL = int(Qt.ItemDataRole.UserRole) + 1        # = QFileSystemModel.FilePathRole
@@ -67,7 +68,6 @@ SOORTEN = {  # extensie -> (kleur, teken in het papiertje)
     "wav": ("#E2457A", "muziek"), "m4a": ("#E2457A", "muziek"), "mp4": ("#0EA5A4", "film"),
     "mkv": ("#0EA5A4", "film"), "avi": ("#0EA5A4", "film"), "mov": ("#0EA5A4", "film"), "webm": ("#0EA5A4", "film"),
 }
-MAP_ROOD = ("#FF6A5A", "#E5303E", "#C82434")  # licht, midden, donker (achterkant)
 VERBERG_EXT = AFBEELDING | ODF | {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".rtf", ".md",
                                   ".csv", ".mp3", ".flac", ".ogg", ".wav", ".m4a", ".mp4", ".mkv", ".avi", ".mov", ".webm"}
 
@@ -460,8 +460,9 @@ class Voorbeelden(QObject):
 # ================================================================ tekenen ===
 
 def teken_map(p: QPainter, r: QRectF, teken: str = "") -> None:
-    """Een rode BugOS-map (met eventueel een tekentje erop, zoals bij Documenten)."""
-    licht, midden, donker = (QColor(c) for c in MAP_ROOD)
+    """Een zachte BugOS-map in een rustige tint (met eventueel een tekentje erop, zoals bij Documenten)."""
+    midden, donker, tekenkleur = QColor(K["map_voor"]), QColor(K["map_achter"]), QColor(K["map_teken"])
+    licht = midden.lighter(104)
     w, h = r.width(), r.height()
     straal = w * 0.085
     tab = QPainterPath()
@@ -477,12 +478,12 @@ def teken_map(p: QPainter, r: QRectF, teken: str = "") -> None:
     verloop.setColorAt(0, licht)
     verloop.setColorAt(1, midden)
     p.fillPath(voor, verloop)
-    p.setPen(QPen(QColor(255, 255, 255, 80), 1.2))
+    p.setPen(QPen(QColor(255, 255, 255, 90), 1.2))
     p.drawLine(int(voor_r.left() + straal), int(voor_r.top() + 1), int(voor_r.right() - straal), int(voor_r.top() + 1))
     if teken:
         m = h * 0.38
         dpr = p.device().devicePixelRatioF() if p.device() else 1.0
-        pm = lijn_pixmap(teken, QColor(255, 255, 255, 235), int(m * dpr), 2.2)
+        pm = lijn_pixmap(teken, tekenkleur, int(m * dpr), 2.2)
         p.drawPixmap(QRectF(voor_r.center().x() - m / 2, voor_r.center().y() - m / 2 + h * 0.02, m, m), pm, QRectF())
 
 
@@ -584,9 +585,9 @@ class TegelTekenaar(QStyledItemDelegate):
         if gekozen or boven:
             vak = QPainterPath()
             vak.addRoundedRect(r, 14, 14)
-            p.fillPath(vak, QColor(K["accent_zacht"] if gekozen else K["knop"]))
+            p.fillPath(vak, QColor(K["knop_hover"] if gekozen else K["knop"]))
             if gekozen:
-                p.setPen(QPen(QColor(K["accent_lijn"]), 1.2))
+                p.setPen(QPen(QColor(K["rand_sterk"]), 1.2))
                 p.drawPath(vak)
         pad = index.data(PAD_ROL) or ""
         is_map = os.path.isdir(pad)
@@ -677,37 +678,17 @@ class Sorteerder(QSortFilterProxyModel):
 
 def stijl() -> str:
     return f"""
-QPushButton#rond {{ min-width: 42px; max-width: 42px; min-height: 42px; max-height: 42px; border-radius: 21px;
-    background: {K['knop']}; border: none; padding: 0; }}
-QPushButton#rond:hover {{ background: {K['knop_hover']}; }}
-QPushButton#rond:disabled {{ background: transparent; }}
 QFrame#pad {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-radius: 14px; }}
 QPushButton#kruimel {{ background: transparent; border: none; border-radius: 8px; padding: 6px 8px;
     font-size: 14px; color: {K['tekst2']}; }}
 QPushButton#kruimel:hover {{ background: {K['knop']}; color: {K['tekst']}; }}
 QPushButton#kruimel[laatste="true"] {{ color: {K['tekst']}; font-weight: 600; }}
 QListView#tegels {{ background: transparent; border: none; outline: 0; }}
-QFrame#melding {{ background: {K['knop']}; border-radius: 14px; }}
-QFrame#melding[soort="goed"] {{ background: {K['goed_zacht']}; }}
-QFrame#melding[soort="fout"] {{ background: {K['fout_zacht']}; }}
-QFrame#keuzebalk {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-radius: 20px; }}
-QPushButton#balkknop {{ background: transparent; border: none; border-radius: 12px; padding: 9px 14px;
-    font-size: 14px; font-weight: 600; color: {K['tekst']}; }}
-QPushButton#balkknop:hover {{ background: {K['knop']}; }}
-QPushButton#balkknop:focus {{ background: {K['knop']}; }}
-QPushButton#balkknop[gevaar="true"] {{ color: {K['fout']}; }}
-QFrame#streep {{ background: {K['rand']}; min-width: 1px; max-width: 1px; border: none; }}
 QWidget#computer_binnen {{ background: transparent; }}
 QFrame#kaart {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-radius: 18px; }}
 QFrame#schijfrij {{ background: transparent; border-radius: 12px; }}
 QFrame#schijfrij:hover {{ background: {K['knop']}; }}
 QFrame#schijfrij[leeg="true"]:hover {{ background: transparent; }}
-QPushButton#rond_klein {{ min-width: 38px; max-width: 38px; min-height: 38px; max-height: 38px; border-radius: 19px;
-    background: transparent; border: none; padding: 0; }}
-QPushButton#rond_klein:hover {{ background: {K['knop_hover']}; }}
-QProgressBar#dun {{ background: {K['knop']}; border: none; border-radius: 3px; min-height: 6px; max-height: 6px; }}
-QProgressBar#dun::chunk {{ background: {K['tekst2']}; border-radius: 3px; }}
-QProgressBar#dun[vol="true"]::chunk {{ background: {K['accent']}; }}
 QPushButton#legenda {{ background: transparent; border: none; border-radius: 10px; padding: 5px 10px 5px 6px;
     text-align: left; font-size: 14px; font-weight: 400; color: {K['tekst']}; }}
 QPushButton#legenda:hover {{ background: {K['knop']}; }}
@@ -715,122 +696,11 @@ QPushButton#legenda:disabled {{ color: {K['tekst2']}; }}
 """
 
 
-class Melding(QFrame):
-    """Een korte melding bovenin, eventueel met een knop (bijvoorbeeld 'Ongedaan maken')."""
-
-    def __init__(self):
-        super().__init__()
-        self.setObjectName("melding")
-        lay = QHBoxLayout(self)
-        lay.setContentsMargins(16, 8, 8, 8)
-        lay.setSpacing(12)
-        self.tekst = label("", wrap=False)
-        self.knop = Knop("", "stil")
-        self.knop.setMinimumHeight(36)
-        lay.addWidget(self.tekst, 1)
-        lay.addWidget(self.knop)
-        self.actie = None
-        self.knop.clicked.connect(self._klik)
-        self.klok = QTimer(self)
-        self.klok.setSingleShot(True)
-        self.klok.timeout.connect(self.hide)
-        self.hide()
-
-    def toon(self, tekst: str, soort: str = "info", knop: str = "", actie=None, seconden: int = 7) -> None:
-        self.setProperty("soort", soort)
-        self.style().unpolish(self)
-        self.style().polish(self)
-        self.tekst.setText(tekst)
-        self.knop.setText(knop)
-        self.knop.setVisible(bool(knop))
-        self.actie = actie
-        self.show()
-        if seconden:
-            self.klok.start(seconden * 1000)
-        else:
-            self.klok.stop()
-
-    def _klik(self) -> None:
-        actie, self.actie = self.actie, None
-        self.hide()
-        if actie:
-            actie()
-
-
-def ronde_knop(icoon_naam: str, tip: str) -> QPushButton:
-    k = QPushButton()
-    k.setObjectName("rond")
-    k.setIcon(lijn_icoon(icoon_naam, "tekst", 20, gekozen=None))
-    k.setIconSize(QSize(20, 20))
-    k.setToolTip(tip)
-    k.setAccessibleName(tip)
-    k.setCursor(Qt.CursorShape.PointingHandCursor)
-    return k
-
-
 class Zoekbalk(Zoekveld):
     """Het zoekveld bovenin: liefst 240 breed, maar het mag krimpen in een smal venster."""
 
     def sizeHint(self) -> QSize:  # noqa: N802
         return QSize(240, super().sizeHint().height())
-
-
-class Keuzebalk(QFrame):
-    """Zweeft onderin zodra je iets kiest: wat kun je ermee? Knoppen met gewone woorden."""
-
-    def __init__(self, ouder: QWidget):
-        super().__init__(ouder)
-        self.setObjectName("keuzebalk")
-        self.lay = QHBoxLayout(self)
-        self.lay.setContentsMargins(20, 7, 7, 7)
-        self.lay.setSpacing(2)
-        self.aantal = label("", "kop3", wrap=False)
-        self.lay.addWidget(self.aantal)
-        self.lay.addSpacing(10)
-        streep = QFrame()
-        streep.setObjectName("streep")
-        streep.setFixedHeight(26)
-        self.lay.addWidget(streep)
-        self.lay.addSpacing(6)
-        self.knoppen: dict[str, QPushButton] = {}
-        self.sluit = ronde_knop("kruis", t("Niets meer kiezen", "Clear selection"))
-        donker = QColor(K["achter"]).lightness() < 128
-        schaduw = QGraphicsDropShadowEffect(self)
-        schaduw.setBlurRadius(36)
-        schaduw.setOffset(0, 10)
-        schaduw.setColor(QColor(0, 0, 0, 150 if donker else 46))
-        self.setGraphicsEffect(schaduw)
-        self.hide()
-
-    def knop(self, sleutel: str, icoon: str, tekst: str, actie, gevaar: bool = False) -> None:
-        k = QPushButton(tekst)
-        k.setObjectName("balkknop")
-        k.setIcon(lijn_icoon(icoon, "fout" if gevaar else "tekst", 18, gekozen=None))
-        k.setIconSize(QSize(18, 18))
-        k.setCursor(Qt.CursorShape.PointingHandCursor)
-        k.setProperty("gevaar", "true" if gevaar else "false")
-        k.clicked.connect(lambda _c=False, f=actie: f())
-        self.lay.addWidget(k)
-        self.knoppen[sleutel] = k
-
-    def klaar(self) -> None:
-        """Na de laatste knop: ruimte en het kruisje om niets meer te kiezen."""
-        self.lay.addSpacing(6)
-        self.lay.addWidget(self.sluit)
-
-    def toon(self, n: int, prullenbak: bool) -> None:
-        if not n:
-            self.hide()
-            return
-        self.aantal.setText(t(f"{n} gekozen", f"{n} selected"))
-        for sleutel, k in self.knoppen.items():
-            if prullenbak:
-                k.setVisible(sleutel == "terugzetten")
-            else:
-                k.setVisible(sleutel != "terugzetten" and (sleutel != "naam" or n == 1))
-        self.adjustSize()
-        self.show()
-        self.raise_()
 
 
 class RuimteBalk(QWidget):
@@ -870,7 +740,7 @@ class SchijfRij(QFrame):
     geklikt = Signal()
 
     def __init__(self, icoon_naam: str, naam: str, uitleg: str, gebruikt: float | None = None,
-                 knop: str = "", knop_icoon: str = "", leeg: bool = False, soort_knop: str = "gewoon"):
+                 knop: str = "", uitwerpen: bool = False, leeg: bool = False, soort_knop: str = "gewoon"):
         super().__init__()
         self.setObjectName("schijfrij")
         if leeg:
@@ -884,7 +754,7 @@ class SchijfRij(QFrame):
         ic = QLabel()
         ic.setPixmap(lijn_icoon(icoon_naam, "tekst3" if leeg else "tekst2", 22, gekozen=None).pixmap(22, 22))
         lay.addWidget(ic)
-        lay.addWidget(label(naam, "sub" if leeg else "kop3", wrap=False), 1)
+        lay.addWidget(label(naam, "sub" if leeg else "rij", wrap=False), 1)
         lay.addWidget(label(uitleg, "klein", wrap=False))
         self.balk = None
         if gebruikt is not None:
@@ -899,18 +769,17 @@ class SchijfRij(QFrame):
             self.balk = balk
         self.knop = None
         if knop:
-            self.knop = Knop(knop, soort_knop, f"lijn:{knop_icoon}" if knop_icoon else None)
+            self.knop = Knop(knop, soort_knop)
             self.knop.setMinimumHeight(38)
+            lay.addWidget(self.knop)
+        elif uitwerpen:
+            self.knop = ronde_knop("uitwerpen", t("Veilig verwijderen", "Safely remove"), klein=True)
+            self.knop.setProperty("uitwerpen", True)
             lay.addWidget(self.knop)
         self.meer = None
         if not leeg:
-            self.meer = QPushButton()
-            self.meer.setObjectName("rond_klein")
-            self.meer.setIcon(lijn_icoon("meer", "tekst2", 20, gekozen=None))
-            self.meer.setIconSize(QSize(20, 20))
-            self.meer.setToolTip(t("Meer: naam wijzigen, repareren, leegmaken…", "More: rename, repair, erase…"))
-            self.meer.setAccessibleName(t("Meer", "More"))
-            self.meer.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.meer = ronde_knop("meer", t("Meer: naam wijzigen, repareren, leegmaken…", "More: rename, repair, erase…"),
+                                   klein=True)
             lay.addWidget(self.meer)
 
     @property
@@ -942,13 +811,11 @@ def stip_icoon(kleur_: QColor, hol: bool = False) -> QIcon:
     return QIcon(beeld)
 
 
-class Bestanden(QWidget):
+class Bestanden(Venster):
     def __init__(self, start: Path | None = None, kies: Path | None = None):
-        super().__init__()
-        self.setObjectName("venster")
-        self.setWindowTitle(t("Bestanden", "Files"))
+        rechts_w = QWidget()
+        super().__init__(t("Bestanden", "Files"), inhoud=rechts_w, maat=(1120, 740), minimum=(940, 560))
         self.setStyleSheet(stijl())
-        self.resize(1120, 740)
         self.terug_lijst: list[Path] = []
         self.vooruit_lijst: list[Path] = []
         self.huidig = thuis()
@@ -964,34 +831,19 @@ class Bestanden(QWidget):
         self.telsein.klaar.connect(self._geteld)
         self.tellen_bezig = False
 
-        hoofd = QHBoxLayout(self)
-        hoofd.setContentsMargins(0, 0, 0, 0)
-        hoofd.setSpacing(0)
-
-        # --- links: plekken, USB-sticks en de prullenbak
-        zij = QWidget()
-        zij.setObjectName("zijkant")
-        zij.setFixedWidth(244)
-        zl = QVBoxLayout(zij)
-        zl.setContentsMargins(14, 22, 14, 14)
-        zl.setSpacing(12)
-        merk = merk_label(26)
-        merk.setContentsMargins(8, 0, 0, 8)
-        zl.addWidget(merk)
-        self.zijbalk = Zijbalk()
+        # --- links: plekken, USB-sticks en de prullenbak (de zijbalk komt van de schil)
+        self.zijbalk = self.nav
         self.zijbalk.itemClicked.connect(self.zijbalk_klik)
         self.zijbalk.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.zijbalk.customContextMenuRequested.connect(self.zijbalk_menu)
-        zl.addWidget(self.zijbalk, 1)
         self.bak_lijst = Zijbalk()
         self.bak_lijst.voeg_toe("lijn:prullenbak", t("Prullenbak", "Trash"), "prullenbak")
         self.bak_lijst.setFixedHeight(48)
         self.bak_lijst.itemClicked.connect(lambda _it: self.open_prullenbak())
-        zl.addWidget(self.bak_lijst)
-        hoofd.addWidget(zij)
+        self.onder.addWidget(self.bak_lijst)
 
         # --- rechts: balk bovenin, tegels, regel onderin
-        rechts = QVBoxLayout()
+        rechts = QVBoxLayout(rechts_w)
         rechts.setContentsMargins(26, 20, 26, 12)
         rechts.setSpacing(14)
         balk = QHBoxLayout()
@@ -1108,19 +960,16 @@ class Bestanden(QWidget):
         self.stapel.addWidget(self.computer)
         rechts.addWidget(self.stapel, 1)
 
-        hoofd.addLayout(rechts, 1)
-
         # zweeft onderin zodra je iets kiest
-        self.keuzebalk = Keuzebalk(self)
+        self.keuzebalk = ActieBalk(self)
         self.keuzebalk.knop("openen", "openen", t("Openen", "Open"), self.openen)
         self.keuzebalk.knop("kopieer", "kopieer", t("Kopiëren", "Copy"), self.kopieer)
         self.keuzebalk.knop("knip", "schaar", t("Knippen", "Cut"), self.knip)
         self.keuzebalk.knop("naam", "potlood", t("Naam wijzigen", "Rename"), self.hernoem)
-        self.keuzebalk.knop("weg", "prullenbak", t("Weggooien", "Delete"), self.weggooien, gevaar=True)
+        self.keuzebalk.knop("weg", "prullenbak", t("Weggooien", "Delete"), self.weggooien)
         self.keuzebalk.knop("terugzetten", "terug", t("Zet terug", "Restore"), self.zet_terug)
         self.keuzebalk.klaar()
-        self.keuzebalk.sluit.clicked.connect(self.lijst.clearSelection)
-        self.setMinimumSize(940, 560)
+        self.keuzebalk.gesloten.connect(self.lijst.clearSelection)
         QApplication.clipboard().dataChanged.connect(self.ververs_plak)
 
         # sneltoetsen, net als in Windows
@@ -1368,7 +1217,7 @@ class Bestanden(QWidget):
             self.status.setText(t(f"{n} aangesloten", f"{n} connected") if n else
                                 t("Niets aangesloten", "Nothing connected"))
             self.stapel.setCurrentWidget(self.computer)
-            self.keuzebalk.toon(0, False)
+            self.keuzebalk.toon(0)
             self.plaats_keuzebalk()
             return
         model = self.lijst.model()
@@ -1403,7 +1252,11 @@ class Bestanden(QWidget):
                 delen.append(t(f"{vrij} vrij", f"{vrij} free"))
         self.status.setText("  ·  ".join(delen))
         self.leeg_knop.setEnabled(aantal > 0)
-        self.keuzebalk.toon(gekozen, self.in_prullenbak)
+        if self.in_prullenbak:
+            knoppen = {"terugzetten"}
+        else:
+            knoppen = {"openen", "kopieer", "knip", "weg"} | ({"naam"} if gekozen == 1 else set())
+        self.keuzebalk.toon(gekozen, knoppen)
         self.plaats_keuzebalk()
 
     def plaats_keuzebalk(self) -> None:
@@ -1412,13 +1265,7 @@ class Bestanden(QWidget):
         onder = balk.sizeHint().height() + 28 if not balk.isHidden() else 0
         if self.lijst.viewportMargins().bottom() != onder:
             self.lijst.setViewportMargins(0, 0, 0, onder)
-        if balk.isHidden():
-            return
-        g = self.stapel.geometry()
-        balk.setMaximumWidth(max(200, g.width() - 24))
-        balk.adjustSize()
-        balk.move(g.center().x() - balk.width() // 2, g.bottom() - balk.height() - 14)
-        balk.raise_()
+        balk.plaats(QRect(self.stapel.mapTo(self, QPoint(0, 0)), self.stapel.size()))
 
     def closeEvent(self, e) -> None:  # noqa: N802
         self.apparaten.stop()
@@ -1714,6 +1561,7 @@ class Bestanden(QWidget):
 
     # --------------------------------------------- schijven en USB-sticks
     def schijf_uitleg(self, x: Schijf) -> str:
+        """Een zin over een schijf, voor de uitleg en de tooltip."""
         if x.nieuw:
             return t("Nog niet in gebruik. Klik op 'In gebruik nemen' om hem klaar te maken.",
                      "Not in use yet. Click 'Set up' to get it ready.")
@@ -1828,20 +1676,19 @@ class Bestanden(QWidget):
         if x.wortel:
             gebruikt = 1 - x.vrij / x.grootte if x.vrij is not None and x.grootte else None
             uitleg = self.schijf_uitleg(x)
-            rij = SchijfRij(x.icoon, x.naam, uitleg, gebruikt,
-                            t("Veilig verwijderen", "Safely remove") if x.los else "", "uitwerpen")
+            rij = SchijfRij(x.icoon, x.naam, uitleg, gebruikt, uitwerpen=x.los)
             if rij.knop is not None:
-                rij.knop.setProperty("uitwerpen", True)
                 rij.knop.clicked.connect(lambda _c=False, g=x: self.uitwerpen(g.station))
         elif x.nieuw:
             rij = SchijfRij(x.icoon, x.naam, t("Nog niet in gebruik", "Not in use yet"), None,
                             t("In gebruik nemen", "Set up"), soort_knop="hoofd")
             rij.knop.clicked.connect(lambda _c=False, g=x: self.neem_in_gebruik(g))
         else:
-            uitleg = t("Op slot", "Locked") if x.op_slot else mooie_maat(x.grootte) if x.grootte else ""
-            rij = SchijfRij("slot" if x.op_slot else x.icoon, x.naam, uitleg, None, t("Openen", "Open"))
-            rij.knop.setToolTip(self.schijf_uitleg(x))
-            rij.knop.clicked.connect(lambda _c=False, g=x: self.open_schijf(g))
+            uitleg = (t("Op slot · klik om te openen", "Locked · click to open") if x.op_slot
+                      else t("Nog dicht · klik om te openen", "Closed · click to open"))
+            if x.grootte:
+                uitleg = f"{mooie_maat(x.grootte)} · " + uitleg
+            rij = SchijfRij("slot" if x.op_slot else x.icoon, x.naam, uitleg, None)
         rij.setToolTip(self.schijf_uitleg(x))
         rij.geklikt.connect(lambda g=x: self.open_schijf(g))
         rij.meer.clicked.connect(lambda _c=False, g=x, k=rij.meer: self.schijf_menu(g).exec(

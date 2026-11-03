@@ -166,7 +166,7 @@ def venster() -> int:
             buiten = QVBoxLayout(self)
             buiten.setContentsMargins(0, 0, 0, 0)
             buiten.addWidget(w)
-            lay.addWidget(kop_met_icoon("backup", "turkoois", t("Back-up", "Backup"),
+            lay.addWidget(kop_met_icoon("lijn:opslag", "neutraal", t("Back-up", "Backup"),
                                         t("Zet je documenten, foto's, muziek, video's, bureaublad en downloads veilig "
                                           "op een USB-schijf. Er wordt nooit iets weggegooid.",
                                           "Keep your documents, photos, music, videos, desktop and downloads safe on a "
@@ -185,8 +185,8 @@ def venster() -> int:
             lay.addWidget(self.balk)
             lay.addStretch(1)
             rij = QHBoxLayout()
-            self.terugzetten = Knop(t("Terugzetten", "Restore"), "rand", "edit-undo", groot=True)
-            self.maak = Knop(t("Maak back-up", "Make backup"), "hoofd", "backup", groot=True)
+            self.terugzetten = Knop(t("Terugzetten", "Restore"), "rand", "lijn:terug", groot=True)
+            self.maak = Knop(t("Maak back-up", "Make backup"), "hoofd", "lijn:opslag", groot=True)
             rij.addWidget(self.terugzetten)
             rij.addStretch(1)
             rij.addWidget(self.maak)

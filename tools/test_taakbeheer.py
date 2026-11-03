@@ -181,17 +181,26 @@ try:
     namen = sorted(r.taak.naam for r in venster.rijen.values())
     klopt(namen == ["Discord", "Firefox webbrowser", "Notities"],
           "venster: de open programma's staan in de lijst (ook Discord, dat vanzelf meestartte)")
-    klopt(all(r.knop is not None for r in venster.rijen.values()), "venster: elk programma heeft 'Sluiten'")
+    klopt(all(r.property("klikbaar") == "true" for r in venster.rijen.values()),
+          "venster: elk programma is aan te klikken (dan komt 'Sluiten' onderin)")
     achter = {r.taak.naam: r for r in venster.achter_rijen.values()}
-    klopt(achter["Bureaublad (Plasma)"].knop is None and achter["Netwerk"].knop is None,
-          "venster: het bureaublad en het netwerk hebben geen stopknop")
-    klopt(venster.status.text() == "Alles loopt soepel." and venster.kort["processor"].text() == "50%",
+    klopt(achter["Bureaublad (Plasma)"].property("klikbaar") == "false"
+          and achter["Netwerk"].property("klikbaar") == "false",
+          "venster: het bureaublad en het netwerk kun je niet kiezen (horen bij BugOS)")
+    klopt(venster.statussen[0].tekst.text() == "Alles loopt soepel." and venster.kort["processor"].text() == "50%",
           "venster: bovenaan hoe het gaat, en de processor")
+    firefox_sleutel = next(s for s, r in venster.rijen.items() if r.taak.naam == "Firefox webbrowser")
+    venster.kies(firefox_sleutel)
+    klopt(not venster.balk.isHidden() and venster.balk.aantal.text() == "Firefox webbrowser"
+          and venster.rijen[firefox_sleutel].property("gekozen") == "true",
+          "kiezen: Firefox licht op en onderin staat de knoppenbalk met zijn naam")
+    venster.kies(None)
+    klopt(venster.balk.isHidden(), "kiezen: niets gekozen, balk weg")
     venster.nieuwe_meting(m)
     klopt(len(venster.rijen) == 3, "venster: een nieuwe meting werkt de regels bij (geen dubbele)")
-    venster.zijbalk.setCurrentRow(2)
+    venster.ga_naar("opstarten")
     app.processEvents()
-    rijen = venster.paginas.currentWidget().widget().findChildren(tb.OpstartRij)
+    rijen = venster.paginas["opstarten"].findChildren(tb.OpstartRij)
     klopt(len(rijen) == 2, "venster: Opstarten toont de programma's met een schuifje")
 finally:
     venster.close()  # stopt ook het meten op de achtergrond

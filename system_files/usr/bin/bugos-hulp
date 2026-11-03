@@ -234,7 +234,7 @@ def venster() -> int:
             blok.addWidget(self.kop)
             blok.addWidget(self.sub)
             self.kaart.lay.addLayout(blok, 1)
-            opnieuw = Knop(t("Opnieuw controleren", "Check again"), "rand", "view-refresh")
+            opnieuw = Knop(t("Opnieuw controleren", "Check again"), "rand", "lijn:verversen")
             opnieuw.clicked.connect(self.vul)
             self.kaart.lay.addWidget(opnieuw)
             lay.addWidget(self.kaart)
@@ -245,7 +245,7 @@ def venster() -> int:
             lay.addLayout(self.groep_plek)
 
             onder = QHBoxLayout()
-            self.kopieer_knop = Knop(t("Uitslag kopiëren", "Copy results"), "stil", "edit-copy")
+            self.kopieer_knop = Knop(t("Uitslag kopiëren", "Copy results"), "stil", "lijn:kopieer")
             self.kopieer_knop.clicked.connect(self.kopieer)
             onder.addWidget(self.kopieer_knop)
             onder.addWidget(label(t("Handig om naar iemand te sturen die je helpt.",
@@ -287,15 +287,14 @@ def venster() -> int:
                 r.setContentsMargins(18, 14, 18, 14)
                 r.setSpacing(14)
                 # Rustig: alleen wat aandacht nodig heeft krijgt kleur.
-                r.addWidget(IcoonChip(u.icoon or "lijn:vink", "neutraal" if u.stand == OK else TINT[u.stand], 40,
-                                      vol=False))
+                r.addWidget(IcoonChip(u.icoon or "lijn:vink", "neutraal", 40, vol=False))
                 b = QVBoxLayout()
                 b.setSpacing(2)
                 b.addWidget(label(u.naam, "kop3"))
                 b.addWidget(label(u.tekst, "klein"))
                 r.addLayout(b, 1)
                 if u.repareer:
-                    knop = Knop(u.repareer_tekst or t("Repareer", "Fix"), "hoofd" if u.stand == PROBLEEM else "rand")
+                    knop = Knop(u.repareer_tekst or t("Repareer", "Fix"), "gewoon")
                     knop.clicked.connect(lambda _=False, f=u.repareer: (f(), QTimer.singleShot(2500, self.vul)))
                     r.addWidget(knop)
                 elif u.stand == OK:

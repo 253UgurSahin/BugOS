@@ -2,8 +2,9 @@
 """BugOS Taakbeheer: zien wat je computer doet, en een programma sluiten dat vastzit.
 
 Zoals Taakbeheer in Windows (Ctrl+Shift+Esc), maar simpeler:
-- Programma's: wat er openstaat, hoeveel kracht en geheugen het gebruikt, en een knop
-  'Sluiten' (netjes, net als op het kruisje klikken; reageert het niet, dan geforceerd).
+- Programma's: wat er openstaat, hoeveel kracht en geheugen het gebruikt. Klik op een
+  programma, dan verschijnt onderin 'Sluiten' (netjes, net als op het kruisje klikken) en
+  'Geforceerd sluiten' (als het niet reageert).
 - Prestaties: processor, geheugen, schijf, internet (en de videokaart) met grafiekjes.
 - Opstarten: programma's die vanzelf meestarten aan- of uitzetten.
 Bovenaan staat in gewone woorden hoe het gaat, met een tip als het druk is.
@@ -24,14 +25,12 @@ sys.path.insert(0, "/usr/lib/bugos/python")
 
 import bugos_taken as bt  # noqa: E402
 from bugos_ui import (  # noqa: E402
-    K, Kaart, Knop, Schuif, Zijbalk, label, lijn, lijn_icoon, maak_app, merk_label, sectie, t, uitvoeren,
+    ActieBalk, K, Kaart, Knop, Pagina, Rij, Schuif, Venster, label, lijn, lijn_icoon, maak_app, sectie, t,
+    uitvoeren,
 )
-from PySide6.QtCore import QRectF, QSize, Qt, QThread, QTimer, Signal  # noqa: E402
+from PySide6.QtCore import QRectF, Qt, QThread, QTimer, Signal  # noqa: E402
 from PySide6.QtGui import QColor, QIcon, QKeySequence, QLinearGradient, QPainter, QPainterPath, QPen, QShortcut  # noqa: E402
-from PySide6.QtWidgets import (  # noqa: E402
-    QApplication, QFrame, QGridLayout, QHBoxLayout, QLabel, QMenu, QPushButton, QScrollArea, QStackedWidget,
-    QVBoxLayout, QWidget,
-)
+from PySide6.QtWidgets import QApplication, QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget  # noqa: E402
 
 GESCHIEDENIS = 60      # hoeveel metingen de grafiekjes laten zien (2 minuten)
 TUSSENPOOS_MS = 2000   # elke 2 seconden meten
@@ -112,28 +111,24 @@ def voorbeeld_meting(stap: int) -> dict:
 
 def stijl() -> str:
     return f"""
-QFrame#rij {{ background: transparent; border-radius: 12px; }}
-QFrame#rij:hover {{ background: {K['knop']}; }}
-QPushButton#rond_klein {{ min-width: 36px; max-width: 36px; min-height: 36px; max-height: 36px; border-radius: 18px;
-    background: transparent; border: none; padding: 0; }}
-QPushButton#rond_klein:hover {{ background: {K['knop_hover']}; }}
+QFrame#rij[gekozen="true"], QFrame#rij[gekozen="true"]:hover {{ background: {K['knop_hover']}; }}
 QLabel#stip {{ border-radius: 6px; min-width: 12px; max-width: 12px; min-height: 12px; max-height: 12px; }}
 QLabel#stip[soort="goed"] {{ background: {K['goed']}; }}
 QLabel#stip[soort="let_op"] {{ background: {K['let_op']}; }}
-QFrame#melding {{ background: {K['knop']}; border-radius: 14px; }}
-QFrame#melding[soort="goed"] {{ background: {K['goed_zacht']}; }}
-QFrame#melding[soort="fout"] {{ background: {K['fout_zacht']}; }}
 """
 
 
-def app_icoon(naam: str) -> QIcon:
+def app_icoon(naam: str, soort: str) -> QIcon:
     if naam and Path(naam).is_absolute():
         return QIcon(naam)
-    return QIcon.fromTheme(naam) if naam else QIcon()
+    ic = QIcon.fromTheme(naam) if naam else QIcon()
+    if ic.isNull():
+        ic = lijn_icoon("apps" if soort == "app" else "schakelaar", "tekst3", 22, gekozen=None)
+    return ic
 
 
 class Grafiek(QWidget):
-    """Een rustig lijntje met een zachte kleur eronder: hoe het de laatste twee minuten ging."""
+    """Een rustig lijntje met een zachte tint eronder: hoe het de laatste twee minuten ging."""
 
     def __init__(self, maximum: float | None = 100.0):
         super().__init__()
@@ -169,16 +164,16 @@ class Grafiek(QWidget):
         vlak.lineTo(punten[-1][0], r.bottom())
         vlak.lineTo(punten[0][0], r.bottom())
         vlak.closeSubpath()
-        kleur_ = QColor(K["accent"])
+        kleur_ = QColor(K["tekst2"])
         verloop = QLinearGradient(0, r.top(), 0, r.bottom())
         boven = QColor(kleur_)
-        boven.setAlphaF(0.22)
+        boven.setAlphaF(0.16)
         onder = QColor(kleur_)
         onder.setAlphaF(0.0)
         verloop.setColorAt(0, boven)
         verloop.setColorAt(1, onder)
         p.fillPath(vlak, verloop)
-        p.setPen(QPen(kleur_, 2.2))
+        p.setPen(QPen(kleur_, 2.0))
         p.drawPath(lijn_)
 
 
@@ -202,68 +197,14 @@ class MeetKaart(Kaart):
         self.grafiek.voeg_toe(punt)
 
 
-class Melding(QFrame):
-    """Een korte melding bovenaan, eventueel met een knop (bijvoorbeeld 'Geforceerd sluiten')."""
+class Getallen(QWidget):
+    """Rechts in een regel: kracht en geheugen, netjes onder hun kopje."""
 
     def __init__(self):
         super().__init__()
-        self.setObjectName("melding")
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(16, 8, 8, 8)
-        lay.setSpacing(12)
-        self.tekst = label("", wrap=True)
-        self.knop = Knop("", "gewoon")
-        self.knop.setMinimumHeight(36)
-        lay.addWidget(self.tekst, 1)
-        lay.addWidget(self.knop)
-        self.actie = None
-        self.knop.clicked.connect(self._klik)
-        self.klok = QTimer(self)
-        self.klok.setSingleShot(True)
-        self.klok.timeout.connect(self.hide)
-        self.hide()
-
-    def toon(self, tekst: str, soort: str = "info", knop: str = "", actie=None, seconden: int = 8) -> None:
-        self.setProperty("soort", soort)
-        self.style().unpolish(self)
-        self.style().polish(self)
-        self.tekst.setText(tekst)
-        self.knop.setText(knop)
-        self.knop.setVisible(bool(knop))
-        self.actie = actie
-        self.show()
-        if seconden:
-            self.klok.start(seconden * 1000)
-        else:
-            self.klok.stop()
-
-    def _klik(self) -> None:
-        actie, self.actie = self.actie, None
-        self.hide()
-        if actie:
-            actie()
-
-
-class TaakRij(QFrame):
-    """Eén programma (of achtergrondtaak): icoon, naam, kracht, geheugen en 'Sluiten'."""
-
-    def __init__(self, taak: bt.Taak, sluiten, forceren):
-        super().__init__()
-        self.setObjectName("rij")
-        self.sleutel = taak.sleutel
-        self.setMinimumHeight(56)
-        lay = QHBoxLayout(self)
-        lay.setContentsMargins(12, 6, 8, 6)
+        lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(14)
-        ic = QLabel()
-        icoon = app_icoon(taak.icoon)
-        if icoon.isNull():
-            icoon = lijn_icoon("apps" if taak.soort == "app" else "schakelaar", "tekst3", 26, gekozen=None)
-        ic.setPixmap(icoon.pixmap(QSize(26, 26)))
-        ic.setFixedSize(28, 28)
-        lay.addWidget(ic)
-        self.naam = label(taak.naam, "kop3" if taak.soort == "app" else "", wrap=False)
-        lay.addWidget(self.naam, 1)
         self.processor = label("", "klein", wrap=False)
         self.processor.setFixedWidth(84)
         self.processor.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -272,152 +213,111 @@ class TaakRij(QFrame):
         self.geheugen.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         lay.addWidget(self.processor)
         lay.addWidget(self.geheugen)
-        self.knop = None
-        self.meer = None
-        if taak.beschermd or not taak.eigen:
-            vast = label(t("Hoort bij BugOS", "Part of BugOS"), "klein", wrap=False)
-            vast.setFixedWidth(160)
-            vast.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            lay.addWidget(vast)
-        else:
-            self.knop = Knop(t("Sluiten", "Close") if taak.soort == "app" else t("Beëindigen", "End"), "gewoon")
-            self.knop.setMinimumHeight(36)
-            self.knop.setFixedWidth(116)
-            self.knop.clicked.connect(lambda _c=False: sluiten(self.taak))
-            lay.addWidget(self.knop)
-            self.meer = QPushButton()
-            self.meer.setObjectName("rond_klein")
-            self.meer.setIcon(lijn_icoon("meer", "tekst2", 20, gekozen=None))
-            self.meer.setIconSize(QSize(20, 20))
-            self.meer.setToolTip(t("Meer", "More"))
-            self.meer.setCursor(Qt.CursorShape.PointingHandCursor)
-            self.meer.clicked.connect(lambda _c=False: self._menu(forceren))
-            lay.addWidget(self.meer)
-        self.zet(taak)
 
-    def _menu(self, forceren) -> None:
-        m = QMenu(self)
-        a = m.addAction(lijn_icoon("kruis", "fout", 18, gekozen=None),
-                        t("Geforceerd sluiten (als hij niet reageert)", "Force close (if it does not respond)"))
-        a.triggered.connect(lambda _c=False: forceren(self.taak))
-        m.exec(self.meer.mapToGlobal(self.meer.rect().bottomLeft()))
+
+class TaakRij(Rij):
+    """Eén programma (of achtergrondtaak): icoon, naam, kracht en geheugen. Klik om te kiezen."""
+
+    def __init__(self, taak: bt.Taak):
+        self.getallen = Getallen()
+        kiesbaar = not taak.beschermd and taak.eigen
+        super().__init__(app_icoon(taak.icoon, taak.soort), taak.naam,
+                         "" if kiesbaar else t("Hoort bij BugOS", "Part of BugOS"), self.getallen,
+                         klikbaar=kiesbaar, pijl=False, hoogte=52)
+        self.sleutel = taak.sleutel
+        self.zet(taak)
 
     def zet(self, taak: bt.Taak) -> None:
         self.taak = taak
-        self.naam.setText(taak.naam)
+        self.titel.setText(taak.naam)
         procent = taak.processor
-        self.processor.setText(f"{procent:.0f}%" if procent >= 0.5 else "0%")
-        kleur_ = K["fout"] if procent >= 50 else K["let_op"] if procent >= 20 else K["tekst2"]
-        self.processor.setStyleSheet(f"color: {kleur_};" + (" font-weight: 600;" if procent >= 20 else ""))
-        self.geheugen.setText(bt.maat(taak.geheugen))
+        self.getallen.processor.setText(f"{procent:.0f}%" if procent >= 0.5 else "0%")
+        kleur_ = K["let_op"] if procent >= 20 else K["tekst2"]
+        self.getallen.processor.setStyleSheet(f"color: {kleur_};" + (" font-weight: 600;" if procent >= 20 else ""))
+        self.getallen.geheugen.setText(bt.maat(taak.geheugen))
+
+    def kies(self, aan: bool) -> None:
+        self.setProperty("gekozen", "true" if aan else "false")
+        self.style().unpolish(self)
+        self.style().polish(self)
 
 
-class OpstartRij(QFrame):
+class OpstartRij(Rij):
     """Een programma dat vanzelf meestart, met een schuifje."""
 
     def __init__(self, item: bt.Opstart, omzetten):
-        super().__init__()
-        self.setObjectName("rij")
-        self.setMinimumHeight(60)
-        lay = QHBoxLayout(self)
-        lay.setContentsMargins(14, 8, 14, 8)
-        lay.setSpacing(14)
-        ic = QLabel()
-        icoon = app_icoon(item.icoon)
-        if icoon.isNull():
-            icoon = lijn_icoon("apps", "tekst3", 26, gekozen=None)
-        ic.setPixmap(icoon.pixmap(QSize(26, 26)))
-        ic.setFixedSize(28, 28)
-        lay.addWidget(ic)
-        lay.addWidget(label(item.naam, "kop3", wrap=False), 1)
+        rechts = QWidget()
+        rl = QHBoxLayout(rechts)
+        rl.setContentsMargins(0, 0, 0, 0)
+        rl.setSpacing(14)
         self.stand = label("", "klein", wrap=False)
-        lay.addWidget(self.stand)
         self.schuif = Schuif(item.aan)
         self.schuif.setAccessibleName(item.naam)
+        rl.addWidget(self.stand)
+        rl.addWidget(self.schuif)
+        super().__init__(app_icoon(item.icoon, "app"), item.naam, "", rechts)
         self.schuif.toggled.connect(lambda aan: (omzetten(item, aan), self._tekst(aan)))
-        lay.addWidget(self.schuif)
         self._tekst(item.aan)
 
     def _tekst(self, aan: bool) -> None:
         self.stand.setText(t("Start mee", "Starts") if aan else t("Start niet mee", "Does not start"))
 
 
-def lijst_kaart() -> tuple[QFrame, QVBoxLayout]:
-    kaart = Kaart(marge=6, ruimte=0)
-    return kaart, kaart.lay
+class Status(QWidget):
+    """Het stipje met de zin 'Alles loopt soepel.' bovenaan een pagina."""
+
+    def __init__(self):
+        super().__init__()
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(2, 0, 0, 0)
+        lay.setSpacing(10)
+        self.stip = QLabel()
+        self.stip.setObjectName("stip")
+        self.stip.setProperty("soort", "goed")
+        lay.addWidget(self.stip, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.tekst = label(t("Even kijken…", "Taking a look…"), "sub", wrap=False)
+        lay.addWidget(self.tekst, 1)
+
+    def zet(self, soort: str, zin: str) -> None:
+        self.tekst.setText(zin)
+        if self.stip.property("soort") != soort:
+            self.stip.setProperty("soort", soort)
+            self.stip.style().unpolish(self.stip)
+            self.stip.style().polish(self.stip)
 
 
 # ================================================================= venster ===
 
-class Taakbeheer(QWidget):
+class Taakbeheer(Venster):
     def __init__(self):
-        super().__init__()
-        self.setObjectName("venster")
-        self.setWindowTitle(t("Taakbeheer", "Task Manager"))
+        super().__init__(t("Taakbeheer", "Task Manager"), maat=(1080, 720), minimum=(900, 560))
         self.setStyleSheet(stijl())
-        self.resize(1080, 720)
-        self.setMinimumSize(900, 560)
         self.processor_geschiedenis: list[float] = []
         self.rijen: dict[str, TaakRij] = {}
         self.achter_rijen: dict[str, TaakRij] = {}
         self.laatste: dict | None = None
+        self.gekozen: str | None = None
+        self.statussen: list[Status] = []
 
-        hoofd = QHBoxLayout(self)
-        hoofd.setContentsMargins(0, 0, 0, 0)
-        hoofd.setSpacing(0)
-
-        # --- links: drie plekken
-        zij = QWidget()
-        zij.setObjectName("zijkant")
-        zij.setFixedWidth(232)
-        zl = QVBoxLayout(zij)
-        zl.setContentsMargins(14, 22, 14, 14)
-        zl.setSpacing(12)
-        merk = merk_label(26)
-        merk.setContentsMargins(8, 0, 0, 8)
-        zl.addWidget(merk)
-        self.zijbalk = Zijbalk()
-        self.zijbalk.voeg_toe("lijn:apps", t("Programma's", "Programs"), "programmas")
-        self.zijbalk.voeg_toe("lijn:grafiek", t("Prestaties", "Performance"), "prestaties")
-        self.zijbalk.voeg_toe("lijn:aan", t("Opstarten", "Startup"), "opstarten")
-        self.zijbalk.currentRowChanged.connect(self.kies_pagina)
-        zl.addWidget(self.zijbalk, 1)
+        self.voeg_pagina("programmas", "apps", t("Programma's", "Programs"), self.maak_programmas())
+        self.voeg_pagina("prestaties", "grafiek", t("Prestaties", "Performance"), self.maak_prestaties())
+        self.voeg_pagina("opstarten", "aan", t("Opstarten", "Startup"), self.maak_opstarten())
         if shutil.which("plasma-systemmonitor"):
-            gevorderd = Knop(t("Systeemmonitor", "System Monitor"), "stil", "lijn:code")
-            gevorderd.setToolTip(t("Alles tot in detail (voor gevorderden)", "Everything in detail (advanced)"))
-            gevorderd.clicked.connect(lambda _c=False: subprocess.Popen(["plasma-systemmonitor"],
-                                                                        start_new_session=True))
-            zl.addWidget(gevorderd)
-        hoofd.addWidget(zij)
+            self.onder_knop(t("Systeemmonitor (voor gevorderden)", "System Monitor (advanced)"), "code",
+                            lambda: subprocess.Popen(["plasma-systemmonitor"], start_new_session=True),
+                            tip=t("Alles tot in detail", "Everything in detail"))
 
-        # --- rechts: titel, melding, pagina's
-        rechts = QVBoxLayout()
-        rechts.setContentsMargins(34, 28, 34, 18)
-        rechts.setSpacing(10)
-        self.titel = label(t("Programma's", "Programs"), "titel", wrap=False)
-        rechts.addWidget(self.titel)
-        regel = QHBoxLayout()
-        regel.setSpacing(10)
-        self.stip = QLabel()
-        self.stip.setObjectName("stip")
-        self.stip.setProperty("soort", "goed")
-        regel.addWidget(self.stip, 0, Qt.AlignmentFlag.AlignVCenter)
-        self.status = label(t("Even kijken…", "Taking a look…"), "sub", wrap=False)
-        regel.addWidget(self.status, 1)
-        rechts.addLayout(regel)
-        self.melding = Melding()
-        rechts.addWidget(self.melding)
-        rechts.addSpacing(6)
-        self.paginas = QStackedWidget()
-        self.paginas.addWidget(self.maak_programmas())
-        self.paginas.addWidget(self.maak_prestaties())
-        self.paginas.addWidget(self.maak_opstarten())
-        rechts.addWidget(self.paginas, 1)
-        hoofd.addLayout(rechts, 1)
+        # zweeft onderin zodra je een programma kiest
+        self.balk = ActieBalk(self)
+        self.balk.knop("sluiten", "kruis", t("Sluiten", "Close"), self.sluit_gekozen)
+        self.balk.knop("forceren", "uitroep", t("Geforceerd sluiten", "Force close"), self.forceer_gekozen)
+        self.balk.klaar()
+        self.balk.gesloten.connect(lambda: self.kies(None))
+        self.pagina_gekozen.connect(lambda _s: self.kies(None))
 
         sluit = QShortcut(QKeySequence("Escape"), self)
-        sluit.activated.connect(self.close)
-        self.zijbalk.setCurrentRow(0)
+        sluit.activated.connect(self.escape)
+        self.ga_naar("programmas")
 
         self.draad = Meetdraad()
         self.draad.meting.connect(self.nieuwe_meting)
@@ -429,21 +329,15 @@ class Taakbeheer(QWidget):
         self.draad.wait(3000)
 
     # ------------------------------------------------------------ pagina's
-    @staticmethod
-    def scroll(binnen: QWidget) -> QScrollArea:
-        vlak = QScrollArea()
-        vlak.setFrameShape(QFrame.Shape.NoFrame)
-        vlak.setWidgetResizable(True)
-        vlak.viewport().setAutoFillBackground(False)
-        binnen.setObjectName("pagina")
-        vlak.setWidget(binnen)
-        return vlak
+    def status_regel(self, pagina: Pagina) -> None:
+        s = Status()
+        self.statussen.append(s)
+        pagina.lay.insertWidget(1, s)
 
-    def maak_programmas(self) -> QWidget:
-        w = QWidget()
-        lay = QVBoxLayout(w)
-        lay.setContentsMargins(0, 0, 6, 0)
-        lay.setSpacing(10)
+    def maak_programmas(self) -> Pagina:
+        p = Pagina(t("Programma's", "Programs"))
+        self.status_regel(p)
+        self.programmas = p
         # samenvatting: vier getallen op een rij
         samen = Kaart(marge=20, ruimte=0, richting="h")
         self.kort: dict[str, QLabel] = {}
@@ -453,8 +347,7 @@ class Taakbeheer(QWidget):
                                              ("internet", t("Internet", "Internet")))):
             if i:
                 streep = QFrame()
-                streep.setFixedWidth(1)
-                streep.setStyleSheet(f"background: {K['rand']};")
+                streep.setObjectName("streep")
                 samen.lay.addWidget(streep)
             blok = QVBoxLayout()
             blok.setContentsMargins(14 if i else 4, 0, 4, 0)
@@ -463,39 +356,36 @@ class Taakbeheer(QWidget):
             self.kort[sleutel] = label("–", "kop2", wrap=False)
             blok.addWidget(self.kort[sleutel])
             samen.lay.addLayout(blok, 1)
-        lay.addWidget(samen)
-        lay.addSpacing(8)
+        p.lay.addWidget(samen)
         kop = QHBoxLayout()
-        kop.setContentsMargins(6 + 12, 0, 6 + 8, 0)  # dezelfde marges als de regels in de kaart
+        kop.setContentsMargins(4 + 14, 6, 4 + 12, 0)  # dezelfde marges als de regels in de kaart
         kop.setSpacing(14)
-        kop.addWidget(sectie(t("Open programma's", "Open programs")), 1)
+        kop.addWidget(sectie(t("Open programma's. Klik om te kiezen.", "Open programs. Click to choose.")), 1)
         for tekst, breedte in ((t("Processor", "Processor"), 84), (t("Geheugen", "Memory"), 92)):
             k = sectie(tekst)
             k.setFixedWidth(breedte)
             k.setAlignment(Qt.AlignmentFlag.AlignRight)
             kop.addWidget(k)
-        kop.addSpacing(116 + 14 + 36)
-        lay.addLayout(kop)
-        self.apps_kaart, self.apps_lay = lijst_kaart()
-        lay.addWidget(self.apps_kaart)
+        p.lay.addLayout(kop)
+        self.apps_kaart = p.kaart()
+        self.apps_lay = self.apps_kaart.lay
         self.geen_apps = label(t("Er staan geen programma's open.", "No programs are open."), "sub")
         self.geen_apps.setContentsMargins(14, 10, 14, 10)
         self.apps_lay.addWidget(self.geen_apps)
-        lay.addSpacing(6)
         self.achter_knop = Knop(t("Achtergrond tonen (voor gevorderden)", "Show background (advanced)"), "stil",
                                 "lijn:rechts")
         self.achter_knop.clicked.connect(self.wissel_achtergrond)
-        lay.addWidget(self.achter_knop, 0, Qt.AlignmentFlag.AlignLeft)
-        self.achter_kaart, self.achter_lay = lijst_kaart()
+        p.lay.addWidget(self.achter_knop, 0, Qt.AlignmentFlag.AlignLeft)
+        self.achter_kaart = p.kaart()
+        self.achter_lay = self.achter_kaart.lay
         self.achter_kaart.hide()
-        lay.addWidget(self.achter_kaart)
-        lay.addStretch(1)
-        return self.scroll(w)
+        p.klaar()
+        return p
 
-    def maak_prestaties(self) -> QWidget:
-        w = QWidget()
-        rooster = QGridLayout(w)
-        rooster.setContentsMargins(0, 0, 6, 0)
+    def maak_prestaties(self) -> Pagina:
+        p = Pagina(t("Prestaties", "Performance"), breedte=1100)
+        self.status_regel(p)
+        rooster = QGridLayout()
         rooster.setSpacing(14)
         self.kaart_processor = MeetKaart(t("Processor", "Processor"))
         self.kaart_geheugen = MeetKaart(t("Geheugen", "Memory"))
@@ -508,59 +398,50 @@ class Taakbeheer(QWidget):
             rooster.addWidget(k, i // 3, i % 3)
         for kolom in range(3):
             rooster.setColumnStretch(kolom, 1)
-        rooster.setRowStretch(2, 1)
-        return self.scroll(w)
+        p.lay.addLayout(rooster)
+        p.klaar()
+        return p
 
-    def maak_opstarten(self) -> QWidget:
-        w = QWidget()
-        self.opstart_lay = QVBoxLayout(w)
-        self.opstart_lay.setContentsMargins(0, 0, 6, 0)
-        self.opstart_lay.setSpacing(10)
-        return self.scroll(w)
+    def maak_opstarten(self) -> Pagina:
+        p = Pagina(t("Opstarten", "Startup"),
+                   t("Deze programma's starten vanzelf als je inlogt. Zet uit wat je niet elke dag nodig hebt: "
+                     "dan is je computer sneller klaar.",
+                     "These programs start by themselves when you log in. Turn off what you do not need every day: "
+                     "then your computer is ready sooner."))
+        self.opstart_pagina = p
+        self.opstart_kaart = p.kaart()
+        p.klaar()
+        p.ververs = self.vul_opstarten
+        return p
 
     def vul_opstarten(self) -> None:
-        lay = self.opstart_lay
-        while lay.count():
-            item = lay.takeAt(0)
+        kaart = self.opstart_kaart
+        while kaart.lay.count():
+            item = kaart.lay.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-        lay.addWidget(label(t("Deze programma's starten vanzelf als je inlogt. Zet uit wat je niet elke dag nodig "
-                              "hebt: dan is je computer sneller klaar.",
-                              "These programs start by themselves when you log in. Turn off what you do not need "
-                              "every day: then your computer is ready sooner."), "sub"))
-        lay.addSpacing(4)
         lijst = bt.opstart_lijst()
-        kaart, rijen = lijst_kaart()
         for i, item in enumerate(lijst):
             if i:
-                rijen.addWidget(lijn())
-            rijen.addWidget(OpstartRij(item, self.zet_opstart))
+                kaart.lay.addWidget(lijn())
+            kaart.lay.addWidget(OpstartRij(item, self.zet_opstart))
         if not lijst:
             leeg = label(t("Er start niets extra mee. Mooi zo: zo is je computer snel klaar.",
                            "Nothing extra starts. Good: your computer is ready quickly."), "sub")
             leeg.setContentsMargins(14, 12, 14, 12)
-            rijen.addWidget(leeg)
-        lay.addWidget(kaart)
-        lay.addStretch(1)
+            kaart.lay.addWidget(leeg)
 
     def zet_opstart(self, item: bt.Opstart, aan: bool) -> None:
         try:
             bt.zet_opstart(item, aan)
             item.aan = aan
-            self.melding.toon(t(f"{item.naam} start voortaan mee.", f"{item.naam} will start from now on.") if aan
-                              else t(f"{item.naam} start voortaan niet meer mee.", f"{item.naam} will no longer start."),
-                              "goed", seconden=5)
+            self.opstart_pagina.melding.toon(
+                t(f"{item.naam} start voortaan mee.", f"{item.naam} will start from now on.") if aan
+                else t(f"{item.naam} start voortaan niet meer mee.", f"{item.naam} will no longer start."),
+                "goed", seconden=5)
         except OSError as e:
-            self.melding.toon(t(f"Dat lukte niet: {e.strerror}", f"That did not work: {e.strerror}"), "fout")
-
-    def kies_pagina(self, rij: int) -> None:
-        if rij < 0:
-            return
-        self.paginas.setCurrentIndex(rij)
-        self.titel.setText((t("Programma's", "Programs"), t("Prestaties", "Performance"),
-                            t("Opstarten", "Startup"))[rij])
-        if rij == 2:
-            self.vul_opstarten()
+            self.opstart_pagina.melding.toon(t(f"Dat lukte niet: {e.strerror}", f"That did not work: {e.strerror}"),
+                                             "fout")
 
     def wissel_achtergrond(self) -> None:
         zichtbaar = not self.achter_kaart.isVisible()
@@ -569,17 +450,59 @@ class Taakbeheer(QWidget):
         self.achter_knop.setText(t("Achtergrond verbergen", "Hide background") if zichtbaar
                                  else t("Achtergrond tonen (voor gevorderden)", "Show background (advanced)"))
 
+    # -------------------------------------------------------------- kiezen
+    def kies(self, sleutel: str | None) -> None:
+        """Eén programma kiezen: de regel licht op en onderin verschijnt de knoppenbalk."""
+        for rijen in (self.rijen, self.achter_rijen):
+            for s, rij in rijen.items():
+                rij.kies(s == sleutel)
+        self.gekozen = sleutel
+        taak = self.taak_van(sleutel)
+        self.balk.toon(1 if taak else 0)
+        if taak:
+            self.balk.aantal.setText(taak.naam)
+            self.balk.knoppen["sluiten"].setText(t("Sluiten", "Close") if taak.soort == "app"
+                                                 else t("Beëindigen", "End"))
+        self.plaats_balk()
+
+    def taak_van(self, sleutel: str | None) -> bt.Taak | None:
+        rij = self.rijen.get(sleutel) or self.achter_rijen.get(sleutel)
+        return rij.taak if rij else None
+
+    def plaats_balk(self) -> None:
+        self.balk.plaats(self.inhoud.geometry())
+
+    def resizeEvent(self, e) -> None:  # noqa: N802
+        super().resizeEvent(e)
+        if hasattr(self, "balk"):
+            self.plaats_balk()
+
+    def escape(self) -> None:
+        if self.gekozen:
+            self.kies(None)
+        else:
+            self.close()
+
+    def sluit_gekozen(self) -> None:
+        taak = self.taak_van(self.gekozen)
+        if taak:
+            self.sluiten(taak)
+            self.kies(None)
+
+    def forceer_gekozen(self) -> None:
+        taak = self.taak_van(self.gekozen)
+        if taak:
+            self.forceren(taak)
+            self.kies(None)
+
     # ------------------------------------------------------------ metingen
     def nieuwe_meting(self, m: dict) -> None:
         self.laatste = m
         self.processor_geschiedenis = (self.processor_geschiedenis + [m["processor"]])[-GESCHIEDENIS:]
         taken = m["taken"]
         soort, zin = bt.advies(self.processor_geschiedenis, m["geheugen_gebruikt"], m["geheugen_totaal"], taken)
-        self.status.setText(zin)
-        if self.stip.property("soort") != soort:
-            self.stip.setProperty("soort", soort)
-            self.stip.style().unpolish(self.stip)
-            self.stip.style().polish(self.stip)
+        for s in self.statussen:
+            s.zet(soort, zin)
         gebruikt, totaal = m["geheugen_gebruikt"], m["geheugen_totaal"]
         self.kort["processor"].setText(f"{m['processor']:.0f}%")
         self.kort["geheugen"].setText(t(f"{bt.maat(gebruikt)} van {bt.maat(totaal)}", f"{bt.maat(gebruikt)} of "
@@ -590,14 +513,14 @@ class Taakbeheer(QWidget):
         temp = m.get("temperatuur")
         kernen = bt.aantal_kernen()
         self.kaart_processor.zet(f"{m['processor']:.0f}%",
-                                 (t(f"{temp:.0f} °C · ", f"{temp:.0f} °C · ") if temp else "")
-                                 + t(f"{kernen} kernen", f"{kernen} cores"), m["processor"])
+                                 (f"{temp:.0f} °C · " if temp else "") + t(f"{kernen} kernen", f"{kernen} cores"),
+                                 m["processor"])
         self.kaart_geheugen.zet(bt.maat(gebruikt), t(f"in gebruik, van de {bt.maat(totaal)}",
                                                      f"in use, of {bt.maat(totaal)}"),
                                 gebruikt / totaal * 100 if totaal else 0)
         self.kaart_schijf.zet(bt.snelheid(m["schijf"]), t(f"{m['schijf_bezig']:.0f}% van de tijd bezig",
                                                           f"busy {m['schijf_bezig']:.0f}% of the time"), m["schijf"])
-        self.kaart_internet.zet(t(f"↓ {bt.snelheid(m['binnen'])}", f"↓ {bt.snelheid(m['binnen'])}"),
+        self.kaart_internet.zet(f"↓ {bt.snelheid(m['binnen'])}",
                                 t(f"↑ {bt.snelheid(m['buiten'])} verstuurd", f"↑ {bt.snelheid(m['buiten'])} sent"),
                                 m["binnen"] + m["buiten"])
         if m.get("videokaart") is not None:
@@ -612,6 +535,8 @@ class Taakbeheer(QWidget):
         if not self.achter_kaart.isVisible():
             self.achter_knop.setText(t(f"Achtergrond tonen ({n}, voor gevorderden)",
                                        f"Show background ({n}, advanced)"))
+        if self.gekozen and self.taak_van(self.gekozen) is None:
+            self.kies(None)  # het gekozen programma is weg
 
     def werk_lijst_bij(self, lay: QVBoxLayout, rijen: dict[str, TaakRij], taken: list[bt.Taak],
                        leeg: QLabel | None) -> None:
@@ -627,11 +552,15 @@ class Taakbeheer(QWidget):
             item = lay.takeAt(0)
             w = item.widget()
             if w is not None and w is not leeg:
-                w.setParent(None)
+                if isinstance(w, TaakRij):
+                    w.setParent(None)
+                else:
+                    w.deleteLater()
         for x in taken:
             rij = oud.pop(x.sleutel, None)
             if rij is None:
-                rij = TaakRij(x, self.sluiten, self.forceren)
+                rij = TaakRij(x)
+                rij.geklikt.connect(lambda s=x.sleutel: self.kies(None if self.gekozen == s else s))
             else:
                 rij.zet(x)
             if rijen:
@@ -649,22 +578,22 @@ class Taakbeheer(QWidget):
         """Netjes sluiten: de vensters dicht, zoals op het kruisje klikken (het programma kan nog vragen
         of je wilt opslaan). Achtergrondtaken krijgen een vriendelijk stopverzoek."""
         if taak.soort == "app" and self.sluit_vensters(taak.pids):
-            self.melding.toon(t(f"{taak.naam} wordt gesloten…", f"Closing {taak.naam}…"), seconden=6)
+            self.programmas.melding.toon(t(f"{taak.naam} wordt gesloten…", f"Closing {taak.naam}…"), seconden=6)
         else:
             bt.stop(taak.pids)
-            self.melding.toon(t(f"{taak.naam} wordt gestopt…", f"Stopping {taak.naam}…"), seconden=6)
+            self.programmas.melding.toon(t(f"{taak.naam} wordt gestopt…", f"Stopping {taak.naam}…"), seconden=6)
         QTimer.singleShot(6000, lambda: self.nog_open(taak))
 
     def nog_open(self, taak: bt.Taak) -> None:
         if not bt.leeft(taak.pids):
-            self.melding.toon(t(f"{taak.naam} is gesloten.", f"{taak.naam} is closed."), "goed", seconden=5)
+            self.programmas.melding.toon(t(f"{taak.naam} is gesloten.", f"{taak.naam} is closed."), "goed", seconden=5)
             return
-        self.melding.toon(
+        self.programmas.melding.toon(
             t(f"{taak.naam} is nog open. Vraagt het iets, bijvoorbeeld of je wilt opslaan? Kijk dan even in dat "
               "venster. Reageert het niet? Sluit het dan geforceerd.",
               f"{taak.naam} is still open. Is it asking something, for example whether to save? Then look at that "
               "window. Not responding? Then force it to close."),
-            "fout", knop=t("Geforceerd sluiten", "Force close"), actie=lambda: self.forceren(taak), seconden=0)
+            "let_op", knop=t("Geforceerd sluiten", "Force close"), actie=lambda: self.forceren(taak), seconden=0)
 
     def forceren(self, taak: bt.Taak) -> None:
         if taak.beschermd:
@@ -673,8 +602,8 @@ class Taakbeheer(QWidget):
         if taak.soort == "app" and taak.eenheid and shutil.which("systemctl"):
             subprocess.run(["systemctl", "--user", "kill", "--signal=SIGKILL", taak.eenheid],
                            capture_output=True, timeout=10)
-        self.melding.toon(t(f"{taak.naam} is geforceerd gesloten.", f"{taak.naam} was force closed."), "goed",
-                          seconden=5)
+        self.programmas.melding.toon(t(f"{taak.naam} is geforceerd gesloten.", f"{taak.naam} was force closed."),
+                                     "goed", seconden=5)
 
     @staticmethod
     def sluit_vensters(pids: list[int]) -> bool:
@@ -715,9 +644,9 @@ def main() -> int:
     app = maak_app("bugos-taakbeheer", "bugos-taakbeheer", sys.argv)
     venster = Taakbeheer()
     if "--prestaties" in sys.argv:
-        venster.zijbalk.setCurrentRow(1)
+        venster.ga_naar("prestaties")
     elif "--opstarten" in sys.argv:
-        venster.zijbalk.setCurrentRow(2)
+        venster.ga_naar("opstarten")
     return uitvoeren(app, venster)
 
 

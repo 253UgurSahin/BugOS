@@ -155,7 +155,7 @@ class Hallo(Pagina):
                            "In a few simple steps we'll set everything up for you. "
                            "You can change everything later."))
         taal = Kaart(marge=20, ruimte=16, richting="h")
-        taal.lay.addWidget(IcoonChip("languages", "turkoois", 48))
+        taal.lay.addWidget(IcoonChip("lijn:wereld", "neutraal", 48, vol=False))
         blok = QVBoxLayout()
         blok.setSpacing(2)
         blok.addWidget(label(t("Taal", "Language"), "klein"))
@@ -169,19 +169,19 @@ class Hallo(Pagina):
 
         tips = Groep()
         for icoon, tint, kop_t, sub_t in (
-            ("security-high", "groen", t("Kan niet stuk", "Can't break"),
+            ("lijn:vink", "neutraal", t("Kan niet stuk", "Can't break"),
              t("Gaat er iets mis na een update? Dan kies je gewoon de vorige versie.",
                "Something wrong after an update? Just pick the previous version.")),
-            ("view-list-icons", "rood", t("Alles in de BugOS Winkel", "Everything in the BugOS Store"),
+            ("lijn:ster", "neutraal", t("Alles in de BugOS Winkel", "Everything in the BugOS Store"),
              t("Apps installeer je met één klik, zoals op je telefoon.", "Install apps with one click, like on your phone.")),
-            ("lock", "blauw", t("Geen account, geen reclame", "No account, no ads"),
+            ("lijn:slot", "neutraal", t("Geen account, geen reclame", "No account, no ads"),
              t("BugOS verzamelt niks over jou.", "BugOS collects nothing about you.")),
         ):
             rij = QWidget()
             r = QHBoxLayout(rij)
             r.setContentsMargins(18, 14, 18, 14)
             r.setSpacing(14)
-            r.addWidget(IcoonChip(icoon, tint, 38))
+            r.addWidget(IcoonChip(icoon, tint, 38, vol=False))
             b = QVBoxLayout()
             b.setSpacing(1)
             b.addWidget(label(kop_t, "kop3"))
@@ -198,7 +198,7 @@ class Internet(Pagina):
                          t("Voor updates en de Winkel heb je internet nodig.",
                            "You need internet for updates and the Store."))
         kaart = Kaart(marge=22, ruimte=16, richting="h")
-        self.chip_icoon = IcoonChip("network-wireless", "blauw", 52)
+        self.chip_icoon = IcoonChip("lijn:wifi", "neutraal", 52, vol=False)
         kaart.lay.addWidget(self.chip_icoon)
         blok = QVBoxLayout()
         blok.setSpacing(4)
@@ -211,9 +211,9 @@ class Internet(Pagina):
         kaart.lay.addWidget(self.status)
         self.lay.addWidget(kaart)
         rij = QHBoxLayout()
-        kies = Knop(t("Wifi kiezen", "Choose Wi-Fi"), "hoofd", "network-wireless", groot=True)
+        kies = Knop(t("Wifi kiezen", "Choose Wi-Fi"), "hoofd", "lijn:wifi", groot=True)
         kies.clicked.connect(lambda: start("systemsettings", "kcm_networkmanagement"))
-        opnieuw = Knop(t("Opnieuw kijken", "Check again"), "stil", "view-refresh")
+        opnieuw = Knop(t("Opnieuw kijken", "Check again"), "stil", "lijn:verversen")
         opnieuw.clicked.connect(self.ververs)
         rij.addWidget(kies)
         rij.addWidget(opnieuw)
@@ -321,10 +321,10 @@ class Updates(Pagina):
                            "Updates keep your computer safe. They only take effect after a restart, "
                            "and if something ever goes wrong, just pick the previous version."))
         self.groep = QButtonGroup(self)
-        self.auto = self._optie("security-high", "groen", t("Vanzelf, stil op de achtergrond", "Automatically, quietly"),
+        self.auto = self._optie("lijn:vink", "neutraal", t("Vanzelf, stil op de achtergrond", "Automatically, quietly"),
                                 t("BugOS houdt zichzelf bij. Jij merkt er niks van.",
                                   "BugOS keeps itself up to date. You won't notice a thing."), True)
-        self.hand = self._optie("system-software-update", "grijs", t("Ik kies zelf wanneer", "I choose when"),
+        self.hand = self._optie("lijn:verversen", "neutraal", t("Ik kies zelf wanneer", "I choose when"),
                                 t("Je krijgt een melding als er een update is.", "You get a notification when there is an update."),
                                 False)
         huidig = "auto"
@@ -339,7 +339,7 @@ class Updates(Pagina):
         r = QHBoxLayout(binnen)
         r.setContentsMargins(6, 4, 6, 4)
         r.setSpacing(16)
-        r.addWidget(IcoonChip(icoon, tint, 48))
+        r.addWidget(IcoonChip(icoon, tint, 48, vol=False))
         b = QVBoxLayout()
         b.setSpacing(2)
         kop_rij = QHBoxLayout()
@@ -370,13 +370,13 @@ class Jij(Pagina):
         g = Groep()
         self.gamer = SchakelRij(t("Ik ga gamen", "I'm going to play games"),
                                 t("Steam staat klaar. Met de Game-modus speel je op volle kracht.",
-                                  "Steam is ready. Game mode gives you full power."), False, "input-gamepad", "paars")
+                                  "Steam is ready. Game mode gives you full power."), False, "lijn:spel", "neutraal")
         self.dev = SchakelRij(t("Ik ga programmeren", "I'm going to code"),
                               t("BugOS zet VS Code, containers en programmeertalen voor je klaar.",
-                                "BugOS sets up VS Code, containers and programming languages."), False, "code-context", "grijs")
+                                "BugOS sets up VS Code, containers and programming languages."), False, "lijn:code", "neutraal")
         self.oud = SchakelRij(t("Mijn computer is wat ouder", "My computer is a bit older"),
                               t("Zware effecten uit, zodat alles vlot blijft.", "Heavy effects off, so everything stays fast."),
-                              False, "speedometer", "oranje")
+                              False, "lijn:ster", "neutraal")
         for w in (self.gamer, self.dev, self.oud):
             g.voeg(w)
         self.lay.addWidget(g)
@@ -397,15 +397,15 @@ class Klaar(Pagina):
                          t("BugOS staat voor je klaar. Klik linksonder op het lieveheersbeestje om je apps te vinden.",
                            "BugOS is ready. Click the ladybug at the bottom left to find your apps."))
         tegels = [
-            Tegel("folder-download", t("Bestanden van Windows", "Files from Windows"),
+            Tegel("lijn:download", t("Bestanden van Windows", "Files from Windows"),
                   t("Zet je oude foto's en documenten terug", "Bring back your old photos and documents"),
-                  lambda: start("bugos-overstap"), tint="blauw"),
-            Tegel("view-list-icons", t("BugOS Winkel", "BugOS Store"),
+                  lambda: start("bugos-overstap")),
+            Tegel("lijn:ster", t("BugOS Winkel", "BugOS Store"),
                   t("Apps installeren met één klik", "Install apps with one click"),
-                  lambda: start("bugos-winkel"), tint="rood"),
-            Tegel("configure", t("Instellingen", "Settings"),
+                  lambda: start("bugos-winkel")),
+            Tegel("lijn:schakelaar", t("Instellingen", "Settings"),
                   t("Wifi, geluid, scherm en meer", "Wi-Fi, sound, display and more"),
-                  lambda: start("bugos-instellingen"), tint="grijs"),
+                  lambda: start("bugos-instellingen")),
         ]
         for tg in tegels:
             self.lay.addWidget(tg)

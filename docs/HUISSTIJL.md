@@ -133,7 +133,7 @@ node tools/achtergrond/maak.js achtergronden
 - **Ruimte:** we gebruiken stapjes van 4: 4, 8, 12, 16, 24, 32, 48.
 - **Icoontjes:** onze eigen **BugOS-lijniconen**: 24 × 24, lijn van 2, ronde uiteinden. Dezelfde set
   zit in de apps (`LIJN` in [`bugos_ui.py`](../system_files/usr/lib/bugos/python/bugos_ui.py), te gebruiken
-  als `lijn:naam`) en op de website. Tegels in Instellingen hebben een gekleurd tegeltje met een wit teken.
+  als `lijn:naam`) en op de website. Overal hetzelfde: een lijnicoon op een rustig grijs tegeltje. Gekleurde tegeltjes gebruiken we niet meer; alleen echte app-logo's (Firefox, Spotify) houden hun eigen kleur.
 - **Alleen wat aandacht nodig heeft, krijgt kleur.** Gaat alles goed, dan blijft het rustig grijs met een
   klein groen bolletje. Een probleem wordt oranje of rood, met een knop die het oplost.
 - **Geen emoji** in apps en op de website. Wel echte iconen.
@@ -165,3 +165,21 @@ node tools/achtergrond/maak.js achtergronden
 | Website | Pas `tools/website/pagina.html` aan en draai `python3 tools/website/bouw.py`. Die zet het echte logo en de opbouwtekening in `website/index.html`. |
 
 De PNG- en achtergrond-hulpjes gebruiken Chromium via [Playwright](https://playwright.dev).
+
+## De schil van de apps
+
+Alle BugOS-apps (Bestanden, Instellingen, Taakbeheer, Winkel) zitten in dezelfde schil, uit `bugos_ui`:
+
+- **Links** een zijbalk van 248 px met de **naam van de app** (en het beestje klein ervoor), de onderdelen,
+  en onderaan een stille knop voor gevorderden ("Meer instellingen", "Systeemmonitor").
+- **Rechts** pagina's met een grote titel, één zin uitleg en kaarten. De inhoud wordt nooit breder dan
+  880 px: dat leest rustig, ook op een groot scherm.
+- **Regels** (`Rij`): icoontje, naam, een regel uitleg, en rechts een schuifje, een knop of een pijltje.
+  Een regel is liefst zelf klikbaar (klik op het netwerk om te verbinden); losse knoppen alleen waar het
+  echt nodig is, de rest achter "…".
+- **Kiezen** gebeurt met een zwevend balkje onderin (`ActieBalk`): "Firefox · Sluiten · Geforceerd sluiten".
+- **Kopjes** boven kaarten zijn gewone zinnen ("Netwerken in de buurt"), geen hoofdletters.
+- **Rood** is alleen accent: de hoofdknop, een schuifje dat aanstaat, het gekozen onderdeel links. Meters,
+  grafiekjes en gekozen tegels zijn grijs; mappen hebben een zachte BugOS-tint.
+- **Meldingen** (`Melding`) staan bovenin de pagina en verdwijnen vanzelf, met eventueel één knop
+  ("Ongedaan maken").

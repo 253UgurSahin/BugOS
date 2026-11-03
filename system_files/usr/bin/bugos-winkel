@@ -18,13 +18,13 @@ from pathlib import Path
 sys.path.insert(0, "/usr/lib/bugos/python")
 
 from bugos_ui import (  # noqa: E402
-    TAAL, Banner, Chip, Held, Kaart, Knop, Zijbalk, Zoekveld, bestaat, draai, label, maak_app, merk_label,
-    raster, sectie, start, t, uitvoeren,
+    TAAL, ZIJBALK_BREEDTE, Banner, Chip, Kaart, Knop, Venster, Zoekveld, bestaat, draai, label, maak_app,
+    raster, start, t, uitvoeren,
 )
 from PySide6.QtCore import QProcess, QSize, Qt  # noqa: E402
 from PySide6.QtGui import QIcon, QPixmap  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
+    QFrame, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
 )
 
 CATALOGUS = Path("/usr/share/bugos/winkel.json")
@@ -124,45 +124,28 @@ class AppKaart(Kaart):
             self.winkel.installeer(self.app)
 
 
-class Winkel(QWidget):
+class Winkel(Venster):
     def __init__(self, catalogus: dict, begin_zoek: str = "", begin_app: str = ""):
-        super().__init__()
-        self.setObjectName("venster")
+        scroll = QScrollArea()
+        super().__init__(t("BugOS Winkel", "BugOS Store"), inhoud=scroll, maat=(1180, 800))
         self.cat = catalogus
         self.installed = geinstalleerd()
         self.bezig_met: str | None = None
         self.kaarten: list[AppKaart] = []
         self.kolommen = 2
-        self.setWindowTitle(t("BugOS Winkel", "BugOS Store"))
-        self.resize(1180, 800)
 
-        hoofd = QHBoxLayout(self)
-        hoofd.setContentsMargins(0, 0, 0, 0)
-        hoofd.setSpacing(0)
-
-        # Links: de onderwerpen
-        zij = QWidget()
-        zij.setObjectName("zijkant")
-        zij.setFixedWidth(264)
-        z = QVBoxLayout(zij)
-        z.setContentsMargins(18, 22, 18, 18)
-        z.setSpacing(14)
-        z.addWidget(merk_label(30))
-        z.addWidget(sectie(t("Onderwerpen", "Topics")))
-        self.lijst = Zijbalk()
+        # Links: de onderwerpen (de zijbalk komt van de schil)
+        self.lijst = self.nav
         for c in self.cat["categorieen"]:
             self.lijst.voeg_toe(c["icoon"], c["nl" if TAAL == "nl" else "en"], c["id"])
         if self.installed:
             self.lijst.voeg_toe("lijn:vink", t("Mijn apps", "My apps"), "_mijn")
         self.lijst.currentRowChanged.connect(lambda _: self.toon())
-        z.addWidget(self.lijst, 1)
-        meer = Knop(t("Meer apps zoeken", "Search more apps"), "stil", "edit-find")
-        meer.clicked.connect(self.meer_apps)
-        z.addWidget(meer)
-        hoofd.addWidget(zij)
+        self.onder_knop(t("Meer apps zoeken", "Search more apps"), "zoek", self.meer_apps,
+                        tip=t("In de grote winkel (Discover), voor gevorderden", "In the big store (Discover), advanced"))
 
         # Rechts: zoeken en de apps
-        scroll = QScrollArea()
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         rechts_w = QWidget()
@@ -175,17 +158,13 @@ class Winkel(QWidget):
         self.zoek.textChanged.connect(lambda _: self.toon())
         rechts.addWidget(self.zoek)
 
-        self.held = Held(150)
-        hb = QVBoxLayout()
+        self.held = QWidget()
+        hb = QVBoxLayout(self.held)
+        hb.setContentsMargins(0, 6, 0, 0)
         hb.setSpacing(6)
         hb.addWidget(label(t("Apps voor alles wat je doet", "Apps for everything you do"), "titel"))
         hb.addWidget(label(t("Bekende, veilige apps. Installeren met één klik, updates gaan vanzelf.",
                              "Well-known, safe apps. Install with one click, updates are automatic."), "sub"))
-        hbw = QWidget()
-        hbw.setLayout(hb)
-        hbw.setMaximumWidth(520)
-        self.held.lay.addWidget(hbw)
-        self.held.lay.addStretch(1)
         rechts.addWidget(self.held)
 
         self.kop = label("", "kop2")
@@ -198,13 +177,12 @@ class Winkel(QWidget):
         onder = Kaart("true", marge=20, ruimte=14, richting="h")
         onder.lay.addWidget(label(t("Niet gevonden wat je zoekt? Er zijn duizenden andere apps.",
                                     "Didn't find what you need? There are thousands of other apps."), "sub"), 1)
-        meer2 = Knop(t("Meer apps zoeken", "Search more apps"), "rand", "edit-find")
+        meer2 = Knop(t("Meer apps zoeken", "Search more apps"), "rand", "lijn:zoek")
         meer2.clicked.connect(self.meer_apps)
         onder.lay.addWidget(meer2)
         rechts.addWidget(onder)
         rechts.addStretch(1)
         scroll.setWidget(rechts_w)
-        hoofd.addWidget(scroll, 1)
 
         self.proces = QProcess(self)
         self.proces.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
@@ -253,7 +231,7 @@ class Winkel(QWidget):
 
     def resizeEvent(self, e):  # noqa: N802
         super().resizeEvent(e)
-        nieuw = max(1, min(3, (self.width() - 264 - 72) // 330))
+        nieuw = max(1, min(3, (self.width() - ZIJBALK_BREEDTE - 72) // 330))
         if nieuw != self.kolommen:
             self.kolommen = nieuw
             if self.kaarten:

@@ -24,14 +24,15 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from PySide6.QtCore import (
-    Property, QByteArray, QEasingCurve, QPointF, QPropertyAnimation, QRectF, QSize, Qt, Signal,
+    Property, QByteArray, QEasingCurve, QPointF, QPropertyAnimation, QRect, QRectF, QSize, Qt, QTimer, Signal,
 )
 from PySide6.QtGui import (
     QColor, QFont, QFontDatabase, QIcon, QLinearGradient, QPainter, QPainterPath, QPalette, QPen, QPixmap,
 )
 from PySide6.QtWidgets import (
-    QAbstractButton, QApplication, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit,
-    QListWidget, QListWidgetItem, QProgressBar, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
+    QAbstractButton, QApplication, QFrame, QGraphicsDropShadowEffect, QGridLayout, QHBoxLayout, QLabel, QLineEdit,
+    QListWidget, QListWidgetItem, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QStackedWidget, QVBoxLayout,
+    QWidget,
 )
 
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "bugos"
@@ -121,6 +122,7 @@ KLEUREN = {
         "accent_zacht": "#FDE9E9", "accent_lijn": "#F3B7BB", "goed": "#14965A", "goed_zacht": "#E3F5EC",
         "let_op": "#B86E00", "let_op_zacht": "#FFF3DC", "fout": "#D3263A", "fout_zacht": "#FDE8EA",
         "schaduw": "rgba(22,23,28,0.06)", "knop": "#F1EEEE", "knop_hover": "#E8E4E4", "schuif_uit": "#D9D4D4",
+        "map_voor": "#EFC3C7", "map_achter": "#DDA2A8", "map_teken": "#8C3A43",
     },
     "donker": {
         "achter": "#111216", "zijbalk": "#16171C", "vlak": "#1C1E24", "vlak_hover": "#22252C",
@@ -129,6 +131,7 @@ KLEUREN = {
         "accent_zacht": "#3A1C22", "accent_lijn": "#6A2A33", "goed": "#3FD17F", "goed_zacht": "#13291D",
         "let_op": "#F2B544", "let_op_zacht": "#2F2612", "fout": "#FF6B70", "fout_zacht": "#36181C",
         "schaduw": "rgba(0,0,0,0.35)", "knop": "#262930", "knop_hover": "#2F333B", "schuif_uit": "#3A3E48",
+        "map_voor": "#67404A", "map_achter": "#7C4F59", "map_teken": "#F5DCE0",
     },
 }
 
@@ -180,9 +183,11 @@ QLabel[rol="titel"] {{ font-family: "{DISPLAY}"; font-size: 30px; font-weight: 6
 QLabel[rol="groot"] {{ font-family: "{DISPLAY}"; font-size: 40px; font-weight: 600; letter-spacing: -0.8px; }}
 QLabel[rol="kop2"] {{ font-family: "{DISPLAY}"; font-size: 19px; font-weight: 600; }}
 QLabel[rol="kop3"] {{ font-size: 15px; font-weight: 600; }}
+QLabel[rol="rij"] {{ font-size: 15px; font-weight: 500; }}
 QLabel[rol="sub"] {{ color: {k['tekst2']}; font-size: 15px; }}
 QLabel[rol="klein"] {{ color: {k['tekst2']}; font-size: 13px; }}
-QLabel[rol="sectie"] {{ color: {k['tekst3']}; font-size: 12px; font-weight: 600; letter-spacing: 0.6px; }}
+QLabel[rol="sectie"] {{ color: {k['tekst2']}; font-size: 13px; font-weight: 600; }}
+QLabel[rol="appnaam"] {{ font-family: "{DISPLAY}"; font-size: 20px; font-weight: 600; letter-spacing: -0.3px; }}
 
 QFrame[kaart="true"] {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 16px; }}
 QFrame[kaart="accent"] {{ background: {k['accent_zacht']}; border: 1px solid {k['accent_lijn']}; border-radius: 16px; }}
@@ -230,8 +235,30 @@ QWidget#zijkant {{ background: {k['zijbalk']}; border-right: 1px solid {k['rand'
 
 QProgressBar {{ background: {k['knop']}; border: none; border-radius: 6px; min-height: 12px; max-height: 12px;
   color: transparent; text-align: center; }}
-QProgressBar::chunk {{ border-radius: 6px; background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-  stop:0 #FF5C50, stop:1 {k['accent']}); }}
+QProgressBar::chunk {{ border-radius: 6px; background: {k['accent']}; }}
+QProgressBar#dun {{ border-radius: 3px; min-height: 6px; max-height: 6px; }}
+QProgressBar#dun::chunk {{ background: {k['tekst3']}; border-radius: 3px; }}
+QProgressBar#dun[vol="true"]::chunk {{ background: {k['let_op']}; }}
+
+QFrame#rij {{ background: transparent; border-radius: 12px; }}
+QFrame#rij[klikbaar="true"]:hover {{ background: {k['knop']}; }}
+QFrame#rij[klikbaar="true"]:focus {{ background: {k['knop']}; }}
+QPushButton#rond {{ min-width: 42px; max-width: 42px; min-height: 42px; max-height: 42px; border-radius: 21px;
+  background: {k['knop']}; border: none; padding: 0; }}
+QPushButton#rond:hover {{ background: {k['knop_hover']}; }}
+QPushButton#rond:disabled {{ background: transparent; }}
+QPushButton#rond_klein {{ min-width: 36px; max-width: 36px; min-height: 36px; max-height: 36px; border-radius: 18px;
+  background: transparent; border: none; padding: 0; }}
+QPushButton#rond_klein:hover {{ background: {k['knop_hover']}; }}
+QFrame#melding {{ background: {k['knop']}; border-radius: 14px; }}
+QFrame#melding[soort="goed"] {{ background: {k['goed_zacht']}; }}
+QFrame#melding[soort="fout"] {{ background: {k['fout_zacht']}; }}
+QFrame#melding[soort="let_op"] {{ background: {k['let_op_zacht']}; }}
+QFrame#actiebalk {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 20px; }}
+QPushButton#balkknop {{ background: transparent; border: none; border-radius: 12px; padding: 9px 14px;
+  font-size: 14px; font-weight: 600; color: {k['tekst']}; }}
+QPushButton#balkknop:hover, QPushButton#balkknop:focus {{ background: {k['knop']}; }}
+QFrame#streep {{ background: {k['rand']}; min-width: 1px; max-width: 1px; border: none; }}
 
 QScrollBar:vertical {{ background: transparent; width: 10px; margin: 4px 2px; }}
 QScrollBar::handle:vertical {{ background: {k['rand_sterk']}; border-radius: 3px; min-height: 40px; }}
@@ -356,6 +383,8 @@ LIJN = {
     "openen": '<path d="M13.5 4.5h6v6M19.5 4.5 11 13M17.5 13.5v5a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V8A1.5 1.5 0 0 1 6 6.5h5"/>',
     "oog": '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
     "kruis": '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
+    "uitroep": '<path d="M12 3.8 2.8 19.5h18.4z"/><path d="M12 9.5v4.5M12 16.8v.3"/>',
+    "zoek": '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
     "laptop": '<rect x="4.5" y="5" width="15" height="10.5" rx="1.5"/><path d="M2.5 19h19"/>',
     "kaart": '<path d="M9 3.5h7.5A1.5 1.5 0 0 1 18 5v14a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V6.5z"/>'
              '<path d="M10 7V9.5M13 7V9.5M16 7V9.5"/>',
@@ -774,7 +803,7 @@ class Tegel(QPushButton):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(16, 16, 16, 16)
         lay.setSpacing(14)
-        chip = IcoonChip(icoon, tint, 44)
+        chip = IcoonChip(icoon, "neutraal", 44, vol=False)
         lay.addWidget(chip, 0, Qt.AlignmentFlag.AlignTop)
         blok = QVBoxLayout()
         blok.setSpacing(2)
@@ -884,12 +913,13 @@ def schijf_info(pad: Path) -> str:
 
 
 def kop_met_icoon(icoon: str, tint: str, titel_tekst: str, sub: str) -> QWidget:
-    """Paginakop met een groot icoontegeltje ervoor."""
+    """Paginakop met een rustig icoontegeltje ervoor (de tint doet niet meer mee: overal dezelfde stijl)."""
+    del tint
     w = QWidget()
     r = QHBoxLayout(w)
     r.setContentsMargins(0, 0, 0, 0)
     r.setSpacing(20)
-    r.addWidget(IcoonChip(icoon, tint, 72), 0, Qt.AlignmentFlag.AlignTop)
+    r.addWidget(IcoonChip(icoon, "neutraal", 64, vol=False), 0, Qt.AlignmentFlag.AlignTop)
     b = QVBoxLayout()
     b.setSpacing(6)
     b.addWidget(label(titel_tekst, "titel"))
@@ -903,7 +933,7 @@ class Zoekveld(QLineEdit):
         super().__init__()
         self.setPlaceholderText(hint)
         self.setClearButtonEnabled(True)
-        self.addAction(QIcon.fromTheme("edit-find"), QLineEdit.ActionPosition.LeadingPosition)
+        self.addAction(lijn_icoon("zoek", "tekst3", 18, gekozen=None), QLineEdit.ActionPosition.LeadingPosition)
         self.setMinimumHeight(48)
 
 
@@ -925,15 +955,14 @@ class Zijbalk(QListWidget):
 
     def voeg_kop(self, tekst: str) -> QListWidgetItem:
         """Een klein kopje (niet aan te klikken), bijvoorbeeld 'USB-STICKS'."""
-        it = QListWidgetItem(tekst.upper())
+        it = QListWidgetItem(tekst)
         it.setFlags(Qt.ItemFlag.NoItemFlags)
         f = it.font()
-        f.setPointSizeF(max(7.5, f.pointSizeF() * 0.78))
+        f.setPointSizeF(max(8.0, f.pointSizeF() * 0.9))
         f.setWeight(QFont.Weight.DemiBold)
-        f.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 108)
         it.setFont(f)
         it.setForeground(QColor(K["tekst3"]))
-        it.setSizeHint(QSize(0, 34))
+        it.setSizeHint(QSize(0, 36))
         self.addItem(it)
         return it
 
@@ -1027,7 +1056,10 @@ class Voortgang(QProgressBar):
 
 
 def sectie(tekst: str) -> QLabel:
-    return label(tekst.upper(), "sectie", wrap=False)
+    """Een klein kopje boven een kaart, in een gewone zin (geen hoofdletters)."""
+    lab = label(tekst, "sectie", wrap=False)
+    lab.setContentsMargins(4, 6, 0, 0)
+    return lab
 
 
 def kop(titel_tekst: str, sub: str = "") -> QWidget:
@@ -1085,3 +1117,352 @@ def ronde_pixmap(pix: QPixmap, straal: int) -> QPixmap:
     p.drawPixmap(QRectF(0, 0, b, h), pix, QRectF(pix.rect()))
     p.end()
     return uit
+
+
+# ================================================================== schil ===
+# Eén schil voor alle BugOS-apps: links de naam van de app en de onderdelen,
+# rechts pagina's met een vaste leesbreedte, overal dezelfde regels, meldingen
+# en knoppenbalk. Zo zien Bestanden, Instellingen en Taakbeheer er hetzelfde uit.
+
+LEESBREEDTE = 880      # breder wordt de inhoud van een pagina niet: dat leest rustiger
+ZIJBALK_BREEDTE = 248
+
+
+def app_kop(naam: str) -> QWidget:
+    """De naam van de app bovenin de zijbalk, met het beestje er klein voor."""
+    w = QWidget()
+    lay = QHBoxLayout(w)
+    lay.setContentsMargins(8, 0, 0, 6)
+    lay.setSpacing(10)
+    beeld = QLabel()
+    beeld.setPixmap(logo_icoon().pixmap(QSize(22, 22)))
+    beeld.setFixedSize(22, 22)
+    lay.addWidget(beeld)
+    lay.addWidget(label(naam, "appnaam", wrap=False), 1)
+    return w
+
+
+def ronde_knop(icoon_naam: str, tip: str, klein: bool = False) -> QPushButton:
+    """Een rond knopje met alleen een icoontje (terug, vooruit, meer…)."""
+    k = QPushButton()
+    k.setObjectName("rond_klein" if klein else "rond")
+    k.setIcon(lijn_icoon(icoon_naam, "tekst2" if klein else "tekst", 20, gekozen=None))
+    k.setIconSize(QSize(20, 20))
+    k.setToolTip(tip)
+    k.setAccessibleName(tip)
+    k.setCursor(Qt.CursorShape.PointingHandCursor)
+    return k
+
+
+class Rij(QFrame):
+    """Eén regel in een kaart: icoontje, naam, een regel uitleg, en rechts een schuifje, knop of pijltje.
+
+    klikbaar=True: de hele regel is een knop (muis, Enter of spatie) en geeft 'geklikt'."""
+
+    geklikt = Signal()
+
+    def __init__(self, icoon_naam: str | QIcon, titel_tekst: str, uitleg_tekst: str = "",
+                 rechts: QWidget | None = None, klikbaar: bool = False, pijl: bool | None = None, hoogte: int = 60):
+        super().__init__()
+        self.setObjectName("rij")
+        self.setProperty("klikbaar", "true" if klikbaar else "false")
+        if klikbaar:
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setMinimumHeight(hoogte)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(14, 8, 12, 8)
+        lay.setSpacing(14)
+        self.icoon = QLabel()
+        self.icoon.setFixedSize(24, 24)
+        self.icoon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.zet_icoon(icoon_naam)
+        lay.addWidget(self.icoon, 0, Qt.AlignmentFlag.AlignVCenter)
+        blok = QVBoxLayout()
+        blok.setSpacing(1)
+        self.titel = label(titel_tekst, "rij", wrap=False)
+        self.uitleg = label(uitleg_tekst, "klein")
+        self.uitleg.setVisible(bool(uitleg_tekst))
+        blok.addWidget(self.titel)
+        blok.addWidget(self.uitleg)
+        lay.addLayout(blok, 1)
+        self.rechts = rechts
+        if rechts is not None:
+            lay.addWidget(rechts, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.pijl = None
+        if pijl is None:
+            pijl = klikbaar and rechts is None
+        if pijl:
+            self.pijl = QLabel()
+            self.pijl.setPixmap(lijn_icoon("rechts", "tekst3", 16, gekozen=None).pixmap(16, 16))
+            lay.addWidget(self.pijl, 0, Qt.AlignmentFlag.AlignVCenter)
+
+    def zet_icoon(self, naam: str | QIcon) -> None:
+        if isinstance(naam, QIcon):
+            ic = naam
+        else:
+            naam = naam[5:] if naam.startswith("lijn:") else naam
+            ic = lijn_icoon(naam, "tekst2", 22, gekozen=None) if naam in LIJN else QIcon.fromTheme(naam)
+        self.icoon.setPixmap(ic.pixmap(QSize(22, 22)))
+
+    def zet_uitleg(self, tekst: str) -> None:
+        self.uitleg.setText(tekst)
+        self.uitleg.setVisible(bool(tekst))
+
+    def mouseReleaseEvent(self, e) -> None:  # noqa: N802
+        if self.property("klikbaar") == "true" and e.button() == Qt.MouseButton.LeftButton \
+                and self.rect().contains(e.position().toPoint()):
+            self.geklikt.emit()
+        super().mouseReleaseEvent(e)
+
+    def keyPressEvent(self, e) -> None:  # noqa: N802
+        if self.property("klikbaar") == "true" and e.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+            self.geklikt.emit()
+            return
+        super().keyPressEvent(e)
+
+
+class Melding(QFrame):
+    """Een korte melding bovenin een pagina, eventueel met een knop ('Ongedaan maken'). Verdwijnt vanzelf."""
+
+    def __init__(self):
+        super().__init__()
+        self.setObjectName("melding")
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(16, 9, 8, 9)
+        lay.setSpacing(12)
+        self.tekst = label("", wrap=True)
+        self.knop = Knop("", "stil")
+        self.knop.setMinimumHeight(36)
+        lay.addWidget(self.tekst, 1)
+        lay.addWidget(self.knop)
+        self.actie = None
+        self.knop.clicked.connect(self._klik)
+        self.klok = QTimer(self)
+        self.klok.setSingleShot(True)
+        self.klok.timeout.connect(self.hide)
+        self.hide()
+
+    def toon(self, tekst: str, soort: str = "info", knop: str = "", actie=None, seconden: int = 7) -> None:
+        self.setProperty("soort", soort)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.tekst.setText(tekst)
+        self.knop.setText(knop)
+        self.knop.setVisible(bool(knop))
+        self.actie = actie
+        self.show()
+        if seconden:
+            self.klok.start(seconden * 1000)
+        else:
+            self.klok.stop()
+
+    def _klik(self) -> None:
+        actie, self.actie = self.actie, None
+        self.hide()
+        if actie:
+            actie()
+
+
+class ActieBalk(QFrame):
+    """Zweeft onderin zodra je iets kiest: '2 gekozen · Openen · Kopiëren · …' met een kruisje."""
+
+    gesloten = Signal()
+
+    def __init__(self, ouder: QWidget):
+        super().__init__(ouder)
+        self.setObjectName("actiebalk")
+        self.lay = QHBoxLayout(self)
+        self.lay.setContentsMargins(20, 7, 7, 7)
+        self.lay.setSpacing(2)
+        self.aantal = label("", "kop3", wrap=False)
+        self.lay.addWidget(self.aantal)
+        self.lay.addSpacing(10)
+        streep = QFrame()
+        streep.setObjectName("streep")
+        streep.setFixedHeight(26)
+        self.lay.addWidget(streep)
+        self.lay.addSpacing(6)
+        self.knoppen: dict[str, QPushButton] = {}
+        self.sluit = ronde_knop("kruis", t("Niets meer kiezen", "Clear selection"))
+        self.sluit.clicked.connect(self.gesloten.emit)
+        schaduw = QGraphicsDropShadowEffect(self)
+        schaduw.setBlurRadius(36)
+        schaduw.setOffset(0, 10)
+        schaduw.setColor(QColor(0, 0, 0, 150 if DONKER else 46))
+        self.setGraphicsEffect(schaduw)
+        self.hide()
+
+    def knop(self, sleutel: str, icoon_naam: str, tekst: str, actie) -> QPushButton:
+        k = QPushButton(tekst)
+        k.setObjectName("balkknop")
+        k.setIcon(lijn_icoon(icoon_naam, "tekst", 18, gekozen=None))
+        k.setIconSize(QSize(18, 18))
+        k.setCursor(Qt.CursorShape.PointingHandCursor)
+        k.clicked.connect(lambda _c=False, f=actie: f())
+        self.lay.addWidget(k)
+        self.knoppen[sleutel] = k
+        return k
+
+    def klaar(self) -> None:
+        """Na de laatste knop: ruimte en het kruisje."""
+        self.lay.addSpacing(6)
+        self.lay.addWidget(self.sluit)
+
+    def toon(self, n: int, zichtbaar: set[str] | None = None, woord: tuple[str, str] = ("gekozen", "selected")) -> None:
+        if not n:
+            self.hide()
+            return
+        self.aantal.setText(f"{n} {t(*woord)}")
+        for sleutel, k in self.knoppen.items():
+            k.setVisible(zichtbaar is None or sleutel in zichtbaar)
+        self.adjustSize()
+        self.show()
+        self.raise_()
+
+    def plaats(self, gebied: QRect) -> None:
+        """Midden onderin 'gebied' (in de coördinaten van het venster)."""
+        if self.isHidden():
+            return
+        self.setMaximumWidth(max(200, gebied.width() - 24))
+        self.adjustSize()
+        self.move(gebied.center().x() - self.width() // 2, gebied.bottom() - self.height() - 14)
+        self.raise_()
+
+
+class Pagina(QScrollArea):
+    """Een pagina in een BugOS-app: grote titel, een regel uitleg, en kaarten met een vaste leesbreedte."""
+
+    def __init__(self, titel_tekst: str = "", uitleg_tekst: str = "", breedte: int = LEESBREEDTE):
+        super().__init__()
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setWidgetResizable(True)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.viewport().setAutoFillBackground(False)
+        buiten = QWidget()
+        buiten.setObjectName("pagina")
+        rij = QHBoxLayout(buiten)
+        rij.setContentsMargins(0, 0, 0, 0)
+        rij.setSpacing(0)
+        inhoud = QWidget()
+        inhoud.setObjectName("pagina")
+        inhoud.setMaximumWidth(breedte)
+        self.lay = QVBoxLayout(inhoud)
+        self.lay.setContentsMargins(40, 32, 40, 28)
+        self.lay.setSpacing(14)
+        rij.addWidget(inhoud, 1)
+        rij.addStretch(0)
+        self.titel = self.sub = None
+        if titel_tekst:
+            self.titel = label(titel_tekst, "titel")
+            self.lay.addWidget(self.titel)
+        if uitleg_tekst:
+            self.sub = label(uitleg_tekst, "sub")
+            self.lay.addWidget(self.sub)
+        self.melding = Melding()
+        self.lay.addWidget(self.melding)
+        self.setWidget(buiten)
+
+    def kaart(self, kopje: str = "") -> Groep:
+        """Een kaart met regels, eventueel met een kopje erboven."""
+        if kopje:
+            self.lay.addWidget(sectie(kopje))
+        g = Groep()
+        g.lay.setContentsMargins(4, 4, 4, 4)
+        self.lay.addWidget(g)
+        return g
+
+    def klaar(self) -> None:
+        """Na de laatste kaart: de rest van de ruimte leeg laten."""
+        self.lay.addStretch(1)
+
+    def ververs(self) -> None:
+        """Wordt aangeroepen als de pagina opent (voor apps die iets willen bijwerken)."""
+
+
+def leeg_groep(g: Groep) -> None:
+    """Haal alle regels uit een kaart (om hem opnieuw te vullen)."""
+    while g.lay.count():
+        item = g.lay.takeAt(0)
+        if item.widget():
+            item.widget().deleteLater()
+
+
+class Venster(QWidget):
+    """Het venster van een BugOS-app: links de naam van de app en de onderdelen, rechts de pagina's.
+
+    inhoud=None: rechts komt een stapel pagina's (voeg_pagina). Anders komt die widget rechts."""
+
+    pagina_gekozen = Signal(str)
+
+    def __init__(self, naam: str, titel_tekst: str = "", zoeken: str = "", inhoud: QWidget | None = None,
+                 maat: tuple[int, int] = (1120, 760), minimum: tuple[int, int] = (920, 600)):
+        super().__init__()
+        self.setObjectName("venster")
+        self.setWindowTitle(titel_tekst or naam)
+        self.resize(*maat)
+        self.setMinimumSize(*minimum)
+        hoofd = QHBoxLayout(self)
+        hoofd.setContentsMargins(0, 0, 0, 0)
+        hoofd.setSpacing(0)
+        self.zij = QWidget()
+        self.zij.setObjectName("zijkant")
+        self.zij.setFixedWidth(ZIJBALK_BREEDTE)
+        self.zij_lay = QVBoxLayout(self.zij)
+        self.zij_lay.setContentsMargins(14, 22, 14, 14)
+        self.zij_lay.setSpacing(12)
+        self.zij_lay.addWidget(app_kop(naam))
+        self.zoekveld = None
+        if zoeken:
+            self.zoekveld = Zoekveld(zoeken)
+            self.zoekveld.setMinimumHeight(44)
+            self.zij_lay.addWidget(self.zoekveld)
+        self.nav = Zijbalk()
+        self.zij_lay.addWidget(self.nav, 1)
+        self.onder = QVBoxLayout()
+        self.onder.setSpacing(4)
+        self.zij_lay.addLayout(self.onder)
+        hoofd.addWidget(self.zij)
+        self.stapel = QStackedWidget() if inhoud is None else None
+        self.inhoud = self.stapel if inhoud is None else inhoud
+        hoofd.addWidget(self.inhoud, 1)
+        self.paginas: dict[str, QWidget] = {}
+        self.nav.currentRowChanged.connect(self._kies)
+
+    def voeg_pagina(self, sleutel: str, icoon_naam: str, naam: str, pagina: QWidget) -> QWidget:
+        self.nav.voeg_toe(icoon_naam if icoon_naam.startswith("lijn:") or ":" in icoon_naam else f"lijn:{icoon_naam}",
+                          naam, sleutel)
+        if self.stapel is not None:
+            self.stapel.addWidget(pagina)
+        self.paginas[sleutel] = pagina
+        return pagina
+
+    def onder_knop(self, tekst: str, icoon_naam: str, actie, tip: str = "") -> Knop:
+        """Een stille knop onderin de zijbalk, bijvoorbeeld 'Meer instellingen (voor gevorderden)'."""
+        k = Knop(tekst, "stil", f"lijn:{icoon_naam}" if icoon_naam else None)
+        if tip:
+            k.setToolTip(tip)
+        k.clicked.connect(lambda _c=False: actie())
+        self.onder.addWidget(k)
+        return k
+
+    def huidige(self) -> str:
+        return self.nav.sleutel(self.nav.currentRow())
+
+    def ga_naar(self, sleutel: str) -> None:
+        if self.huidige() == sleutel:
+            self._kies(self.nav.currentRow())
+        else:
+            self.nav.kies(sleutel)
+
+    def _kies(self, rij: int) -> None:
+        sleutel = self.nav.sleutel(rij)
+        pagina = self.paginas.get(sleutel)
+        if pagina is None:
+            return
+        if self.stapel is not None:
+            self.stapel.setCurrentWidget(pagina)
+        ververs = getattr(pagina, "ververs", None)
+        if callable(ververs):
+            ververs()
+        self.pagina_gekozen.emit(sleutel)

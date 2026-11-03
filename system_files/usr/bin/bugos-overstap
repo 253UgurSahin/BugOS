@@ -195,19 +195,19 @@ def venster() -> int:
             buiten = QVBoxLayout(self)
             buiten.setContentsMargins(0, 0, 0, 0)
             buiten.addWidget(w)
-            lay.addWidget(kop_met_icoon("folder-download", "blauw", t("Je bestanden van Windows", "Your files from Windows"),
+            lay.addWidget(kop_met_icoon("lijn:download", "neutraal", t("Je bestanden van Windows", "Your files from Windows"),
                                         t("Heb je met \"BugOS Overstap\" je bestanden op een USB-schijf gezet? "
                                           "Steek die schijf in en druk op de knop.",
                                           "Did you put your files on a USB drive with \"BugOS Overstap\"? "
                                           "Plug in that drive and press the button.")))
             wat = Groep()
             for icoon, tint, kop_t, sub_t in (
-                ("folder-download", "blauw", t("Documenten, foto's, muziek en video's", "Documents, photos, music and videos"),
+                ("lijn:download", "neutraal", t("Documenten, foto's, muziek en video's", "Documents, photos, music and videos"),
                  t("Komen op de goede plek. Wat al op BugOS staat, wordt nooit overschreven.",
                    "Go to the right place. What's already on BugOS is never overwritten.")),
-                ("favorite", "geel", t("Bladwijzers", "Bookmarks"),
+                ("lijn:ster", "neutraal", t("Bladwijzers", "Bookmarks"),
                  t("Van Chrome, Edge en Brave, klaar om in Firefox te zetten.", "From Chrome, Edge and Brave, ready for Firefox.")),
-                ("insert-image", "oranje", t("Je achtergrond", "Your wallpaper"),
+                ("lijn:foto", "neutraal", t("Je achtergrond", "Your wallpaper"),
                  t("Je oude Windows-achtergrond wordt ook je BugOS-achtergrond.",
                    "Your old Windows wallpaper becomes your BugOS wallpaper too.")),
             ):
@@ -215,7 +215,7 @@ def venster() -> int:
                 r = QHBoxLayout(rij)
                 r.setContentsMargins(18, 12, 18, 12)
                 r.setSpacing(14)
-                r.addWidget(IcoonChip(icoon, tint, 36))
+                r.addWidget(IcoonChip(icoon, tint, 36, vol=False))
                 b = QVBoxLayout()
                 b.setSpacing(1)
                 b.addWidget(label(kop_t, "kop3"))
@@ -235,7 +235,7 @@ def venster() -> int:
             lay.addStretch(1)
             rij = QHBoxLayout()
             rij.addStretch(1)
-            self.knop = Knop(t("Zet mijn bestanden terug", "Restore my files"), "hoofd", "folder-download", groot=True)
+            self.knop = Knop(t("Zet mijn bestanden terug", "Restore my files"), "hoofd", "lijn:download", groot=True)
             rij.addWidget(self.knop)
             lay.addLayout(rij)
 
