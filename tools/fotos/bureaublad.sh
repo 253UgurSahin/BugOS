@@ -12,12 +12,13 @@
 #   snelmenu:  daarbij het BugOS-snelmenu open
 #   uitzetten: daarbij het uitzetscherm (zoals na "Uitzetten" in het startmenu)
 #
-# Hoe het werkt: KWin draait in een venster op het virtuele scherm (Wayland in X) en daarbinnen
+# Hoe het werkt: KWin draait met een virtueel scherm (geen X of grafische kaart nodig) en daarbinnen
 # plasmashell, net als op een echte pc. Het startmenu gaat open zoals de Windows-toets dat doet,
 # het uitzetscherm via dezelfde D-Bus-vraag als 'Uitzetten' in het startmenu (in proefstand, zonder
-# logind: PLASMA_SESSION_GUI_TEST). Zonder ~/.config/plasma-org.kde.plasma.desktop-appletsrc bouwt
-# plasmashell de taakbalk uit het look-and-feel-pakket in kdeglobals (org.bugos.desktop).
-# Alle BUGOS_-instellingen in de omgeving gaan mee naar de programma's.
+# logind: PLASMA_SESSION_GUI_TEST). De foto maakt KWin zelf (Spectacle, of schermfoto.py via D-Bus)
+# en komt in /var/home/oma/foto.png; de bouwstraat kopieert hem uit de container.
+# Zonder ~/.config/plasma-org.kde.plasma.desktop-appletsrc bouwt plasmashell de taakbalk uit het
+# look-and-feel-pakket in kdeglobals (org.bugos.desktop). Alle BUGOS_-instellingen gaan mee.
 set -euo pipefail
 
 stap() {  # een regel in het logboek, met de tijd ervoor
@@ -81,8 +82,29 @@ in_kwin() {  # scene
             gdbus call --session --dest org.kde.LogoutPrompt --object-path /LogoutPrompt \
                 --method org.kde.LogoutPrompt.promptAll >/dev/null 2>&1 || stap "Let op: promptAll gaf een fout" ;;
     esac
-    stap "Klaar voor de foto; alles blijft staan tot de bouwstraat de container weghaalt"
+    sleep 8
+    schermfoto "$HOME/foto.png"
+    stap "Klaar; alles blijft staan tot de bouwstraat de container weghaalt"
     sleep infinity
+}
+
+# De foto van het virtuele scherm: met Spectacle als dat er is, anders via KWin's D-Bus (schermfoto.py).
+schermfoto() {  # uit.png
+    local uit="$1"
+    rm -f "$uit"
+    if command -v spectacle >/dev/null 2>&1; then
+        stap "Schermfoto met Spectacle"
+        timeout 40 spectacle --background --nonotify --fullscreen --output "$uit" 2>&1 | head -5 || true
+    fi
+    if [ ! -s "$uit" ]; then
+        stap "Schermfoto via KWin's D-Bus (schermfoto.py)"
+        timeout 60 python3 "$(dirname "$ZELF")/schermfoto.py" "$uit" 2>&1 | head -5 || true
+    fi
+    if [ -s "$uit" ]; then
+        stap "Schermfoto staat klaar: $uit ($(stat -c %s "$uit") bytes)"
+    else
+        fout "Geen schermfoto kunnen maken (geen Spectacle en geen schermfoto via D-Bus)."
+    fi
 }
 
 # ---- Deel 2: draait als oma, binnen één dbus-run-session (gestart onderaan dit bestand) ----
@@ -113,9 +135,11 @@ bureaublad_tonen() {  # scene
         stap "$(kwin_wayland --version 2>/dev/null | head -1 || true)"
         stap "D-Bus-sessie: ${DBUS_SESSION_BUS_ADDRESS:-(geen adres)}; namen op de bus: $(gdbus call --session \
             --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.ListNames 2>/dev/null | tr ',' '\n' | wc -l)"
-        stap "KWin starten in een venster op $DISPLAY (Wayland in X), scherm 2560x1600 op schaal 2"
-        export LIBGL_ALWAYS_SOFTWARE=1 QT_QUICK_BACKEND=software
-        kwin_wayland --x11-display "$DISPLAY" --width 2560 --height 1600 --scale 2 \
+        # Virtueel scherm van 2560x1600 op schaal 2 (net als de andere foto's); zachte (software) tekening.
+        # KWIN_WAYLAND_NO_PERMISSION_CHECKS: zodat ook ons eigen fotoscriptje een schermfoto mag vragen.
+        stap "KWin starten met een virtueel scherm van 2560x1600 op schaal 2"
+        export LIBGL_ALWAYS_SOFTWARE=1 QT_QUICK_BACKEND=software KWIN_WAYLAND_NO_PERMISSION_CHECKS=1
+        kwin_wayland --virtual --width 2560 --height 1600 --scale 2 \
             --no-lockscreen --no-global-shortcuts --socket wayland-foto &
         kwin_pid=$!
         # Pas als KWin zich op D-Bus meldt (org.kde.KWin) is hij echt klaar; het socket-bestand is er eerder.
@@ -302,6 +326,6 @@ fi
 # Nu als oma, binnen één D-Bus-sessie (plasmashell, de activiteitenbeheerder en de menu's moeten
 # elkaar daarop kunnen vinden). Dit script roept zichzelf opnieuw aan voor deel 2 hierboven.
 stap "Klaargezet (thema $THEMA, scene $SCENE); nu als oma het bureaublad starten"
-# QT_LOGGING_TO_CONSOLE=1: KDE-programma's schrijven hun meldingen anders naar journald, en dat is er hier niet.
+# QT_FORCE_STDERR_LOGGING=1: KDE-programma's schrijven hun meldingen anders naar journald, en dat is er hier niet.
 exec runuser -u oma -- env HOME="$THUIS" USER=oma LOGNAME=oma XDG_RUNTIME_DIR=/tmp/run-oma DISPLAY="${DISPLAY:-:99}" \
-    QT_LOGGING_TO_CONSOLE=1 ZELF="$ZELF" "${BUGOS_ENV[@]}" dbus-run-session -- bash "$ZELF" --als-oma "$SCENE"
+    LANG=nl_NL.UTF-8 QT_FORCE_STDERR_LOGGING=1 ZELF="$ZELF" "${BUGOS_ENV[@]}" dbus-run-session -- bash "$ZELF" --als-oma "$SCENE"

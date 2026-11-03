@@ -124,6 +124,8 @@ jobs:
             -c 'mis=0; for p in plasmashell plasmawindowed gdbus; do command -v "$p" >/dev/null || { echo "::error::$p ontbreekt in BugOS"; mis=1; }; done
                 command -v qdbus6 >/dev/null || echo "::warning::qdbus6 ontbreekt in BugOS"
                 command -v kwin_wayland >/dev/null || echo "::warning::kwin_wayland ontbreekt in BugOS (nodig voor een echte bureaubladfoto)"
+                command -v spectacle >/dev/null || echo "::warning::spectacle ontbreekt in BugOS (dan maakt schermfoto.py de foto via D-Bus)"
+                python3 -c "import gi" 2>/dev/null || echo "::warning::python3-gobject ontbreekt in BugOS (schermfoto.py heeft het nodig als Spectacle er niet is)"
                 command -v kactivitymanagerd >/dev/null || [ -x /usr/libexec/kactivitymanagerd ] || echo "::warning::kactivitymanagerd ontbreekt in BugOS (plasmashell heeft hem nodig)"
                 for b in /usr/libexec/ksmserver-logout-greeter /usr/share/dbus-1/services/org.kde.ActivityManager.service \
                          /usr/share/plasma/plasmoids/org.bugos.startmenu /usr/share/plasma/plasmoids/org.bugos.snelmenu \
@@ -147,7 +149,11 @@ jobs:
               -v /tmp/.X11-unix:/tmp/.X11-unix \
               -v "$PWD:/repo:ro" --entrypoint /usr/bin/bash "$BEELD" /repo/tools/fotos/bureaublad.sh "$2" "$3"
             sleep 100
-            import -display :99 -window root "docs/beelden/bureaublad/$1.png"
+            # De foto maakt KWin zelf in de container (virtueel scherm); zonder KWin valt het script terug op
+            # het X-scherm van de bouwcomputer, dan knippen we dat.
+            if ! sudo podman cp foto:/var/home/oma/foto.png "docs/beelden/bureaublad/$1.png" 2>/dev/null; then
+              import -display :99 -window root "docs/beelden/bureaublad/$1.png"
+            fi
             # Het logboek van de container bewaren we in een bestand, om er hieronder een paar keer in te kijken.
             sudo podman logs foto 2>&1 | tee /tmp/logboek-foto.txt >/dev/null || true
             sudo podman rm -f foto >/dev/null
