@@ -671,7 +671,9 @@ def lees_aanwijzer(sysnaam: str, eigenschappen: dict) -> Aanwijzer | None:
     """Uit: de eigenschappen (GetAll) van org.kde.KWin.InputDevice."""
     def w(naam: str, standaard=None):
         v = eigenschappen.get(naam)
-        return v.get("data") if isinstance(v, dict) else standaard
+        if isinstance(v, dict) and "data" in v:   # busctl schrijft een variant als {"type": "b", "data": true}
+            v = v["data"]
+        return standaard if v is None else v
     if not w("pointer", False):
         return None
     kan = {naam for naam, sleutel in (("aan", "supportsDisableEvents"), ("linkshandig", "supportsLeftHanded"),
