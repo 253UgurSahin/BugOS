@@ -143,7 +143,8 @@ hernoem() {
 hernoem org.kde.discover.desktop "Meer apps" "More apps"
 hernoem org.kde.dolphin.desktop "Dolphin (voor gevorderden)" "Dolphin (advanced)"
 hernoem systemsettings.desktop "Alle instellingen" "All settings"
-hernoem org.kde.partitionmanager.desktop "Schijven" "Disks"
+hernoem org.kde.partitionmanager.desktop "Schijfbeheer (voor gevorderden)" "Disk management (advanced)"
+hernoem org.kde.plasma-systemmonitor.desktop "Systeemmonitor (voor gevorderden)" "System Monitor (advanced)"
 hernoem org.kde.konsole.desktop "Terminal" "Terminal"
 
 # 5. Bestandstypes koppelen: .exe -> bugos-exe, .rpm/.deb -> bugos-pakket.

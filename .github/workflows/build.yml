@@ -49,6 +49,8 @@ jobs:
 
       - name: Bestanden testen (veilig weggooien, terugzetten, kopiëren)
         run: QT_QPA_PLATFORM=offscreen python3 tools/test_bestanden.py
+      - name: Taakbeheer testen (meten, groeperen, opstarten; met een nep-/proc)
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_taakbeheer.py
 
   bouwen:
     name: BugOS ${{ matrix.variant }}

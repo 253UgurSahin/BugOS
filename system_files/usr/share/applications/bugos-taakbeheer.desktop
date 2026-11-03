@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Taakbeheer
+Name[en]=Task Manager
+GenericName=Zien wat je computer doet
+GenericName[en]=See what your computer is doing
+Comment=Programma's sluiten die vastzitten, en zien hoe druk je computer is
+Comment[en]=Close programs that are stuck, and see how busy your computer is
+Exec=bugos-taakbeheer
+Icon=utilities-system-monitor
+Categories=System;Monitor;Qt;KDE;
+Keywords=taakbeheer;task manager;processen;vastgelopen;hangt;traag;geheugen;processor;cpu;opstarten;
+Keywords[en]=task manager;processes;frozen;stuck;slow;memory;cpu;startup;
+StartupWMClass=bugos-taakbeheer
+X-KDE-Shortcuts=Ctrl+Shift+Esc
