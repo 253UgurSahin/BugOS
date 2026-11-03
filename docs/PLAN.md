@@ -165,6 +165,7 @@ Het belangrijkste idee: **BugOS kan niet stuk.**
 - [ ] Ondertekenen via SignPath, vrijwilligers en een domeinnaam (zie hierboven).
 
 ### Daarna: testen op echte computers
+- [ ] **Nieuwe stick nog niet getest** (branch `claude/fix-iso-alleen-bugos`). BugOS gaat nu als OCI-map op de stick; uitgepakt in de containeropslag lukte niet (whiteouts: "open /etc/.wh.bazaar: invalid argument"). Volgende stap: `tools/iso-lokaal.sh` (of iso.yml) draaien, de ISO in een VM opstarten, zonder netwerk installeren en het geïnstalleerde systeem nalopen (geen Aurora/Fedora; `stat /usr/libexec/utempter/utempter` moet `root:utmp` zijn).
 - [ ] De "probeer eerst"-stick op een echte pc proberen
 - [x] Startmenu en snelmenu standaard (getest buiten Plasma: tools/qml-test.py, tools/test_start_data.py, tools/test_uitzetscherm.py)
 - [ ] Startmenu, snelmenu en uitzetscherm op een echte pc nalopen (Windows-toets, wifi kiezen, uitzetten) — zie TESTEN.md
