@@ -122,6 +122,8 @@ gevonden = [r.titel.text() for r in venster.paginas["start"].zoek_kaart.findChil
 klopt(venster.stapel.currentWidget() is venster.paginas["start"] and "Bluetooth" in gevonden and "Geluid" in gevonden,
       "zoeken: 'koptelefoon' vindt Bluetooth en Geluid")
 klopt(mod.Instellingen("schakelaars").stapel.currentWidget().sleutel == "updates", "oude naam 'schakelaars' werkt nog")
+klopt(mod.begin_pagina(["-qwindowgeometry", "1180x740+0+0", "wifi"]) == "wifi" and mod.begin_pagina([]) == "start",
+      "startpagina: het woord 'wifi' wordt gevonden, ook na Qt-opties")
 QThreadPool.globalInstance().waitForDone(5000)
 venster.close()
 

@@ -1062,10 +1062,15 @@ class Instellingen(QWidget):
         self.paginas["start"].zoek(tekst)
 
 
+def begin_pagina(args: list[str]) -> str:
+    """Welke pagina moet open? Het eerste woord dat een pagina is (Qt-opties zoals -qwindowgeometry tellen niet)."""
+    namen = {k.sleutel for k in PAGINAS} | set(OUDE_NAMEN)
+    return next((a for a in args if a in namen), "start")
+
+
 def main() -> int:
     app = maak_app("bugos-instellingen", "bugos-instellingen", sys.argv)
-    begin = sys.argv[1] if len(sys.argv) > 1 else "start"
-    return uitvoeren(app, Instellingen(begin))
+    return uitvoeren(app, Instellingen(begin_pagina(sys.argv[1:])))
 
 
 if __name__ == "__main__":
