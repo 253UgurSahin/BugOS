@@ -146,6 +146,7 @@ Het belangrijkste idee: **BugOS kan niet stuk.**
 - [x] **Bureaublad**: nieuwe kleuren, eigen lettertypes, startmenu en snelmenu, opstartscherm, inlog- en vergrendelscherm, opstartlogo
 - [x] **Nieuwe website** met echte schermafbeeldingen, een probeer-het-zelf voor "terug naar gisteren" en een licht/donker-schuif
 - [x] **BugOS Overstap** (Windows) in de nieuwe stijl, scherp op schermen van 125% en 150%
+- [x] **Premium-ronde:** eigen BugOS-lijniconen, rustigere apps (alleen problemen krijgen kleur), en een website die het verhaal vertelt: waarom een lieveheersbeestje, de oma-test en een dag in huis
 
 ### Voor de manager: wat er nodig is om BugOS uit te delen
 - [ ] De **repo** en de **pakketten** (`bugos`, `bugos-nvidia`) op **openbaar** zetten. Zonder dat:
