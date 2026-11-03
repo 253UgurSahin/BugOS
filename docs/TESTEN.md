@@ -55,6 +55,8 @@ Herstart daarna de computer. Wil je terug? Kies dan in het opstartmenu de vorige
 - [ ] Uitzetten via het startmenu: je ziet het **BugOS-uitzetscherm** met grote tegels; "Toch niet" gaat terug
 - [ ] Liever het KDE-menu? Instellingen → Updates en meer → Taakbalk: zet het BugOS-startmenu uit en weer aan
 - [ ] Start de "probeer eerst"-stick op: verschijnt het welkomstscherm met "Eerst proberen" en "BugOS installeren"?
+- [ ] Is er op de stick nergens "Aurora" of "Fedora" te zien (geen "Welcome Center", één installeer-knop, Nederlandse teksten)?
+- [ ] Installeer BugOS **zonder internet** (kabel eruit, wifi uit): lukt het, en start daarna BugOS op?
 
 ### Het nieuwe design
 

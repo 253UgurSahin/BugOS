@@ -25,7 +25,8 @@ dnf5 install -y --skip-unavailable "${PAKKETTEN[@]}"
 dnf5 install -y --skip-unavailable steam || true
 
 # 3. De naam "BugOS" in het systeem zetten (bij "Over dit systeem" e.d.).
-#    ID blijft "fedora", anders snappen sommige programma's het niet meer.
+#    ID blijft wat de fundering zegt ("aurora", met ID_LIKE="fedora"): het
+#    installatieprogramma (profiel), Cockpit en fwupd zoeken daarop. Zie 3b.
 sed -i \
     -e "s|^NAME=.*|NAME=\"BugOS\"|" \
     -e "s|^PRETTY_NAME=.*|PRETTY_NAME=\"BugOS ${BUGOS_VERSION}\"|" \
@@ -54,16 +55,42 @@ install -Dm0644 /usr/share/bugos/logo.svg /usr/share/pixmaps/bugos-logo.svg
 
 # 3b. Alles wat de gebruiker nog als "Aurora" (of Fedora) ziet, wordt BugOS.
 #     BugOS is gebouwd op Aurora, maar dat hoeft niemand te zien: de computer
-#     heet overal BugOS. Technische velden (ID=aurora, VARIANT_ID, IMAGE_ID)
-#     laten we staan, want programma's als het installatieprogramma, ujust en
-#     bootc kijken daarnaar. Alleen wat op het scherm komt, passen we aan.
+#     heet overal BugOS. ID=aurora, ID_LIKE=fedora en VERSION_ID laten we
+#     staan: het installatieprogramma (profiel), Cockpit, fwupd en dnf zoeken
+#     daarop. Alleen wat op het scherm komt, passen we aan.
 
 # os-release: de velden die programma's laten zien ("Over dit systeem",
-# hostnamectl, het installatieprogramma). Daar stond "(Kinoite)" en "Kinoite".
+# hostnamectl, fastfetch, lsb_release). Daar stond "(Kinoite)", "Stargazer",
+# "OS Image: aurora" en "cpe:/o:universal-blue:aurora".
+if [ "$BUGOS_VARIANT" = nvidia ]; then
+    BEELD_ID=bugos-nvidia
+else
+    BEELD_ID=bugos
+fi
 sed -i \
     -e "s|^VERSION=.*|VERSION=\"${BUGOS_VERSION}\"|" \
     -e "s|^VARIANT=.*|VARIANT=\"BugOS\"|" \
+    -e "s|^VERSION_CODENAME=.*|VERSION_CODENAME=\"\"|" \
+    -e "s|^CPE_NAME=.*|CPE_NAME=\"cpe:/o:bugos:bugos:${BUGOS_VERSION}\"|" \
+    -e "s|^IMAGE_ID=.*|IMAGE_ID=\"${BEELD_ID}\"|" \
+    -e "s|^IMAGE_VERSION=.*|IMAGE_VERSION=\"${BUGOS_VERSION}\"|" \
+    -e "s|^OSTREE_VERSION=.*|OSTREE_VERSION='${BUGOS_VERSION}'|" \
+    -e "s|^BUILD_ID=.*|BUILD_ID=\"${BUGOS_VERSION}\"|" \
+    -e "s|^ANSI_COLOR=.*|ANSI_COLOR=\"0;38;2;222;47;62\"|" \
     /usr/lib/os-release
+
+# /etc/system-release was een verwijzing naar "Fedora release 44". Het
+# opstartprogramma (bootupd) noemt de opstartkeuze in het BIOS/UEFI-menu
+# daarnaar, dus daar stond "Fedora". Nu een eigen bestand: "BugOS release 44".
+# (/etc/fedora-release blijft Fedora, voor programma's die dat nodig hebben.)
+rm -f /etc/system-release
+printf 'BugOS release %s\n' "$(. /usr/lib/os-release && echo "${VERSION_ID}")" >/etc/system-release
+
+# Aurora's "eerste keer opstarten"-assistent van KDE (plasma-setup) maakt
+# zelf een gebruiker en zet Aurora's thema neer. Bij BugOS maakt het
+# installatieprogramma de gebruiker al, en BugOS Welkom doet de rest.
+# Dit bestand betekent voor plasma-setup: "al gedaan".
+touch /etc/plasma-setup-done
 
 # Het "Welcome Center" van KDE (met "Welcome to Aurora" en het Aurora-logo)
 # verscheen bij de eerste keer inloggen en op de USB-stick. BugOS heeft een
@@ -80,11 +107,102 @@ rm -f /usr/bin/plasma-welcome-original
 rm -rf /usr/share/plasma/plasma-welcome
 
 # De terminal begon met "Welcome to Aurora" en links naar Aurora
-# (ublue-motd). Weg ermee: een terminal hoort gewoon rustig te openen.
-rm -f /etc/profile.d/ublue-motd.sh
-# fastfetch/neofetch-aliassen wijzen naar Aurora's versie met Aurora-logo;
-# zonder deze aliassen draait gewoon de normale fastfetch.
-rm -f /etc/profile.d/ublue-fastfetch.sh
+# (ublue-motd, ook in fish). Weg ermee: een terminal hoort rustig te openen.
+rm -f /etc/profile.d/ublue-motd.sh /usr/bin/ublue-motd /usr/share/fish/vendor_conf.d/fish_greeting.fish
+rm -rf /usr/share/ublue-os/motd
+# fastfetch/neofetch-aliassen wijzen naar Aurora's versie met Aurora-logo
+# en "Stargazers"-tellers. Weg; fastfetch krijgt hieronder ons eigen logo.
+rm -f /etc/profile.d/ublue-fastfetch.sh /usr/share/fish/vendor_conf.d/ublue-fastfetch.fish \
+    /usr/bin/ublue-fastfetch /usr/share/ublue-os/fastfetch.jsonc /usr/share/ublue-os/aurora-ascii-logo.txt
+# Gewone fastfetch kiest zijn logo op ID (=aurora), dus geven we hem zelf
+# een instelling met het lieveheersbeestje (fastfetch leest /etc/xdg).
+mkdir -p /etc/xdg/fastfetch
+cat >/usr/share/bugos/fastfetch-logo.txt <<'EOF'
+$1      ▄▄▄
+$1    ▄█▀ ▀█▄
+$2  ▄████$1█$2████▄
+$2 ██ ▀▀ $1█$2 ▀▀ ██
+$2 ████▄▄$1█$2▄▄████
+$2  ▀████$1█$2████▀
+$2     ▀▀$1▀$2▀▀
+EOF
+cat >/etc/xdg/fastfetch/config.jsonc <<'EOF'
+{
+    "logo": {
+        "type": "file",
+        "source": "/usr/share/bugos/fastfetch-logo.txt",
+        "color": { "1": "white", "2": "red" }
+    },
+    "modules": [
+        "title", "separator",
+        { "type": "os", "format": "{pretty-name}" },
+        "kernel", "uptime", "packages", "shell", "de", "terminal",
+        "cpu", "gpu", "memory", "disk", "break", "colors"
+    ]
+}
+EOF
+
+# Wat ujust en de andere Universal Blue-hulpjes over "dit systeem" lezen.
+# Daar stond Aurora (ghcr.io/ublue-os/aurora); dan zou bijvoorbeeld
+# "ujust rebase-helper" de computer naar Aurora kunnen omzetten.
+cat >/usr/share/ublue-os/image-info.json <<EOF
+{
+  "image-name": "${BEELD_ID}",
+  "image-flavor": "${BUGOS_VARIANT}",
+  "image-vendor": "253ugursahin",
+  "image-ref": "ostree-unverified-registry:ghcr.io/253ugursahin/${BEELD_ID}",
+  "image-tag": "latest",
+  "base-image-name": "aurora",
+  "fedora-version": "$(. /usr/lib/os-release && echo "${VERSION_ID}")"
+}
+EOF
+
+# Aurora-apps in het startmenu en de zoekbalk ("Documentation", "Community",
+# "Aurora Offline Docs", "System Update") en de instellingenpagina
+# "Aurora Preferences" (die kan de computer zelfs naar Aurora omzetten).
+for f in dev.getaurora.documentation dev.getaurora.discussions dev.getaurora.offline-docs dev.getaurora.system-update; do
+    rm -f "/usr/share/applications/$f.desktop"
+done
+rm -f /usr/share/kglobalaccel/dev.getaurora.offline-docs.desktop \
+    /usr/share/icons/hicolor/scalable/apps/aurora-docs.svg \
+    /usr/share/icons/hicolor/scalable/apps/aurora-discussions.svg \
+    /usr/share/icons/hicolor/scalable/apps/aurora-update.svg
+rm -rf /usr/share/doc/aurora
+if rpm -q kcm_ublue >/dev/null 2>&1; then
+    rpm -e kcm_ublue
+fi
+
+# Aurora's winkel "Bazaar" (voorpagina "Aurora Recommends", met Aurora-
+# plaatjes) werd bij de eerste start vanzelf geïnstalleerd. BugOS heeft één
+# winkel: de BugOS Winkel, met "Meer apps zoeken" in KDE Discover (zie
+# packages.txt). Twee of drie winkels is verwarrend.
+rm -f /usr/share/flatpak/preinstall.d/bazaar.preinstall /usr/lib/tmpfiles.d/bazaar-flatpak.conf \
+    /usr/share/factory/var/lib/flatpak/overrides/io.github.kolunmi.Bazaar
+rm -rf /etc/bazaar
+if rpm -q krunner-bazaar >/dev/null 2>&1; then
+    rpm -e krunner-bazaar
+fi
+# Aurora zette in de zoekbalk (KRunner) de Discover-resultaten uit en Bazaar
+# aan. Zonder dat bestand gelden de gewone KDE-instellingen weer.
+rm -f /usr/share/kde-settings/kde-profile/default/xdg/krunnerrc
+
+# Firefox: begint niet meer op de Fedora-startpagina, en heet "voor BugOS".
+FF=/usr/lib64/firefox
+if [ -d "$FF" ]; then
+    sed -i -e 's|https://start.fedoraproject.org/|about:home|' -e '/browser.newtabpage.pinned/d' \
+        "$FF/browser/defaults/preferences/firefox-redhat-default-prefs.js" || true
+    mkdir -p "$FF/distribution"
+    cat >"$FF/distribution/distribution.ini" <<'EOF'
+[Global]
+id=bugos
+version=1.0
+about=Mozilla Firefox voor BugOS
+
+[Preferences]
+app.distributor="bugos"
+app.distributor.channel="bugos"
+EOF
+fi
 
 # Aurora-meldingen ("Aurora IWD/ZFS deprecation") horen niet bij BugOS.
 # mask in plaats van disable: anders zet de "preset" bij de eerste start
@@ -113,9 +231,15 @@ install -Dm0644 "$MERK/logo-wit.svg" /usr/share/pixmaps/fedora_whitelogo.svg
 install -Dm0644 "$MERK/merk.svg" /usr/share/icons/hicolor/scalable/distributor-logo.svg
 install -Dm0644 "$MERK/merk-inkt.svg" /usr/share/icons/hicolor/scalable/places/distributor-logo-symbolic.svg
 
-# "Over dit systeem" (KDE Info-centrum): ons logo en onze website.
+# "Over dit systeem" (KDE Info-centrum): onze naam, versie, logo en website.
+# Name en Version moeten er expliciet in: anders pakt KDE ze per regel uit
+# Aurora's eigen bestand in kde-profile, en stond er "Aurora 44". Dat
+# bestand halen we ook weg, zodat er niets van Aurora kan doorschemeren.
+rm -f /usr/share/kde-settings/kde-profile/default/xdg/kcm-about-distrorc
 cat >/etc/xdg/kcm-about-distrorc <<EOF
 [General]
+Name=BugOS
+Version=${BUGOS_VERSION}
 LogoPath=/usr/share/pixmaps/system-logo.png
 Website=https://github.com/253UgurSahin/BugOS
 Variant=
@@ -182,6 +306,19 @@ kwriteconfig6 --file /etc/xdg/kscreenlockerrc --group Greeter --group Wallpaper 
     --key Image "file:///usr/share/wallpapers/bugos/"
 kwriteconfig6 --file /etc/xdg/kscreenlockerrc --group Greeter --group Wallpaper --group org.kde.image --group General \
     --key PreviewImage "file:///usr/share/wallpapers/bugos/contents/screenshot.jpg"
+# Het inlogscherm. Fedora 44 gebruikt "Plasma Login Manager" (niet meer
+# SDDM); bij Aurora stond daar de zeilboot met "SS AURORA". Nu: Stip.
+if [ -d /usr/lib/plasmalogin ]; then
+    cat >/usr/lib/plasmalogin/defaults.conf <<'EOF'
+[Greeter]
+WallpaperPlugin=org.kde.image
+
+[Greeter][Wallpaper][org.kde.image][General]
+Image=file:///usr/share/wallpapers/bugos/
+PreviewImage=file:///usr/share/wallpapers/bugos/contents/screenshot.jpg
+EOF
+fi
+# Oudere systemen met SDDM: daar ook de BugOS-achtergrond.
 if [ -d /usr/share/sddm/themes/breeze ]; then
     printf '[General]\nbackground=/usr/share/wallpapers/bugos/contents/images_dark/3840x2160.jpg\ntype=image\n' \
         >/usr/share/sddm/themes/breeze/theme.conf.user

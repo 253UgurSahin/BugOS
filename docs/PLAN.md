@@ -134,6 +134,7 @@ Het belangrijkste idee: **BugOS kan niet stuk.**
 - [x] **Windows-overstap**: pc-controle, bestanden meenemen, ruimte maken, BugOS downloaden en de USB-stick schrijven
 - [x] In BugOS: de bestanden van Windows terugzetten met één knop
 - [x] **"Probeer eerst"-USB-stick** met het nieuwe installatieprogramma (Anaconda WebUI). Het stelt weinig vragen, waarschuwt bij BitLocker en legt bij Nvidia het blauwe sleutel-scherm uit.
+- [x] **De stick ís BugOS**: BugOS zit zelf op de stick en installeert zonder internet. Geen Aurora- of Fedora-namen of -logo's meer op de stick, in het installatieprogramma en in het geïnstalleerde systeem (welkomstscherm, terminal, inlogscherm, "Over dit systeem", startmenu, winkel). De stick start in het Nederlands.
 - [x] Een downloadplek voor de ISO: GitHub Releases, in stukjes van minder dan 2 GB. BugOS Overstap plakt ze vanzelf aan elkaar.
 - [ ] **Het Windows-programma ondertekenen**, zodat Windows geen waarschuwing geeft. Dit kost normaal geld (een certificaat). Voor open-source projecten kan het gratis via [SignPath Foundation](https://signpath.org). Aanvragen moet de eigenaar van de repo doen, dus **dit is een taak voor de manager**.
 
@@ -158,8 +159,8 @@ Het belangrijkste idee: **BugOS kan niet stuk.**
 ### Voor de manager: wat er nodig is om BugOS uit te delen
 - [ ] De **repo** en de **pakketten** (`bugos`, `bugos-nvidia`) op **openbaar** zetten. Zonder dat:
   - kan BugOS Overstap BugOS niet downloaden,
-  - kan de "probeer eerst"-stick niet installeren (die haalt BugOS van internet),
   - en krijgen geïnstalleerde computers geen updates.
+  - (Installeren vanaf de "probeer eerst"-stick werkt wél: BugOS zit zelf op de stick.)
 - [ ] In **Settings** de standaard-branch op `main` zetten. Dan draait de nachtelijke bouw (met beveiligingsupdates) op `main`.
 - [ ] Ondertekenen via SignPath, vrijwilligers en een domeinnaam (zie hierboven).
 

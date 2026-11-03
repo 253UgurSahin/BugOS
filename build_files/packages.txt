@@ -26,6 +26,15 @@ python3-pyside6
 kdialog
 libnotify
 
+# --- Internet en apps ---
+# Firefox als gewoon programma: Aurora heeft geen browser in het systeem, en
+# de taakbalk en het startmenu van BugOS verwijzen naar Firefox.
+firefox
+# "Meer apps zoeken" in de BugOS Winkel opent KDE Discover (alleen Flatpak-apps;
+# systeemupdates doet BugOS zelf). Aurora had hier Bazaar, dat haalt build.sh weg.
+plasma-discover
+plasma-discover-flatpak
+
 # --- Alle talen ---
 glibc-all-langpacks
 

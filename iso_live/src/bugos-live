@@ -12,6 +12,19 @@ from PySide6.QtGui import QColor, QIcon, QLinearGradient, QPainter, QPixmap  # n
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget  # noqa: E402
 
 
+def geheugen_gb() -> float:
+    """Totale werkgeheugen in GB (uit /proc/meminfo); 99 als het niet lukt."""
+    try:
+        with open("/proc/meminfo", encoding="utf-8") as f:
+            for regel in f:
+                if regel.startswith("MemTotal:"):
+                    return int(regel.split()[1]) / 1024 / 1024
+    except (OSError, ValueError, IndexError):
+        pass
+    # Weten we het niet, dan liever geen onnodige waarschuwing.
+    return 99.0
+
+
 class Live(QWidget):
     def __init__(self):
         super().__init__()
@@ -49,6 +62,15 @@ class Live(QWidget):
         net_rij.addWidget(self.wifi)
         net_rij.addStretch(1)
         lay.addLayout(net_rij)
+
+        # Weinig geheugen? Dan eerlijk zeggen dat installeren kan mislukken.
+        # Het installatieprogramma zet elk onderdeel van BugOS eerst in het
+        # geheugen (de stick zelf kan niet beschreven worden), en het grootste
+        # onderdeel is een paar GB.
+        if geheugen_gb() < 6:
+            waarschuwing = Chip(t("!  Deze computer heeft weinig geheugen. Installeren kan dan mislukken.",
+                                  "!  This computer has little memory. Installing may fail."), "let_op")
+            lay.addWidget(waarschuwing)
         lay.addStretch(1)
 
         rij = QHBoxLayout()
@@ -88,7 +110,8 @@ class Live(QWidget):
         self.chip.setStyleSheet(Chip("", "goed").styleSheet())
 
     def installeer(self) -> None:
-        subprocess.Popen(["liveinst"], start_new_session=True)
+        # Via ons startertje: dat waarschuwt eerst bij een BitLocker-schijf.
+        subprocess.Popen(["bugos-installeren"], start_new_session=True)
         self.close()
 
     def paintEvent(self, _e):  # noqa: N802

@@ -52,14 +52,26 @@ jobs:
         uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
         with:
           remove-codeql: true
+          extra-squeeze: true
 
-      - name: Container-opslag naar de grote extra schijf (/mnt)
+      # BugOS zit nu zelf in de live-omgeving (om vanaf de stick te installeren).
+      # Het opslaan van die bouwstap kost tijdelijk een veelvoud van ~11 GB, meer
+      # dan de bouwcomputer vrij heeft. Daarom (net als Bazzite) een "opgeblazen"
+      # schijfbestand met btrfs en zstd-compressie: neemt alleen echte ruimte in
+      # voor wat erop staat, en dat wordt ook nog ingepakt.
+      - name: Container-opslag op een gecomprimeerde schijf (/mnt)
         run: |
           df -h / /mnt
+          sudo truncate -s 110G /mnt/bugos-podman.img
+          sudo mkfs.btrfs -q -f -m single -d single /mnt/bugos-podman.img
+          LOOP="$(sudo losetup --find --show --direct-io=on /mnt/bugos-podman.img)"
+          sudo mkdir -p /mnt/containers
+          sudo mount -o compress-force=zstd:2,discard=async,noatime "$LOOP" /mnt/containers
           sudo mkdir -p /mnt/containers/storage /mnt/containers/tmp
           printf '[storage]\ndriver = "overlay"\ngraphroot = "/mnt/containers/storage"\nrunroot = "/run/containers/storage"\n' | sudo tee /etc/containers/storage.conf
           echo "TMPDIR=/mnt/containers/tmp" >> "$GITHUB_ENV"
           sudo podman info --format '{{ .Store.GraphRoot }}'
+          df -h / /mnt /mnt/containers
 
       - name: Namen bepalen
         id: naam
@@ -75,7 +87,13 @@ jobs:
           sudo cp /tmp/ghcr-auth.json /run/containers/0/auth.json 2>/dev/null || true
 
       - name: BugOS ophalen
-        run: sudo podman pull --authfile /tmp/ghcr-auth.json "${{ steps.naam.outputs.image }}"
+        id: ophalen
+        run: |
+          IMG="${{ steps.naam.outputs.image }}"
+          sudo podman pull --authfile /tmp/ghcr-auth.json "$IMG"
+          # De precieze versie (digest): de live-omgeving en de BugOS die erop
+          # meegaat om te installeren moeten exact dezelfde zijn.
+          echo "digest=$(sudo podman image inspect --format '{{ .Digest }}' "$IMG")" >> "$GITHUB_OUTPUT"
 
       - name: Live-omgeving bouwen
         run: |
@@ -86,11 +104,14 @@ jobs:
             --secret id=ghcr,src=/tmp/ghcr-auth.json \
             --build-arg BASE_IMAGE="${{ steps.naam.outputs.image }}" \
             --build-arg IMAGE_REF="${{ steps.naam.outputs.image }}" \
+            --build-arg IMAGE_DIGEST="${{ steps.ophalen.outputs.digest }}" \
             --build-arg BUGOS_VARIANT="${{ steps.naam.outputs.soort }}" \
             -t localhost/bugos-live:latest iso_live
+          df -h / /mnt /mnt/containers
+          sudo btrfs filesystem df /mnt/containers || true
           sudo podman rmi "${{ steps.naam.outputs.image }}" || true
           sudo podman image prune -f || true
-          df -h / /mnt
+          df -h / /mnt /mnt/containers
 
       - name: ISO maken (Titanoboa)
         id: iso
