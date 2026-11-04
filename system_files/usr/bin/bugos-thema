@@ -1,0 +1,81 @@
+#!/usr/bin/bash
+# bugos-thema - licht of donker voor het hele systeem, op één plek.
+#
+#   bugos-thema licht|donker   kleuren, KDE-programma's (Kvantum) en de Plasma-stijl omzetten
+#   bugos-thema status         print licht of donker
+#   bugos-thema eerste-keer    (bij het inloggen, één keer) de BugOS-ontwerptaal aanzetten voor
+#                              wie nog de oude instellingen had (Breeze-stijl en -pictogrammen)
+#
+# Jip-en-Janneke: BugOS heeft één ontwerptaal. De eigen apps (Instellingen,
+# Bestanden...) tekenen zichzelf; al het andere krijgt dezelfde stijl van:
+#   - het kleurenschema BugOSLicht / BugOSDonker (kleuren van alles)
+#   - de programmastijl Kvantum "BugOS" / "BugOSDonker" (knoppen, velden, lijsten in KDE-programma's)
+#   - de Plasma-stijl "bugos" (taakbalk, pop-ups) en het pictogramthema "BugOS" (volgen licht/donker vanzelf)
+# Snelmenu, BugOS Welkom en Instellingen gebruiken allemaal dit script.
+
+# shellcheck source=system_files/usr/share/bugos/lib.sh
+. /usr/share/bugos/lib.sh
+
+CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}"
+KVANTUM="$CONFIG/Kvantum/kvantum.kvconfig"
+
+kvantum_zet() {
+    mkdir -p "$CONFIG/Kvantum"
+    kwriteconfig6 --file "$KVANTUM" --group General --key theme "$1"
+}
+
+huidig() {
+    if [ "$(kreadconfig6 --file kdeglobals --group General --key ColorScheme 2>/dev/null)" = BugOSDonker ]; then
+        echo donker
+    else
+        echo licht
+    fi
+}
+
+case "${1:-status}" in
+licht | donker)
+    if [ "$1" = donker ]; then
+        schema=BugOSDonker kv=BugOSDonker
+    else
+        schema=BugOSLicht kv=BugOS
+    fi
+    plasma-apply-colorscheme "$schema" >/dev/null 2>&1
+    kvantum_zet "$kv"
+    # De Plasma-stijl "bugos" volgt het kleurenschema; zet hem alleen terug als er
+    # nog een Breeze-stijl van vroeger stond (BugOS zette toen default/breeze-dark).
+    stijl="$(kreadconfig6 --file plasmarc --group Theme --key name 2>/dev/null)"
+    case "$stijl" in
+    "" | default | breeze-dark | breeze-light) plasma-apply-desktoptheme bugos >/dev/null 2>&1 ;;
+    esac
+    ;;
+status)
+    huidig
+    ;;
+eerste-keer)
+    MARKER="$BUGOS_CONFIG/thema-1"
+    [ -f "$MARKER" ] && exit 0
+    # Kvantum: zonder eigen instelling kiest hij zijn eigen standaard (niet BugOS).
+    if [ ! -f "$KVANTUM" ] || ! grep -q '^theme=' "$KVANTUM"; then
+        if [ "$(huidig)" = donker ]; then kvantum_zet BugOSDonker; else kvantum_zet BugOS; fi
+    fi
+    # Alleen wat BugOS zelf vroeger instelde, zetten we om. Wie zelf iets anders
+    # koos (bijv. Oxygen of Papirus), houdt dat.
+    stijl="$(kreadconfig6 --file kdeglobals --group KDE --key widgetStyle 2>/dev/null)"
+    case "$stijl" in
+    "" | Breeze | breeze) kwriteconfig6 --file kdeglobals --group KDE --key widgetStyle kvantum ;;
+    esac
+    iconen="$(kreadconfig6 --file kdeglobals --group Icons --key Theme 2>/dev/null)"
+    case "$iconen" in
+    "" | breeze | breeze-dark) kwriteconfig6 --file kdeglobals --group Icons --key Theme BugOS ;;
+    esac
+    plasma="$(kreadconfig6 --file plasmarc --group Theme --key name 2>/dev/null)"
+    case "$plasma" in
+    "" | default | breeze-dark | breeze-light) plasma-apply-desktoptheme bugos >/dev/null 2>&1 ;;
+    esac
+    mkdir -p "$BUGOS_CONFIG" && touch "$MARKER"
+    ;;
+*)
+    echo "Gebruik: bugos-thema licht|donker|status|eerste-keer" >&2
+    exit 2
+    ;;
+esac

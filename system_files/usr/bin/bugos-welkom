@@ -309,8 +309,8 @@ class Uiterlijk(Pagina):
         self.knoppen[bugos_ui.DONKER].setChecked(True)
 
     def kies(self, donker: bool) -> None:
-        start("plasma-apply-colorscheme", "BugOSDonker" if donker else "BugOSLicht")
-        start("plasma-apply-desktoptheme", "breeze-dark" if donker else "default")
+        # Eén plek voor licht/donker: kleuren, KDE-programma's en de Plasma-stijl.
+        start("bugos-thema", "donker" if donker else "licht")
 
 
 class Updates(Pagina):

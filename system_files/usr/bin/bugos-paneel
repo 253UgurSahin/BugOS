@@ -117,8 +117,9 @@ function systeemvak(rustig) {
         var ws = ps[i].widgets();
         for (var j = 0; j < ws.length; j++) {
             if (ws[j].type != "org.kde.plasma.systemtray") continue;
-            var vak = desktopById(ws[j].readConfig("SystrayContainmentId"));
-            if (!vak) continue;
+            // Plasma 6: de lijst staat bij het systeemvak zelf ([General] hiddenItems),
+            // niet meer in een aparte "containment" (SystrayContainmentId bestaat niet meer).
+            var vak = ws[j];
             vak.currentConfigGroup = ["General"];
             var oud = vak.readConfig("hiddenItems", []);
             if (typeof oud == "string") oud = oud.split(",");

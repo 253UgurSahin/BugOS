@@ -454,8 +454,8 @@ def zet_donker(aan: bool) -> None:
     if VOORBEELD:
         _VB["donker"] = aan
         return
-    draai("plasma-apply-colorscheme", "BugOSDonker" if aan else "BugOSLicht")
-    draai("plasma-apply-desktoptheme", "breeze-dark" if aan else "default")
+    # Eén plek voor licht/donker: kleuren, KDE-programma's (Kvantum) en de Plasma-stijl.
+    draai("bugos-thema", "donker" if aan else "licht", timeout=30)
 
 
 def bugos_achtergronden() -> list[tuple[str, str]]:

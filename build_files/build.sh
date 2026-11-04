@@ -270,6 +270,25 @@ kwriteconfig6 --file /etc/xdg/breezerc --group Windeco --key DrawTitleBarSeparat
 kwriteconfig6 --file /etc/xdg/breezerc --group Windeco --key DrawBackgroundGradient false
 kwriteconfig6 --file /etc/xdg/breezerc --group Windeco --key TitleAlignment AlignLeft
 
+# Eén ontwerptaal voor het hele systeem (zie tools/ontwerp/README.md). De eigen
+# BugOS-apps tekenen zichzelf; al het andere krijgt dezelfde stijl van:
+#  - KDE-programma's (ook KDE Instellingen, Dolphin, Schijfbeheer): de
+#    programmastijl Kvantum "BugOS" (licht) of "BugOSDonker" (donker);
+#  - pictogrammen: het thema "BugOS" (de rest komt van Breeze);
+#  - taakbalk, pop-ups en tooltips: de Plasma-stijl "bugos".
+# Licht/donker omzetten doet bugos-thema; die zet ook Kvantum om.
+kwriteconfig6 --file /etc/xdg/kdeglobals --group KDE --key widgetStyle kvantum
+kwriteconfig6 --file /etc/xdg/kdeglobals --group Icons --key Theme BugOS
+kwriteconfig6 --file /etc/xdg/plasmarc --group Theme --key name bugos
+# Kvantum leest zijn keuze uit ~/.config/Kvantum: nieuwe gebruikers krijgen hem
+# via /etc/skel, bestaande via "bugos-thema eerste-keer" bij het inloggen.
+for kv in /etc/skel/.config/Kvantum /etc/xdg/Kvantum; do
+    mkdir -p "$kv"
+    printf '[General]\ntheme=BugOS\n' >"$kv/kvantum.kvconfig"
+done
+# GTK-programma's (zoals Firefox) zoeken pictogrammen via deze index.
+gtk-update-icon-cache -f -t /usr/share/icons/BugOS || true
+
 # Lettertypes: Inter voor alles, JetBrains Mono voor code (meegeleverd in /usr/share/fonts/bugos).
 fc-cache -f /usr/share/fonts/bugos || true
 LETTER="Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
@@ -389,6 +408,39 @@ hernoem systemsettings.desktop "Alle instellingen" "All settings"
 hernoem org.kde.partitionmanager.desktop "Schijfbeheer (voor gevorderden)" "Disk management (advanced)"
 hernoem org.kde.plasma-systemmonitor.desktop "Systeemmonitor (voor gevorderden)" "System Monitor (advanced)"
 hernoem org.kde.konsole.desktop "Terminal" "Terminal"
+
+# 4c. Het startmenu rustig houden (de Bugie-test): hulpjes voor gevorderden en
+#     losse onderdelen van Wine (Kladblok, Regedit, Mijnenveger...) verbergen.
+#     Ze werken gewoon; een .exe openen gaat via bugos-exe. NoDisplay verandert
+#     niets aan wat een bestand opent.
+verberg() {
+    local f="/usr/share/applications/$1"
+    [ -f "$f" ] || return 0
+    if grep -q '^NoDisplay=' "$f"; then
+        sed -i 's/^NoDisplay=.*/NoDisplay=true/' "$f"
+    else
+        sed -i '0,/^\[Desktop Entry\]/s//[Desktop Entry]\nNoDisplay=true/' "$f"
+    fi
+}
+for f in /usr/share/applications/wine-*.desktop; do
+    [ -e "$f" ] && verberg "$(basename "$f")"
+done
+# "KDE System Settings" is dezelfde als "All settings" (systemsettings.desktop).
+for app in kdesystemsettings.desktop htop.desktop nvtop.desktop org.kde.kdebugsettings.desktop \
+    org.kde.drkonqi.coredump.gui.desktop org.kde.kjournaldbrowser.desktop; do
+    verberg "$app"
+done
+
+# 4d. Eigen pictogramnamen voor KDE-programma's waarvan de standaardnaam ook in
+#     KDE Instellingen gebruikt wordt (daar is het een lijnicoon, hier een app-tegel).
+icoon() {
+    local f="/usr/share/applications/$1"
+    [ -f "$f" ] && sed -i "0,/^Icon=.*/s//Icon=$2/" "$f"
+    return 0
+}
+icoon systemsettings.desktop systemsettings
+icoon org.kde.kinfocenter.desktop org.kde.kinfocenter
+icoon org.kde.kwalletmanager.desktop org.kde.kwalletmanager
 
 # 5. Bestandstypes koppelen: .exe -> bugos-exe, .rpm/.deb -> bugos-pakket.
 update-desktop-database /usr/share/applications || true

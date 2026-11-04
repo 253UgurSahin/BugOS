@@ -1,15 +1,15 @@
 [kdeglobals][KDE]
-widgetStyle=Breeze
+widgetStyle=kvantum
 SingleClick=false
 
 [kdeglobals][General]
 ColorScheme=BugOSLicht
 
 [kdeglobals][Icons]
-Theme=breeze
+Theme=BugOS
 
 [plasmarc][Theme]
-name=default
+name=bugos
 
 [kwinrc][WindowSwitcher]
 LayoutName=thumbnail_grid

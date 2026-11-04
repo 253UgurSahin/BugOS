@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=BugOS look
+Name[nl]=BugOS-stijl
+Comment=Turns on the BugOS look for KDE programs, icons and the taskbar (once)
+Comment[nl]=Zet de BugOS-stijl aan voor KDE-programma's, pictogrammen en de taakbalk (één keer)
+Exec=bugos-thema eerste-keer
+Icon=bugos-logo
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=1
+NoDisplay=true

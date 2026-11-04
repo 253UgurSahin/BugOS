@@ -359,8 +359,8 @@ def snel_zet(wat: str, waarde: str) -> None:
     elif wat == "spel":
         draai("bugos-spelmodus", "aan" if aan else "uit")
     elif wat == "donker":
-        draai("plasma-apply-colorscheme", "BugOSDonker" if aan else "BugOSLicht")
-        draai("plasma-apply-desktoptheme", "breeze-dark" if aan else "default")
+        # Eén plek voor licht/donker: kleuren, KDE-programma's (Kvantum) en de Plasma-stijl.
+        los_starten("bugos-thema", "donker" if aan else "licht")
     elif wat == "volume":
         try:
             procent = max(0, min(100, int(waarde)))

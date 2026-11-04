@@ -5,6 +5,6 @@ Name[nl]=BugOS Welkom
 Comment=Set up BugOS in a few steps
 Comment[nl]=BugOS instellen in een paar stappen
 Exec=bugos-welkom
-Icon=bugos-logo
+Icon=bugos-welkom
 Categories=System;Settings;
 Terminal=false
