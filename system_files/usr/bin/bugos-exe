@@ -58,6 +58,19 @@ if [ ! -d "$WINEPREFIX" ]; then
     WINEDEBUG=-all wineboot --init >/dev/null 2>&1
 fi
 
+# BugOS-kleuren in Windows-programma's (licht of donker, zoals de rest). Alleen als
+# er iets veranderd is: een andere stand, of nieuwe kleuren na een BugOS-update.
+THEMA="$(bugos-thema status 2>/dev/null)"
+[ "$THEMA" = donker ] || THEMA=licht
+KLEUREN="/usr/share/bugos/wine/$THEMA.reg"
+if [ -f "$KLEUREN" ]; then
+    STEMPEL="$THEMA $(cksum <"$KLEUREN")"
+    if [ "$(cat "$WINEPREFIX/.bugos-kleuren" 2>/dev/null)" != "$STEMPEL" ]; then
+        WINEDEBUG=-all wine regedit /S "$(WINEDEBUG=-all winepath -w "$KLEUREN")" >/dev/null 2>&1 &&
+            echo "$STEMPEL" >"$WINEPREFIX/.bugos-kleuren"
+    fi
+fi
+
 START=$(date +%s)
 case "$NAAM" in
 *.msi | *.MSI) WINEDEBUG=-all wine msiexec /i "$BESTAND" ;;

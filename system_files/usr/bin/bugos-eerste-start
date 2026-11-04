@@ -20,6 +20,8 @@ command -v steam >/dev/null 2>&1 || APPS+=(com.valvesoftware.Steam)
 flatpak remote-add --if-not-exists --system flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
 if flatpak install --system --noninteractive --or-update flathub "${APPS[@]}"; then
+    # De BugOS-stijl ook voor deze apps (Kvantum en Breeze-GTK in de Flatpak-doos).
+    /usr/bin/bugos-flatpak-stijl || true
     touch "$KLAAR"
 else
     echo "BugOS: apps installeren lukte nog niet, volgende keer opnieuw." >&2

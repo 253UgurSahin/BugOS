@@ -196,7 +196,8 @@ All BugOS apps (Files, Settings, Task Manager, Store) sit in the same shell, fro
 ## One system, one look
 
 BugOS should feel like one whole, the way Windows 11 or macOS do. Every window, menu and pop-up uses
-the same surfaces, shapes and letters, whether it is a BugOS app, a KDE program or a Plasma pop-up.
+the same surfaces, shapes and letters, whether it is a BugOS app, a KDE program, a GTK program (Firefox,
+GNOME apps), an app from the Store (Flatpak), the terminal or a Windows program.
 
 - **One source.** Colors (`KLEUREN`) and sizes (`MATEN`) live only in
   [`bugos_ui.py`](../system_files/usr/lib/bugos/python/bugos_ui.py). Everything else is made from it:
@@ -208,6 +209,10 @@ the same surfaces, shapes and letters, whether it is a BugOS app, a KDE program 
   | KDE programs (buttons, fields, lists) | Kvantum themes `BugOS` / `BugOSDonker` and the color schemes, by `python3 tools/kvantum/maak.py` |
   | Taskbar, tray pop-ups, notifications | Plasma style `bugos`, by `python3 tools/plasma/vlakken.py` and `knoppen.py` |
   | Icons | Icon theme `BugOS`, by `python3 tools/iconen/maak.py` |
+  | GTK programs (Firefox, GNOME apps) | A thin layer `bugos.css` on top of Breeze-GTK, by `python3 tools/gtk/maak.py` |
+  | Store apps (Flatpak) | The same Kvantum and GTK files, read-only; `bugos-flatpak-stijl` adds the style extensions |
+  | Terminal | Konsole profiles and colors `BugOS` / `BugOSDonker`, by `python3 tools/konsole/maak.py` |
+  | Windows programs (Wine) | System colors `licht.reg` / `donker.reg`, by `python3 tools/wine/maak.py` |
 
   CI fails when a made file is out of date. Never change a made file by hand.
 - **One surface per window.** The title bar, the toolbars, the sidebar and the page all have the window color
@@ -222,3 +227,11 @@ the same surfaces, shapes and letters, whether it is a BugOS app, a KDE program 
   titles (pop-up title 20 px, page title 30 px). The window title uses Inter semibold.
 - **One way to point and choose.** Pointing at something gives a calm gray (`knop`); the chosen item is soft red
   with red text (`accent_zacht`); keyboard focus is a 2 px red ring.
+- **Dress, don't repaint.** Programs that are not ours keep their own layout. BugOS only gives them its colors,
+  corners, sliders, switches and red accent, through the route the program itself reads (the color scheme, a
+  GTK layer, the terminal profile, Wine's system colors). We never patch one program at a time, and what
+  someone chooses themselves (another theme, another terminal profile, removing the GTK layer) stays.
+- **Where we stop.** The login and lock screen, the boot screen and the boot menu already follow BugOS through
+  the Plasma style, the wallpaper, the BugOS logo and the name BugOS. Programs that draw everything themselves
+  (Steam, games, Electron apps such as Discord) keep their own look. The mouse pointer and the system sounds stay
+  Breeze and Ocean: calm and familiar, and they do not need to say BugOS.

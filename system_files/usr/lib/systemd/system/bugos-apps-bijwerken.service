@@ -12,3 +12,5 @@ Nice=19
 IOSchedulingClass=idle
 ExecStart=/usr/bin/flatpak update --system --noninteractive --assumeyes
 ExecStartPost=-/usr/bin/flatpak uninstall --system --unused --noninteractive --assumeyes
+# Nieuwe apps (of een nieuwe KDE-versie) krijgen ook de BugOS-stijl.
+ExecStartPost=-/usr/bin/bugos-flatpak-stijl

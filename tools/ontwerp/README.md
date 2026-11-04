@@ -1,7 +1,8 @@
 # One design language for the whole system
 
 BugOS's own apps get their look from `bugos_ui.py`. Everything else (KDE apps, KDE Settings,
-the taskbar and its pop-ups, icons) gets the same look from four parts:
+the taskbar and its pop-ups, icons, GTK and Flatpak apps, the terminal and Windows programs) gets the
+same look from these parts:
 
 | Part | Where | Made by |
 |---|---|---|
@@ -9,6 +10,26 @@ the taskbar and its pop-ups, icons) gets the same look from four parts:
 | Application style (Kvantum) "BugOS" / "BugOSDonker" | `system_files/usr/share/Kvantum` | see `tools/kvantum/` |
 | Plasma style "bugos" (taskbar, pop-ups, tooltips) | `system_files/usr/share/plasma/desktoptheme/bugos` | SVG files |
 | Window title bar | Breeze with BugOS settings | `build_files/build.sh` |
+| GTK layer `bugos.css` (GTK 3 and 4, also libadwaita) | `system_files/usr/share/bugos/gtk` | `python3 tools/gtk/maak.py`; test: `xvfb-run -a python3 tools/gtk/proef.py` |
+| Terminal (Konsole) "BugOS" / "BugOSDonker" | `system_files/usr/share/konsole` | `python3 tools/konsole/maak.py` |
+| Windows programs (Wine system colors) | `system_files/usr/share/bugos/wine` | `python3 tools/wine/maak.py` |
+
+### How it reaches programs that are not KDE
+
+- **GTK** (Firefox, GIMP, GNOME apps): the theme stays *Breeze*, because only then does KDE put its colors into
+  GTK (`~/.config/gtk-3.0/colors.css`) and give GTK windows the same window buttons. At every login
+  `bugos-thema inloggen` copies `bugos.css` next to it and puts `@import 'bugos.css';` at the top of `gtk.css`
+  (KDE keeps that line; it only adds its own `colors.css`). The layer only changes corners, sliders, switches and,
+  for libadwaita apps, the accent color: KDE passes the *soft* selection color as the accent, and libadwaita would
+  turn that into slate blue. Someone who removes the line keeps it removed.
+- **Flatpak** apps cannot see `/usr/share`. `bugos-thema` gives them read-only access to `gtk-3.0`, `gtk-4.0`,
+  `Kvantum` and `kdeglobals` in `~/.config` (Flatpak binds those into the app's own config folder) and copies the
+  Kvantum themes into `~/.config/Kvantum`. Icons work by themselves (Flatpak shows the host's `/usr/share/icons`).
+  `bugos-flatpak-stijl` (after the first start and after the daily app update) installs
+  `org.kde.KStyle.Kvantum` for every installed KDE runtime and `org.gtk.Gtk3theme.Breeze`.
+- **Terminal:** `bugos-thema licht|donker` picks the profile `BugOS` or `BugOSDonker`, unless someone chose another.
+- **Wine:** `bugos-exe` writes the BugOS system colors into the Windows folder, again when light/dark changes or
+  after an update changes the colors.
 
 All of them take their colours, sizes and line icons from one place: [`tokens.py`](tokens.py), which reads
 `KLEUREN` and `LIJN` straight from `bugos_ui.py`. Change a colour there, and everything follows.

@@ -36,18 +36,23 @@ jobs:
             $(grep -l '^#!/usr/bin/python3' system_files/usr/bin/bugos-*)
           shellcheck -x iso_live/src/build.sh iso_live/src/bugos-installeren tools/iso-lokaal.sh system_files/usr/bin/bugos-paneel
 
-      - name: Ontwerptaal is bijgewerkt (pictogrammen en Kvantum-stijl gemaakt met hun makers)
+      - name: Ontwerptaal is bijgewerkt (pictogrammen, Kvantum, GTK, Terminal en Wine gemaakt met hun makers)
         run: |
           python3 tools/iconen/maak.py
           if [ -f tools/kvantum/maak.py ]; then python3 tools/kvantum/maak.py; fi
           python3 tools/ontwerp/maak_qml.py --check
-          for m in tools/plasma/vlakken.py tools/plasma/knoppen.py; do python3 "$m"; done
-          ANDERS="$(git status --porcelain -- system_files/usr/share/icons/BugOS system_files/usr/share/Kvantum system_files/usr/share/plasma/desktoptheme/bugos system_files/usr/share/color-schemes tools/iconen/lijsten)"
+          for m in tools/plasma/vlakken.py tools/plasma/knoppen.py tools/gtk/maak.py tools/konsole/maak.py tools/wine/maak.py; do python3 "$m"; done
+          ANDERS="$(git status --porcelain -- system_files/usr/share/icons/BugOS system_files/usr/share/Kvantum system_files/usr/share/plasma/desktoptheme/bugos system_files/usr/share/color-schemes tools/iconen/lijsten system_files/usr/share/bugos/gtk system_files/usr/share/bugos/wine system_files/usr/share/konsole)"
           if [ -n "$ANDERS" ]; then
             echo "$ANDERS" | head -20
-            echo "Draai: python3 tools/iconen/maak.py (en tools/kvantum/maak.py) en zet het resultaat in de repo."
+            echo "Draai de makers (tools/iconen, kvantum, plasma, gtk, konsole, wine: maak.py) en zet het resultaat in de repo."
             exit 1
           fi
+
+      - name: GTK leest de BugOS-laag zonder fouten (GTK 3 en 4)
+        run: |
+          sudo apt-get install -y -qq gir1.2-gtk-3.0 gir1.2-gtk-4.0 python3-gi >/dev/null
+          /usr/bin/python3 tools/gtk/proef.py --check
 
       - name: Website is bijgewerkt (gebouwd uit tools/website/pagina.html)
         run: |

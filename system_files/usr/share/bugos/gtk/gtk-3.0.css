@@ -1,0 +1,73 @@
+/* BugOS-laag voor GTK 3.0. Gemaakt door tools/gtk/maak.py: niet met de hand aanpassen.
+ *
+ * Alleen vormen (hoeken, schuifje, schakelaar). De kleuren komen van KDE
+ * (colors.css, uit het BugOS-kleurenschema); hieronder staan alleen
+ * reservekleuren voor als die er niet is (bijv. in een Flatpak zonder toegang).
+ * Weg ermee? Haal de regel "@import 'bugos.css';" uit ~/.config/gtk-3.0/gtk.css. */
+
+/* Reservekleuren (BugOS Licht). KDE's colors.css komt na dit bestand en wint dus. */
+@define-color theme_button_decoration_focus_breeze #DE2F3E;
+@define-color theme_bg_color_breeze #F6F5F5;
+@define-color theme_button_foreground_normal_breeze #16171C;
+@define-color borders_breeze #D5D0D0;
+@define-color bugos_koraal #FF5C50;
+
+/* Hoeken: knoppen en velden 12 px (zoals overal in BugOS) */
+button, entry, combobox button, spinbutton:not(.vertical), .linked > entry:only-child {
+  border-radius: 12px;
+}
+/* Rij van knoppen aan elkaar (zoals "Vet | Schuin"): alleen de buitenste hoeken rond */
+.linked:not(.vertical) > button:first-child, .linked:not(.vertical) > entry:first-child,
+.linked:not(.vertical) > combobox:first-child > box > button.combo {
+  border-radius: 12px 0 0 12px;
+}
+.linked:not(.vertical) > button:last-child, .linked:not(.vertical) > entry:last-child,
+.linked:not(.vertical) > combobox:last-child > box > button.combo {
+  border-radius: 0 12px 12px 0;
+}
+.linked:not(.vertical) > button:only-child, .linked:not(.vertical) > entry:only-child {
+  border-radius: 12px;
+}
+.linked:not(.vertical) > button:not(:first-child):not(:last-child),
+.linked:not(.vertical) > entry:not(:first-child):not(:last-child) {
+  border-radius: 0;
+}
+button.circular, button.osd.circular { border-radius: 9999px; }
+
+/* Menu's, pop-ups en tooltips: 12 px, net als in KDE (Kvantum) */
+menu, .menu, .context-menu, popover, popover.background, tooltip, tooltip.background {
+  border-radius: 12px;
+}
+menu menuitem { border-radius: 8px; }
+
+/* De vensterrand (en zijn hoeken) laten we aan KWin en Breeze: die zijn gelijk aan alle andere vensters. */
+
+/* Schakelaar: aan = het BugOS-rood (verloop), uit blijft rustig grijs */
+switch:checked {
+  background-image: linear-gradient(to right, @bugos_koraal, @theme_button_decoration_focus_breeze);
+  border-color: transparent;
+}
+switch:checked:disabled { opacity: 0.5; }
+switch slider { background-image: none; background-color: #FFFFFF; }
+
+/* Schuif: spoor 8 px, gevuld deel koraal -> rood, wit bolletje van 22 px */
+scale trough {
+  min-width: 8px;
+  min-height: 8px;
+  border-radius: 4px;
+  border-color: transparent;
+}
+scale highlight {
+  border-radius: 4px;
+  border-color: transparent;
+  background-image: linear-gradient(to right, @bugos_koraal, @theme_button_decoration_focus_breeze);
+}
+scale highlight:disabled { background-image: none; }
+scale slider {
+  min-width: 22px;
+  min-height: 22px;
+  margin: -8px;
+  background-image: none;
+  background-color: #FFFFFF;
+  border-color: alpha(@theme_button_foreground_normal_breeze, 0.15);
+}

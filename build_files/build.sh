@@ -292,6 +292,32 @@ done
 # GTK-programma's (zoals Firefox) zoeken pictogrammen via deze index.
 gtk-update-icon-cache -f -t /usr/share/icons/BugOS || true
 
+# GTK-programma's (Firefox, GNOME-apps, GTK-Flatpaks): het Breeze-GTK-thema. KDE
+# zet daar zelf de BugOS-kleuren in (colors.css); bugos-thema zet er bij het
+# inloggen de BugOS-laag bovenop (/usr/share/bugos/gtk, gemaakt door
+# tools/gtk/maak.py: alleen hoeken, schuifjes, schakelaars en het rood).
+# We houden Breeze als naam: alleen dan geeft KDE GTK-vensters dezelfde
+# vensterknoppen als alle andere vensters.
+if [ ! -f /usr/share/themes/Breeze/gtk-3.0/gtk.css ] || [ ! -f /usr/share/themes/Breeze/gtk-4.0/gtk.css ]; then
+    dnf5 install -y --setopt=install_weak_deps=False breeze-gtk-gtk3 breeze-gtk-gtk4 ||
+        echo "LET OP: Breeze-GTK ontbreekt; GTK-programma's krijgen dan Adwaita met de BugOS-laag."
+fi
+for v in 3.0 4.0; do
+    mkdir -p "/etc/xdg/gtk-$v"
+    cat >"/etc/xdg/gtk-$v/settings.ini" <<'EOF'
+[Settings]
+gtk-theme-name=Breeze
+gtk-icon-theme-name=BugOS
+gtk-font-name=Inter 10
+gtk-cursor-theme-name=breeze_cursors
+gtk-application-prefer-dark-theme=false
+EOF
+done
+
+# Terminal (Konsole): het BugOS-profiel (kleuren uit tools/konsole/maak.py,
+# JetBrains Mono). bugos-thema wisselt licht/donker.
+kwriteconfig6 --file /etc/xdg/konsolerc --group "Desktop Entry" --key DefaultProfile BugOS.profile
+
 # Lettertypes: Inter voor alles, JetBrains Mono voor code (meegeleverd in /usr/share/fonts/bugos).
 fc-cache -f /usr/share/fonts/bugos || true
 LETTER="Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"

@@ -1,0 +1,56 @@
+/* BugOS-laag voor GTK 4.0. Gemaakt door tools/gtk/maak.py: niet met de hand aanpassen.
+ *
+ * Alleen vormen (hoeken, schuifje, schakelaar). De kleuren komen van KDE
+ * (colors.css, uit het BugOS-kleurenschema); hieronder staan alleen
+ * reservekleuren voor als die er niet is (bijv. in een Flatpak zonder toegang).
+ * Weg ermee? Haal de regel "@import 'bugos.css';" uit ~/.config/gtk-4.0/gtk.css. */
+
+/* Reservekleuren (BugOS Licht). KDE's colors.css komt na dit bestand en wint dus. */
+@define-color theme_button_decoration_focus_breeze #DE2F3E;
+@define-color theme_bg_color_breeze #F6F5F5;
+@define-color theme_button_foreground_normal_breeze #16171C;
+@define-color borders_breeze #D5D0D0;
+@define-color bugos_koraal #FF5C50;
+
+/* Accentkleur van GNOME-apps (libadwaita). KDE geeft via de portal de zachte selectiekleur
+ * door (lichtroze); libadwaita maakt daar grijsblauw van. Hier: het echte BugOS-rood, uit het
+ * kleurenschema (licht en donker), met witte tekst erop. */
+@define-color accent_bg_color @theme_button_decoration_focus_breeze;
+@define-color accent_fg_color #FFFFFF;
+@define-color accent_color @theme_button_decoration_focus_breeze;
+:root {
+  --accent-bg-color: @theme_button_decoration_focus_breeze;
+  --accent-fg-color: #FFFFFF;
+  --accent-color: @theme_button_decoration_focus_breeze;
+}
+
+/* Hoeken: knoppen en velden 12 px. Ronde (.circular) en pil-knoppen (.pill) blijven rond. */
+button:not(.circular):not(.pill):not(.osd), entry, spinbutton, dropdown > button, combobox button {
+  border-radius: 12px;
+}
+.linked:not(.vertical) > button:not(:first-child):not(:last-child),
+.linked:not(.vertical) > entry:not(:first-child):not(:last-child) {
+  border-radius: 0;
+}
+.linked:not(.vertical) > button:first-child:not(:only-child),
+.linked:not(.vertical) > entry:first-child:not(:only-child) {
+  border-top-right-radius: 0; border-bottom-right-radius: 0;
+}
+.linked:not(.vertical) > button:last-child:not(:only-child),
+.linked:not(.vertical) > entry:last-child:not(:only-child) {
+  border-top-left-radius: 0; border-bottom-left-radius: 0;
+}
+
+/* Pop-ups en menu's: 12 px */
+popover > contents, popover.menu > contents, tooltip { border-radius: 12px; }
+popover.menu modelbutton { border-radius: 8px; }
+
+/* Schakelaar aan = BugOS-rood */
+switch:checked {
+  background-image: linear-gradient(to right, @bugos_koraal, @theme_button_decoration_focus_breeze);
+}
+switch > slider { background-color: #FFFFFF; }
+
+/* Schuif: gevuld deel koraal -> rood, wit bolletje */
+scale > trough > highlight { background-image: linear-gradient(to right, @bugos_koraal, @theme_button_decoration_focus_breeze); }
+scale > trough > slider { background-color: #FFFFFF; }
