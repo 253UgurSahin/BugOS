@@ -72,6 +72,7 @@ PlasmoidItem {
         icoonTekenaar: Kirigami.Icon {
             property string naam: ""
             source: naam
+            roundToIconSize: false   // de gevraagde maat (46) en niet afronden naar 32
         }
         onStart: pad => root.voerUit("bugos-start-data --start " + root.aanhalen(pad))
         onOpenBestand: pad => root.voerUit("bugos-start-data --open " + root.aanhalen(pad))

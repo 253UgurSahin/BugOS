@@ -69,7 +69,8 @@ PlasmoidItem {
             property bool wit: false
             source: naam
             isMask: wit
-            color: "white"
+            // Wit op een rode (aan) tegel, anders gewoon de tekstkleur (zoals overal).
+            color: wit ? "white" : Kirigami.Theme.textColor
         }
         onZet: (wat, waarde) => root.voerUit("bugos-start-data --zet " + wat + " " + waarde)
         onOpen: wat => {

@@ -419,6 +419,8 @@ Rectangle {
                 text: tegel.app.naam
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                maximumLineCount: 2
                 elide: Text.ElideRight
                 color: menu.tekst
                 font.pixelSize: 13
