@@ -4,6 +4,7 @@
 import QtQuick
 import QtQuick.Layouts
 import org.kde.plasma.plasmoid
+import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasma5support as P5Support
 import org.kde.kirigami as Kirigami
 
@@ -40,6 +41,38 @@ PlasmoidItem {
     onExpandedChanged: if (expanded) voerUit("bugos-start-data")
     Component.onCompleted: voerUit("bugos-start-data")
 
+    // Rechtermuisknop op Start: de snelle lijst van Windows (Win+X), met Taakbeheer.
+    // Plasma zet zijn eigen regels (aanpassen, verwijderen) er vanzelf onder.
+    function tr(nl, en) { return nederlands ? nl : en }
+    function startApp(desktop) { voerUit("bugos-start-data --start " + aanhalen("/usr/share/applications/" + desktop)) }
+    Plasmoid.contextualActions: [
+        PlasmaCore.Action {
+            text: root.tr("Taakbeheer", "Task Manager")
+            icon.name: "bugos-taakbeheer"
+            onTriggered: root.startApp("bugos-taakbeheer.desktop")
+        },
+        PlasmaCore.Action {
+            text: root.tr("Instellingen", "Settings")
+            icon.name: "bugos-instellingen"
+            onTriggered: root.startApp("bugos-instellingen.desktop")
+        },
+        PlasmaCore.Action {
+            text: root.tr("Bestanden", "Files")
+            icon.name: "bugos-bestanden"
+            onTriggered: root.startApp("bugos-bestanden.desktop")
+        },
+        PlasmaCore.Action {
+            text: root.tr("Terminal", "Terminal")
+            icon.name: "utilities-terminal"
+            onTriggered: root.startApp("org.kde.konsole.desktop")
+        },
+        PlasmaCore.Action {
+            text: root.tr("Er werkt iets niet", "Something is not working")
+            icon.name: "bugos-hulp"
+            onTriggered: root.startApp("bugos-hulp.desktop")
+        }
+    ]
+
     compactRepresentation: MouseArea {
         id: knop
         hoverEnabled: true
@@ -52,9 +85,15 @@ PlasmoidItem {
         Keys.onSpacePressed: root.expanded = !root.expanded
         Layout.minimumWidth: Kirigami.Units.iconSizes.medium
         Layout.minimumHeight: Kirigami.Units.iconSizes.medium
+        // Even groot als de app-tegels ernaast (die tekent de takenlijst op ~32 px).
+        // Zonder roundToIconSize: false rondt Kirigami de ~28 px ruimte af naar 22,
+        // en dan wordt het lieveheersbeestje maar 16 x 20 px: veel kleiner dan de tegels.
         Kirigami.Icon {
-            anchors.fill: parent
-            anchors.margins: Kirigami.Units.smallSpacing
+            anchors.centerIn: parent
+            readonly property int maat: Math.min(Kirigami.Units.iconSizes.medium, parent.width, parent.height)
+            width: maat
+            height: maat
+            roundToIconSize: false
             source: "bugos-logo"
             active: knop.containsMouse || root.expanded || knop.activeFocus
         }

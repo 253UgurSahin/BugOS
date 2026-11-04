@@ -23,8 +23,14 @@ taken.writeConfig("launchers", [
     "applications:bugos-winkel.desktop",
     "applications:bugos-instellingen.desktop"
 ]);
+// De takenlijst rekt niet uit: de lege ruimte erachter is van de taakbalkruimte
+// hieronder. Zo kom je met de rechtermuisknop op een leeg stuk taakbalk bij
+// "Taakbeheer", net als in Windows (het menu van de takenlijst zelf kunnen we niet uitbreiden).
+taken.writeConfig("fill", false);
 
-panel.addWidget("org.kde.plasma.marginsseparator");
+// Lege ruimte tussen de apps en het systeemvak, met Taakbeheer in het rechtermuismenu.
+// Vervangt de oude scheidingsruimte (marginsseparator): die vulde ook de ruimte, maar zonder menu.
+panel.addWidget("org.bugos.taakbalk");
 // Snelmenu: grote knoppen voor wifi, bluetooth, geluid, donker en niet storen.
 panel.addWidget("org.bugos.snelmenu");
 var vakje = panel.addWidget("org.kde.plasma.systemtray");

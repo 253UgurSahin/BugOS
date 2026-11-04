@@ -842,21 +842,25 @@ class Bestanden(Venster):
         self.bak_lijst.itemClicked.connect(lambda _it: self.open_prullenbak())
         self.onder.addWidget(self.bak_lijst)
 
-        # --- rechts: balk bovenin, tegels, regel onderin
+        # --- rechts: één compacte balk bovenin, een korte regel info, de tegels.
+        # Zoals de Verkenner van Windows 11: waar je bent staat in het pad (kruimels),
+        # niet nog een keer als grote titel eronder. Dat scheelt ruim 60 px hoogte.
+        HOOGTE = 40   # knophoogte uit het ontwerp (MATEN in tools/ontwerp: knopHoogte = 40)
         rechts = QVBoxLayout(rechts_w)
-        rechts.setContentsMargins(26, 20, 26, 12)
-        rechts.setSpacing(14)
+        rechts.setContentsMargins(22, 14, 22, 12)
+        rechts.setSpacing(8)
         balk = QHBoxLayout()
-        balk.setSpacing(10)
-        self.terug_knop = ronde_knop("links", t("Terug", "Back"))
-        self.vooruit_knop = ronde_knop("rechts", t("Vooruit", "Forward"))
+        balk.setSpacing(8)
+        # Kleine ronde knopjes (36 px, zonder vlak tot je erover gaat): rustiger naast het pad.
+        self.terug_knop = ronde_knop("links", t("Terug", "Back"), klein=True)
+        self.vooruit_knop = ronde_knop("rechts", t("Vooruit", "Forward"), klein=True)
         self.terug_knop.clicked.connect(self.terug)
         self.vooruit_knop.clicked.connect(self.vooruit)
         balk.addWidget(self.terug_knop)
         balk.addWidget(self.vooruit_knop)
         self.pad_vak = QFrame()
         self.pad_vak.setObjectName("pad")
-        self.pad_vak.setFixedHeight(44)
+        self.pad_vak.setFixedHeight(HOOGTE)
         self.pad_lay = QHBoxLayout(self.pad_vak)
         self.pad_lay.setContentsMargins(8, 0, 8, 0)
         self.pad_lay.setSpacing(0)
@@ -866,8 +870,8 @@ class Bestanden(Venster):
         self.zoek = Zoekbalk(t("Zoek in deze map", "Search this folder"))
         self.zoek.setMinimumWidth(170)
         self.zoek.setMaximumWidth(240)
-        self.zoek.setMinimumHeight(44)
-        self.zoek.setMaximumHeight(44)
+        self.zoek.setMinimumHeight(HOOGTE)
+        self.zoek.setMaximumHeight(HOOGTE)
         self.zoek.textChanged.connect(self.zoeken)
         balk.addWidget(self.zoek)
         self.plak_knop = Knop(t("Plakken", "Paste"), "gewoon", "lijn:plak")
@@ -880,22 +884,21 @@ class Bestanden(Venster):
         self.leeg_knop = Knop(t("Prullenbak leegmaken", "Empty trash"), "gewoon", "lijn:prullenbak")
         self.leeg_knop.clicked.connect(self.leegmaken)
         for k in (self.plak_knop, self.nieuw_knop, self.uitwerp_knop, self.leeg_knop):
-            k.setMinimumHeight(44)
+            k.setMinimumHeight(HOOGTE)
+            k.setMaximumHeight(HOOGTE)
             balk.addWidget(k)
         self.plak_knop.hide()
         rechts.addLayout(balk)
 
+        # Eén korte regel onder de balk: "8 items · 1 gekozen · 11 GB vrij".
+        # Vroeger stond hier eerst nog de naam van de map als grote titel; die stond
+        # al in het pad (of, bij Prullenbak en Deze computer, in self.titel in de balk).
+        self.status = label("", "sub", wrap=False)
+        self.status.setContentsMargins(6, 0, 0, 0)
+        rechts.addWidget(self.status)
+
         self.melding = Melding()
         rechts.addWidget(self.melding)
-
-        kopblok = QVBoxLayout()
-        kopblok.setSpacing(2)
-        kopblok.setContentsMargins(4, 6, 0, 2)
-        self.grote_titel = label("", "titel", wrap=False)
-        self.status = label("", "sub", wrap=False)
-        kopblok.addWidget(self.grote_titel)
-        kopblok.addWidget(self.status)
-        rechts.addLayout(kopblok)
 
         # het model: de echte bestanden op de schijf
         self.model = QFileSystemModel(self)
@@ -1152,6 +1155,20 @@ class Bestanden(Venster):
         if not self.in_prullenbak and not self.in_computer and self.huidig.parent != self.huidig:
             self.ga_naar(self.huidig.parent)
 
+    def plek_naam(self) -> str:
+        """De naam die bovenin staat: het laatste stukje van het pad, of (zonder pad) de naam in de balk.
+
+        Er is geen aparte grote titel meer; dit is dus wat de gebruiker ziet als 'waar ben ik'."""
+        if not self.pad_vak.isHidden():
+            # Uit de layout lezen (niet findChildren): oude kruimels staan dan al niet meer
+            # in de layout, ook al heeft Qt ze nog niet echt opgeruimd (deleteLater).
+            for i in range(self.pad_lay.count() - 1, -1, -1):
+                w = self.pad_lay.itemAt(i).widget()
+                if isinstance(w, QPushButton):
+                    return w.text()
+            return ""
+        return self.titel.text()
+
     def bouw_pad(self) -> None:
         while self.pad_lay.count():
             w = self.pad_lay.takeAt(0).widget()
@@ -1169,15 +1186,12 @@ class Bestanden(Venster):
         self.terug_knop.setEnabled(bool(self.terug_lijst))
         self.vooruit_knop.setEnabled(bool(self.vooruit_lijst))
         if not in_map:
-            self.titel.setText("")
+            # Geen pad hier (Prullenbak, Deze computer): de naam staat dan in de balk zelf,
+            # op de plek van het pad, zodat je altijd bovenin ziet waar je bent.
             titel = t("Prullenbak", "Trash") if self.in_prullenbak else t("Deze computer", "This computer")
-            self.grote_titel.setText(titel)
+            self.titel.setText(titel)
             self.setWindowTitle(titel)
             return
-        naam_hier = next((n for s_, n, _i, p_ in plekken() if p_ == self.huidig), None)
-        if naam_hier is None:
-            naam_hier = hier.naam if hier and Path(hier.wortel) == self.huidig else (self.huidig.name or "/")
-        self.grote_titel.setText(naam_hier)
         self.setWindowTitle(f"{self.huidig.name or '/'} - {t('Bestanden', 'Files')}")
         # Van waar tellen we? Thuis, een schijf, of de hele computer.
         delen: list[tuple[str, Path]] = []

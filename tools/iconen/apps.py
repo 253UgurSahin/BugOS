@@ -34,11 +34,13 @@ ACCENT = _L["accent"]                   # #DE2F3E: vast, ook op de donkere tegel
 TINT = _L["accent_zacht"]               # #FDE9E9: maakt de tegel warm (licht) en tilt hem op (donker)
 TINT_DEKKING = 0.08
 GLANS, SCHADUW = 0.035, 0.06            # wit bovenaan, zwart onderaan (vast, voor licht en donker)
-RAND_DEKKING = 0.1                      # haarlijn in de tekstkleur
+RAND_DEKKING = 0.14                     # haarlijn in de tekstkleur (0.1 viel weg op de grijze taakbalk en het startmenu)
 
 # De tegel op het 48-doek: 44 x 44 op (2, 2), hoek ~23 % (net als branding/logo/bugos-icoon.svg).
 T_XY, T_W, T_R = 2, 44, 10
-SCHAAL = 1.25          # 24-raster -> 30 px: de glyph beslaat ongeveer de helft van de tegel
+SCHAAL = 1.5           # 24-raster -> 36 px: de glyph beslaat ruim 60 % van de tegel.
+                       # Was 1.25 (de helft): naast volle pictogrammen als Firefox en Steam
+                       # leken de BugOS-apps daardoor klein en leeg, in het startmenu en op de taakbalk.
 DIKTE = 2.25           # lijndikte in px op het 48-doek (ruim 1 px bij 22 px)
 
 

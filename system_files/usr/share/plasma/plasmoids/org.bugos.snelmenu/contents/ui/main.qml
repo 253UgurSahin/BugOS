@@ -47,10 +47,16 @@ PlasmoidItem {
         Keys.onSpacePressed: root.expanded = !root.expanded
         Layout.minimumWidth: Kirigami.Units.iconSizes.medium
         Layout.minimumHeight: Kirigami.Units.iconSizes.medium
-        // Eigen BugOS-icoon: twee schuifjes
+        // Eigen BugOS-icoon: twee schuifjes.
+        // Precies even groot als de pictogrammen van het systeemvak ernaast (22 px).
+        // Vroeger vulde het de ruimte min een marge; Kirigami rondde dat af naar een
+        // kleinere maat, waardoor het schuifje maar 14 x 12 px werd naast een bel van 20 x 22.
         Kirigami.Icon {
-            anchors.fill: parent
-            anchors.margins: Kirigami.Units.smallSpacing
+            anchors.centerIn: parent
+            readonly property int maat: Math.min(Kirigami.Units.iconSizes.smallMedium, parent.width, parent.height)
+            width: maat
+            height: maat
+            roundToIconSize: false
             source: Qt.resolvedUrl("../icons/bugos-snelmenu.svg")
             isMask: true
             color: Kirigami.Theme.textColor

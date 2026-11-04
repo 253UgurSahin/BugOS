@@ -134,6 +134,30 @@ function systeemvak(rustig) {
     }
     print(n);
 }
+// De taakbalkruimte (org.bugos.taakbalk) op bestaande taakbalken zetten: op de plek
+// van de oude scheidingsruimte, of anders vlak voor het snelmenu / systeemvak.
+// De takenlijst rekt daarna niet meer uit, zodat de lege ruimte van de taakbalkruimte
+// is (rechtermuisknop op leeg = Taakbeheer, net als in Windows).
+function taakbalkruimte() {
+    // 1. De takenlijst niet meer laten uitrekken (op elk paneel dat er een heeft).
+    var ps = panels();
+    for (var i = 0; i < ps.length; i++) {
+        var ws = ps[i].widgets();
+        for (var j = 0; j < ws.length; j++) {
+            if (ws[j].type != "org.kde.plasma.icontasks" && ws[j].type != "org.kde.plasma.taskmanager") continue;
+            ws[j].currentConfigGroup = ["General"];
+            ws[j].writeConfig("fill", false);
+            ws[j].reloadConfig();
+        }
+    }
+    // 2. De taakbalkruimte neerzetten. vervang() loopt zelf alle panelen langs en slaat
+    //    een paneel over dat hem al heeft; dus van de beste naar de minst goede plek:
+    //    de oude scheidingsruimte, anders vóór het snelmenu, anders vóór het systeemvak.
+    //    (vervang() print elke keer een getal; de uitvoer wordt niet gelezen.)
+    vervang("org.kde.plasma.marginsseparator", "org.bugos.taakbalk", "");
+    vervang("", "org.bugos.taakbalk", "org.bugos.snelmenu");
+    vervang("", "org.bugos.taakbalk", "org.kde.plasma.systemtray");
+}
 function heeft(soort) {
     var ps = panels(), n = 0;
     for (var i = 0; i < ps.length; i++) {
@@ -192,7 +216,9 @@ standaard:*)
     # ook voor wie stap 1 al had. Alleen als het snelmenu er staat.
     MARKER="$BUGOS_CONFIG/paneel-standaard-1"
     MARKER2="$BUGOS_CONFIG/paneel-systeemvak-1"
-    [ -f "$MARKER" ] && [ -f "$MARKER2" ] && exit 0
+    # Stap 3: de taakbalkruimte (rechtermuisknop op leeg = Taakbeheer), ook voor wie stap 1 en 2 al had.
+    MARKER3="$BUGOS_CONFIG/paneel-taakbalkruimte-1"
+    [ -f "$MARKER" ] && [ -f "$MARKER2" ] && [ -f "$MARKER3" ] && exit 0
     for _ in $(seq 1 30); do
         bureaublad_er && break
         sleep 2
@@ -210,6 +236,10 @@ standaard:*)
             plasma_script "$JS systeemvak(true);" >/dev/null
         fi
         mkdir -p "$BUGOS_CONFIG" && touch "$MARKER2"
+    fi
+    if [ ! -f "$MARKER3" ]; then
+        plasma_script "$JS taakbalkruimte();" >/dev/null
+        mkdir -p "$BUGOS_CONFIG" && touch "$MARKER3"
     fi
     ;;
 *)

@@ -246,8 +246,7 @@ venster = b.Bestanden(docs)
 for _ in range(50):
     app.processEvents()
 klopt(venster.huidig == docs, "venster: opent in Documenten")
-klopt(venster.grote_titel.text() in ("Documenten", "Documents", "Documenten".lower()) or venster.grote_titel.text() != "",
-      "venster: toont een titel")
+klopt(venster.plek_naam() == docs.name, "venster: het pad bovenin eindigt bij Documenten")
 venster.ververs()
 for _ in range(50):
     app.processEvents()
@@ -298,7 +297,7 @@ venster.vul_zijbalk()
 klopt([x.naam for x in venster.lijst_schijven] == ["Stick van Bugie"], "venster: de stick staat in de zijbalk")
 venster.open_computer()
 klopt(venster.in_computer and venster.stapel.currentWidget() is venster.computer
-      and venster.grote_titel.text() == "Deze computer", "Deze computer: de pagina opent")
+      and venster.plek_naam() == "Deze computer", "Deze computer: de pagina opent")
 tegels = venster.computer.widget().findChildren(b.SchijfRij)
 klopt(len(tegels) == 1 and tegels[0].uitwerp_knop is not None and tegels[0].meer is not None,
       "Deze computer: de stick, met 'Veilig verwijderen' en een knop voor meer")
@@ -309,7 +308,7 @@ klopt([a.text() for a in menu.actions() if a.text()] == ["Openen", "Naam wijzige
 klopt(venster.ruimte_balk is not None and venster.status.text() == "1 aangesloten", "Deze computer: ruimte bovenaan, en 1 aangesloten")
 tegels[0].geklikt.emit()
 klopt(venster.huidig == stick and not venster.in_computer and not venster.uitwerp_knop.isHidden()
-      and venster.grote_titel.text() == "Stick van Bugie", "stick openen: naam bovenin en 'Veilig verwijderen'")
+      and venster.plek_naam() == "Stick van Bugie", "stick openen: naam bovenin en 'Veilig verwijderen'")
 venster.terug()
 klopt(venster.in_computer, "terug: weer op Deze computer")
 venster.ga_naar(stick / "Foto's")

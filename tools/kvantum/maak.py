@@ -175,6 +175,21 @@ class Svg:
                          '</linearGradient>')
         return f"url(#{gid})"
 
+    def verloop_vervaag(self, kleur: str, alpha: float, x2: float, y2: float, omgekeerd: bool) -> str:
+        """Verloop van één kleur van alpha naar helemaal doorzichtig (of andersom).
+
+        Waarom niet verloop() met '#00000000': Qt's SVG-tekenaar (die Kvantum gebruikt)
+        kent geen kleuren met een alfakanaal (#RRGGBBAA). Dan vloeit het verloop niet uit
+        en krijg je een harde grijze band om elk menu. stop-opacity kent Qt wel."""
+        self.n += 1
+        gid = f"v{self.n}"
+        van, tot = (0.0, alpha) if omgekeerd else (alpha, 0.0)
+        self.defs.append(f'<linearGradient id="{gid}" x1="0" y1="0" x2="{f(x2)}" y2="{f(y2)}">'
+                         f'<stop offset="0" stop-color="{kleur}" stop-opacity="{f(van)}"/>'
+                         f'<stop offset="1" stop-color="{kleur}" stop-opacity="{f(tot)}"/>'
+                         '</linearGradient>')
+        return f"url(#{gid})"
+
     def radiaal(self, kleur: str, alpha: float, cx: float, cy: float) -> str:
         """Zachte schaduw voor hoeken: vol bij (cx, cy) van het vak, weg aan de overkant."""
         self.n += 1
@@ -350,12 +365,12 @@ def schaduw(svg: Svg, naam: str, diepte: float, alpha: float, kleur: str = "#000
     d = diepte
     for kant, (w, h, x2, y2, omgekeerd) in {"top": (L, d, 0, 1, True), "bottom": (L, d, 0, 1, False),
                                            "left": (d, L, 1, 0, True), "right": (d, L, 1, 0, False)}.items():
-        kl = (f"{kleur}00", kleur) if omgekeerd else (kleur, f"{kleur}00")
-        gid = svg.verloop(kl, x2, y2)
-        # stop-opacity via kleur met alfa werkt niet overal; zet de sterkte op het vlak
+        # Van 'alpha' aan de kant van het menu naar 0 aan de buitenkant. De sterkte zit in
+        # het verloop zelf (stop-opacity), zodat de hoeken (radiaal) en de zijkanten gelijk oplopen.
+        gid = svg.verloop_vervaag(kleur, alpha, x2, y2, omgekeerd)
         svg.element(f"{naam}-shadow-{kant}", w, h,
                     lambda x, y, w=w, h=h, gid=gid: f'<rect x="{f(x)}" y="{f(y)}" width="{f(w)}" height="{f(h)}" '
-                    f'fill="{gid}" fill-opacity="{f(alpha)}"/>')
+                    f'fill="{gid}"/>')
     for hoek, (cx, cy) in {"topleft": (1, 1), "topright": (0, 1), "bottomleft": (1, 0), "bottomright": (0, 0)}.items():
         rid = svg.radiaal(kleur, alpha, cx, cy)
         svg.element(f"{naam}-shadow-{hoek}", d, d,
@@ -853,7 +868,9 @@ def maak_kvconfig(thema: str, k: dict) -> str:
     delen.append(sectie(
         "MenuItem", inherits="PanelButtonCommand", **kader("menuitem", "rmenuitem", 3, e_regel),
         interior=True, interior__element="menuitem", indicator__element="menuitem", indicator__size=12,
-        text__margin__top=4, text__margin__bottom=4, text__margin__left=8, text__margin__right=8,
+        # Zelfde ruimte als QMenu::item in bugos_ui (Instellingen, Bestanden): 9 px boven en onder,
+        # 12 px links. Het kader neemt er al 3 van; de tekstmarge doet de rest.
+        text__margin__top=6, text__margin__bottom=6, text__margin__left=9, text__margin__right=12,
         text__normal__color=tekst, text__focus__color=tekst, text__press__color=tekst,
         text__toggle__color=tekst, min_width=0, min_height=0, focusFrame=False))
     delen.append(sectie("MenuBar", inherits="PanelButtonCommand", frame=False, interior=True,
