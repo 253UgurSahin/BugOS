@@ -2,7 +2,7 @@
 # BugOS-stick (live ISO) helemaal lokaal bouwen, zonder GitHub.
 # ===============================================================
 # Waarom: via GitHub duurt het lang (bouwen, en dan ~6 GB downloaden). Lokaal
-# halen we alleen de fundering (Aurora, ~4 GB) en de extra pakketten op, en
+# halen we alleen de fundering (Fedora Kinoite van Universal Blue, ~3 GB) en de extra pakketten op, en
 # bouwen we de rest zelf. Het doet precies wat build.yml + iso.yml doen:
 #   1. BugOS bouwen uit deze map (Containerfile)            -> localhost/bugos:lokaal
 #   2. Een eigen registry op localhost:5000 (de stick-bouw "haalt" BugOS
@@ -27,10 +27,10 @@ UIT="${2:?geef de uitvoermap voor de ISO}"
 VARIANT="${3:-main}"
 
 if [ "$VARIANT" = nvidia ]; then
-    BASIS=ghcr.io/ublue-os/aurora-nvidia-open:stable
+    BASIS=ghcr.io/ublue-os/kinoite-nvidia:latest
     NAAM=bugos-nvidia
 else
-    BASIS=ghcr.io/ublue-os/aurora:stable
+    BASIS=ghcr.io/ublue-os/kinoite-main:latest
     NAAM=bugos
 fi
 # De naam die BugOS op de stick en na het installeren krijgt (voor updates).

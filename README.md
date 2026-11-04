@@ -126,5 +126,5 @@ docs/                  uitleg, plan en huisstijl
 GPL-3.0. BugOS is en blijft gratis en open.
 De lettertypes vallen onder de SIL Open Font License (zie [`branding/lettertypes/`](branding/lettertypes/)).
 
-BugOS is gebouwd op [Aurora](https://getaurora.dev) en [Universal Blue](https://universal-blue.org),
+BugOS is een eigen systeem op de basis van [Universal Blue](https://universal-blue.org) (net als Bazzite),
 [Fedora](https://fedoraproject.org) en [KDE](https://kde.org).

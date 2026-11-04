@@ -21,8 +21,8 @@ mount -o remount,rw /proc/sys || true
 #    Hoe: als "OCI-map" (de ingepakte lagen, precies zoals ze in GitHub
 #    Packages staan) in /var/lib/bugos-stick/bugos. Het installatieprogramma
 #    leest die rechtstreeks (ostreecontainer --transport=oci).
-#    Waarom niet uitgepakt in de containeropslag (zoals Aurora en Bazzite)?
-#    BugOS haalt bestanden van Aurora weg; die "verwijderd"-merktekens
+#    Waarom niet uitgepakt in de containeropslag (zoals Bazzite)?
+#    BugOS haalt bestanden van de fundering (Fedora Kinoite) weg; die "verwijderd"-merktekens
 #    (whiteouts) kan de opslag binnen deze bouwstap niet aanmaken ("open
 #    /etc/.wh.bazaar: invalid argument"). Een OCI-map wordt niet uitgepakt,
 #    dus dat probleem bestaat dan niet. Nadeel: de stick wordt een paar GB
@@ -98,6 +98,9 @@ cat >/etc/anaconda/profile.d/bugos.conf <<EOF
 # BugOS: zo min mogelijk vragen tijdens het installeren.
 [Profile]
 profile_id = bugos
+# Alles wat we hier niet zelf zeggen, zoals bij Fedora Kinoite (de fundering
+# van BugOS): een alleen-lezen systeem met btrfs.
+base_profile = fedora-kinoite
 
 [Profile Detection]
 os_id = ${ID}
@@ -294,11 +297,11 @@ rm -f /etc/xdg/autostart/liveinst-setup.desktop /etc/xdg/autostart/bugos-schijve
 printf '[Wallet]\nEnabled=false\n' >/etc/xdg/kwalletrc
 
 # Dingen die op een live-stick niet horen te draaien.
-# flatpak-preinstall en brew-setup kwamen mee van Aurora: op de stick haalden
-# ze honderden MB aan apps en Homebrew binnen, in het geheugen (de stick kan
-# niet schrijven). Dat maakt hem traag en het geheugen kan vollopen. Na het
-# installeren draaien ze gewoon wel (dit geldt alleen voor de stick).
-for s in rpm-ostreed-automatic.timer uupd.timer rpm-ostree-countme.service \
+# Updates en het klaarzetten van apps zouden op de stick honderden MB binnen-
+# halen, in het geheugen (de stick kan niet schrijven). Dat maakt hem traag en
+# het geheugen kan vollopen. Na het installeren draaien ze gewoon wel (dit
+# geldt alleen voor de stick).
+for s in rpm-ostreed-automatic.timer bugos-apps-bijwerken.timer uupd.timer rpm-ostree-countme.service \
     bootloader-update.service bugos-eerste-start.service \
     flatpak-preinstall.service brew-setup.service brew-update.timer brew-upgrade.timer \
     rpm-ostree-countme.timer ublue-system-setup.service tailscaled.service; do
@@ -326,7 +329,7 @@ EOF
 # Het installatieprogramma in BugOS-kleuren, met het lieveheersbeestje.
 # Het programma (Anaconda WebUI) haalt zijn logo en kleuren uit de
 # "branding" van Cockpit. Zonder eigen map kreeg je die van Fedora: blauw,
-# met de Aurora-"A" als logo. /etc/cockpit/branding wordt als eerste gelezen,
+# met het Fedora-logo. /etc/cockpit/branding wordt als eerste gelezen,
 # wat er ook in os-release staat.
 [ -f /usr/share/bugos/merk/merk-donker-256.png ] || {
     echo "Basisbeeld te oud: /usr/share/bugos/merk ontbreekt (eerst BugOS opnieuw bouwen)" >&2
@@ -401,7 +404,7 @@ cat >"$BRANDING/branding.css" <<'EOF'
 EOF
 
 # Voor de zekerheid ook op de plek die Cockpit op naam van het systeem kiest
-# (ID uit os-release, bij ons "aurora"), mocht /etc/cockpit/branding niet
+# (ID uit os-release, bij ons "bugos"), mocht /etc/cockpit/branding niet
 # gelezen worden.
 mkdir -p "/usr/share/cockpit/branding/${ID}"
 cp -a "$BRANDING"/. "/usr/share/cockpit/branding/${ID}/"

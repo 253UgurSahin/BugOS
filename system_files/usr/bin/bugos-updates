@@ -15,13 +15,10 @@
 
 CONF=/etc/bugos/updates.conf
 
-# Aurora gebruikt "uupd" (doet systeem + apps + containers in één keer).
-# Is die er niet, dan nemen we de gewone Fedora-dienst.
-if systemctl list-unit-files uupd.timer >/dev/null 2>&1; then
-    TIMER=uupd.timer
-else
-    TIMER=rpm-ostreed-automatic.timer
-fi
+# BugOS regelt updates zelf, met twee diensten (zie build_files/build.sh):
+#   rpm-ostreed-automatic.timer  -> het systeem (BugOS zelf)
+#   bugos-apps-bijwerken.timer   -> de apps (Flatpak)
+TIMERS=(rpm-ostreed-automatic.timer bugos-apps-bijwerken.timer)
 
 als_beheerder() {
     if [ "$(id -u)" -ne 0 ]; then
@@ -34,20 +31,21 @@ auto)
     als_beheerder "$@"
     mkdir -p /etc/bugos
     echo "UPDATES=auto" >"$CONF"
-    systemctl enable --now "$TIMER"
+    systemctl enable --now "${TIMERS[@]}"
     t "Updates gaan nu vanzelf." "Updates are now automatic."
     ;;
 hand)
     als_beheerder "$@"
     mkdir -p /etc/bugos
     echo "UPDATES=hand" >"$CONF"
-    systemctl disable --now "$TIMER"
+    systemctl disable --now "${TIMERS[@]}"
     # De BugOS Winkel (Discover) blijft melden als er updates zijn.
     t "Updates doe je nu zelf via de BugOS Winkel." "You now do updates yourself via the BugOS Store."
     ;;
 nu)
     als_beheerder "$@"
-    if command -v uupd >/dev/null 2>&1; then uupd; else rpm-ostree upgrade; fi
+    rpm-ostree upgrade
+    flatpak update --system --noninteractive --assumeyes || true
     ;;
 terug)
     als_beheerder "$@"

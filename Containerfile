@@ -4,11 +4,13 @@
 # BugOS-spullen in, en maak er een nieuw systeem van".
 #
 # BASE_IMAGE kiest de fundering:
-#   - ghcr.io/ublue-os/aurora:stable              -> gewone pc's (Intel/AMD)
-#   - ghcr.io/ublue-os/aurora-nvidia-open:stable  -> pc's met een Nvidia-kaart
-# Aurora is Fedora Atomic met KDE, al klaar met codecs, wifi en bluetooth.
+#   - ghcr.io/ublue-os/kinoite-main:latest    -> gewone pc's (Intel/AMD)
+#   - ghcr.io/ublue-os/kinoite-nvidia:latest  -> pc's met een Nvidia-kaart
+# Dat is kaal Fedora Kinoite (Fedora Atomic met KDE) van Universal Blue, met
+# alleen codecs en drivers erbij. Geen ander systeem eronder (zoals Aurora):
+# BugOS is een eigen systeem, net als Bazzite, dat op dezelfde basis bouwt.
 
-ARG BASE_IMAGE=ghcr.io/ublue-os/aurora:stable
+ARG BASE_IMAGE=ghcr.io/ublue-os/kinoite-main:latest
 
 # Deze tussenstap houdt de bouwscripts buiten het eindresultaat.
 FROM scratch AS ctx

@@ -1,4 +1,4 @@
-# Extra programma's in BugOS (bovenop Aurora).
+# Extra programma's in BugOS (bovenop de fundering, Fedora Kinoite).
 # Eén pakket per regel. Regels met # zijn uitleg.
 
 # --- Windows-programma's (.exe) ---
@@ -27,7 +27,7 @@ kdialog
 libnotify
 
 # --- Internet en apps ---
-# Firefox als gewoon programma: Aurora heeft geen browser in het systeem, en
+# Firefox als gewoon programma: de fundering heeft geen browser in het systeem, en
 # de taakbalk en het startmenu van BugOS verwijzen naar Firefox.
 firefox
 # (KDE Discover voor "Meer apps zoeken" wordt apart geïnstalleerd in build.sh,

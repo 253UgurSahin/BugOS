@@ -17,7 +17,7 @@ Het belangrijkste idee: **BugOS kan niet stuk.**
 
 | Onderwerp | Wat we kozen | Waarom, in gewone taal |
 |---|---|---|
-| Fundering | Fedora Atomic (via Aurora van Universal Blue) | Het systeem is van "onbreekbaar glas". Elke update is een complete nieuwe versie. Gaat er iets mis? Dan kies je bij het opstarten de vorige versie. |
+| Fundering | Fedora Atomic (kaal Fedora Kinoite van Universal Blue, net als Bazzite) | Het systeem is van "onbreekbaar glas". Elke update is een complete nieuwe versie. Gaat er iets mis? Dan kies je bij het opstarten de vorige versie. |
 | Schil | Eigen BugOS-jas op de KDE-motor | KDE regelt al goed: vensters, wifi, bluetooth en schermen. Wij maken het startmenu, de taakbalk, de stijl en de eigen BugOS-apps. |
 | Uiterlijk | Eigen BugOS-stijl, licht of donker | Knoppen zitten waar je ze van Windows kent, maar het ziet er anders uit. Je kiest zelf licht of donker. |
 | Updates | Standaard vanzelf, met een schakelaar voor "zelf doen" | Oma hoeft er niks voor te doen. Wie zelf wil kiezen, kan dat. |
@@ -45,7 +45,7 @@ Het belangrijkste idee: **BugOS kan niet stuk.**
 │  Vensters · Wifi · Bluetooth · Dolphin (gevorderden)    │
 │  Schijfbeheer (KDE Partition Manager) · Geluid          │
 ├─────────────────────────────────────────────────────────┤
-│  🏠 Aurora / Fedora Atomic (de fundering)               │
+│  🏠 Fedora Kinoite / Fedora Atomic (de fundering)       │
 │  Drivers · Codecs (films/muziek) · Nvidia · Updates     │
 │  met een "terug-knop"                                   │
 └─────────────────────────────────────────────────────────┘
@@ -177,7 +177,7 @@ Het belangrijkste idee: **BugOS kan niet stuk.**
 - **Nvidia:** we gebruiken de "open" Nvidia-driver. Die werkt op kaarten vanaf ongeveer 2018 (RTX 20-serie en nieuwer, GTX 16-serie). Voor oudere Nvidia-kaarten moeten we later iets regelen.
 - **Oude pc's:** BugOS heeft een 64-bit computer nodig met minstens 4 GB geheugen. Héél oude pc's (uit de tijd van Windows XP) gaan niet.
 - **Windows-programma's:** niet alles werkt via Wine. Anti-cheat in sommige online games en zware programma's zoals Adobe en de nieuwste Office werken vaak niet. Daarom legt BugOS altijd uit wat het alternatief is.
-- **Aurora als fundering:** dat is het snelst en het meest betrouwbaar. Ooit kunnen we overstappen naar een "kalere" fundering (`kinoite-main`) als we meer zelf willen doen.
+- **Eigen systeem op `kinoite-main`:** BugOS bouwt niet meer op Aurora, maar net als Bazzite op de kale basis van Universal Blue (Fedora Kinoite met codecs en drivers). BugOS heet daardoor ook vanbinnen BugOS (`ID=bugos`) en regelt zijn updates zelf (`rpm-ostreed-automatic.timer` voor het systeem, `bugos-apps-bijwerken.timer` voor de apps).
 
 ## Woordenlijst
 
