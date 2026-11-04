@@ -321,7 +321,10 @@ def maak_app(naam: str, bureaublad_bestand: str, args: Sequence[str]) -> QApplic
     app = QApplication(list(args))
     app.setApplicationName(naam)
     app.setDesktopFileName(bureaublad_bestand)
-    app.setWindowIcon(QIcon.fromTheme("bugos-logo", QIcon("/usr/share/bugos/logo.svg")))
+    # Het eigen pictogram van de app (zelfde naam als het .desktop-bestand), zodat Alt+Tab en de taakbalk
+    # hetzelfde tegeltje tonen als het startmenu.
+    app.setWindowIcon(QIcon.fromTheme(bureaublad_bestand.removesuffix(".desktop"),
+                                      QIcon.fromTheme("bugos-logo", QIcon("/usr/share/bugos/logo.svg"))))
     _laad_lettertypes()
     DONKER = _kies_thema(app)
     K.clear()

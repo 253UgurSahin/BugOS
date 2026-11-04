@@ -42,14 +42,14 @@ Rectangle {
     function tr(nl, en) { return nederlands ? nl : en }
 
     implicitWidth: 420
-    implicitHeight: kolom.implicitHeight + 44
+    implicitHeight: kolom.implicitHeight + 20
     color: palette.window
     SystemPalette { id: palette; colorGroup: SystemPalette.Active }
 
     ColumnLayout {
         id: kolom
         anchors.fill: parent
-        anchors.margins: 22
+        anchors.margins: 10   // de pop-up zelf heeft al 12 px rand
         spacing: 16
 
         RowLayout {

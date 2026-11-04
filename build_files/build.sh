@@ -298,8 +298,18 @@ done
 kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key smallestReadableFont "Inter,8,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
 kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key fixed "JetBrains Mono,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
 kwriteconfig6 --file /etc/xdg/kdeglobals --group WM --key activeFont "Inter,10,-1,5,600,0,0,0,0,0,0,0,0,0,0,1"
-# Accentkleur: lieveheersbeestjesrood
-kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key AccentColor "222,47,62"
+# Geen aparte KDE-accentkleur: die zou de zachte BugOS-selectie bij elke wissel van
+# licht/donker weer fel maken. Het rood zit al in het kleurenschema (DecorationFocus).
+
+# KDE's schakelaar (QQC2 Switch, o.a. in KDE Instellingen) kleurt "aan" met de selectiekleur,
+# en die is in BugOS zacht rood. Laat hem net als in de BugOS-apps fel rood zijn met een wit bolletje.
+SCHAKEL=/usr/lib64/qt6/qml/org/kde/desktop/private
+if [ -f "$SCHAKEL/SwitchIndicator.qml" ]; then
+    sed -i         -e 's/indicator.control.checked ? Kirigami.Theme.highlightColor : handleBorderColor/indicator.control.checked ? Kirigami.Theme.focusColor : handleBorderColor/'         -e 's/color: Qt.alpha(Kirigami.Theme.highlightColor, 0.5)/color: Kirigami.Theme.focusColor/'         -e 's/readonly property color handleColor: Kirigami.Theme.backgroundColor/readonly property color handleColor: "#ffffff"/'         "$SCHAKEL/SwitchIndicator.qml"
+    # Zonder "prefer" laadt Qt de QML van schijf in plaats van de ingebouwde kopie.
+    sed -i '/^prefer :\/qt\/qml\/org\/kde\/desktop\/private\/$/d' "$SCHAKEL/qmldir"
+    grep -q focusColor "$SCHAKEL/SwitchIndicator.qml" || echo "LET OP: schakelaar-aanpassing paste niet (nieuwe KDE-versie?)"
+fi
 
 # De kleuren van "BugOS Licht" ook echt in de standaardinstellingen zetten.
 # Alleen de naam van het schema is niet genoeg: programma's zoals de verkenner

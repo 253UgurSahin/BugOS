@@ -32,8 +32,15 @@ huidig() {
     fi
 }
 
+# Een eigen KDE-accentkleur maakt de zachte BugOS-selectie fel (oude BugOS zette die).
+geen_accent() {
+    kwriteconfig6 --file kdeglobals --group General --key AccentColor --delete 2>/dev/null
+    kwriteconfig6 --file kdeglobals --group General --key LastUsedCustomAccentColor --delete 2>/dev/null
+}
+
 case "${1:-status}" in
 licht | donker)
+    geen_accent
     if [ "$1" = donker ]; then
         schema=BugOSDonker kv=BugOSDonker
     else
@@ -54,6 +61,7 @@ status)
 eerste-keer)
     MARKER="$BUGOS_CONFIG/thema-1"
     [ -f "$MARKER" ] && exit 0
+    geen_accent
     # Kvantum: zonder eigen instelling kiest hij zijn eigen standaard (niet BugOS).
     if [ ! -f "$KVANTUM" ] || ! grep -q '^theme=' "$KVANTUM"; then
         if [ "$(huidig)" = donker ]; then kvantum_zet BugOSDonker; else kvantum_zet BugOS; fi
