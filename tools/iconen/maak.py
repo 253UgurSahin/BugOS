@@ -19,6 +19,7 @@ contactvel per onderdeel maken.
 from __future__ import annotations
 
 import argparse
+import configparser
 import importlib
 import shutil
 import sys
@@ -64,6 +65,27 @@ def _mappen_uit_lijsten() -> set[str]:
     return mappen
 
 
+def _mappen_uit_oude_index(eigen: set[str]) -> None:
+    """Neem de mappen van de andere onderdelen over uit de bestaande index.theme.
+
+    Voor --alleen: dan draait maar één onderdeel. Wat de andere onderdelen aan mappen
+    toevoegen (map_erbij, bijv. status/22) of aanpassen (bijv. places/scalable met
+    MinSize=32), weet basis.MAPPEN dan niet. De bestaande index.theme komt van de
+    laatste volledige run en klopt dus: die eigenschappen nemen we ongewijzigd over.
+    eigen: de mappen die het draaiende onderdeel net zelf heeft gevuld; die laten we
+    zoals dat onderdeel ze nu wil."""
+    oud = basis.UIT / "index.theme"
+    if not oud.exists():
+        return
+    ini = configparser.ConfigParser(interpolation=None)
+    ini.optionxform = str   # hoofdletters bewaren: Size, Context, Type
+    ini.read(oud, encoding="utf-8")
+    for sectie in ini.sections():
+        if sectie == "Icon Theme" or sectie in eigen:
+            continue
+        basis.MAPPEN[sectie] = dict(ini[sectie])
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--alleen", choices=ONDERDELEN, help="alleen dit onderdeel opnieuw maken")
@@ -76,6 +98,11 @@ def main() -> int:
             for regel in oud.read_text(encoding="utf-8").split():
                 (basis.UIT / regel).unlink(missing_ok=True)
         print(f"{args.alleen}: {_draai(args.alleen, b)} pictogrammen")
+        # De andere onderdelen draaien nu niet, dus hun extra mappen (map_erbij, bijv.
+        # status/22 of places/22@2x) zijn niet aangemeld. Zonder dit verdwenen die mappen
+        # uit index.theme, en vond KDE die pictogrammen niet meer. Hun eigenschappen
+        # staan nog in de bestaande index.theme: daar halen we ze vandaan.
+        _mappen_uit_oude_index(b.gebruikte_mappen)
         b.gebruikte_mappen |= {m for m in _mappen_uit_lijsten() if m in basis.MAPPEN}
     else:
         if basis.UIT.exists():
