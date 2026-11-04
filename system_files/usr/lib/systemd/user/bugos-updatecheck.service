@@ -1,5 +1,5 @@
 [Unit]
-Description=BugOS: kijken of er een update is (als je updates zelf doet)
+Description=BugOS: check for an update (when you do updates yourself)
 After=graphical-session.target
 ConditionKernelCommandLine=!rd.live.image
 

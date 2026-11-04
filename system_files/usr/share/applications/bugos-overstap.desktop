@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=Bestanden van Windows
-Name[en]=Files from Windows
-Comment=Bestanden van je oude Windows-pc terugzetten
-Comment[en]=Restore files from your old Windows PC
+Name=Files from Windows
+Name[nl]=Bestanden van Windows
+Comment=Restore files from your old Windows PC
+Comment[nl]=Bestanden van je oude Windows-pc terugzetten
 Exec=bugos-overstap
 Icon=folder-download
 Categories=Utility;

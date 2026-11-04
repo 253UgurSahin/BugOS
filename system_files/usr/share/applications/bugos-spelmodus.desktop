@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=Game-modus aan/uit
-Name[en]=Game mode on/off
-Comment=Volle kracht, meldingen stil en FPS-teller
-Comment[en]=Full power, quiet notifications and FPS counter
+Name=Game mode on/off
+Name[nl]=Game-modus aan/uit
+Comment=Full power, quiet notifications and FPS counter
+Comment[nl]=Volle kracht, meldingen stil en FPS-teller
 Exec=bugos-spelmodus wissel
 Icon=input-gaming
 Categories=Game;

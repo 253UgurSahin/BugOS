@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=Back-up
-Name[en]=Backup
-Comment=Je bestanden veilig op een USB-schijf
-Comment[en]=Your files safe on a USB drive
+Name=Backup
+Name[nl]=Back-up
+Comment=Your files safe on a USB drive
+Comment[nl]=Je bestanden veilig op een USB-schijf
 Exec=bugos-backup
 Icon=document-save
 Categories=Utility;Archiving;

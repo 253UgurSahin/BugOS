@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=Schijven openen
-Name[en]=Open drives
-Comment=Opent de schijven die in de computer zitten, zodat ze er altijd zijn
-Comment[en]=Opens the drives inside the computer, so they are always there
+Name=Open drives
+Name[nl]=Schijven openen
+Comment=Opens the drives inside the computer, so they are always there
+Comment[nl]=Opent de schijven die in de computer zitten, zodat ze er altijd zijn
 Exec=/usr/bin/bugos-schijven-openen
 NoDisplay=true
 OnlyShowIn=KDE;

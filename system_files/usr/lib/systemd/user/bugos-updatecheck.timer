@@ -1,5 +1,5 @@
 [Unit]
-Description=BugOS: elke dag kijken of er een update is
+Description=BugOS: check for an update every day
 
 [Timer]
 OnStartupSec=15min

@@ -800,7 +800,7 @@ def zet_tijd_auto(aan: bool) -> bool:
 
 
 # (code, landcode voor de klok en getallen, naam in die taal zelf)
-TALEN = [("nl", "nl_NL", "Nederlands"), ("en", "en_US", "English"), ("de", "de_DE", "Deutsch"),
+TALEN = [("en", "en_US", "English"), ("nl", "nl_NL", "Nederlands"), ("de", "de_DE", "Deutsch"),
          ("fr", "fr_FR", "Français"), ("es", "es_ES", "Español"), ("it", "it_IT", "Italiano"),
          ("pt", "pt_PT", "Português"), ("pl", "pl_PL", "Polski"), ("tr", "tr_TR", "Türkçe"),
          ("uk", "uk_UA", "Українська"), ("ar", "ar_EG", "العربية")]

@@ -6,125 +6,125 @@
 </p>
 
 <p align="center">
-  <img src="docs/beelden/banner.webp" width="900" alt="BugOS: de computer die gewoon werkt. Een laptop met het BugOS-bureaublad op een donkere achtergrond.">
+  <img src="docs/beelden/banner.webp" width="900" alt="BugOS: the computer that just works. A laptop showing the BugOS desktop on a dark background.">
 </p>
 
 <p align="center">
-  <a href="docs/TESTEN.md">Proberen</a> ·
-  <a href="docs/PLAN.md">Het plan</a> ·
-  <a href="docs/HUISSTIJL.md">Huisstijl</a> ·
-  <a href="docs/VERTALEN.md">Vertalen</a>
+  <a href="docs/TESTEN.md">Try it</a> ·
+  <a href="docs/PLAN.md">The plan</a> ·
+  <a href="docs/HUISSTIJL.md">Brand style</a> ·
+  <a href="docs/VERTALEN.md">Translate</a>
 </p>
 
-## Het verhaal
+## The story
 
-Een *bug* is een foutje in een computer. Een lieveheersbeestje eet de beestjes op die je plantjes
-kapotmaken, en volgens oma brengt het geluk. Daarom is het ons logo: **BugOS ruimt de foutjes op**,
-zodat jij gewoon kunt doen waarvoor je achter de computer zit.
+A *bug* is a little mistake in a computer. A ladybug eats the little bugs that ruin your plants,
+and people say it brings good luck. That is why it is our logo: **BugOS cleans up the bugs**,
+so you can simply do what you sat down at the computer for.
 
-> **De oma-test:** snapt oma het niet? Dan maken we het opnieuw.
+> **The Bugie test:** if Bugie can't use it without help, we make it again.
 
-## Wat is BugOS?
+## What is BugOS?
 
-BugOS is een gratis besturingssysteem. Je gebruikt het net als Windows, maar het **kan niet stuk**.
-Gaat er na een update iets mis? Dan kies je bij het opstarten de versie van gisteren, en alles is weer zoals het was.
+BugOS is a free operating system. You use it just like Windows, but it **can't break**.
+Did something go wrong after an update? Then you pick yesterday's version when the computer starts, and everything is back the way it was.
 
 | | |
 |---|---|
-| **Gewoon makkelijk** | Wifi, bluetooth, geluid en printers werken meteen. Grote knoppen en gewone woorden. |
-| **Apps met één klik** | De BugOS Winkel heeft bekende, veilige apps. Downloads van een website werken ook. |
-| **Windows-programma's** | Dubbelklik op een `.exe` en hij start. Is er een betere versie voor BugOS? Dan stelt BugOS die voor. |
-| **Gamen** | Steam, game-modus, controllers en Nvidia zitten er al in. |
-| **Programmeren** | Eén schakelaar zet VS Code, containers en programmeertalen klaar. |
-| **Updates vanzelf** | Stil op de achtergrond, en pas actief als je opnieuw opstart. Liever zelf kiezen? Dat kan ook. |
-| **Ook oude computers** | Heeft je computer weinig geheugen? Dan zet BugOS vanzelf de lichte stand aan. |
-| **Van jou** | Geen account nodig, geen reclame, en BugOS verzamelt niks over jou. |
+| **Just easy** | Wi-Fi, Bluetooth, sound and printers work right away. Big buttons and everyday words. |
+| **Apps in one click** | The BugOS Store has well-known, safe apps. Downloads from a website work too. |
+| **Windows programs** | Double-click an `.exe` and it starts. Is there a better version for BugOS? Then BugOS suggests it. |
+| **Gaming** | Steam, game mode, controllers and Nvidia are already built in. |
+| **Programming** | One switch sets up VS Code, containers and programming languages. |
+| **Updates by themselves** | Quietly in the background, and only active when you restart. Rather choose yourself? You can do that too. |
+| **Old computers too** | Does your computer have little memory? Then BugOS turns on light mode by itself. |
+| **Yours** | No account needed, no ads, and BugOS collects nothing about you. |
 
-## Zo ziet het eruit
+## What it looks like
 
 <table>
   <tr>
     <td width="50%">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="website/assets/winkel-donker.webp">
-        <img src="website/assets/winkel-licht.webp" alt="De BugOS Winkel">
+        <img src="website/assets/winkel-licht.webp" alt="The BugOS Store">
       </picture>
-      <p align="center"><b>BugOS Winkel</b>: apps met één klik</p>
+      <p align="center"><b>BugOS Store</b>: apps in one click</p>
     </td>
     <td width="50%">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="website/assets/hulp-donker.webp">
-        <img src="website/assets/hulp-licht.webp" alt="Er werkt iets niet: de hulp-app">
+        <img src="website/assets/hulp-licht.webp" alt="Something is not working: the help app">
       </picture>
-      <p align="center"><b>Er werkt iets niet</b>: BugOS kijkt het na en repareert</p>
+      <p align="center"><b>Something is not working</b>: BugOS checks it and fixes it</p>
     </td>
   </tr>
   <tr>
     <td width="50%">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="website/assets/instellingen-donker.webp">
-        <img src="website/assets/instellingen-licht.webp" alt="BugOS Instellingen: alles in gewone woorden">
+        <img src="website/assets/instellingen-licht.webp" alt="BugOS Settings: everything in everyday words">
       </picture>
-      <p align="center"><b>Instellingen</b>: wifi, geluid, printers, inloggen en meer, in gewone woorden</p>
+      <p align="center"><b>Settings</b>: Wi-Fi, sound, printers, signing in and more, in everyday words</p>
     </td>
     <td width="50%">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="website/assets/welkom-donker.webp">
-        <img src="website/assets/welkom-licht.webp" alt="BugOS Welkom: kies licht of donker">
+        <img src="website/assets/welkom-licht.webp" alt="BugOS Welcome: choose light or dark">
       </picture>
-      <p align="center"><b>Welkom</b>: alles stap voor stap ingesteld</p>
+      <p align="center"><b>Welcome</b>: everything set up step by step</p>
     </td>
   </tr>
   <tr>
     <td width="50%">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="website/assets/verkenner-donker.webp">
-        <img src="website/assets/verkenner-licht.webp" alt="Bestanden, de verkenner van BugOS, met de map Afbeeldingen">
+        <img src="website/assets/verkenner-licht.webp" alt="Files, the BugOS file manager, showing the Pictures folder">
       </picture>
-      <p align="center"><b>Bestanden</b>: je foto's en documenten, net als in Windows</p>
+      <p align="center"><b>Files</b>: your photos and documents, just like in Windows</p>
     </td>
     <td width="50%">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="website/assets/backup-donker.webp">
-        <img src="website/assets/backup-licht.webp" alt="Back-up met één knop naar een USB-schijf">
+        <img src="website/assets/backup-licht.webp" alt="Backup with one button to a USB drive">
       </picture>
-      <p align="center"><b>Back-up</b>: met één knop naar een USB-schijf</p>
+      <p align="center"><b>Backup</b>: one button, straight to a USB drive</p>
     </td>
   </tr>
 </table>
 
-## Proberen
+## Try it
 
-BugOS is nog in ontwikkeling (versie 0.3). Probeer het eerst op een reserve-computer of in een virtuele pc.
-In [docs/TESTEN.md](docs/TESTEN.md) staat precies hoe.
+BugOS is still being built (version 0.3). Try it first on a spare computer or in a virtual PC.
+[docs/TESTEN.md](docs/TESTEN.md) explains exactly how.
 
-Nu nog op Windows? Het programmaatje **BugOS Overstap** (in [`windows-overstap/`](windows-overstap/))
-kijkt of je computer BugOS aankan, neemt je bestanden mee en maakt de USB-stick voor je.
+Still on Windows? The little program **BugOS Overstap** (in [`windows-overstap/`](windows-overstap/))
+checks whether your computer can run BugOS, takes your files along and makes the USB stick for you.
 
 <p align="center">
-  <img src="docs/beelden/overstap/overstap-1.png" width="700" alt="BugOS Overstap op Windows, stap 1: kan mijn computer BugOS aan?">
+  <img src="docs/beelden/overstap/overstap-1.png" width="700" alt="BugOS Overstap on Windows, step 1: can my computer run BugOS?">
 </p>
 
-## Hoe is de repo ingedeeld?
+## How is the repo organized?
 
 ```
-Containerfile          het bouwrecept
-build_files/           het bouwscript en de lijst met extra programma's
-system_files/          alles wat in BugOS komt (apps, stijl, logo, lettertypes)
-iso_live/              de "probeer eerst"-USB-stick
-disk_config/           instellingen voor de klassieke USB-stick (ISO)
-windows-overstap/      het Windows-programma om over te stappen
-website/               de BugOS-website
-branding/              logo's, kleuren en lettertypes (zie docs/HUISSTIJL.md)
-tools/                 hulpjes voor de makers (logo, achtergrond, vertalingen)
-.github/workflows/     de "bakkerij" die BugOS automatisch bouwt
-docs/                  uitleg, plan en huisstijl
+Containerfile          the build recipe
+build_files/           the build script and the list of extra programs
+system_files/          everything that goes into BugOS (apps, style, logo, fonts)
+iso_live/              the "try it first" USB stick
+disk_config/           settings for the classic USB stick (ISO)
+windows-overstap/      the Windows program for switching over
+website/               the BugOS website
+branding/              logos, colors and fonts (see docs/HUISSTIJL.md)
+tools/                 little helpers for the makers (logo, background, translations)
+.github/workflows/     the "bakery" that builds BugOS automatically
+docs/                  explanations, plan and brand style
 ```
 
-## Licentie
+## License
 
-GPL-3.0. BugOS is en blijft gratis en open.
-De lettertypes vallen onder de SIL Open Font License (zie [`branding/lettertypes/`](branding/lettertypes/)).
+GPL-3.0. BugOS is and stays free and open.
+The fonts are under the SIL Open Font License (see [`branding/lettertypes/`](branding/lettertypes/)).
 
-BugOS is een eigen systeem op de basis van [Universal Blue](https://universal-blue.org) (net als Bazzite),
-[Fedora](https://fedoraproject.org) en [KDE](https://kde.org).
+BugOS is its own system, built on `kinoite-main` from [Universal Blue](https://universal-blue.org) (just like Bazzite),
+[Fedora](https://fedoraproject.org) Kinoite and [KDE](https://kde.org).

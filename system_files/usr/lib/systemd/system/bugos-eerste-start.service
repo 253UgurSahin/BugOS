@@ -1,5 +1,5 @@
 [Unit]
-Description=BugOS: standaard-apps klaarzetten na installatie
+Description=BugOS: set up the default apps after installing
 Wants=network-online.target
 After=network-online.target
 ConditionPathExists=!/var/lib/bugos/eerste-start-klaar

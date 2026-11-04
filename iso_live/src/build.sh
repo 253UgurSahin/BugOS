@@ -120,16 +120,14 @@ default_partitioning =
     /home (min 500 MiB, free 50 GiB)
     /var  (btrfs)
 
-[User Interface]
-# De pagina "Date and time" (half Engels) slaan we over: de tijdzone staat in
-# de kickstart hieronder op Europe/Amsterdam, en de tijd komt van internet.
-# (De oude namen "root-password" en "network" bestaan niet in deze versie.)
-hidden_webui_pages =
-    anaconda-screen-date-time
+# De pagina "Date and time" blijft zichtbaar: BugOS is voor de hele wereld,
+# dus de gebruiker kiest zelf zijn tijdzone (er staat er geen vast in de
+# kickstart hieronder).
 
 [Localization]
-# Niet via internet raden (dat vraagt het aan een Fedora-server, en kan
-# Nederlands overschrijven): BugOS begint in het Nederlands.
+# Niet via internet raden: dat vraagt het aan een Fedora-server, en BugOS
+# verzamelt niets. BugOS begint in het Engels; de gebruiker kiest op de eerste
+# pagina zelf een andere taal (alle talen van Fedora zijn er).
 use_geolocation = False
 
 [Timezone]
@@ -139,7 +137,7 @@ EOF
 echo "BugOS release ${VERSION_ID:-1}" >/etc/system-release
 
 # Het venster heette "Anaconda Web UI".
-sed -i 's|<title translate>Anaconda Web UI</title>|<title>BugOS installeren</title>|' \
+sed -i 's|<title translate>Anaconda Web UI</title>|<title>Install BugOS</title>|' \
     /usr/share/cockpit/anaconda-webui/index.html
 
 # Nederlandse teksten van het installatieprogramma: waar "Fedora" in staat
@@ -228,16 +226,15 @@ cat >>/usr/share/anaconda/interactive-defaults.ks <<EOF
 mkdir -p /tmp/bugos_logs
 %end
 
-# Taal, toetsenbord en tijdzone staan alvast goed voor Nederland.
-# us(euro): het gewone Amerikaanse toetsenbord, met het euroteken op AltGr+5.
-lang nl_NL.UTF-8
-keyboard --vckeymap=us --xlayouts='us(euro)'
-timezone Europe/Amsterdam
+# Standaard Engels met het Amerikaanse toetsenbord. In het installatieprogramma
+# kiest de gebruiker zelf een andere taal, een ander toetsenbord en de tijdzone.
+lang en_US.UTF-8
+keyboard --vckeymap=us --xlayouts='us'
 
 %onerror
 run0 --user=liveuser --setenv=WAYLAND_DISPLAY=wayland-0 --setenv=DISPLAY=:0 \\
     yad --timeout=0 --text-info --no-buttons --width=640 --height=420 \\
-    --title=BugOS --text="Het installeren is niet gelukt. Er is niets aan je computer veranderd als dit vóór het kopiëren gebeurde. Maak een foto van dit scherm en meld het op github.com/253UgurSahin/BugOS/issues" \\
+    --title=BugOS --text="Installing BugOS did not work. If this happened before copying started, nothing on your computer was changed. Take a photo of this screen and report it at github.com/253UgurSahin/BugOS/issues" \\
     </tmp/anaconda.log
 %end
 
@@ -267,7 +264,7 @@ if [ -d /sys/firmware/efi ] && mokutil --sb-state 2>/dev/null | grep -q enabled;
     printf 'bugos\nbugos\n' | mokutil --import /usr/share/bugos/sb_pubkey.der || true
     run0 --user=liveuser --setenv=WAYLAND_DISPLAY=wayland-0 --setenv=DISPLAY=:0 \
         yad --on-top --width=560 --title=BugOS --button=OK:0 \
-        --text="<b>Nog één stapje bij het opnieuw opstarten</b>\n\nJe computer laat een blauw scherm zien (MOK Manager). Kies daar:\n  1. <b>Enroll MOK</b>\n  2. <b>Continue</b>\n  3. <b>Yes</b>\n  4. Typ het wachtwoord: <b>bugos</b>\n  5. <b>Reboot</b>\n\nDit is nodig zodat je Nvidia-videokaart goed werkt." || true
+        --text="<b>One more step when the computer restarts</b>\n\nYour computer will show a blue screen (MOK Manager). Choose:\n  1. <b>Enroll MOK</b>\n  2. <b>Continue</b>\n  3. <b>Yes</b>\n  4. Type the password: <b>bugos</b>\n  5. <b>Reboot</b>\n\nThis is needed so your Nvidia graphics card works properly." || true
 fi
 %end
 EOF
@@ -310,11 +307,10 @@ done
 systemctl --global disable bugos-updatecheck.timer 2>/dev/null || true
 systemctl --global disable ublue-user-setup.service 2>/dev/null || true
 
-# Taal op de stick: Nederlands, met het Amerikaanse toetsenbord (dat gebruikt
-# bijna iedereen in Nederland). Zonder dit startte de stick in het Engels.
-# In het installatieprogramma kies je zelf de taal en het toetsenbord voor
-# de computer; Nederlands staat dan al klaar.
-echo "LANG=nl_NL.UTF-8" >/etc/locale.conf
+# Taal op de stick: Engels, met het Amerikaanse toetsenbord. Alle BugOS-
+# schermen zijn er ook in andere talen (zie docs/VERTALEN.md); in het
+# installatieprogramma kies je zelf de taal en het toetsenbord voor de computer.
+echo "LANG=en_US.UTF-8" >/etc/locale.conf
 echo "KEYMAP=us" >/etc/vconsole.conf
 mkdir -p /etc/X11/xorg.conf.d
 cat >/etc/X11/xorg.conf.d/00-keyboard.conf <<'EOF'
@@ -322,7 +318,6 @@ Section "InputClass"
     Identifier "system-keyboard"
     MatchIsKeyboard "on"
     Option "XkbLayout" "us"
-    Option "XkbVariant" "euro"
 EndSection
 EOF
 
@@ -416,7 +411,7 @@ find /var/tmp -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
 mkdir -p /var/tmp
 cat >/etc/systemd/system/var-tmp.mount <<'EOF'
 [Unit]
-Description=Grotere tijdelijke map voor de live-USB
+Description=Larger temporary folder for the live USB
 
 [Mount]
 What=tmpfs
@@ -437,6 +432,6 @@ mkdir -p /boot/efi
 cp -av /usr/lib/efi/*/*/EFI /boot/efi/
 cp -v /boot/efi/EFI/fedora/grubx64.efi /boot/efi/EFI/BOOT/fbx64.efi || true
 rm -f /etc/localtime
-systemd-firstboot --timezone Europe/Amsterdam
+systemd-firstboot --timezone UTC
 mkdir -p /usr/lib/bootc-image-builder
 cp "$SRC/iso.yaml" /usr/lib/bootc-image-builder/iso.yaml

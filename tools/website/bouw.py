@@ -66,8 +66,8 @@ def opbouw() -> str:
     merkers = (merker(1, 240, 236, 204, 209, 232, 230)
                + merker(2, 12, 80, 77, 108, 20, 85)
                + merker(3, 210, 0, 160, 28, 202, 5))
-    label = ("Opbouwtekening van het BugOS-logo: twee vleugels (1), vier stippen (2) en een kop met twee "
-             "witte vlekjes (3), getekend met cirkels en één rechte lijn.")
+    label = ("How the BugOS logo is built: two wings (1), four dots (2) and a head with two "
+             "white spots (3), drawn with circles and one straight line.")
     return (f'<svg class="tekening" viewBox="-36 -26 328 312" role="img" aria-label="{label}">'
             f'{merk_variabel("opbouw")}{hulp}{maten}{merkers}</svg>')
 

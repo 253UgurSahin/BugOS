@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=Windows-programma (BugOS)
-Name[en]=Windows program (BugOS)
-Comment=Windows-programma's openen
-Comment[en]=Open Windows programs
+Name=Windows program (BugOS)
+Name[nl]=Windows-programma (BugOS)
+Comment=Open Windows programs
+Comment[nl]=Windows-programma's openen
 Exec=bugos-exe %f
 Icon=wine
 MimeType=application/x-ms-dos-executable;application/x-msdownload;application/x-msi;application/x-ms-shortcut;application/vnd.microsoft.portable-executable;

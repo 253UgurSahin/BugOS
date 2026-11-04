@@ -1,11 +1,11 @@
 [Desktop Entry]
 Type=Application
-Name=Bestanden
-Name[en]=Files
-GenericName=Verkenner
-GenericName[en]=File manager
-Comment=Je foto's, documenten en downloads
-Comment[en]=Your photos, documents and downloads
+Name=Files
+Name[nl]=Bestanden
+GenericName=File manager
+GenericName[nl]=Verkenner
+Comment=Your photos, documents and downloads
+Comment[nl]=Je foto's, documenten en downloads
 Exec=bugos-bestanden %U
 Icon=system-file-manager
 Categories=Qt;System;FileTools;FileManager;

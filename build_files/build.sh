@@ -191,7 +191,7 @@ done
 # bestand gelden de gewone KDE-instellingen.
 rm -f /usr/share/kde-settings/kde-profile/default/xdg/krunnerrc
 
-# Firefox: begint niet meer op de Fedora-startpagina, en heet "voor BugOS".
+# Firefox: begint niet meer op de Fedora-startpagina, en heet "for BugOS".
 FF=/usr/lib64/firefox
 if [ -d "$FF" ]; then
     sed -i -e 's|https://start.fedoraproject.org/|about:home|' -e '/browser.newtabpage.pinned/d' \
@@ -201,7 +201,7 @@ if [ -d "$FF" ]; then
 [Global]
 id=bugos
 version=1.0
-about=Mozilla Firefox voor BugOS
+about=Mozilla Firefox for BugOS
 
 [Preferences]
 app.distributor="bugos"

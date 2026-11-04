@@ -1,192 +1,193 @@
-# 🐞 De BugOS-bouwtekening
+# 🐞 The BugOS blueprint
 
-> Uitgelegd zo simpel als het kan. Als oma het niet snapt, moeten we het opnieuw opschrijven.
+> Explained as simply as possible. If Bugie doesn't get it, we write it again.
 
-## Wat is BugOS?
+## What is BugOS?
 
-BugOS is een gratis besturingssysteem voor je computer, net als Windows.
-Het is gemaakt voor **iedereen**:
+BugOS is a free operating system for your computer, just like Windows.
+It is made for **everyone**:
 
-- 👵 **Oma** moet het kunnen gebruiken zonder hulp.
-- 🎮 **Gamers** moeten er goed op kunnen spelen.
-- 🛠️ **Programmeurs** moeten er fijn op kunnen werken.
+- 🐞 **Bugie** should be able to use it without help.
+- 🎮 **Gamers** should be able to play well on it.
+- 🛠️ **Developers** should enjoy working on it.
 
-Het belangrijkste idee: **BugOS kan niet stuk.**
+The most important idea: **BugOS can't break.**
 
-## De keuzes die we samen hebben gemaakt
+## The choices we made together
 
-| Onderwerp | Wat we kozen | Waarom, in gewone taal |
+| Topic | What we chose | Why, in plain words |
 |---|---|---|
-| Fundering | Fedora Atomic (kaal Fedora Kinoite van Universal Blue, net als Bazzite) | Het systeem is van "onbreekbaar glas". Elke update is een complete nieuwe versie. Gaat er iets mis? Dan kies je bij het opstarten de vorige versie. |
-| Schil | Eigen BugOS-jas op de KDE-motor | KDE regelt al goed: vensters, wifi, bluetooth en schermen. Wij maken het startmenu, de taakbalk, de stijl en de eigen BugOS-apps. |
-| Uiterlijk | Eigen BugOS-stijl, licht of donker | Knoppen zitten waar je ze van Windows kent, maar het ziet er anders uit. Je kiest zelf licht of donker. |
-| Updates | Standaard vanzelf, met een schakelaar voor "zelf doen" | Oma hoeft er niks voor te doen. Wie zelf wil kiezen, kan dat. |
-| Programma's | De BugOS Winkel, plus dubbelklikken op downloads | Net als je telefoon, en ook net als Windows. |
-| Windows-programma's | Dubbelklik op een `.exe` start hem via Wine | Werkt het niet, dan legt BugOS uit wat je in plaats daarvan kunt gebruiken. |
-| Gamers | Steam en Proton, game-modus, controllers en Nvidia | Spelen zonder gedoe. |
-| Programmeurs | Ontwikkelaarsmodus-schakelaar, containers, VS Code en programmeertalen | Alles staat klaar met één klik, en oma ziet er niks van. |
-| Talen | Alle talen van KDE | Onze eigen schermen eerst in het Nederlands en Engels. |
-| Installeren | USB-stick, ook naast Windows, plus een Windows-overstap-programma | Overstappen moet makkelijk zijn. |
-| Computers | Gewone pc's en laptops, Nvidia, oude pc's (met lichte stand) | De lichte stand gaat vanzelf aan op trage computers. |
-| Privacy | Geen account en niks verzamelen | Je computer is van jou. |
-| Licentie | GPL-3.0 | Altijd gratis en open. |
+| Foundation | Fedora Atomic: its own system on Universal Blue's `kinoite-main` (plain Fedora Kinoite with codecs and drivers), just like Bazzite. The Nvidia version uses `kinoite-nvidia`. | The system is made of "unbreakable glass". Every update is a complete new version. Something goes wrong? Then you pick the previous version when the computer starts. |
+| Shell | Our own BugOS coat on the KDE engine | KDE already handles windows, Wi-Fi, Bluetooth and screens well. We make the start menu, the taskbar, the style and our own BugOS apps. |
+| Look | Our own BugOS style, light or dark | Buttons are where you know them from Windows, but it looks different. You choose light or dark yourself. |
+| Updates | Automatic by default, with a switch for "I'll do it myself" | Bugie doesn't have to do anything. Anyone who wants to choose can. |
+| Programs | The BugOS Store, plus double-clicking downloads | Just like your phone, and also just like Windows. |
+| Windows programs | Double-click an `.exe` and it starts through Wine | If it doesn't work, BugOS explains what you can use instead. |
+| Gamers | Steam and Proton, game mode, controllers and Nvidia | Play without hassle. |
+| Developers | Developer mode switch, containers, VS Code and programming languages | Everything is ready with one click, and Bugie never sees any of it. |
+| Languages | English by default; our own screens in English and Dutch | Every other language can be added with translation files. KDE itself already speaks 50+ languages. |
+| Installing | USB stick, also next to Windows, plus a Windows switching program | Switching should be easy. |
+| Computers | Normal PCs and laptops, Nvidia, old PCs (with light mode) | Light mode turns on by itself on slow computers. |
+| Privacy | No account and no data collection | Your computer belongs to you. |
+| License | GPL-3.0 | Always free and open. |
 
-## Hoe zit BugOS in elkaar? (het huis)
+## How is BugOS put together? (the house)
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  🐞 BugOS-jas (van ons)                                 │
-│  Startmenu · Taakbalk · Stijl · BugOS Welkom · Winkel   │
-│  Game-modus · Ontwikkelaarsmodus · Lichte stand         │
-│  .exe openen · .rpm/.deb installeren · Updates-knop     │
-│  Bestanden (de verkenner, met grote tegels)             │
+│  🐞 BugOS coat (ours)                                   │
+│  Start menu · Taskbar · Style · BugOS Welcome · Store   │
+│  Game mode · Developer mode · Light mode                │
+│  Open .exe · Install .rpm/.deb · Updates button         │
+│  Files (the file explorer, with big tiles)              │
 ├─────────────────────────────────────────────────────────┤
-│  🧱 KDE Plasma (de motor)                               │
-│  Vensters · Wifi · Bluetooth · Dolphin (gevorderden)    │
-│  Schijfbeheer (KDE Partition Manager) · Geluid          │
+│  🧱 KDE Plasma (the engine)                             │
+│  App windows · Wi-Fi · Bluetooth · Dolphin (advanced)   │
+│  Disk management (KDE Partition Manager) · Sound        │
 ├─────────────────────────────────────────────────────────┤
-│  🏠 Fedora Kinoite / Fedora Atomic (de fundering)       │
-│  Drivers · Codecs (films/muziek) · Nvidia · Updates     │
-│  met een "terug-knop"                                   │
+│  🏠 Fedora Kinoite / kinoite-main (the foundation)      │
+│  Drivers · Codecs (movies/music) · Nvidia · Updates     │
+│  with an "undo button"                                  │
 └─────────────────────────────────────────────────────────┘
 ```
 
-## Hoe komt een update bij de gebruiker? (de bakkerij)
+## How does an update reach the user? (the bakery)
 
-1. Wij veranderen iets in deze repo.
-2. GitHub bakt automatisch een nieuwe BugOS. Dat gebeurt ook elke nacht, zodat beveiligingsupdates van Fedora meekomen.
-3. De computer van de gebruiker haalt die op de achtergrond op.
-4. Bij de volgende keer opstarten draait de nieuwe versie.
-5. Problemen? Dan kies je in het opstartmenu de vorige versie, en alles is weer zoals gisteren.
+1. We change something in this repo.
+2. GitHub automatically bakes a new BugOS. This also happens every night, so security updates from Fedora come along.
+3. The user's computer fetches it in the background.
+4. The next time the computer starts, the new version runs.
+5. Problems? Then you pick the previous version in the startup menu, and everything is back to how it was yesterday.
 
-## Wat zit er nu al in (versie 0.3)
+## What is already in it (version 0.3)
 
-### Apps die je ziet
+### Apps you can see
 
-| App in het startmenu | Bestand | Wat het doet |
+| App in the start menu | File | What it does |
 |---|---|---|
-| BugOS Welkom | `bugos-welkom` | Het eerste scherm: taal, wifi, licht of donker, updates, gamen of programmeren, en bestanden van Windows terugzetten. |
-| Instellingen | `bugos-instellingen` | Zoals Instellingen in Windows, maar rustiger. Start: snelle schuifjes (wifi, bluetooth, nachtlicht, donker) en het volume. Eigen pagina's in gewone woorden: Wifi en internet (netwerken, verbinden met wachtwoord), Bluetooth (apparaten verbinden), Printers en scannen (printers, wachtrij, testpagina, scannen), Geluid (volume, welke luidspreker), Scherm (helderheid, nachtlicht, grootte), Energie (zuinig/gebalanceerd/snel, batterij, scherm uit, slaapstand, aan/uit-knop, dichtklappen), Uiterlijk (licht/donker, achtergrond), Meldingen (niet storen, stil bij games, geluidje, proefmelding), Muis en touchpad (snelheid, linkshandig, scrollrichting, tikken, dubbelklik), Makkelijker zien (grote letters, grote aanwijzer, muis schudden, vergrootglas, plaktoetsen, langzame toetsen, schermlezer), Tijd en taal (klok vanzelf gelijk, tijdzone, taal), Inloggen en wachtwoord (naam, wachtwoord wijzigen, inloggen zonder wachtwoord, scherm op slot), Standaardprogramma's (internet, e-mail, foto's, muziek, video's, PDF, tekst), Updates en meer, Over deze computer. Zoeken over alles. Per pagina 'Meer instellingen (voor gevorderden)' naar KDE. |
-| Er werkt iets niet | `bugos-hulp` | Controleert internet, wifi, bluetooth, geluid, printer, opslag en updates. Bij elk probleem staat een knop "Repareer". |
-| Back-up | `bugos-backup` | Je bestanden met één knop naar een USB-schijf, en ook weer terug. Er wordt nooit iets weggegooid. |
-| Bestanden van Windows | `bugos-overstap` | Zet de bestanden, bladwijzers en achtergrond terug die je met BugOS Overstap van Windows hebt meegenomen. |
-| Game-modus aan/uit | `bugos-spelmodus` | Volle kracht, meldingen stil en een FPS-teller. |
-| BugOS Winkel | `bugos-winkel` | 37 bekende, veilige apps in 10 onderwerpen, installeren met één klik. "Meer apps zoeken" opent de grote KDE-winkel. |
-| Startmenu | `org.bugos.startmenu` | De startknop linksonder (het lieveheersbeestje), standaard. Begroeting, grote zoekbalk die apps én de pagina's van Instellingen vindt, vastgezette apps, recente bestanden, alle apps per onderwerp, en onderin Instellingen, Vergrendelen, Afmelden, Herstarten en Uitzetten. Alt+F1 en de Windows-toets openen het. Liever het KDE-menu? Instellingen → Updates en meer → Taakbalk. |
-| Snelmenu | `org.bugos.snelmenu` | Naast het systeemvak, standaard. Grote knoppen voor wifi, bluetooth, game-modus, donker, niet storen en geluid uit, plus de volumeschuif; het pijltje bij een knop opent de bijbehorende pagina van Instellingen (bijvoorbeeld een wifi-netwerk kiezen). |
-| Uitzetscherm | `uitzetscherm/Logout.qml` | Het scherm bij Uitzetten, Herstarten of Afmelden: grote tegels Slaapstand, Opnieuw opstarten, Uitzetten (rood), Afmelden en een knop "Toch niet". Via het startmenu telt het 30 seconden af en zegt dat in gewone woorden. Komt in het shell-pakket van Plasma én in de BugOS-look-and-feel. |
-| Taakbalk klaarzetten | `bugos-paneel` | Zet het BugOS-startmenu en het snelmenu op de taakbalk (`standaard`, één keer na het inloggen, ook voor wie al een taakbalk had), of één van de twee aan/uit (`startmenu|snelmenu aan|uit|status`). "Uit" zet het KDE-menu terug zoals BugOS het had ingesteld. |
-| Bestanden | `bugos-bestanden` | De verkenner: grote tegels met voorbeeldjes, links je vaste plekken en USB-sticks. Kies je iets, dan staat onderin wat je ermee kunt (Openen, Kopiëren, Weggooien...). Weggooien gaat eerst naar de prullenbak (met Ongedaan maken); nooit iets overschrijven. **Deze computer**: al je schijven (USB-stick, externe schijf, tweede schijf, Windows-schijf, sd-kaart, cd) met hoeveel ruimte er nog is; openen met één klik (ook op slot: KDE vraagt het wachtwoord) en veilig verwijderen van de hele stick. Per stick of schijf (knop '…'): naam wijzigen, controleren en repareren, leegmaken. Een **nieuwe, lege schijf**: 'In gebruik nemen' (indelen en formatteren, zoals Schijfbeheer in Windows); daarna is hij er altijd. Schijfbeheer (KDE Partition Manager) voor gevorderden. |
-| Taakbeheer | `bugos-taakbeheer` | Zoals Taakbeheer in Windows (Ctrl+Shift+Esc), maar simpeler: bovenaan in gewone woorden hoe het gaat (met een tip als het druk is), open programma's met 'Sluiten' (netjes, en geforceerd als hij niet reageert), prestaties met grafiekjes (processor met temperatuur, geheugen, schijf, internet, videokaart) en programma's die meestarten aan/uit. Onderdelen van BugOS zelf kun je niet per ongeluk stoppen. |
-| Schijven openen | `bugos-schijven-openen` | Opent na het inloggen de schijven die in de computer zitten, zodat ze er altijd zijn (zoals D: in Windows). Zonder wachtwoord voor beheerders (polkit-regel). |
-| Inloggen zonder wachtwoord | `bugos-inloggen` | Zet het inlogscherm (SDDM) op 'vanzelf inloggen' voor één gebruiker, of weer uit. Instellingen roept het aan via pkexec; KDE vraagt één keer je wachtwoord (polkit-actie org.bugos.inloggen). |
-| Meer apps, Schijven, Dolphin | (KDE) | KDE-programma's met een simpele BugOS-naam. Dolphin is de verkenner voor gevorderden. |
+| BugOS Welcome | `bugos-welkom` | The first screen: language, Wi-Fi, light or dark, updates, gaming or programming, and bringing back files from Windows. |
+| Settings | `bugos-instellingen` | Like Settings in Windows, but calmer. Home: quick toggles (Wi-Fi, Bluetooth, night light, dark) and the volume. Its own pages in plain words: Wi-Fi and internet (networks, connect with a password), Bluetooth (connect devices), Printers and scanning (printers, queue, test page, scanning), Sound (volume, which speaker), Screen (brightness, night light, size), Power (saver/balanced/fast, battery, screen off, sleep, power button, closing the lid), Appearance (light/dark, background), Notifications (do not disturb, quiet during games, sound, test notification), Mouse and touchpad (speed, left-handed, scroll direction, tapping, double-click), Easier to see (large text, large pointer, shake the mouse, magnifier, sticky keys, slow keys, screen reader), Time and language (set the clock automatically, time zone, language), Sign-in and password (name, change password, sign in without a password, lock screen), Default apps (internet, email, photos, music, videos, PDF, text), Updates and more, About this computer. Search across everything. Each page has 'More settings (for advanced users)' that leads to KDE. |
+| Something is not working | `bugos-hulp` | Checks internet, Wi-Fi, Bluetooth, sound, printer, storage and updates. Every problem has a "Fix" button. |
+| Backup | `bugos-backup` | Your files to a USB drive with one button, and back again. Nothing is ever thrown away. |
+| Files from Windows | `bugos-overstap` | Brings back the files, bookmarks and background you took from Windows with BugOS Switch. |
+| Game mode on/off | `bugos-spelmodus` | Full power, notifications muted and an FPS counter. |
+| BugOS Store | `bugos-winkel` | 37 well-known, safe apps in 10 topics, install with one click. "Find more apps" opens the big KDE store. |
+| Start menu | `org.bugos.startmenu` | The start button at the bottom left (the ladybug), by default. A greeting, a big search bar that finds apps and the pages of Settings, pinned apps, recent files, all apps by topic, and at the bottom Settings, Lock, Sign out, Restart and Shut down. Alt+F1 and the Windows key open it. Prefer the KDE menu? Settings → Updates and more → Taskbar. |
+| Quick menu | `org.bugos.snelmenu` | Next to the system tray, by default. Big buttons for Wi-Fi, Bluetooth, game mode, dark, do not disturb and mute, plus the volume slider; the little arrow next to a button opens the matching page in Settings (for example to pick a Wi-Fi network). |
+| Shutdown screen | `uitzetscherm/Logout.qml` | The screen for Shut down, Restart or Sign out: big tiles for Sleep, Restart, Shut down (red), Sign out and a "Never mind" button. From the start menu it counts down 30 seconds and says so in plain words. It goes into Plasma's shell package and into the BugOS look-and-feel. |
+| Set up the taskbar | `bugos-paneel` | Puts the BugOS start menu and the quick menu on the taskbar (`standaard`, once after signing in, also for people who already had a taskbar), or turns one of the two on/off (`startmenu|snelmenu aan|uit|status`). "Off" puts the KDE menu back the way BugOS had set it up. |
+| Files | `bugos-bestanden` | The file explorer: big tiles with previews, your usual places and USB sticks on the left. When you pick something, the bottom shows what you can do with it (Open, Copy, Throw away...). Throwing away goes to the trash first (with Undo); nothing is ever overwritten. **This computer**: all your drives (USB stick, external drive, second drive, Windows drive, SD card, CD) with how much space is left; open with one click (also when locked: KDE asks for the password) and safely remove the whole stick. Per stick or drive (the '…' button): rename, check and repair, erase. A **new, empty drive**: 'Start using' (partition and format, like Disk Management in Windows); after that it is always there. Disk management (KDE Partition Manager) for advanced users. |
+| Task Manager | `bugos-taakbeheer` | Like Task Manager in Windows (Ctrl+Shift+Esc), but simpler: at the top, in plain words, how things are going (with a tip when it is busy), open programs with 'Close' (politely, and forced if it doesn't respond), performance with small graphs (processor with temperature, memory, disk, internet, graphics card) and programs that start with the computer on/off. You can't stop parts of BugOS itself by accident. |
+| Open drives | `bugos-schijven-openen` | After signing in, opens the drives inside the computer so they are always there (like D: in Windows). No password needed for administrators (polkit rule). |
+| Sign in without a password | `bugos-inloggen` | Sets the sign-in screen (SDDM) to 'sign in automatically' for one user, or turns it off again. Settings calls it through pkexec; KDE asks for your password once (polkit action org.bugos.inloggen). |
+| More apps, Disks, Dolphin | (KDE) | KDE programs with a simple BugOS name. Dolphin is the file explorer for advanced users. |
 
-### Wat op de achtergrond gebeurt
+### What happens in the background
 
-| Onderdeel | Bestand | Wat het doet |
+| Part | File | What it does |
 |---|---|---|
-| Windows-programma's | `bugos-exe` | Dubbelklik op een `.exe` start hem via Wine. Bestaat er een betere versie in de Winkel, dan wordt die eerst aangeboden. |
-| Downloads van websites | `bugos-pakket` | Dubbelklik op een `.rpm` of `.deb`: eerst kijkt hij in de Winkel, anders installeert hij het veilig in een doosje. |
-| Updates | `bugos-updates` | Vanzelf of zelf; nu updaten of terug naar de vorige versie. |
-| Update-melding | `bugos-updatecheck` | Bij "zelf updaten" krijg je één keer per dag een melding met een knop "Nu updaten". |
-| Ontwikkelaarsmodus | `bugos-ontwikkelaar` | VS Code, containers en een dev-doosje met programmeertalen. |
-| Lichte stand | `bugos-lichte-stand` | Zet vanzelf de zware effecten uit op oude pc's. |
-| Eerste start | `bugos-eerste-start` | Zet LibreOffice, VLC en Steam klaar. |
-| Vertalingen | `vertalingen/*.json` | Elke taal kan erbij zonder code te schrijven (zie [VERTALEN.md](VERTALEN.md)). |
-| Stijl | `look-and-feel`, `color-schemes`, `bugos_ui.py` | Taakbalk onderaan, BugOS-kleuren voor licht en donker, de lettertypes, het logo, de achtergrond "Stip", het opstart-, inlog- en vergrendelscherm en vaste favorieten in het startmenu. Alle BugOS-apps gebruiken hetzelfde ontwerp (`bugos_ui.py`). Zie [HUISSTIJL.md](HUISSTIJL.md). |
+| Windows programs | `bugos-exe` | Double-click an `.exe` and it starts through Wine. If there is a better version in the Store, that is offered first. |
+| Downloads from websites | `bugos-pakket` | Double-click an `.rpm` or `.deb`: it first looks in the Store, otherwise it installs it safely in a little box. |
+| Updates | `bugos-updates` | Automatic or by yourself; update now or go back to the previous version. |
+| Update notification | `bugos-updatecheck` | With "update myself" you get a notification once a day with an "Update now" button. |
+| Developer mode | `bugos-ontwikkelaar` | VS Code, containers and a dev box with programming languages. |
+| Light mode | `bugos-lichte-stand` | Turns off the heavy effects on old PCs by itself. |
+| First start | `bugos-eerste-start` | Sets up LibreOffice, VLC and Steam. |
+| Translations | `vertalingen/*.json` | Any language can be added without writing code (see [VERTALEN.md](VERTALEN.md)). |
+| Style | `look-and-feel`, `color-schemes`, `bugos_ui.py` | Taskbar at the bottom, BugOS colors for light and dark, the fonts, the logo, the "Stip" background, the boot, sign-in and lock screens, and pinned favorites in the start menu. All BugOS apps use the same design (`bugos_ui.py`). See [HUISSTIJL.md](HUISSTIJL.md). |
 
-### Voor Windows (`windows-overstap/`)
+### For Windows (`windows-overstap/`)
 
-**BugOS Overstap** heeft dezelfde look als BugOS (donkere zijbalk met de stappen, rode knoppen) en werkt in vier stappen:
+**BugOS Switch** has the same look as BugOS (dark sidebar with the steps, red buttons) and works in four steps:
 
-1. Controleren: kan deze pc BugOS aan? Het kijkt naar 64-bit, geheugen, UEFI, ruimte, BitLocker en Nvidia.
-2. Meenemen: documenten, foto's, muziek, video's, bureaublad, downloads, bladwijzers en achtergrond gaan naar een USB-schijf.
-3. Ruimte maken: Windows wordt kleiner gemaakt, zodat BugOS ernaast past.
-4. USB-stick maken: BugOS wordt vanzelf gedownload (de goede versie voor jouw videokaart), gecontroleerd en op de USB-stick gezet.
+1. Check: can this PC run BugOS? It looks at 64-bit, memory, UEFI, space, BitLocker and Nvidia.
+2. Take along: documents, photos, music, videos, desktop, downloads, bookmarks and background go to a USB drive.
+3. Make room: Windows is made smaller, so BugOS fits next to it.
+4. Make the USB stick: BugOS is downloaded automatically (the right version for your graphics card), checked and put on the USB stick.
 
-### De bakkerij (`.github/workflows/`)
+### The bakery (`.github/workflows/`)
 
-| Workflow | Wat het doet |
+| Workflow | What it does |
 |---|---|
-| `build.yml` | Bouwt BugOS (gewoon en Nvidia), bij elke verandering en elke nacht. |
-| `iso.yml` | Maakt op verzoek een USB-stick (ISO). Standaard is dat de "probeer eerst"-stick met het nieuwe installatieprogramma. Op verzoek zet hij de ISO in stukjes van minder dan 2 GB in een GitHub Release. |
-| `windows-overstap.yml` | Controleert het Windows-programma op een echte Windows-computer en pakt het in. Bij een versie-tag (zoals `v0.2`) maakt hij er een download van. |
-| `website.yml` | Zet de website (`website/`) online via GitHub Pages. Staat voorlopig op handmatig. |
+| `build.yml` | Builds BugOS (normal and Nvidia), on every change and every night. |
+| `iso.yml` | Makes a USB stick (ISO) on request. By default that is the "try first" stick with the new installer. On request it puts the ISO in pieces of less than 2 GB in a GitHub Release. |
+| `windows-overstap.yml` | Checks the Windows program on a real Windows computer and packs it. With a version tag (like `v0.2`) it turns it into a download. |
+| `website.yml` | Puts the website (`website/`) online through GitHub Pages. Set to manual for now. |
 
-## Het stappenplan
+## The roadmap
 
-### Fase 1: Fundering ✅
-- [x] Plan op papier
-- [x] BugOS wordt automatisch gebouwd, in een gewone en een Nvidia-versie
-- [x] Een ISO voor de USB-stick op verzoek
-- [x] De eerste eigen BugOS-onderdelen
+### Phase 1: Foundation ✅
+- [x] Plan on paper
+- [x] BugOS is built automatically, in a normal and an Nvidia version
+- [x] An ISO for the USB stick on request
+- [x] The first BugOS parts of our own
 
-### Fase 2: De eigen jas ✅
-- [x] **BugOS Instellingen** met grote tegels en een zoekbalk
-- [x] Een update-melding voor wie "zelf" kiest
-- [x] **BugOS Winkel** in eigen stijl, met veilige en geteste apps vooraan
-- [x] Vaste favorieten in het startmenu
-- [x] **Eigen startmenu**, standaard op de taakbalk (het KDE-menu blijft te kiezen in Instellingen)
-- [x] **Snelmenu** in BugOS-stijl, standaard naast het systeemvak
+### Phase 2: Our own coat ✅
+- [x] **BugOS Settings** with big tiles and a search bar
+- [x] An update notification for people who choose "myself"
+- [x] **BugOS Store** in our own style, with safe and tested apps up front
+- [x] Pinned favorites in the start menu
+- [x] **Our own start menu**, on the taskbar by default (the KDE menu can still be chosen in Settings)
+- [x] **Quick menu** in BugOS style, next to the system tray by default
 
-### Fase 3: Overstappen ✅ (het ondertekenen wacht op de manager)
-- [x] **Windows-overstap**: pc-controle, bestanden meenemen, ruimte maken, BugOS downloaden en de USB-stick schrijven
-- [x] In BugOS: de bestanden van Windows terugzetten met één knop
-- [x] **"Probeer eerst"-USB-stick** met het nieuwe installatieprogramma (Anaconda WebUI). Het stelt weinig vragen, waarschuwt bij BitLocker en legt bij Nvidia het blauwe sleutel-scherm uit.
-- [x] **De stick ís BugOS**: BugOS zit zelf op de stick en installeert zonder internet. Geen Aurora- of Fedora-namen of -logo's meer op de stick, in het installatieprogramma en in het geïnstalleerde systeem (welkomstscherm, terminal, inlogscherm, "Over dit systeem", startmenu, winkel). De stick start in het Nederlands.
-- [x] Een downloadplek voor de ISO: GitHub Releases, in stukjes van minder dan 2 GB. BugOS Overstap plakt ze vanzelf aan elkaar.
-- [ ] **Het Windows-programma ondertekenen**, zodat Windows geen waarschuwing geeft. Dit kost normaal geld (een certificaat). Voor open-source projecten kan het gratis via [SignPath Foundation](https://signpath.org). Aanvragen moet de eigenaar van de repo doen, dus **dit is een taak voor de manager**.
+### Phase 3: Switching ✅ (signing is waiting on the manager)
+- [x] **Windows switch**: PC check, take files along, make room, download BugOS and write the USB stick
+- [x] In BugOS: bring back the files from Windows with one button
+- [x] **"Try first" USB stick** with the new installer (Anaconda WebUI). It asks few questions, warns about BitLocker and explains the blue key screen for Nvidia.
+- [x] **The stick is BugOS**: BugOS itself is on the stick and installs without internet. No more Aurora or Fedora names or logos on the stick, in the installer and in the installed system (welcome screen, terminal, sign-in screen, "About this system", start menu, store). The stick starts in English; you choose your language, keyboard and time zone in the installer (the date and time page is no longer hidden).
+- [x] A download place for the ISO: GitHub Releases, in pieces of less than 2 GB. BugOS Switch glues them back together by itself.
+- [ ] **Sign the Windows program**, so Windows doesn't show a warning. This normally costs money (a certificate). For open-source projects it can be free through [SignPath Foundation](https://signpath.org). The owner of the repo has to apply, so **this is a task for the manager**.
 
-### Fase 4: Oppoetsen ✅ (op de punten voor de manager na)
-- [x] Hulp-app "Er werkt iets niet"
-- [x] Back-up met één knop
-- [x] Vertalen zonder programmeren (woordenboekjes per taal)
-- [x] Eigen website met een downloadknop (staat klaar, maar is nog niet online)
-- [ ] Vrijwilligers vinden voor vertalingen (**manager**)
-- [ ] Een eigen domeinnaam voor de website (**manager**)
+### Phase 4: Polishing ✅ (except for the manager's items)
+- [x] Help app "Something is not working"
+- [x] Backup with one button
+- [x] Translating without programming (little dictionaries per language)
+- [x] Our own website with a download button (ready, but not online yet)
+- [ ] Find volunteers for translations (**manager**)
+- [ ] Our own domain name for the website (**manager**)
 
-### Fase 5: Nieuw design ✅
-- [x] **Nieuw logo**: een lieveheersbeestje van simpele vormen, in kleur, één kleur en als app-icoon
-- [x] **Nieuwe achtergrond "Stip"**, licht en donker
-- [x] **Huisstijl** op papier: logo, kleuren, letters, vormen en hoe we praten ([HUISSTIJL.md](HUISSTIJL.md))
-- [x] **Alle BugOS-apps** opnieuw ontworpen, in licht en donker: Welkom, Instellingen, Winkel, Er werkt iets niet, Back-up, Bestanden van Windows en de "probeer eerst"-stick
-- [x] **Bureaublad**: nieuwe kleuren, eigen lettertypes, startmenu en snelmenu, opstartscherm, inlog- en vergrendelscherm, opstartlogo
-- [x] **Nieuwe website** met echte schermafbeeldingen, een probeer-het-zelf voor "terug naar gisteren" en een licht/donker-schuif
-- [x] **BugOS Overstap** (Windows) in de nieuwe stijl, scherp op schermen van 125% en 150%
-- [x] **Premium-ronde:** eigen BugOS-lijniconen, rustigere apps (alleen problemen krijgen kleur), en een website die het verhaal vertelt: waarom een lieveheersbeestje, de oma-test en een dag in huis
+### Phase 5: New design ✅
+- [x] **New logo**: a ladybug made of simple shapes, in color, in one color and as an app icon
+- [x] **New background "Stip"**, light and dark
+- [x] **Brand style** on paper: logo, colors, fonts, shapes and how we talk ([HUISSTIJL.md](HUISSTIJL.md))
+- [x] **All BugOS apps** redesigned, in light and dark: Welcome, Settings, Store, Something is not working, Backup, Files from Windows and the "try first" stick
+- [x] **Desktop**: new colors, our own fonts, start menu and quick menu, boot screen, sign-in and lock screen, boot logo
+- [x] **New website** with real screenshots, a try-it-yourself for "back to yesterday" and a light/dark switch
+- [x] **BugOS Switch** (Windows) in the new style, sharp on 125% and 150% screens
+- [x] **Premium round:** our own BugOS line icons, calmer apps (only problems get color), and a website that tells the story: why a ladybug, the Bugie test and a day at home
 
-### Voor de manager: wat er nodig is om BugOS uit te delen
-- [ ] De **repo** en de **pakketten** (`bugos`, `bugos-nvidia`) op **openbaar** zetten. Zonder dat:
-  - kan BugOS Overstap BugOS niet downloaden,
-  - en krijgen geïnstalleerde computers geen updates.
-  - (Installeren vanaf de "probeer eerst"-stick werkt wél: BugOS zit zelf op de stick.)
-- [ ] In **Settings** de standaard-branch op `main` zetten. Dan draait de nachtelijke bouw (met beveiligingsupdates) op `main`.
-- [ ] Ondertekenen via SignPath, vrijwilligers en een domeinnaam (zie hierboven).
+### For the manager: what is needed to hand out BugOS
+- [ ] Make the **repo** and the **packages** (`bugos`, `bugos-nvidia`) **public**. Without that:
+  - BugOS Switch can't download BugOS,
+  - and installed computers get no updates.
+  - (Installing from the "try first" stick does work: BugOS itself is on the stick.)
+- [ ] In **Settings**, set the default branch to `main`. Then the nightly build (with security updates) runs on `main`.
+- [ ] Signing through SignPath, volunteers and a domain name (see above).
 
-### Daarna: testen op echte computers
-- [ ] **Nieuwe stick nog niet getest** (branch `claude/fix-iso-alleen-bugos`). BugOS gaat nu als OCI-map op de stick; uitgepakt in de containeropslag lukte niet (whiteouts: "open /etc/.wh.bazaar: invalid argument"). Volgende stap: `tools/iso-lokaal.sh` (of iso.yml) draaien, de ISO in een VM opstarten, zonder netwerk installeren en het geïnstalleerde systeem nalopen (geen Aurora/Fedora; `stat /usr/libexec/utempter/utempter` moet `root:utmp` zijn).
-- [ ] De "probeer eerst"-stick op een echte pc proberen
-- [x] Startmenu en snelmenu standaard (getest buiten Plasma: tools/qml-test.py, tools/test_start_data.py, tools/test_uitzetscherm.py)
-- [ ] Startmenu, snelmenu en uitzetscherm op een echte pc nalopen (Windows-toets, wifi kiezen, uitzetten) — zie TESTEN.md
-- [ ] Bureaublad-foto's uit het echte beeld: de fotoronde (`tools/fotos/bureaublad.sh`) start KWin en plasmashell in de container, maar de bouwcomputer heeft geen grafische kaart; de laatste stap (KWin's software-tekenaar) is nog niet bevestigd. Tot dan: foto's uit de fotostudio.
-- [ ] BugOS Overstap op een echte Windows-pc proberen (stap 3 en 4 eerst op een reserve-pc)
+### Next: testing on real computers
+- [ ] **Switched to English, not tested yet:** the docs and the default language are now English, the word "oma" has been replaced by "Bugie", and BugOS now builds on the new base `kinoite-main`. None of this has been tested in a real build yet. Next step: a CI build plus an ISO test in a VM.
+- [ ] **New stick not tested yet** (branch `claude/fix-iso-alleen-bugos`). BugOS now goes on the stick as an OCI folder; unpacking it into the container storage did not work (whiteouts: "open /etc/.wh.bazaar: invalid argument"). Next step: run `tools/iso-lokaal.sh` (or iso.yml), boot the ISO in a VM, install without a network and check the installed system (no Aurora/Fedora; `stat /usr/libexec/utempter/utempter` must be `root:utmp`).
+- [ ] Try the "try first" stick on a real PC
+- [x] Start menu and quick menu by default (tested outside Plasma: tools/qml-test.py, tools/test_start_data.py, tools/test_uitzetscherm.py)
+- [ ] Check the start menu, quick menu and shutdown screen on a real PC (Windows key, picking Wi-Fi, shutting down) — see TESTEN.md
+- [ ] Desktop photos from the real screen: the photo round (`tools/fotos/bureaublad.sh`) starts KWin and plasmashell in the container, but the build computer has no graphics card; the last step (KWin's software renderer) is not confirmed yet. Until then: photos from the photo studio.
+- [ ] Try BugOS Switch on a real Windows PC (steps 3 and 4 on a spare PC first)
 
-## Dingen om op te letten
+## Things to watch out for
 
-- **Nvidia:** we gebruiken de "open" Nvidia-driver. Die werkt op kaarten vanaf ongeveer 2018 (RTX 20-serie en nieuwer, GTX 16-serie). Voor oudere Nvidia-kaarten moeten we later iets regelen.
-- **Oude pc's:** BugOS heeft een 64-bit computer nodig met minstens 4 GB geheugen. Héél oude pc's (uit de tijd van Windows XP) gaan niet.
-- **Windows-programma's:** niet alles werkt via Wine. Anti-cheat in sommige online games en zware programma's zoals Adobe en de nieuwste Office werken vaak niet. Daarom legt BugOS altijd uit wat het alternatief is.
-- **Eigen systeem op `kinoite-main`:** BugOS bouwt niet meer op Aurora, maar net als Bazzite op de kale basis van Universal Blue (Fedora Kinoite met codecs en drivers). BugOS heet daardoor ook vanbinnen BugOS (`ID=bugos`) en regelt zijn updates zelf (`rpm-ostreed-automatic.timer` voor het systeem, `bugos-apps-bijwerken.timer` voor de apps).
+- **Nvidia:** we use the "open" Nvidia driver. It works on cards from about 2018 onwards (RTX 20 series and newer, GTX 16 series). For older Nvidia cards we need to sort something out later.
+- **Old PCs:** BugOS needs a 64-bit computer with at least 4 GB of memory. Very old PCs (from the Windows XP days) won't work.
+- **Windows programs:** not everything works through Wine. Anti-cheat in some online games and heavy programs like Adobe and the newest Office often don't work. That's why BugOS always explains what the alternative is.
+- **Its own system on `kinoite-main`:** BugOS no longer builds on Aurora. Just like Bazzite, it builds on Universal Blue's plain base (Fedora Kinoite with codecs and drivers); the Nvidia version uses `kinoite-nvidia`. Because of that, BugOS is also called BugOS on the inside (`ID=bugos`, `ID_LIKE=fedora`) and handles its own updates: `rpm-ostreed-automatic.timer` for the system (staged, active after a restart) and `bugos-apps-bijwerken.timer` for the Flatpak apps (daily).
 
-## Woordenlijst
+## Glossary
 
-| Woord | Betekent |
+| Word | Means |
 |---|---|
-| Distro | Een "smaak" van Linux. BugOS is een distro. |
-| Image | Eén compleet pakketje van het hele systeem. |
-| Container / doosje | Een afgesloten ruimte waarin een programma draait zonder het systeem te kunnen breken. |
-| Flatpak | De manier waarop de Winkel apps installeert. |
-| Wine / Proton | De "vertaler" waardoor Windows-programma's en -games werken. |
-| KDE Plasma | Het bureaublad (de motor) waar onze BugOS-jas omheen zit. |
-| ISO | Het bestand dat je op een USB-stick zet om BugOS te installeren. |
+| Distro | A "flavor" of Linux. BugOS is a distro. |
+| Image | One complete package of the whole system. |
+| Container / little box | A closed-off space where a program runs without being able to break the system. |
+| Flatpak | The way the Store installs apps. |
+| Wine / Proton | The "translator" that makes Windows programs and games work. |
+| KDE Plasma | The desktop (the engine) that our BugOS coat sits around. |
+| ISO | The file you put on a USB stick to install BugOS. |

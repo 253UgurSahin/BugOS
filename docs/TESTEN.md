@@ -1,80 +1,82 @@
-# 🧪 BugOS proberen
+# 🧪 Trying BugOS
 
-## Stap 1: De bakkerij aanzetten (één keer)
+## Step 1: Turn on the bakery (once)
 
-1. Ga op GitHub naar deze repo, dan **Actions**. Zet de workflows aan als GitHub daarom vraagt.
-2. Elke keer als er iets verandert, bouwt GitHub BugOS opnieuw. Je ziet een groen vinkje ✅ als het gelukt is.
-3. Ga naar je GitHub-profiel, dan **Packages**, dan `bugos`, dan **Package settings**. Zet de zichtbaarheid op **Public**. Doe hetzelfde voor `bugos-nvidia`. Dit is nodig, anders kunnen computers de updates niet ophalen.
+1. On GitHub, go to this repo, then **Actions**. Turn on the workflows if GitHub asks you to.
+2. Every time something changes, GitHub builds BugOS again. You see a green check mark ✅ when it worked.
+3. Go to your GitHub profile, then **Packages**, then `bugos`, then **Package settings**. Set the visibility to **Public**. Do the same for `bugos-nvidia`. This is needed, otherwise computers can't fetch the updates.
 
-## Stap 2: Een USB-stick (ISO) maken
+## Step 2: Make a USB stick (ISO)
 
-1. Ga naar **Actions**, dan **BugOS ISO maken**, dan **Run workflow**.
-2. Kies `bugos` (gewone pc) of `bugos-nvidia` (pc met een Nvidia-kaart).
-3. Laat "tag" op `latest` staan en "soort" op `live` (de "probeer eerst"-stick).
-4. Zet "publiceren" aan als de ISO een echte download moet worden (een GitHub Release). Laat hem uit om alleen te testen.
-5. Na ongeveer 30 tot 60 minuten staat de ISO onderaan de pagina (**Artifacts**), of bij **Releases** als je hebt gepubliceerd.
-6. Zet hem op een USB-stick met **BugOS Overstap** (Windows), [Fedora Media Writer](https://fedoraproject.org/workstation/download) of [balenaEtcher](https://etcher.balena.io/).
+1. Go to **Actions**, then **BugOS ISO maken**, then **Run workflow**.
+2. Choose `bugos` (normal PC) or `bugos-nvidia` (PC with an Nvidia card).
+3. Leave "tag" on `latest` and "soort" on `live` (the "try it first" stick).
+4. Turn on "publiceren" if the ISO should become a real download (a GitHub Release). Leave it off if you only want to test.
+5. After about 30 to 60 minutes the ISO is at the bottom of the page (**Artifacts**), or under **Releases** if you published it.
+6. Put it on a USB stick with **BugOS Overstap** (Windows), [Fedora Media Writer](https://fedoraproject.org/workstation/download) or [balenaEtcher](https://etcher.balena.io/).
 
-Zo ziet de "probeer eerst"-stick eruit als hij opstart:
+This is what the "try it first" stick looks like when it starts:
 
-<img src="../website/assets/live.webp" width="640" alt="Welkom bij BugOS: kies Eerst proberen of BugOS installeren">
+<img src="../website/assets/live.webp" width="640" alt="Welcome to BugOS: choose Try first or Install BugOS">
 
-## Stap 3: Proberen in een virtuele pc (het veiligst)
+The stick and the installer start in English. In the installer you pick your own language, keyboard and time zone.
 
-Een virtuele pc is een "computer in je computer". Je echte computer blijft dan helemaal zoals hij is.
+## Step 3: Try it in a virtual PC (the safest way)
 
-- **Windows:** gebruik [VirtualBox](https://www.virtualbox.org/). Maak een nieuwe machine, kies de ISO, geef hem 4 GB geheugen en 40 GB schijf, en zet EFI aan.
-- **Linux:** gebruik GNOME Boxes of virt-manager.
+A virtual PC is a "computer inside your computer". Your real computer stays exactly the way it is.
 
-## Al een Fedora Atomic of Aurora? Dan kan het zonder USB
+- **Windows:** use [VirtualBox](https://www.virtualbox.org/). Make a new machine, choose the ISO, give it 4 GB of memory and a 40 GB disk, and turn on EFI.
+- **Linux:** use GNOME Boxes or virt-manager.
 
-Typ in de terminal:
+## Already on Fedora Atomic or another Universal Blue image? Then you can do it without a USB stick
+
+Type this in the terminal:
 
 ```bash
 sudo bootc switch ghcr.io/253ugursahin/bugos:latest
 ```
 
-Herstart daarna de computer. Wil je terug? Kies dan in het opstartmenu de vorige versie.
+Then restart the computer. Want to go back? Pick the previous version in the start-up menu.
 
-## Wat moet je testen?
+## What should you test?
 
-- [ ] Verschijnt BugOS Welkom na de eerste keer inloggen?
-- [ ] Werkt licht/donker kiezen?
-- [ ] Zit de taakbalk onderaan, met het lieveheersbeestje als startknop?
-- [ ] Wifi en bluetooth verbinden
-- [ ] Dubbelklik op een `.exe` (bijvoorbeeld Notepad++)
-- [ ] Zoek "Game-modus" in het startmenu en zet hem aan en weer uit
-- [ ] Draai `bugos-updates status` in de terminal
-- [ ] Open **Instellingen** en zoek op "wifi"
-- [ ] Open **Er werkt iets niet** en zet het geluid op stil: krijg je een "Repareer"-knop?
-- [ ] Open **Back-up** en maak een back-up naar een USB-stick
-- [ ] Probeer op een Windows-pc **BugOS Overstap** (stap 1 en 2 zijn veilig, die veranderen niets aan je pc)
-- [ ] Open de **BugOS Winkel** en installeer iets
-- [ ] Het lieveheersbeestje linksonder is het **BugOS-startmenu**: zoek "wifi" en open de pagina; de Windows-toets opent het menu
-- [ ] Het **snelmenu** (twee schuifjes, naast het systeemvak): zet wifi uit en aan; het pijltje bij Wifi opent Instellingen
-- [ ] Uitzetten via het startmenu: je ziet het **BugOS-uitzetscherm** met grote tegels; "Toch niet" gaat terug
-- [ ] Liever het KDE-menu? Instellingen → Updates en meer → Taakbalk: zet het BugOS-startmenu uit en weer aan
-- [ ] Start de "probeer eerst"-stick op: verschijnt het welkomstscherm met "Eerst proberen" en "BugOS installeren"?
-- [ ] Is er op de stick nergens "Aurora" of "Fedora" te zien (geen "Welcome Center", één installeer-knop, Nederlandse teksten)?
-- [ ] Installeer BugOS **zonder internet** (kabel eruit, wifi uit): lukt het, en start daarna BugOS op?
+- [ ] Does BugOS Welcome appear after you sign in for the first time?
+- [ ] Does choosing light/dark work?
+- [ ] Is the taskbar at the bottom, with the ladybug as the start button?
+- [ ] Connect to Wi-Fi and Bluetooth
+- [ ] Double-click an `.exe` (for example Notepad++)
+- [ ] Search for "Game mode" in the start menu and turn it on and off again
+- [ ] Run `bugos-updates status` in the terminal
+- [ ] Open **Settings** and search for "wifi"
+- [ ] Open **Something is not working** and mute the sound: do you get a "Fix" button?
+- [ ] Open **Backup** and make a backup to a USB stick
+- [ ] Try **BugOS Overstap** on a Windows PC (steps 1 and 2 are safe, they change nothing on your PC)
+- [ ] Open the **BugOS Store** and install something
+- [ ] The ladybug at the bottom left is the **BugOS start menu**: search for "wifi" and open the page; the Windows key opens the menu
+- [ ] The **quick menu** (two sliders, next to the system tray): turn Wi-Fi off and on; the little arrow next to Wi-Fi opens Settings
+- [ ] Shut down from the start menu: you see the **BugOS shutdown screen** with big tiles; "Cancel" takes you back
+- [ ] Rather have the KDE menu? Settings → Updates and more → Taskbar: turn the BugOS start menu off and on again
+- [ ] Start the "try it first" stick: does the welcome screen appear with "Try first" and "Install BugOS"?
+- [ ] Is there no "Aurora" or "Fedora" anywhere on the stick (no "Welcome Center", one install button, English texts (or your chosen language))?
+- [ ] Install BugOS **without internet** (cable out, Wi-Fi off): does it work, and does BugOS start afterwards?
 
-### Het nieuwe design
+### The new design
 
-- [ ] Zie je het BugOS-beestje tijdens het opstarten (voordat je inlogt)?
-- [ ] Heeft het inlogscherm de donkere Stip-achtergrond?
-- [ ] Zie je na het inloggen het BugOS-opstartscherm (logo met drie bolletjes)?
-- [ ] Is de achtergrond licht bij licht en donker bij donker?
-- [ ] Ziet de tekst er overal netjes uit (lettertype Inter)? Zijn er geen vreemde of te kleine letters?
-- [ ] Vergrendel het scherm (Windows-toets + L): zie je de Stip-achtergrond?
-- [ ] BugOS Overstap op Windows: is het venster scherp, ook als Windows op 125% of 150% staat?
+- [ ] Do you see the BugOS bug while the computer starts (before you sign in)?
+- [ ] Does the sign-in screen have the dark Stip background?
+- [ ] After signing in, do you see the BugOS splash screen (logo with three dots)?
+- [ ] Is the background light in light mode and dark in dark mode?
+- [ ] Does the text look neat everywhere (the Inter font)? Are there no strange or too-small letters?
+- [ ] Lock the screen (Windows key + L): do you see the Stip background?
+- [ ] BugOS Overstap on Windows: is the window sharp, also when Windows is set to 125% or 150%?
 
-## BugOS Overstap (voor Windows) downloaden
+## Downloading BugOS Overstap (for Windows)
 
-- Ga naar **Actions**, dan **Windows-overstap**, kies de laatste groene run en download **BugOS-Overstap** onderaan.
-- Of maak een versie-tag (zoals `v0.2`). Dan staat hij bij **Releases** als zip.
+- Go to **Actions**, then **Windows-overstap**, pick the latest green run and download **BugOS-Overstap** at the bottom.
+- Or make a version tag (like `v0.2`). Then it shows up under **Releases** as a zip.
 
-## De website aanzetten
+## Turning on the website
 
-Ga naar **Settings**, dan **Pages**, en zet **Source** op **GitHub Actions**. Zodra alles op `main` staat, komt de website vanzelf online.
+Go to **Settings**, then **Pages**, and set **Source** to **GitHub Actions**. As soon as everything is on `main`, the website goes online by itself.
 
-Vind je iets raars? Maak een **Issue** aan op GitHub, of vertel het mij gewoon in de chat.
+Found something strange? Open an **Issue** on GitHub, or just tell me in the chat.

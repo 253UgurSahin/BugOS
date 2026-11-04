@@ -8,12 +8,17 @@
 # Dit draait als de live-gebruiker, dus het venster komt gewoon op het scherm
 # (in de kickstart lukte dat niet).
 
+# Teksten in de taal van de stick (standaard Engels): t "Nederlands" "English".
+# shellcheck source=system_files/usr/share/bugos/lib.sh
+. /usr/share/bugos/lib.sh
+
 # lsblk --list: elke schijf én partitie op een eigen regel. (Met --json staan
 # partities "onder" de schijf, en dan zag de oude controle ze niet.)
 if lsblk --list --noheadings -o FSTYPE 2>/dev/null | grep -qx BitLocker; then
     if ! kdialog --title BugOS --warningcontinuecancel \
-        "<b>Let op: er staat een versleutelde Windows-schijf (BitLocker) op deze computer.</b><br><br>Wil je BugOS naast Windows zetten? Schrijf dan eerst je BitLocker-herstelsleutel op (account.microsoft.com/devices/recoverykey).<br><br>Doorgaan met installeren?" \
-        --continue-label "Ja, doorgaan" --cancel-label "Stoppen"; then
+        "$(t "<b>Let op: er staat een versleutelde Windows-schijf (BitLocker) op deze computer.</b><br><br>Wil je BugOS naast Windows zetten? Schrijf dan eerst je BitLocker-herstelsleutel op (account.microsoft.com/devices/recoverykey).<br><br>Doorgaan met installeren?" \
+            "<b>Careful: this computer has an encrypted Windows drive (BitLocker).</b><br><br>Do you want to put BugOS next to Windows? Then first write down your BitLocker recovery key (account.microsoft.com/devices/recoverykey).<br><br>Continue installing?")" \
+        --continue-label "$(t "Ja, doorgaan" "Yes, continue")" --cancel-label "$(t "Stoppen" "Stop")"; then
         exit 0
     fi
 fi

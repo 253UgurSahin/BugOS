@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=Pakket installeren (BugOS)
-Name[en]=Install package (BugOS)
-Comment=Programma's van websites installeren
-Comment[en]=Install programs from websites
+Name=Install package (BugOS)
+Name[nl]=Pakket installeren (BugOS)
+Comment=Install programs from websites
+Comment[nl]=Programma's van websites installeren
 Exec=bugos-pakket %f
 Icon=system-software-install
 MimeType=application/x-rpm;application/x-redhat-package-manager;application/vnd.debian.binary-package;application/x-deb;

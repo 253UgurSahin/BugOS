@@ -1,14 +1,14 @@
-# 🌍 BugOS vertalen
+# 🌍 Translating BugOS
 
-BugOS moet in **elke taal** werken. KDE (de motor) is al in meer dan 50 talen vertaald.
-Onze eigen BugOS-schermen staan in het Nederlands en Engels. Voor alle andere talen hebben we jouw hulp nodig.
+BugOS should work in **every language**. KDE (the engine) is already translated into more than 50 languages.
+Our own BugOS screens are in English and Dutch. For all other languages we need your help.
 
-## Hoe werkt het?
+## How does it work?
 
-In de code staat elke tekst twee keer: `t("Nederlands", "English")`.
-Voor andere talen kijkt BugOS in een woordenboekje: `system_files/usr/share/bugos/vertalingen/<taal>.json`.
+In the code, every text is written twice, in Dutch and in English: `t("Nederlands", "English")`.
+English is the default. For other languages BugOS looks in a little dictionary: `system_files/usr/share/bugos/vertalingen/<taal>.json`.
 
-Zo'n woordenboekje ziet er zo uit:
+This is what such a little dictionary looks like:
 
 ```json
 {
@@ -17,28 +17,28 @@ Zo'n woordenboekje ziet er zo uit:
 }
 ```
 
-Links staat de Engelse tekst, rechts de vertaling. Ontbreekt een vertaling, dan laat BugOS de Engelse tekst zien.
+On the left is the English text, on the right the translation. If a translation is missing, BugOS shows the English text.
 
-## Zelf een taal toevoegen
+## Add a language yourself
 
-1. Maak een kopie van `sjabloon.json` en noem hem naar je taal. Gebruik de code van twee letters: `de.json` (Duits), `tr.json` (Turks), `fr.json` (Frans), enzovoort.
-2. Vul rechts de vertalingen in.
-3. Stuur hem in via GitHub (een Pull Request), of mail hem naar de makers.
+1. Make a copy of `sjabloon.json` and name it after your language. Use the two-letter code: `de.json` (German), `tr.json` (Turkish), `fr.json` (French), and so on.
+2. Fill in the translations on the right.
+3. Send it in through GitHub (a Pull Request), or email it to the makers.
 
-Tekst die tussen `{` en `}` staat, of een `\n` (nieuwe regel), laat je precies zo staan.
+Text between `{` and `}`, or a `\n` (new line), you leave exactly as it is.
 
-## Voor de makers: het sjabloon bijwerken
+## For the makers: updating the template
 
-Na het toevoegen van nieuwe teksten draai je:
+After adding new texts, run:
 
 ```bash
 python3 tools/vertalingen-verzamelen.py
 ```
 
-Om een bestaande taal bij te werken (vertalingen blijven bewaard):
+To update an existing language (translations that are already there are kept):
 
 ```bash
 python3 tools/vertalingen-verzamelen.py de
 ```
 
-Let op: teksten met een getal erin (zoals "Nog 12 GB vrij") worden nog niet vertaald. Die blijven voorlopig Engels.
+Note: texts with a number in them (like "12 GB free") are not translated yet. For now they stay in English.

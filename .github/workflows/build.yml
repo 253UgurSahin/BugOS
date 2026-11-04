@@ -107,7 +107,7 @@ jobs:
             --build-arg BUGOS_VARIANT=${{ matrix.variant }} \
             --build-arg BUGOS_VERSION=${{ steps.meta.outputs.versie }} \
             --label org.opencontainers.image.title="BugOS" \
-            --label org.opencontainers.image.description="BugOS: Linux zo makkelijk als Windows" \
+            --label org.opencontainers.image.description="BugOS: Linux as easy as Windows" \
             --label org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}" \
             --label org.opencontainers.image.licenses="GPL-3.0-or-later" \
             --label containers.bootc=1 \

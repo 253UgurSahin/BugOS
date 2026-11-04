@@ -1,6 +1,7 @@
 [Desktop Entry]
 Type=Application
-Name=BugOS Welkom
+Name=BugOS Welcome
+Name[nl]=BugOS Welkom
 Exec=bugos-welkom --eerste-keer
 Icon=bugos-logo
 OnlyShowIn=KDE;
