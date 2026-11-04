@@ -69,7 +69,7 @@ The most important idea: **BugOS can't break.**
 | Settings | `bugos-instellingen` | Like Settings in Windows, but calmer. Home: quick toggles (Wi-Fi, Bluetooth, night light, dark) and the volume. Its own pages in plain words: Wi-Fi and internet (networks, connect with a password), Bluetooth (connect devices), Printers and scanning (printers, queue, test page, scanning), Sound (volume, which speaker), Screen (brightness, night light, size), Power (saver/balanced/fast, battery, screen off, sleep, power button, closing the lid), Appearance (light/dark, background), Notifications (do not disturb, quiet during games, sound, test notification), Mouse and touchpad (speed, left-handed, scroll direction, tapping, double-click), Easier to see (large text, large pointer, shake the mouse, magnifier, sticky keys, slow keys, screen reader), Time and language (set the clock automatically, time zone, language), Sign-in and password (name, change password, sign in without a password, lock screen), Default apps (internet, email, photos, music, videos, PDF, text), Updates and more, About this computer. Search across everything. Each page has 'More settings (for advanced users)' that leads to KDE. |
 | Something is not working | `bugos-hulp` | Checks internet, Wi-Fi, Bluetooth, sound, printer, storage and updates. Every problem has a "Fix" button. |
 | Backup | `bugos-backup` | Your files to a USB drive with one button, and back again. Nothing is ever thrown away. |
-| Files from Windows | `bugos-overstap` | Brings back the files, bookmarks and background you took from Windows with BugOS Switch. |
+| Files from Windows | `bugos-overstap` | Brings back the files, bookmarks and background you took from Windows with BugOS Overstap. |
 | Game mode on/off | `bugos-spelmodus` | Full power, notifications muted and an FPS counter. |
 | BugOS Store | `bugos-winkel` | 37 well-known, safe apps in 10 topics, install with one click. "Find more apps" opens the big KDE store. |
 | Start menu | `org.bugos.startmenu` | The start button at the bottom left (the ladybug), by default. A greeting, a big search bar that finds apps and the pages of Settings, pinned apps, recent files, all apps by topic, and at the bottom Settings, Lock, Sign out, Restart and Shut down. Alt+F1 and the Windows key open it. Prefer the KDE menu? Settings → Updates and more → Taskbar. |
@@ -98,7 +98,7 @@ The most important idea: **BugOS can't break.**
 
 ### For Windows (`windows-overstap/`)
 
-**BugOS Switch** has the same look as BugOS (dark sidebar with the steps, red buttons) and works in four steps:
+**BugOS Overstap** (the Windows app that helps you switch) has the same look as BugOS (dark sidebar with the steps, red buttons) and works in four steps:
 
 1. Check: can this PC run BugOS? It looks at 64-bit, memory, UEFI, space, BitLocker and Nvidia.
 2. Take along: documents, photos, music, videos, desktop, downloads, bookmarks and background go to a USB drive.
@@ -135,7 +135,7 @@ The most important idea: **BugOS can't break.**
 - [x] In BugOS: bring back the files from Windows with one button
 - [x] **"Try first" USB stick** with the new installer (Anaconda WebUI). It asks few questions, warns about BitLocker and explains the blue key screen for Nvidia.
 - [x] **The stick is BugOS**: BugOS itself is on the stick and installs without internet. No more Aurora or Fedora names or logos on the stick, in the installer and in the installed system (welcome screen, terminal, sign-in screen, "About this system", start menu, store). The stick starts in English; you choose your language, keyboard and time zone in the installer (the date and time page is no longer hidden).
-- [x] A download place for the ISO: GitHub Releases, in pieces of less than 2 GB. BugOS Switch glues them back together by itself.
+- [x] A download place for the ISO: GitHub Releases, in pieces of less than 2 GB. BugOS Overstap glues them back together by itself.
 - [ ] **Sign the Windows program**, so Windows doesn't show a warning. This normally costs money (a certificate). For open-source projects it can be free through [SignPath Foundation](https://signpath.org). The owner of the repo has to apply, so **this is a task for the manager**.
 
 ### Phase 4: Polishing ✅ (except for the manager's items)
@@ -153,12 +153,12 @@ The most important idea: **BugOS can't break.**
 - [x] **All BugOS apps** redesigned, in light and dark: Welcome, Settings, Store, Something is not working, Backup, Files from Windows and the "try first" stick
 - [x] **Desktop**: new colors, our own fonts, start menu and quick menu, boot screen, sign-in and lock screen, boot logo
 - [x] **New website** with real screenshots, a try-it-yourself for "back to yesterday" and a light/dark switch
-- [x] **BugOS Switch** (Windows) in the new style, sharp on 125% and 150% screens
+- [x] **BugOS Overstap** (Windows) in the new style, sharp on 125% and 150% screens
 - [x] **Premium round:** our own BugOS line icons, calmer apps (only problems get color), and a website that tells the story: why a ladybug, the Bugie test and a day at home
 
 ### For the manager: what is needed to hand out BugOS
 - [ ] Make the **repo** and the **packages** (`bugos`, `bugos-nvidia`) **public**. Without that:
-  - BugOS Switch can't download BugOS,
+  - BugOS Overstap can't download BugOS,
   - and installed computers get no updates.
   - (Installing from the "try first" stick does work: BugOS itself is on the stick.)
 - [ ] In **Settings**, set the default branch to `main`. Then the nightly build (with security updates) runs on `main`.
@@ -171,7 +171,7 @@ The most important idea: **BugOS can't break.**
 - [x] Start menu and quick menu by default (tested outside Plasma: tools/qml-test.py, tools/test_start_data.py, tools/test_uitzetscherm.py)
 - [ ] Check the start menu, quick menu and shutdown screen on a real PC (Windows key, picking Wi-Fi, shutting down) — see TESTEN.md
 - [ ] Desktop photos from the real screen: the photo round (`tools/fotos/bureaublad.sh`) starts KWin and plasmashell in the container, but the build computer has no graphics card; the last step (KWin's software renderer) is not confirmed yet. Until then: photos from the photo studio.
-- [ ] Try BugOS Switch on a real Windows PC (steps 3 and 4 on a spare PC first)
+- [ ] Try BugOS Overstap on a real Windows PC (steps 3 and 4 on a spare PC first)
 
 ## Things to watch out for
 
