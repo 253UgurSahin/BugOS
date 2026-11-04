@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BugOS Plasma-stijl: schuif. Gemaakt door tools/plasma/knoppen.py; niet met de hand bewerken. -->
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="130" height="166" viewBox="0 0 130 166">
+    <defs>
+    <style type="text/css" id="current-color-scheme">
+        .ColorScheme-Text { color:#16171C; }
+        .ColorScheme-Background { color:#F6F5F5; }
+        .ColorScheme-ButtonFocus { color:#DE2F3E; }
+        .ColorScheme-ButtonBackground { color:#F1EEEE; }
+        .ColorScheme-ViewBackground { color:#FFFFFF; }
+        .ColorScheme-Highlight { color:#FDE9E9; }
+    </style>
+        <linearGradient id="vul-h" x1="0" y1="0" x2="1" y2="0"><stop offset="0" style="stop-color:#FF5C50;stop-opacity:1"/><stop offset="1" style="stop-color:#FF5C50;stop-opacity:0"/></linearGradient>
+        <linearGradient id="vul-h-l" x1="0" y1="0" x2="1" y2="0"><stop offset="0" style="stop-color:#FF5C50;stop-opacity:1"/><stop offset="1" style="stop-color:#FF5C50;stop-opacity:0.5"/></linearGradient>
+        <linearGradient id="vul-h-r" x1="0" y1="0" x2="1" y2="0"><stop offset="0" style="stop-color:#FF5C50;stop-opacity:0.5"/><stop offset="1" style="stop-color:#FF5C50;stop-opacity:0"/></linearGradient>
+        <radialGradient id="schaduw-horizontal" gradientUnits="userSpaceOnUse" cx="42" cy="85" r="13"><stop offset="0" style="stop-color:#000000;stop-opacity:0.22"/><stop offset="0.72" style="stop-color:#000000;stop-opacity:0.12"/><stop offset="1" style="stop-color:#000000;stop-opacity:0"/></radialGradient>
+        <radialGradient id="schaduw-vertical" gradientUnits="userSpaceOnUse" cx="42" cy="119" r="13"><stop offset="0" style="stop-color:#000000;stop-opacity:0.22"/><stop offset="0.72" style="stop-color:#000000;stop-opacity:0.12"/><stop offset="1" style="stop-color:#000000;stop-opacity:0"/></radialGradient>
+    </defs>
+    <g id="groove-topleft"><rect x="2" y="2" width="4" height="4" fill="none"/><path d="M2,6L2,6A4,4 0 0 1 6,2L6,2L6,6Z" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><path d="M2,6L2,6A4,4 0 0 1 6,2L6,2L6,6Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.08"/></g>
+    <g id="groove-top"><rect x="6" y="2" width="4" height="4" fill="none"/><rect x="6" y="2" width="4" height="4" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><rect x="6" y="2" width="4" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.08"/></g>
+    <g id="groove-topright"><rect x="10" y="2" width="4" height="4" fill="none"/><path d="M14,6L14,6A4,4 0 0 0 10,2L10,2L10,6Z" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><path d="M14,6L14,6A4,4 0 0 0 10,2L10,2L10,6Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.08"/></g>
+    <g id="groove-left"><rect x="2" y="6" width="4" height="4" fill="none"/><rect x="2" y="6" width="4" height="4" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><rect x="2" y="6" width="4" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.08"/></g>
+    <g id="groove-center"><rect x="6" y="6" width="4" height="4" fill="none"/><rect x="6" y="6" width="4" height="4" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><rect x="6" y="6" width="4" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.08"/></g>
+    <g id="groove-right"><rect x="10" y="6" width="4" height="4" fill="none"/><rect x="10" y="6" width="4" height="4" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><rect x="10" y="6" width="4" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.08"/></g>
+    <g id="groove-bottomleft"><rect x="2" y="10" width="4" height="4" fill="none"/><path d="M2,10L2,10A4,4 0 0 0 6,14L6,14L6,10Z" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><path d="M2,10L2,10A4,4 0 0 0 6,14L6,14L6,10Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.08"/></g>
+    <g id="groove-bottom"><rect x="6" y="10" width="4" height="4" fill="none"/><rect x="6" y="10" width="4" height="4" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><rect x="6" y="10" width="4" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.08"/></g>
+    <g id="groove-bottomright"><rect x="10" y="10" width="4" height="4" fill="none"/><path d="M14,10L14,10A4,4 0 0 1 10,14L10,14L10,10Z" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><path d="M14,10L14,10A4,4 0 0 1 10,14L10,14L10,10Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.08"/></g>
+    <g id="groove-highlight-topleft"><rect x="2" y="36" width="4" height="4" fill="none"/><path d="M2,40L2,40A4,4 0 0 1 6,36L6,36L6,40Z" class="ColorScheme-ButtonFocus" style="fill:currentColor"/><path d="M2,40L2,40A4,4 0 0 1 6,36L6,36L6,40Z" style="fill:#FF5C50"/></g>
+    <g id="groove-highlight-top"><rect x="6" y="36" width="4" height="4" fill="none"/><rect x="6" y="36" width="4" height="4" class="ColorScheme-ButtonFocus" style="fill:currentColor"/><rect x="6" y="36" width="4" height="4" style="fill:url(#vul-h)"/></g>
+    <g id="groove-highlight-topright"><rect x="10" y="36" width="4" height="4" fill="none"/><path d="M14,40L14,40A4,4 0 0 0 10,36L10,36L10,40Z" class="ColorScheme-ButtonFocus" style="fill:currentColor"/></g>
+    <g id="groove-highlight-left"><rect x="2" y="40" width="4" height="4" fill="none"/><rect x="2" y="40" width="4" height="4" class="ColorScheme-ButtonFocus" style="fill:currentColor"/><rect x="2" y="40" width="4" height="4" style="fill:url(#vul-h-l)"/></g>
+    <g id="groove-highlight-center"><rect id="msc" x="6" y="40" width="4" height="4" fill="none"/><rect x="6" y="40" width="4" height="4" class="ColorScheme-ButtonFocus" style="fill:currentColor"/><rect x="6" y="40" width="4" height="4" style="fill:url(#vul-h)"/></g>
+    <g id="groove-highlight-right"><rect x="10" y="40" width="4" height="4" fill="none"/><rect x="10" y="40" width="4" height="4" class="ColorScheme-ButtonFocus" style="fill:currentColor"/><rect x="10" y="40" width="4" height="4" style="fill:url(#vul-h-r)"/></g>
+    <g id="groove-highlight-bottomleft"><rect x="2" y="44" width="4" height="4" fill="none"/><path d="M2,44L2,44A4,4 0 0 0 6,48L6,48L6,44Z" class="ColorScheme-ButtonFocus" style="fill:currentColor"/><path d="M2,44L2,44A4,4 0 0 0 6,48L6,48L6,44Z" style="fill:#FF5C50"/></g>
+    <g id="groove-highlight-bottom"><rect x="6" y="44" width="4" height="4" fill="none"/><rect x="6" y="44" width="4" height="4" class="ColorScheme-ButtonFocus" style="fill:currentColor"/><rect x="6" y="44" width="4" height="4" style="fill:url(#vul-h)"/></g>
+    <g id="groove-highlight-bottomright"><rect x="10" y="44" width="4" height="4" fill="none"/><path d="M14,44L14,44A4,4 0 0 1 10,48L10,48L10,44Z" class="ColorScheme-ButtonFocus" style="fill:currentColor"/></g>
+    <g id="horizontal-slider-handle"><rect x="2" y="70" width="22" height="22" fill="none"/><circle cx="13" cy="81" r="10.5" style="fill:#FFFFFF;stroke:#000000;stroke-opacity:0.12;stroke-width:1"/></g>
+    <g id="horizontal-slider-shadow"><rect x="28" y="70" width="28" height="28" fill="none"/><circle cx="42" cy="85" r="13" style="fill:url(#schaduw-horizontal)"/></g>
+    <g id="horizontal-slider-focus"><rect x="60" y="70" width="26" height="26" fill="none"/><path d="M60,83A13,13 0 1 0 86,83A13,13 0 1 0 60,83ZM62,83A11,11 0 1 0 84,83A11,11 0 1 0 62,83Z" class="ColorScheme-ButtonFocus" style="fill-rule:evenodd;fill:currentColor"/></g>
+    <g id="horizontal-slider-hover"><rect x="90" y="70" width="22" height="22" fill="none"/><path d="M90,81A11,11 0 1 0 112,81A11,11 0 1 0 90,81ZM91.5,81A9.5,9.5 0 1 0 110.5,81A9.5,9.5 0 1 0 91.5,81Z" class="ColorScheme-ButtonFocus" style="fill-rule:evenodd;fill:currentColor;fill-opacity:0.4"/></g>
+    <g id="vertical-slider-handle"><rect x="2" y="104" width="22" height="22" fill="none"/><circle cx="13" cy="115" r="10.5" style="fill:#FFFFFF;stroke:#000000;stroke-opacity:0.12;stroke-width:1"/></g>
+    <g id="vertical-slider-shadow"><rect x="28" y="104" width="28" height="28" fill="none"/><circle cx="42" cy="119" r="13" style="fill:url(#schaduw-vertical)"/></g>
+    <g id="vertical-slider-focus"><rect x="60" y="104" width="26" height="26" fill="none"/><path d="M60,117A13,13 0 1 0 86,117A13,13 0 1 0 60,117ZM62,117A11,11 0 1 0 84,117A11,11 0 1 0 62,117Z" class="ColorScheme-ButtonFocus" style="fill-rule:evenodd;fill:currentColor"/></g>
+    <g id="vertical-slider-hover"><rect x="90" y="104" width="22" height="22" fill="none"/><path d="M90,115A11,11 0 1 0 112,115A11,11 0 1 0 90,115ZM91.5,115A9.5,9.5 0 1 0 110.5,115A9.5,9.5 0 1 0 91.5,115Z" class="ColorScheme-ButtonFocus" style="fill-rule:evenodd;fill:currentColor;fill-opacity:0.4"/></g>
+    <rect id="hint-handle-size" x="2" y="138" width="20" height="20" fill="none"/>
+    <rect id="hint-tile-center" x="28" y="138" width="2" height="2" fill="none"/>
+    <rect id="hint-stretch-borders" x="32" y="138" width="2" height="2" fill="none"/>
+</svg>

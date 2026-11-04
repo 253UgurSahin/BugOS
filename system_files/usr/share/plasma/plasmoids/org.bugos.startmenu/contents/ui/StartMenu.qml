@@ -33,13 +33,14 @@ Rectangle {
 
     // Huisstijl
     readonly property bool donker: palette.window.hslLightness < 0.5
-    readonly property color rood: donker ? "#EA3B4B" : "#DE2F3E"
+    readonly property Ontwerp o: Ontwerp { donker: menu.donker }   // zelfde kleuren en maten als de BugOS-apps
+    readonly property color rood: o.accent
     readonly property color tekst: palette.windowText
-    readonly property color tekst2: Qt.rgba(tekst.r, tekst.g, tekst.b, 0.62)
-    readonly property color vlak: donker ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(0, 0, 0, 0.035)
-    readonly property color zweef: donker ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(0.87, 0.18, 0.24, 0.07)
-    readonly property color lijnkleur: Qt.rgba(tekst.r, tekst.g, tekst.b, 0.10)
-    readonly property string display: "Funnel Display"
+    readonly property color tekst2: o.tekst2
+    readonly property color vlak: o.knop          // knoppen, net als in de apps
+    readonly property color zweef: o.knopHover    // aanwijzen
+    readonly property color lijnkleur: o.rand
+    readonly property string display: o.kopLetter
 
     readonly property bool alleApps: stapel.currentIndex === 1
     property string zoekTekst: zoekveld.text.trim().toLowerCase()
@@ -113,7 +114,7 @@ Rectangle {
             Label {
                 text: menu.groet() + (menu.voornaam() ? ", " + menu.voornaam() : "")
                 font.family: menu.display
-                font.pixelSize: 26
+                font.pixelSize: o.letterHeld
                 font.weight: Font.DemiBold
                 color: menu.tekst
                 Layout.fillWidth: true
@@ -145,8 +146,8 @@ Rectangle {
                 else event.accepted = false
             }
             background: Rectangle {
-                radius: 25
-                color: menu.donker ? Qt.rgba(1, 1, 1, 0.06) : "#FFFFFF"
+                radius: menu.o.rKnop
+                color: menu.o.vlak
                 border.width: zoekveld.activeFocus ? 2 : 1
                 border.color: zoekveld.activeFocus ? menu.rood : menu.lijnkleur
             }
@@ -282,7 +283,7 @@ Rectangle {
                         required property string section
                         text: section.toUpperCase()
                         color: menu.tekst2
-                        font.pixelSize: 11
+                        font.pixelSize: 12
                         font.weight: Font.DemiBold
                         font.letterSpacing: 0.8
                         topPadding: 12
@@ -309,8 +310,8 @@ Rectangle {
                 width: 38; height: 38; radius: 19
                 readonly property string foto: (menu.gegevens.gebruiker && menu.gegevens.gebruiker.foto) ? menu.gegevens.gebruiker.foto : ""
                 gradient: Gradient {
-                    GradientStop { position: 0.0; color: "#FF5C50" }
-                    GradientStop { position: 1.0; color: "#C41D3A" }
+                    GradientStop { position: 0.0; color: menu.o.verloopBegin }
+                    GradientStop { position: 1.0; color: menu.o.verloopEind }
                 }
                 Label {
                     anchors.centerIn: parent
@@ -376,7 +377,7 @@ Rectangle {
         Keys.onEnterPressed: clicked()
         Accessible.name: tekst
         background: Rectangle {
-            radius: 16
+            radius: menu.o.rKnop
             color: pil.hovered || pil.activeFocus ? menu.zweef : menu.vlak
         }
         contentItem: Row {
@@ -399,7 +400,7 @@ Rectangle {
         Keys.onReturnPressed: clicked()
         Keys.onEnterPressed: clicked()
         background: Rectangle {
-            radius: 14
+            radius: menu.o.rKnop
             color: tegel.hovered || tegel.activeFocus ? menu.zweef : "transparent"
         }
         contentItem: ColumnLayout {
@@ -436,7 +437,7 @@ Rectangle {
         Keys.onReturnPressed: clicked()
         Keys.onEnterPressed: clicked()
         background: Rectangle {
-            radius: 12
+            radius: menu.o.rKnop
             color: regel.hovered || regel.gemarkeerd ? menu.zweef : "transparent"
         }
         contentItem: RowLayout {
@@ -474,7 +475,7 @@ Rectangle {
         Keys.onReturnPressed: clicked()
         Keys.onEnterPressed: clicked()
         background: Rectangle {
-            radius: 12
+            radius: menu.o.rKnop
             color: bregel.hovered ? menu.zweef : "transparent"
         }
         contentItem: RowLayout {
@@ -494,7 +495,7 @@ Rectangle {
                 spacing: 0
                 Layout.fillWidth: true
                 Label { text: bregel.bestand.naam; color: menu.tekst; font.pixelSize: 13; elide: Text.ElideMiddle; Layout.fillWidth: true }
-                Label { text: bregel.bestand.map; color: menu.tekst2; font.pixelSize: 11; elide: Text.ElideMiddle; Layout.fillWidth: true }
+                Label { text: bregel.bestand.map; color: menu.tekst2; font.pixelSize: 12; elide: Text.ElideMiddle; Layout.fillWidth: true }
             }
         }
     }

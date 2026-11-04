@@ -678,14 +678,14 @@ class Sorteerder(QSortFilterProxyModel):
 
 def stijl() -> str:
     return f"""
-QFrame#pad {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-radius: 14px; }}
+QFrame#pad {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-radius: 12px; }}
 QPushButton#kruimel {{ background: transparent; border: none; border-radius: 8px; padding: 6px 8px;
     font-size: 14px; color: {K['tekst2']}; }}
 QPushButton#kruimel:hover {{ background: {K['knop']}; color: {K['tekst']}; }}
 QPushButton#kruimel[laatste="true"] {{ color: {K['tekst']}; font-weight: 600; }}
 QListView#tegels {{ background: transparent; border: none; outline: 0; }}
 QWidget#computer_binnen {{ background: transparent; }}
-QFrame#kaart {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-radius: 18px; }}
+QFrame#kaart {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-radius: 16px; }}
 QFrame#schijfrij {{ background: transparent; border-radius: 12px; }}
 QFrame#schijfrij:hover {{ background: {K['knop']}; }}
 QFrame#schijfrij[leeg="true"]:hover {{ background: transparent; }}

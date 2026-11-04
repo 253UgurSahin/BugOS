@@ -40,7 +40,9 @@ jobs:
         run: |
           python3 tools/iconen/maak.py
           if [ -f tools/kvantum/maak.py ]; then python3 tools/kvantum/maak.py; fi
-          ANDERS="$(git status --porcelain -- system_files/usr/share/icons/BugOS system_files/usr/share/Kvantum tools/iconen/lijsten)"
+          python3 tools/ontwerp/maak_qml.py --check
+          for m in tools/plasma/vlakken.py tools/plasma/knoppen.py; do python3 "$m"; done
+          ANDERS="$(git status --porcelain -- system_files/usr/share/icons/BugOS system_files/usr/share/Kvantum system_files/usr/share/plasma/desktoptheme/bugos system_files/usr/share/color-schemes tools/iconen/lijsten)"
           if [ -n "$ANDERS" ]; then
             echo "$ANDERS" | head -20
             echo "Draai: python3 tools/iconen/maak.py (en tools/kvantum/maak.py) en zet het resultaat in de repo."

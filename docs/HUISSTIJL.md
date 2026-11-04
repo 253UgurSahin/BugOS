@@ -192,3 +192,33 @@ All BugOS apps (Files, Settings, Task Manager, Store) sit in the same shell, fro
 - **Start menu**: a greeting with your first name, one big search bar that finds apps and settings, pinned apps as tiles, recent files, and at the bottom your name with the power buttons. Only "Shut down" turns red when you point at it.
 - **Quick menu**: six big tiles (on = red gradient, off = calm flat tile) and a volume slider. A small arrow next to a tile opens the matching page in Settings.
 - **Shutdown screen**: dark over the whole screen, one question in plain words ("Shut down the computer?"), big tiles and one red tile. "Never mind" or Esc goes back.
+
+## One system, one look
+
+BugOS should feel like one whole, the way Windows 11 or macOS do. Every window, menu and pop-up uses
+the same surfaces, shapes and letters, whether it is a BugOS app, a KDE program or a Plasma pop-up.
+
+- **One source.** Colors (`KLEUREN`) and sizes (`MATEN`) live only in
+  [`bugos_ui.py`](../system_files/usr/lib/bugos/python/bugos_ui.py). Everything else is made from it:
+
+  | Part | Made by |
+  |---|---|
+  | BugOS apps | `bugos_ui` style sheet (directly) |
+  | Start menu and quick menu | `Ontwerp.qml`, made by `python3 tools/ontwerp/maak_qml.py` |
+  | KDE programs (buttons, fields, lists) | Kvantum themes `BugOS` / `BugOSDonker` and the color schemes, by `python3 tools/kvantum/maak.py` |
+  | Taskbar, tray pop-ups, notifications | Plasma style `bugos`, by `python3 tools/plasma/vlakken.py` and `knoppen.py` |
+  | Icons | Icon theme `BugOS`, by `python3 tools/iconen/maak.py` |
+
+  CI fails when a made file is out of date. Never change a made file by hand.
+- **One surface per window.** The title bar, the toolbars, the sidebar and the page all have the window color
+  (`achter`). Content sits on white cards (`vlak`) with a hairline (`rand`). No separator lines between the title
+  bar and the window, and no differently colored sidebar.
+- **Pop-ups are small windows.** Tray pop-ups, the start menu and the quick menu have the window color with white
+  tiles and cards inside, 22 px corners and the same soft shadow.
+- **One size scale.** Controls (buttons, fields, list rows, menus, tooltips) 12 px corners, cards and tiles 16,
+  pop-ups and panels 22. Round buttons with only an icon are circles. Sliders: track 8 px with a coral-to-red fill,
+  a white knob of 22 px.
+- **One set of letters.** Inter for everything (14 px text, 13 px small, 15 px row names), Funnel Display only for
+  titles (pop-up title 20 px, page title 30 px). The window title uses Inter semibold.
+- **One way to point and choose.** Pointing at something gives a calm gray (`knop`); the chosen item is soft red
+  with red text (`accent_zacht`); keyboard focus is a 2 px red ring.

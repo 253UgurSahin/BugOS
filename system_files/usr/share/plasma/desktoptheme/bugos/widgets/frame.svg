@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BugOS Plasma-stijl: kaders. Gemaakt door tools/plasma/vlakken.py; niet met de hand bewerken. -->
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="216" height="100" viewBox="0 0 216 100">
+  <defs>
+    <style type="text/css" id="current-color-scheme">
+        .ColorScheme-Text { color:#16171C; }
+        .ColorScheme-Background { color:#F6F5F5; }
+        .ColorScheme-ViewBackground { color:#FFFFFF; }
+        .ColorScheme-ButtonBackground { color:#F1EEEE; }
+        .ColorScheme-Highlight { color:#FDE9E9; }
+        .ColorScheme-ButtonFocus { color:#DE2F3E; }
+        .ColorScheme-NeutralText { color:#B86E00; }
+    </style>
+
+  </defs>
+  <rect id="hint-tile-center" x="0" y="0" width="5" height="5" fill="#ff6600"/>
+  <g id="base">
+  <g id="plain-topleft"><rect x="2" y="8" width="16" height="16" fill="none"/><path d="M18,8L18,8L18,24L2,24L2,24C2,15.1634 9.1634,8 18,8ZM18,9C9.7157,9 3,15.7157 3,24L3,24L18,24L18,9Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="plain-top"><rect x="18" y="8" width="32" height="16" fill="none"/><path d="M18,8L50,8L50,24L18,24L18,8ZM18,9L18,24L50,24L50,9Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="plain-topright"><rect x="50" y="8" width="16" height="16" fill="none"/><path d="M50,8L50,8C58.8366,8 66,15.1634 66,24L66,24L50,24L50,8ZM50,9L50,24L65,24L65,24C65,15.7157 58.2843,9 50,9Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="plain-left"><rect x="2" y="24" width="16" height="32" fill="none"/><path d="M2,24L18,24L18,56L2,56L2,24ZM3,24L3,56L18,56L18,24Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="plain-center"><rect x="18" y="24" width="32" height="32" fill="none"/></g>
+  <g id="plain-right"><rect x="50" y="24" width="16" height="32" fill="none"/><path d="M50,24L66,24L66,56L50,56L50,24ZM50,24L50,56L65,56L65,24Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="plain-bottomleft"><rect x="2" y="56" width="16" height="16" fill="none"/><path d="M2,56L18,56L18,72L18,72C9.1634,72 2,64.8366 2,56L2,56ZM3,56L3,56C3,64.2843 9.7157,71 18,71L18,71L18,56Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="plain-bottom"><rect x="18" y="56" width="32" height="16" fill="none"/><path d="M18,56L50,56L50,72L18,72L18,56ZM18,56L18,71L50,71L50,56Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="plain-bottomright"><rect x="50" y="56" width="16" height="16" fill="none"/><path d="M50,56L66,56L66,56C66,64.8366 58.8366,72 50,72L50,72L50,56ZM50,56L50,71L50,71C58.2843,71 65,64.2843 65,56L65,56Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="raised-topleft"><rect x="76" y="8" width="16" height="16" fill="none"/><path d="M92,8L92,8L92,24L76,24L76,24C76,15.1634 83.1634,8 92,8Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M92,8L92,8L92,24L76,24L76,24C76,15.1634 83.1634,8 92,8ZM92,9C83.7157,9 77,15.7157 77,24L77,24L92,24L92,9Z" class="ColorScheme-Text" fill="currentColor" opacity="0.12" fill-rule="evenodd"/></g>
+  <g id="raised-top"><rect x="92" y="8" width="32" height="16" fill="none"/><path d="M92,8L124,8L124,24L92,24L92,8Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M92,8L124,8L124,24L92,24L92,8ZM92,9L92,24L124,24L124,9Z" class="ColorScheme-Text" fill="currentColor" opacity="0.12" fill-rule="evenodd"/></g>
+  <g id="raised-topright"><rect x="124" y="8" width="16" height="16" fill="none"/><path d="M124,8L124,8C132.8366,8 140,15.1634 140,24L140,24L124,24L124,8Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M124,8L124,8C132.8366,8 140,15.1634 140,24L140,24L124,24L124,8ZM124,9L124,24L139,24L139,24C139,15.7157 132.2843,9 124,9Z" class="ColorScheme-Text" fill="currentColor" opacity="0.12" fill-rule="evenodd"/></g>
+  <g id="raised-left"><rect x="76" y="24" width="16" height="32" fill="none"/><path d="M76,24L92,24L92,56L76,56L76,24Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M76,24L92,24L92,56L76,56L76,24ZM77,24L77,56L92,56L92,24Z" class="ColorScheme-Text" fill="currentColor" opacity="0.12" fill-rule="evenodd"/></g>
+  <g id="raised-center"><rect x="92" y="24" width="32" height="32" fill="none"/><path d="M92,24L124,24L124,56L92,56L92,24Z" class="ColorScheme-ViewBackground" fill="currentColor"/></g>
+  <g id="raised-right"><rect x="124" y="24" width="16" height="32" fill="none"/><path d="M124,24L140,24L140,56L124,56L124,24Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M124,24L140,24L140,56L124,56L124,24ZM124,24L124,56L139,56L139,24Z" class="ColorScheme-Text" fill="currentColor" opacity="0.12" fill-rule="evenodd"/></g>
+  <g id="raised-bottomleft"><rect x="76" y="56" width="16" height="16" fill="none"/><path d="M76,56L92,56L92,72L92,72C83.1634,72 76,64.8366 76,56L76,56Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M76,56L92,56L92,72L92,72C83.1634,72 76,64.8366 76,56L76,56ZM77,56L77,56C77,64.2843 83.7157,71 92,71L92,71L92,56Z" class="ColorScheme-Text" fill="currentColor" opacity="0.12" fill-rule="evenodd"/></g>
+  <g id="raised-bottom"><rect x="92" y="56" width="32" height="16" fill="none"/><path d="M92,56L124,56L124,72L92,72L92,56Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M92,56L124,56L124,72L92,72L92,56ZM92,56L92,71L124,71L124,56Z" class="ColorScheme-Text" fill="currentColor" opacity="0.12" fill-rule="evenodd"/></g>
+  <g id="raised-bottomright"><rect x="124" y="56" width="16" height="16" fill="none"/><path d="M124,56L140,56L140,56C140,64.8366 132.8366,72 124,72L124,72L124,56Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M124,56L140,56L140,56C140,64.8366 132.8366,72 124,72L124,72L124,56ZM124,56L124,71L124,71C132.2843,71 139,64.2843 139,56L139,56Z" class="ColorScheme-Text" fill="currentColor" opacity="0.12" fill-rule="evenodd"/></g>
+  <g id="sunken-topleft"><rect x="150" y="8" width="16" height="16" fill="none"/><path d="M166,8L166,8L166,24L150,24L150,24C150,15.1634 157.1634,8 166,8Z" class="ColorScheme-Text" fill="currentColor" opacity="0.05"/><path d="M166,8L166,8L166,24L150,24L150,24C150,15.1634 157.1634,8 166,8ZM166,9C157.7157,9 151,15.7157 151,24L151,24L166,24L166,9Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="sunken-top"><rect x="166" y="8" width="32" height="16" fill="none"/><path d="M166,8L198,8L198,24L166,24L166,8Z" class="ColorScheme-Text" fill="currentColor" opacity="0.05"/><path d="M166,8L198,8L198,24L166,24L166,8ZM166,9L166,24L198,24L198,9Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="sunken-topright"><rect x="198" y="8" width="16" height="16" fill="none"/><path d="M198,8L198,8C206.8366,8 214,15.1634 214,24L214,24L198,24L198,8Z" class="ColorScheme-Text" fill="currentColor" opacity="0.05"/><path d="M198,8L198,8C206.8366,8 214,15.1634 214,24L214,24L198,24L198,8ZM198,9L198,24L213,24L213,24C213,15.7157 206.2843,9 198,9Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="sunken-left"><rect x="150" y="24" width="16" height="32" fill="none"/><path d="M150,24L166,24L166,56L150,56L150,24Z" class="ColorScheme-Text" fill="currentColor" opacity="0.05"/><path d="M150,24L166,24L166,56L150,56L150,24ZM151,24L151,56L166,56L166,24Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="sunken-center"><rect x="166" y="24" width="32" height="32" fill="none"/><path d="M166,24L198,24L198,56L166,56L166,24Z" class="ColorScheme-Text" fill="currentColor" opacity="0.05"/></g>
+  <g id="sunken-right"><rect x="198" y="24" width="16" height="32" fill="none"/><path d="M198,24L214,24L214,56L198,56L198,24Z" class="ColorScheme-Text" fill="currentColor" opacity="0.05"/><path d="M198,24L214,24L214,56L198,56L198,24ZM198,24L198,56L213,56L213,24Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="sunken-bottomleft"><rect x="150" y="56" width="16" height="16" fill="none"/><path d="M150,56L166,56L166,72L166,72C157.1634,72 150,64.8366 150,56L150,56Z" class="ColorScheme-Text" fill="currentColor" opacity="0.05"/><path d="M150,56L166,56L166,72L166,72C157.1634,72 150,64.8366 150,56L150,56ZM151,56L151,56C151,64.2843 157.7157,71 166,71L166,71L166,56Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="sunken-bottom"><rect x="166" y="56" width="32" height="16" fill="none"/><path d="M166,56L198,56L198,72L166,72L166,56Z" class="ColorScheme-Text" fill="currentColor" opacity="0.05"/><path d="M166,56L198,56L198,72L166,72L166,56ZM166,56L166,71L198,71L198,56Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="sunken-bottomright"><rect x="198" y="56" width="16" height="16" fill="none"/><path d="M198,56L214,56L214,56C214,64.8366 206.8366,72 198,72L198,72L198,56Z" class="ColorScheme-Text" fill="currentColor" opacity="0.05"/><path d="M198,56L214,56L214,56C214,64.8366 206.8366,72 198,72L198,72L198,56ZM198,56L198,71L198,71C206.2843,71 213,64.2843 213,56L213,56Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  </g>
+  <rect id="plain-hint-top-margin" x="33" y="8" width="2" height="8" fill="#ff00ff"/>
+  <rect id="plain-hint-bottom-margin" x="33" y="64" width="2" height="8" fill="#ff00ff"/>
+  <rect id="plain-hint-left-margin" x="2" y="39" width="8" height="2" fill="#ff00ff"/>
+  <rect id="plain-hint-right-margin" x="58" y="39" width="8" height="2" fill="#ff00ff"/>
+  <rect id="raised-hint-top-margin" x="107" y="8" width="2" height="8" fill="#ff00ff"/>
+  <rect id="raised-hint-bottom-margin" x="107" y="64" width="2" height="8" fill="#ff00ff"/>
+  <rect id="raised-hint-left-margin" x="76" y="39" width="8" height="2" fill="#ff00ff"/>
+  <rect id="raised-hint-right-margin" x="132" y="39" width="8" height="2" fill="#ff00ff"/>
+  <rect id="sunken-hint-top-margin" x="181" y="8" width="2" height="8" fill="#ff00ff"/>
+  <rect id="sunken-hint-bottom-margin" x="181" y="64" width="2" height="8" fill="#ff00ff"/>
+  <rect id="sunken-hint-left-margin" x="150" y="39" width="8" height="2" fill="#ff00ff"/>
+  <rect id="sunken-hint-right-margin" x="206" y="39" width="8" height="2" fill="#ff00ff"/>
+  <g id="border-bottomleft"><rect x="2" y="90" width="8" height="8" fill="none"/></g>
+</svg>

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BugOS Plasma-stijl: tabs. Gemaakt door tools/plasma/knoppen.py; niet met de hand bewerken. -->
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="58" height="154" viewBox="0 0 58 154">
+    <defs>
+    <style type="text/css" id="current-color-scheme">
+        .ColorScheme-Text { color:#16171C; }
+        .ColorScheme-Background { color:#F6F5F5; }
+        .ColorScheme-ButtonFocus { color:#DE2F3E; }
+        .ColorScheme-ButtonBackground { color:#F1EEEE; }
+        .ColorScheme-ViewBackground { color:#FFFFFF; }
+        .ColorScheme-Highlight { color:#FDE9E9; }
+    </style>
+
+    </defs>
+    <g id="north-active-tab-topleft"><rect x="2" y="2" width="13" height="13" fill="none"/><path d="M5,15L5,15A10,10 0 0 1 15,5L15,5L15,15Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="north-active-tab-top"><rect x="15" y="2" width="4" height="13" fill="none"/><rect x="15" y="5" width="4" height="10" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="north-active-tab-topright"><rect x="19" y="2" width="13" height="13" fill="none"/><path d="M29,15L29,15A10,10 0 0 0 19,5L19,5L19,15Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="north-active-tab-left"><rect x="2" y="15" width="13" height="4" fill="none"/><rect x="5" y="15" width="10" height="4" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="north-active-tab-center"><rect x="15" y="15" width="4" height="4" fill="none"/><rect x="15" y="15" width="4" height="4" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="north-active-tab-right"><rect x="19" y="15" width="13" height="4" fill="none"/><rect x="19" y="15" width="10" height="4" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="north-active-tab-bottomleft"><rect x="2" y="19" width="13" height="13" fill="none"/><path d="M5,19L5,19A10,10 0 0 0 15,29L15,29L15,19Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="north-active-tab-bottom"><rect x="15" y="19" width="4" height="13" fill="none"/><rect x="15" y="19" width="4" height="10" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="north-active-tab-bottomright"><rect x="19" y="19" width="13" height="13" fill="none"/><path d="M29,19L29,19A10,10 0 0 1 19,29L19,29L19,19Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <rect id="north-active-tab-hint-top-margin" x="38" y="2" width="2" height="9" fill="none"/>
+    <rect id="north-active-tab-hint-bottom-margin" x="41" y="2" width="2" height="9" fill="none"/>
+    <rect id="north-active-tab-hint-left-margin" x="38" y="12" width="12" height="2" fill="none"/>
+    <rect id="north-active-tab-hint-right-margin" x="38" y="16" width="12" height="2" fill="none"/>
+    <g id="south-active-tab-topleft"><rect x="2" y="38" width="13" height="13" fill="none"/><path d="M5,51L5,51A10,10 0 0 1 15,41L15,41L15,51Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="south-active-tab-top"><rect x="15" y="38" width="4" height="13" fill="none"/><rect x="15" y="41" width="4" height="10" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="south-active-tab-topright"><rect x="19" y="38" width="13" height="13" fill="none"/><path d="M29,51L29,51A10,10 0 0 0 19,41L19,41L19,51Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="south-active-tab-left"><rect x="2" y="51" width="13" height="4" fill="none"/><rect x="5" y="51" width="10" height="4" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="south-active-tab-center"><rect x="15" y="51" width="4" height="4" fill="none"/><rect x="15" y="51" width="4" height="4" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="south-active-tab-right"><rect x="19" y="51" width="13" height="4" fill="none"/><rect x="19" y="51" width="10" height="4" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="south-active-tab-bottomleft"><rect x="2" y="55" width="13" height="13" fill="none"/><path d="M5,55L5,55A10,10 0 0 0 15,65L15,65L15,55Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="south-active-tab-bottom"><rect x="15" y="55" width="4" height="13" fill="none"/><rect x="15" y="55" width="4" height="10" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="south-active-tab-bottomright"><rect x="19" y="55" width="13" height="13" fill="none"/><path d="M29,55L29,55A10,10 0 0 1 19,65L19,65L19,55Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <rect id="south-active-tab-hint-top-margin" x="38" y="38" width="2" height="9" fill="none"/>
+    <rect id="south-active-tab-hint-bottom-margin" x="41" y="38" width="2" height="9" fill="none"/>
+    <rect id="south-active-tab-hint-left-margin" x="38" y="48" width="12" height="2" fill="none"/>
+    <rect id="south-active-tab-hint-right-margin" x="38" y="52" width="12" height="2" fill="none"/>
+    <g id="east-active-tab-topleft"><rect x="2" y="74" width="13" height="13" fill="none"/><path d="M5,87L5,87A10,10 0 0 1 15,77L15,77L15,87Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="east-active-tab-top"><rect x="15" y="74" width="4" height="13" fill="none"/><rect x="15" y="77" width="4" height="10" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="east-active-tab-topright"><rect x="19" y="74" width="13" height="13" fill="none"/><path d="M29,87L29,87A10,10 0 0 0 19,77L19,77L19,87Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="east-active-tab-left"><rect x="2" y="87" width="13" height="4" fill="none"/><rect x="5" y="87" width="10" height="4" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="east-active-tab-center"><rect x="15" y="87" width="4" height="4" fill="none"/><rect x="15" y="87" width="4" height="4" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="east-active-tab-right"><rect x="19" y="87" width="13" height="4" fill="none"/><rect x="19" y="87" width="10" height="4" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="east-active-tab-bottomleft"><rect x="2" y="91" width="13" height="13" fill="none"/><path d="M5,91L5,91A10,10 0 0 0 15,101L15,101L15,91Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="east-active-tab-bottom"><rect x="15" y="91" width="4" height="13" fill="none"/><rect x="15" y="91" width="4" height="10" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="east-active-tab-bottomright"><rect x="19" y="91" width="13" height="13" fill="none"/><path d="M29,91L29,91A10,10 0 0 1 19,101L19,101L19,91Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <rect id="east-active-tab-hint-top-margin" x="38" y="74" width="2" height="9" fill="none"/>
+    <rect id="east-active-tab-hint-bottom-margin" x="41" y="74" width="2" height="9" fill="none"/>
+    <rect id="east-active-tab-hint-left-margin" x="38" y="84" width="12" height="2" fill="none"/>
+    <rect id="east-active-tab-hint-right-margin" x="38" y="88" width="12" height="2" fill="none"/>
+    <g id="west-active-tab-topleft"><rect x="2" y="110" width="13" height="13" fill="none"/><path d="M5,123L5,123A10,10 0 0 1 15,113L15,113L15,123Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="west-active-tab-top"><rect x="15" y="110" width="4" height="13" fill="none"/><rect x="15" y="113" width="4" height="10" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="west-active-tab-topright"><rect x="19" y="110" width="13" height="13" fill="none"/><path d="M29,123L29,123A10,10 0 0 0 19,113L19,113L19,123Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="west-active-tab-left"><rect x="2" y="123" width="13" height="4" fill="none"/><rect x="5" y="123" width="10" height="4" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="west-active-tab-center"><rect x="15" y="123" width="4" height="4" fill="none"/><rect x="15" y="123" width="4" height="4" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="west-active-tab-right"><rect x="19" y="123" width="13" height="4" fill="none"/><rect x="19" y="123" width="10" height="4" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="west-active-tab-bottomleft"><rect x="2" y="127" width="13" height="13" fill="none"/><path d="M5,127L5,127A10,10 0 0 0 15,137L15,137L15,127Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="west-active-tab-bottom"><rect x="15" y="127" width="4" height="13" fill="none"/><rect x="15" y="127" width="4" height="10" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="west-active-tab-bottomright"><rect x="19" y="127" width="13" height="13" fill="none"/><path d="M29,127L29,127A10,10 0 0 1 19,137L19,137L19,127Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <rect id="west-active-tab-hint-top-margin" x="38" y="110" width="2" height="9" fill="none"/>
+    <rect id="west-active-tab-hint-bottom-margin" x="41" y="110" width="2" height="9" fill="none"/>
+    <rect id="west-active-tab-hint-left-margin" x="38" y="120" width="12" height="2" fill="none"/>
+    <rect id="west-active-tab-hint-right-margin" x="38" y="124" width="12" height="2" fill="none"/>
+    <rect id="hint-tile-center" x="2" y="146" width="2" height="2" fill="none"/>
+</svg>

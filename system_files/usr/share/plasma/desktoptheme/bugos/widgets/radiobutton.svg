@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BugOS Plasma-stijl: keuzerondjes. Gemaakt door tools/plasma/knoppen.py; niet met de hand bewerken. -->
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="140" height="30" viewBox="0 0 140 30">
+    <defs>
+    <style type="text/css" id="current-color-scheme">
+        .ColorScheme-Text { color:#16171C; }
+        .ColorScheme-Background { color:#F6F5F5; }
+        .ColorScheme-ButtonFocus { color:#DE2F3E; }
+        .ColorScheme-ButtonBackground { color:#F1EEEE; }
+        .ColorScheme-ViewBackground { color:#FFFFFF; }
+        .ColorScheme-Highlight { color:#FDE9E9; }
+    </style>
+
+    </defs>
+    <g id="normal"><rect x="2" y="2" width="16" height="16" fill="none"/><circle cx="10" cy="10" r="8" class="ColorScheme-ViewBackground" style="fill:currentColor"/><path d="M2,10A8,8 0 1 0 18,10A8,8 0 1 0 2,10ZM3.5,10A6.5,6.5 0 1 0 16.5,10A6.5,6.5 0 1 0 3.5,10Z" class="ColorScheme-Text" style="fill-rule:evenodd;fill:currentColor;fill-opacity:0.2"/></g>
+    <g id="checked"><rect x="24" y="2" width="16" height="16" fill="none"/><circle cx="32" cy="10" r="8" class="ColorScheme-ButtonFocus" style="fill:currentColor"/></g>
+    <g id="hover"><rect x="46" y="2" width="16" height="16" fill="none"/><circle cx="54" cy="10" r="8" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="focus"><rect x="68" y="2" width="20" height="20" fill="none"/><path d="M68,12A10,10 0 1 0 88,12A10,10 0 1 0 68,12ZM70,12A8,8 0 1 0 86,12A8,8 0 1 0 70,12Z" class="ColorScheme-ButtonFocus" style="fill-rule:evenodd;fill:currentColor"/></g>
+    <g id="shadow"><rect x="94" y="2" width="22" height="22" fill="none"/></g>
+    <rect id="hint-size" x="122" y="2" width="16" height="16" fill="none"/>
+    <circle id="symbol" cx="145" cy="5" r="3" style="fill:#FFFFFF"/>
+</svg>

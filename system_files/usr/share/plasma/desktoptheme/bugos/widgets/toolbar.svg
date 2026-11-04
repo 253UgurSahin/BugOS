@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BugOS Plasma-stijl: werkbalk. Gemaakt door tools/plasma/knoppen.py; niet met de hand bewerken. -->
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="74" height="48" viewBox="0 0 74 48">
+    <defs>
+    <style type="text/css" id="current-color-scheme">
+        .ColorScheme-Text { color:#16171C; }
+        .ColorScheme-Background { color:#F6F5F5; }
+        .ColorScheme-ButtonFocus { color:#DE2F3E; }
+        .ColorScheme-ButtonBackground { color:#F1EEEE; }
+        .ColorScheme-ViewBackground { color:#FFFFFF; }
+        .ColorScheme-Highlight { color:#FDE9E9; }
+    </style>
+
+    </defs>
+    <rect id="topleft" x="2" y="2" width="4" height="4" class="ColorScheme-Background" style="fill:currentColor"/>
+    <rect id="top" x="6" y="2" width="32" height="4" class="ColorScheme-Background" style="fill:currentColor"/>
+    <rect id="topright" x="38" y="2" width="4" height="4" class="ColorScheme-Background" style="fill:currentColor"/>
+    <rect id="left" x="2" y="6" width="4" height="32" class="ColorScheme-Background" style="fill:currentColor"/>
+    <rect id="center" x="6" y="6" width="32" height="32" class="ColorScheme-Background" style="fill:currentColor"/>
+    <rect id="right" x="38" y="6" width="4" height="32" class="ColorScheme-Background" style="fill:currentColor"/>
+    <rect id="bottomleft" x="2" y="38" width="4" height="4" class="ColorScheme-Background" style="fill:currentColor"/>
+    <rect id="bottom" x="6" y="38" width="32" height="4" class="ColorScheme-Background" style="fill:currentColor"/>
+    <rect id="bottomright" x="38" y="38" width="4" height="4" class="ColorScheme-Background" style="fill:currentColor"/>
+    <rect id="hint-tile-center" x="46" y="2" width="2" height="2" fill="none"/>
+    <rect id="hint-top-margin" x="50" y="2" width="2" height="4" fill="none"/>
+    <rect id="hint-bottom-margin" x="54" y="2" width="2" height="4" fill="none"/>
+    <rect id="hint-left-margin" x="46" y="10" width="4" height="2" fill="none"/>
+    <rect id="hint-right-margin" x="46" y="14" width="4" height="2" fill="none"/>
+</svg>

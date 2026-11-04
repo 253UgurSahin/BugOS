@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BugOS Plasma-stijl: rand van een schuifvlak. Gemaakt door tools/plasma/knoppen.py; niet met de hand bewerken. -->
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="36" height="36" viewBox="0 0 36 36">
+    <defs>
+    <style type="text/css" id="current-color-scheme">
+        .ColorScheme-Text { color:#16171C; }
+        .ColorScheme-Background { color:#F6F5F5; }
+        .ColorScheme-ButtonFocus { color:#DE2F3E; }
+        .ColorScheme-ButtonBackground { color:#F1EEEE; }
+        .ColorScheme-ViewBackground { color:#FFFFFF; }
+        .ColorScheme-Highlight { color:#FDE9E9; }
+    </style>
+
+    </defs>
+    <g id="border-topleft"><rect x="2" y="2" width="8" height="8" fill="none"/><path d="M2,10L2,10A8,8 0 0 1 10,2L10,2L10,10ZM3,10L3,10A7,7 0 0 1 10,3L10,3L10,10Z" class="ColorScheme-Text" style="fill-rule:evenodd;fill:currentColor;fill-opacity:0.12"/></g>
+    <g id="border-top"><rect x="10" y="2" width="4" height="8" fill="none"/><rect x="10" y="2" width="4" height="1" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.12"/></g>
+    <g id="border-topright"><rect x="14" y="2" width="8" height="8" fill="none"/><path d="M22,10L22,10A8,8 0 0 0 14,2L14,2L14,10ZM21,10L21,10A7,7 0 0 0 14,3L14,3L14,10Z" class="ColorScheme-Text" style="fill-rule:evenodd;fill:currentColor;fill-opacity:0.12"/></g>
+    <g id="border-left"><rect x="2" y="10" width="8" height="4" fill="none"/><rect x="2" y="10" width="1" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.12"/></g>
+    <g id="border-center"><rect x="10" y="10" width="4" height="4" fill="none"/></g>
+    <g id="border-right"><rect x="14" y="10" width="8" height="4" fill="none"/><rect x="21" y="10" width="1" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.12"/></g>
+    <g id="border-bottomleft"><rect x="2" y="14" width="8" height="8" fill="none"/><path d="M2,14L2,14A8,8 0 0 0 10,22L10,22L10,14ZM3,14L3,14A7,7 0 0 0 10,21L10,21L10,14Z" class="ColorScheme-Text" style="fill-rule:evenodd;fill:currentColor;fill-opacity:0.12"/></g>
+    <g id="border-bottom"><rect x="10" y="14" width="4" height="8" fill="none"/><rect x="10" y="21" width="4" height="1" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.12"/></g>
+    <g id="border-bottomright"><rect x="14" y="14" width="8" height="8" fill="none"/><path d="M22,14L22,14A8,8 0 0 1 14,22L14,22L14,14ZM21,14L21,14A7,7 0 0 1 14,21L14,21L14,14Z" class="ColorScheme-Text" style="fill-rule:evenodd;fill:currentColor;fill-opacity:0.12"/></g>
+</svg>

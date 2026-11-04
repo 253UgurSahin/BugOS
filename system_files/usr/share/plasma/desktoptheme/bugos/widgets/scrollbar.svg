@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BugOS Plasma-stijl: schuifbalk. Gemaakt door tools/plasma/knoppen.py; niet met de hand bewerken. -->
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="34" height="202" viewBox="0 0 34 202">
+    <defs>
+    <style type="text/css" id="current-color-scheme">
+        .ColorScheme-Text { color:#16171C; }
+        .ColorScheme-Background { color:#F6F5F5; }
+        .ColorScheme-ButtonFocus { color:#DE2F3E; }
+        .ColorScheme-ButtonBackground { color:#F1EEEE; }
+        .ColorScheme-ViewBackground { color:#FFFFFF; }
+        .ColorScheme-Highlight { color:#FDE9E9; }
+    </style>
+
+    </defs>
+    <rect id="hint-tile-center" x="2" y="2" width="2" height="2" fill="none"/>
+    <rect id="hint-scrollbar-size" x="6" y="2" width="6" height="6" fill="none"/>
+    <g id="slider-topleft"><rect x="2" y="10" width="3" height="3" fill="none"/><path d="M2,13L2,13A3,3 0 0 1 5,10L5,10L5,13Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.24"/></g>
+    <g id="slider-top"><rect x="5" y="10" width="4" height="3" fill="none"/><rect x="5" y="10" width="4" height="3" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.24"/></g>
+    <g id="slider-topright"><rect x="9" y="10" width="3" height="3" fill="none"/><path d="M12,13L12,13A3,3 0 0 0 9,10L9,10L9,13Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.24"/></g>
+    <g id="slider-left"><rect x="2" y="13" width="3" height="4" fill="none"/><rect x="2" y="13" width="3" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.24"/></g>
+    <g id="slider-center"><rect x="5" y="13" width="4" height="4" fill="none"/><rect x="5" y="13" width="4" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.24"/></g>
+    <g id="slider-right"><rect x="9" y="13" width="3" height="4" fill="none"/><rect x="9" y="13" width="3" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.24"/></g>
+    <g id="slider-bottomleft"><rect x="2" y="17" width="3" height="3" fill="none"/><path d="M2,17L2,17A3,3 0 0 0 5,20L5,20L5,17Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.24"/></g>
+    <g id="slider-bottom"><rect x="5" y="17" width="4" height="3" fill="none"/><rect x="5" y="17" width="4" height="3" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.24"/></g>
+    <g id="slider-bottomright"><rect x="9" y="17" width="3" height="3" fill="none"/><path d="M12,17L12,17A3,3 0 0 1 9,20L9,20L9,17Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.24"/></g>
+    <rect id="slider-hint-left-inset" x="2" y="44" width="4" height="3" fill="none"/>
+    <rect id="slider-hint-right-inset" x="8" y="44" width="4" height="3" fill="none"/>
+    <rect id="slider-hint-top-inset" x="14" y="44" width="3" height="4" fill="none"/>
+    <rect id="slider-hint-bottom-inset" x="20" y="44" width="3" height="4" fill="none"/>
+    <g id="mouseover-slider-topleft"><rect x="2" y="58" width="3" height="3" fill="none"/><path d="M2,61L2,61A3,3 0 0 1 5,58L5,58L5,61Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.45"/></g>
+    <g id="mouseover-slider-top"><rect x="5" y="58" width="4" height="3" fill="none"/><rect x="5" y="58" width="4" height="3" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.45"/></g>
+    <g id="mouseover-slider-topright"><rect x="9" y="58" width="3" height="3" fill="none"/><path d="M12,61L12,61A3,3 0 0 0 9,58L9,58L9,61Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.45"/></g>
+    <g id="mouseover-slider-left"><rect x="2" y="61" width="3" height="4" fill="none"/><rect x="2" y="61" width="3" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.45"/></g>
+    <g id="mouseover-slider-center"><rect id="msc" x="5" y="61" width="4" height="4" fill="none"/><rect x="5" y="61" width="4" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.45"/></g>
+    <g id="mouseover-slider-right"><rect x="9" y="61" width="3" height="4" fill="none"/><rect x="9" y="61" width="3" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.45"/></g>
+    <g id="mouseover-slider-bottomleft"><rect x="2" y="65" width="3" height="3" fill="none"/><path d="M2,65L2,65A3,3 0 0 0 5,68L5,68L5,65Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.45"/></g>
+    <g id="mouseover-slider-bottom"><rect x="5" y="65" width="4" height="3" fill="none"/><rect x="5" y="65" width="4" height="3" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.45"/></g>
+    <g id="mouseover-slider-bottomright"><rect x="9" y="65" width="3" height="3" fill="none"/><path d="M12,65L12,65A3,3 0 0 1 9,68L9,68L9,65Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.45"/></g>
+    <rect id="mouseover-slider-hint-left-inset" x="2" y="92" width="4" height="3" fill="none"/>
+    <rect id="mouseover-slider-hint-right-inset" x="8" y="92" width="4" height="3" fill="none"/>
+    <rect id="mouseover-slider-hint-top-inset" x="14" y="92" width="3" height="4" fill="none"/>
+    <rect id="mouseover-slider-hint-bottom-inset" x="20" y="92" width="3" height="4" fill="none"/>
+    <g id="background-vertical-topleft"><rect x="2" y="106" width="3" height="3" fill="none"/></g>
+    <g id="background-vertical-top"><rect x="5" y="106" width="4" height="3" fill="none"/></g>
+    <g id="background-vertical-topright"><rect x="9" y="106" width="3" height="3" fill="none"/></g>
+    <g id="background-vertical-left"><rect x="2" y="109" width="3" height="4" fill="none"/></g>
+    <g id="background-vertical-center"><rect x="5" y="109" width="4" height="4" fill="none"/></g>
+    <g id="background-vertical-right"><rect x="9" y="109" width="3" height="4" fill="none"/></g>
+    <g id="background-vertical-bottomleft"><rect x="2" y="113" width="3" height="3" fill="none"/></g>
+    <g id="background-vertical-bottom"><rect x="5" y="113" width="4" height="3" fill="none"/></g>
+    <g id="background-vertical-bottomright"><rect x="9" y="113" width="3" height="3" fill="none"/></g>
+    <rect id="background-vertical-hint-left-inset" x="2" y="140" width="4" height="3" fill="none"/>
+    <rect id="background-vertical-hint-right-inset" x="8" y="140" width="4" height="3" fill="none"/>
+    <rect id="background-vertical-hint-top-inset" x="14" y="140" width="3" height="4" fill="none"/>
+    <rect id="background-vertical-hint-bottom-inset" x="20" y="140" width="3" height="4" fill="none"/>
+    <g id="background-horizontal-topleft"><rect x="2" y="154" width="3" height="3" fill="none"/></g>
+    <g id="background-horizontal-top"><rect x="5" y="154" width="4" height="3" fill="none"/></g>
+    <g id="background-horizontal-topright"><rect x="9" y="154" width="3" height="3" fill="none"/></g>
+    <g id="background-horizontal-left"><rect x="2" y="157" width="3" height="4" fill="none"/></g>
+    <g id="background-horizontal-center"><rect x="5" y="157" width="4" height="4" fill="none"/></g>
+    <g id="background-horizontal-right"><rect x="9" y="157" width="3" height="4" fill="none"/></g>
+    <g id="background-horizontal-bottomleft"><rect x="2" y="161" width="3" height="3" fill="none"/></g>
+    <g id="background-horizontal-bottom"><rect x="5" y="161" width="4" height="3" fill="none"/></g>
+    <g id="background-horizontal-bottomright"><rect x="9" y="161" width="3" height="3" fill="none"/></g>
+    <rect id="background-horizontal-hint-left-inset" x="2" y="188" width="4" height="3" fill="none"/>
+    <rect id="background-horizontal-hint-right-inset" x="8" y="188" width="4" height="3" fill="none"/>
+    <rect id="background-horizontal-hint-top-inset" x="14" y="188" width="3" height="4" fill="none"/>
+    <rect id="background-horizontal-hint-bottom-inset" x="20" y="188" width="3" height="4" fill="none"/>
+</svg>

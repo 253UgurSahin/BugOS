@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BugOS Plasma-stijl: pop-up (zonder compositing). Gemaakt door tools/plasma/vlakken.py; niet met de hand bewerken. -->
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="168" height="88" viewBox="0 0 168 88">
+  <defs>
+    <style type="text/css" id="current-color-scheme">
+        .ColorScheme-Text { color:#16171C; }
+        .ColorScheme-Background { color:#F6F5F5; }
+        .ColorScheme-ViewBackground { color:#FFFFFF; }
+        .ColorScheme-ButtonBackground { color:#F1EEEE; }
+        .ColorScheme-Highlight { color:#FDE9E9; }
+        .ColorScheme-ButtonFocus { color:#DE2F3E; }
+        .ColorScheme-NeutralText { color:#B86E00; }
+    </style>
+
+  </defs>
+  <rect id="hint-tile-center" x="0" y="0" width="5" height="5" fill="#ff6600"/>
+  <g id="base">
+  <g id="topleft"><rect x="2" y="10" width="22" height="22" fill="none"/><path d="M24,10L24,10L24,32L2,32L2,32C2,19.8497 11.8497,10 24,10Z" class="ColorScheme-Background" fill="currentColor"/><path d="M24,10L24,10L24,32L2,32L2,32C2,19.8497 11.8497,10 24,10ZM24,11C12.402,11 3,20.402 3,32L3,32L24,32L24,11Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="top"><rect x="24" y="10" width="32" height="22" fill="none"/><path d="M24,10L56,10L56,32L24,32L24,10Z" class="ColorScheme-Background" fill="currentColor"/><path d="M24,10L56,10L56,32L24,32L24,10ZM24,11L24,32L56,32L56,11Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="topright"><rect x="56" y="10" width="22" height="22" fill="none"/><path d="M56,10L56,10C68.1503,10 78,19.8497 78,32L78,32L56,32L56,10Z" class="ColorScheme-Background" fill="currentColor"/><path d="M56,10L56,10C68.1503,10 78,19.8497 78,32L78,32L56,32L56,10ZM56,11L56,32L77,32L77,32C77,20.402 67.598,11 56,11Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="left"><rect x="2" y="32" width="22" height="32" fill="none"/><path d="M2,32L24,32L24,64L2,64L2,32Z" class="ColorScheme-Background" fill="currentColor"/><path d="M2,32L24,32L24,64L2,64L2,32ZM3,32L3,64L24,64L24,32Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="center"><rect x="24" y="32" width="32" height="32" fill="none"/><path d="M24,32L56,32L56,64L24,64L24,32Z" class="ColorScheme-Background" fill="currentColor"/></g>
+  <g id="right"><rect x="56" y="32" width="22" height="32" fill="none"/><path d="M56,32L78,32L78,64L56,64L56,32Z" class="ColorScheme-Background" fill="currentColor"/><path d="M56,32L78,32L78,64L56,64L56,32ZM56,32L56,64L77,64L77,32Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="bottomleft"><rect x="2" y="64" width="22" height="22" fill="none"/><path d="M2,64L24,64L24,86L24,86C11.8497,86 2,76.1503 2,64L2,64Z" class="ColorScheme-Background" fill="currentColor"/><path d="M2,64L24,64L24,86L24,86C11.8497,86 2,76.1503 2,64L2,64ZM3,64L3,64C3,75.598 12.402,85 24,85L24,85L24,64Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="bottom"><rect x="24" y="64" width="32" height="22" fill="none"/><path d="M24,64L56,64L56,86L24,86L24,64Z" class="ColorScheme-Background" fill="currentColor"/><path d="M24,64L56,64L56,86L24,86L24,64ZM24,64L24,85L56,85L56,64Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="bottomright"><rect x="56" y="64" width="22" height="22" fill="none"/><path d="M56,64L78,64L78,64C78,76.1503 68.1503,86 56,86L56,86L56,64Z" class="ColorScheme-Background" fill="currentColor"/><path d="M56,64L78,64L78,64C78,76.1503 68.1503,86 56,86L56,86L56,64ZM56,64L56,85L56,85C67.598,85 77,75.598 77,64L77,64Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  </g>
+  <rect id="hint-top-margin" x="39" y="10" width="2" height="12" fill="#ff00ff"/>
+  <rect id="hint-bottom-margin" x="39" y="74" width="2" height="12" fill="#ff00ff"/>
+  <rect id="hint-left-margin" x="2" y="47" width="12" height="2" fill="#ff00ff"/>
+  <rect id="hint-right-margin" x="66" y="47" width="12" height="2" fill="#ff00ff"/>
+  <g id="mask-topleft"><rect x="90" y="10" width="22" height="22" fill="none"/><path d="M90,32L91,32C91,20.402 100.402,11 112,11L112,10L112,32Z"/></g>
+  <g id="mask-top"><rect x="112" y="10" width="32" height="22" fill="none"/><path d="M112,10L144,10L144,32L112,32L112,10Z"/></g>
+  <g id="mask-topright"><rect x="144" y="10" width="22" height="22" fill="none"/><path d="M166,32L165,32C165,20.402 155.598,11 144,11L144,10L144,32Z"/></g>
+  <g id="mask-left"><rect x="90" y="32" width="22" height="32" fill="none"/><path d="M90,32L112,32L112,64L90,64L90,32Z"/></g>
+  <g id="mask-center"><rect x="112" y="32" width="32" height="32" fill="none"/><path d="M112,32L144,32L144,64L112,64L112,32Z"/></g>
+  <g id="mask-right"><rect x="144" y="32" width="22" height="32" fill="none"/><path d="M144,32L166,32L166,64L144,64L144,32Z"/></g>
+  <g id="mask-bottomleft"><rect x="90" y="64" width="22" height="22" fill="none"/><path d="M90,64L91,64C91,75.598 100.402,85 112,85L112,86L112,64Z"/></g>
+  <g id="mask-bottom"><rect x="112" y="64" width="32" height="22" fill="none"/><path d="M112,64L144,64L144,86L112,86L112,64Z"/></g>
+  <g id="mask-bottomright"><rect x="144" y="64" width="22" height="22" fill="none"/><path d="M166,64L165,64C165,75.598 155.598,85 144,85L144,86L144,64Z"/></g>
+</svg>

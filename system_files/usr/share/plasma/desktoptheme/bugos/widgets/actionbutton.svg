@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BugOS Plasma-stijl: ronde knoppen. Gemaakt door tools/plasma/knoppen.py; niet met de hand bewerken. -->
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="150" height="120" viewBox="0 0 150 120">
+    <defs>
+    <style type="text/css" id="current-color-scheme">
+        .ColorScheme-Text { color:#16171C; }
+        .ColorScheme-Background { color:#F6F5F5; }
+        .ColorScheme-ButtonFocus { color:#DE2F3E; }
+        .ColorScheme-ButtonBackground { color:#F1EEEE; }
+        .ColorScheme-ViewBackground { color:#FFFFFF; }
+        .ColorScheme-Highlight { color:#FDE9E9; }
+    </style>
+
+    </defs>
+    <g id="normal"><rect x="2" y="2" width="32" height="32" fill="none"/><circle cx="18" cy="18" r="16" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.1"/></g>
+    <g id="pressed"><rect x="40" y="2" width="32" height="32" fill="none"/><circle cx="56" cy="18" r="16" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="hover"><rect x="78" y="2" width="32" height="32" fill="none"/><circle cx="94" cy="18" r="16" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.06"/></g>
+    <g id="focus"><rect x="116" y="2" width="32" height="32" fill="none"/><path d="M116,18A16,16 0 1 0 148,18A16,16 0 1 0 116,18ZM118,18A14,14 0 1 0 146,18A14,14 0 1 0 118,18Z" class="ColorScheme-ButtonFocus" style="fill-rule:evenodd;fill:currentColor"/></g>
+    <g id="24-24-normal"><rect x="2" y="40" width="24" height="24" fill="none"/><circle cx="14" cy="52" r="12" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.1"/></g>
+    <g id="24-24-pressed"><rect x="32" y="40" width="24" height="24" fill="none"/><circle cx="44" cy="52" r="12" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="24-24-hover"><rect x="62" y="40" width="24" height="24" fill="none"/><circle cx="74" cy="52" r="12" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.06"/></g>
+    <g id="24-24-focus"><rect x="92" y="40" width="24" height="24" fill="none"/><path d="M92,52A12,12 0 1 0 116,52A12,12 0 1 0 92,52ZM94,52A10,10 0 1 0 114,52A10,10 0 1 0 94,52Z" class="ColorScheme-ButtonFocus" style="fill-rule:evenodd;fill:currentColor"/></g>
+    <g id="22-22-normal"><rect x="2" y="70" width="22" height="22" fill="none"/><circle cx="13" cy="81" r="11" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.1"/></g>
+    <g id="22-22-pressed"><rect x="30" y="70" width="22" height="22" fill="none"/><circle cx="41" cy="81" r="11" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="22-22-hover"><rect x="58" y="70" width="22" height="22" fill="none"/><circle cx="69" cy="81" r="11" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.06"/></g>
+    <g id="22-22-focus"><rect x="86" y="70" width="22" height="22" fill="none"/><path d="M86,81A11,11 0 1 0 108,81A11,11 0 1 0 86,81ZM88,81A9,9 0 1 0 106,81A9,9 0 1 0 88,81Z" class="ColorScheme-ButtonFocus" style="fill-rule:evenodd;fill:currentColor"/></g>
+    <g id="16-16-normal"><rect x="2" y="98" width="16" height="16" fill="none"/><circle cx="10" cy="106" r="8" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.1"/></g>
+    <g id="16-16-pressed"><rect x="24" y="98" width="16" height="16" fill="none"/><circle cx="32" cy="106" r="8" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="16-16-hover"><rect x="46" y="98" width="16" height="16" fill="none"/><circle cx="54" cy="106" r="8" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.06"/></g>
+    <g id="16-16-focus"><rect x="68" y="98" width="16" height="16" fill="none"/><path d="M68,106A8,8 0 1 0 84,106A8,8 0 1 0 68,106ZM70,106A6,6 0 1 0 82,106A6,6 0 1 0 70,106Z" class="ColorScheme-ButtonFocus" style="fill-rule:evenodd;fill:currentColor"/></g>
+</svg>

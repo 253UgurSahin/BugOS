@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BugOS Plasma-stijl: markering in lijsten en menu's. Gemaakt door tools/plasma/vlakken.py; niet met de hand bewerken. -->
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="226" height="58" viewBox="0 0 226 58">
+  <defs>
+    <style type="text/css" id="current-color-scheme">
+        .ColorScheme-Text { color:#16171C; }
+        .ColorScheme-Background { color:#F6F5F5; }
+        .ColorScheme-ViewBackground { color:#FFFFFF; }
+        .ColorScheme-ButtonBackground { color:#F1EEEE; }
+        .ColorScheme-Highlight { color:#FDE9E9; }
+        .ColorScheme-ButtonFocus { color:#DE2F3E; }
+        .ColorScheme-NeutralText { color:#B86E00; }
+    </style>
+
+  </defs>
+  <rect id="hint-tile-center" x="0" y="0" width="5" height="5" fill="#ff6600"/>
+  <g id="base">
+  <g id="normal-topleft"><rect x="2" y="8" width="12" height="12" fill="none"/></g>
+  <g id="normal-top"><rect x="14" y="8" width="24" height="12" fill="none"/></g>
+  <g id="normal-topright"><rect x="38" y="8" width="12" height="12" fill="none"/></g>
+  <g id="normal-left"><rect x="2" y="20" width="12" height="24" fill="none"/></g>
+  <g id="normal-center"><rect x="14" y="20" width="24" height="24" fill="none"/></g>
+  <g id="normal-right"><rect x="38" y="20" width="12" height="24" fill="none"/></g>
+  <g id="normal-bottomleft"><rect x="2" y="44" width="12" height="12" fill="none"/></g>
+  <g id="normal-bottom"><rect x="14" y="44" width="24" height="12" fill="none"/></g>
+  <g id="normal-bottomright"><rect x="38" y="44" width="12" height="12" fill="none"/></g>
+  <g id="hover-topleft"><rect x="60" y="8" width="12" height="12" fill="none"/><path d="M72,8L72,8L72,20L60,20L60,20C60,13.3726 65.3726,8 72,8Z" class="ColorScheme-ButtonBackground" fill="currentColor"/></g>
+  <g id="hover-top"><rect x="72" y="8" width="24" height="12" fill="none"/><path d="M72,8L96,8L96,20L72,20L72,8Z" class="ColorScheme-ButtonBackground" fill="currentColor"/></g>
+  <g id="hover-topright"><rect x="96" y="8" width="12" height="12" fill="none"/><path d="M96,8L96,8C102.6274,8 108,13.3726 108,20L108,20L96,20L96,8Z" class="ColorScheme-ButtonBackground" fill="currentColor"/></g>
+  <g id="hover-left"><rect x="60" y="20" width="12" height="24" fill="none"/><path d="M60,20L72,20L72,44L60,44L60,20Z" class="ColorScheme-ButtonBackground" fill="currentColor"/></g>
+  <g id="hover-center"><rect x="72" y="20" width="24" height="24" fill="none"/><path d="M72,20L96,20L96,44L72,44L72,20Z" class="ColorScheme-ButtonBackground" fill="currentColor"/></g>
+  <g id="hover-right"><rect x="96" y="20" width="12" height="24" fill="none"/><path d="M96,20L108,20L108,44L96,44L96,20Z" class="ColorScheme-ButtonBackground" fill="currentColor"/></g>
+  <g id="hover-bottomleft"><rect x="60" y="44" width="12" height="12" fill="none"/><path d="M60,44L72,44L72,56L72,56C65.3726,56 60,50.6274 60,44L60,44Z" class="ColorScheme-ButtonBackground" fill="currentColor"/></g>
+  <g id="hover-bottom"><rect x="72" y="44" width="24" height="12" fill="none"/><path d="M72,44L96,44L96,56L72,56L72,44Z" class="ColorScheme-ButtonBackground" fill="currentColor"/></g>
+  <g id="hover-bottomright"><rect x="96" y="44" width="12" height="12" fill="none"/><path d="M96,44L108,44L108,44C108,50.6274 102.6274,56 96,56L96,56L96,44Z" class="ColorScheme-ButtonBackground" fill="currentColor"/></g>
+  <g id="selected-topleft"><rect x="118" y="8" width="12" height="12" fill="none"/><path d="M130,8L130,8L130,20L118,20L118,20C118,13.3726 123.3726,8 130,8Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M130,8L130,8L130,20L118,20L118,20C118,13.3726 123.3726,8 130,8Z" class="ColorScheme-ButtonFocus" fill="currentColor" opacity="0.13"/></g>
+  <g id="selected-top"><rect x="130" y="8" width="24" height="12" fill="none"/><path d="M130,8L154,8L154,20L130,20L130,8Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M130,8L154,8L154,20L130,20L130,8Z" class="ColorScheme-ButtonFocus" fill="currentColor" opacity="0.13"/></g>
+  <g id="selected-topright"><rect x="154" y="8" width="12" height="12" fill="none"/><path d="M154,8L154,8C160.6274,8 166,13.3726 166,20L166,20L154,20L154,8Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M154,8L154,8C160.6274,8 166,13.3726 166,20L166,20L154,20L154,8Z" class="ColorScheme-ButtonFocus" fill="currentColor" opacity="0.13"/></g>
+  <g id="selected-left"><rect x="118" y="20" width="12" height="24" fill="none"/><path d="M118,20L130,20L130,44L118,44L118,20Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M118,20L130,20L130,44L118,44L118,20Z" class="ColorScheme-ButtonFocus" fill="currentColor" opacity="0.13"/></g>
+  <g id="selected-center"><rect x="130" y="20" width="24" height="24" fill="none"/><path d="M130,20L154,20L154,44L130,44L130,20Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M130,20L154,20L154,44L130,44L130,20Z" class="ColorScheme-ButtonFocus" fill="currentColor" opacity="0.13"/></g>
+  <g id="selected-right"><rect x="154" y="20" width="12" height="24" fill="none"/><path d="M154,20L166,20L166,44L154,44L154,20Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M154,20L166,20L166,44L154,44L154,20Z" class="ColorScheme-ButtonFocus" fill="currentColor" opacity="0.13"/></g>
+  <g id="selected-bottomleft"><rect x="118" y="44" width="12" height="12" fill="none"/><path d="M118,44L130,44L130,56L130,56C123.3726,56 118,50.6274 118,44L118,44Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M118,44L130,44L130,56L130,56C123.3726,56 118,50.6274 118,44L118,44Z" class="ColorScheme-ButtonFocus" fill="currentColor" opacity="0.13"/></g>
+  <g id="selected-bottom"><rect x="130" y="44" width="24" height="12" fill="none"/><path d="M130,44L154,44L154,56L130,56L130,44Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M130,44L154,44L154,56L130,56L130,44Z" class="ColorScheme-ButtonFocus" fill="currentColor" opacity="0.13"/></g>
+  <g id="selected-bottomright"><rect x="154" y="44" width="12" height="12" fill="none"/><path d="M154,44L166,44L166,44C166,50.6274 160.6274,56 154,56L154,56L154,44Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M154,44L166,44L166,44C166,50.6274 160.6274,56 154,56L154,56L154,44Z" class="ColorScheme-ButtonFocus" fill="currentColor" opacity="0.13"/></g>
+  <g id="selected+hover-topleft"><rect x="176" y="8" width="12" height="12" fill="none"/><path d="M188,8L188,8L188,20L176,20L176,20C176,13.3726 181.3726,8 188,8Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M188,8L188,8L188,20L176,20L176,20C176,13.3726 181.3726,8 188,8Z" class="ColorScheme-ButtonFocus" fill="currentColor" opacity="0.16"/></g>
+  <g id="selected+hover-top"><rect x="188" y="8" width="24" height="12" fill="none"/><path d="M188,8L212,8L212,20L188,20L188,8Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M188,8L212,8L212,20L188,20L188,8Z" class="ColorScheme-ButtonFocus" fill="currentColor" opacity="0.16"/></g>
+  <g id="selected+hover-topright"><rect x="212" y="8" width="12" height="12" fill="none"/><path d="M212,8L212,8C218.6274,8 224,13.3726 224,20L224,20L212,20L212,8Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M212,8L212,8C218.6274,8 224,13.3726 224,20L224,20L212,20L212,8Z" class="ColorScheme-ButtonFocus" fill="currentColor" opacity="0.16"/></g>
+  <g id="selected+hover-left"><rect x="176" y="20" width="12" height="24" fill="none"/><path d="M176,20L188,20L188,44L176,44L176,20Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M176,20L188,20L188,44L176,44L176,20Z" class="ColorScheme-ButtonFocus" fill="currentColor" opacity="0.16"/></g>
+  <g id="selected+hover-center"><rect x="188" y="20" width="24" height="24" fill="none"/><path d="M188,20L212,20L212,44L188,44L188,20Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M188,20L212,20L212,44L188,44L188,20Z" class="ColorScheme-ButtonFocus" fill="currentColor" opacity="0.16"/></g>
+  <g id="selected+hover-right"><rect x="212" y="20" width="12" height="24" fill="none"/><path d="M212,20L224,20L224,44L212,44L212,20Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M212,20L224,20L224,44L212,44L212,20Z" class="ColorScheme-ButtonFocus" fill="currentColor" opacity="0.16"/></g>
+  <g id="selected+hover-bottomleft"><rect x="176" y="44" width="12" height="12" fill="none"/><path d="M176,44L188,44L188,56L188,56C181.3726,56 176,50.6274 176,44L176,44Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M176,44L188,44L188,56L188,56C181.3726,56 176,50.6274 176,44L176,44Z" class="ColorScheme-ButtonFocus" fill="currentColor" opacity="0.16"/></g>
+  <g id="selected+hover-bottom"><rect x="188" y="44" width="24" height="12" fill="none"/><path d="M188,44L212,44L212,56L188,56L188,44Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M188,44L212,44L212,56L188,56L188,44Z" class="ColorScheme-ButtonFocus" fill="currentColor" opacity="0.16"/></g>
+  <g id="selected+hover-bottomright"><rect x="212" y="44" width="12" height="12" fill="none"/><path d="M212,44L224,44L224,44C224,50.6274 218.6274,56 212,56L212,56L212,44Z" class="ColorScheme-ViewBackground" fill="currentColor"/><path d="M212,44L224,44L224,44C224,50.6274 218.6274,56 212,56L212,56L212,44Z" class="ColorScheme-ButtonFocus" fill="currentColor" opacity="0.16"/></g>
+  </g>
+  <rect id="normal-hint-top-margin" x="25" y="8" width="2" height="8" fill="#ff00ff"/>
+  <rect id="normal-hint-bottom-margin" x="25" y="48" width="2" height="8" fill="#ff00ff"/>
+  <rect id="normal-hint-left-margin" x="2" y="31" width="8" height="2" fill="#ff00ff"/>
+  <rect id="normal-hint-right-margin" x="42" y="31" width="8" height="2" fill="#ff00ff"/>
+  <rect id="hover-hint-top-margin" x="83" y="8" width="2" height="8" fill="#ff00ff"/>
+  <rect id="hover-hint-bottom-margin" x="83" y="48" width="2" height="8" fill="#ff00ff"/>
+  <rect id="hover-hint-left-margin" x="60" y="31" width="8" height="2" fill="#ff00ff"/>
+  <rect id="hover-hint-right-margin" x="100" y="31" width="8" height="2" fill="#ff00ff"/>
+  <rect id="selected-hint-top-margin" x="141" y="8" width="2" height="8" fill="#ff00ff"/>
+  <rect id="selected-hint-bottom-margin" x="141" y="48" width="2" height="8" fill="#ff00ff"/>
+  <rect id="selected-hint-left-margin" x="118" y="31" width="8" height="2" fill="#ff00ff"/>
+  <rect id="selected-hint-right-margin" x="158" y="31" width="8" height="2" fill="#ff00ff"/>
+  <rect id="selected+hover-hint-top-margin" x="199" y="8" width="2" height="8" fill="#ff00ff"/>
+  <rect id="selected+hover-hint-bottom-margin" x="199" y="48" width="2" height="8" fill="#ff00ff"/>
+  <rect id="selected+hover-hint-left-margin" x="176" y="31" width="8" height="2" fill="#ff00ff"/>
+  <rect id="selected+hover-hint-right-margin" x="216" y="31" width="8" height="2" fill="#ff00ff"/>
+</svg>

@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BugOS Plasma-stijl: knoppen. Gemaakt door tools/plasma/knoppen.py; niet met de hand bewerken. -->
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="46" height="458" viewBox="0 0 46 458">
+    <defs>
+    <style type="text/css" id="current-color-scheme">
+        .ColorScheme-Text { color:#16171C; }
+        .ColorScheme-Background { color:#F6F5F5; }
+        .ColorScheme-ButtonFocus { color:#DE2F3E; }
+        .ColorScheme-ButtonBackground { color:#F1EEEE; }
+        .ColorScheme-ViewBackground { color:#FFFFFF; }
+        .ColorScheme-Highlight { color:#FDE9E9; }
+    </style>
+
+    </defs>
+    <g id="shadow-topleft"><rect x="2" y="2" width="6" height="6" fill="none"/></g>
+    <g id="shadow-top"><rect id="st" x="8" y="2" width="4" height="6" fill="none"/></g>
+    <g id="shadow-topright"><rect x="12" y="2" width="6" height="6" fill="none"/></g>
+    <g id="shadow-left"><rect id="sl" x="2" y="8" width="6" height="4" fill="none"/></g>
+    <g id="shadow-center"><rect x="8" y="8" width="4" height="4" fill="none"/></g>
+    <g id="shadow-right"><rect id="sr" x="12" y="8" width="6" height="4" fill="none"/></g>
+    <g id="shadow-bottomleft"><rect x="2" y="12" width="6" height="6" fill="none"/></g>
+    <g id="shadow-bottom"><rect id="sb" x="8" y="12" width="4" height="6" fill="none"/></g>
+    <g id="shadow-bottomright"><rect x="12" y="12" width="6" height="6" fill="none"/></g>
+    <rect id="shadow-hint-top-margin" x="24" y="2" width="2" height="0.001" fill="none"/>
+    <rect id="shadow-hint-bottom-margin" x="27" y="2" width="2" height="0.001" fill="none"/>
+    <rect id="shadow-hint-left-margin" x="24" y="12" width="0.001" height="2" fill="none"/>
+    <rect id="shadow-hint-right-margin" x="24" y="16" width="0.001" height="2" fill="none"/>
+    <g id="normal-topleft"><rect x="2" y="36" width="6" height="6" fill="none"/></g>
+    <g id="normal-top"><rect x="8" y="36" width="4" height="6" fill="none"/></g>
+    <g id="normal-topright"><rect x="12" y="36" width="6" height="6" fill="none"/></g>
+    <g id="normal-left"><rect x="2" y="42" width="6" height="4" fill="none"/></g>
+    <g id="normal-center"><rect x="8" y="42" width="4" height="4" fill="none"/><rect x="8" y="42" width="4" height="4" class="ColorScheme-ButtonBackground" style="fill:currentColor"/></g>
+    <g id="normal-right"><rect x="12" y="42" width="6" height="4" fill="none"/></g>
+    <g id="normal-bottomleft"><rect x="2" y="46" width="6" height="6" fill="none"/></g>
+    <g id="normal-bottom"><rect x="8" y="46" width="4" height="6" fill="none"/></g>
+    <g id="normal-bottomright"><rect x="12" y="46" width="6" height="6" fill="none"/></g>
+    <rect id="normal-hint-top-margin" x="24" y="36" width="2" height="8" fill="none"/>
+    <rect id="normal-hint-bottom-margin" x="27" y="36" width="2" height="8" fill="none"/>
+    <rect id="normal-hint-left-margin" x="24" y="46" width="12" height="2" fill="none"/>
+    <rect id="normal-hint-right-margin" x="24" y="50" width="12" height="2" fill="none"/>
+    <rect id="normal-hint-compose-over-border" x="0" y="0" width="2" height="2" fill="none"/>
+    <g id="16-16-normal-center"><rect x="2" y="70" width="16" height="16" fill="none"/><rect x="2" y="70" width="16" height="16" class="ColorScheme-ViewBackground" style="fill:currentColor"/><path d="M8,70H12A6,6 0 0 1 18,76V80A6,6 0 0 1 12,86H8A6,6 0 0 1 2,80V76A6,6 0 0 1 8,70ZM8,71.5H12A4.5,4.5 0 0 1 16.5,76V80A4.5,4.5 0 0 1 12,84.5H8A4.5,4.5 0 0 1 3.5,80V76A4.5,4.5 0 0 1 8,71.5Z" class="ColorScheme-Text" style="fill-rule:evenodd;fill:currentColor;fill-opacity:0.2"/></g>
+    <g id="20-20-normal-center"><rect x="2" y="92" width="20" height="20" fill="none"/><rect x="2" y="92" width="20" height="20" class="ColorScheme-ViewBackground" style="fill:currentColor"/><path d="M9.5,92H14.5A7.5,7.5 0 0 1 22,99.5V104.5A7.5,7.5 0 0 1 14.5,112H9.5A7.5,7.5 0 0 1 2,104.5V99.5A7.5,7.5 0 0 1 9.5,92ZM9.5,93.875H14.5A5.625,5.625 0 0 1 20.125,99.5V104.5A5.625,5.625 0 0 1 14.5,110.125H9.5A5.625,5.625 0 0 1 3.875,104.5V99.5A5.625,5.625 0 0 1 9.5,93.875Z" class="ColorScheme-Text" style="fill-rule:evenodd;fill:currentColor;fill-opacity:0.2"/></g>
+    <g id="24-24-normal-center"><rect x="2" y="118" width="24" height="24" fill="none"/><rect x="2" y="118" width="24" height="24" class="ColorScheme-ViewBackground" style="fill:currentColor"/><path d="M11,118H17A9,9 0 0 1 26,127V133A9,9 0 0 1 17,142H11A9,9 0 0 1 2,133V127A9,9 0 0 1 11,118ZM11,120.25H17A6.75,6.75 0 0 1 23.75,127V133A6.75,6.75 0 0 1 17,139.75H11A6.75,6.75 0 0 1 4.25,133V127A6.75,6.75 0 0 1 11,120.25Z" class="ColorScheme-Text" style="fill-rule:evenodd;fill:currentColor;fill-opacity:0.2"/></g>
+    <g id="28-28-normal-center"><rect x="2" y="148" width="28" height="28" fill="none"/><rect x="2" y="148" width="28" height="28" class="ColorScheme-ViewBackground" style="fill:currentColor"/><path d="M12.5,148H19.5A10.5,10.5 0 0 1 30,158.5V165.5A10.5,10.5 0 0 1 19.5,176H12.5A10.5,10.5 0 0 1 2,165.5V158.5A10.5,10.5 0 0 1 12.5,148ZM12.5,150.625H19.5A7.875,7.875 0 0 1 27.375,158.5V165.5A7.875,7.875 0 0 1 19.5,173.375H12.5A7.875,7.875 0 0 1 4.625,165.5V158.5A7.875,7.875 0 0 1 12.5,150.625Z" class="ColorScheme-Text" style="fill-rule:evenodd;fill:currentColor;fill-opacity:0.2"/></g>
+    <g id="32-32-normal-center"><rect x="2" y="182" width="32" height="32" fill="none"/><rect x="2" y="182" width="32" height="32" class="ColorScheme-ViewBackground" style="fill:currentColor"/><path d="M14,182H22A12,12 0 0 1 34,194V202A12,12 0 0 1 22,214H14A12,12 0 0 1 2,202V194A12,12 0 0 1 14,182ZM14,185H22A9,9 0 0 1 31,194V202A9,9 0 0 1 22,211H14A9,9 0 0 1 5,202V194A9,9 0 0 1 14,185Z" class="ColorScheme-Text" style="fill-rule:evenodd;fill:currentColor;fill-opacity:0.2"/></g>
+    <g id="mask-normal-topleft"><rect x="2" y="220" width="6" height="6" fill="none"/><path d="M2,226L2,226A6,6 0 0 1 8,220L8,220L8,226Z" style="fill:#000000"/></g>
+    <g id="mask-normal-top"><rect x="8" y="220" width="4" height="6" fill="none"/><rect x="8" y="220" width="4" height="6" style="fill:#000000"/></g>
+    <g id="mask-normal-topright"><rect x="12" y="220" width="6" height="6" fill="none"/><path d="M18,226L18,226A6,6 0 0 0 12,220L12,220L12,226Z" style="fill:#000000"/></g>
+    <g id="mask-normal-left"><rect x="2" y="226" width="6" height="4" fill="none"/><rect x="2" y="226" width="6" height="4" style="fill:#000000"/></g>
+    <g id="mask-normal-center"><rect x="8" y="226" width="4" height="4" fill="none"/><rect x="8" y="226" width="4" height="4" style="fill:#000000"/></g>
+    <g id="mask-normal-right"><rect x="12" y="226" width="6" height="4" fill="none"/><rect x="12" y="226" width="6" height="4" style="fill:#000000"/></g>
+    <g id="mask-normal-bottomleft"><rect x="2" y="230" width="6" height="6" fill="none"/><path d="M2,230L2,230A6,6 0 0 0 8,236L8,236L8,230Z" style="fill:#000000"/></g>
+    <g id="mask-normal-bottom"><rect x="8" y="230" width="4" height="6" fill="none"/><rect x="8" y="230" width="4" height="6" style="fill:#000000"/></g>
+    <g id="mask-normal-bottomright"><rect x="12" y="230" width="6" height="6" fill="none"/><path d="M18,230L18,230A6,6 0 0 1 12,236L12,236L12,230Z" style="fill:#000000"/></g>
+    <g id="hover-topleft"><rect x="2" y="254" width="6" height="6" fill="none"/><path d="M2,260L2,260A6,6 0 0 1 8,254L8,254L8,260Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="hover-top"><rect x="8" y="254" width="4" height="6" fill="none"/><rect x="8" y="254" width="4" height="6" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="hover-topright"><rect x="12" y="254" width="6" height="6" fill="none"/><path d="M18,260L18,260A6,6 0 0 0 12,254L12,254L12,260Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="hover-left"><rect x="2" y="260" width="6" height="4" fill="none"/><rect x="2" y="260" width="6" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="hover-center"><rect x="8" y="260" width="4" height="4" fill="none"/><rect x="8" y="260" width="4" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="hover-right"><rect x="12" y="260" width="6" height="4" fill="none"/><rect x="12" y="260" width="6" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="hover-bottomleft"><rect x="2" y="264" width="6" height="6" fill="none"/><path d="M2,264L2,264A6,6 0 0 0 8,270L8,270L8,264Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="hover-bottom"><rect x="8" y="264" width="4" height="6" fill="none"/><rect x="8" y="264" width="4" height="6" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="hover-bottomright"><rect x="12" y="264" width="6" height="6" fill="none"/><path d="M18,264L18,264A6,6 0 0 1 12,270L12,270L12,264Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <rect id="hover-hint-top-margin" x="24" y="254" width="2" height="0.001" fill="none"/>
+    <rect id="hover-hint-bottom-margin" x="27" y="254" width="2" height="0.001" fill="none"/>
+    <rect id="hover-hint-left-margin" x="24" y="264" width="0.001" height="2" fill="none"/>
+    <rect id="hover-hint-right-margin" x="24" y="268" width="0.001" height="2" fill="none"/>
+    <g id="pressed-topleft"><rect x="2" y="288" width="6" height="6" fill="none"/><path d="M2,294L2,294A6,6 0 0 1 8,288L8,288L8,294Z" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><path d="M2,294L2,294A6,6 0 0 1 8,288L8,288L8,294Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.1"/></g>
+    <g id="pressed-top"><rect x="8" y="288" width="4" height="6" fill="none"/><rect x="8" y="288" width="4" height="6" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><rect x="8" y="288" width="4" height="6" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.1"/></g>
+    <g id="pressed-topright"><rect x="12" y="288" width="6" height="6" fill="none"/><path d="M18,294L18,294A6,6 0 0 0 12,288L12,288L12,294Z" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><path d="M18,294L18,294A6,6 0 0 0 12,288L12,288L12,294Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.1"/></g>
+    <g id="pressed-left"><rect x="2" y="294" width="6" height="4" fill="none"/><rect x="2" y="294" width="6" height="4" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><rect x="2" y="294" width="6" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.1"/></g>
+    <g id="pressed-center"><rect id="pc" x="8" y="294" width="4" height="4" fill="none"/><rect x="8" y="294" width="4" height="4" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><rect x="8" y="294" width="4" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.1"/></g>
+    <g id="pressed-right"><rect x="12" y="294" width="6" height="4" fill="none"/><rect x="12" y="294" width="6" height="4" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><rect x="12" y="294" width="6" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.1"/></g>
+    <g id="pressed-bottomleft"><rect x="2" y="298" width="6" height="6" fill="none"/><path d="M2,298L2,298A6,6 0 0 0 8,304L8,304L8,298Z" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><path d="M2,298L2,298A6,6 0 0 0 8,304L8,304L8,298Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.1"/></g>
+    <g id="pressed-bottom"><rect x="8" y="298" width="4" height="6" fill="none"/><rect x="8" y="298" width="4" height="6" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><rect x="8" y="298" width="4" height="6" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.1"/></g>
+    <g id="pressed-bottomright"><rect x="12" y="298" width="6" height="6" fill="none"/><path d="M18,298L18,298A6,6 0 0 1 12,304L12,304L12,298Z" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><path d="M18,298L18,298A6,6 0 0 1 12,304L12,304L12,298Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.1"/></g>
+    <rect id="pressed-hint-top-margin" x="24" y="288" width="2" height="8" fill="none"/>
+    <rect id="pressed-hint-bottom-margin" x="27" y="288" width="2" height="8" fill="none"/>
+    <rect id="pressed-hint-left-margin" x="24" y="298" width="12" height="2" fill="none"/>
+    <rect id="pressed-hint-right-margin" x="24" y="302" width="12" height="2" fill="none"/>
+    <rect id="pressed-hint-compose-over-border" x="0" y="0" width="2" height="2" fill="none"/>
+    <g id="focus-topleft"><rect x="2" y="322" width="8" height="8" fill="none"/><path d="M2,330L2,330A8,8 0 0 1 10,322L10,322L10,330ZM4,330L4,330A6,6 0 0 1 10,324L10,324L10,330Z" class="ColorScheme-ButtonFocus" style="fill-rule:evenodd;fill:currentColor"/></g>
+    <g id="focus-top"><rect x="10" y="322" width="4" height="8" fill="none"/><rect x="10" y="322" width="4" height="2" class="ColorScheme-ButtonFocus" style="fill:currentColor"/></g>
+    <g id="focus-topright"><rect x="14" y="322" width="8" height="8" fill="none"/><path d="M22,330L22,330A8,8 0 0 0 14,322L14,322L14,330ZM20,330L20,330A6,6 0 0 0 14,324L14,324L14,330Z" class="ColorScheme-ButtonFocus" style="fill-rule:evenodd;fill:currentColor"/></g>
+    <g id="focus-left"><rect x="2" y="330" width="8" height="4" fill="none"/><rect x="2" y="330" width="2" height="4" class="ColorScheme-ButtonFocus" style="fill:currentColor"/></g>
+    <g id="focus-center"><rect x="10" y="330" width="4" height="4" fill="none"/></g>
+    <g id="focus-right"><rect x="14" y="330" width="8" height="4" fill="none"/><rect x="20" y="330" width="2" height="4" class="ColorScheme-ButtonFocus" style="fill:currentColor"/></g>
+    <g id="focus-bottomleft"><rect x="2" y="334" width="8" height="8" fill="none"/><path d="M2,334L2,334A8,8 0 0 0 10,342L10,342L10,334ZM4,334L4,334A6,6 0 0 0 10,340L10,340L10,334Z" class="ColorScheme-ButtonFocus" style="fill-rule:evenodd;fill:currentColor"/></g>
+    <g id="focus-bottom"><rect x="10" y="334" width="4" height="8" fill="none"/><rect x="10" y="340" width="4" height="2" class="ColorScheme-ButtonFocus" style="fill:currentColor"/></g>
+    <g id="focus-bottomright"><rect x="14" y="334" width="8" height="8" fill="none"/><path d="M22,334L22,334A8,8 0 0 1 14,342L14,342L14,334ZM20,334L20,334A6,6 0 0 1 14,340L14,340L14,334Z" class="ColorScheme-ButtonFocus" style="fill-rule:evenodd;fill:currentColor"/></g>
+    <rect id="focus-hint-top-margin" x="28" y="322" width="2" height="2" fill="none"/>
+    <rect id="focus-hint-bottom-margin" x="31" y="322" width="2" height="2" fill="none"/>
+    <rect id="focus-hint-left-margin" x="28" y="332" width="2" height="2" fill="none"/>
+    <rect id="focus-hint-right-margin" x="28" y="336" width="2" height="2" fill="none"/>
+    <g id="toolbutton-hover-topleft"><rect x="2" y="356" width="10" height="10" fill="none"/><path d="M2,366L2,366A10,10 0 0 1 12,356L12,356L12,366Z" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><path d="M2,366L2,366A10,10 0 0 1 12,356L12,356L12,366Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="toolbutton-hover-top"><rect x="12" y="356" width="4" height="10" fill="none"/><rect x="12" y="356" width="4" height="10" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><rect x="12" y="356" width="4" height="10" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="toolbutton-hover-topright"><rect x="16" y="356" width="10" height="10" fill="none"/><path d="M26,366L26,366A10,10 0 0 0 16,356L16,356L16,366Z" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><path d="M26,366L26,366A10,10 0 0 0 16,356L16,356L16,366Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="toolbutton-hover-left"><rect x="2" y="366" width="10" height="4" fill="none"/><rect x="2" y="366" width="10" height="4" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><rect x="2" y="366" width="10" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="toolbutton-hover-center"><rect x="12" y="366" width="4" height="4" fill="none"/><rect x="12" y="366" width="4" height="4" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><rect x="12" y="366" width="4" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="toolbutton-hover-right"><rect x="16" y="366" width="10" height="4" fill="none"/><rect x="16" y="366" width="10" height="4" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><rect x="16" y="366" width="10" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="toolbutton-hover-bottomleft"><rect x="2" y="370" width="10" height="10" fill="none"/><path d="M2,370L2,370A10,10 0 0 0 12,380L12,380L12,370Z" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><path d="M2,370L2,370A10,10 0 0 0 12,380L12,380L12,370Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="toolbutton-hover-bottom"><rect x="12" y="370" width="4" height="10" fill="none"/><rect x="12" y="370" width="4" height="10" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><rect x="12" y="370" width="4" height="10" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="toolbutton-hover-bottomright"><rect x="16" y="370" width="10" height="10" fill="none"/><path d="M26,370L26,370A10,10 0 0 1 16,380L16,380L16,370Z" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><path d="M26,370L26,370A10,10 0 0 1 16,380L16,380L16,370Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <rect id="toolbutton-hover-hint-top-margin" x="32" y="356" width="2" height="4" fill="none"/>
+    <rect id="toolbutton-hover-hint-bottom-margin" x="35" y="356" width="2" height="4" fill="none"/>
+    <rect id="toolbutton-hover-hint-left-margin" x="32" y="366" width="4" height="2" fill="none"/>
+    <rect id="toolbutton-hover-hint-right-margin" x="32" y="370" width="4" height="2" fill="none"/>
+    <g id="toolbutton-pressed-topleft"><rect x="2" y="390" width="10" height="10" fill="none"/><path d="M2,400L2,400A10,10 0 0 1 12,390L12,390L12,400Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="toolbutton-pressed-top"><rect x="12" y="390" width="4" height="10" fill="none"/><rect x="12" y="390" width="4" height="10" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="toolbutton-pressed-topright"><rect x="16" y="390" width="10" height="10" fill="none"/><path d="M26,400L26,400A10,10 0 0 0 16,390L16,390L16,400Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="toolbutton-pressed-left"><rect x="2" y="400" width="10" height="4" fill="none"/><rect x="2" y="400" width="10" height="4" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="toolbutton-pressed-center"><rect x="12" y="400" width="4" height="4" fill="none"/><rect x="12" y="400" width="4" height="4" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="toolbutton-pressed-right"><rect x="16" y="400" width="10" height="4" fill="none"/><rect x="16" y="400" width="10" height="4" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="toolbutton-pressed-bottomleft"><rect x="2" y="404" width="10" height="10" fill="none"/><path d="M2,404L2,404A10,10 0 0 0 12,414L12,414L12,404Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="toolbutton-pressed-bottom"><rect x="12" y="404" width="4" height="10" fill="none"/><rect x="12" y="404" width="4" height="10" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="toolbutton-pressed-bottomright"><rect x="16" y="404" width="10" height="10" fill="none"/><path d="M26,404L26,404A10,10 0 0 1 16,414L16,414L16,404Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <rect id="toolbutton-pressed-hint-top-margin" x="32" y="390" width="2" height="4" fill="none"/>
+    <rect id="toolbutton-pressed-hint-bottom-margin" x="35" y="390" width="2" height="4" fill="none"/>
+    <rect id="toolbutton-pressed-hint-left-margin" x="32" y="400" width="4" height="2" fill="none"/>
+    <rect id="toolbutton-pressed-hint-right-margin" x="32" y="404" width="4" height="2" fill="none"/>
+    <g id="toolbutton-focus-topleft"><rect x="2" y="424" width="12" height="12" fill="none"/><path d="M2,436L2,436A12,12 0 0 1 14,424L14,424L14,436ZM4,436L4,436A10,10 0 0 1 14,426L14,426L14,436Z" class="ColorScheme-ButtonFocus" style="fill-rule:evenodd;fill:currentColor"/></g>
+    <g id="toolbutton-focus-top"><rect x="14" y="424" width="4" height="12" fill="none"/><rect x="14" y="424" width="4" height="2" class="ColorScheme-ButtonFocus" style="fill:currentColor"/></g>
+    <g id="toolbutton-focus-topright"><rect x="18" y="424" width="12" height="12" fill="none"/><path d="M30,436L30,436A12,12 0 0 0 18,424L18,424L18,436ZM28,436L28,436A10,10 0 0 0 18,426L18,426L18,436Z" class="ColorScheme-ButtonFocus" style="fill-rule:evenodd;fill:currentColor"/></g>
+    <g id="toolbutton-focus-left"><rect x="2" y="436" width="12" height="4" fill="none"/><rect x="2" y="436" width="2" height="4" class="ColorScheme-ButtonFocus" style="fill:currentColor"/></g>
+    <g id="toolbutton-focus-center"><rect x="14" y="436" width="4" height="4" fill="none"/></g>
+    <g id="toolbutton-focus-right"><rect x="18" y="436" width="12" height="4" fill="none"/><rect x="28" y="436" width="2" height="4" class="ColorScheme-ButtonFocus" style="fill:currentColor"/></g>
+    <g id="toolbutton-focus-bottomleft"><rect x="2" y="440" width="12" height="12" fill="none"/><path d="M2,440L2,440A12,12 0 0 0 14,452L14,452L14,440ZM4,440L4,440A10,10 0 0 0 14,450L14,450L14,440Z" class="ColorScheme-ButtonFocus" style="fill-rule:evenodd;fill:currentColor"/></g>
+    <g id="toolbutton-focus-bottom"><rect x="14" y="440" width="4" height="12" fill="none"/><rect x="14" y="450" width="4" height="2" class="ColorScheme-ButtonFocus" style="fill:currentColor"/></g>
+    <g id="toolbutton-focus-bottomright"><rect x="18" y="440" width="12" height="12" fill="none"/><path d="M30,440L30,440A12,12 0 0 1 18,452L18,452L18,440ZM28,440L28,440A10,10 0 0 1 18,450L18,450L18,440Z" class="ColorScheme-ButtonFocus" style="fill-rule:evenodd;fill:currentColor"/></g>
+    <rect id="toolbutton-focus-hint-top-margin" x="36" y="424" width="2" height="2" fill="none"/>
+    <rect id="toolbutton-focus-hint-bottom-margin" x="39" y="424" width="2" height="2" fill="none"/>
+    <rect id="toolbutton-focus-hint-left-margin" x="36" y="434" width="2" height="2" fill="none"/>
+    <rect id="toolbutton-focus-hint-right-margin" x="36" y="438" width="2" height="2" fill="none"/>
+</svg>

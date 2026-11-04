@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BugOS Plasma-stijl: menubalk. Gemaakt door tools/plasma/knoppen.py; niet met de hand bewerken. -->
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="44" height="104" viewBox="0 0 44 104">
+    <defs>
+    <style type="text/css" id="current-color-scheme">
+        .ColorScheme-Text { color:#16171C; }
+        .ColorScheme-Background { color:#F6F5F5; }
+        .ColorScheme-ButtonFocus { color:#DE2F3E; }
+        .ColorScheme-ButtonBackground { color:#F1EEEE; }
+        .ColorScheme-ViewBackground { color:#FFFFFF; }
+        .ColorScheme-Highlight { color:#FDE9E9; }
+    </style>
+
+    </defs>
+    <g id="normal-topleft"><rect x="2" y="2" width="8" height="8" fill="none"/></g>
+    <g id="normal-top"><rect x="10" y="2" width="4" height="8" fill="none"/></g>
+    <g id="normal-topright"><rect x="14" y="2" width="8" height="8" fill="none"/></g>
+    <g id="normal-left"><rect x="2" y="10" width="8" height="4" fill="none"/></g>
+    <g id="normal-center"><rect x="10" y="10" width="4" height="4" fill="none"/></g>
+    <g id="normal-right"><rect x="14" y="10" width="8" height="4" fill="none"/></g>
+    <g id="normal-bottomleft"><rect x="2" y="14" width="8" height="8" fill="none"/></g>
+    <g id="normal-bottom"><rect x="10" y="14" width="4" height="8" fill="none"/></g>
+    <g id="normal-bottomright"><rect x="14" y="14" width="8" height="8" fill="none"/></g>
+    <rect id="normal-hint-top-margin" x="28" y="2" width="2" height="8" fill="none"/>
+    <rect id="normal-hint-bottom-margin" x="31" y="2" width="2" height="8" fill="none"/>
+    <rect id="normal-hint-left-margin" x="28" y="12" width="8" height="2" fill="none"/>
+    <rect id="normal-hint-right-margin" x="28" y="16" width="8" height="2" fill="none"/>
+    <g id="hover-topleft"><rect x="2" y="36" width="8" height="8" fill="none"/><path d="M2,44L2,44A8,8 0 0 1 10,36L10,36L10,44Z" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><path d="M2,44L2,44A8,8 0 0 1 10,36L10,36L10,44Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="hover-top"><rect x="10" y="36" width="4" height="8" fill="none"/><rect x="10" y="36" width="4" height="8" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><rect x="10" y="36" width="4" height="8" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="hover-topright"><rect x="14" y="36" width="8" height="8" fill="none"/><path d="M22,44L22,44A8,8 0 0 0 14,36L14,36L14,44Z" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><path d="M22,44L22,44A8,8 0 0 0 14,36L14,36L14,44Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="hover-left"><rect x="2" y="44" width="8" height="4" fill="none"/><rect x="2" y="44" width="8" height="4" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><rect x="2" y="44" width="8" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="hover-center"><rect x="10" y="44" width="4" height="4" fill="none"/><rect x="10" y="44" width="4" height="4" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><rect x="10" y="44" width="4" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="hover-right"><rect x="14" y="44" width="8" height="4" fill="none"/><rect x="14" y="44" width="8" height="4" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><rect x="14" y="44" width="8" height="4" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="hover-bottomleft"><rect x="2" y="48" width="8" height="8" fill="none"/><path d="M2,48L2,48A8,8 0 0 0 10,56L10,56L10,48Z" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><path d="M2,48L2,48A8,8 0 0 0 10,56L10,56L10,48Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="hover-bottom"><rect x="10" y="48" width="4" height="8" fill="none"/><rect x="10" y="48" width="4" height="8" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><rect x="10" y="48" width="4" height="8" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <g id="hover-bottomright"><rect x="14" y="48" width="8" height="8" fill="none"/><path d="M22,48L22,48A8,8 0 0 1 14,56L14,56L14,48Z" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><path d="M22,48L22,48A8,8 0 0 1 14,56L14,56L14,48Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.05"/></g>
+    <rect id="hover-hint-top-margin" x="28" y="36" width="2" height="8" fill="none"/>
+    <rect id="hover-hint-bottom-margin" x="31" y="36" width="2" height="8" fill="none"/>
+    <rect id="hover-hint-left-margin" x="28" y="46" width="8" height="2" fill="none"/>
+    <rect id="hover-hint-right-margin" x="28" y="50" width="8" height="2" fill="none"/>
+    <g id="pressed-topleft"><rect x="2" y="70" width="8" height="8" fill="none"/><path d="M2,78L2,78A8,8 0 0 1 10,70L10,70L10,78Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="pressed-top"><rect x="10" y="70" width="4" height="8" fill="none"/><rect x="10" y="70" width="4" height="8" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="pressed-topright"><rect x="14" y="70" width="8" height="8" fill="none"/><path d="M22,78L22,78A8,8 0 0 0 14,70L14,70L14,78Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="pressed-left"><rect x="2" y="78" width="8" height="4" fill="none"/><rect x="2" y="78" width="8" height="4" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="pressed-center"><rect x="10" y="78" width="4" height="4" fill="none"/><rect x="10" y="78" width="4" height="4" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="pressed-right"><rect x="14" y="78" width="8" height="4" fill="none"/><rect x="14" y="78" width="8" height="4" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="pressed-bottomleft"><rect x="2" y="82" width="8" height="8" fill="none"/><path d="M2,82L2,82A8,8 0 0 0 10,90L10,90L10,82Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="pressed-bottom"><rect x="10" y="82" width="4" height="8" fill="none"/><rect x="10" y="82" width="4" height="8" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <g id="pressed-bottomright"><rect x="14" y="82" width="8" height="8" fill="none"/><path d="M22,82L22,82A8,8 0 0 1 14,90L14,90L14,82Z" class="ColorScheme-Highlight" style="fill:currentColor"/></g>
+    <rect id="pressed-hint-top-margin" x="28" y="70" width="2" height="8" fill="none"/>
+    <rect id="pressed-hint-bottom-margin" x="31" y="70" width="2" height="8" fill="none"/>
+    <rect id="pressed-hint-left-margin" x="28" y="80" width="8" height="2" fill="none"/>
+    <rect id="pressed-hint-right-margin" x="28" y="84" width="8" height="2" fill="none"/>
+</svg>

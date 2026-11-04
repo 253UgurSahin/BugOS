@@ -29,14 +29,15 @@ Rectangle {
     // Nog geen status binnen? Dan zeggen we dat, in plaats van grijze knoppen.
     readonly property bool leeg: Object.keys(status).length === 0
 
-    // Huisstijl
+    // Huisstijl: dezelfde kleuren en maten als de BugOS-apps (Ontwerp.qml wordt gemaakt uit bugos_ui.py)
     readonly property bool donker: palette.window.hslLightness < 0.5
-    readonly property color rood: donker ? "#EA3B4B" : "#DE2F3E"
-    readonly property color tekst: palette.windowText
-    readonly property color tekst2: Qt.rgba(tekst.r, tekst.g, tekst.b, 0.62)
-    readonly property color vlak: donker ? Qt.rgba(1, 1, 1, 0.06) : "#FFFFFF"
-    readonly property color vlakZweef: donker ? Qt.rgba(1, 1, 1, 0.11) : "#F6EFEF"
-    readonly property color lijnkleur: Qt.rgba(tekst.r, tekst.g, tekst.b, 0.10)
+    readonly property Ontwerp o: Ontwerp { donker: snel.donker }
+    readonly property color rood: o.accent
+    readonly property color tekst: o.tekst
+    readonly property color tekst2: o.tekst2
+    readonly property color vlak: o.vlak
+    readonly property color vlakZweef: o.vlakHover
+    readonly property color lijnkleur: o.rand
 
     function tr(nl, en) { return nederlands ? nl : en }
 
@@ -55,8 +56,8 @@ Rectangle {
             Layout.fillWidth: true
             Label {
                 text: snel.tr("Snelmenu", "Quick menu")
-                font.family: "Funnel Display"
-                font.pixelSize: 22
+                font.family: snel.o.kopLetter
+                font.pixelSize: snel.o.letterKop
                 font.weight: Font.DemiBold
                 color: snel.tekst
                 Layout.fillWidth: true
@@ -69,7 +70,7 @@ Rectangle {
                 ToolTip.visible: hovered
                 ToolTip.text: Accessible.name
                 onClicked: snel.open("instellingen")
-                background: Rectangle { radius: 18; color: tandwiel.hovered ? Qt.rgba(snel.tekst.r, snel.tekst.g, snel.tekst.b, 0.08) : "transparent" }
+                background: Rectangle { radius: 18; color: tandwiel.hovered ? snel.o.knop : "transparent" }
                 contentItem: Item {
                     Loader { anchors.centerIn: parent; width: 20; height: 20; sourceComponent: snel.icoonTekenaar; onLoaded: item.naam = "configure" }
                 }
@@ -80,7 +81,7 @@ Rectangle {
             visible: snel.leeg
             text: snel.tr("Even kijken…", "One moment…")
             color: snel.tekst2
-            font.pixelSize: 13
+            font.pixelSize: snel.o.letterKlein
             Layout.topMargin: -8
         }
 
@@ -119,9 +120,9 @@ Rectangle {
             objectName: "batterij"
             Layout.fillWidth: true
             implicitHeight: 52
-            radius: 18
+            radius: snel.o.rKaart
             color: snel.vlak
-            border.width: snel.donker ? 0 : 1
+            border.width: 1
             border.color: snel.lijnkleur
             visible: typeof snel.status.batterij === "number"
             RowLayout {
@@ -141,7 +142,7 @@ Rectangle {
                           ? snel.tr("Batterij " + snel.status.batterij + "%, wordt opgeladen", "Battery " + snel.status.batterij + "%, charging")
                           : snel.tr("Batterij " + snel.status.batterij + "%", "Battery " + snel.status.batterij + "%")
                     color: snel.tekst
-                    font.pixelSize: 13
+                    font.pixelSize: snel.o.letterKlein
                     font.weight: Font.Medium
                     elide: Text.ElideRight
                 }
@@ -161,9 +162,9 @@ Rectangle {
         property int minimum: 0
         Layout.fillWidth: true
         implicitHeight: 64
-        radius: 18
+        radius: snel.o.rKaart
         color: snel.vlak
-        border.width: snel.donker ? 0 : 1
+        border.width: 1
         border.color: snel.lijnkleur
         objectName: wat
         visible: typeof snel.status[wat] === "number"
@@ -193,16 +194,16 @@ Rectangle {
                     x: schuif.leftPadding
                     y: schuif.topPadding + schuif.availableHeight / 2 - height / 2
                     width: schuif.availableWidth
-                    height: 8
-                    radius: 4
-                    color: Qt.rgba(snel.tekst.r, snel.tekst.g, snel.tekst.b, 0.12)
+                    height: snel.o.schuifSpoor
+                    radius: height / 2
+                    color: snel.o.schuifUit
                     Rectangle {
                         width: schuif.visualPosition * parent.width
                         height: parent.height
-                        radius: 4
+                        radius: height / 2
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: "#FF5C50" }
+                            GradientStop { position: 0.0; color: snel.o.verloopBegin }
                             GradientStop { position: 1.0; color: snel.rood }
                         }
                     }
@@ -210,16 +211,16 @@ Rectangle {
                 handle: Rectangle {
                     x: schuif.leftPadding + schuif.visualPosition * (schuif.availableWidth - width)
                     y: schuif.topPadding + schuif.availableHeight / 2 - height / 2
-                    width: 22; height: 22; radius: 11
+                    width: snel.o.schuifKnop; height: width; radius: width / 2
                     color: "#FFFFFF"
                     border.width: 1
-                    border.color: Qt.rgba(0, 0, 0, 0.12)
+                    border.color: snel.o.randSterk
                 }
             }
             Label {
                 text: Math.round(schuif.value) + "%"
                 color: snel.tekst2
-                font.pixelSize: 13
+                font.pixelSize: snel.o.letterKlein
                 Layout.preferredWidth: 40
                 horizontalAlignment: Text.AlignRight
             }
@@ -241,7 +242,7 @@ Rectangle {
         Keys.onEnterPressed: clicked()
         background: Rectangle {
             radius: 14
-            color: pijl.hovered || pijl.activeFocus ? Qt.rgba(snel.tekst.r, snel.tekst.g, snel.tekst.b, 0.10) : "transparent"
+            color: pijl.hovered || pijl.activeFocus ? snel.o.knopHover : "transparent"
         }
         contentItem: Label {
             text: "›"
@@ -275,22 +276,22 @@ Rectangle {
         scale: pressed ? 0.96 : 1.0
         Behavior on scale { NumberAnimation { duration: 90 } }
         background: Rectangle {
-            radius: 18
+            radius: snel.o.rKaart
             color: knop.aan ? "transparent" : (knop.hovered ? snel.vlakZweef : snel.vlak)
-            border.width: knop.aan || snel.donker ? 0 : 1
+            border.width: knop.aan ? 0 : 1
             border.color: snel.lijnkleur
             Rectangle {
                 anchors.fill: parent
-                radius: 18
+                radius: snel.o.rKaart
                 visible: knop.aan
                 gradient: Gradient {
-                    GradientStop { position: 0.0; color: "#FF5C50" }
+                    GradientStop { position: 0.0; color: snel.o.verloopBegin }
                     GradientStop { position: 1.0; color: snel.rood }
                 }
             }
             Rectangle {
                 anchors.fill: parent
-                radius: 18
+                radius: snel.o.rKaart
                 color: "transparent"
                 border.width: knop.activeFocus ? 2 : 0
                 border.color: snel.tekst
@@ -318,7 +319,7 @@ Rectangle {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.topMargin: 4
                 width: 36; height: 36; radius: 18
-                color: knop.aan ? Qt.rgba(1, 1, 1, 0.22) : Qt.rgba(snel.tekst.r, snel.tekst.g, snel.tekst.b, 0.07)
+                color: knop.aan ? Qt.rgba(1, 1, 1, 0.22) : snel.o.knop
                 Loader {
                     anchors.centerIn: parent
                     width: 20; height: 20
@@ -335,7 +336,7 @@ Rectangle {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
                 elide: Text.ElideRight
-                font.pixelSize: 13
+                font.pixelSize: snel.o.letterKlein
                 font.weight: Font.Medium
                 color: knop.aan ? "white" : snel.tekst
             }

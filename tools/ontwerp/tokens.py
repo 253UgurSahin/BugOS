@@ -35,7 +35,7 @@ def _lees_constanten(pad: Path, namen: set[str]) -> dict:
     return uit
 
 
-_C = _lees_constanten(BUGOS_UI, {"KLEUREN", "LIJN", "ROOD", "TINTEN"})
+_C = _lees_constanten(BUGOS_UI, {"KLEUREN", "LIJN", "ROOD", "TINTEN", "MATEN"})
 
 #: {"licht": {...}, "donker": {...}}: achter, zijbalk, vlak, rand, tekst, tekst2, accent, ...
 KLEUREN: dict[str, dict[str, str]] = _C["KLEUREN"]
@@ -49,15 +49,7 @@ ROOD_VERLOOP = ("#FF5C50", "#DE2F3E")
 ROOD_VERLOOP_DONKER = ("#FF5C50", "#EA3B4B")
 
 #: Maten uit docs/HUISSTIJL.md ("Shapes"), in pixels bij schaal 1.
-MATEN = {
-    "knop": 12,          # hoeken van knoppen, invoervelden, menu's, tooltips
-    "kaart": 16,         # hoeken van kaarten, lijsten, groepen
-    "groot": 22,         # hoeken van grote vlakken: pop-ups, panelen, dialogen (22 tot 28)
-    "stappen": (4, 8, 12, 16, 24, 32, 48),
-    "lijn": 2,           # lijndikte van de pictogrammen op het 24-raster
-    "schuif_spoor": 8,   # hoogte van het spoor van een schuif
-    "schuif_knop": 22,   # doorsnede van het bolletje van een schuif
-}
+MATEN: dict = _C["MATEN"]
 
 LETTERS = {"tekst": "Inter", "kop": "Funnel Display", "code": "JetBrains Mono"}
 

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BugOS Plasma-stijl: schakelaar. Gemaakt door tools/plasma/knoppen.py; niet met de hand bewerken. -->
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="158" height="120" viewBox="0 0 158 120">
+    <defs>
+    <style type="text/css" id="current-color-scheme">
+        .ColorScheme-Text { color:#16171C; }
+        .ColorScheme-Background { color:#F6F5F5; }
+        .ColorScheme-ButtonFocus { color:#DE2F3E; }
+        .ColorScheme-ButtonBackground { color:#F1EEEE; }
+        .ColorScheme-ViewBackground { color:#FFFFFF; }
+        .ColorScheme-Highlight { color:#FDE9E9; }
+    </style>
+        <linearGradient id="aan-verloop" x1="0" y1="0" x2="1" y2="0"><stop offset="0" style="stop-color:#FF5C50;stop-opacity:1"/><stop offset="1" style="stop-color:#FF5C50;stop-opacity:0"/></linearGradient>
+        <radialGradient id="schaduw-knop" gradientUnits="userSpaceOnUse" cx="128" cy="73" r="11.5"><stop offset="0" style="stop-color:#000000;stop-opacity:0.22"/><stop offset="0.72" style="stop-color:#000000;stop-opacity:0.12"/><stop offset="1" style="stop-color:#000000;stop-opacity:0"/></radialGradient>
+    </defs>
+    <g id="inactive-left"><rect x="2" y="2" width="11" height="22" fill="none"/><path d="M13,2A11,11 0 0 0 13,24Z" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><path d="M13,2A11,11 0 0 0 13,24Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.12"/></g>
+    <g id="inactive-center"><rect x="13" y="2" width="2" height="22" fill="none"/><rect x="13" y="2" width="2" height="22" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><rect x="13" y="2" width="2" height="22" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.12"/></g>
+    <g id="inactive-right"><rect x="15" y="2" width="11" height="22" fill="none"/><path d="M15,2A11,11 0 0 1 15,24Z" class="ColorScheme-ButtonBackground" style="fill:currentColor"/><path d="M15,2A11,11 0 0 1 15,24Z" class="ColorScheme-Text" style="fill:currentColor;fill-opacity:0.12"/></g>
+    <g id="active-left"><rect x="2" y="30" width="11" height="22" fill="none"/><path d="M13,30A11,11 0 0 0 13,52Z" class="ColorScheme-ButtonFocus" style="fill:currentColor"/><path d="M13,30A11,11 0 0 0 13,52Z" style="fill:#FF5C50"/></g>
+    <g id="active-center"><rect x="13" y="30" width="2" height="22" fill="none"/><rect x="13" y="30" width="2" height="22" class="ColorScheme-ButtonFocus" style="fill:currentColor"/><rect x="13" y="30" width="2" height="22" style="fill:url(#aan-verloop)"/></g>
+    <g id="active-right"><rect x="15" y="30" width="11" height="22" fill="none"/><path d="M15,30A11,11 0 0 1 15,52Z" class="ColorScheme-ButtonFocus" style="fill:currentColor"/></g>
+    <g id="handle"><rect x="2" y="58" width="24" height="22" fill="none"/><circle cx="14" cy="69" r="8.5" style="fill:#FFFFFF;stroke:#000000;stroke-opacity:0.12;stroke-width:1"/></g>
+    <g id="handle-hover"><rect x="30" y="58" width="24" height="22" fill="none"/><circle cx="42" cy="69" r="8.5" class="ColorScheme-ButtonFocus" style="fill:#FFFFFF;stroke:currentColor;stroke-opacity:0.45;stroke-width:1"/></g>
+    <g id="handle-pressed"><rect x="58" y="58" width="24" height="22" fill="none"/><circle cx="70" cy="69" r="8.5" style="fill:#F1EEEE;stroke:#000000;stroke-opacity:0.12;stroke-width:1"/></g>
+    <g id="handle-focus"><rect x="86" y="58" width="24" height="24" fill="none"/><path d="M86,70A12,12 0 1 0 110,70A12,12 0 1 0 86,70ZM88,70A10,10 0 1 0 108,70A10,10 0 1 0 88,70Z" class="ColorScheme-ButtonFocus" style="fill-rule:evenodd;fill:currentColor"/></g>
+    <g id="handle-shadow"><rect x="114" y="58" width="28" height="28" fill="none"/><circle cx="128" cy="73" r="11.5" style="fill:url(#schaduw-knop)"/></g>
+    <rect id="hint-bar-size" x="2" y="92" width="42" height="22" fill="none"/>
+    <rect id="hint-stretch-borders" x="48" y="92" width="2" height="2" fill="none"/>
+</svg>

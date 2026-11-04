@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BugOS Plasma-stijl: bezig-rondje. Gemaakt door tools/plasma/knoppen.py; niet met de hand bewerken. -->
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="154" height="44" viewBox="0 0 154 44">
+    <defs>
+    <style type="text/css" id="current-color-scheme">
+        .ColorScheme-Text { color:#16171C; }
+        .ColorScheme-Background { color:#F6F5F5; }
+        .ColorScheme-ButtonFocus { color:#DE2F3E; }
+        .ColorScheme-ButtonBackground { color:#F1EEEE; }
+        .ColorScheme-ViewBackground { color:#FFFFFF; }
+        .ColorScheme-Highlight { color:#FDE9E9; }
+    </style>
+
+    </defs>
+    <g id="busywidget"><rect x="2" y="2" width="36" height="36" fill="none"/><circle cx="20" cy="20" r="16" class="ColorScheme-Text" style="fill:none;stroke:currentColor;stroke-opacity:0.15;stroke-width:3"/><path d="M20,4A16,16 0 0 1 35.035,25.472" class="ColorScheme-ButtonFocus" style="fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round"/></g>
+    <g id="stopped"><rect x="42" y="2" width="36" height="36" fill="none"/><circle cx="60" cy="20" r="16" class="ColorScheme-Text" style="fill:none;stroke:currentColor;stroke-opacity:0.15;stroke-width:3"/></g>
+    <g id="22-22-busywidget"><rect x="82" y="2" width="22" height="22" fill="none"/><circle cx="93" cy="13" r="9.25" class="ColorScheme-Text" style="fill:none;stroke:currentColor;stroke-opacity:0.15;stroke-width:2.5"/><path d="M93,3.75A9.25,9.25 0 0 1 101.692,16.164" class="ColorScheme-ButtonFocus" style="fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round"/></g>
+    <g id="16-16-busywidget"><rect x="108" y="2" width="16" height="16" fill="none"/><circle cx="116" cy="10" r="6.5" class="ColorScheme-Text" style="fill:none;stroke:currentColor;stroke-opacity:0.15;stroke-width:2"/><path d="M116,3.5A6.5,6.5 0 0 1 122.108,12.223" class="ColorScheme-ButtonFocus" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"/></g>
+    <rect id="hint-rotation-angle" x="128" y="2" width="14" height="14" fill="none"/>
+</svg>

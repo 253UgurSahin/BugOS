@@ -116,7 +116,7 @@ ROOD = "#DE2F3E"
 
 KLEUREN = {
     "licht": {
-        "achter": "#F6F5F5", "zijbalk": "#EFEDED", "vlak": "#FFFFFF", "vlak_hover": "#FBF9F9",
+        "achter": "#F6F5F5", "zijbalk": "#F6F5F5", "vlak": "#FFFFFF", "vlak_hover": "#FBF9F9",
         "rand": "#E6E2E2", "rand_sterk": "#D5D0D0", "tekst": "#16171C", "tekst2": "#5D6270",
         "tekst3": "#8A8F9A", "accent": "#DE2F3E", "accent_hover": "#C82434", "accent_tekst": "#FFFFFF",
         "accent_zacht": "#FDE9E9", "accent_lijn": "#F3B7BB", "goed": "#14965A", "goed_zacht": "#E3F5EC",
@@ -125,7 +125,7 @@ KLEUREN = {
         "map_voor": "#EFC3C7", "map_achter": "#DDA2A8", "map_teken": "#8C3A43",
     },
     "donker": {
-        "achter": "#111216", "zijbalk": "#16171C", "vlak": "#1C1E24", "vlak_hover": "#22252C",
+        "achter": "#111216", "zijbalk": "#111216", "vlak": "#1C1E24", "vlak_hover": "#22252C",
         "rand": "#2B2E36", "rand_sterk": "#3A3E48", "tekst": "#EDEEF1", "tekst2": "#A3A8B4",
         "tekst3": "#7C828E", "accent": "#EA3B4B", "accent_hover": "#F25262", "accent_tekst": "#FFFFFF",
         "accent_zacht": "#3A1C22", "accent_lijn": "#6A2A33", "goed": "#3FD17F", "goed_zacht": "#13291D",
@@ -133,6 +133,18 @@ KLEUREN = {
         "schaduw": "rgba(0,0,0,0.35)", "knop": "#262930", "knop_hover": "#2F333B", "schuif_uit": "#3A3E48",
         "map_voor": "#67404A", "map_achter": "#7C4F59", "map_teken": "#F5DCE0",
     },
+}
+
+# Maten: één schaal voor het hele systeem (eigen apps, menu's, KDE-stijl, Plasma, vensterbalk).
+# tools/ontwerp/tokens.py leest deze, dus de KDE- en Plasma-stijl gebruiken precies dezelfde getallen.
+MATEN = {
+    "knop": 12,          # hoeken van knoppen, invoervelden, lijstregels, menu's, tooltips
+    "kaart": 16,         # hoeken van kaarten, tegels, groepen
+    "groot": 22,         # hoeken van pop-ups, panelen en dialogen
+    "stappen": (4, 8, 12, 16, 24, 32, 48),
+    "lijn": 2,           # lijndikte van de pictogrammen op het 24-raster
+    "schuif_spoor": 8,   # hoogte van het spoor van een schuif
+    "schuif_knop": 22,   # doorsnede van het bolletje van een schuif
 }
 
 # Kleuren voor de pictogramtegeltjes (zoals bij een telefoon).
@@ -206,32 +218,32 @@ QPushButton[soort="stil"] {{ background: transparent; color: {k['tekst2']}; }}
 QPushButton[soort="stil"]:hover {{ background: {k['knop']}; color: {k['tekst']}; }}
 QPushButton[soort="rand"] {{ background: transparent; border: 1px solid {k['rand_sterk']}; }}
 QPushButton[soort="rand"]:hover {{ background: {k['knop']}; }}
-QPushButton[groot="true"] {{ padding: 13px 24px; font-size: 15px; border-radius: 14px; }}
+QPushButton[groot="true"] {{ padding: 13px 24px; font-size: 15px; border-radius: 12px; }}
 QPushButton[groot="true"]:focus {{ padding: 12px 23px; }}
 
 QPushButton#tegel {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 16px; padding: 0; text-align: left; }}
 QPushButton#tegel:hover {{ background: {k['vlak_hover']}; border: 1px solid {k['rand_sterk']}; }}
 QPushButton#tegel:focus {{ border: 2px solid {k['accent']}; }}
-QPushButton#keuze {{ background: {k['vlak']}; border: 2px solid {k['rand']}; border-radius: 18px; padding: 0; text-align: left; }}
+QPushButton#keuze {{ background: {k['vlak']}; border: 2px solid {k['rand']}; border-radius: 16px; padding: 0; text-align: left; }}
 QPushButton#keuze:hover {{ border: 2px solid {k['rand_sterk']}; }}
 QPushButton#keuze:focus {{ border: 2px dashed {k['accent_lijn']}; }}
 QPushButton#keuze:checked {{ border: 2px solid {k['accent']}; background: {k['vlak']}; }}
 
-QLineEdit {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 14px; padding: 11px 14px;
+QLineEdit {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 12px; padding: 11px 14px;
   font-size: 15px; selection-background-color: {k['accent']}; }}
 QLineEdit:focus {{ border: 2px solid {k['accent']}; padding: 10px 13px; }}
 
 QComboBox {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 12px; padding: 10px 14px; font-size: 14px; }}
 QComboBox:focus {{ border: 2px solid {k['accent']}; }}
 QComboBox::drop-down {{ border: none; width: 28px; }}
-QComboBox QAbstractItemView {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 10px;
+QComboBox QAbstractItemView {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 12px;
   selection-background-color: {k['accent_zacht']}; selection-color: {k['tekst']}; padding: 4px; }}
 
 QListWidget#zijbalk {{ background: transparent; border: none; outline: 0; font-size: 14px; }}
-QListWidget#zijbalk::item {{ padding: 10px 12px; border-radius: 10px; margin: 1px 0; color: {k['tekst']}; }}
+QListWidget#zijbalk::item {{ padding: 10px 12px; border-radius: 12px; margin: 1px 0; color: {k['tekst']}; }}
 QListWidget#zijbalk::item:hover {{ background: {k['knop']}; }}
 QListWidget#zijbalk::item:selected {{ background: {k['accent_zacht']}; color: {k['accent']}; font-weight: 600; }}
-QWidget#zijkant {{ background: {k['zijbalk']}; border-right: 1px solid {k['rand']}; }}
+QWidget#zijkant {{ background: {k['zijbalk']}; border: none; }}
 
 QProgressBar {{ background: {k['knop']}; border: none; border-radius: 6px; min-height: 12px; max-height: 12px;
   color: transparent; text-align: center; }}
@@ -250,11 +262,11 @@ QPushButton#rond:disabled {{ background: transparent; }}
 QPushButton#rond_klein {{ min-width: 36px; max-width: 36px; min-height: 36px; max-height: 36px; border-radius: 18px;
   background: transparent; border: none; padding: 0; }}
 QPushButton#rond_klein:hover {{ background: {k['knop_hover']}; }}
-QFrame#melding {{ background: {k['knop']}; border-radius: 14px; }}
+QFrame#melding {{ background: {k['knop']}; border-radius: 12px; }}
 QFrame#melding[soort="goed"] {{ background: {k['goed_zacht']}; }}
 QFrame#melding[soort="fout"] {{ background: {k['fout_zacht']}; }}
 QFrame#melding[soort="let_op"] {{ background: {k['let_op_zacht']}; }}
-QFrame#actiebalk {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 20px; }}
+QFrame#actiebalk {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 22px; }}
 QPushButton#balkknop {{ background: transparent; border: none; border-radius: 12px; padding: 9px 14px;
   font-size: 14px; font-weight: 600; color: {k['tekst']}; }}
 QPushButton#balkknop:hover, QPushButton#balkknop:focus {{ background: {k['knop']}; }}
@@ -274,6 +286,13 @@ QMenu::icon {{ padding-left: 8px; }}
 QMenu::separator {{ height: 1px; background: {k['rand']}; margin: 6px 8px; }}
 QToolTip {{ background: {k['tekst']}; color: {k['achter']}; border: none; border-radius: 8px; padding: 6px 10px; }}
 QCheckBox, QRadioButton {{ spacing: 10px; font-size: 15px; }}
+QSlider {{ min-height: 28px; }}
+QSlider::groove:horizontal {{ height: 8px; border-radius: 4px; background: {k['schuif_uit']}; }}
+QSlider::sub-page:horizontal {{ height: 8px; border-radius: 4px;
+  background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #FF5C50, stop:1 {k['accent']}); }}
+QSlider::handle:horizontal {{ width: 22px; height: 22px; margin: -7px 0; border-radius: 11px; background: #FFFFFF;
+  border: 1px solid {k['rand_sterk']}; }}
+QSlider::groove:horizontal:disabled, QSlider::sub-page:horizontal:disabled {{ background: {k['knop']}; }}
 """
 
 
@@ -671,7 +690,7 @@ class Banner(QFrame):
             "fout": (K["fout"], K["fout_zacht"], "dialog-error"),
             "bezig": (K["accent"], K["accent_zacht"], "view-refresh"),
         }.get(soort, (K["tekst"], K["knop"], "dialog-information"))
-        self.setStyleSheet(f"QFrame{{background:{achter};border-radius:14px;}} QLabel{{color:{voor};font-size:14px;}}")
+        self.setStyleSheet(f"QFrame{{background:{achter};border-radius:12px;}} QLabel{{color:{voor};font-size:14px;}}")
         self.teken.setPixmap(QIcon.fromTheme(icoon).pixmap(20, 20))
         self.tekst.setText(tekst)
         self.setVisible(bool(tekst))

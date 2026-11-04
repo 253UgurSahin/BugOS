@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BugOS Plasma-stijl: pijltjes. Gemaakt door tools/plasma/knoppen.py; niet met de hand bewerken. -->
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="78" height="22" viewBox="0 0 78 22">
+    <defs>
+    <style type="text/css" id="current-color-scheme">
+        .ColorScheme-Text { color:#16171C; }
+        .ColorScheme-Background { color:#F6F5F5; }
+        .ColorScheme-ButtonFocus { color:#DE2F3E; }
+        .ColorScheme-ButtonBackground { color:#F1EEEE; }
+        .ColorScheme-ViewBackground { color:#FFFFFF; }
+        .ColorScheme-Highlight { color:#FDE9E9; }
+    </style>
+
+    </defs>
+    <g id="down-arrow"><rect x="2" y="2" width="14" height="14" fill="none"/><path d="M5.792,7.542L9,10.75L12.208,7.542" class="ColorScheme-Text" style="fill:none;stroke:currentColor;stroke-width:1.167;stroke-linecap:round;stroke-linejoin:round"/></g>
+    <g id="up-arrow"><rect x="20" y="2" width="14" height="14" fill="none"/><path d="M23.792,10.458L27,7.25L30.208,10.458" class="ColorScheme-Text" style="fill:none;stroke:currentColor;stroke-width:1.167;stroke-linecap:round;stroke-linejoin:round"/></g>
+    <g id="left-arrow"><rect x="38" y="2" width="14" height="14" fill="none"/><path d="M46.458,5.792L43.25,9L46.458,12.208" class="ColorScheme-Text" style="fill:none;stroke:currentColor;stroke-width:1.167;stroke-linecap:round;stroke-linejoin:round"/></g>
+    <g id="right-arrow"><rect x="56" y="2" width="14" height="14" fill="none"/><path d="M61.542,5.792L64.75,9L61.542,12.208" class="ColorScheme-Text" style="fill:none;stroke:currentColor;stroke-width:1.167;stroke-linecap:round;stroke-linejoin:round"/></g>
+</svg>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BugOS Plasma-stijl: tooltip (zonder compositing). Gemaakt door tools/plasma/vlakken.py; niet met de hand bewerken. -->
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="128" height="68" viewBox="0 0 128 68">
+  <defs>
+    <style type="text/css" id="current-color-scheme">
+        .ColorScheme-Text { color:#16171C; }
+        .ColorScheme-Background { color:#F6F5F5; }
+        .ColorScheme-ViewBackground { color:#FFFFFF; }
+        .ColorScheme-ButtonBackground { color:#F1EEEE; }
+        .ColorScheme-Highlight { color:#FDE9E9; }
+        .ColorScheme-ButtonFocus { color:#DE2F3E; }
+        .ColorScheme-NeutralText { color:#B86E00; }
+    </style>
+
+  </defs>
+  <rect id="hint-tile-center" x="0" y="0" width="5" height="5" fill="#ff6600"/>
+  <g id="base">
+  <g id="topleft"><rect x="2" y="10" width="12" height="12" fill="none"/><path d="M14,10L14,10L14,22L2,22L2,22C2,15.3726 7.3726,10 14,10Z" class="ColorScheme-Background" fill="currentColor"/><path d="M14,10L14,10L14,22L2,22L2,22C2,15.3726 7.3726,10 14,10ZM14,11C7.9249,11 3,15.9249 3,22L3,22L14,22L14,11Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="top"><rect x="14" y="10" width="32" height="12" fill="none"/><path d="M14,10L46,10L46,22L14,22L14,10Z" class="ColorScheme-Background" fill="currentColor"/><path d="M14,10L46,10L46,22L14,22L14,10ZM14,11L14,22L46,22L46,11Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="topright"><rect x="46" y="10" width="12" height="12" fill="none"/><path d="M46,10L46,10C52.6274,10 58,15.3726 58,22L58,22L46,22L46,10Z" class="ColorScheme-Background" fill="currentColor"/><path d="M46,10L46,10C52.6274,10 58,15.3726 58,22L58,22L46,22L46,10ZM46,11L46,22L57,22L57,22C57,15.9249 52.0751,11 46,11Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="left"><rect x="2" y="22" width="12" height="32" fill="none"/><path d="M2,22L14,22L14,54L2,54L2,22Z" class="ColorScheme-Background" fill="currentColor"/><path d="M2,22L14,22L14,54L2,54L2,22ZM3,22L3,54L14,54L14,22Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="center"><rect x="14" y="22" width="32" height="32" fill="none"/><path d="M14,22L46,22L46,54L14,54L14,22Z" class="ColorScheme-Background" fill="currentColor"/></g>
+  <g id="right"><rect x="46" y="22" width="12" height="32" fill="none"/><path d="M46,22L58,22L58,54L46,54L46,22Z" class="ColorScheme-Background" fill="currentColor"/><path d="M46,22L58,22L58,54L46,54L46,22ZM46,22L46,54L57,54L57,22Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="bottomleft"><rect x="2" y="54" width="12" height="12" fill="none"/><path d="M2,54L14,54L14,66L14,66C7.3726,66 2,60.6274 2,54L2,54Z" class="ColorScheme-Background" fill="currentColor"/><path d="M2,54L14,54L14,66L14,66C7.3726,66 2,60.6274 2,54L2,54ZM3,54L3,54C3,60.0751 7.9249,65 14,65L14,65L14,54Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="bottom"><rect x="14" y="54" width="32" height="12" fill="none"/><path d="M14,54L46,54L46,66L14,66L14,54Z" class="ColorScheme-Background" fill="currentColor"/><path d="M14,54L46,54L46,66L14,66L14,54ZM14,54L14,65L46,65L46,54Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  <g id="bottomright"><rect x="46" y="54" width="12" height="12" fill="none"/><path d="M46,54L58,54L58,54C58,60.6274 52.6274,66 46,66L46,66L46,54Z" class="ColorScheme-Background" fill="currentColor"/><path d="M46,54L58,54L58,54C58,60.6274 52.6274,66 46,66L46,66L46,54ZM46,54L46,65L46,65C52.0751,65 57,60.0751 57,54L57,54Z" class="ColorScheme-Text" fill="currentColor" opacity="0.1" fill-rule="evenodd"/></g>
+  </g>
+  <rect id="hint-top-margin" x="29" y="10" width="2" height="8" fill="#ff00ff"/>
+  <rect id="hint-bottom-margin" x="29" y="58" width="2" height="8" fill="#ff00ff"/>
+  <rect id="hint-left-margin" x="2" y="37" width="8" height="2" fill="#ff00ff"/>
+  <rect id="hint-right-margin" x="50" y="37" width="8" height="2" fill="#ff00ff"/>
+  <g id="mask-topleft"><rect x="70" y="10" width="12" height="12" fill="none"/><path d="M70,22L71,22C71,15.9249 75.9249,11 82,11L82,10L82,22Z"/></g>
+  <g id="mask-top"><rect x="82" y="10" width="32" height="12" fill="none"/><path d="M82,10L114,10L114,22L82,22L82,10Z"/></g>
+  <g id="mask-topright"><rect x="114" y="10" width="12" height="12" fill="none"/><path d="M126,22L125,22C125,15.9249 120.0751,11 114,11L114,10L114,22Z"/></g>
+  <g id="mask-left"><rect x="70" y="22" width="12" height="32" fill="none"/><path d="M70,22L82,22L82,54L70,54L70,22Z"/></g>
+  <g id="mask-center"><rect x="82" y="22" width="32" height="32" fill="none"/><path d="M82,22L114,22L114,54L82,54L82,22Z"/></g>
+  <g id="mask-right"><rect x="114" y="22" width="12" height="32" fill="none"/><path d="M114,22L126,22L126,54L114,54L114,22Z"/></g>
+  <g id="mask-bottomleft"><rect x="70" y="54" width="12" height="12" fill="none"/><path d="M70,54L71,54C71,60.0751 75.9249,65 82,65L82,66L82,54Z"/></g>
+  <g id="mask-bottom"><rect x="82" y="54" width="32" height="12" fill="none"/><path d="M82,54L114,54L114,66L82,66L82,54Z"/></g>
+  <g id="mask-bottomright"><rect x="114" y="54" width="12" height="12" fill="none"/><path d="M126,54L125,54C125,60.0751 120.0751,65 114,65L114,66L114,54Z"/></g>
+</svg>

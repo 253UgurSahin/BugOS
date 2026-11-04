@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BugOS Plasma-stijl: marges van de taakbalk in de bewerkstand. Gemaakt door tools/plasma/vlakken.py; niet met de hand bewerken. -->
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="40" height="8" viewBox="0 0 40 8">
+  <defs>
+    <style type="text/css" id="current-color-scheme">
+        .ColorScheme-Text { color:#16171C; }
+        .ColorScheme-Background { color:#F6F5F5; }
+        .ColorScheme-ViewBackground { color:#FFFFFF; }
+        .ColorScheme-ButtonBackground { color:#F1EEEE; }
+        .ColorScheme-Highlight { color:#FDE9E9; }
+        .ColorScheme-ButtonFocus { color:#DE2F3E; }
+        .ColorScheme-NeutralText { color:#B86E00; }
+    </style>
+
+  </defs>
+  <g id="base">
+  <g id="fill"><rect x="2" y="2" width="4" height="4" fill="none"/><path d="M2,2h4v4h-4z" class="ColorScheme-ButtonFocus" fill="currentColor" opacity="0.25"/></g>
+  <g id="topleft"><rect x="10" y="2" width="4" height="4" fill="none"/><path d="M10,2h4l-4,4z" class="ColorScheme-ButtonFocus" fill="currentColor" opacity="0.25"/></g>
+  <g id="topright"><rect x="18" y="2" width="4" height="4" fill="none"/><path d="M18,2h4v4z" class="ColorScheme-ButtonFocus" fill="currentColor" opacity="0.25"/></g>
+  <g id="bottomleft"><rect x="26" y="2" width="4" height="4" fill="none"/><path d="M26,2v4h4z" class="ColorScheme-ButtonFocus" fill="currentColor" opacity="0.25"/></g>
+  <g id="bottomright"><rect x="34" y="2" width="4" height="4" fill="none"/><path d="M38,2v4h-4z" class="ColorScheme-ButtonFocus" fill="currentColor" opacity="0.25"/></g>
+  </g>
+</svg>
