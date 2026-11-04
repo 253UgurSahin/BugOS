@@ -52,8 +52,8 @@ klopt(bi.splits_nmcli("a\\\\b:c") == ["a\\b", "c"], "wifi: een \\ in een naam ga
 # 2. bluetooth
 klopt(bi.lees_bt_aan("Controller 00:11 BugOS [default]\n\tPowered: yes\n\tDiscoverable: no\n"), "bluetooth: aan")
 klopt(not bi.lees_bt_aan("Controller 00:11 BugOS\n\tPowered: no\n"), "bluetooth: uit")
-klopt(bi.lees_bt_apparaten("Device AA:BB:CC:DD:EE:01 Koptelefoon van oma\nDevice 11:22:33:44:55:66 Muis\n")
-      == [("AA:BB:CC:DD:EE:01", "Koptelefoon van oma"), ("11:22:33:44:55:66", "Muis")], "bluetooth: apparaten")
+klopt(bi.lees_bt_apparaten("Device AA:BB:CC:DD:EE:01 Koptelefoon van Bugie\nDevice 11:22:33:44:55:66 Muis\n")
+      == [("AA:BB:CC:DD:EE:01", "Koptelefoon van Bugie"), ("11:22:33:44:55:66", "Muis")], "bluetooth: apparaten")
 info = bi.lees_bt_info("AA:BB:CC:DD:EE:01", "Koptelefoon", "\tName: Koptelefoon\n\tIcon: audio-headset\n"
                        "\tConnected: yes\n\tBattery Percentage: 0x50 (80)\n")
 klopt(info.verbonden and info.soort == "audio-headset" and info.batterij == 80, "bluetooth: verbonden, soort, batterij")
@@ -125,8 +125,8 @@ klopt(bi.mooie_zone("Europe/Amsterdam") == "Amsterdam (Europa)"
       and bi.mooie_zone("America/New_York") == "New York (Amerika)"
       and bi.mooie_zone("America/Argentina/Buenos_Aires") == "Argentina / Buenos Aires (Amerika)"
       and bi.mooie_zone("UTC") == "UTC", "tijd: tijdzones in gewone woorden")
-klopt(bi.lees_autologin(["[General]\nx=1\n", "[Autologin]\nUser=oma\nSession=plasma\n"], "oma")
-      and not bi.lees_autologin(["[Autologin]\nUser=opa\n"], "oma"), "inloggen: 'zonder wachtwoord' uit sddm lezen")
+klopt(bi.lees_autologin(["[General]\nx=1\n", "[Autologin]\nUser=bugie\nSession=plasma\n"], "bugie")
+      and not bi.lees_autologin(["[Autologin]\nUser=sanne\n"], "bugie"), "inloggen: 'zonder wachtwoord' uit sddm lezen")
 hash_ = bi.versleutel("geheim123")
 klopt(hash_.startswith("$6$") and len(hash_) > 90, "inloggen: wachtwoord versleutelen zoals /etc/shadow")
 klopt(bi.lees_tot("2999,12,31,0,0,0") and not bi.lees_tot("2001,1,1,0,0,0") and not bi.lees_tot("")
@@ -138,12 +138,12 @@ klopt(bi.lees_mimeinfo(cache)["application/pdf"] == ["org.kde.okular.desktop", "
 klopt(bi.lees_desktop_naam("[Desktop Entry]\nName=Okular\nName[nl]=Okular (documenten)\n[Desktop Action x]\nName=Anders\n")
       == "Okular (documenten)" and bi.lees_desktop_naam("[Desktop Entry]\nName=Geheim\nNoDisplay=true\n") is None,
       "programma's: naam uit een .desktop-bestand; verborgen programma's niet")
-lp = ("printer HP_LaserJet is idle.  enabled since Mon 03 Nov 2026\n\tDescription: HP LaserJet van oma\n\tLocation: kamer\n"
+lp = ("printer HP_LaserJet is idle.  enabled since Mon 03 Nov 2026\n\tDescription: HP LaserJet van Bugie\n\tLocation: kamer\n"
       "printer Canon_PIXMA disabled since Sun 02 Nov 2026 -\n\tPaused\n\tDescription: Canon PIXMA\n"
       "printer Brother now printing Brother-12.  enabled since Mon\n")
 prs = bi.lees_lpstat(lp, "system default destination: HP_LaserJet\n")
 klopt([(p.omschrijving, p.staat, p.standaard) for p in prs]
-      == [("HP LaserJet van oma", "klaar", True), ("Canon PIXMA", "gestopt", False), ("Brother", "bezig", False)],
+      == [("HP LaserJet van Bugie", "klaar", True), ("Canon PIXMA", "gestopt", False), ("Brother", "bezig", False)],
       "printers: naam, of hij klaar is, en welke de standaard is")
 klopt(bi.lees_lpstat("", "no system default destination\n") == [], "printers: geen printers")
 bi.zet_grote_tekst(True)
@@ -187,7 +187,7 @@ klopt(mod.begin_pagina(["-qwindowgeometry", "1180x740+0+0", "wifi"]) == "wifi" a
 muis_p = venster.paginas["muis"]
 klopt(len(muis_p.vak.findChildren(mod.Groep)) == 2 and len(muis_p.vak.findChildren(mod.Regelaar)) == 2,
       "muis-pagina: een kaart voor de muis en een voor het touchpad, elk met een snelheidsschuif")
-klopt(venster.paginas["inloggen"].ik.titel.text() == "Oma" and "oma" in venster.paginas["inloggen"].ik.uitleg.text(),
+klopt(venster.paginas["inloggen"].ik.titel.text() == "Bugie" and "bugie" in venster.paginas["inloggen"].ik.uitleg.text(),
       "inloggen-pagina: naam en inlognaam")
 klopt(venster.paginas["programmas"].rijen["pdf"].uitleg.text() == "Firefox", "programma's-pagina: PDF opent nu met Firefox")
 printers_p = venster.paginas["printers"]

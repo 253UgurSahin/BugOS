@@ -78,7 +78,7 @@ jobs:
           NEP=/repo/tools/fotos/schijven.json RUIMTE=$VOORBEELD maak computer licht computer:
           NEP=/repo/tools/fotos/schijven.json RUIMTE=$VOORBEELD maak computer-donker donker computer:
           RUIMTE=$VOORBEELD maak computer-leeg licht computer:
-          NEP=/repo/tools/fotos/schijven.json maak stick licht "/run/media/oma/Stick van oma"
+          NEP=/repo/tools/fotos/schijven.json maak stick licht "/run/media/bugie/Stick van Bugie"
           maak dolphin licht Afbeeldingen dolphin
           # Taakbeheer en Instellingen, met voorbeeldgegevens (er wordt niets aan de computer veranderd)
           VOORBEELD_VAN=BUGOS_TAKEN_VOORBEELD maak taakbeheer licht "arg:--programmas" bugos-taakbeheer
@@ -151,7 +151,7 @@ jobs:
             sleep 100
             # De foto maakt KWin zelf in de container (virtueel scherm); zonder KWin valt het script terug op
             # het X-scherm van de bouwcomputer, dan knippen we dat.
-            if ! sudo podman cp foto:/var/home/oma/foto.png "docs/beelden/bureaublad/$1.png" 2>/dev/null; then
+            if ! sudo podman cp foto:/var/home/bugie/foto.png "docs/beelden/bureaublad/$1.png" 2>/dev/null; then
               import -display :99 -window root "docs/beelden/bureaublad/$1.png"
             fi
             # Het logboek van de container bewaren we in een bestand, om er hieronder een paar keer in te kijken.

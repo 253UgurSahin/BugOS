@@ -34,7 +34,7 @@ def mooie_maat(n: int | float) -> str:
 @dataclass
 class Schijf:
     apparaat: str            # de partitie, bv. /dev/sdb1 (of /dev/sdb bij een stick zonder indeling)
-    naam: str                # wat je ziet, bv. "USB-stick van oma" of "USB-stick (16 GB)"
+    naam: str                # wat je ziet, bv. "USB-stick van Bugie" of "USB-stick (16 GB)"
     soort: str               # "stick", "extern", "intern", "kaart" of "cd"
     station: str             # het hele apparaat (bv. /dev/sdb): dat gaat eruit bij veilig verwijderen
     fs_apparaat: str = ""    # waar de bestanden echt op staan (bij een versleutelde schijf: het slot-apparaat)

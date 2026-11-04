@@ -23,7 +23,7 @@ INSTELLING = {"id": "instelling-wifi", "pad": "instelling:wifi", "naam": "Wifi e
               "soort": "instelling"}
 GEGEVENS = {"apps": [APP, INSTELLING], "favorieten": [APP] * 6,
             "recent": [{"naam": f"brief {i}.odt", "pad": f"/tmp/brief{i}.odt", "map": "~/Documenten"} for i in range(8)],
-            "gebruiker": {"naam": "Oma", "foto": ""}}
+            "gebruiker": {"naam": "Bugie", "foto": ""}}
 STATUS = {"wifi": True, "bluetooth": False, "spel": False, "donker": False, "volume": 40, "stil": False,
           "niet_storen": False}
 fouten = 0

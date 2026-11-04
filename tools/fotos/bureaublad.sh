@@ -16,7 +16,7 @@
 # plasmashell, net als op een echte pc. Het startmenu gaat open zoals de Windows-toets dat doet,
 # het uitzetscherm via dezelfde D-Bus-vraag als 'Uitzetten' in het startmenu (in proefstand, zonder
 # logind: PLASMA_SESSION_GUI_TEST). De foto maakt KWin zelf (Spectacle, of schermfoto.py via D-Bus)
-# en komt in /var/home/oma/foto.png; de bouwstraat kopieert hem uit de container.
+# en komt in /var/home/bugie/foto.png; de bouwstraat kopieert hem uit de container.
 # Zonder ~/.config/plasma-org.kde.plasma.desktop-appletsrc bouwt plasmashell de taakbalk uit het
 # look-and-feel-pakket in kdeglobals (org.bugos.desktop). Alle BUGOS_-instellingen gaan mee.
 set -euo pipefail
@@ -30,7 +30,7 @@ fout() {  # hiermee kan er geen goede foto komen; de bouwstraat zoekt in het log
     exit 1
 }
 
-# ---- Deel 3: met KWin erbij (Wayland), als oma: plasmashell en de gevraagde scene ----
+# ---- Deel 3: met KWin erbij (Wayland), als bugie: plasmashell en de gevraagde scene ----
 # Plasma 6.8 is Wayland-only: op een kaal X-scherm crasht plasmashell. Daarom draait KWin zelf in
 # een venster op het virtuele scherm (--x11-display) en daarbinnen plasmashell, net als op een echte pc.
 # KWin is er dan ook écht, dus het startmenu klapt gewoon op de taakbalk open (activateLauncherMenu)
@@ -107,7 +107,7 @@ schermfoto() {  # uit.png
     fi
 }
 
-# ---- Deel 2: draait als oma, binnen één dbus-run-session (gestart onderaan dit bestand) ----
+# ---- Deel 2: draait als bugie, binnen één dbus-run-session (gestart onderaan dit bestand) ----
 bureaublad_tonen() {  # scene
     local scene="$1" kam plasma_pid kwin_pid kwin_code gewacht=0 antwoordt=nee greeter hulp kies=()
     export LANG=nl_NL.UTF-8 LANGUAGE=nl XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6
@@ -214,7 +214,7 @@ bureaublad_tonen() {  # scene
     sleep infinity
 }
 
-if [ "${1:-}" = --als-oma ]; then
+if [ "${1:-}" = --als-bugie ]; then
     bureaublad_tonen "${2:-taakbalk}"
     exit 0
 fi
@@ -242,10 +242,10 @@ case "$SCENE" in
         [ -x /usr/libexec/ksmserver-logout-greeter ] || fout "/usr/libexec/ksmserver-logout-greeter ontbreekt in dit BugOS-beeld." ;;
 esac
 
-# Een gebruiker "oma" met de gewone Nederlandse mappen (net als in tools/fotos/verkenner.sh).
+# Een gebruiker "bugie" met de gewone Nederlandse mappen (net als in tools/fotos/verkenner.sh).
 mkdir -p /var/home
-id oma >/dev/null 2>&1 || useradd -m -d /var/home/oma -s /bin/bash -c Oma oma
-THUIS=/var/home/oma
+id bugie >/dev/null 2>&1 || useradd -m -d /var/home/bugie -s /bin/bash -c Bugie bugie
+THUIS=/var/home/bugie
 cd "$THUIS"
 mkdir -p Bureaublad Documenten Downloads Afbeeldingen Muziek "Video's" Sjablonen Openbaar .config .local/share
 cat > .config/user-dirs.dirs <<'MAPPEN'
@@ -277,7 +277,7 @@ cp "$REPO/tools/fotos/demo/Brief gemeente.pdf" Downloads/
 cat > .local/share/recently-used.xbel <<RECENT
 <?xml version="1.0" encoding="UTF-8"?>
 <xbel version="1.0" xmlns:bookmark="http://www.freedesktop.org/standards/desktop-bookmarks" xmlns:mime="http://www.freedesktop.org/standards/shared-mime-info">
-  <bookmark href="file://$THUIS/Documenten/Recepten%20oma.odt" added="2026-10-30T09:12:00Z" modified="2026-11-02T15:40:00Z" visited="2026-11-02T15:40:00Z"/>
+  <bookmark href="file://$THUIS/Documenten/Recepten%20Bugie.odt" added="2026-10-30T09:12:00Z" modified="2026-11-02T15:40:00Z" visited="2026-11-02T15:40:00Z"/>
   <bookmark href="file://$THUIS/Downloads/Brief%20gemeente.pdf" added="2026-10-31T10:00:00Z" modified="2026-11-02T11:05:00Z" visited="2026-11-02T11:05:00Z"/>
   <bookmark href="file://$THUIS/Documenten/Boodschappenlijst.odt" added="2026-10-29T08:00:00Z" modified="2026-11-01T17:30:00Z" visited="2026-11-01T17:30:00Z"/>
   <bookmark href="file://$THUIS/Afbeeldingen/Achtergrond%20Stip.jpg" added="2026-10-28T14:00:00Z" modified="2026-10-31T19:20:00Z" visited="2026-10-31T19:20:00Z"/>
@@ -314,8 +314,8 @@ fi
 # Alle BUGOS_-instellingen gaan mee naar de programma's (bv. voorbeeldgegevens voor foto's).
 mapfile -t BUGOS_ENV < <(env | grep '^BUGOS_' || true)
 
-chown -R oma:oma "$THUIS"
-mkdir -p /tmp/run-oma && chown oma:oma /tmp/run-oma && chmod 700 /tmp/run-oma
+chown -R bugie:bugie "$THUIS"
+mkdir -p /tmp/run-bugie && chown bugie:bugie /tmp/run-bugie && chmod 700 /tmp/run-bugie
 
 # kwin_wayland heeft in het beeld extra rechten op het bestand zelf (cap_sys_nice). In een container
 # mag een gewone gebruiker zo'n bestand niet starten ("Actie is niet toegestaan"). Voor een foto zijn
@@ -329,9 +329,9 @@ if [ -n "$KWIN" ] && command -v setcap >/dev/null 2>&1; then
     fi
 fi
 
-# Nu als oma, binnen één D-Bus-sessie (plasmashell, de activiteitenbeheerder en de menu's moeten
+# Nu als bugie, binnen één D-Bus-sessie (plasmashell, de activiteitenbeheerder en de menu's moeten
 # elkaar daarop kunnen vinden). Dit script roept zichzelf opnieuw aan voor deel 2 hierboven.
-stap "Klaargezet (thema $THEMA, scene $SCENE); nu als oma het bureaublad starten"
+stap "Klaargezet (thema $THEMA, scene $SCENE); nu als bugie het bureaublad starten"
 # QT_FORCE_STDERR_LOGGING=1: KDE-programma's schrijven hun meldingen anders naar journald, en dat is er hier niet.
-exec runuser -u oma -- env HOME="$THUIS" USER=oma LOGNAME=oma XDG_RUNTIME_DIR=/tmp/run-oma DISPLAY="${DISPLAY:-:99}" \
-    LANG=nl_NL.UTF-8 QT_FORCE_STDERR_LOGGING=1 ZELF="$ZELF" "${BUGOS_ENV[@]}" dbus-run-session -- bash "$ZELF" --als-oma "$SCENE"
+exec runuser -u bugie -- env HOME="$THUIS" USER=bugie LOGNAME=bugie XDG_RUNTIME_DIR=/tmp/run-bugie DISPLAY="${DISPLAY:-:99}" \
+    LANG=nl_NL.UTF-8 QT_FORCE_STDERR_LOGGING=1 ZELF="$ZELF" "${BUGOS_ENV[@]}" dbus-run-session -- bash "$ZELF" --als-bugie "$SCENE"

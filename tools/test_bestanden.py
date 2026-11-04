@@ -45,7 +45,7 @@ def klopt(voorwaarde: bool, wat: str) -> None:
 thuis = TMP / "thuis"
 docs = thuis / "Documenten"
 docs.mkdir()
-(docs / "brief.txt").write_text("hallo oma")
+(docs / "brief.txt").write_text("hallo bugie")
 (docs / "map").mkdir()
 (docs / "map" / "binnen.txt").write_text("binnenin")
 
@@ -62,7 +62,7 @@ klopt(b.lees_herkomst(info) == docs / "brief.txt", "prullenbak: weet waar het va
 inhoud = b.prullenbak_inhoud()
 klopt(len(inhoud) == 1 and inhoud[0][0] == bestand, "prullenbak: inhoud toont het bestand")
 terug = b.terugzetten(bestand, info)
-klopt(terug == docs / "brief.txt" and terug.read_text() == "hallo oma", "terugzetten: weer op de oude plek, inhoud heel")
+klopt(terug == docs / "brief.txt" and terug.read_text() == "hallo bugie", "terugzetten: weer op de oude plek, inhoud heel")
 klopt(not info.exists(), "terugzetten: info-bestand opgeruimd")
 
 # 3. twee keer hetzelfde weggooien: geen botsing
@@ -131,11 +131,11 @@ NEP = [
     {"name": "sda", "path": "/dev/sda", "type": "disk", "size": 1000204886016, "rm": False, "hotplug": False,
      "tran": "sata", "mountpoints": [None], "children": [
          {"name": "sda1", "path": "/dev/sda1", "type": "part", "size": 1000202788864, "fstype": "ntfs", "label": "Data",
-          "fsavail": 612000000000, "fssize": 1000202788864, "mountpoints": ["/run/media/oma/Data"]}]},
+          "fsavail": 612000000000, "fssize": 1000202788864, "mountpoints": ["/run/media/bugie/Data"]}]},
     {"name": "sdb", "path": "/dev/sdb", "type": "disk", "size": 15931539456, "rm": True, "hotplug": True,
      "tran": "usb", "mountpoints": [None], "children": [
-         {"name": "sdb1", "path": "/dev/sdb1", "type": "part", "size": 15930490880, "fstype": "vfat", "label": "OMA",
-          "fsavail": 11800000000, "fssize": 15926000000, "mountpoints": ["/run/media/oma/OMA"]}]},
+         {"name": "sdb1", "path": "/dev/sdb1", "type": "part", "size": 15930490880, "fstype": "vfat", "label": "BUGIE",
+          "fsavail": 11800000000, "fssize": 15926000000, "mountpoints": ["/run/media/bugie/BUGIE"]}]},
     {"name": "sdc", "path": "/dev/sdc", "type": "disk", "size": 2000398934016, "rm": False, "hotplug": True,
      "tran": "usb", "mountpoints": [None], "children": [
          {"name": "sdc1", "path": "/dev/sdc1", "type": "part", "size": 2000397795328, "fstype": "crypto_LUKS",
@@ -149,7 +149,7 @@ NEP = [
               {"name": "luks-1234", "kname": "dm-0", "path": "/dev/mapper/luks-1234", "type": "crypt",
                "size": 249983000000,
                "fstype": "ext4", "label": "Back-up", "fsavail": 180000000000, "fssize": 245000000000,
-               "mountpoints": ["/run/media/oma/Back-up"]}]},
+               "mountpoints": ["/run/media/bugie/Back-up"]}]},
          {"name": "sde2", "path": "/dev/sde2", "type": "part", "size": 250000000000, "fstype": "exfat",
           "label": "Films", "mountpoints": [None]}]},
     {"name": "sdf", "path": "/dev/sdf", "type": "disk", "size": 1000204886016, "rm": False, "hotplug": False,
@@ -188,7 +188,7 @@ klopt(st[0][-2] == "'dos'" and st[1][-5] == "'0x07'" and st[1][-2] == "'exfat'",
 klopt(sch.eerste_deel("/dev/nvme1n1") == "/dev/nvme1n1p1" and sch.eerste_deel("/dev/sdb") == "/dev/sdb1",
       "eerste stuk: sdb1, maar nvme1n1p1")
 proef = [sch.Schijf("/dev/sdx1", "Data", "intern", "/dev/sdx", "/dev/sdx1", fs="ntfs"),
-         sch.Schijf("/dev/sdy1", "Open", "intern", "/dev/sdy", "/dev/sdy1", wortel="/run/media/oma/Open", fs="ext4"),
+         sch.Schijf("/dev/sdy1", "Open", "intern", "/dev/sdy", "/dev/sdy1", wortel="/run/media/bugie/Open", fs="ext4"),
          sch.Schijf("/dev/sdz1", "Stick", "stick", "/dev/sdz", "/dev/sdz1", fs="vfat"),
          sch.Schijf("/dev/sdw1", "Slot", "intern", "/dev/sdw", "/dev/sdw1", op_slot=True, fs="crypto_LUKS"),
          sch.Schijf("/dev/sdv", "Nieuw", "intern", "/dev/sdv", nieuw=True)]
@@ -196,7 +196,7 @@ klopt(sch.auto_open_stappen(proef) == [["udisksctl", "mount", "-b", "/dev/sdx1",
       "bij het opstarten: alleen dichte schijven in de computer gaan vanzelf open (geen sticks, slot of nieuw)")
 klopt(per["/dev/sda1"].naam == "Data" and per["/dev/sda1"].soort == "intern" and per["/dev/sda1"].vrij == 612000000000,
       "schijven: tweede schijf in de computer, open, met vrije ruimte")
-klopt(per["/dev/sdb1"].soort == "stick" and per["/dev/sdb1"].wortel == "/run/media/oma/OMA" and per["/dev/sdb1"].los,
+klopt(per["/dev/sdb1"].soort == "stick" and per["/dev/sdb1"].wortel == "/run/media/bugie/BUGIE" and per["/dev/sdb1"].los,
       "schijven: USB-stick, open, uit te werpen")
 c = per["/dev/sdc1"]
 klopt(c.soort == "extern" and c.op_slot and c.naam == "Externe schijf",
@@ -214,14 +214,14 @@ klopt(stappen == [["udisksctl", "unmount", "-b", "/dev/mapper/luks-1234"], ["udi
 klopt(sch.openen_stappen(c)[:2] == ["solid-hardware6", "mount"] and c.apparaat.endswith("sdc1"),
       "openen: schijf op slot via KDE (die vraagt het wachtwoord)")
 klopt(sch.openen_stappen(per["/dev/sdd"]) == ["udisksctl", "mount", "-b", "/dev/sdd"], "openen: gewone stick via udisks")
-klopt(b.schijf_van(Path("/run/media/oma/OMA/Foto's"), lijst) is per["/dev/sdb1"], "schijf_van: map op de stick")
-klopt(sch.systeem_plek("/var/home") and not sch.systeem_plek("/var/mnt/data") and not sch.systeem_plek("/run/media/oma/x"),
+klopt(b.schijf_van(Path("/run/media/bugie/BUGIE/Foto's"), lijst) is per["/dev/sdb1"], "schijf_van: map op de stick")
+klopt(sch.systeem_plek("/var/home") and not sch.systeem_plek("/var/mnt/data") and not sch.systeem_plek("/run/media/bugie/x"),
       "systeemplekken: /var/home wel, /var/mnt en /run/media niet")
 klopt(e.udisks_fs.endswith("/block_devices/dm_2d0") and e.udisks_deel.endswith("/block_devices/sde1"),
       "udisks: 'dm-0' wordt 'dm_2d0' (zo heet hij daar)")
-klopt(sch.gvariant_tekst("Oma's stick") == "'Oma\\'s stick'", "naam wijzigen: een ' in de naam gaat goed mee")
-oma = per["/dev/sdb1"]
-st = sch.hernoem_stappen(oma, "Foto's")
+klopt(sch.gvariant_tekst("Bugie's stick") == "'Bugie\\'s stick'", "naam wijzigen: een ' in de naam gaat goed mee")
+bugie = per["/dev/sdb1"]
+st = sch.hernoem_stappen(bugie, "Foto's")
 klopt(st[0] == ["udisksctl", "unmount", "-b", "/dev/sdb1"] and "Filesystem.SetLabel" in st[1][-3]
       and st[1][-2] == "'Foto\\'s'" and st[2] == ["udisksctl", "mount", "-b", "/dev/sdb1"],
       "naam wijzigen: dicht, naam erop, weer open")
@@ -292,10 +292,10 @@ nep_bestand.write_text(json.dumps({"blockdevices": [
     {"name": "sdx", "path": "/dev/sdx", "type": "disk", "size": 16000000000, "rm": True, "hotplug": True,
      "tran": "usb", "children": [
          {"name": "sdx1", "path": "/dev/sdx1", "type": "part", "size": 16000000000, "fstype": "exfat",
-          "label": "Stick van oma", "fsavail": 12000000000, "fssize": 16000000000, "mountpoints": [str(stick)]}]}]}))
+          "label": "Stick van Bugie", "fsavail": 12000000000, "fssize": 16000000000, "mountpoints": [str(stick)]}]}]}))
 os.environ["BUGOS_LSBLK"] = str(nep_bestand)
 venster.vul_zijbalk()
-klopt([x.naam for x in venster.lijst_schijven] == ["Stick van oma"], "venster: de stick staat in de zijbalk")
+klopt([x.naam for x in venster.lijst_schijven] == ["Stick van Bugie"], "venster: de stick staat in de zijbalk")
 venster.open_computer()
 klopt(venster.in_computer and venster.stapel.currentWidget() is venster.computer
       and venster.grote_titel.text() == "Deze computer", "Deze computer: de pagina opent")
@@ -309,7 +309,7 @@ klopt([a.text() for a in menu.actions() if a.text()] == ["Openen", "Naam wijzige
 klopt(venster.ruimte_balk is not None and venster.status.text() == "1 aangesloten", "Deze computer: ruimte bovenaan, en 1 aangesloten")
 tegels[0].geklikt.emit()
 klopt(venster.huidig == stick and not venster.in_computer and not venster.uitwerp_knop.isHidden()
-      and venster.grote_titel.text() == "Stick van oma", "stick openen: naam bovenin en 'Veilig verwijderen'")
+      and venster.grote_titel.text() == "Stick van Bugie", "stick openen: naam bovenin en 'Veilig verwijderen'")
 venster.terug()
 klopt(venster.in_computer, "terug: weer op Deze computer")
 venster.ga_naar(stick / "Foto's")

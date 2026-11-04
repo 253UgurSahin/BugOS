@@ -79,11 +79,11 @@
      "type": "part",
      "size": 15930490880,
      "fstype": "exfat",
-     "label": "Stick van oma",
+     "label": "Stick van Bugie",
      "fsavail": 11800000000,
      "fssize": 15926000000,
      "mountpoints": [
-      "/run/media/oma/Stick van oma"
+      "/run/media/bugie/Stick van Bugie"
      ]
     }
    ]
@@ -110,7 +110,7 @@
      "fsavail": 312000000000,
      "fssize": 1000202788864,
      "mountpoints": [
-      "/run/media/oma/Fotoschijf"
+      "/run/media/bugie/Fotoschijf"
      ]
     }
    ]

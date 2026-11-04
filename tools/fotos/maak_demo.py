@@ -79,16 +79,16 @@ def odf(naam: str, soort: str, plaatje: Image.Image, tekst: str) -> None:
 
 def main() -> None:
     UIT.mkdir(exist_ok=True)
-    odf("Recepten oma.odt", "text", pagina("Appeltaart van oma", [
+    odf("Recepten Bugie.odt", "text", pagina("Appeltaart van Bugie", [
         "Voor een taart van 24 cm", "", "300 gram zelfrijzend bakmeel", "200 gram roomboter",
         "150 gram suiker", "1 ei", "1,5 kilo appels (goudrenet)", "Kaneel en rozijnen", "",
-        "  Oven voorverwarmen op 175 graden.", "  Bakken in ongeveer een uur."]), "Appeltaart van oma")
+        "  Oven voorverwarmen op 175 graden.", "  Bakken in ongeveer een uur."]), "Appeltaart van Bugie")
     odf("Boodschappenlijst.odt", "text", pagina("Boodschappen", [
         "[x]  Brood", "[x]  Melk", "[  ]  Kaas", "[  ]  Appels (goudrenet)", "[  ]  Koffie",
         "[  ]  Bloemen voor Sanne"]), "Boodschappen")
     odf("Verjaardagen.ods", "spreadsheet", pagina("Verjaardagen", [
         "Sanne|14 maart", "Daan|2 juni", "Opa Henk|19 augustus", "Tante Ria|3 oktober",
-        "Oma Riet|11 december"], tabel=True), "Verjaardagen")
+        "Bugie|11 december"], tabel=True), "Verjaardagen")
     brief = pagina("Gemeente", ["Aan: mevrouw R. de Vries", "Betreft: uw aanvraag", "",
                                 "Geachte mevrouw De Vries,", "", "  Hierbij ontvangt u de bevestiging",
                                 "  van uw aanvraag voor een nieuwe", "  parkeervergunning.", "",

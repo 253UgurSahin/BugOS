@@ -17,10 +17,10 @@ MAP="${2:-}"
 PROGRAMMA="${3:-bugos-bestanden}"
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 
-# Een gebruiker "oma" met de gewone Nederlandse mappen.
+# Een gebruiker "bugie" met de gewone Nederlandse mappen.
 mkdir -p /var/home
-id oma >/dev/null 2>&1 || useradd -m -d /var/home/oma -s /bin/bash oma
-THUIS=/var/home/oma
+id bugie >/dev/null 2>&1 || useradd -m -d /var/home/bugie -s /bin/bash bugie
+THUIS=/var/home/bugie
 cd "$THUIS"
 mkdir -p Bureaublad Documenten Downloads Afbeeldingen Muziek "Video's" Sjablonen Openbaar .config
 cat > .config/user-dirs.dirs <<'MAPPEN'
@@ -91,19 +91,19 @@ for schijf in json.load(open(sys.argv[1], encoding="utf-8"))["blockdevices"]:
             if plek and plek.startswith("/run/media/"):
                 os.makedirs(plek, exist_ok=True)
 PY
-    STICK="/run/media/oma/Stick van oma"
+    STICK="/run/media/bugie/Stick van Bugie"
     if [ -d "$STICK" ]; then
         mkdir -p "$STICK/Foto's van de kleinkinderen"
         cp "Afbeeldingen/Achtergrond Stip.jpg" "$STICK/Verjaardag Daan.jpg"
         cp "Afbeeldingen/BugOS Welkom.webp" "$STICK/Kerst.webp"
-        cp "$REPO/tools/fotos/demo/Recepten oma.odt" "$STICK/"
+        cp "$REPO/tools/fotos/demo/Recepten Bugie.odt" "$STICK/"
     fi
-    if [ -d /run/media/oma/Fotoschijf ]; then
-        mkdir -p /run/media/oma/Fotoschijf/{2019,2020,2021,2022}
+    if [ -d /run/media/bugie/Fotoschijf ]; then
+        mkdir -p /run/media/bugie/Fotoschijf/{2019,2020,2021,2022}
     fi
     # Alleen als er nep-schijven 'open' staan (bij een lege lijst bestaat deze map niet).
-    if [ -d /run/media/oma ]; then
-        chown -R oma:oma /run/media/oma
+    if [ -d /run/media/bugie ]; then
+        chown -R bugie:bugie /run/media/bugie
     fi
 fi
 
@@ -115,10 +115,10 @@ esac
 # Alle BUGOS_-instellingen gaan mee naar het programma (bv. voorbeeldgegevens voor foto's).
 mapfile -t BUGOS_ENV < <(env | grep '^BUGOS_' || true)
 
-chown -R oma:oma "$THUIS"
-mkdir -p /tmp/run-oma && chown oma:oma /tmp/run-oma && chmod 700 /tmp/run-oma
+chown -R bugie:bugie "$THUIS"
+mkdir -p /tmp/run-bugie && chown bugie:bugie /tmp/run-bugie && chmod 700 /tmp/run-bugie
 
-exec runuser -u oma -- env HOME="$THUIS" USER=oma XDG_RUNTIME_DIR=/tmp/run-oma DISPLAY="${DISPLAY:-:99}" \
+exec runuser -u bugie -- env HOME="$THUIS" USER=bugie XDG_RUNTIME_DIR=/tmp/run-bugie DISPLAY="${DISPLAY:-:99}" \
     LANG=nl_NL.UTF-8 LANGUAGE=nl QT_SCALE_FACTOR=2 \
     XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6 "${BUGOS_ENV[@]}" \
     dbus-run-session -- "$PROGRAMMA" -qwindowgeometry 1180x740+0+0 "$DOEL"
