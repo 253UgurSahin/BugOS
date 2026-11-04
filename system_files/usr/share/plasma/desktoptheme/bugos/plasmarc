@@ -1,0 +1,8 @@
+[Wallpaper]
+defaultWallpaperTheme=bugos
+defaultFileSuffix=.jpg
+defaultWidth=3840
+defaultHeight=2160
+
+[AdaptiveTransparency]
+enabled=false

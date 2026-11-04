@@ -1,0 +1,19 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "BugOS"
+            }
+        ],
+        "Category": "",
+        "Description": "The BugOS look for the taskbar, pop-ups and tooltips. Follows the BugOS colors in light and dark.",
+        "Description[nl]": "De BugOS-stijl voor de taakbalk, pop-ups en tooltips. Volgt de BugOS-kleuren in licht en donker.",
+        "EnabledByDefault": true,
+        "Id": "bugos",
+        "License": "GPL-3.0-or-later",
+        "Name": "BugOS",
+        "Version": "1.0",
+        "Website": "https://github.com/253UgurSahin/BugOS"
+    },
+    "X-Plasma-API": "5.0"
+}
