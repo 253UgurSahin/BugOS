@@ -197,6 +197,8 @@ done
 rm -f /usr/share/kde-settings/kde-profile/default/xdg/krunnerrc
 
 # Firefox: begint niet meer op de Fedora-startpagina, en heet "for BugOS".
+# browser.tabs.inTitlebar=0: Firefox krijgt dezelfde vensterbalk als alle andere vensters
+# (geen eigen knoppen meer in de tabbalk), zodat het één geheel blijft.
 FF=/usr/lib64/firefox
 if [ -d "$FF" ]; then
     sed -i -e 's|https://start.fedoraproject.org/|about:home|' -e '/browser.newtabpage.pinned/d' \
@@ -211,6 +213,7 @@ about=Mozilla Firefox for BugOS
 [Preferences]
 app.distributor="bugos"
 app.distributor.channel="bugos"
+browser.tabs.inTitlebar=0
 EOF
 fi
 
