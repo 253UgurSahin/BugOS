@@ -89,12 +89,12 @@ def lees_netwerken(uitvoer: str) -> list[Netwerk]:
     return sorted(beste.values(), key=lambda x: (not x.verbonden, -x.sterkte, x.naam.lower()))
 
 
-_VB = {"wifi": True, "verbonden": "Thuis", "bt": True, "volume": 45, "stil": False, "uitgang": "speakers",
+_VB = {"wifi": True, "verbonden": "Home", "bt": True, "volume": 45, "stil": False, "uitgang": "speakers",
        "helderheid": 70, "nachtlicht": False, "schaal": 1.25, "profiel": "balanced", "donker": False,
        "bt_verbonden": {"AA:BB:CC:DD:EE:01"},
        "grote_tekst": False, "grote_aanwijzer": False, "schud": True, "plaktoetsen": False, "langzame_toetsen": False,
        "schermlezer": False, "dubbelklik": True, "aanwijzers": None, "tijd_auto": True, "zone": "Europe/Amsterdam",
-       "taal": "nl", "auto_inloggen": False, "slot_na": 15, "slot_na_slapen": True, "scherm_uit": 600,
+       "taal": "en", "auto_inloggen": False, "slot_na": 15, "slot_na_slapen": True, "scherm_uit": 600,
        "slaap": 1800, "aanuit": 16, "deksel": 1, "niet_storen": False, "stil_bij_games": True, "geluidje": True,
        "apps": None, "printers": None, "volledige_naam": "Bugie"}
 
@@ -217,7 +217,7 @@ def zet_bt(aan: bool) -> bool:
 
 def bt_apparaten() -> list[Apparaat]:
     if VOORBEELD:
-        lijst = [Apparaat("AA:BB:CC:DD:EE:01", "Koptelefoon van Bugie", "audio-headset", False, 80),
+        lijst = [Apparaat("AA:BB:CC:DD:EE:01", "Bugie's headphones", "audio-headset", False, 80),
                  Apparaat("AA:BB:CC:DD:EE:02", "Muis", "input-mouse", False, None),
                  Apparaat("AA:BB:CC:DD:EE:03", "Telefoon", "phone", False, None)]
         for a in lijst:
@@ -282,7 +282,7 @@ def geluid() -> tuple[int, bool, list[Uitgang]]:
         return _VB["volume"], _VB["stil"], [
             Uitgang("speakers", "Ingebouwde luidsprekers", _VB["uitgang"] == "speakers"),
             Uitgang("hdmi", "Televisie (HDMI)", _VB["uitgang"] == "hdmi"),
-            Uitgang("headset", "Koptelefoon van Bugie", _VB["uitgang"] == "headset")]
+            Uitgang("headset", "Bugie's headphones", _VB["uitgang"] == "headset")]
     standaard = draai("pactl", "get-default-sink", timeout=5)[1].strip()
     uit = draai("pactl", "-f", "json", "list", "sinks", timeout=5)[1]
     volume, stil = lees_volume(uit, standaard)
@@ -1295,7 +1295,7 @@ def lees_lpstat(printers_uit: str, standaard_uit: str) -> list[Printer]:
 def printers() -> list[Printer]:
     if VOORBEELD:
         if _VB["printers"] is None:
-            _VB["printers"] = [Printer("HP_LaserJet", "HP LaserJet van Bugie", "klaar", True),
+            _VB["printers"] = [Printer("HP_LaserJet", "Bugie's HP LaserJet", "klaar", True),
                                Printer("Canon_PIXMA", "Canon PIXMA (boven)", "gestopt", False)]
         return _VB["printers"]
     if not shutil.which("lpstat"):

@@ -79,21 +79,21 @@ def odf(naam: str, soort: str, plaatje: Image.Image, tekst: str) -> None:
 
 def main() -> None:
     UIT.mkdir(exist_ok=True)
-    odf("Recepten Bugie.odt", "text", pagina("Appeltaart van Bugie", [
-        "Voor een taart van 24 cm", "", "300 gram zelfrijzend bakmeel", "200 gram roomboter",
-        "150 gram suiker", "1 ei", "1,5 kilo appels (goudrenet)", "Kaneel en rozijnen", "",
-        "  Oven voorverwarmen op 175 graden.", "  Bakken in ongeveer een uur."]), "Appeltaart van Bugie")
-    odf("Boodschappenlijst.odt", "text", pagina("Boodschappen", [
-        "[x]  Brood", "[x]  Melk", "[  ]  Kaas", "[  ]  Appels (goudrenet)", "[  ]  Koffie",
-        "[  ]  Bloemen voor Sanne"]), "Boodschappen")
-    odf("Verjaardagen.ods", "spreadsheet", pagina("Verjaardagen", [
-        "Sanne|14 maart", "Daan|2 juni", "Opa Henk|19 augustus", "Tante Ria|3 oktober",
-        "Bugie|11 december"], tabel=True), "Verjaardagen")
-    brief = pagina("Gemeente", ["Aan: mevrouw R. de Vries", "Betreft: uw aanvraag", "",
-                                "Geachte mevrouw De Vries,", "", "  Hierbij ontvangt u de bevestiging",
-                                "  van uw aanvraag voor een nieuwe", "  parkeervergunning.", "",
-                                "Met vriendelijke groet,", "Team Burgerzaken"])
-    brief.save(UIT / "Brief gemeente.pdf", "PDF", resolution=72)
+    odf("Bugie's recipes.odt", "text", pagina("Bugie's apple pie", [
+        "For a 24 cm pie", "", "300 g self-raising flour", "200 g butter",
+        "150 g sugar", "1 egg", "1.5 kg apples", "Cinnamon and raisins", "",
+        "  Preheat the oven to 175 degrees.", "  Bake for about an hour."]), "Bugie's apple pie")
+    odf("Shopping list.odt", "text", pagina("Shopping", [
+        "[x]  Bread", "[x]  Milk", "[  ]  Cheese", "[  ]  Apples", "[  ]  Coffee",
+        "[  ]  Flowers for Sanne"]), "Shopping")
+    odf("Birthdays.ods", "spreadsheet", pagina("Birthdays", [
+        "Sanne|14 March", "Daan|2 June", "Uncle Henk|19 August", "Aunt Ria|3 October",
+        "Bugie|11 December"], tabel=True), "Birthdays")
+    brief = pagina("Town council", ["To: R. de Vries", "Subject: your application", "",
+                                    "Dear R. de Vries,", "", "  This letter confirms",
+                                    "  your application for a new", "  parking permit.", "",
+                                    "Kind regards,", "Citizen Services"])
+    brief.save(UIT / "Letter from the council.pdf", "PDF", resolution=72)
     print("demo-bestanden gemaakt in", UIT)
 
 

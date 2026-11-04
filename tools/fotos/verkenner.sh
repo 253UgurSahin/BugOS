@@ -4,7 +4,7 @@
 # Draait in het echte BugOS-beeld; de bouwstraat maakt dan een schermfoto.
 #
 # Gebruik: bash tools/fotos/verkenner.sh <licht|donker> [map] [programma]
-#   map: welke map open moet staan, bijvoorbeeld Documenten (leeg = de thuismap).
+#   map: welke map open moet staan, bijvoorbeeld Documents (leeg = de thuismap).
 #        Een bestand mag ook: dan opent zijn map en is dat bestand gekozen.
 #        "computer:" opent de pagina Deze computer; een pad met / ervoor mag ook.
 #   programma: bugos-bestanden (standaard) of dolphin
@@ -17,34 +17,34 @@ MAP="${2:-}"
 PROGRAMMA="${3:-bugos-bestanden}"
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 
-# Een gebruiker "bugie" met de gewone Nederlandse mappen.
+# Een gebruiker "bugie" met de gewone Engelse mappen (BugOS is standaard Engels).
 mkdir -p /var/home
 id bugie >/dev/null 2>&1 || useradd -m -d /var/home/bugie -s /bin/bash bugie
 THUIS=/var/home/bugie
 cd "$THUIS"
-mkdir -p Bureaublad Documenten Downloads Afbeeldingen Muziek "Video's" Sjablonen Openbaar .config
+mkdir -p Desktop Documents Downloads Pictures Music Videos Templates Public .config
 cat > .config/user-dirs.dirs <<'MAPPEN'
-XDG_DESKTOP_DIR="$HOME/Bureaublad"
-XDG_DOCUMENTS_DIR="$HOME/Documenten"
+XDG_DESKTOP_DIR="$HOME/Desktop"
+XDG_DOCUMENTS_DIR="$HOME/Documents"
 XDG_DOWNLOAD_DIR="$HOME/Downloads"
-XDG_MUSIC_DIR="$HOME/Muziek"
-XDG_PICTURES_DIR="$HOME/Afbeeldingen"
-XDG_PUBLICSHARE_DIR="$HOME/Openbaar"
-XDG_TEMPLATES_DIR="$HOME/Sjablonen"
-XDG_VIDEOS_DIR="$HOME/Video's"
+XDG_MUSIC_DIR="$HOME/Music"
+XDG_PICTURES_DIR="$HOME/Pictures"
+XDG_PUBLICSHARE_DIR="$HOME/Public"
+XDG_TEMPLATES_DIR="$HOME/Templates"
+XDG_VIDEOS_DIR="$HOME/Videos"
 MAPPEN
-echo "nl_NL" > .config/user-dirs.locale
+echo "en_US" > .config/user-dirs.locale
 
 # Voorbeeldbestanden
-cp "$REPO"/tools/fotos/demo/* Documenten/
-mkdir -p "Afbeeldingen/Vakantie Texel" "Afbeeldingen/Kleinkinderen"
-cp /usr/share/wallpapers/bugos/contents/images/3840x2160.jpg "Afbeeldingen/Achtergrond Stip.jpg"
-cp /usr/share/wallpapers/bugos/contents/images_dark/3840x2160.jpg "Afbeeldingen/Achtergrond Stip donker.jpg"
-cp "$REPO/website/assets/bureaublad-licht.webp" "Afbeeldingen/Bureaublad licht.webp"
-cp "$REPO/website/assets/bureaublad-donker.webp" "Afbeeldingen/Bureaublad donker.webp"
-cp "$REPO/website/assets/winkel-licht.webp" "Afbeeldingen/BugOS Winkel.webp"
-cp "$REPO/website/assets/welkom-licht.webp" "Afbeeldingen/BugOS Welkom.webp"
-cp "$REPO/tools/fotos/demo/Brief gemeente.pdf" Downloads/
+cp "$REPO"/tools/fotos/demo/* Documents/
+mkdir -p "Pictures/Holiday by the sea" "Pictures/Family"
+cp /usr/share/wallpapers/bugos/contents/images/3840x2160.jpg "Pictures/Stip background.jpg"
+cp /usr/share/wallpapers/bugos/contents/images_dark/3840x2160.jpg "Pictures/Stip background dark.jpg"
+cp "$REPO/website/assets/bureaublad-licht.webp" "Pictures/Desktop light.webp"
+cp "$REPO/website/assets/bureaublad-donker.webp" "Pictures/Desktop dark.webp"
+cp "$REPO/website/assets/winkel-licht.webp" "Pictures/BugOS Store.webp"
+cp "$REPO/website/assets/welkom-licht.webp" "Pictures/BugOS Welcome.webp"
+cp "$REPO/tools/fotos/demo/Letter from the council.pdf" Downloads/
 : > Downloads/SpotifySetup.exe
 
 if [ "$THEMA" = donker ]; then
@@ -91,15 +91,15 @@ for schijf in json.load(open(sys.argv[1], encoding="utf-8"))["blockdevices"]:
             if plek and plek.startswith("/run/media/"):
                 os.makedirs(plek, exist_ok=True)
 PY
-    STICK="/run/media/bugie/Stick van Bugie"
+    STICK="/run/media/bugie/Bugie's stick"
     if [ -d "$STICK" ]; then
         mkdir -p "$STICK/Foto's van de kleinkinderen"
-        cp "Afbeeldingen/Achtergrond Stip.jpg" "$STICK/Verjaardag Daan.jpg"
-        cp "Afbeeldingen/BugOS Welkom.webp" "$STICK/Kerst.webp"
-        cp "$REPO/tools/fotos/demo/Recepten Bugie.odt" "$STICK/"
+        cp "Pictures/Stip background.jpg" "$STICK/Daan birthday.jpg"
+        cp "Pictures/BugOS Welcome.webp" "$STICK/Christmas.webp"
+        cp "$REPO/tools/fotos/demo/Bugie's recipes.odt" "$STICK/"
     fi
-    if [ -d /run/media/bugie/Fotoschijf ]; then
-        mkdir -p /run/media/bugie/Fotoschijf/{2019,2020,2021,2022}
+    if [ -d /run/media/bugie/"Photo drive" ]; then
+        mkdir -p "/run/media/bugie/Photo drive"/{2019,2020,2021,2022}
     fi
     # Alleen als er nep-schijven 'open' staan (bij een lege lijst bestaat deze map niet).
     if [ -d /run/media/bugie ]; then
@@ -119,6 +119,6 @@ chown -R bugie:bugie "$THUIS"
 mkdir -p /tmp/run-bugie && chown bugie:bugie /tmp/run-bugie && chmod 700 /tmp/run-bugie
 
 exec runuser -u bugie -- env HOME="$THUIS" USER=bugie XDG_RUNTIME_DIR=/tmp/run-bugie DISPLAY="${DISPLAY:-:99}" \
-    LANG=nl_NL.UTF-8 LANGUAGE=nl QT_SCALE_FACTOR=2 \
+    LANG=en_US.UTF-8 LANGUAGE=en QT_SCALE_FACTOR=2 \
     XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6 "${BUGOS_ENV[@]}" \
     dbus-run-session -- "$PROGRAMMA" -qwindowgeometry 1180x740+0+0 "$DOEL"

@@ -79,11 +79,11 @@
      "type": "part",
      "size": 15930490880,
      "fstype": "exfat",
-     "label": "Stick van Bugie",
+     "label": "Bugie's stick",
      "fsavail": 11800000000,
      "fssize": 15926000000,
      "mountpoints": [
-      "/run/media/bugie/Stick van Bugie"
+      "/run/media/bugie/Bugie's stick"
      ]
     }
    ]
@@ -106,11 +106,11 @@
      "type": "part",
      "size": 1000202788864,
      "fstype": "ntfs",
-     "label": "Fotoschijf",
+     "label": "Photo drive",
      "fsavail": 312000000000,
      "fssize": 1000202788864,
      "mountpoints": [
-      "/run/media/bugie/Fotoschijf"
+      "/run/media/bugie/Photo drive"
      ]
     }
    ]

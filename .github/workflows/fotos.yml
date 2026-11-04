@@ -69,17 +69,17 @@ jobs:
             fi
           }
           maak thuismap licht ""
-          maak documenten licht Documenten
-          maak afbeeldingen donker Afbeeldingen
-          maak afbeeldingen-licht licht Afbeeldingen
-          maak gekozen licht "Afbeeldingen/Achtergrond Stip.jpg"
+          maak documenten licht Documents
+          maak afbeeldingen donker Pictures
+          maak afbeeldingen-licht licht Pictures
+          maak gekozen licht "Pictures/Stip background.jpg"
           # Deze computer, met nep-schijven (een USB-stick en een fotoschijf) en voorbeeldgetallen
           VOORBEELD=512e9,286e9,48e9,96e9,6e9,12e9,9e9
           NEP=/repo/tools/fotos/schijven.json RUIMTE=$VOORBEELD maak computer licht computer:
           NEP=/repo/tools/fotos/schijven.json RUIMTE=$VOORBEELD maak computer-donker donker computer:
           RUIMTE=$VOORBEELD maak computer-leeg licht computer:
-          NEP=/repo/tools/fotos/schijven.json maak stick licht "/run/media/bugie/Stick van Bugie"
-          maak dolphin licht Afbeeldingen dolphin
+          NEP=/repo/tools/fotos/schijven.json maak stick licht "/run/media/bugie/Bugie's stick"
+          maak dolphin licht Pictures dolphin
           # Taakbeheer en Instellingen, met voorbeeldgegevens (er wordt niets aan de computer veranderd)
           VOORBEELD_VAN=BUGOS_TAKEN_VOORBEELD maak taakbeheer licht "arg:--programmas" bugos-taakbeheer
           VOORBEELD_VAN=BUGOS_TAKEN_VOORBEELD maak taakbeheer-donker donker "arg:--prestaties" bugos-taakbeheer

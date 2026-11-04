@@ -110,7 +110,7 @@ schermfoto() {  # uit.png
 # ---- Deel 2: draait als bugie, binnen één dbus-run-session (gestart onderaan dit bestand) ----
 bureaublad_tonen() {  # scene
     local scene="$1" kam plasma_pid kwin_pid kwin_code gewacht=0 antwoordt=nee greeter hulp kies=()
-    export LANG=nl_NL.UTF-8 LANGUAGE=nl XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6
+    export LANG=en_US.UTF-8 LANGUAGE=en XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6
     stap "Bureaublad voor de foto: scene '$scene', scherm ${DISPLAY:-?}, als $(id -un)"
     stap "$(plasmashell --version 2>/dev/null | head -1 || true)"
 
@@ -242,34 +242,34 @@ case "$SCENE" in
         [ -x /usr/libexec/ksmserver-logout-greeter ] || fout "/usr/libexec/ksmserver-logout-greeter ontbreekt in dit BugOS-beeld." ;;
 esac
 
-# Een gebruiker "bugie" met de gewone Nederlandse mappen (net als in tools/fotos/verkenner.sh).
+# Een gebruiker "bugie" met de gewone Engelse mappen (net als in tools/fotos/verkenner.sh).
 mkdir -p /var/home
 id bugie >/dev/null 2>&1 || useradd -m -d /var/home/bugie -s /bin/bash -c Bugie bugie
 THUIS=/var/home/bugie
 cd "$THUIS"
-mkdir -p Bureaublad Documenten Downloads Afbeeldingen Muziek "Video's" Sjablonen Openbaar .config .local/share
+mkdir -p Desktop Documents Downloads Pictures Music Videos Templates Public .config .local/share
 cat > .config/user-dirs.dirs <<'MAPPEN'
-XDG_DESKTOP_DIR="$HOME/Bureaublad"
-XDG_DOCUMENTS_DIR="$HOME/Documenten"
+XDG_DESKTOP_DIR="$HOME/Desktop"
+XDG_DOCUMENTS_DIR="$HOME/Documents"
 XDG_DOWNLOAD_DIR="$HOME/Downloads"
-XDG_MUSIC_DIR="$HOME/Muziek"
-XDG_PICTURES_DIR="$HOME/Afbeeldingen"
+XDG_MUSIC_DIR="$HOME/Music"
+XDG_PICTURES_DIR="$HOME/Pictures"
 XDG_PUBLICSHARE_DIR="$HOME/Openbaar"
 XDG_TEMPLATES_DIR="$HOME/Sjablonen"
-XDG_VIDEOS_DIR="$HOME/Video's"
+XDG_VIDEOS_DIR="$HOME/Videos"
 MAPPEN
 echo "nl_NL" > .config/user-dirs.locale
 
 # Voorbeeldbestanden
-cp "$REPO"/tools/fotos/demo/* Documenten/
-mkdir -p "Afbeeldingen/Vakantie Texel" "Afbeeldingen/Kleinkinderen"
-cp /usr/share/wallpapers/bugos/contents/images/3840x2160.jpg "Afbeeldingen/Achtergrond Stip.jpg"
-cp /usr/share/wallpapers/bugos/contents/images_dark/3840x2160.jpg "Afbeeldingen/Achtergrond Stip donker.jpg"
-cp "$REPO/website/assets/bureaublad-licht.webp" "Afbeeldingen/Bureaublad licht.webp"
-cp "$REPO/website/assets/bureaublad-donker.webp" "Afbeeldingen/Bureaublad donker.webp"
-cp "$REPO/website/assets/winkel-licht.webp" "Afbeeldingen/BugOS Winkel.webp"
-cp "$REPO/website/assets/welkom-licht.webp" "Afbeeldingen/BugOS Welkom.webp"
-cp "$REPO/tools/fotos/demo/Brief gemeente.pdf" Downloads/
+cp "$REPO"/tools/fotos/demo/* Documents/
+mkdir -p "Pictures/Holiday by the sea" "Pictures/Family"
+cp /usr/share/wallpapers/bugos/contents/images/3840x2160.jpg "Pictures/Stip background.jpg"
+cp /usr/share/wallpapers/bugos/contents/images_dark/3840x2160.jpg "Pictures/Stip background dark.jpg"
+cp "$REPO/website/assets/bureaublad-licht.webp" "Pictures/Desktop light.webp"
+cp "$REPO/website/assets/bureaublad-donker.webp" "Pictures/Desktop dark.webp"
+cp "$REPO/website/assets/winkel-licht.webp" "Pictures/BugOS Store.webp"
+cp "$REPO/website/assets/welkom-licht.webp" "Pictures/BugOS Welcome.webp"
+cp "$REPO/tools/fotos/demo/Letter from the council.pdf" Downloads/
 : > Downloads/SpotifySetup.exe
 
 # Pas geopende bestanden, zodat het startmenu bij "Recent geopend" iets laat zien
@@ -277,11 +277,11 @@ cp "$REPO/tools/fotos/demo/Brief gemeente.pdf" Downloads/
 cat > .local/share/recently-used.xbel <<RECENT
 <?xml version="1.0" encoding="UTF-8"?>
 <xbel version="1.0" xmlns:bookmark="http://www.freedesktop.org/standards/desktop-bookmarks" xmlns:mime="http://www.freedesktop.org/standards/shared-mime-info">
-  <bookmark href="file://$THUIS/Documenten/Recepten%20Bugie.odt" added="2026-10-30T09:12:00Z" modified="2026-11-02T15:40:00Z" visited="2026-11-02T15:40:00Z"/>
-  <bookmark href="file://$THUIS/Downloads/Brief%20gemeente.pdf" added="2026-10-31T10:00:00Z" modified="2026-11-02T11:05:00Z" visited="2026-11-02T11:05:00Z"/>
-  <bookmark href="file://$THUIS/Documenten/Boodschappenlijst.odt" added="2026-10-29T08:00:00Z" modified="2026-11-01T17:30:00Z" visited="2026-11-01T17:30:00Z"/>
-  <bookmark href="file://$THUIS/Afbeeldingen/Achtergrond%20Stip.jpg" added="2026-10-28T14:00:00Z" modified="2026-10-31T19:20:00Z" visited="2026-10-31T19:20:00Z"/>
-  <bookmark href="file://$THUIS/Documenten/Verjaardagen.ods" added="2026-10-20T12:00:00Z" modified="2026-10-30T12:00:00Z" visited="2026-10-30T12:00:00Z"/>
+  <bookmark href="file://$THUIS/Documents/Bugie's%20recipes.odt" added="2026-10-30T09:12:00Z" modified="2026-11-02T15:40:00Z" visited="2026-11-02T15:40:00Z"/>
+  <bookmark href="file://$THUIS/Downloads/Letter%20from%20the%20council.pdf" added="2026-10-31T10:00:00Z" modified="2026-11-02T11:05:00Z" visited="2026-11-02T11:05:00Z"/>
+  <bookmark href="file://$THUIS/Documents/Shopping%20list.odt" added="2026-10-29T08:00:00Z" modified="2026-11-01T17:30:00Z" visited="2026-11-01T17:30:00Z"/>
+  <bookmark href="file://$THUIS/Pictures/Stip%20background.jpg" added="2026-10-28T14:00:00Z" modified="2026-10-31T19:20:00Z" visited="2026-10-31T19:20:00Z"/>
+  <bookmark href="file://$THUIS/Documents/Birthdays.ods" added="2026-10-20T12:00:00Z" modified="2026-10-30T12:00:00Z" visited="2026-10-30T12:00:00Z"/>
 </xbel>
 RECENT
 
@@ -334,4 +334,4 @@ fi
 stap "Klaargezet (thema $THEMA, scene $SCENE); nu als bugie het bureaublad starten"
 # QT_FORCE_STDERR_LOGGING=1: KDE-programma's schrijven hun meldingen anders naar journald, en dat is er hier niet.
 exec runuser -u bugie -- env HOME="$THUIS" USER=bugie LOGNAME=bugie XDG_RUNTIME_DIR=/tmp/run-bugie DISPLAY="${DISPLAY:-:99}" \
-    LANG=nl_NL.UTF-8 QT_FORCE_STDERR_LOGGING=1 ZELF="$ZELF" "${BUGOS_ENV[@]}" dbus-run-session -- bash "$ZELF" --als-bugie "$SCENE"
+    LANG=en_US.UTF-8 QT_FORCE_STDERR_LOGGING=1 ZELF="$ZELF" "${BUGOS_ENV[@]}" dbus-run-session -- bash "$ZELF" --als-bugie "$SCENE"
