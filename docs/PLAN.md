@@ -165,12 +165,12 @@ The most important idea: **BugOS can't break.**
 - [ ] Signing through SignPath, volunteers and a domain name (see above).
 
 ### Next: testing on real computers
-- [ ] **Switched to English, not tested yet:** the docs and the default language are now English, the word "oma" has been replaced by "Bugie", and BugOS now builds on the new base `kinoite-main`. None of this has been tested in a real build yet. Next step: a CI build plus an ISO test in a VM.
+- [ ] **Switched to English, new base `kinoite-main`:** the docs and the default language are now English, the word "oma" has been replaced by "Bugie". The image builds (locally with Podman, 2026-11-04: `ID=bugos`, no Aurora left, Discover Flatpak-only, update timers on, `bootc container lint` passes). Not tested yet: the stick (ISO) in a VM, and the English screenshots (run `fotos.yml` again).
 - [ ] **New stick not tested yet** (branch `claude/fix-iso-alleen-bugos`). BugOS now goes on the stick as an OCI folder; unpacking it into the container storage did not work (whiteouts: "open /etc/.wh.bazaar: invalid argument"). Next step: run `tools/iso-lokaal.sh` (or iso.yml), boot the ISO in a VM, install without a network and check the installed system (no Aurora/Fedora; `stat /usr/libexec/utempter/utempter` must be `root:utmp`).
 - [ ] Try the "try first" stick on a real PC
 - [x] Start menu and quick menu by default (tested outside Plasma: tools/qml-test.py, tools/test_start_data.py, tools/test_uitzetscherm.py)
 - [ ] Check the start menu, quick menu and shutdown screen on a real PC (Windows key, picking Wi-Fi, shutting down) — see TESTEN.md
-- [ ] Desktop photos from the real screen: the photo round (`tools/fotos/bureaublad.sh`) starts KWin and plasmashell in the container, but the build computer has no graphics card; the last step (KWin's software renderer) is not confirmed yet. Until then: photos from the photo studio.
+- [ ] Desktop photos from the real screen: the photo round (`tools/fotos/bureaublad.sh`) starts KWin and plasmashell in the container, but the build computer has no graphics card; even with KWin's software renderer (KWIN_DRM_DEVICES), KWin 6.8 found no 'render device'. Next step: test on a real PC or a VM with a screen. Until then: photos from the photo studio.
 - [ ] Try BugOS Overstap on a real Windows PC (steps 3 and 4 on a spare PC first)
 
 ## Things to watch out for
