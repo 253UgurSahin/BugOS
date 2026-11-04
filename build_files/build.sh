@@ -12,6 +12,11 @@ BUGOS_VERSION="${BUGOS_VERSION:-dev}"
 
 # 1. Onze eigen bestanden (scripts, stijl, logo, instellingen) neerleggen.
 cp -avf /ctx/system_files/. /
+# Vaste rechten, wat de bouwmap ook zegt (vanaf Windows is alles 0777, en dan
+# klaagt systemd over "world-writable" diensten): bestanden 0644, mappen 0755,
+# alleen de programma's in /usr/bin uitvoerbaar.
+(cd /ctx/system_files && find . -type f -print0) | while IFS= read -r -d '' f; do chmod 0644 "/${f#./}"; done
+(cd /ctx/system_files && find . -mindepth 1 -type d -print0) | while IFS= read -r -d '' d; do chmod 0755 "/${d#./}"; done
 chmod 0755 /usr/bin/bugos-*
 
 # 2. Extra programma's installeren.
