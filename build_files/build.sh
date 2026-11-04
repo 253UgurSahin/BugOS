@@ -251,6 +251,25 @@ kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key ColorScheme BugOS
 # Dubbelklik om te openen, net als in Windows.
 kwriteconfig6 --file /etc/xdg/kdeglobals --group KDE --key SingleClick false
 
+# De vensterbalk (titelbalk) in BugOS-stijl. We gebruiken de Breeze-rand van
+# KDE (goede schaduwen en ronde hoeken, volgt vanzelf licht en donker) met:
+#  - de kleur van de bovenkant van het venster (BugOS-kleurenschema), zonder
+#    streep eronder: balk en venster lopen in elkaar over;
+#  - grote ronde knoppen, en een rood rondje bij "sluiten";
+#  - de titel links, zoals in de BugOS-apps; geen extra knoppen links.
+kwriteconfig6 --file /etc/xdg/kwinrc --group org.kde.kdecoration2 --key library org.kde.breeze
+kwriteconfig6 --file /etc/xdg/kwinrc --group org.kde.kdecoration2 --key theme Breeze
+kwriteconfig6 --file /etc/xdg/kwinrc --group org.kde.kdecoration2 --key ButtonsOnLeft ""
+kwriteconfig6 --file /etc/xdg/kwinrc --group org.kde.kdecoration2 --key ButtonsOnRight IAX
+kwriteconfig6 --file /etc/xdg/kwinrc --group org.kde.kdecoration2 --key BorderSize None
+kwriteconfig6 --file /etc/xdg/kwinrc --group org.kde.kdecoration2 --key BorderSizeAuto false
+kwriteconfig6 --file /etc/xdg/breezerc --group Common --key OutlineCloseButton true
+kwriteconfig6 --file /etc/xdg/breezerc --group Common --key ShadowSize ShadowLarge
+kwriteconfig6 --file /etc/xdg/breezerc --group Windeco --key ButtonSize ButtonLarge
+kwriteconfig6 --file /etc/xdg/breezerc --group Windeco --key DrawTitleBarSeparator false
+kwriteconfig6 --file /etc/xdg/breezerc --group Windeco --key DrawBackgroundGradient false
+kwriteconfig6 --file /etc/xdg/breezerc --group Windeco --key TitleAlignment AlignLeft
+
 # Lettertypes: Inter voor alles, JetBrains Mono voor code (meegeleverd in /usr/share/fonts/bugos).
 fc-cache -f /usr/share/fonts/bugos || true
 LETTER="Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"

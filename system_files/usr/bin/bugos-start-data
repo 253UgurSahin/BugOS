@@ -283,11 +283,42 @@ def volume_status() -> tuple[int | None, bool]:
     return procent, "MUTED" in vol
 
 
+def backlight() -> Path | None:
+    """De schermverlichting van een laptop (een losse monitor heeft dit meestal niet)."""
+    basis = Path(os.environ.get("BUGOS_SYS", "/sys")) / "class" / "backlight"
+    for pad in sorted(basis.glob("*")):
+        if (pad / "max_brightness").exists():
+            return pad
+    return None
+
+
+def helderheid() -> int | None:
+    pad = backlight()
+    if pad is None:
+        return None
+    try:
+        return round(int((pad / "brightness").read_text()) / max(int((pad / "max_brightness").read_text()), 1) * 100)
+    except (OSError, ValueError):
+        return None
+
+
+def batterij() -> tuple[int | None, bool]:
+    """(procent, laadt) van de eerste batterij; (None, False) op een computer zonder batterij."""
+    basis = Path(os.environ.get("BUGOS_SYS", "/sys")) / "class" / "power_supply"
+    for pad in sorted(basis.glob("BAT*")):
+        try:
+            return int((pad / "capacity").read_text().strip()), (pad / "status").read_text().strip() == "Charging"
+        except (OSError, ValueError):
+            continue
+    return None, False
+
+
 def snel_status() -> dict:
     if os.environ.get("BUGOS_SNEL_VOORBEELD"):  # voor foto's en tests: niets aan de computer vragen
         return {"wifi": True, "bluetooth": False, "spel": False,
                 "donker": kde_lees("kdeglobals", "General", "ColorScheme") == "BugOSDonker",
-                "volume": 60, "stil": False, "niet_storen": False}
+                "volume": 60, "stil": False, "niet_storen": False,
+                "helderheid": 70, "batterij": 76, "laadt": False}
     s: dict = {}
     s["wifi"] = draai("nmcli", "radio", "wifi").strip() == "enabled" if shutil.which("nmcli") else None
     bt = draai("bluetoothctl", "show") if shutil.which("bluetoothctl") else ""
@@ -296,6 +327,8 @@ def snel_status() -> dict:
     s["donker"] = kde_lees("kdeglobals", "General", "ColorScheme") == "BugOSDonker"
     s["volume"], s["stil"] = volume_status()
     s["niet_storen"] = niet_storen_tot_in_toekomst(kde_lees("plasmanotifyrc", "DoNotDisturb", "Until"))
+    s["helderheid"] = helderheid()
+    s["batterij"], s["laadt"] = batterij()
     return s
 
 
@@ -311,14 +344,7 @@ def tray_status() -> dict:
                 soorten.add(delen[0])
         s["internet"] = "kabel" if "ethernet" in soorten else "wifi" if "wifi" in soorten else "geen"
     s["volume"], s["stil"] = volume_status()
-    basis = Path(os.environ.get("BUGOS_SYS", "/sys")) / "class" / "power_supply"
-    for pad in sorted(basis.glob("BAT*")):
-        try:
-            s["batterij"] = int((pad / "capacity").read_text().strip())
-            s["laadt"] = (pad / "status").read_text().strip() == "Charging"
-            break
-        except (OSError, ValueError):
-            continue
+    s["batterij"], s["laadt"] = batterij()
     return s
 
 
@@ -342,6 +368,18 @@ def snel_zet(wat: str, waarde: str) -> None:
             return
         # Alleen het volume; 'stil' blijft zoals het was (dat is een eigen knop).
         draai("wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", f"{procent / 100:.2f}")
+    elif wat == "helderheid":
+        pad = backlight()
+        try:
+            procent = max(5, min(100, int(waarde)))
+            maximum = int((pad / "max_brightness").read_text()) if pad else 0
+        except (ValueError, OSError):
+            return
+        if pad and maximum:
+            # Via logind: mag zonder wachtwoord voor wie achter de computer zit (net als Instellingen).
+            draai("gdbus", "call", "--system", "--dest", "org.freedesktop.login1", "--object-path",
+                  "/org/freedesktop/login1/session/auto", "--method", "org.freedesktop.login1.Session.SetBrightness",
+                  "backlight", pad.name, str(max(1, round(maximum * procent / 100))))
     elif wat == "stil":
         draai("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "1" if aan else "0")
     elif wat == "niet_storen":

@@ -97,15 +97,33 @@ Rectangle {
             SnelKnop { wat: "stil"; icoon: "audio-volume-muted"; tekst: snel.tr("Geluid uit", "Mute") }
         }
 
-        // Volume
+        // Volume en (op een laptop) de helderheid van het scherm
+        SchuifRij {
+            wat: "volume"
+            icoon: snel.status.stil ? "audio-volume-muted" : "audio-volume-high"
+            naam: snel.tr("Volume", "Volume")
+            naar: "geluid"
+            meerNaam: snel.tr("Meer over geluid", "More about sound")
+        }
+        SchuifRij {
+            wat: "helderheid"
+            icoon: "brightness-high"
+            naam: snel.tr("Helderheid", "Brightness")
+            naar: "scherm"
+            meerNaam: snel.tr("Meer over het scherm", "More about the display")
+            minimum: 5
+        }
+
+        // Batterij (alleen op een laptop)
         Rectangle {
+            objectName: "batterij"
             Layout.fillWidth: true
-            implicitHeight: 64
+            implicitHeight: 52
             radius: 18
             color: snel.vlak
             border.width: snel.donker ? 0 : 1
             border.color: snel.lijnkleur
-            visible: snel.status.volume !== null && snel.status.volume !== undefined
+            visible: typeof snel.status.batterij === "number"
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 16
@@ -115,55 +133,97 @@ Rectangle {
                     Layout.preferredWidth: 22
                     Layout.preferredHeight: 22
                     sourceComponent: snel.icoonTekenaar
-                    onLoaded: item.naam = Qt.binding(() => snel.status.stil ? "audio-volume-muted" : "audio-volume-high")
-                }
-                Slider {
-                    id: volume
-                    Layout.fillWidth: true
-                    from: 0
-                    to: 100
-                    stepSize: 5
-                    Accessible.name: snel.tr("Volume", "Volume")
-                    onMoved: verzend.restart()
-                    // Nieuwe status pas overnemen als je niet aan het schuiven bent
-                    Binding { target: volume; property: "value"; value: snel.status.volume || 0; when: !volume.pressed }
-                    Timer { id: verzend; interval: 150; onTriggered: snel.zet("volume", String(Math.round(volume.value))) }
-                    background: Rectangle {
-                        x: volume.leftPadding
-                        y: volume.topPadding + volume.availableHeight / 2 - height / 2
-                        width: volume.availableWidth
-                        height: 8
-                        radius: 4
-                        color: Qt.rgba(snel.tekst.r, snel.tekst.g, snel.tekst.b, 0.12)
-                        Rectangle {
-                            width: volume.visualPosition * parent.width
-                            height: parent.height
-                            radius: 4
-                            gradient: Gradient {
-                                orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: "#FF5C50" }
-                                GradientStop { position: 1.0; color: snel.rood }
-                            }
-                        }
-                    }
-                    handle: Rectangle {
-                        x: volume.leftPadding + volume.visualPosition * (volume.availableWidth - width)
-                        y: volume.topPadding + volume.availableHeight / 2 - height / 2
-                        width: 22; height: 22; radius: 11
-                        color: "#FFFFFF"
-                        border.width: 1
-                        border.color: Qt.rgba(0, 0, 0, 0.12)
-                    }
+                    onLoaded: item.naam = Qt.binding(() => snel.status.laadt ? "battery-charging" : "battery-good")
                 }
                 Label {
-                    text: Math.round(volume.value) + "%"
-                    color: snel.tekst2
+                    Layout.fillWidth: true
+                    text: snel.status.laadt
+                          ? snel.tr("Batterij " + snel.status.batterij + "%, wordt opgeladen", "Battery " + snel.status.batterij + "%, charging")
+                          : snel.tr("Batterij " + snel.status.batterij + "%", "Battery " + snel.status.batterij + "%")
+                    color: snel.tekst
                     font.pixelSize: 13
-                    Layout.preferredWidth: 40
-                    horizontalAlignment: Text.AlignRight
+                    font.weight: Font.Medium
+                    elide: Text.ElideRight
                 }
-                Pijltje { naar: "geluid"; Accessible.name: snel.tr("Meer over geluid", "More about sound") }
+                Pijltje { naar: "energie"; Accessible.name: snel.tr("Meer over energie", "More about power") }
             }
+        }
+    }
+
+    // Een rij met een schuif (volume, helderheid). Verborgen als de computer het niet heeft.
+    component SchuifRij: Rectangle {
+        id: rij
+        property string wat
+        property string icoon
+        property string naam
+        property string naar
+        property string meerNaam
+        property int minimum: 0
+        Layout.fillWidth: true
+        implicitHeight: 64
+        radius: 18
+        color: snel.vlak
+        border.width: snel.donker ? 0 : 1
+        border.color: snel.lijnkleur
+        objectName: wat
+        visible: typeof snel.status[wat] === "number"
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 16
+            anchors.rightMargin: 16
+            spacing: 12
+            Loader {
+                Layout.preferredWidth: 22
+                Layout.preferredHeight: 22
+                sourceComponent: snel.icoonTekenaar
+                onLoaded: item.naam = Qt.binding(() => rij.icoon)
+            }
+            Slider {
+                id: schuif
+                Layout.fillWidth: true
+                from: rij.minimum
+                to: 100
+                stepSize: 5
+                Accessible.name: rij.naam
+                onMoved: verzend.restart()
+                // Nieuwe status pas overnemen als je niet aan het schuiven bent
+                Binding { target: schuif; property: "value"; value: snel.status[rij.wat] || 0; when: !schuif.pressed }
+                Timer { id: verzend; interval: 150; onTriggered: snel.zet(rij.wat, String(Math.round(schuif.value))) }
+                background: Rectangle {
+                    x: schuif.leftPadding
+                    y: schuif.topPadding + schuif.availableHeight / 2 - height / 2
+                    width: schuif.availableWidth
+                    height: 8
+                    radius: 4
+                    color: Qt.rgba(snel.tekst.r, snel.tekst.g, snel.tekst.b, 0.12)
+                    Rectangle {
+                        width: schuif.visualPosition * parent.width
+                        height: parent.height
+                        radius: 4
+                        gradient: Gradient {
+                            orientation: Gradient.Horizontal
+                            GradientStop { position: 0.0; color: "#FF5C50" }
+                            GradientStop { position: 1.0; color: snel.rood }
+                        }
+                    }
+                }
+                handle: Rectangle {
+                    x: schuif.leftPadding + schuif.visualPosition * (schuif.availableWidth - width)
+                    y: schuif.topPadding + schuif.availableHeight / 2 - height / 2
+                    width: 22; height: 22; radius: 11
+                    color: "#FFFFFF"
+                    border.width: 1
+                    border.color: Qt.rgba(0, 0, 0, 0.12)
+                }
+            }
+            Label {
+                text: Math.round(schuif.value) + "%"
+                color: snel.tekst2
+                font.pixelSize: 13
+                Layout.preferredWidth: 40
+                horizontalAlignment: Text.AlignRight
+            }
+            Pijltje { naar: rij.naar; Accessible.name: rij.meerNaam }
         }
     }
 

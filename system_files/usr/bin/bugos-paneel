@@ -4,6 +4,7 @@
 #   bugos-paneel startmenu aan|uit|status
 #   bugos-paneel snelmenu  aan|uit|status
 #   bugos-paneel standaard          (één keer, na het inloggen: allebei aan)
+#   bugos-paneel systeemvak rustig|alles   (KDE-pictogrammen naast het snelmenu verbergen of terugzetten)
 #
 # Jip-en-Janneke: de startknop linksonder (het lieveheersbeestje) is het
 # BugOS-menu. "uit" zet het gewone KDE-menu terug, precies zoals BugOS het
@@ -102,6 +103,36 @@ function weg(soort) {
     }
     print(n);
 }
+// Pictogrammen in het systeemvak die het snelmenu al doet (geluid, wifi, bluetooth,
+// helderheid/batterij) of die je bijna nooit nodig hebt. Ze blijven werken (de
+// volumetoetsen, meldingen bij een lege batterij), maar staan niet meer in beeld.
+// Wie ze toch wil: het pijltje in het systeemvak, of "bugos-paneel systeemvak alles".
+var RUSTIG = ["org.kde.plasma.volume", "org.kde.plasma.networkmanagement", "org.kde.plasma.bluetooth",
+    "org.kde.plasma.battery", "org.kde.plasma.brightness", "org.kde.kscreen", "org.kde.plasma.clipboard",
+    "org.kde.plasma.keyboardlayout", "org.kde.plasma.keyboardindicator", "org.kde.plasma.manage-inputmethod",
+    "org.kde.plasma.printmanager", "org.kde.kdeconnect", "org.kde.plasma.weather"];
+function systeemvak(rustig) {
+    var ps = panels(), n = 0;
+    for (var i = 0; i < ps.length; i++) {
+        var ws = ps[i].widgets();
+        for (var j = 0; j < ws.length; j++) {
+            if (ws[j].type != "org.kde.plasma.systemtray") continue;
+            var vak = desktopById(ws[j].readConfig("SystrayContainmentId"));
+            if (!vak) continue;
+            vak.currentConfigGroup = ["General"];
+            var oud = vak.readConfig("hiddenItems", []);
+            if (typeof oud == "string") oud = oud.split(",");
+            var nieuw = [];
+            for (var k = 0; k < oud.length; k++)
+                if (oud[k] !== "" && RUSTIG.indexOf(oud[k]) < 0) nieuw.push(oud[k]);
+            if (rustig) nieuw = nieuw.concat(RUSTIG);
+            vak.writeConfig("hiddenItems", nieuw);
+            vak.reloadConfig();
+            n++;
+        }
+    }
+    print(n);
+}
 function heeft(soort) {
     var ps = panels(), n = 0;
     for (var i = 0; i < ps.length; i++) {
@@ -135,11 +166,20 @@ startmenu:status)
     ;;
 snelmenu:aan)
     bureaublad_er || niet_bereikbaar
-    plasma_script "$JS vervang(\"\", \"org.bugos.snelmenu\", \"org.kde.plasma.systemtray\");" >/dev/null || niet_bereikbaar
+    plasma_script "$JS vervang(\"\", \"org.bugos.snelmenu\", \"org.kde.plasma.systemtray\"); systeemvak(true);" >/dev/null || niet_bereikbaar
     ;;
 snelmenu:uit)
     bureaublad_er || niet_bereikbaar
-    plasma_script "$JS weg(\"org.bugos.snelmenu\");" >/dev/null || niet_bereikbaar
+    # Zonder snelmenu heb je de KDE-pictogrammen voor geluid, wifi enz. weer nodig.
+    plasma_script "$JS weg(\"org.bugos.snelmenu\"); systeemvak(false);" >/dev/null || niet_bereikbaar
+    ;;
+systeemvak:rustig)
+    bureaublad_er || niet_bereikbaar
+    plasma_script "$JS systeemvak(true);" >/dev/null || niet_bereikbaar
+    ;;
+systeemvak:alles)
+    bureaublad_er || niet_bereikbaar
+    plasma_script "$JS systeemvak(false);" >/dev/null || niet_bereikbaar
     ;;
 snelmenu:status)
     status_van org.bugos.snelmenu
@@ -147,21 +187,32 @@ snelmenu:status)
 standaard:*)
     # Eén keer per gebruiker (bij het inloggen): zet het BugOS-startmenu en het snelmenu
     # op de taakbalk. Daarna beslist de gebruiker zelf in Instellingen; dit draait niet opnieuw.
+    # Stap 2 (later bijgekomen, dus een eigen merkteken): het systeemvak rustig maken,
+    # ook voor wie stap 1 al had. Alleen als het snelmenu er staat.
     MARKER="$BUGOS_CONFIG/paneel-standaard-1"
-    [ -f "$MARKER" ] && exit 0
+    MARKER2="$BUGOS_CONFIG/paneel-systeemvak-1"
+    [ -f "$MARKER" ] && [ -f "$MARKER2" ] && exit 0
     for _ in $(seq 1 30); do
         bureaublad_er && break
         sleep 2
     done
     bureaublad_er || exit 0  # volgende keer opnieuw proberen
-    if [ "$(status_van org.kde.plasma.kickoff)" = aan ]; then
-        plasma_script "$JS vervang(\"org.kde.plasma.kickoff\", \"org.bugos.startmenu\", \"\");" >/dev/null
+    if [ ! -f "$MARKER" ]; then
+        if [ "$(status_van org.kde.plasma.kickoff)" = aan ]; then
+            plasma_script "$JS vervang(\"org.kde.plasma.kickoff\", \"org.bugos.startmenu\", \"\");" >/dev/null
+        fi
+        plasma_script "$JS vervang(\"\", \"org.bugos.snelmenu\", \"org.kde.plasma.systemtray\");" >/dev/null
+        mkdir -p "$BUGOS_CONFIG" && touch "$MARKER"
     fi
-    plasma_script "$JS vervang(\"\", \"org.bugos.snelmenu\", \"org.kde.plasma.systemtray\");" >/dev/null
-    mkdir -p "$BUGOS_CONFIG" && touch "$MARKER"
+    if [ ! -f "$MARKER2" ]; then
+        if [ "$(status_van org.bugos.snelmenu)" = aan ]; then
+            plasma_script "$JS systeemvak(true);" >/dev/null
+        fi
+        mkdir -p "$BUGOS_CONFIG" && touch "$MARKER2"
+    fi
     ;;
 *)
-    echo "Gebruik: bugos-paneel startmenu|snelmenu aan|uit|status, of bugos-paneel standaard" >&2
+    echo "Gebruik: bugos-paneel startmenu|snelmenu aan|uit|status, bugos-paneel systeemvak rustig|alles, of bugos-paneel standaard" >&2
     exit 2
     ;;
 esac

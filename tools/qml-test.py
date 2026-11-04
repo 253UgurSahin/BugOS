@@ -84,6 +84,13 @@ def main() -> int:
         snel.rootObject().setProperty("status", STATUS)
         app.processEvents()
         klopt(kind(snel, "evenKijken").property("visible") is False, "snelmenu: met status verdwijnt 'Even kijken…'")
+        klopt(kind(snel, "volume").property("visible") is True and kind(snel, "helderheid").property("visible") is False
+              and kind(snel, "batterij").property("visible") is False,
+              "snelmenu: pc zonder schermverlichting en batterij: alleen de volumeschuif")
+        snel.rootObject().setProperty("status", dict(STATUS, helderheid=70, batterij=76, laadt=True))
+        app.processEvents()
+        klopt(kind(snel, "helderheid").property("visible") is True and kind(snel, "batterij").property("visible") is True,
+              "snelmenu: laptop: ook helderheid en batterij")
         views.append((SNELMENU, snel))
 
     def klaar():
