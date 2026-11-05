@@ -17,6 +17,8 @@ if [ -z "$BESTAND" ] || [ ! -f "$BESTAND" ]; then
 fi
 
 NAAM="$(basename "$BESTAND")"
+# De meldingen lezen \n als nieuwe regel (printf %b): een \ in de bestandsnaam moet dus dubbel.
+TOON="${NAAM//\\/\\\\}"
 ALTERNATIEVEN=/usr/share/bugos/alternatieven.txt
 
 # Is er een beter, echt Linux-alternatief? Dan dat eerst aanbieden.
@@ -55,7 +57,13 @@ if [ ! -d "$WINEPREFIX" ]; then
     melding "$(t "Even geduld..." "Please wait...")" \
         "$(t "De eerste keer zet BugOS alles klaar voor Windows-programma's. Dit duurt een minuutje." \
             "The first time, BugOS prepares everything for Windows programs. This takes a minute.")"
-    WINEDEBUG=-all wineboot --init >/dev/null 2>&1
+    if ! WINEDEBUG=-all wineboot --init >/dev/null 2>&1; then
+        # Een half klaargezette Windows-map werkt later ook niet: weg ermee, dan de volgende keer opnieuw.
+        rm -rf -- "$WINEPREFIX"
+        fout "$(t "Klaarzetten voor Windows-programma's lukte niet. Is je computer vol? Probeer het straks nog eens." \
+            "Preparing for Windows programs did not work. Is your computer full? Try again later.")"
+        exit 1
+    fi
 fi
 
 # BugOS-kleuren in Windows-programma's (licht of donker, zoals de rest). Alleen als
@@ -82,7 +90,7 @@ DUUR=$(($(date +%s) - START))
 # Stopte het programma meteen met een fout? Dan vriendelijk uitleggen.
 if [ "$CODE" -ne 0 ] && [ "$DUUR" -lt 10 ]; then
     fout "$(t \
-        "Helaas, \"$NAAM\" werkt niet op BugOS.\n\nTips:\n• Kijk in de BugOS Winkel of er een versie voor BugOS is.\n• Zoek op internet naar \"$NAAM alternatief Linux\".\n\nJe computer is niet kapot, er is niks veranderd." \
-        "Sorry, \"$NAAM\" does not work on BugOS.\n\nTips:\n• Check the BugOS Store for a BugOS version.\n• Search the internet for \"$NAAM alternative Linux\".\n\nYour computer is fine, nothing has changed.")"
+        "Helaas, \"$TOON\" werkt niet op BugOS.\n\nTips:\n• Kijk in de BugOS Winkel of er een versie voor BugOS is.\n• Zoek op internet naar \"$TOON alternatief Linux\".\n\nJe computer is niet kapot, er is niks veranderd." \
+        "Sorry, \"$TOON\" does not work on BugOS.\n\nTips:\n• Check the BugOS Store for a BugOS version.\n• Search the internet for \"$TOON alternative Linux\".\n\nYour computer is fine, nothing has changed.")"
     exit 1
 fi
