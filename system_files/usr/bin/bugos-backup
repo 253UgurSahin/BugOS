@@ -86,15 +86,27 @@ def rsync_terug(doel: Path, thuis: Path) -> list[str]:
             f"{doel}/", f"{thuis}/"]
 
 
-def ruimte_genoeg(schijf: Path, mappen: list[Path]) -> tuple[bool, int, int]:
+def ruimte_genoeg(schijf: Path, mappen: list[Path], doel: Path | None = None) -> tuple[bool, int, int]:
+    """Past wat er nog gekopieerd moet worden? Wat al (even groot) in de back-up staat, telt niet mee:
+    rsync kopieert alleen wat nieuw of veranderd is."""
     nodig = 0
     for m in mappen:
         for wortel, _, bestanden in os.walk(m):
             for b in bestanden:
+                bron = Path(wortel) / b
                 try:
-                    nodig += (Path(wortel) / b).stat().st_size
+                    grootte = bron.stat().st_size
                 except OSError:
-                    pass
+                    continue
+                if doel is not None:
+                    try:
+                        oud = (doel / m.name / bron.relative_to(m)).stat().st_size
+                    except (OSError, ValueError):
+                        oud = None
+                    if oud == grootte:
+                        continue  # staat er al
+                # Nieuw of veranderd: rsync schrijft eerst een volledige kopie (en gooit dan pas de oude weg).
+                nodig += grootte
     vrij = shutil.disk_usage(str(schijf)).free
     return nodig < vrij, nodig, vrij
 
@@ -281,7 +293,7 @@ def venster() -> int:
             if schijf is None:
                 return
             mappen = bron_mappen()
-            past, nodig, vrij = ruimte_genoeg(schijf, mappen)
+            past, nodig, vrij = ruimte_genoeg(schijf, mappen, backup_doel(schijf))
             if not past:
                 self.melding.zet(t(f"Te weinig ruimte op de schijf: nodig {nodig / 1024**3:.1f} GB, vrij {vrij / 1024**3:.1f} GB.",
                                    f"Not enough space on the drive: need {nodig / 1024**3:.1f} GB, free {vrij / 1024**3:.1f} GB."),
