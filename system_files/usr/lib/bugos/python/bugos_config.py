@@ -280,8 +280,8 @@ def geluid() -> tuple[int, bool, list[Uitgang]]:
     """(volume, stil, uitgangen)."""
     if VOORBEELD:
         return _VB["volume"], _VB["stil"], [
-            Uitgang("speakers", "Ingebouwde luidsprekers", _VB["uitgang"] == "speakers"),
-            Uitgang("hdmi", "Televisie (HDMI)", _VB["uitgang"] == "hdmi"),
+            Uitgang("speakers", "Built-in speakers", _VB["uitgang"] == "speakers"),
+            Uitgang("hdmi", "TV (HDMI)", _VB["uitgang"] == "hdmi"),
             Uitgang("headset", "Bugie's headphones", _VB["uitgang"] == "headset")]
     standaard = draai("pactl", "get-default-sink", timeout=5)[1].strip()
     uit = draai("pactl", "-f", "json", "list", "sinks", timeout=5)[1]

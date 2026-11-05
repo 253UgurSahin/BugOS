@@ -16,8 +16,8 @@ from pathlib import Path
 
 HIER = Path(__file__).resolve().parent
 ROOT = HIER.parent.parent
-sys.path.insert(0, str(ROOT / "tools" / "merk"))
-from merk import CX, CY, HR, HX, HY, R, RAND, STIPPEN, merkteken  # noqa: E402
+sys.path.insert(0, str(ROOT / "tools" / "brand"))
+from mark import CX, CY, HR, HX, HY, R, RAND, STIPPEN, merkteken  # noqa: E402
 
 
 def merk_variabel(uid: str) -> str:

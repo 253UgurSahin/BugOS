@@ -67,6 +67,8 @@ for groep in schema.sections():
         eigen.add_section(groep)
     for sleutel, waarde in schema.items(groep):
         eigen.set(groep, sleutel, waarde)
+if not eigen.has_section("General"):
+    eigen.add_section("General")
 eigen.set("General", "ColorScheme", "BugOSDark")
 with open(doel, "w", encoding="utf-8") as f:
     eigen.write(f, space_around_delimiters=False)
