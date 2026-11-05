@@ -1,0 +1,45 @@
+#!/usr/bin/bash
+# bugos-ondertekend - zet deze computer één keer over op ondertekende updates.
+#
+# Draait als systeemdienst (bugos-ondertekend.service), alleen als BugOS een
+# openbare sleutel heeft (/etc/pki/containers/bugos.pub). Haalt deze computer
+# zijn updates nog op zonder handtekening te controleren ("ostree-unverified-
+# registry"), dan zetten we hem om naar dezelfde plek mét controle
+# ("ostree-image-signed"). Dat wordt actief bij de volgende keer opstarten,
+# net als een gewone update. Lukt het niet (geen internet, nog geen
+# handtekening), dan blijft alles zoals het was en proberen we het later opnieuw.
+
+set -u
+KLAAR=/var/lib/bugos/ondertekend
+SLEUTEL=/etc/pki/containers/bugos.pub
+
+[ -s "$SLEUTEL" ] || exit 0
+[ -f "$KLAAR" ] && exit 0
+mkdir -p /var/lib/bugos
+
+STATUS="$(rpm-ostree status --json 2>/dev/null)" || exit 1
+REF="$(echo "$STATUS" | jq -r '.deployments[] | select(.booted) | ."container-image-reference" // empty')"
+
+case "$REF" in
+ostree-image-signed:*)
+    touch "$KLAAR" # al goed
+    exit 0
+    ;;
+ostree-unverified-registry:ghcr.io/253ugursahin/* | ostree-unverified-image:docker://ghcr.io/253ugursahin/*)
+    PLEK="${REF#ostree-unverified-registry:}"
+    PLEK="${PLEK#ostree-unverified-image:docker://}"
+    ;;
+*)
+    # Een ander beeld (iemand heeft zelf iets anders gekozen, of een test): niets aan doen.
+    touch "$KLAAR"
+    exit 0
+    ;;
+esac
+
+if rpm-ostree rebase "ostree-image-signed:docker://$PLEK"; then
+    touch "$KLAAR"
+    echo "BugOS: updates worden voortaan op een handtekening gecontroleerd (actief na opnieuw opstarten)."
+else
+    echo "BugOS: overstappen op ondertekende updates lukte nog niet; de volgende keer opnieuw." >&2
+    exit 1
+fi
