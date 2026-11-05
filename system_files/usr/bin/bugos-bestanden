@@ -1735,8 +1735,11 @@ class Bestanden(Venster):
                   vrij_spel and not x.op_slot and x.fs in MAX_NAAM)
             actie("vink", t("Controleren en repareren", "Check and repair"), lambda: self.repareer_schijf(x),
                   vrij_spel and not x.op_slot)
-            actie("prullenbak", t("Leegmaken (alles wissen)…", "Erase (delete everything)…"),
-                  lambda: self.leegmaak_schijf(x), vrij_spel, "fout")
+            # Alleen voor schijven die je eruit kunt halen: nooit per ongeluk de Windows-schijf of een
+            # andere interne schijf wissen (daarvoor is Schijfbeheer, voor gevorderden).
+            if x.los:
+                actie("prullenbak", t("Leegmaken (alles wissen)…", "Erase (delete everything)…"),
+                      lambda: self.leegmaak_schijf(x), vrij_spel, "fout")
         if x.los:
             m.addSeparator()
             actie("uitwerpen", t("Veilig verwijderen", "Safely remove"), lambda: self.uitwerpen(x.station), vrij_spel)
@@ -1793,6 +1796,15 @@ class Bestanden(Venster):
                                f"Everything on '{x.naam}' will be erased. This cannot be undone.\n\n"
                                "Afterwards it is empty and works on any computer (Windows and Mac too)."),
                              t("Alles wissen", "Erase everything")):
+            return
+        # Zit precies dezelfde schijf er nog in? (Er kan intussen een andere stick in zitten.)
+        nu = next((s for s in schijven() if s.apparaat == x.apparaat), None)
+        if not x.los or nu is None or (nu.station, nu.grootte, nu.naam, nu.udisks_deel) != (
+                x.station, x.grootte, x.naam, x.udisks_deel):
+            self.melding.toon(t(f"'{x.naam}' zit er niet meer in. Er is niets gewist.",
+                                f"'{x.naam}' is no longer there. Nothing was erased."), "fout")
+            self._zijbalk_sleutels = None
+            self.vul_zijbalk()
             return
         naam = x.naam if len(x.naam) <= 15 and "(" not in x.naam else t("USB-stick", "USB stick")
         self.beheer(x, leegmaak_stappen(x, naam),

@@ -305,6 +305,19 @@ menu = venster.schijf_menu(venster.lijst_schijven[0])
 klopt([a.text() for a in menu.actions() if a.text()] == ["Openen", "Naam wijzigen…", "Controleren en repareren",
                                                           "Leegmaken (alles wissen)…", "Veilig verwijderen"],
       "beheer: openen, naam wijzigen, repareren, leegmaken, veilig verwijderen")
+windows = sch.Schijf("/dev/nvme0n1p3", "Windows", "intern", "/dev/nvme0n1", "/dev/nvme0n1p3", fs="ntfs")
+klopt("Leegmaken (alles wissen)…" not in [a.text() for a in venster.schijf_menu(windows).actions()],
+      "beheer: een interne schijf (Windows) kun je hier niet wissen")
+_gewist: list = []
+_oud_vraag, _oud_beheer = venster.vraag_ja, venster.beheer
+venster.vraag_ja = lambda *a, **kw: True
+venster.beheer = lambda x, *a, **kw: _gewist.append(x.apparaat)
+andere = sch.Schijf("/dev/sdq1", "Andere stick", "stick", "/dev/sdq", "/dev/sdq1", fs="vfat")
+venster.leegmaak_schijf(andere)                     # zit er niet (meer) in
+venster.leegmaak_schijf(windows)                    # intern: nooit
+venster.leegmaak_schijf(venster.lijst_schijven[0])  # de stick die er echt in zit
+venster.vraag_ja, venster.beheer = _oud_vraag, _oud_beheer
+klopt(_gewist == ["/dev/sdx1"], "leegmaken: alleen de stick die er nu echt in zit (geen andere, geen interne)")
 klopt(venster.ruimte_balk is not None and venster.status.text() == "1 aangesloten", "Deze computer: ruimte bovenaan, en 1 aangesloten")
 tegels[0].geklikt.emit()
 klopt(venster.huidig == stick and not venster.in_computer and not venster.uitwerp_knop.isHidden()
