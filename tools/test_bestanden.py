@@ -145,6 +145,27 @@ klopt(v2 == doel / "verhuis" and (v2 / "a.txt").read_text() == "a" and not (docs
 b.prullenbak_legen()
 klopt(b.prullenbak_inhoud() == [], "prullenbak legen: leeg")
 klopt((docs / "kopie.txt").exists() is False and (doel / "kopie.txt").exists(), "prullenbak legen: rest blijft heel")
+# 7b. kan iets niet weg, dan blijft het zichtbaar in de prullenbak (geen verborgen restjes)
+(docs / "vast").mkdir()
+(docs / "vast" / "x.txt").write_text("x")
+(docs / "los.txt").write_text("l")
+b.naar_prullenbak(docs / "vast")
+b.naar_prullenbak(docs / "los.txt")
+_echt_rmtree = _sh.rmtree
+
+
+def _weigert(p, *a, **kw):
+    if Path(p).name == "vast":
+        raise PermissionError(13, "Permission denied")
+    return _echt_rmtree(p, *a, **kw)
+
+
+_sh.rmtree = _weigert
+mislukt = b.prullenbak_legen()
+_sh.rmtree = _echt_rmtree
+klopt(mislukt == 1 and [x[0].name for x in b.prullenbak_inhoud()] == ["vast"],
+      "prullenbak legen: wat niet weg kan, telt als mislukt en blijft zichtbaar; de rest is weg")
+b.prullenbak_legen()
 
 # 8. namen tonen
 klopt(b.toon_naam("Recept.odt", False) == "Recept", "naam: bekende extensie verborgen")
@@ -315,6 +336,11 @@ for _ in range(20):
 klopt(not venster.isVisible(), "sluiten tijdens kopiëren: na het kopiëren gaat het venster vanzelf dicht")
 venster.sluit_na_klus = False
 venster.show()
+# ongedaan maken dat niet lukt (het ding is intussen weg uit de prullenbak): geen 'Teruggezet.'
+venster.laatst_weg = [(thuis / ".local" / "share" / "Trash" / "files" / "bestaat-niet.txt",
+                       thuis / ".local" / "share" / "Trash" / "info" / "bestaat-niet.txt.trashinfo")]
+venster.ongedaan()
+klopt("niet terug" in venster.melding.tekst.text(), "ongedaan maken dat mislukt: zegt dat het niet lukte")
 
 # kopiëren en plakken via het venster
 klopt(venster.plak_knop.isHidden(), "plakken: geen knop zolang er niets gekopieerd is")

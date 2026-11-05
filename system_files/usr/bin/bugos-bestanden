@@ -303,16 +303,35 @@ def prullenbak_inhoud() -> list[tuple[Path, Path, Path | None]]:
     return uit
 
 
-def prullenbak_legen() -> None:
+def prullenbak_legen() -> int:
+    """Gooi alles in de prullenbak echt weg. Geeft terug hoeveel dingen niet weg konden.
+
+    Het info-bestand gaat pas weg als het ding zelf weg is: wat niet weg kon, blijft dus gewoon
+    zichtbaar in de prullenbak (en neemt niet stiekem ruimte in)."""
     bak = prullenbak()
-    for map_ in (bak / "files", bak / "info"):
-        if not map_.is_dir():
-            continue
-        for p in map_.iterdir():
+    mislukt = 0
+
+    def weg(p: Path) -> bool:
+        try:
             if p.is_dir() and not p.is_symlink():
-                shutil.rmtree(p, ignore_errors=True)
+                shutil.rmtree(p)
             else:
                 p.unlink(missing_ok=True)
+            return True
+        except OSError:
+            return False
+
+    if (bak / "info").is_dir():
+        for info in (bak / "info").glob("*.trashinfo"):
+            if weg(bak / "files" / info.name[: -len(".trashinfo")]):
+                info.unlink(missing_ok=True)
+            else:
+                mislukt += 1
+    if (bak / "files").is_dir():  # losse dingen zonder info-bestand
+        for p in (bak / "files").iterdir():
+            if not (bak / "info" / f"{p.name}.trashinfo").exists() and not weg(p):
+                mislukt += 1
+    return mislukt
 
 
 def zit_in(kind: Path, ouder: Path) -> bool:
@@ -1581,28 +1600,40 @@ class Bestanden(Venster):
                               knop=t("Ongedaan maken", "Undo"), actie=self.ongedaan, seconden=10)
 
     def ongedaan(self) -> None:
+        mislukt = 0
         for bestand, info in self.laatst_weg:
             try:
                 terugzetten(bestand, info)
             except OSError:
-                pass
+                mislukt += 1
         self.laatst_weg = []
-        self.melding.toon(t("Teruggezet.", "Restored."), "goed")
+        if mislukt:
+            self.melding.toon(t(f"{mislukt} {'ding kon' if mislukt == 1 else 'dingen konden'} niet terug. "
+                                "Kijk in de prullenbak.",
+                                f"{mislukt} {'item' if mislukt == 1 else 'items'} could not be restored. "
+                                "Look in the trash."), "fout")
+        else:
+            self.melding.toon(t("Teruggezet.", "Restored."), "goed")
 
     # ------------------------------------------------------ prullenbak
     def zet_terug(self) -> None:
         if not self.in_prullenbak:
             return
         sel = self.lijst.selectionModel().selectedIndexes()
-        n = 0
+        n = mislukt = 0
         for i in sel:
             try:
                 terugzetten(Path(i.data(PAD_ROL)), Path(i.data(INFO_ROL)))
                 n += 1
             except OSError:
-                pass
+                mislukt += 1
         self.open_prullenbak(geschiedenis=False)
-        if n:
+        if mislukt:
+            self.melding.toon(t(f"{n} teruggezet, {mislukt} {'lukte' if mislukt == 1 else 'lukten'} niet "
+                                "(is de plek waar het stond er nog, en mag je daar schrijven?).",
+                                f"{n} restored, {mislukt} could not be restored "
+                                "(does the original place still exist, and may you write there?)."), "fout")
+        elif n:
             self.melding.toon(t(f"{n} {'ding' if n == 1 else 'dingen'} teruggezet.", f"{n} {'item' if n == 1 else 'items'} restored."), "goed")
 
     def leegmaken(self) -> None:
@@ -1610,9 +1641,15 @@ class Bestanden(Venster):
                          t("Alles in de prullenbak wordt echt weggegooid. Dit kan niet ongedaan worden.",
                            "Everything in the trash will be deleted for good. This cannot be undone."),
                          t("Leegmaken", "Empty")):
-            prullenbak_legen()
+            mislukt = prullenbak_legen()
             self.open_prullenbak(geschiedenis=False)
-            self.melding.toon(t("De prullenbak is leeg.", "The trash is empty."), "goed")
+            if mislukt:
+                self.melding.toon(t(f"{mislukt} {'ding kon' if mislukt == 1 else 'dingen konden'} niet weg. "
+                                    "Ze staan nog in de prullenbak.",
+                                    f"{mislukt} {'item' if mislukt == 1 else 'items'} could not be deleted. "
+                                    "They are still in the trash."), "fout")
+            else:
+                self.melding.toon(t("De prullenbak is leeg.", "The trash is empty."), "goed")
 
     # --------------------------------------------- schijven en USB-sticks
     def schijf_uitleg(self, x: Schijf) -> str:
