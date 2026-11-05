@@ -32,7 +32,13 @@ APP_EENHEID = re.compile(r"^app-(?:(?:flatpak|gnome|kde|snap|dbus)-)?(?P<id>.+?)
 BESCHERMD = {"kwin_wayland", "kwin_x11", "plasmashell", "ksmserver", "kded6", "kded5", "plasma_session",
              "Xwayland", "systemd", "dbus-broker", "dbus-daemon", "startplasma-wayland", "startplasma-x11",
              "polkit-kde-authentication-agent-1", "xdg-desktop-portal", "xdg-desktop-portal-kde", "pipewire",
-             "wireplumber", "pipewire-pulse", "bugos-taakbeheer", "sddm", "sddm-helper"}
+             "wireplumber", "pipewire-pulse", "bugos-taakbeheer", "sddm", "sddm-helper", "kwin_wayland_wrapper"}
+# De kernel bewaart een procesnaam (comm) in maximaal 15 tekens: "xdg-desktop-portal-kde" heet daar
+# "xdg-desktop-por". Vergelijk dus op die ingekorte naam, anders herkennen we lange namen nooit.
+BESCHERMD_KORT = {naam[:15] for naam in BESCHERMD}
+# Ook alles wat in een eenheid van het bureaublad zelf draait (plasma-*.service) of in de inlogsessie
+# (session-*.scope, daar draait startplasma) hoort bij BugOS: stoppen sluit alle vensters.
+BESCHERMDE_EENHEID = re.compile(r"^(plasma-.+\.service|session-[^/]+\.scope)$")
 BEKENDE_NAMEN = {  # achtergrond: gewone woorden in plaats van programmanamen
     "plasmashell": ("Bureaublad (Plasma)", "Desktop (Plasma)"),
     "kwin_wayland": ("Vensters (KWin)", "Windows (KWin)"),
@@ -346,7 +352,8 @@ def groepeer(lijst: list[Proces], procent: dict[int, float]) -> list[Taak]:
         taak.processor += procent.get(p.pid, 0.0)
         taak.geheugen += p.geheugen
         taak.eigen = taak.eigen and p.eigen
-        if p.naam in BESCHERMD or p.pid == eigen_pid or soort == "systeem":
+        if (p.naam[:15] in BESCHERMD_KORT or p.pid == eigen_pid or soort == "systeem"
+                or BESCHERMDE_EENHEID.match(eenheid)):
             taak.beschermd = True
     return sorted(taken.values(), key=lambda x: (x.soort != "app", x.naam.lower()))
 

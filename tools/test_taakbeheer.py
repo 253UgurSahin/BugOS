@@ -128,6 +128,16 @@ klopt(taken["Bureaublad (Plasma)"].beschermd and taken["Bureaublad (Plasma)"].so
       "groeperen: het bureaublad heeft een gewone naam en kan niet per ongeluk dicht")
 klopt(taken["Netwerk"].soort == "systeem" and taken["Netwerk"].beschermd, "groeperen: systeem (Netwerk) beschermd")
 klopt(next(x for x in m["taken"]).soort == "app", "volgorde: eerst de programma's")
+# Lange namen kort de kernel in tot 15 tekens; die moeten toch beschermd zijn.
+SESSIE = f"{GEBRUIKER}/session.slice"
+lang = [bt.Proces(400, "xdg-desktop-por", 1, 1, 1, True, f"{SESSIE}/xdg-desktop-portal-kde.service"),
+        bt.Proces(401, "polkit-kde-auth", 1, 1, 1, True, f"{SESSIE}/plasma-polkit-agent.service"),
+        bt.Proces(402, "kwin_wayland_wr", 1, 1, 1, True, f"{SESSIE}/plasma-kwin_wayland.service"),
+        bt.Proces(403, "startplasma-way", 1, 1, 1, True, "/user.slice/user-1000.slice/session-2.scope"),
+        bt.Proces(404, "spotify", 1, 1, 1, True, f"{SESSIE}/spotify-helper.service")]
+beschermd = {x.pids[0]: x.beschermd for x in bt.groepeer(lang, {})}
+klopt(all(beschermd[p] for p in (400, 401, 402, 403)) and not beschermd[404],
+      "beschermd: ook lange namen (xdg-desktop-portal-kde, kwin_wayland_wrapper, startplasma) en plasma-diensten")
 
 # 5. advies in gewone woorden
 klopt(bt.advies([10, 20, 30], 4, 16, m["taken"])[0] == "goed", "advies: rustig -> 'Alles loopt soepel'")
