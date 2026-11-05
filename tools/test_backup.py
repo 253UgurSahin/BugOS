@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.machinery
 import importlib.util
+import json
 import os
 import sys
 import tempfile
@@ -93,6 +94,24 @@ schrijf(leeg / "BugOS-Backup" / "bugie@oude-laptop" / "Music" / "lied.mp3", b"m"
 klopt(bb.backups_op(leeg) == [leeg / "BugOS-Backup" / "bugie@oude-laptop"],
       "terugzetten: alleen een back-up van een andere computer, die wordt gevonden")
 klopt(bb.backups_op(TMP / "bestaat-niet") == [], "terugzetten: schijf zonder back-up, geen fout")
+
+# 4. links gaan mee, en elke map komt terug in de echte map (ook als die in een andere taal heet)
+(THUIS / "Documents" / "snelkoppeling").symlink_to("brief.txt")
+klopt(bb.zonder_venster(SCHIJF) == 0 and (doel / "Documents" / "snelkoppeling").is_symlink(),
+      "back-up: een snelkoppeling (symlink) gaat mee")
+klopt(json.loads((doel / bb.LIJSTJE).read_text()).get("PICTURES") == "Pictures",
+      "back-up: lijstje met welke map welke soort is")
+nl = TMP / "nl-stick" / "BugOS-Backup" / "bugie@oud"
+schrijf(nl / "Afbeeldingen" / "kat.jpg", b"k")
+schrijf(nl / "Eigen map" / "x.txt", b"x")
+(nl / bb.LIJSTJE).write_text(json.dumps({"PICTURES": "Afbeeldingen"}))
+naar = {Path(c[-2].rstrip("/")).name: c[-1].rstrip("/") for c in bb.terug_opdrachten(nl, THUIS)}
+klopt(naar == {"Afbeeldingen": str(THUIS / "Pictures"), "Eigen map": str(THUIS / "Eigen map")},
+      "terugzetten: 'Afbeeldingen' gaat naar de afbeeldingenmap van deze computer, een eigen map naar thuis")
+oud_stijl = TMP / "oude-stick"
+schrijf(oud_stijl / "Music" / "lied.mp3", b"m")
+klopt([c[-1].rstrip("/") for c in bb.terug_opdrachten(oud_stijl, THUIS)] == [str(THUIS / "Music")],
+      "terugzetten: een back-up zonder lijstje werkt ook (Engelse namen)")
 
 print(f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)

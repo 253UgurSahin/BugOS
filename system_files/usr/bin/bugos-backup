@@ -55,6 +55,40 @@ def bron_mappen() -> list[Path]:
     return [p for p in (gebruikersmap(x, s) for x, s in MAPPEN) if p.is_dir()]
 
 
+LIJSTJE = "bugos-mappen.json"  # in de back-up: welke map welke soort is ({"PICTURES": "Afbeeldingen", ...})
+
+
+def schrijf_lijstje(doel: Path) -> None:
+    """Onthoud bij de back-up dat bijv. 'Afbeeldingen' de map PICTURES is. Dan komt hij bij het
+    terugzetten in de juiste map, ook als de nieuwe computer Engels is ('Pictures')."""
+    lijstje = {x: m.name for x, s in MAPPEN if (m := gebruikersmap(x, s)).is_dir()}
+    try:
+        (doel / LIJSTJE).write_text(json.dumps(lijstje, ensure_ascii=False))
+    except OSError:
+        pass
+
+
+def terug_opdrachten(bron: Path, thuis: Path) -> list[list[str]]:
+    """Per map in de back-up één rsync, naar de echte map op deze computer."""
+    try:
+        lijstje = json.loads((bron / LIJSTJE).read_text())
+    except (OSError, ValueError):
+        lijstje = {}
+    soort_van = {naam: xdg for xdg, naam in lijstje.items()}
+    soort_van.update({s: x for x, s in MAPPEN if s not in soort_van})  # oude back-ups: de Engelse namen
+    opdrachten = []
+    try:
+        mappen = sorted(p for p in bron.iterdir() if p.is_dir())
+    except OSError:
+        return []
+    for m in mappen:
+        xdg = soort_van.get(m.name)
+        standaard = next((s for x, s in MAPPEN if x == xdg), m.name)
+        naar = gebruikersmap(xdg, standaard) if xdg else thuis / m.name
+        opdrachten.append(rsync_terug(m, naar))
+    return opdrachten
+
+
 def schijven() -> list[Path]:
     """Alle aangesloten USB-schijven en losse schijven waarop je mag schrijven."""
     if os.environ.get("BUGOS_SCHIJVEN"):  # voor tests en screenshots
@@ -87,13 +121,14 @@ def backups_op(schijf: Path) -> list[Path]:
 def rsync_maak(bron: Path, doel: Path) -> list[str]:
     # Geen --delete: wat ooit in de back-up staat, blijft daar staan.
     # --modify-window: USB-schijven (FAT/exFAT) onthouden tijd minder precies.
-    return ["rsync", "-rt", "--modify-window=2", "--info=progress2", "--no-inc-recursive",
+    # -l: snelkoppelingen (symlinks) gaan ook mee (op FAT/exFAT kan dat niet; dan zegt rsync 23: "deels").
+    return ["rsync", "-rtl", "--modify-window=2", "--info=progress2", "--no-inc-recursive",
             f"{bron}/", f"{doel / bron.name}/"]
 
 
 def rsync_terug(doel: Path, thuis: Path) -> list[str]:
     # --update: een nieuwer bestand op de computer wordt nooit overschreven.
-    return ["rsync", "-rt", "--update", "--modify-window=2", "--info=progress2", "--no-inc-recursive",
+    return ["rsync", "-rtl", "--update", "--modify-window=2", "--info=progress2", "--no-inc-recursive",
             f"{doel}/", f"{thuis}/"]
 
 
@@ -154,6 +189,7 @@ DEELS_UITLEG = t("Een paar bestanden konden niet mee: {mappen}. Dat komt meestal
 def zonder_venster(schijf: Path) -> int:
     doel = backup_doel(schijf)
     doel.mkdir(parents=True, exist_ok=True)
+    schrijf_lijstje(doel)
     deels = []
     for m in bron_mappen():
         code = subprocess.call(rsync_maak(m, doel))
@@ -176,7 +212,7 @@ def venster() -> int:
         raster, schijf_info, sectie, uitvoeren,
     )
     from PySide6.QtCore import QProcess, QTimer
-    from PySide6.QtWidgets import QFrame, QHBoxLayout, QInputDialog, QVBoxLayout, QWidget
+    from PySide6.QtWidgets import QFrame, QHBoxLayout, QInputDialog, QMessageBox, QVBoxLayout, QWidget
 
     def wat_mee_gaat() -> QWidget:
         """Zes kleine kaartjes: deze mappen gaan mee in de back-up."""
@@ -342,6 +378,7 @@ def venster() -> int:
                 return
             doel = backup_doel(schijf)
             doel.mkdir(parents=True, exist_ok=True)
+            schrijf_lijstje(doel)
             self.stand.update(klus="maak", schijf=schijf)
             self.wachtrij[:] = [rsync_maak(m, doel) for m in mappen]
             self.bezig(t("Bezig met kopiëren… Haal de schijf er niet uit.", "Copying… Do not unplug the drive."))
@@ -365,8 +402,17 @@ def venster() -> int:
                 if not ok:
                     return
                 bron = next(p for p in lijst if p.name == keuze)
+            vraag = QMessageBox.question(
+                self, t("Terugzetten?", "Restore?"),
+                t("Je bestanden van de back-up komen terug op je computer. Een bestand dat op je computer ouder is "
+                  "dan in de back-up, wordt vervangen. Nieuwere bestanden op je computer blijven staan.",
+                  "Your files from the backup come back to your computer. A file that is older on your computer "
+                  "than in the backup is replaced. Newer files on your computer are kept."),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Cancel)
+            if vraag != QMessageBox.StandardButton.Yes:
+                return
             self.stand.update(klus="terug", schijf=schijf)
-            self.wachtrij[:] = [rsync_terug(bron, Path.home())]
+            self.wachtrij[:] = terug_opdrachten(bron, Path.home())
             self.bezig(t("Bezig met terugzetten… Nieuwere bestanden op je computer blijven gewoon staan.",
                          "Restoring… Newer files on your computer are kept."))
             self.volgende()
