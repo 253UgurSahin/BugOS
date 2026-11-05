@@ -73,6 +73,17 @@ def backup_doel(schijf: Path) -> Path:
     return schijf / "BugOS-Backup" / f"{getpass.getuser()}@{socket.gethostname()}"
 
 
+def backups_op(schijf: Path) -> list[Path]:
+    """Alle back-ups op deze schijf, die van deze computer eerst. Na opnieuw installeren of op een
+    nieuwe pc heet de computer (of de gebruiker) vaak anders: die back-ups moet je ook terug kunnen zetten."""
+    eigen = backup_doel(schijf)
+    try:
+        alle = sorted(p for p in (schijf / "BugOS-Backup").iterdir() if p.is_dir())
+    except OSError:
+        return []
+    return sorted(alle, key=lambda p: p != eigen)
+
+
 def rsync_maak(bron: Path, doel: Path) -> list[str]:
     # Geen --delete: wat ooit in de back-up staat, blijft daar staan.
     # --modify-window: USB-schijven (FAT/exFAT) onthouden tijd minder precies.
@@ -165,7 +176,7 @@ def venster() -> int:
         raster, schijf_info, sectie, uitvoeren,
     )
     from PySide6.QtCore import QProcess, QTimer
-    from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QWidget
+    from PySide6.QtWidgets import QFrame, QHBoxLayout, QInputDialog, QVBoxLayout, QWidget
 
     def wat_mee_gaat() -> QWidget:
         """Zes kleine kaartjes: deze mappen gaan mee in de back-up."""
@@ -248,7 +259,7 @@ def venster() -> int:
                 return
             s = self.gekozen()
             self.maak.setEnabled(s is not None)
-            self.terugzetten.setEnabled(s is not None and backup_doel(s).exists())
+            self.terugzetten.setEnabled(s is not None and bool(backups_op(s)))
 
         def ververs_schijven(self) -> None:
             if self.proces.state() != QProcess.ProcessState.NotRunning:
@@ -256,7 +267,7 @@ def venster() -> int:
             items = []
             for s in schijven():
                 extra = schijf_info(s)
-                if backup_doel(s).exists():
+                if backups_op(s):
                     extra += t("  ·  heeft al een back-up", "  ·  already has a backup")
                 items.append((str(s), s.name, extra))
             self.kiezer.zet(items)
@@ -340,8 +351,22 @@ def venster() -> int:
             schijf = self.gekozen()
             if schijf is None:
                 return
+            lijst = backups_op(schijf)
+            if not lijst:
+                return
+            bron = lijst[0]
+            if len(lijst) > 1 and lijst[0] != backup_doel(schijf):
+                # Geen back-up van deze computer, wel van andere: laat kiezen (bijv. "bugie@oude-laptop").
+                keuze, ok = QInputDialog.getItem(
+                    self, t("Welke back-up?", "Which backup?"),
+                    t("Er staan meer back-ups op deze schijf. Welke wil je terugzetten?",
+                      "There are several backups on this drive. Which one do you want to restore?"),
+                    [p.name for p in lijst], 0, False)
+                if not ok:
+                    return
+                bron = next(p for p in lijst if p.name == keuze)
             self.stand.update(klus="terug", schijf=schijf)
-            self.wachtrij[:] = [rsync_terug(backup_doel(schijf), Path.home())]
+            self.wachtrij[:] = [rsync_terug(bron, Path.home())]
             self.bezig(t("Bezig met terugzetten… Nieuwere bestanden op je computer blijven gewoon staan.",
                          "Restoring… Newer files on your computer are kept."))
             self.volgende()

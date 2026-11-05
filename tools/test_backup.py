@@ -83,5 +83,16 @@ klopt(code == 2 and (THUIS / "nieuw" / "Pictures" / "kat.jpg").exists(),
       "overstap deels: Documents lukt niet helemaal, Pictures wordt toch teruggezet")
 os.environ["PATH"] = "/usr/bin:/bin"
 
+# 3. terugzetten na opnieuw installeren: de computer heet anders, de oude back-up moet je toch zien
+oud = SCHIJF / "BugOS-Backup" / "bugie@oude-laptop"
+schrijf(oud / "Documents" / "oud.txt", b"o")
+lijst = bb.backups_op(SCHIJF)
+klopt(lijst[0] == doel and oud in lijst, "terugzetten: eigen back-up eerst, die van een andere computer staat er ook")
+leeg = TMP / "lege-stick"
+schrijf(leeg / "BugOS-Backup" / "bugie@oude-laptop" / "Music" / "lied.mp3", b"m")
+klopt(bb.backups_op(leeg) == [leeg / "BugOS-Backup" / "bugie@oude-laptop"],
+      "terugzetten: alleen een back-up van een andere computer, die wordt gevonden")
+klopt(bb.backups_op(TMP / "bestaat-niet") == [], "terugzetten: schijf zonder back-up, geen fout")
+
 print(f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)
