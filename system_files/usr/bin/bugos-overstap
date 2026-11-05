@@ -166,12 +166,29 @@ def afronden(bron: Path) -> list[str]:
     return gedaan
 
 
+# rsync: 0 = goed, 24 = een bestand verdween (geen probleem), 23 = een paar bestanden konden niet mee
+# (bijv. een naam met : of ?, of iets dat Windows op slot had). Bij 23 gaan we door met de volgende map.
+GOED, DEELS = (0, 24), (23,)
+
+
+def deels_uitleg(mappen: list[str]) -> str:
+    return t(f"Een paar bestanden uit {', '.join(mappen)} konden niet mee. De rest staat er wel.",
+             f"A few files from {', '.join(mappen)} could not be copied. Everything else is there.")
+
+
 def zonder_venster(bron: Path) -> int:
+    deels = []
     for _, cmd in stappen(bron):
-        if subprocess.call(cmd, stdout=subprocess.DEVNULL) not in (0, 24):
+        code = subprocess.call(cmd, stdout=subprocess.DEVNULL)
+        if code in DEELS:
+            deels.append(Path(cmd[-2].rstrip("/")).name)
+        elif code not in GOED:
             return 1
     for regel in afronden(bron):
         print(regel)
+    if deels:
+        print(deels_uitleg(deels), file=sys.stderr)
+        return 2
     return 0
 
 
@@ -244,6 +261,8 @@ def venster() -> int:
             self.proces.readyReadStandardOutput.connect(self.lees)
             self.proces.finished.connect(self.klaar)
             self.wachtrij: list[tuple[str, list[str]]] = []
+            self.nu: list[str] = []
+            self.deels: list[str] = []
             self.bron: Path | None = None
             self.knop.clicked.connect(self.begin)
             self.kiezer.gewijzigd.connect(lambda: self.knop.setEnabled(self.kiezer.gekozen() is not None))
@@ -269,12 +288,15 @@ def venster() -> int:
             if not self.wachtrij:
                 gedaan = afronden(self.bron)
                 self.balk.setValue(100)
-                self.melding.zet(t("Klaar! Je bestanden staan op hun plek.", "Done! Your files are in place.")
-                                 + ("\n\n• " + "\n• ".join(gedaan) if gedaan else ""), "goed")
+                kop = (deels_uitleg(self.deels) if self.deels
+                       else t("Klaar! Je bestanden staan op hun plek.", "Done! Your files are in place."))
+                self.melding.zet(kop + ("\n\n• " + "\n• ".join(gedaan) if gedaan else ""),
+                                 "let_op" if self.deels else "goed")
                 self.knop.setEnabled(True)
                 self.kiezer.setEnabled(True)
                 return
             tekst, cmd = self.wachtrij.pop(0)
+            self.nu = cmd
             self.melding.zet(tekst, "bezig")
             self.balk.setValue(0)
             self.proces.start(cmd[0], cmd[1:])
@@ -285,7 +307,9 @@ def venster() -> int:
                     self.balk.setValue(int(stuk[:-1]))
 
         def klaar(self, code: int, _s) -> None:
-            if code not in (0, 24):
+            if code in DEELS:
+                self.deels.append(Path(self.nu[-2].rstrip("/")).name)
+            elif code not in GOED:
                 self.melding.zet(t("Het lukte niet helemaal. Zit de schijf er nog in? Probeer het opnieuw.",
                                    "It did not fully work. Is the drive still plugged in? Try again."), "fout")
                 self.wachtrij.clear()
@@ -299,6 +323,7 @@ def venster() -> int:
             if not gekozen:
                 return
             self.bron = Path(gekozen)
+            self.deels = []
             self.wachtrij[:] = stappen(self.bron)
             self.knop.setEnabled(False)
             self.kiezer.setEnabled(False)

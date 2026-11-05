@@ -57,5 +57,31 @@ schrijf(THUIS / "Documents" / "nieuw.txt", b"z" * 300)
 _, nodig, _ = bb.ruimte_genoeg(SCHIJF, mappen, doel)
 klopt(nodig == 300, "ruimte: daarna alleen wat nieuw is (300 bytes), niet alles opnieuw")
 
+# 2. een paar bestanden kunnen niet mee (rsync 23): de andere mappen gaan gewoon door
+NEP = TMP / "nep-bin"
+NEP.mkdir()
+(NEP / "rsync").write_text('#!/usr/bin/bash\ncase "$*" in *Documents*) exit 23;; esac\nexec /usr/bin/rsync "$@"\n')
+(NEP / "rsync").chmod(0o755)
+os.environ["PATH"] = f"{NEP}:/usr/bin:/bin"
+schrijf(THUIS / "Pictures" / "vakantie.jpg", b"v" * 10)
+code = bb.zonder_venster(SCHIJF)
+klopt(code == 2 and (doel / "Pictures" / "vakantie.jpg").exists(),
+      "deels: Documents lukt niet helemaal, Pictures (erna) wordt toch gekopieerd, met een melding")
+
+lader = importlib.machinery.SourceFileLoader("bugos_overstap",
+                                             str(ROOT / "system_files" / "usr" / "bin" / "bugos-overstap"))
+spec = importlib.util.spec_from_loader("bugos_overstap", lader)
+bo = importlib.util.module_from_spec(spec)
+lader.exec_module(bo)
+bo.gebruikersmap = lambda xdg, standaard: THUIS / "nieuw" / standaard
+(THUIS / "nieuw").mkdir()
+WIN = TMP / "windows-stick" / "BugOS-Overstap"
+schrijf(WIN / "Documents" / "cv.docx", b"c")
+schrijf(WIN / "Pictures" / "kat.jpg", b"k")
+code = bo.zonder_venster(WIN)
+klopt(code == 2 and (THUIS / "nieuw" / "Pictures" / "kat.jpg").exists(),
+      "overstap deels: Documents lukt niet helemaal, Pictures wordt toch teruggezet")
+os.environ["PATH"] = "/usr/bin:/bin"
+
 print(f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)

@@ -129,13 +129,31 @@ def laatste_backup() -> str:
         return t("Je hebt nog nooit een back-up gemaakt.", "You have never made a backup.")
 
 
+# rsync: 0 = goed, 24 = een bestand verdween tijdens het kopiëren (geen probleem),
+# 23 = sommige bestanden konden niet mee (bijv. een naam met : of ? of groter dan 4 GB op een
+# FAT32-stick). Bij 23 gaan we gewoon door met de volgende mappen en zeggen we het erbij.
+GOED, DEELS = (0, 24), (23,)
+
+DEELS_UITLEG = t("Een paar bestanden konden niet mee: {mappen}. Dat komt meestal door een naam met : ? * of \", "
+                 "of een bestand groter dan 4 GB op een FAT32-schijf. De rest staat er wel.",
+                 "A few files could not be copied: {mappen}. Usually a name with : ? * or \", or a file larger "
+                 "than 4 GB on a FAT32 drive. Everything else is there.")
+
+
 def zonder_venster(schijf: Path) -> int:
     doel = backup_doel(schijf)
     doel.mkdir(parents=True, exist_ok=True)
+    deels = []
     for m in bron_mappen():
-        if subprocess.call(rsync_maak(m, doel)) not in (0, 24):  # 24 = bestand verdween tijdens kopiëren
+        code = subprocess.call(rsync_maak(m, doel))
+        if code in DEELS:
+            deels.append(m.name)
+        elif code not in GOED:
             return 1
     onthoud(schijf)
+    if deels:
+        print(DEELS_UITLEG.format(mappen=", ".join(deels)), file=sys.stderr)
+        return 2
     return 0
 
 
@@ -205,6 +223,8 @@ def venster() -> int:
             lay.addLayout(rij)
 
             self.wachtrij: list[list[str]] = []
+            self.nu: list[str] = []     # de opdracht die nu loopt
+            self.deels: list[str] = []  # mappen waarvan een paar bestanden niet mee konden
             self.proces = QProcess(self)
             self.proces.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
             self.proces.readyReadStandardOutput.connect(self.lees)
@@ -246,7 +266,7 @@ def venster() -> int:
             if not self.wachtrij:
                 self.klaar()
                 return
-            cmd = self.wachtrij.pop(0)
+            cmd = self.nu = self.wachtrij.pop(0)
             self.proces.start(cmd[0], cmd[1:])
 
         def lees(self) -> None:
@@ -256,7 +276,9 @@ def venster() -> int:
                     self.balk.setValue(int(stuk[:-1]))
 
         def klaar_met_een(self, code: int, _status) -> None:
-            if code not in (0, 24):
+            if code in DEELS:
+                self.deels.append(Path(self.nu[-2].rstrip("/")).name or "~")
+            elif code not in GOED:
                 self.melding.zet(t("Het lukte niet helemaal. Zit de schijf er nog in? Probeer het opnieuw.",
                                    "It did not fully work. Is the drive still plugged in? Try again."), "fout")
                 self.wachtrij.clear()
@@ -265,6 +287,13 @@ def venster() -> int:
             self.volgende()
 
         def klaar(self) -> None:
+            if self.deels:
+                if self.stand["klus"] == "maak":
+                    onthoud(self.stand["schijf"])
+                    self.wanneer.setText(laatste_backup())
+                self.melding.zet(DEELS_UITLEG.format(mappen=", ".join(self.deels)), "let_op")
+                self.stop(True)
+                return
             if self.stand["klus"] == "maak":
                 onthoud(self.stand["schijf"])
                 self.wanneer.setText(laatste_backup())
@@ -281,6 +310,7 @@ def venster() -> int:
             self.knoppen()
 
         def bezig(self, tekst: str) -> None:
+            self.deels = []
             self.melding.zet(tekst, "bezig")
             self.balk.setValue(0)
             self.balk.show()
