@@ -73,6 +73,8 @@ jobs:
         run: QT_QPA_PLATFORM=offscreen python3 tools/test_instellingen.py
       - name: Startmenu-gegevens testen (apps, instellingen zoeken, snelmenu-status; met nep-programma's)
         run: python3 tools/test_start_data.py
+      - name: Pakket installeren testen (rare bestandsnamen voeren niets uit; met nep-programma's)
+        run: bash tools/test_pakket.sh
       - name: Uitzetscherm testen (laadt het, en kloppen de knoppen per situatie)
         run: |
           if [ -f tools/test_uitzetscherm.py ]; then

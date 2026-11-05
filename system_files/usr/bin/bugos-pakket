@@ -64,16 +64,21 @@ if ! distrobox list 2>/dev/null | grep -q " $DOOS "; then
     }
 fi
 
+# De bestandsnaam gaat als los argument ($1) mee, nooit in de opdrachttekst zelf: een naam als
+# 'app$(…).rpm' of met een " erin kan dan niets uitvoeren of de installatie breken.
 if [ "$SOORT" = rpm ]; then
-    INSTALL="sudo dnf install -y \"$BESTAND\""
+    # shellcheck disable=SC2016  # $1 is voor de bash in het doosje
+    INSTALL='sudo dnf install -y "$1"'
 else
-    INSTALL="sudo apt-get update && sudo apt-get install -y \"$BESTAND\""
+    # shellcheck disable=SC2016
+    INSTALL='sudo apt-get update && sudo apt-get install -y "$1"'
 fi
 
 # Programma's van dit pakket naar het startmenu brengen.
-EXPORT="for d in \$( (rpm -qlp \"$BESTAND\" 2>/dev/null || dpkg-deb -c \"$BESTAND\" 2>/dev/null | awk '{print \$6}') | grep -E 'share/applications/.*\\.desktop\$'); do distrobox-export --app \"\$(basename \"\$d\" .desktop)\"; done"
+# shellcheck disable=SC2016
+EXPORT='for d in $( (rpm -qlp "$1" 2>/dev/null || dpkg-deb -c "$1" 2>/dev/null | awk '\''{print $6}'\'') | grep -E '\''share/applications/.*\.desktop$'\''); do distrobox-export --app "$(basename "$d" .desktop)"; done'
 
-if distrobox enter "$DOOS" -- bash -c "$INSTALL && $EXPORT" >/dev/null 2>&1; then
+if distrobox enter "$DOOS" -- bash -c "$INSTALL && $EXPORT" bugos-pakket "$BESTAND" >/dev/null 2>&1; then
     melding "$(t "Klaar!" "Done!")" "$(t "\"$NAAM\" staat nu in je startmenu." "\"$NAAM\" is now in your start menu.")"
 else
     fout "$(t "Het installeren van \"$NAAM\" is niet gelukt. Je computer is niet veranderd." \
