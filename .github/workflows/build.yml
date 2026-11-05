@@ -104,10 +104,10 @@ jobs:
         include:
           - variant: main
             image: bugos
-            base: ghcr.io/ublue-os/kinoite-main:latest
+            base: ghcr.io/ublue-os/kinoite-main:44
           - variant: nvidia
             image: bugos-nvidia
-            base: ghcr.io/ublue-os/kinoite-nvidia:latest
+            base: ghcr.io/ublue-os/kinoite-nvidia:44
     steps:
       - uses: actions/checkout@v4
 
