@@ -208,8 +208,24 @@ def venster() -> int:
     from bugos_ui import (
         K, Chip, Groep, IcoonChip, Kaart, Knop, label, maak_app, pagina, sectie, uitvoeren,
     )
-    from PySide6.QtCore import QTimer
+    from PySide6.QtCore import QThread, QTimer, Signal
     from PySide6.QtWidgets import QApplication, QHBoxLayout, QScrollArea, QVBoxLayout, QWidget
+
+    class Klusje(QThread):
+        """Iets traags (alles nakijken, een reparatie) op de achtergrond, zodat het venster niet vastloopt."""
+
+        klaar = Signal(object)
+
+        def __init__(self, werk):
+            super().__init__()
+            self.werk = werk
+
+        def run(self) -> None:
+            try:
+                uitkomst = self.werk()
+            except Exception as e:  # noqa: BLE001  (een controle die faalt mag het venster niet stoppen)
+                uitkomst = e
+            self.klaar.emit(uitkomst)
 
     class Hulp(QScrollArea):
         def __init__(self):
@@ -253,10 +269,41 @@ def venster() -> int:
             lay.addLayout(onder)
             lay.addStretch(1)
             self.groep = None
+            self.klusjes: list[Klusje] = []
+            self.bezig = False
             QTimer.singleShot(60, self.vul)
 
+        def op_achtergrond(self, werk, klaar) -> None:
+            k = Klusje(werk)
+            self.klusjes.append(k)
+            k.klaar.connect(lambda uit: (self.klusjes.remove(k), klaar(uit)))
+            k.start()
+
         def vul(self) -> None:
-            self.laatste = alles_controleren()
+            if self.bezig:
+                return
+            self.bezig = True
+            self.kop.setText(t("Even kijken…", "Let me check…"))
+            self.op_achtergrond(alles_controleren, self.toon)
+
+        def repareer(self, knop, f) -> None:
+            knop.setEnabled(False)
+            knop.setText(t("Bezig…", "Busy…"))
+            self.op_achtergrond(f, lambda _: QTimer.singleShot(1500, self.vul))
+
+        def closeEvent(self, e) -> None:  # noqa: N802
+            for k in list(self.klusjes):  # een lopende reparatie eerst laten afmaken
+                k.wait(25000)
+            super().closeEvent(e)
+
+        def toon(self, uitslagen) -> None:
+            self.bezig = False
+            if isinstance(uitslagen, Exception):
+                self.kop.setText(t("Nakijken lukte niet", "Checking did not work"))
+                self.sub.setText(t("Probeer het opnieuw, of start de computer opnieuw op.",
+                                   "Try again, or restart the computer."))
+                return
+            self.laatste = uitslagen
             problemen = [u for u in self.laatste if u.stand in (PROBLEEM, LET_OP)]
             n = len(problemen)
             while self.chip_plek.count():
@@ -295,7 +342,7 @@ def venster() -> int:
                 r.addLayout(b, 1)
                 if u.repareer:
                     knop = Knop(u.repareer_tekst or t("Repareer", "Fix"), "gewoon")
-                    knop.clicked.connect(lambda _=False, f=u.repareer: (f(), QTimer.singleShot(2500, self.vul)))
+                    knop.clicked.connect(lambda _=False, k=knop, f=u.repareer: self.repareer(k, f))
                     r.addWidget(knop)
                 elif u.stand == OK:
                     goed = label(f'<span style="color:{K["goed"]}">\u25CF</span>&nbsp; ' + t("In orde", "OK"), "klein", wrap=False)

@@ -22,7 +22,7 @@ from bugos_ui import (  # noqa: E402
     CONFIG, Chip, Groep, IcoonChip, K, Kaart, KeuzeKaart, Knop, SchakelRij, Tegel, achtergrond_pad, bestaat, draai,
     label, maak_app, ronde_pixmap, start, t, uitvoeren,
 )
-from PySide6.QtCore import QLocale, QPointF, QRectF, QSize, Qt, QTimer  # noqa: E402
+from PySide6.QtCore import QLocale, QPointF, QRectF, QSize, Qt, QThread, QTimer, Signal  # noqa: E402
 from PySide6.QtGui import QColor, QFont, QIcon, QLinearGradient, QPainter, QPen, QPixmap  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
     QButtonGroup, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
@@ -192,6 +192,18 @@ class Hallo(Pagina):
         self.klaar_met_vullen()
 
 
+class Kijker(QThread):
+    """Kijkt op de achtergrond of er internet is (nmcli kan even duren), zodat het venster niet hapert."""
+
+    klaar = Signal(bool)
+
+    def run(self) -> None:
+        try:
+            self.klaar.emit(bool(heeft_internet()))
+        except Exception:  # noqa: BLE001
+            self.klaar.emit(False)
+
+
 class Internet(Pagina):
     def __init__(self):
         super().__init__(t("Internet", "Internet"),
@@ -220,13 +232,31 @@ class Internet(Pagina):
         rij.addStretch(1)
         self.lay.addLayout(rij)
         self.klaar_met_vullen()
-        self.ververs()
+        self.kijker: Kijker | None = None
+        self.toon(False)
+        # Alleen kijken zolang deze pagina te zien is (niet elke 4 seconden nmcli op de andere pagina's).
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.ververs)
+
+    def showEvent(self, e) -> None:  # noqa: N802
+        super().showEvent(e)
+        self.ververs()
         self.timer.start(4000)
 
+    def hideEvent(self, e) -> None:  # noqa: N802
+        self.timer.stop()
+        if not self.window().isVisible() and self.kijker is not None:
+            self.kijker.wait(8000)  # het venster gaat dicht: laat het kijken eerst afmaken
+        super().hideEvent(e)
+
     def ververs(self) -> None:
-        online = heeft_internet()
+        if self.kijker is not None and self.kijker.isRunning():
+            return
+        self.kijker = Kijker(self)
+        self.kijker.klaar.connect(self.toon)
+        self.kijker.start()
+
+    def toon(self, online: bool) -> None:
         if online:
             self.kop.setText(t("Je bent verbonden", "You are connected"))
             self.sub.setText(t("Mooi zo. Je kunt verder.", "Great. You can continue."))

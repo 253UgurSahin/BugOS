@@ -83,6 +83,8 @@ jobs:
         run: bash tools/test_paneel.sh
       - name: Windows-programma openen testen (rare namen, mislukte Wine-start; met nep-programma's)
         run: bash tools/test_exe.sh
+      - name: "'Er werkt iets niet' testen (nakijken en repareren op de achtergrond)"
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_hulp.py
       - name: Back-up testen (ruimte, maken en terugzetten; met tijdelijke mappen)
         run: python3 tools/test_backup.py
       - name: Uitzetscherm testen (laadt het, en kloppen de knoppen per situatie)

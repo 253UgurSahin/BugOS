@@ -317,8 +317,16 @@ class WifiPagina(Blad):
         op_achtergrond(self, lambda: bi.zet_wifi(aan), lambda _u: QTimer.singleShot(1500, self.ververs))
 
     def verbind(self, n: bi.Netwerk) -> None:
+        if not n.beveiligd:
+            self.verbind_met(n, bekend=True)
+            return
+        # Kennen we dit netwerk al? (nmcli kan even duren: op de achtergrond, het venster blijft reageren.)
+        self.melding.toon(t(f"Even kijken bij {n.naam}…", f"Checking {n.naam}…"), seconden=15)
+        op_achtergrond(self, lambda: bi.bekend_netwerk(n.naam), lambda bekend: self.verbind_met(n, bekend is True))
+
+    def verbind_met(self, n: bi.Netwerk, bekend: bool) -> None:
         wachtwoord = ""
-        if n.beveiligd and not bi.bekend_netwerk(n.naam):
+        if n.beveiligd and not bekend:
             d = QInputDialog(self)
             d.setWindowTitle(t("Wachtwoord", "Password"))
             d.setLabelText(t(f"Wat is het wachtwoord van '{n.naam}'?\n(Het staat vaak op de onderkant van het modem.)",
@@ -1042,10 +1050,17 @@ class TijdPagina(Blad):
             t("Dat lukte niet.", "That did not work."), "fout"))
 
     def kies_zone(self) -> None:
+        # timedatectl kan even duren: eerst op de achtergrond ophalen, dan pas de keuzelijst.
+        op_achtergrond(self, lambda: (bi.tijd().zone, bi.tijdzones()), self.kies_zone_uit)
+
+    def kies_zone_uit(self, uitkomst) -> None:
+        if not isinstance(uitkomst, tuple):
+            self.melding.toon(t("De tijdzones konden niet geladen worden.", "Could not load the time zones."), "fout")
+            return
         nl = TAAL == "nl"
-        huidig = bi.tijd().zone
+        huidig, zones = uitkomst
         d = KiesDialoog(self, t("Waar ben je?", "Where are you?"),
-                        [(z, bi.mooie_zone(z, nl)) for z in bi.tijdzones()], huidig,
+                        [(z, bi.mooie_zone(z, nl)) for z in zones], huidig,
                         t("Zoek een stad, bijvoorbeeld Amsterdam", "Search a city, for example London"))
         if not d.exec() or d.gekozen == huidig:
             return
