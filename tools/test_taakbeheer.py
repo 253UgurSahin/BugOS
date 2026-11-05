@@ -173,6 +173,19 @@ klopt(not (eigen / "discord.desktop").exists() and {x.naam: x for x in bt.opstar
 bt.zet_opstart(lijst["Notities"], False)
 klopt("Hidden=true" in (eigen / "notities.desktop").read_text() and "Exec=notities" in (eigen / "notities.desktop")
       .read_text(), "opstarten uit (eigen programma): Hidden=true, de rest blijft")
+# Een eigen aangepaste versie van een systeem-programma (andere opdracht, commentaar) blijft heel.
+aangepast = "# mijn eigen versie\n[Desktop Entry]\nType=Application\nName=Discord\nExec=discord --start-minimized\n"
+schrijf(eigen / "discord.desktop", aangepast)
+d = {x.naam: x for x in bt.opstart_lijst()}["Discord"]
+bt.zet_opstart(d, False)
+tekst = (eigen / "discord.desktop").read_text()
+klopt("Exec=discord --start-minimized" in tekst and "# mijn eigen versie" in tekst and "Hidden=true" in tekst,
+      "opstarten uit (eigen aangepaste versie): eigen opdracht en commentaar blijven, alleen Hidden=true erbij")
+bt.zet_opstart({x.naam: x for x in bt.opstart_lijst()}["Discord"], True)
+tekst = (eigen / "discord.desktop").read_text()
+klopt((eigen / "discord.desktop").exists() and "Exec=discord --start-minimized" in tekst and "Hidden=false" in tekst,
+      "opstarten weer aan (eigen aangepaste versie): het bestand blijft, met Hidden=false")
+klopt(not list(eigen.glob(".*bugos-nieuw")), "opstarten: geen tijdelijke bestanden achtergebleven")
 
 # 8. het venster (zonder scherm)
 lader = importlib.machinery.SourceFileLoader("taakbeheer", str(ROOT / "system_files" / "usr" / "bin" /

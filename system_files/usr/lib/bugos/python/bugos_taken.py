@@ -448,23 +448,56 @@ def opstart_lijst() -> list[Opstart]:
     return sorted(lijst, key=lambda x: x.naam.lower())
 
 
+ALLEEN_UIT = "[Desktop Entry]\nHidden=true\n"  # wat wij neerzetten om een systeem-programma uit te zetten
+
+
+def met_hidden(tekst: str, waarde: str) -> str:
+    """Zet alleen de regel Hidden= in [Desktop Entry]; de rest (ook commentaar en eigen Exec) blijft precies zo."""
+    regels = tekst.splitlines()
+    groep, invoeg = "", None
+    for i, regel in enumerate(regels):
+        kaal = regel.strip()
+        if kaal.startswith("[") and kaal.endswith("]"):
+            groep = kaal
+            if groep == "[Desktop Entry]":
+                invoeg = i + 1
+            continue
+        if groep == "[Desktop Entry]" and kaal.split("=", 1)[0].strip() == "Hidden":
+            regels[i] = f"Hidden={waarde}"
+            return "\n".join(regels) + "\n"
+    if invoeg is None:
+        return f"[Desktop Entry]\nHidden={waarde}\n" + tekst
+    regels.insert(invoeg, f"Hidden={waarde}")
+    return "\n".join(regels) + "\n"
+
+
+def schrijf_veilig(pad: Path, tekst: str) -> None:
+    """Eerst naar een tijdelijk bestand, dan in één keer op zijn plek: nooit een half bestand."""
+    tijdelijk = pad.with_name(f".{pad.name}.bugos-nieuw")
+    tijdelijk.write_text(tekst, encoding="utf-8")
+    os.replace(tijdelijk, pad)
+
+
 def zet_opstart(item: Opstart, aan: bool) -> None:
-    """Aan of uit, alleen voor jou (in ~/.config/autostart). Het origineel blijft heel."""
+    """Aan of uit, alleen voor jou (in ~/.config/autostart). Het origineel blijft heel, en een eigen
+    aangepaste versie (andere opdracht, extra opties) ook: we veranderen alleen 'Hidden'."""
     map_ = config_thuis() / "autostart"
     map_.mkdir(parents=True, exist_ok=True)
     pad = map_ / item.bestand
-    if item.van_systeem:
-        if aan:
-            pad.unlink(missing_ok=True)  # dan geldt het origineel weer
-        else:
-            pad.write_text("[Desktop Entry]\nHidden=true\n", encoding="utf-8")
+    try:
+        eigen = pad.read_text(encoding="utf-8")
+    except OSError:
+        eigen = None
+    if item.van_systeem and eigen is None:
+        if not aan:
+            schrijf_veilig(pad, ALLEEN_UIT)
         return
-    c = lees_bureaublad(pad)
-    if c is None:
+    if item.van_systeem and aan and eigen.strip() == ALLEEN_UIT.strip():
+        pad.unlink(missing_ok=True)  # alleen ons eigen 'uit'-briefje: weg ermee, dan geldt het origineel weer
         return
-    c["Desktop Entry"]["Hidden"] = "false" if aan else "true"
-    with open(pad, "w", encoding="utf-8") as f:
-        c.write(f, space_around_delimiters=False)
+    if eigen is None:
+        return
+    schrijf_veilig(pad, met_hidden(eigen, "false" if aan else "true"))
 
 
 # ================================================================ maten ===
