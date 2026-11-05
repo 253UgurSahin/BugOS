@@ -82,6 +82,17 @@ schrijf(WIN / "Pictures" / "kat.jpg", b"k")
 code = bo.zonder_venster(WIN)
 klopt(code == 2 and (THUIS / "nieuw" / "Pictures" / "kat.jpg").exists(),
       "overstap deels: Documents lukt niet helemaal, Pictures wordt toch teruggezet")
+schrijf(WIN / "Bladwijzers" / "Edge.json", json.dumps({"roots": {"bar": {"name": "Balk", "children": [
+    {"type": "url", "name": "Nieuws", "url": "https://example.org/"}]}}}).encode())
+schrijf(WIN / "achtergrond.jpg", b"jpg")
+bo.afronden(WIN)
+html1 = THUIS / "nieuw" / "Documents" / "Bladwijzers-van-Windows.html"
+html1.write_text("mijn eigen aanpassing")
+bo.afronden(WIN)
+klopt(html1.read_text() == "mijn eigen aanpassing"
+      and (THUIS / "nieuw" / "Documents" / "Bladwijzers-van-Windows (2).html").exists()
+      and (THUIS / "nieuw" / "Pictures" / "Windows-achtergrond (2).jpg").exists(),
+      "overstap: nog een keer doen overschrijft niets (bladwijzers en achtergrond krijgen '(2)')")
 os.environ["PATH"] = "/usr/bin:/bin"
 
 # 3. terugzetten na opnieuw installeren: de computer heet anders, de oude back-up moet je toch zien
