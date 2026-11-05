@@ -167,6 +167,10 @@ klopt(mislukt == 1 and [x[0].name for x in b.prullenbak_inhoud()] == ["vast"],
       "prullenbak legen: wat niet weg kan, telt als mislukt en blijft zichtbaar; de rest is weg")
 b.prullenbak_legen()
 
+# 7c. snelkoppelingen: telt waar de koppeling zelf staat (kapot of naar een andere schijf)
+(docs / "kapot").symlink_to(TMP / "bestaat-niet")
+klopt(b.zelfde_schijf(docs / "kapot", thuis), "snelkoppeling: een kapotte koppeling in Documenten mag naar de prullenbak")
+
 # 8. namen tonen
 klopt(b.toon_naam("Recept.odt", False) == "Recept", "naam: bekende extensie verborgen")
 klopt(b.toon_naam("SpotifySetup.exe", False) == "SpotifySetup.exe", "naam: programma houdt zijn extensie")

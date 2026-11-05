@@ -229,8 +229,10 @@ def prullenbak() -> Path:
 
 
 def zelfde_schijf(a: Path, b: Path) -> bool:
+    """Staat 'a' zelf op dezelfde schijf als 'b'? Bij een snelkoppeling telt waar de koppeling staat,
+    niet waar hij naar wijst (die gaat gewoon naar de prullenbak, ook als hij naar een stick wijst)."""
     try:
-        return os.stat(a).st_dev == os.stat(b).st_dev
+        return os.lstat(a).st_dev == os.stat(b).st_dev
     except OSError:
         return False
 
@@ -1539,7 +1541,7 @@ class Bestanden(Venster):
             self.melding.toon(t("Een naam mag geen / bevatten.", "A name cannot contain /."), "fout")
             return
         doel = oud.with_name(nieuw)
-        if doel.exists():
+        if doel.exists() or doel.is_symlink():  # ook een kapotte snelkoppeling niet overschrijven
             self.melding.toon(t(f"Er staat al iets met de naam '{nieuw}'.", f"Something named '{nieuw}' already exists."), "fout")
             return
         try:
