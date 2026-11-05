@@ -232,10 +232,9 @@ lang en_US.UTF-8
 keyboard --vckeymap=us --xlayouts='us'
 
 %onerror
-run0 --user=liveuser --setenv=WAYLAND_DISPLAY=wayland-0 --setenv=DISPLAY=:0 \\
+tail -n 60 /tmp/anaconda.log | run0 --user=liveuser --setenv=WAYLAND_DISPLAY=wayland-0 --setenv=DISPLAY=:0 \\
     yad --timeout=0 --text-info --no-buttons --width=640 --height=420 \\
-    --title=BugOS --text="Installing BugOS did not work. If this happened before copying started, nothing on your computer was changed. Take a photo of this screen and report it at github.com/253UgurSahin/BugOS/issues" \\
-    </tmp/anaconda.log
+    --title=BugOS --text="Installing BugOS did not work. If this happened before copying started, nothing on your computer was changed. Take a photo of this screen and report it at github.com/253UgurSahin/BugOS/issues\n\nThat page is public: check the photo for your name, your computer's name or other personal details first."
 %end
 
 # BugOS vanaf de stick zelf installeren (zie stap 1): geen internet nodig.
