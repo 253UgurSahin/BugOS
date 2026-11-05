@@ -17,6 +17,9 @@ STOREN_MARKER="$BUGOS_CONFIG/niet-storen-voor-spelmodus"
 ENVFILE="${XDG_CONFIG_HOME:-$HOME/.config}/environment.d/90-bugos-spelmodus.conf"
 
 aan() {
+    # Staat hij al aan? Dan niets doen: anders onthouden we "volle kracht" en "niet storen" als hoe
+    # het eerst was, en zet 'uit' ze nooit meer terug.
+    [ -f "$MARKER" ] && return 0
     mkdir -p "$BUGOS_CONFIG" "$(dirname "$ENVFILE")"
     powerprofilesctl get >"$BUGOS_CONFIG/stroomprofiel-voor-spelmodus" 2>/dev/null
     powerprofilesctl set performance 2>/dev/null
