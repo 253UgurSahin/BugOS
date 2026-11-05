@@ -42,8 +42,33 @@ def nep(naam: str, uitvoer: str = "") -> None:
     pad.chmod(0o755)
 
 
+def schoon_pad() -> str:
+    """PATH zonder de echte BugOS-programma's (bugos-*): op BugOS zelf staan die in /usr/bin, en dan zou de
+    test die vinden in plaats van zijn eigen nep-versies. Per map een schaduwmap met al het andere."""
+    mappen = []
+    for i, m in enumerate(p for p in os.environ.get("PATH", "").split(os.pathsep) if p):
+        bron = Path(m)
+        try:
+            namen = [x.name for x in bron.iterdir()]
+        except OSError:
+            continue
+        if not any(n.startswith("bugos-") for n in namen):
+            mappen.append(m)
+            continue
+        schaduw = TMP / f"pad-{i}"
+        schaduw.mkdir(exist_ok=True)
+        for n in namen:
+            if not n.startswith("bugos-") and not (schaduw / n).exists():
+                (schaduw / n).symlink_to(bron / n)
+        mappen.append(str(schaduw))
+    return os.pathsep.join(mappen)
+
+
+PAD = schoon_pad()
+
+
 def draai(*args: str, env_extra: dict | None = None) -> str:
-    env = dict(os.environ, PATH=f"{NEP}:{os.environ['PATH']}", HOME=str(TMP / "thuis"), LC_ALL="nl_NL.UTF-8",
+    env = dict(os.environ, PATH=f"{NEP}:{PAD}", HOME=str(TMP / "thuis"), LC_ALL="nl_NL.UTF-8",
                XDG_DATA_HOME=str(TMP / "data"), XDG_DATA_DIRS=str(TMP / "sys-share"),
                BUGOS_SYS=str(TMP / "sys"), XDG_CURRENT_DESKTOP="KDE")
     env.update(env_extra or {})
@@ -131,9 +156,15 @@ draai("--zet", "niet_storen", "aan")
 klopt("kwriteconfig6 --file plasmanotifyrc --group DoNotDisturb --key Until --notify 2999,12,31,0,0,0" in logboek(),
       "zet niet storen: dezelfde waarde als Instellingen, met --notify")
 LOG.write_text("")
+nep("bugos-thema")
 draai("--zet", "donker", "aan")
-klopt("plasma-apply-colorscheme BugOSDonker" in logboek() and "plasma-apply-desktoptheme breeze-dark" in logboek(),
-      "zet donker: kleuren én Plasma-thema, net als Instellingen")
+import time  # noqa: E402
+for _ in range(50):  # bugos-thema start los (op de achtergrond): even wachten tot hij in het logboek staat
+    if "bugos-thema donker" in logboek():
+        break
+    time.sleep(0.1)
+klopt("bugos-thema donker" in logboek(),
+      "zet donker: via bugos-thema (kleuren, KDE-programma's en Plasma-stijl in één keer, net als Instellingen)")
 
 # 5. starten
 LOG.write_text("")
