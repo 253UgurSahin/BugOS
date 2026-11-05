@@ -100,6 +100,46 @@ try:
     klopt(False, "map in zichzelf kopiëren wordt geweigerd")
 except ValueError:
     klopt(True, "map in zichzelf kopiëren wordt geweigerd")
+# 6b. gaat het halverwege mis (schijf vol, stick eruit), dan blijft er geen halve kopie achter
+import shutil as _sh  # noqa: E402
+_echt_copy2 = _sh.copy2
+
+
+def _halverwege(bron, doel_, **kw):
+    _echt_copy2(bron, doel_, **kw)
+    if Path(bron).name == "binnen.txt":
+        raise OSError(28, "No space left on device")
+
+
+_echt_copytree = _sh.copytree
+_sh.copytree = lambda s, d, **kw: _echt_copytree(s, d, copy_function=_halverwege, **kw)
+voor = sorted(p.name for p in doel.iterdir())
+try:
+    b.kopieer_een(docs / "map", doel, verplaats=False)
+    klopt(False, "kopie mislukt halverwege: fout gemeld")
+except (OSError, _sh.Error):
+    klopt(sorted(p.name for p in doel.iterdir()) == voor, "kopie mislukt halverwege: geen halve map achtergebleven")
+_sh.copytree = _echt_copytree
+# 6c. verplaatsen naar een andere schijf: eerst helemaal kopiëren, dan pas het origineel weg
+_echt_rename = os.rename
+_keer = []
+
+
+def _andere_schijf(a, c):
+    if not _keer:  # alleen de eerste poging (het verplaatsen zelf) zegt: andere schijf
+        _keer.append(1)
+        raise OSError(18, "Invalid cross-device link")
+    return _echt_rename(a, c)
+
+
+os.rename = _andere_schijf
+(docs / "verhuis").mkdir()
+(docs / "verhuis" / "a.txt").write_text("a")
+v2 = b.kopieer_een(docs / "verhuis", doel, verplaats=True)
+os.rename = _echt_rename
+klopt(v2 == doel / "verhuis" and (v2 / "a.txt").read_text() == "a" and not (docs / "verhuis").exists()
+      and not any(p.name.endswith(".bugos-bezig") for p in doel.iterdir()),
+      "verplaatsen naar een andere schijf: alles over, origineel weg, geen tijdelijke map over")
 
 # 7. prullenbak legen
 b.prullenbak_legen()
@@ -257,6 +297,24 @@ klopt(not venster.keuzebalk.isHidden() and venster.keuzebalk.knoppen["naam"].isV
 klopt(venster.keuzebalk.knoppen["terugzetten"].isHidden(), "kiezen: geen Zet terug buiten de prullenbak")
 venster.ga_naar(thuis)
 klopt(venster.gekozen() == [] and venster.keuzebalk.isHidden(), "andere map: niets blijft gekozen, balk weg")
+
+
+class _BezigeKlus:
+    def isRunning(self):  # noqa: N802
+        return True
+
+
+venster.show()
+venster.klus = _BezigeKlus()
+venster.close()
+klopt(venster.isVisible() and venster.sluit_na_klus, "sluiten tijdens kopiëren: venster wacht tot het klaar is")
+venster.klus = None
+venster._klus_klaar(1, "", False)
+for _ in range(20):
+    app.processEvents()
+klopt(not venster.isVisible(), "sluiten tijdens kopiëren: na het kopiëren gaat het venster vanzelf dicht")
+venster.sluit_na_klus = False
+venster.show()
 
 # kopiëren en plakken via het venster
 klopt(venster.plak_knop.isHidden(), "plakken: geen knop zolang er niets gekopieerd is")

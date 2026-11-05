@@ -14,6 +14,7 @@ Gebruik:  bugos-bestanden [map of bestand]
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import os
 import shutil
@@ -330,12 +331,41 @@ def kopieer_een(bron: Path, doelmap: Path, verplaats: bool) -> Path | None:
         return bron  # staat er al
     doel = vrije_naam(doelmap / bron.name)
     if verplaats:
-        shutil.move(str(bron), str(doel))
-    elif bron.is_dir() and not bron.is_symlink():
-        shutil.copytree(bron, doel, symlinks=True)
-    else:
-        shutil.copy2(bron, doel, follow_symlinks=False)
+        try:
+            os.rename(bron, doel)  # op dezelfde schijf: in één keer, niets half
+            return doel
+        except OSError as e:
+            if e.errno != errno.EXDEV:
+                raise
+    # Eerst onder een verborgen tijdelijke naam; pas als alles er is, krijgt hij zijn echte naam.
+    # Gaat het mis (schijf vol, stick eruit, venster dicht), dan blijft er geen halve kopie achter.
+    tijdelijk = vrije_naam(doelmap / f".{doel.name}.bugos-bezig")
+    try:
+        if bron.is_dir() and not bron.is_symlink():
+            shutil.copytree(bron, tijdelijk, symlinks=True)
+        else:
+            shutil.copy2(bron, tijdelijk, follow_symlinks=False)
+        os.rename(tijdelijk, doel)
+    except BaseException:
+        ruim_op(tijdelijk)
+        raise
+    if verplaats:  # naar een andere schijf: het origineel pas weg als de kopie helemaal klaar is
+        if bron.is_dir() and not bron.is_symlink():
+            shutil.rmtree(bron)
+        else:
+            bron.unlink()
     return doel
+
+
+def ruim_op(pad: Path) -> None:
+    """Haal een halve kopie weg (stil: er was al een fout)."""
+    try:
+        if pad.is_dir() and not pad.is_symlink():
+            shutil.rmtree(pad, ignore_errors=True)
+        else:
+            pad.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 class Klus(QThread):
@@ -821,6 +851,7 @@ class Bestanden(Venster):
         self.huidig = thuis()
         self.in_prullenbak = False
         self.klus: Klus | None = None
+        self.sluit_na_klus = False
         self.laatst_weg: list[tuple[Path, Path]] = []
         self.in_computer = False                 # de pagina 'Deze computer' staat open
         self.lijst_schijven: list[Schijf] = []   # USB-sticks en andere schijven
@@ -1282,6 +1313,14 @@ class Bestanden(Venster):
         balk.plaats(QRect(self.stapel.mapTo(self, QPoint(0, 0)), self.stapel.size()))
 
     def closeEvent(self, e) -> None:  # noqa: N802
+        if self.klus and self.klus.isRunning():
+            # Nooit midden in het kopiëren stoppen: wacht tot het klaar is en sluit dan vanzelf.
+            self.sluit_na_klus = True
+            self.melding.toon(t("Even wachten: het kopiëren is nog bezig. Daarna gaat het venster vanzelf dicht.",
+                                "One moment: copying is still busy. The window closes by itself afterwards."),
+                              seconden=0)
+            e.ignore()
+            return
         self.apparaten.stop()
         self.voorbeelden.stop()
         STOP.set()
@@ -1441,6 +1480,8 @@ class Bestanden(Venster):
                                 f"Done: {gelukt} {'item' if gelukt == 1 else 'items'} {'moved' if knip else 'copied'}."), "goed")
         if knip:
             QApplication.clipboard().clear()
+        if self.sluit_na_klus:
+            QTimer.singleShot(0, self.close)
 
     # ------------------------------------------------------------ vragen
     def vraag_tekst(self, titel: str, vraag: str, tekst: str, ok: str = "") -> str | None:
