@@ -138,6 +138,22 @@ lang = [bt.Proces(400, "xdg-desktop-por", 1, 1, 1, True, f"{SESSIE}/xdg-desktop-
 beschermd = {x.pids[0]: x.beschermd for x in bt.groepeer(lang, {})}
 klopt(all(beschermd[p] for p in (400, 401, 402, 403)) and not beschermd[404],
       "beschermd: ook lange namen (xdg-desktop-portal-kde, kwin_wayland_wrapper, startplasma) en plasma-diensten")
+# B002: de rest van wat de sessie nodig heeft (gezien in de echte BugOS live-sessie, met hun eenheden).
+GEB = "/user.slice/user-1000.slice/user@1000.service"
+kern = [bt.Proces(500, "dbus-broker-lau", 1, 1, 1, True, f"{GEB}/session.slice/dbus-broker.service"),
+        bt.Proces(501, "(sd-pam)", 1, 1, 1, True, f"{GEB}/init.scope"),
+        bt.Proces(502, "at-spi-bus-laun", 1, 1, 1, True, f"{GEB}/session.slice/at-spi-dbus-bus.service"),
+        bt.Proces(503, "at-spi2-registr", 1, 1, 1, True,
+                  f"{GEB}/session.slice/dbus-:1.28-org.a11y.atspi.Registry@0.service"),
+        bt.Proces(504, "dconf-service", 1, 1, 1, True, f"{GEB}/session.slice/dconf.service"),
+        bt.Proces(505, "xdg-document-po", 1, 1, 1, True, f"{GEB}/app.slice/xdg-document-portal.service"),
+        bt.Proces(506, "xdg-permission-", 1, 1, 1, True, f"{GEB}/app.slice/xdg-permission-store.service"),
+        bt.Proces(507, "ssh-agent", 1, 1, 1, True, f"{GEB}/app.slice/ssh-agent.service"),
+        bt.Proces(508, "kdeconnectd", 1, 1, 1, True, f"{GEB}/app.slice/app-org.kde.kdeconnect.daemon@autostart.service")]
+beschermd = {x.pids[0]: x.beschermd for x in bt.groepeer(kern, {})}
+klopt(all(beschermd[p] for p in range(500, 507)),
+      "beschermd: sessie-berichtenbus, gebruikersbeheer, toegankelijkheid, dconf en de Flatpak-portalen")
+klopt(not beschermd[507] and not beschermd[508], "niet beschermd: gewone achtergrondhulpjes (ssh-agent, KDE Connect)")
 
 # 5. advies in gewone woorden
 klopt(bt.advies([10, 20, 30], 4, 16, m["taken"])[0] == "goed", "advies: rustig -> 'Alles loopt soepel'")

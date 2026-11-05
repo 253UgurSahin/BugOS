@@ -38,7 +38,11 @@ BESCHERMD = {"kwin_wayland", "kwin_x11", "plasmashell", "ksmserver", "kded6", "k
 BESCHERMD_KORT = {naam[:15] for naam in BESCHERMD}
 # Ook alles wat in een eenheid van het bureaublad zelf draait (plasma-*.service) of in de inlogsessie
 # (session-*.scope, daar draait startplasma) hoort bij BugOS: stoppen sluit alle vensters.
-BESCHERMDE_EENHEID = re.compile(r"^(plasma-.+\.service|session-[^/]+\.scope)$")
+# En wat de sessie onder water nodig heeft: de berichtenbus (dbus/dbus-broker, en wat die zelf start:
+# dbus-:<id>-<naam>.service), het gebruikersbeheer (init.scope: systemd --user en (sd-pam)),
+# toegankelijkheid voor schermlezers (at-spi), instellingen (dconf) en de Flatpak-portalen (xdg-*).
+BESCHERMDE_EENHEID = re.compile(r"^(plasma-.+\.service|session-[^/]+\.scope|init\.scope|dbus(-broker)?\.service"
+                                r"|dbus-:.+\.service|at-spi-dbus-bus\.service|dconf\.service|xdg-.+\.service)$")
 BEKENDE_NAMEN = {  # achtergrond: gewone woorden in plaats van programmanamen
     "plasmashell": ("Bureaublad (Plasma)", "Desktop (Plasma)"),
     "kwin_wayland": ("Vensters (KWin)", "Windows (KWin)"),
