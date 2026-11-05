@@ -127,8 +127,11 @@ def controle_printer() -> Uitslag:
     if code != 0 or "not running" in uit:
         return Uitslag(naam, LET_OP, t("De printerdienst draait niet.", "The printing service is not running."),
                        lambda: start("pkexec", "systemctl", "restart", "cups"), t("Printerdienst starten", "Start printing service"))
+    # Zijn er printers? lpstat -e geeft alleen hun namen (leeg als er geen is). lpstat -p zegt zonder
+    # printer "No destinations added." (in de taal van de computer), en dat is geen printer.
+    _, namen = draai("lpstat", "-e", timeout=5)
     _, printers = draai("lpstat", "-p", timeout=5)
-    if not printers.strip():
+    if not namen.strip():
         return Uitslag(naam, OK, t("Er is nog geen printer toegevoegd.", "No printer has been added yet."),
                        lambda: kde_instelling("kcm_printer_manager"), t("Printer toevoegen", "Add printer"))
     if "disabled" in printers:

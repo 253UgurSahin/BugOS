@@ -41,6 +41,21 @@ def trage_controle():
                       lambda: (time.sleep(1.5), gerepareerd.append(1)), "Zet aan")
 
 
+# B003: zonder printer zegt lpstat -p "No destinations added." (exit 1); dat is geen printer.
+_echt = (bh.draai, bh.bestaat)
+bh.bestaat = lambda naam: True
+antwoorden = {("-r",): (0, "scheduler is running\n"), ("-p",): (1, "lpstat: No destinations added.\n"),
+              ("-e",): (0, "")}
+bh.draai = lambda *cmd, **kw: antwoorden[cmd[1:]]
+u = bh.controle_printer()
+tekst = u.tekst.lower()
+klopt(u.stand == bh.OK and u.repareer is not None and ("nog geen printer" in tekst or "no printer" in tekst),
+      "printer: zonder printer 'nog geen printer toegevoegd', met de knop erbij")
+antwoorden.update({("-p",): (0, "printer HP is idle.  enabled since Mon\n"), ("-e",): (0, "HP\n")})
+u = bh.controle_printer()
+klopt(u.stand == bh.OK and u.repareer is None, "printer: met een printer die klaarstaat 'Printer is klaar'")
+bh.draai, bh.bestaat = _echt
+
 bh.CONTROLES = [trage_controle]
 venster_ = {}
 bugos_ui.uitvoeren = lambda app, w: venster_.setdefault("w", w) and 0  # niet blijven wachten: de test bestuurt het
