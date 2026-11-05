@@ -15,7 +15,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preload" href="fonts/funnel-display.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/atkinson-hyperlegible-next.woff2" as="font" type="font/woff2" crossorigin>
-<script>document.documentElement.classList.add("js");try{var t=localStorage.getItem("bugos-thema");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<script>document.documentElement.classList.add("js");try{var t=localStorage.getItem("bugos-theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
 <style>
 /* Website v4. Eén verhaal van boven naar beneden:
    nacht-opening met de ringen van "Stip" -> het verhaal (tekst kleurt mee met scrollen)
@@ -368,7 +368,7 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
 
 /* download */
 .download { position: relative; isolation: isolate; overflow: hidden; background: var(--nacht); color: var(--nacht-tekst); }
-.download::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(180deg, rgba(5,5,6,.2), rgba(5,5,6,.96) 70%), url("assets/stip-donker.webp") center top / cover no-repeat; opacity: .9; }
+.download::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(180deg, rgba(5,5,6,.2), rgba(5,5,6,.96) 70%), url("assets/dot-dark.webp") center top / cover no-repeat; opacity: .9; }
 .download .label { color: #9A9FA9; }
 .dl-kop { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 6fr); gap: clamp(40px, 6vw, 96px); align-items: center; }
 @media (max-width: 960px) { .dl-kop { grid-template-columns: 1fr; } }
@@ -469,10 +469,10 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
     </ul>
     <div class="apparaat">
       <div class="deksel" id="deksel">
-        <img src="assets/bureaublad-donker-1440.webp" srcset="assets/bureaublad-donker-1440.webp 1440w, assets/bureaublad-donker.webp 2880w" sizes="(max-width: 1100px) 100vw, 1060px" width="2880" height="1800" fetchpriority="high" alt="The BugOS desktop: the start menu with a 'Good evening' greeting and the BugOS Store, on the red Dot wallpaper.">
+        <img src="assets/desktop-dark-1440.webp" srcset="assets/desktop-dark-1440.webp 1440w, assets/desktop-dark.webp 2880w" sizes="(max-width: 1100px) 100vw, 1060px" width="2880" height="1800" fetchpriority="high" alt="The BugOS desktop: the start menu with a 'Good evening' greeting and the BugOS Store, on the red Dot wallpaper.">
       </div>
       <div class="voet"></div>
-      <div class="zweef links" data-zweef="-0.06" aria-hidden="true"><img src="assets/snelmenu-donker.webp" width="840" height="800" alt=""></div>
+      <div class="zweef links" data-zweef="-0.06" aria-hidden="true"><img src="assets/quickmenu-dark.webp" width="840" height="800" alt=""></div>
       <div class="zweef rechts" data-zweef="0.05" aria-hidden="true">
         <span class="vink"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>
         <span><b>Updated last night</b><small>Nothing for you to do.</small></span>
@@ -538,7 +538,7 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
       <li class="rv" style="--d:.24s"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.4-7.5-10a4.3 4.3 0 0 1 7.5-2.9 4.3 4.3 0 0 1 7.5 2.9c0 5.6-7.5 10-7.5 10z"/></svg></span><h3>Nothing disappears</h3><p>BugOS never just throws something away. Not during a backup or an update either.</p></li>
     </ul>
     <figure class="foto-groot rv">
-      <div class="venster"><img loading="lazy" data-licht="assets/welkom-licht.webp" data-donker="assets/welkom-donker.webp" src="assets/welkom-licht.webp" width="2200" height="1360" alt="BugOS Welcome, step 3 of 6: Light or dark? Two big cards to choose from."></div>
+      <div class="venster"><img loading="lazy" data-licht="assets/welcome-light.webp" data-donker="assets/welcome-dark.webp" src="assets/welcome-light.webp" width="2200" height="1360" alt="BugOS Welcome, step 3 of 6: Light or dark? Two big cards to choose from."></div>
       <figcaption class="onderschrift">BugOS Welcome: turning it on for the first time, step by step.</figcaption>
     </figure>
   </div>
@@ -557,27 +557,27 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
         <li class="moment">
           <time datetime="08:30">08:30</time>
           <h3>The computer is ready.</h3><p>Bugie turns on the computer. The updates were already done last night, quietly in the background. Bugie doesn't notice a thing.</p><span class="wie">Automatic updates</span>
-          <figure><div class="venster"><img loading="lazy" data-licht="assets/aanuit-licht-uitsnede.webp" data-donker="assets/aanuit-donker-uitsnede.webp" src="assets/aanuit-licht-uitsnede.webp" width="1940" height="1100" alt="Settings, On and off: the 'Automatic updates' switch is on."></div></figure>
+          <figure><div class="venster"><img loading="lazy" data-licht="assets/power-light-crop.webp" data-donker="assets/power-dark-crop.webp" src="assets/power-light-crop.webp" width="1940" height="1100" alt="Settings, On and off: the 'Automatic updates' switch is on."></div></figure>
         </li>
         <li class="moment">
           <time datetime="10:15">10:15</time>
           <h3>The printer is acting up.</h3><p>Bugie opens "Something is not working". BugOS checks the wifi, sound, the printer and more. If there's a problem, there's a button that fixes it for you.</p><span class="wie">Help in one click</span>
-          <figure><div class="venster"><img loading="lazy" data-licht="assets/hulp-licht-uitsnede.webp" data-donker="assets/hulp-donker-uitsnede.webp" src="assets/hulp-licht-uitsnede.webp" width="1760" height="1120" alt="Something is not working: everything has been checked, with a green dot next to internet, wifi, bluetooth, sound, printer, storage and updates."></div></figure>
+          <figure><div class="venster"><img loading="lazy" data-licht="assets/help-light-crop.webp" data-donker="assets/help-dark-crop.webp" src="assets/help-light-crop.webp" width="1760" height="1120" alt="Something is not working: everything has been checked, with a green dot next to internet, wifi, bluetooth, sound, printer, storage and updates."></div></figure>
         </li>
         <li class="moment">
           <time datetime="11:30">11:30</time>
           <h3>Photos of the grandkids.</h3><p>In Files, your photos, documents and downloads each have their own place, just like in Windows. You see a small preview of every file right away. Click something, and the bottom shows what you can do with it.</p><span class="wie">The file manager</span>
-          <figure><div class="venster"><img loading="lazy" data-licht="assets/verkenner-licht.webp" data-donker="assets/verkenner-donker.webp" src="assets/verkenner-licht.webp" width="2360" height="1480" alt="Files, the BugOS file manager: the Pictures folder with red folders and previews of the photos."></div></figure>
+          <figure><div class="venster"><img loading="lazy" data-licht="assets/explorer-light.webp" data-donker="assets/explorer-dark.webp" src="assets/explorer-light.webp" width="2360" height="1480" alt="Files, the BugOS file manager: the Pictures folder with red folders and previews of the photos."></div></figure>
         </li>
         <li class="moment">
           <time datetime="13:00">13:00</time>
           <h3>Getting an app.</h3><p>The BugOS Store has well-known, safe apps. One click on Install and you're done. Updates happen by themselves.</p><span class="wie">The BugOS Store</span>
-          <figure><div class="venster"><img loading="lazy" data-licht="assets/winkel-licht.webp" data-donker="assets/winkel-donker.webp" src="assets/winkel-licht.webp" width="2360" height="1600" alt="The BugOS Store with recommended apps like Firefox, VLC, LibreOffice, Spotify and Steam."></div></figure>
+          <figure><div class="venster"><img loading="lazy" data-licht="assets/store-light.webp" data-donker="assets/store-dark.webp" src="assets/store-light.webp" width="2360" height="1600" alt="The BugOS Store with recommended apps like Firefox, VLC, LibreOffice, Spotify and Steam."></div></figure>
         </li>
         <li class="moment smal-beeld">
           <time datetime="16:30">16:30</time>
           <h3>Daan comes over to game.</h3><p>Game mode on, plug in the controller, play. Steam is ready to go, and the right Nvidia driver is already in there too.</p><span class="wie">For gamers</span>
-          <figure class="smal"><div class="venster" style="border-color:#1F2024"><img loading="lazy" src="assets/snelmenu-donker.webp" width="840" height="800" alt="The quick menu with big buttons: wifi, bluetooth, game mode and dark mode are on."></div></figure>
+          <figure class="smal"><div class="venster" style="border-color:#1F2024"><img loading="lazy" src="assets/quickmenu-dark.webp" width="840" height="800" alt="The quick menu with big buttons: wifi, bluetooth, game mode and dark mode are on."></div></figure>
         </li>
         <li class="moment">
           <time datetime="21:00">21:00</time>
@@ -638,12 +638,12 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
       <li class="tegel groot rv">
         <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span>
         <h3>One-button backup</h3><p>Plug in a USB drive, press the button and your documents, photos, music and videos are safe. Nothing is ever thrown away.</p>
-        <div class="beeld"><img loading="lazy" data-licht="assets/backup-licht.webp" data-donker="assets/backup-donker.webp" src="assets/backup-licht.webp" width="1560" height="1440" alt="Backup: choose what goes along (documents, pictures, music, videos, desktop, downloads) and a USB stick, then press Make backup."></div>
+        <div class="beeld"><img loading="lazy" data-licht="assets/backup-light.webp" data-donker="assets/backup-dark.webp" src="assets/backup-light.webp" width="1560" height="1440" alt="Backup: choose what goes along (documents, pictures, music, videos, desktop, downloads) and a USB stick, then press Make backup."></div>
       </li>
       <li class="tegel half nacht beeld-midden rv" style="--d:.08s">
         <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/></svg></span>
         <h3>One search for everything</h3><p>Open the start menu and type what you're looking for: an app or a setting.</p>
-        <div class="beeld"><img loading="lazy" src="assets/startmenu-donker.webp" width="1320" height="1280" alt="The start menu: 'Good evening', a search box, pinned apps and recently opened files."></div>
+        <div class="beeld"><img loading="lazy" src="assets/startmenu-dark.webp" width="1320" height="1280" alt="The start menu: 'Good evening', a search box, pinned apps and recently opened files."></div>
       </li>
       <li class="tegel klein rv">
         <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M3.5 8.5h17M7 6.5h.01M9.5 6.5h.01"/></svg></span>
@@ -660,12 +660,12 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
       <li class="tegel half rv">
         <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg></span>
         <h3>Files from Windows</h3><p>Bring your documents, photos, bookmarks and even your wallpaper along from your old computer.</p>
-        <div class="beeld"><img loading="lazy" data-licht="assets/overstap-licht.webp" data-donker="assets/overstap-donker.webp" src="assets/overstap-licht.webp" width="1560" height="1400" alt="Your files from Windows: documents, bookmarks and wallpaper, put back from the USB stick with one button."></div>
+        <div class="beeld"><img loading="lazy" data-licht="assets/switch-light.webp" data-donker="assets/switch-dark.webp" src="assets/switch-light.webp" width="1560" height="1400" alt="Your files from Windows: documents, bookmarks and wallpaper, put back from the USB stick with one button."></div>
       </li>
       <li class="tegel groot rv" style="--d:.08s">
         <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></span>
         <h3>Settings in plain words</h3><p>Everything in one place, in everyday words. The switches you use most are right at the top.</p>
-        <div class="beeld"><img loading="lazy" data-licht="assets/instellingen-licht.webp" data-donker="assets/instellingen-donker.webp" src="assets/instellingen-licht.webp" width="2240" height="1640" alt="Settings: big switches for wifi, bluetooth, night light and dark, a volume slider and a list of all settings with a short explanation each."></div>
+        <div class="beeld"><img loading="lazy" data-licht="assets/settings-light.webp" data-donker="assets/settings-dark.webp" src="assets/settings-light.webp" width="2240" height="1640" alt="Settings: big switches for wifi, bluetooth, night light and dark, a volume slider and a list of all settings with a short explanation each."></div>
       </li>
       <li class="tegel klein rv">
         <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.3 2.5 3.5 5.3 3.5 8.5s-1.2 6-3.5 8.5c-2.3-2.5-3.5-5.3-3.5-8.5s1.2-6 3.5-8.5z"/></svg></span>
@@ -692,8 +692,8 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
       <p class="lead rv">Go ahead, slide it back and forth. Every app, every menu and the wallpaper follow along.</p>
     </div>
     <div class="vergelijk rv" id="vergelijk">
-      <img src="assets/bureaublad-donker.webp" loading="lazy" width="2880" height="1800" alt="The BugOS desktop in dark.">
-      <img class="licht" src="assets/bureaublad-licht.webp" loading="lazy" width="2880" height="1800" alt="The BugOS desktop in light.">
+      <img src="assets/desktop-dark.webp" loading="lazy" width="2880" height="1800" alt="The BugOS desktop in dark.">
+      <img class="licht" src="assets/desktop-light.webp" loading="lazy" width="2880" height="1800" alt="The BugOS desktop in light.">
       <span class="etiket l">Light</span><span class="etiket r">Dark</span>
       <span class="grens"></span>
       <input type="range" id="schuif" min="0" max="100" value="50" aria-label="Slide between light and dark">
@@ -741,7 +741,7 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
 <circle cx="128" cy="146" r="94" fill="url(#winmerk-r)" clip-path="url(#winmerk-rechts)"/>
 <g fill="#16171C"><circle cx="90" cy="120" r="18"/><circle cx="166" cy="120" r="18"/><circle cx="88" cy="186" r="14"/><circle cx="168" cy="186" r="14"/></g>
 </g></svg>BugOS Overstap<div class="win-knoppen"><span><svg viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor"/></svg></span><span><svg viewBox="0 0 10 10"><rect x=".5" y=".5" width="9" height="9" fill="none" stroke="currentColor"/></svg></span><span><svg viewBox="0 0 10 10"><path d="M0 0l10 10M10 0 0 10" stroke="currentColor"/></svg></span></div></div>
-      <img loading="lazy" src="assets/overstap-windows.webp" width="1320" height="840" alt="BugOS Overstap on Windows, step 1: Can my computer run BugOS? With a green check mark next to 64-bit, memory, UEFI and graphics card.">
+      <img loading="lazy" src="assets/switch-windows.webp" width="1320" height="840" alt="BugOS Overstap on Windows, step 1: Can my computer run BugOS? With a green check mark next to 64-bit, memory, UEFI and graphics card.">
     </figure>
     <p class="terugzetten">In BugOS you put everything back with one button, in the "Files from Windows" app.</p>
   </div>
@@ -795,14 +795,14 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
     </div>
     <div class="opties">
       <div class="optie hoofd rv">
-        <img class="ic" src="assets/bugos-icoon.svg" alt="">
+        <img class="ic" src="assets/bugos-icon.svg" alt="">
         <h3>BugOS</h3>
         <p>For most computers and laptops, with an Intel or AMD processor.</p>
         <a class="knop knop-rood" href="https://github.com/253UgurSahin/BugOS/releases">Download (.iso)</a>
         <small>About 5.6 GB · 64-bit</small>
       </div>
       <div class="optie rv" style="--d:.08s">
-        <img class="ic" src="assets/bugos-icoon.svg" alt="">
+        <img class="ic" src="assets/bugos-icon.svg" alt="">
         <h3>BugOS for Nvidia</h3>
         <p>Do you have an Nvidia graphics card (GTX 16 or RTX)? Then the right driver is already in there.</p>
         <a class="knop knop-rand" href="https://github.com/253UgurSahin/BugOS/releases">Download (.iso)</a>
@@ -858,7 +858,7 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
         <p style="margin-top:16px;max-width:22rem">The computer that just works. Free, safe and open, for everyone at home.</p>
       </div>
       <div><h4>BugOS</h4><ul><li><a href="#verhaal">The story</a></li><li><a href="#dag">How it works</a></li><li><a href="#functies">Features</a></li><li><a href="#download">Download</a></li></ul></div>
-      <div><h4>Get involved</h4><ul><li><a href="https://github.com/253UgurSahin/BugOS">GitHub</a></li><li><a href="https://github.com/253UgurSahin/BugOS/blob/main/docs/VERTALEN.md">Translate</a></li><li><a href="https://github.com/253UgurSahin/BugOS/blob/main/docs/HUISSTIJL.md">Brand guide</a></li></ul></div>
+      <div><h4>Get involved</h4><ul><li><a href="https://github.com/253UgurSahin/BugOS">GitHub</a></li><li><a href="https://github.com/253UgurSahin/BugOS/blob/main/docs/TRANSLATING.md">Translate</a></li><li><a href="https://github.com/253UgurSahin/BugOS/blob/main/docs/BRAND.md">Brand guide</a></li></ul></div>
       <div><h4>Built on</h4><ul><li><a href="https://fedoraproject.org">Fedora</a></li><li><a href="https://kde.org">KDE Plasma</a></li><li><a href="https://universal-blue.org">Universal Blue</a></li></ul></div>
     </div>
     <div class="klein"><span>BugOS is free software under the GPL-3.0 license.</span><span>This website uses no cookies and no tracking.</span></div>
@@ -869,7 +869,7 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
 (function () {
   var root = document.documentElement;
   var rustig = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-  function bewaar(w) { try { localStorage.setItem("bugos-thema", w); } catch (e) {} }
+  function bewaar(w) { try { localStorage.setItem("bugos-theme", w); } catch (e) {} }
   function isDonker() {
     var t = root.getAttribute("data-theme");
     if (t) return t === "dark";

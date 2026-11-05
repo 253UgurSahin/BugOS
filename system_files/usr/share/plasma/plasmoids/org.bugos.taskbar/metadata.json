@@ -1,0 +1,21 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "BugOS"
+            }
+        ],
+        "Category": "Windows and Tasks",
+        "Description": "De lege ruimte van de taakbalk: met de rechtermuisknop open je Taakbeheer, net als in Windows",
+        "Description[en]": "The empty space on the taskbar: right-click it to open Task Manager, just like in Windows",
+        "Icon": "bugos-task-manager",
+        "Id": "org.bugos.taskbar",
+        "License": "GPL-3.0-or-later",
+        "Name": "BugOS Taakbalkruimte",
+        "Name[en]": "BugOS Taskbar Space",
+        "Version": "0.1",
+        "Website": "https://github.com/253UgurSahin/BugOS"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

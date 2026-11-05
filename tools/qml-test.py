@@ -14,7 +14,7 @@ from PySide6.QtQuick import QQuickView
 
 ROOT = Path(__file__).resolve().parent.parent / "system_files/usr/share/plasma/plasmoids"
 STARTMENU = ROOT / "org.bugos.startmenu/contents/ui/StartMenu.qml"
-SNELMENU = ROOT / "org.bugos.snelmenu/contents/ui/Snelmenu.qml"
+SNELMENU = ROOT / "org.bugos.quickmenu/contents/ui/QuickMenu.qml"
 
 APP = {"id": "a.desktop", "pad": "/a.desktop", "naam": "Firefox", "uitleg": "Webbrowser", "icoon": "firefox",
        "groep": "Internet", "zoek": "firefox webbrowser", "soort": "app"}
@@ -77,7 +77,7 @@ def main() -> int:
         views.append((STARTMENU, start))
 
     snel = laad(SNELMENU)
-    klopt(snel is not None, "Snelmenu.qml laadt")
+    klopt(snel is not None, "QuickMenu.qml laadt")
     if snel:
         app.processEvents()
         klopt(kind(snel, "evenKijken").property("visible") is True, "snelmenu: zonder status staat er 'Even kijken…'")

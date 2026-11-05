@@ -1,0 +1,26 @@
+#!/usr/bin/python3
+"""Interne schijven openen na het inloggen, zodat ze er altijd zijn (zoals D: in Windows).
+
+Draait één keer na het inloggen (zie /etc/xdg/autostart/bugos-open-drives.desktop).
+Zonder wachtwoord dankzij /usr/share/polkit-1/rules.d/50-bugos-drives.rules (alleen voor beheerders).
+"""
+
+import subprocess
+import sys
+
+sys.path.insert(0, "/usr/lib/bugos/python")
+
+from bugos_drives import auto_open_stappen, schijven  # noqa: E402
+
+
+def main() -> int:
+    for opdracht in auto_open_stappen(schijven()):
+        try:
+            subprocess.run(opdracht, capture_output=True, timeout=60)
+        except (OSError, subprocess.SubprocessError):
+            pass  # lukt het niet, dan kan het altijd nog met één klik in Bestanden
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

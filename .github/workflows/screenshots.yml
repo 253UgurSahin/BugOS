@@ -1,0 +1,231 @@
+---
+# Foto's maken van het echte BugOS (de verkenner, en het hele bureaublad met de taakbalk),
+# op een virtueel scherm. Op verzoek: Actions -> BugOS-foto's -> Run workflow.
+# Twee taken maken tegelijk foto's (verkenner en bureaublad); een derde (vastleggen) zet ze samen in de repo.
+name: BugOS-foto's
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Welke BugOS (tag van het beeld)"
+        default: "latest"
+      vastleggen:
+        description: "De foto's in de repo zetten (docs/images/explorer en docs/images/bureaublad)"
+        type: boolean
+        default: true
+
+jobs:
+  verkenner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ruimte maken op de bouwcomputer
+        uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
+
+      - name: BugOS ophalen
+        run: |
+          # podman, net als bij het bouwen (docker kan niet zoveel lagen aan)
+          echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+          sudo podman pull "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${{ inputs.tag }}"
+
+      - name: Hulpmiddelen voor schijven in BugOS
+        run: |
+          # Bestanden gebruikt deze om schijven te openen, te ontgrendelen en veilig te verwijderen.
+          sudo podman run --rm --entrypoint /usr/bin/bash "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${{ inputs.tag }}" \
+            -c 'mis=0; for p in lsblk udisksctl gdbus mkfs.exfat; do command -v "$p" >/dev/null || { echo "::error::$p ontbreekt in BugOS"; mis=1; }; done
+                for p in solid-hardware6 eject fsck.exfat mkfs.vfat partitionmanager nmcli bluetoothctl pactl kscreen-doctor powerprofilesctl; do
+                  command -v "$p" >/dev/null || echo "::warning::$p ontbreekt in BugOS"; done; echo "Hulpmiddelen gecontroleerd."; exit $mis'
+
+      - name: Foto's van de verkenner
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb imagemagick >/dev/null
+          Xvfb :99 -screen 0 2560x1600x24 -ac -nolisten tcp &
+          sleep 3
+          BEELD="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${{ inputs.tag }}"
+          mkdir -p docs/images/explorer
+          # NEP=<lijstje.json> ervoor: nep-schijven (anders geen; de schijven van de bouwcomputer horen er niet bij)
+          # RUIMTE=... ervoor: voorbeeldgetallen voor 'Deze computer'
+          maak() {  # naam thema map [programma]
+            sudo podman run -d --name foto -e DISPLAY=:99 -e "BUGOS_LSBLK=${NEP:-/repo/tools/screenshots/no-drives.json}" \
+              ${RUIMTE:+-e BUGOS_RUIMTE=$RUIMTE} ${VOORBEELD_VAN:+-e $VOORBEELD_VAN=1} \
+              -v /tmp/.X11-unix:/tmp/.X11-unix \
+              -v "$PWD:/repo:ro" --entrypoint /usr/bin/bash "$BEELD" /repo/tools/screenshots/explorer.sh "$2" "$3" "${4:-bugos-files}"
+            sleep 30
+            import -display :99 -window root -crop 2360x1480+0+0 +repage "docs/images/explorer/$1.png"
+            echo "--- logboek ($1) ---"
+            sudo podman logs foto 2>&1 | grep -v -e keysym -e xkbcomp -e 'dbus-daemon' -e portal | tail -15 || true
+            sudo podman rm -f foto >/dev/null
+            # Een zwarte foto (het programma startte niet) is heel klein: dan stoppen we, zodat hij niet in de repo komt.
+            if [ "$(stat -c %s "docs/images/explorer/$1.png")" -lt 20000 ]; then
+              echo "::error::De foto '$1' is leeg: het programma startte niet (zie het logboek hierboven)."
+              exit 1
+            fi
+          }
+          maak thuismap licht ""
+          maak documenten licht Documents
+          maak afbeeldingen donker Pictures
+          maak afbeeldingen-licht licht Pictures
+          maak gekozen licht "Pictures/Stip background.jpg"
+          # Deze computer, met nep-schijven (een USB-stick en een fotoschijf) en voorbeeldgetallen
+          VOORBEELD=512e9,286e9,48e9,96e9,6e9,12e9,9e9
+          NEP=/repo/tools/screenshots/drives.json RUIMTE=$VOORBEELD maak computer licht computer:
+          NEP=/repo/tools/screenshots/drives.json RUIMTE=$VOORBEELD maak computer-donker donker computer:
+          RUIMTE=$VOORBEELD maak computer-leeg licht computer:
+          NEP=/repo/tools/screenshots/drives.json maak stick licht "/run/media/bugie/Bugie's stick"
+          maak dolphin licht Pictures dolphin
+          # Taakbeheer en Instellingen, met voorbeeldgegevens (er wordt niets aan de computer veranderd)
+          VOORBEELD_VAN=BUGOS_TAKEN_VOORBEELD maak taakbeheer licht "arg:--programmas" bugos-task-manager
+          VOORBEELD_VAN=BUGOS_TAKEN_VOORBEELD maak taakbeheer-donker donker "arg:--prestaties" bugos-task-manager
+          VOORBEELD_VAN=BUGOS_INSTELLINGEN_VOORBEELD maak instellingen licht arg:start bugos-settings
+          VOORBEELD_VAN=BUGOS_INSTELLINGEN_VOORBEELD maak instellingen-wifi licht arg:wifi bugos-settings
+          VOORBEELD_VAN=BUGOS_INSTELLINGEN_VOORBEELD maak instellingen-donker donker arg:geluid bugos-settings
+          VOORBEELD_VAN=BUGOS_INSTELLINGEN_VOORBEELD maak instellingen-zien licht arg:zien bugos-settings
+          VOORBEELD_VAN=BUGOS_INSTELLINGEN_VOORBEELD maak instellingen-muis licht arg:muis bugos-settings
+          VOORBEELD_VAN=BUGOS_INSTELLINGEN_VOORBEELD maak instellingen-inloggen donker arg:inloggen bugos-settings
+          ls -la docs/images/explorer
+
+      - name: Foto's bewaren
+        uses: actions/upload-artifact@v4
+        with:
+          name: verkenner-fotos
+          path: docs/images/explorer/
+
+  # Het hele bureaublad: plasmashell met de BugOS-taakbalk, en daarbij het startmenu, het snelmenu
+  # en het uitzetscherm (zie tools/screenshots/desktop.sh). Draait tegelijk met de verkenner-taak.
+  bureaublad:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ruimte maken op de bouwcomputer
+        uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
+
+      - name: BugOS ophalen
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+          sudo podman pull "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${{ inputs.tag }}"
+
+      - name: Hulpmiddelen voor het bureaublad in BugOS
+        run: |
+          # Zonder plasmashell (het bureaublad), plasmawindowed (toont een menu als los venster) of gdbus kan het niet.
+          # De rest geeft alleen een waarschuwing: dan mist er hoogstens een foto, en het logboek zegt dan waarom.
+          sudo podman run --rm --entrypoint /usr/bin/bash "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${{ inputs.tag }}" \
+            -c 'mis=0; for p in plasmashell plasmawindowed gdbus; do command -v "$p" >/dev/null || { echo "::error::$p ontbreekt in BugOS"; mis=1; }; done
+                command -v qdbus6 >/dev/null || echo "::warning::qdbus6 ontbreekt in BugOS"
+                command -v kwin_wayland >/dev/null || echo "::warning::kwin_wayland ontbreekt in BugOS (nodig voor een echte bureaubladfoto)"
+                command -v spectacle >/dev/null || echo "::warning::spectacle ontbreekt in BugOS (dan maakt screenshot.py de foto via D-Bus)"
+                python3 -c "import gi" 2>/dev/null || echo "::warning::python3-gobject ontbreekt in BugOS (screenshot.py heeft het nodig als Spectacle er niet is)"
+                command -v kactivitymanagerd >/dev/null || [ -x /usr/libexec/kactivitymanagerd ] || echo "::warning::kactivitymanagerd ontbreekt in BugOS (plasmashell heeft hem nodig)"
+                for b in /usr/libexec/ksmserver-logout-greeter /usr/share/dbus-1/services/org.kde.ActivityManager.service \
+                         /usr/share/plasma/plasmoids/org.bugos.startmenu /usr/share/plasma/plasmoids/org.bugos.quickmenu \
+                         /usr/share/plasma/look-and-feel/org.bugos.desktop/contents/layouts/org.kde.plasma.desktop-layout.js; do
+                  [ -e "$b" ] || echo "::warning::$b ontbreekt in BugOS"; done
+                echo "Hulpmiddelen gecontroleerd."; exit $mis'
+
+      - name: Foto's van het bureaublad
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb imagemagick >/dev/null
+          Xvfb :99 -screen 0 2560x1600x24 -ac -nolisten tcp &
+          sleep 3
+          BEELD="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${{ inputs.tag }}"
+          mkdir -p docs/images/bureaublad
+          maak_bureaublad() {  # naam thema scene
+            # Het script start plasmashell (met de BugOS-taakbalk) en daarbij het gevraagde menu of scherm,
+            # en blijft dan staan; na 75 s maken we een foto van het hele scherm (geen uitsnede).
+            # --cap-add=SYS_NICE: kwin_wayland vraagt dat recht (voor een vloeiend beeld); zonder mag hij niet starten.
+            sudo podman run -d --name foto --cap-add=SYS_NICE -e DISPLAY=:99 ${VOORBEELD_VAN:+-e $VOORBEELD_VAN=1} \
+              -v /tmp/.X11-unix:/tmp/.X11-unix \
+              -v "$PWD:/repo:ro" --entrypoint /usr/bin/bash "$BEELD" /repo/tools/screenshots/desktop.sh "$2" "$3"
+            sleep 100
+            # De foto maakt KWin zelf in de container (virtueel scherm); zonder KWin valt het script terug op
+            # het X-scherm van de bouwcomputer, dan knippen we dat.
+            if ! sudo podman cp foto:/var/home/bugie/foto.png "docs/images/bureaublad/$1.png" 2>/dev/null; then
+              import -display :99 -window root "docs/images/bureaublad/$1.png"
+            fi
+            # Het logboek van de container bewaren we in een bestand, om er hieronder een paar keer in te kijken.
+            sudo podman logs foto 2>&1 | tee /tmp/logboek-foto.txt >/dev/null || true
+            sudo podman rm -f foto >/dev/null
+            echo "--- logboek ($1): de stappen van het script ---"
+            grep -E '^(\[[0-9:]+\] |FOUT: )' /tmp/logboek-foto.txt || true
+            echo "--- logboek ($1): de laatste regels ---"
+            grep -v -e keysym -e xkbcomp -e 'dbus-daemon' -e portal -e '^$' /tmp/logboek-foto.txt | tail -60 || true
+            if grep -q '^FOUT: ' /tmp/logboek-foto.txt; then
+              echo "::error::Foto '$1': $(grep -m1 '^FOUT: ' /tmp/logboek-foto.txt | cut -c7-)"
+              exit 1
+            fi
+            # Een zwarte foto (het bureaublad startte niet) herkennen we aan de inhoud, niet aan de bestandsgrootte:
+            # de gemiddelde helderheid (0 = zwart, 1 = wit). Het uitzetscherm is met opzet donker (een laag van
+            # 86% zwart over het bureaublad), dus daar ligt de grens lager.
+            GRENS=0.02
+            if [ "$3" = uitzetten ]; then GRENS=0.005; fi
+            HELDER="$(convert "docs/images/bureaublad/$1.png" -colorspace Gray -format '%[fx:mean]' info:)"
+            echo "Helderheid van '$1': $HELDER (grens $GRENS)"
+            if awk -v h="$HELDER" -v g="$GRENS" 'BEGIN { exit (h + 0 < g + 0) ? 0 : 1 }'; then
+              echo "::error::De foto '$1' is zwart (helderheid $HELDER): het bureaublad startte niet (zie het logboek hierboven)."
+              exit 1
+            fi
+          }
+          maak_bureaublad taakbalk licht taakbalk
+          maak_bureaublad taakbalk-donker donker taakbalk
+          maak_bureaublad startmenu licht startmenu
+          maak_bureaublad startmenu-donker donker startmenu
+          # Snelmenu met voorbeeldstatus (de bouwcomputer heeft geen wifi of bluetooth)
+          VOORBEELD_VAN=BUGOS_SNEL_VOORBEELD maak_bureaublad snelmenu licht snelmenu
+          VOORBEELD_VAN=BUGOS_SNEL_VOORBEELD maak_bureaublad snelmenu-donker donker snelmenu
+          maak_bureaublad uitzetten licht uitzetten
+          ls -la docs/images/bureaublad
+
+      - name: Foto's bewaren
+        uses: actions/upload-artifact@v4
+        with:
+          name: bureaublad-fotos
+          path: docs/images/bureaublad/
+
+  # Twee taken maken foto's; deze ene taak zet ze samen in de repo (anders zitten twee pushes elkaar in de weg).
+  vastleggen:
+    needs: [verkenner, bureaublad]
+    if: ${{ inputs.vastleggen }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Foto's van de verkenner ophalen
+        uses: actions/download-artifact@v4
+        with:
+          name: verkenner-fotos
+          path: docs/images/explorer
+
+      - name: Foto's van het bureaublad ophalen
+        uses: actions/download-artifact@v4
+        with:
+          name: bureaublad-fotos
+          path: docs/images/bureaublad
+
+      - name: Foto's in de repo zetten
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/images/explorer docs/images/bureaublad
+          if git diff --cached --quiet; then echo "Geen veranderingen."; exit 0; fi
+          git commit -m "Foto's van de verkenner en het bureaublad (gemaakt met het echte BugOS)"
+          # Is er intussen iets anders op de branch gezet? Dan zetten we de foto's daarachter.
+          for poging in 1 2 3; do
+            git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            sleep $((poging * 5))
+          done
+          exit 1

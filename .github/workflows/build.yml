@@ -7,7 +7,7 @@ name: BugOS bouwen
 on:
   push:
     branches: [main, "claude/**"]
-    paths-ignore: ["**.md", "docs/**", "tools/fotos/**", ".github/workflows/fotos.yml"]
+    paths-ignore: ["**.md", "docs/**", "tools/screenshots/**", ".github/workflows/screenshots.yml"]
   pull_request:
     branches: [main]
   schedule:
@@ -28,36 +28,36 @@ jobs:
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
           shellcheck -x build_files/build.sh \
-            system_files/usr/share/bugos/lib.sh tools/fotos/*.sh \
+            system_files/usr/share/bugos/lib.sh tools/screenshots/*.sh \
             $(grep -l '^#!/usr/bin/bash' system_files/usr/bin/bugos-*)
       - name: Python nakijken
         run: |
           python3 -m py_compile system_files/usr/lib/bugos/python/*.py iso_live/src/bugos-live \
             $(grep -l '^#!/usr/bin/python3' system_files/usr/bin/bugos-*)
-          shellcheck -x iso_live/src/build.sh iso_live/src/bugos-installeren tools/iso-lokaal.sh system_files/usr/bin/bugos-paneel
+          shellcheck -x iso_live/src/build.sh iso_live/src/bugos-install tools/iso-local.sh system_files/usr/bin/bugos-panel
 
       - name: Ontwerptaal is bijgewerkt (pictogrammen, Kvantum, GTK, Terminal en Wine gemaakt met hun makers)
         run: |
-          python3 tools/iconen/maak.py
-          if [ -f tools/kvantum/maak.py ]; then python3 tools/kvantum/maak.py; fi
-          python3 tools/ontwerp/maak_qml.py --check
-          for m in tools/plasma/vlakken.py tools/plasma/knoppen.py tools/gtk/maak.py tools/konsole/maak.py tools/wine/maak.py; do python3 "$m"; done
-          ANDERS="$(git status --porcelain -- system_files/usr/share/icons/BugOS system_files/usr/share/Kvantum system_files/usr/share/plasma/desktoptheme/bugos system_files/usr/share/color-schemes tools/iconen/lijsten system_files/usr/share/bugos/gtk system_files/usr/share/bugos/wine system_files/usr/share/konsole)"
+          python3 tools/icons/make.py
+          if [ -f tools/kvantum/make.py ]; then python3 tools/kvantum/make.py; fi
+          python3 tools/design/make_qml.py --check
+          for m in tools/plasma/surfaces.py tools/plasma/buttons.py tools/gtk/make.py tools/konsole/make.py tools/wine/make.py; do python3 "$m"; done
+          ANDERS="$(git status --porcelain -- system_files/usr/share/icons/BugOS system_files/usr/share/Kvantum system_files/usr/share/plasma/desktoptheme/bugos system_files/usr/share/color-schemes tools/icons/lists system_files/usr/share/bugos/gtk system_files/usr/share/bugos/wine system_files/usr/share/konsole)"
           if [ -n "$ANDERS" ]; then
             echo "$ANDERS" | head -20
-            echo "Draai de makers (tools/iconen, kvantum, plasma, gtk, konsole, wine: maak.py) en zet het resultaat in de repo."
+            echo "Draai de makers (tools/icons, kvantum, plasma, gtk, konsole, wine: make.py) en zet het resultaat in de repo."
             exit 1
           fi
 
       - name: GTK leest de BugOS-laag zonder fouten (GTK 3 en 4)
         run: |
           sudo apt-get install -y -qq gir1.2-gtk-3.0 gir1.2-gtk-4.0 python3-gi >/dev/null
-          /usr/bin/python3 tools/gtk/proef.py --check
+          /usr/bin/python3 tools/gtk/preview.py --check
 
-      - name: Website is bijgewerkt (gebouwd uit tools/website/pagina.html)
+      - name: Website is bijgewerkt (gebouwd uit tools/website/page.html)
         run: |
-          python3 tools/website/bouw.py
-          git diff --exit-code website/index.html || { echo "Draai: python3 tools/website/bouw.py"; exit 1; }
+          python3 tools/website/build.py
+          git diff --exit-code website/index.html || { echo "Draai: python3 tools/website/build.py"; exit 1; }
 
       - name: Menu's (QML) laden zonder Plasma
         run: |
@@ -66,17 +66,17 @@ jobs:
           QT_QPA_PLATFORM=offscreen python3 tools/qml-test.py
 
       - name: Bestanden testen (veilig weggooien, terugzetten, kopiëren)
-        run: QT_QPA_PLATFORM=offscreen python3 tools/test_bestanden.py
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_files.py
       - name: Taakbeheer testen (meten, groeperen, opstarten; met een nep-/proc)
-        run: QT_QPA_PLATFORM=offscreen python3 tools/test_taakbeheer.py
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_task_manager.py
       - name: Instellingen testen (wifi, bluetooth, geluid, scherm lezen; elke pagina opent)
-        run: QT_QPA_PLATFORM=offscreen python3 tools/test_instellingen.py
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_settings.py
       - name: Startmenu-gegevens testen (apps, instellingen zoeken, snelmenu-status; met nep-programma's)
         run: python3 tools/test_start_data.py
       - name: Uitzetscherm testen (laadt het, en kloppen de knoppen per situatie)
         run: |
-          if [ -f tools/test_uitzetscherm.py ]; then
-            QT_QPA_PLATFORM=offscreen python3 tools/test_uitzetscherm.py
+          if [ -f tools/test_logout.py ]; then
+            QT_QPA_PLATFORM=offscreen python3 tools/test_logout.py
           else
             echo "Nog geen test voor het uitzetscherm."
           fi

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- BugOS Plasma-stijl: keuzerondjes. Gemaakt door tools/plasma/knoppen.py; niet met de hand bewerken. -->
+<!-- BugOS Plasma-stijl: keuzerondjes. Gemaakt door tools/plasma/buttons.py; niet met de hand bewerken. -->
 <svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="140" height="30" viewBox="0 0 140 30">
     <defs>
     <style type="text/css" id="current-color-scheme">

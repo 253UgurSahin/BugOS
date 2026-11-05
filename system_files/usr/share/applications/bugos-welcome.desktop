@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=BugOS Welcome
+Name[nl]=BugOS Welkom
+Comment=Set up BugOS in a few steps
+Comment[nl]=BugOS instellen in een paar stappen
+Exec=bugos-welcome
+Icon=bugos-welcome
+Categories=System;Settings;
+Terminal=false

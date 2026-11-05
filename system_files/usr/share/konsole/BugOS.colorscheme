@@ -1,4 +1,4 @@
-# BugOS-kleuren voor de Terminal. Gemaakt door tools/konsole/maak.py: niet met de hand aanpassen.
+# BugOS-kleuren voor de Terminal. Gemaakt door tools/konsole/make.py: niet met de hand aanpassen.
 
 [Background]
 Color=255,255,255

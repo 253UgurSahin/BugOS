@@ -3,11 +3,11 @@ application/x-ms-dos-executable=bugos-exe.desktop
 application/x-msdownload=bugos-exe.desktop
 application/x-msi=bugos-exe.desktop
 application/vnd.microsoft.portable-executable=bugos-exe.desktop
-application/x-rpm=bugos-pakket.desktop
-application/x-redhat-package-manager=bugos-pakket.desktop
-application/vnd.debian.binary-package=bugos-pakket.desktop
-application/x-deb=bugos-pakket.desktop
-inode/directory=bugos-bestanden.desktop
+application/x-rpm=bugos-package.desktop
+application/x-redhat-package-manager=bugos-package.desktop
+application/vnd.debian.binary-package=bugos-package.desktop
+application/x-deb=bugos-package.desktop
+inode/directory=bugos-files.desktop
 
 [Added Associations]
-inode/directory=bugos-bestanden.desktop;org.kde.dolphin.desktop;
+inode/directory=bugos-files.desktop;org.kde.dolphin.desktop;

@@ -10,7 +10,7 @@ zodat alle apps er hetzelfde uitzien en hetzelfde praten.
               Zoekveld, Zijbalk, Banner, Chip, Voortgang, Sectie
 
 Kleuren en maten komen uit één plek (KLEUREN hieronder), zodat alles klopt
-met de huisstijl in docs/HUISSTIJL.md.
+met de huisstijl in docs/BRAND.md.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "bug
 
 # =================================================================== taal ===
 
-VERTALINGEN = Path("/usr/share/bugos/vertalingen")
+VERTALINGEN = Path("/usr/share/bugos/translations")
 
 
 def _taal() -> str:
@@ -71,7 +71,7 @@ def t(nl: str, en: str) -> str:
     """Geef de tekst in de taal van de gebruiker.
 
     Nederlands en Engels staan in de code zelf. Andere talen komen uit
-    /usr/share/bugos/vertalingen/<taal>.json (zie docs/VERTALEN.md).
+    /usr/share/bugos/translations/<taal>.json (zie docs/TRANSLATING.md).
     Ontbreekt een vertaling, dan valt BugOS terug op Engels."""
     if TAAL == "nl":
         return nl
@@ -136,7 +136,7 @@ KLEUREN = {
 }
 
 # Maten: één schaal voor het hele systeem (eigen apps, menu's, KDE-stijl, Plasma, vensterbalk).
-# tools/ontwerp/tokens.py leest deze, dus de KDE- en Plasma-stijl gebruiken precies dezelfde getallen.
+# tools/design/tokens.py leest deze, dus de KDE- en Plasma-stijl gebruiken precies dezelfde getallen.
 MATEN = {
     "knop": 12,          # hoeken van knoppen, invoervelden, lijstregels, menu's, tooltips
     "kaart": 16,         # hoeken van kaarten, tegels, groepen
@@ -1007,7 +1007,7 @@ class Zijbalk(QListWidget):
 
 def logo_icoon() -> QIcon:
     """Het beestje voor het huidige thema: in donker met een licht kopje (anders verdwijnt het kopje)."""
-    pad = Path("/usr/share/bugos/logo-donker.svg" if DONKER else "/usr/share/bugos/logo.svg")
+    pad = Path("/usr/share/bugos/logo-dark.svg" if DONKER else "/usr/share/bugos/logo.svg")
     return QIcon(str(pad)) if pad.exists() else QIcon.fromTheme("bugos-logo")
 
 

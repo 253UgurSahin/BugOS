@@ -37,9 +37,9 @@ ZELFDE_APP = {
 }
 
 STANDAARD_FAVORIETEN = [
-    "org.mozilla.firefox.desktop", "bugos-bestanden.desktop", "bugos-winkel.desktop",
-    "bugos-instellingen.desktop", "org.libreoffice.LibreOffice.writer.desktop",
-    "org.videolan.VLC.desktop", "com.valvesoftware.Steam.desktop", "bugos-hulp.desktop",
+    "org.mozilla.firefox.desktop", "bugos-files.desktop", "bugos-store.desktop",
+    "bugos-settings.desktop", "org.libreoffice.LibreOffice.writer.desktop",
+    "org.videolan.VLC.desktop", "com.valvesoftware.Steam.desktop", "bugos-help.desktop",
 ]
 
 CATEGORIE = [
@@ -248,7 +248,7 @@ def los_starten(*cmd: str) -> bool:
 
 # ------------------------------------------------------------- snelmenu ----
 
-NIET_STOREN_TOT = "2999,12,31,0,0,0"  # dezelfde waarde als lib.sh en bugos_instellen.py
+NIET_STOREN_TOT = "2999,12,31,0,0,0"  # dezelfde waarde als lib.sh en bugos_config.py
 
 
 def niet_storen_tot_in_toekomst(tekst: str) -> bool:
@@ -316,15 +316,15 @@ def batterij() -> tuple[int | None, bool]:
 def snel_status() -> dict:
     if os.environ.get("BUGOS_SNEL_VOORBEELD"):  # voor foto's en tests: niets aan de computer vragen
         return {"wifi": True, "bluetooth": False, "spel": False,
-                "donker": kde_lees("kdeglobals", "General", "ColorScheme") == "BugOSDonker",
+                "donker": kde_lees("kdeglobals", "General", "ColorScheme") == "BugOSDark",
                 "volume": 60, "stil": False, "niet_storen": False,
                 "helderheid": 70, "batterij": 76, "laadt": False}
     s: dict = {}
     s["wifi"] = draai("nmcli", "radio", "wifi").strip() == "enabled" if shutil.which("nmcli") else None
     bt = draai("bluetoothctl", "show") if shutil.which("bluetoothctl") else ""
     s["bluetooth"] = None if "Controller" not in bt else ("Powered: yes" in bt)
-    s["spel"] = draai("bugos-spelmodus", "status").strip() == "aan" if shutil.which("bugos-spelmodus") else None
-    s["donker"] = kde_lees("kdeglobals", "General", "ColorScheme") == "BugOSDonker"
+    s["spel"] = draai("bugos-game-mode", "status").strip() == "aan" if shutil.which("bugos-game-mode") else None
+    s["donker"] = kde_lees("kdeglobals", "General", "ColorScheme") == "BugOSDark"
     s["volume"], s["stil"] = volume_status()
     s["niet_storen"] = niet_storen_tot_in_toekomst(kde_lees("plasmanotifyrc", "DoNotDisturb", "Until"))
     s["helderheid"] = helderheid()
@@ -357,10 +357,10 @@ def snel_zet(wat: str, waarde: str) -> None:
             draai("rfkill", "unblock", "bluetooth")
         draai("bluetoothctl", "power", "on" if aan else "off")
     elif wat == "spel":
-        draai("bugos-spelmodus", "aan" if aan else "uit")
+        draai("bugos-game-mode", "aan" if aan else "uit")
     elif wat == "donker":
         # Eén plek voor licht/donker: kleuren, KDE-programma's (Kvantum) en de Plasma-stijl.
-        los_starten("bugos-thema", "donker" if aan else "licht")
+        los_starten("bugos-theme", "donker" if aan else "licht")
     elif wat == "volume":
         try:
             procent = max(0, min(100, int(waarde)))
@@ -396,7 +396,7 @@ def snel_zet(wat: str, waarde: str) -> None:
 def start(pad: str) -> None:
     if pad.startswith("instelling:"):
         pagina = pad.split(":", 1)[1]
-        los_starten("bugos-instellingen", pagina) if pagina else los_starten("bugos-instellingen")
+        los_starten("bugos-settings", pagina) if pagina else los_starten("bugos-settings")
     elif shutil.which("kioclient"):
         los_starten("kioclient", "exec", pad)
     else:

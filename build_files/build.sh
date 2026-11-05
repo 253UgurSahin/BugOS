@@ -39,7 +39,7 @@ if [ "${#TEVEEL[@]}" -gt 0 ]; then
 fi
 
 # Steam als echt systeemprogramma (beste voor controllers en game-modus).
-# Lukt dat niet, dan zet bugos-eerste-start.service Steam later als Flatpak neer.
+# Lukt dat niet, dan zet bugos-first-boot.service Steam later als Flatpak neer.
 dnf5 install -y --skip-unavailable steam || true
 
 # 3. BugOS is een eigen systeem, net als Bazzite.
@@ -130,7 +130,7 @@ touch /etc/plasma-setup-done
 
 # Het "Welcome Center" van KDE (met "Welcome to Fedora" en het Fedora-logo)
 # verschijnt bij de eerste keer inloggen. BugOS heeft een eigen welkomstapp
-# (bugos-welkom), dus deze gaat er helemaal uit. Geen ander pakket heeft hem
+# (bugos-welcome), dus deze gaat er helemaal uit. Geen ander pakket heeft hem
 # nodig (alleen plasma-workspace "raadt hem aan").
 # rpm -e in plaats van dnf remove: dan gaan er niet stilletjes andere
 # pakketten mee die toevallig alleen hierdoor waren binnengekomen.
@@ -220,19 +220,19 @@ fi
 # Logo's: veel programma's gebruiken vaste bestandsnamen voor "het logo van
 # dit systeem" (Over dit systeem, het installatieprogramma, sommige menu's).
 # Daar staat het Fedora-logo. Wij leggen er het lieveheersbeestje neer.
-MERK=/usr/share/bugos/merk
+MERK=/usr/share/bugos/brand
 for png in system-logo.png fedora-logo-sprite.png fedora-logo.png fedora_logo_med.png fedora-logo-small.png; do
-    install -Dm0644 "$MERK/merk-256.png" "/usr/share/pixmaps/$png"
+    install -Dm0644 "$MERK/mark-256.png" "/usr/share/pixmaps/$png"
 done
 # De "witte" versie is voor donkere achtergronden: het beestje met lichte kop.
-install -Dm0644 "$MERK/merk-donker-256.png" /usr/share/pixmaps/system-logo-white.png
+install -Dm0644 "$MERK/mark-dark-256.png" /usr/share/pixmaps/system-logo-white.png
 # fedora-logo.svg en fedora_whitelogo.svg zijn (verwijzingen naar) het Fedora-logo.
 rm -f /usr/share/pixmaps/fedora-logo.svg /usr/share/pixmaps/fedora_whitelogo.svg
 install -Dm0644 "$MERK/logo.svg" /usr/share/pixmaps/fedora-logo.svg
-install -Dm0644 "$MERK/logo-wit.svg" /usr/share/pixmaps/fedora_whitelogo.svg
+install -Dm0644 "$MERK/logo-white.svg" /usr/share/pixmaps/fedora_whitelogo.svg
 # Het algemene "logo van de distributie" (ook voor het pictogram start-here).
-install -Dm0644 "$MERK/merk.svg" /usr/share/icons/hicolor/scalable/distributor-logo.svg
-install -Dm0644 "$MERK/merk-inkt.svg" /usr/share/icons/hicolor/scalable/places/distributor-logo-symbolic.svg
+install -Dm0644 "$MERK/mark.svg" /usr/share/icons/hicolor/scalable/distributor-logo.svg
+install -Dm0644 "$MERK/mark-ink.svg" /usr/share/icons/hicolor/scalable/places/distributor-logo-symbolic.svg
 
 # "Over dit systeem" (KDE Info-centrum): onze naam, versie, logo en website.
 # Name en Version moeten er expliciet in: anders pakt KDE ze per regel uit
@@ -250,7 +250,7 @@ EOF
 
 # 4. BugOS-stijl als standaard voor nieuwe gebruikers.
 kwriteconfig6 --file /etc/xdg/kdeglobals --group KDE --key LookAndFeelPackage org.bugos.desktop
-kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key ColorScheme BugOSLicht
+kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key ColorScheme BugOSLight
 # Dubbelklik om te openen, net als in Windows.
 kwriteconfig6 --file /etc/xdg/kdeglobals --group KDE --key SingleClick false
 
@@ -273,18 +273,18 @@ kwriteconfig6 --file /etc/xdg/breezerc --group Windeco --key DrawTitleBarSeparat
 kwriteconfig6 --file /etc/xdg/breezerc --group Windeco --key DrawBackgroundGradient false
 kwriteconfig6 --file /etc/xdg/breezerc --group Windeco --key TitleAlignment AlignLeft
 
-# Eén ontwerptaal voor het hele systeem (zie tools/ontwerp/README.md). De eigen
+# Eén ontwerptaal voor het hele systeem (zie tools/design/README.md). De eigen
 # BugOS-apps tekenen zichzelf; al het andere krijgt dezelfde stijl van:
 #  - KDE-programma's (ook KDE Instellingen, Dolphin, Schijfbeheer): de
-#    programmastijl Kvantum "BugOS" (licht) of "BugOSDonker" (donker);
+#    programmastijl Kvantum "BugOS" (licht) of "BugOSDark" (donker);
 #  - pictogrammen: het thema "BugOS" (de rest komt van Breeze);
 #  - taakbalk, pop-ups en tooltips: de Plasma-stijl "bugos".
-# Licht/donker omzetten doet bugos-thema; die zet ook Kvantum om.
+# Licht/donker omzetten doet bugos-theme; die zet ook Kvantum om.
 kwriteconfig6 --file /etc/xdg/kdeglobals --group KDE --key widgetStyle kvantum
 kwriteconfig6 --file /etc/xdg/kdeglobals --group Icons --key Theme BugOS
 kwriteconfig6 --file /etc/xdg/plasmarc --group Theme --key name bugos
 # Kvantum leest zijn keuze uit ~/.config/Kvantum: nieuwe gebruikers krijgen hem
-# via /etc/skel, bestaande via "bugos-thema eerste-keer" bij het inloggen.
+# via /etc/skel, bestaande via "bugos-theme eerste-keer" bij het inloggen.
 for kv in /etc/skel/.config/Kvantum /etc/xdg/Kvantum; do
     mkdir -p "$kv"
     printf '[General]\ntheme=BugOS\n' >"$kv/kvantum.kvconfig"
@@ -293,9 +293,9 @@ done
 gtk-update-icon-cache -f -t /usr/share/icons/BugOS || true
 
 # GTK-programma's (Firefox, GNOME-apps, GTK-Flatpaks): het Breeze-GTK-thema. KDE
-# zet daar zelf de BugOS-kleuren in (colors.css); bugos-thema zet er bij het
+# zet daar zelf de BugOS-kleuren in (colors.css); bugos-theme zet er bij het
 # inloggen de BugOS-laag bovenop (/usr/share/bugos/gtk, gemaakt door
-# tools/gtk/maak.py: alleen hoeken, schuifjes, schakelaars en het rood).
+# tools/gtk/make.py: alleen hoeken, schuifjes, schakelaars en het rood).
 # We houden Breeze als naam: alleen dan geeft KDE GTK-vensters dezelfde
 # vensterknoppen als alle andere vensters.
 if [ ! -f /usr/share/themes/Breeze/gtk-3.0/gtk.css ] || [ ! -f /usr/share/themes/Breeze/gtk-4.0/gtk.css ]; then
@@ -314,8 +314,8 @@ gtk-application-prefer-dark-theme=false
 EOF
 done
 
-# Terminal (Konsole): het BugOS-profiel (kleuren uit tools/konsole/maak.py,
-# JetBrains Mono). bugos-thema wisselt licht/donker.
+# Terminal (Konsole): het BugOS-profiel (kleuren uit tools/konsole/make.py,
+# JetBrains Mono). bugos-theme wisselt licht/donker.
 kwriteconfig6 --file /etc/xdg/konsolerc --group "Desktop Entry" --key DefaultProfile BugOS.profile
 
 # Lettertypes: Inter voor alles, JetBrains Mono voor code (meegeleverd in /usr/share/fonts/bugos).
@@ -354,7 +354,7 @@ def lees(pad):
     return c
 
 
-schema = lees("/usr/share/color-schemes/BugOSLicht.colors")
+schema = lees("/usr/share/color-schemes/BugOSLight.colors")
 glob = lees("/etc/xdg/kdeglobals")
 for groep in schema.sections():
     if groep == "General":
@@ -408,7 +408,7 @@ fi
 #     look-and-feel-pakket. Daarom zetten we onze versie op allebei de plekken.
 #     Het origineel van KDE blijft ernaast staan als Logout.qml.kde (om terug
 #     te kunnen kijken); Plasma gebruikt dat bestand niet.
-UITZET=/usr/share/bugos/uitzetscherm/Logout.qml
+UITZET=/usr/share/bugos/logout/Logout.qml
 UITZET_SHELL=/usr/share/plasma/shells/org.kde.plasma.desktop/contents/logout
 if [ -d "$UITZET_SHELL" ]; then
     if [ -f "$UITZET_SHELL/Logout.qml" ] && [ ! -f "$UITZET_SHELL/Logout.qml.kde" ]; then
@@ -481,22 +481,22 @@ icoon systemsettings.desktop systemsettings
 icoon org.kde.kinfocenter.desktop org.kde.kinfocenter
 icoon org.kde.kwalletmanager.desktop org.kde.kwalletmanager
 
-# 5. Bestandstypes koppelen: .exe -> bugos-exe, .rpm/.deb -> bugos-pakket.
+# 5. Bestandstypes koppelen: .exe -> bugos-exe, .rpm/.deb -> bugos-package.
 update-desktop-database /usr/share/applications || true
 
 # 6. Diensten aanzetten.
-systemctl enable bugos-eerste-start.service
+systemctl enable bugos-first-boot.service
 # Updates: BugOS regelt dit zelf (geen uupd van Universal Blue).
 #  - het systeem: rpm-ostree haalt de nieuwe BugOS op de achtergrond op en zet
 #    hem klaar ("stage"); hij wordt actief bij de volgende keer opstarten.
-#  - de apps (Flatpak): bugos-apps-bijwerken.timer, elke dag.
+#  - de apps (Flatpak): bugos-update-apps.timer, elke dag.
 #  bugos-updates auto|hand zet ze allebei aan of uit.
 if grep -q '^#\?AutomaticUpdatePolicy=' /etc/rpm-ostreed.conf 2>/dev/null; then
     sed -i 's|^#\?AutomaticUpdatePolicy=.*|AutomaticUpdatePolicy=stage|' /etc/rpm-ostreed.conf
 else
     printf '[Daemon]\nAutomaticUpdatePolicy=stage\n' >>/etc/rpm-ostreed.conf
 fi
-systemctl enable rpm-ostreed-automatic.timer bugos-apps-bijwerken.timer
+systemctl enable rpm-ostreed-automatic.timer bugos-update-apps.timer
 systemctl enable podman.socket || true
 # Elke gebruiker: dagelijks kijken of er een update is (doet alleen iets bij "zelf updaten").
 systemctl --global enable bugos-updatecheck.timer

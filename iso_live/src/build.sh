@@ -216,7 +216,7 @@ fi
 # Dit zat eerst in de kickstart, maar daar kwam het venster niet op het
 # scherm en de controle zag de schijven niet (lsblk --json zet partities
 # "onder" de schijf). Nu een klein programma dat als de live-gebruiker draait.
-install -Dm0755 "$SRC/bugos-installeren" /usr/bin/bugos-installeren
+install -Dm0755 "$SRC/bugos-install" /usr/bin/bugos-install
 
 # Wat het installatieprogramma doet.
 mkdir -p /usr/share/anaconda/post-scripts
@@ -284,12 +284,12 @@ install -Dm0755 "$SRC/bugos-live" /usr/bin/bugos-live
 # van dát bestand de BugOS-knop. Zo staat er altijd maar één.
 # 0755: livesys kopieert hem naar het bureaublad; met het uitvoerbit vraagt
 # KDE niet of je deze "onbekende starter" wel vertrouwt.
-install -Dm0755 "$SRC/bugos-installeren.desktop" /usr/share/applications/liveinst.desktop
-rm -f /usr/share/applications/bugos-installeren.desktop /etc/skel/Desktop/bugos-installeren.desktop
+install -Dm0755 "$SRC/bugos-install.desktop" /usr/share/applications/liveinst.desktop
+rm -f /usr/share/applications/bugos-install.desktop /etc/skel/Desktop/bugos-install.desktop
 # Anaconda's eigen bureaubladhulpje (doet op deze stick niets) en BugOS'
 # automatisch openen van interne schijven: dat laatste kan het verkleinen of
 # wissen van Windows laten mislukken ("apparaat bezet"). Op de stick dus niet.
-rm -f /etc/xdg/autostart/liveinst-setup.desktop /etc/xdg/autostart/bugos-schijven-openen.desktop
+rm -f /etc/xdg/autostart/liveinst-setup.desktop /etc/xdg/autostart/bugos-open-drives.desktop
 # Geen vraag om een "portemonnee"-wachtwoord (KWallet) op de stick.
 printf '[Wallet]\nEnabled=false\n' >/etc/xdg/kwalletrc
 
@@ -298,8 +298,8 @@ printf '[Wallet]\nEnabled=false\n' >/etc/xdg/kwalletrc
 # halen, in het geheugen (de stick kan niet schrijven). Dat maakt hem traag en
 # het geheugen kan vollopen. Na het installeren draaien ze gewoon wel (dit
 # geldt alleen voor de stick).
-for s in rpm-ostreed-automatic.timer bugos-apps-bijwerken.timer uupd.timer rpm-ostree-countme.service \
-    bootloader-update.service bugos-eerste-start.service \
+for s in rpm-ostreed-automatic.timer bugos-update-apps.timer uupd.timer rpm-ostree-countme.service \
+    bootloader-update.service bugos-first-boot.service \
     flatpak-preinstall.service brew-setup.service brew-update.timer brew-upgrade.timer \
     rpm-ostree-countme.timer ublue-system-setup.service tailscaled.service; do
     systemctl disable "$s" 2>/dev/null || true
@@ -308,7 +308,7 @@ systemctl --global disable bugos-updatecheck.timer 2>/dev/null || true
 systemctl --global disable ublue-user-setup.service 2>/dev/null || true
 
 # Taal op de stick: Engels, met het Amerikaanse toetsenbord. Alle BugOS-
-# schermen zijn er ook in andere talen (zie docs/VERTALEN.md); in het
+# schermen zijn er ook in andere talen (zie docs/TRANSLATING.md); in het
 # installatieprogramma kies je zelf de taal en het toetsenbord voor de computer.
 echo "LANG=en_US.UTF-8" >/etc/locale.conf
 echo "KEYMAP=us" >/etc/vconsole.conf
@@ -326,17 +326,17 @@ EOF
 # "branding" van Cockpit. Zonder eigen map kreeg je die van Fedora: blauw,
 # met het Fedora-logo. /etc/cockpit/branding wordt als eerste gelezen,
 # wat er ook in os-release staat.
-[ -f /usr/share/bugos/merk/merk-donker-256.png ] || {
-    echo "Basisbeeld te oud: /usr/share/bugos/merk ontbreekt (eerst BugOS opnieuw bouwen)" >&2
+[ -f /usr/share/bugos/brand/mark-dark-256.png ] || {
+    echo "Basisbeeld te oud: /usr/share/bugos/brand ontbreekt (eerst BugOS opnieuw bouwen)" >&2
     exit 1
 }
 BRANDING=/etc/cockpit/branding
 mkdir -p "$BRANDING"
-install -m0644 /usr/share/bugos/merk/merk-donker-256.png "$BRANDING/logo.png"
-install -m0644 /usr/share/bugos/merk/merk-256.png "$BRANDING/apple-touch-icon.png"
-install -m0644 /usr/share/bugos/merk/merk-256.png "$BRANDING/favicon.ico"
+install -m0644 /usr/share/bugos/brand/mark-dark-256.png "$BRANDING/logo.png"
+install -m0644 /usr/share/bugos/brand/mark-256.png "$BRANDING/apple-touch-icon.png"
+install -m0644 /usr/share/bugos/brand/mark-256.png "$BRANDING/favicon.ico"
 cat >"$BRANDING/branding.css" <<'EOF'
-/* BugOS: het installatieprogramma in de huisstijl (docs/HUISSTIJL.md). */
+/* BugOS: het installatieprogramma in de huisstijl (docs/BRAND.md). */
 #badge {
     inline-size: 80px;
     block-size: 80px;

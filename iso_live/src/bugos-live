@@ -37,7 +37,7 @@ class Live(QWidget):
 
         logo = QLabel()
         # Dit scherm is altijd donker: het logo met de lichte kop.
-        logo.setPixmap(QIcon("/usr/share/bugos/logo-donker.svg").pixmap(76, 76))
+        logo.setPixmap(QIcon("/usr/share/bugos/logo-dark.svg").pixmap(76, 76))
         lay.addWidget(logo)
         kop = label(t("Welkom bij BugOS", "Welcome to BugOS"), "groot")
         kop.setStyleSheet("color:#FFFFFF;")
@@ -111,7 +111,7 @@ class Live(QWidget):
 
     def installeer(self) -> None:
         # Via ons startertje: dat waarschuwt eerst bij een BitLocker-schijf.
-        subprocess.Popen(["bugos-installeren"], start_new_session=True)
+        subprocess.Popen(["bugos-install"], start_new_session=True)
         self.close()
 
     def paintEvent(self, _e):  # noqa: N802

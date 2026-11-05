@@ -17,7 +17,7 @@ if [ -z "$BESTAND" ] || [ ! -f "$BESTAND" ]; then
 fi
 
 NAAM="$(basename "$BESTAND")"
-ALTERNATIEVEN=/usr/share/bugos/alternatieven.txt
+ALTERNATIEVEN=/usr/share/bugos/alternatives.txt
 
 # Is er een beter, echt Linux-alternatief? Dan dat eerst aanbieden.
 zoek_alternatief() {
@@ -39,7 +39,7 @@ if ALT="$(zoek_alternatief)"; then
     if vraag "$(t \
         "Dit lijkt op een programma waarvoor een betere versie voor BugOS bestaat: $APP.\n\nWil je $APP uit de BugOS Winkel halen?\n(Kies Nee om de Windows-versie toch te proberen.)" \
         "This looks like a program that has a better version for BugOS: $APP.\n\nDo you want to get $APP from the BugOS Store?\n(Choose No to try the Windows version anyway.)")"; then
-        exec bugos-winkel "appstream://$ID"
+        exec bugos-store "appstream://$ID"
     fi
 fi
 
@@ -60,7 +60,7 @@ fi
 
 # BugOS-kleuren in Windows-programma's (licht of donker, zoals de rest). Alleen als
 # er iets veranderd is: een andere stand, of nieuwe kleuren na een BugOS-update.
-THEMA="$(bugos-thema status 2>/dev/null)"
+THEMA="$(bugos-theme status 2>/dev/null)"
 [ "$THEMA" = donker ] || THEMA=licht
 KLEUREN="/usr/share/bugos/wine/$THEMA.reg"
 if [ -f "$KLEUREN" ]; then

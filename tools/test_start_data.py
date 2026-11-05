@@ -65,7 +65,7 @@ apps.mkdir(parents=True)
 (apps / "steam.desktop").write_text("[Desktop Entry]\nType=Application\nName=Steam\nCategories=Game;\nIcon=steam\n")
 (apps / "firefox.desktop").write_text("[Desktop Entry]\nType=Application\nName=Firefox\nName[nl]=Firefox\n"
                                       "GenericName[nl]=Webbrowser\nCategories=Network;\nIcon=firefox\n")
-(apps / "bugos-bestanden.desktop").write_text("[Desktop Entry]\nType=Application\nName=Files\nName[nl]=Bestanden\n"
+(apps / "bugos-files.desktop").write_text("[Desktop Entry]\nType=Application\nName=Files\nName[nl]=Bestanden\n"
                                               "Categories=System;\nIcon=folder\n")
 (apps / "geheim.desktop").write_text("[Desktop Entry]\nType=Application\nName=Geheim\nNoDisplay=true\n")
 (TMP / "thuis").mkdir()
@@ -81,7 +81,7 @@ klopt(wifi is not None and wifi["naam"] == "Wifi en internet" and wifi["uitleg"]
 namen = [a["naam"] for a in data["apps"] if a["soort"] == "app"]
 klopt(namen == ["Bestanden", "Firefox", "Steam"], f"gegevens: apps op naam, verborgen niet ({namen})")
 fav = [a["id"] for a in data["favorieten"]]
-klopt(fav == ["firefox.desktop", "bugos-bestanden.desktop", "steam.desktop"],
+klopt(fav == ["firefox.desktop", "bugos-files.desktop", "steam.desktop"],
       f"favorieten: Firefox en Steam ook onder hun rpm-naam, zonder dubbelen ({fav})")
 klopt(all(a["soort"] == "app" for a in data["favorieten"]), "favorieten: geen instellingenpagina's")
 
@@ -91,16 +91,16 @@ nep("bluetoothctl", "Controller 00:11:22:33:44:55 BugOS [default]\n\tPowered: ye
 nep("wpctl", "Volume: 0.40 [MUTED]")
 (NEP / "kreadconfig6").write_text("#!/usr/bin/bash\n"
                                   f"printf '%s\\n' \"kreadconfig6 $*\" >> '{LOG}'\n"
-                                  "case \"$*\" in *ColorScheme*) echo BugOSDonker ;; *Until*) echo '2999,12,31,0,0,0' ;; esac\n")
+                                  "case \"$*\" in *ColorScheme*) echo BugOSDark ;; *Until*) echo '2999,12,31,0,0,0' ;; esac\n")
 (NEP / "kreadconfig6").chmod(0o755)
 s = json.loads(draai("--snel"))
 klopt(s["wifi"] is True and s["bluetooth"] is True and s["volume"] == 40 and s["stil"] is True,
       "snel: wifi, bluetooth, volume 40% en stil uit nmcli, bluetoothctl en wpctl")
-klopt(s["donker"] is True and s["niet_storen"] is True, "snel: donker (BugOSDonker) en niet storen (tot 2999)")
-klopt(s["spel"] is None, "snel: game-modus is 'onbekend' (knop uit) als bugos-spelmodus ontbreekt")
+klopt(s["donker"] is True and s["niet_storen"] is True, "snel: donker (BugOSDark) en niet storen (tot 2999)")
+klopt(s["spel"] is None, "snel: game-modus is 'onbekend' (knop uit) als bugos-game-mode ontbreekt")
 (NEP / "kreadconfig6").write_text("#!/usr/bin/bash\n"
                                   "case \"$*\" in *ColorScheme*) echo BreezeDark ;; *Until*) echo '2001,1,1,0,0,0' ;; esac\n")
-nep("bugos-spelmodus", "aan")
+nep("bugos-game-mode", "aan")
 s = json.loads(draai("--snel"))
 klopt(s["donker"] is False and s["niet_storen"] is False and s["spel"] is True,
       "snel: BreezeDark telt niet als BugOS-donker, een verlopen 'tot' is niet meer niet storen, game-modus aan")
@@ -132,17 +132,17 @@ klopt("kwriteconfig6 --file plasmanotifyrc --group DoNotDisturb --key Until --no
       "zet niet storen: dezelfde waarde als Instellingen, met --notify")
 LOG.write_text("")
 draai("--zet", "donker", "aan")
-klopt("plasma-apply-colorscheme BugOSDonker" in logboek() and "plasma-apply-desktoptheme breeze-dark" in logboek(),
+klopt("plasma-apply-colorscheme BugOSDark" in logboek() and "plasma-apply-desktoptheme breeze-dark" in logboek(),
       "zet donker: kleuren én Plasma-thema, net als Instellingen")
 
 # 5. starten
 LOG.write_text("")
-nep("bugos-instellingen")
+nep("bugos-settings")
 draai("--start", "instelling:wifi")
 import time  # noqa: E402
 
 time.sleep(0.5)
-klopt("bugos-instellingen wifi" in logboek(), "start: 'instelling:wifi' opent BugOS Instellingen op de wifi-pagina")
+klopt("bugos-settings wifi" in logboek(), "start: 'instelling:wifi' opent BugOS Instellingen op de wifi-pagina")
 
 shutil.rmtree(TMP, ignore_errors=True)
 print()

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Files from Windows
+Name[nl]=Bestanden van Windows
+Comment=Restore files from your old Windows PC
+Comment[nl]=Bestanden van je oude Windows-pc terugzetten
+Exec=bugos-switch
+Icon=bugos-switch
+Categories=Utility;
+Keywords=windows;overstap;migratie;migrate;bestanden;bladwijzers;
+Terminal=false

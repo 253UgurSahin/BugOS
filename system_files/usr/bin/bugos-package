@@ -1,0 +1,82 @@
+#!/usr/bin/bash
+# bugos-package - een .rpm of .deb van een website installeren met dubbelklik.
+#
+# Jip-en-Janneke: BugOS is van "onbreekbaar glas". Losse installatiebestanden
+# mogen daar niet zomaar in. Daarom:
+#   1. BugOS kijkt eerst of het programma in de BugOS Winkel staat.
+#   2. Zo niet, dan zet BugOS het in een eigen "doosje" (container), zodat het
+#      werkt zonder het systeem te kunnen breken. Het verschijnt gewoon in je
+#      startmenu.
+
+# shellcheck source=system_files/usr/share/bugos/lib.sh
+. /usr/share/bugos/lib.sh
+
+BESTAND="${1:-}"
+if [ -z "$BESTAND" ] || [ ! -f "$BESTAND" ]; then
+    fout "$(t "Ik kan dit bestand niet vinden." "I cannot find this file.")"
+    exit 1
+fi
+BESTAND="$(realpath "$BESTAND")"
+
+# Naam van het programma uitzoeken.
+case "$BESTAND" in
+*.rpm)
+    SOORT=rpm
+    NAAM="$(rpm -qp --qf '%{NAME}' "$BESTAND" 2>/dev/null)"
+    DOOS=bugos-fedora
+    DOOS_BEELD=registry.fedoraproject.org/fedora-toolbox:latest
+    ;;
+*.deb)
+    SOORT=deb
+    NAAM="$(basename "$BESTAND" .deb | cut -d_ -f1)"
+    DOOS=bugos-ubuntu
+    DOOS_BEELD=quay.io/toolbx/ubuntu-toolbox:latest
+    ;;
+*)
+    fout "$(t "Dit soort bestand ken ik niet." "I don't know this kind of file.")"
+    exit 1
+    ;;
+esac
+[ -z "$NAAM" ] && NAAM="$(basename "$BESTAND")"
+
+# Stap 1: staat het in de Winkel?
+GEVONDEN="$(flatpak search --columns=application "$NAAM" 2>/dev/null | head -n1)"
+if [ -n "$GEVONDEN" ] && [ "$GEVONDEN" != "No matches found" ]; then
+    if vraag "$(t \
+        "\"$NAAM\" staat ook in de BugOS Winkel. Dat is veiliger en krijgt vanzelf updates.\n\nWil je het uit de Winkel halen?" \
+        "\"$NAAM\" is also in the BugOS Store. That is safer and updates automatically.\n\nDo you want to get it from the Store?")"; then
+        exec bugos-store "appstream://$GEVONDEN"
+    fi
+fi
+
+# Stap 2: in een doosje installeren.
+vraag "$(t \
+    "Wil je \"$NAAM\" installeren?\n\nBugOS zet het in een veilig doosje. Daarna staat het gewoon in je startmenu." \
+    "Do you want to install \"$NAAM\"?\n\nBugOS puts it in a safe box. Afterwards it is in your start menu.")" || exit 0
+
+melding "$(t "Bezig met installeren..." "Installing...")" \
+    "$(t "Dit kan een paar minuten duren. Je mag gewoon doorwerken." "This can take a few minutes. You can keep working.")"
+
+if ! distrobox list 2>/dev/null | grep -q " $DOOS "; then
+    distrobox create --yes --name "$DOOS" --image "$DOOS_BEELD" >/dev/null 2>&1 || {
+        fout "$(t "Het doosje kon niet gemaakt worden. Heb je internet?" "The box could not be created. Are you online?")"
+        exit 1
+    }
+fi
+
+if [ "$SOORT" = rpm ]; then
+    INSTALL="sudo dnf install -y \"$BESTAND\""
+else
+    INSTALL="sudo apt-get update && sudo apt-get install -y \"$BESTAND\""
+fi
+
+# Programma's van dit pakket naar het startmenu brengen.
+EXPORT="for d in \$( (rpm -qlp \"$BESTAND\" 2>/dev/null || dpkg-deb -c \"$BESTAND\" 2>/dev/null | awk '{print \$6}') | grep -E 'share/applications/.*\\.desktop\$'); do distrobox-export --app \"\$(basename \"\$d\" .desktop)\"; done"
+
+if distrobox enter "$DOOS" -- bash -c "$INSTALL && $EXPORT" >/dev/null 2>&1; then
+    melding "$(t "Klaar!" "Done!")" "$(t "\"$NAAM\" staat nu in je startmenu." "\"$NAAM\" is now in your start menu.")"
+else
+    fout "$(t "Het installeren van \"$NAAM\" is niet gelukt. Je computer is niet veranderd." \
+        "Installing \"$NAAM\" did not work. Your computer has not changed.")"
+    exit 1
+fi
