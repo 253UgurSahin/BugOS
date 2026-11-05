@@ -407,6 +407,17 @@ venster.leegmaak_schijf(venster.lijst_schijven[0])  # de stick die er echt in zi
 venster.vraag_ja, venster.beheer = _oud_vraag, _oud_beheer
 klopt(_gewist == ["/dev/sdx1"], "leegmaken: alleen de stick die er nu echt in zit (geen andere, geen interne)")
 klopt(venster.ruimte_balk is not None and venster.status.text() == "1 aangesloten", "Deze computer: ruimte bovenaan, en 1 aangesloten")
+from PySide6.QtCore import QEvent, Qt  # noqa: E402
+from PySide6.QtGui import QKeyEvent  # noqa: E402
+
+klopt(tegels[0].focusPolicy() == Qt.FocusPolicy.StrongFocus and tegels[0].accessibleName() == "Stick van Bugie",
+      "toetsenbord: de stick-rij is met Tab te bereiken en heeft een naam voor schermlezers")
+_geopend = []
+tegels[0].geklikt.connect(lambda: _geopend.append(1))
+tegels[0].keyPressEvent(QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Return, Qt.KeyboardModifier.NoModifier))
+klopt(_geopend == [1] and venster.huidig == stick, "toetsenbord: Enter op de stick-rij opent hem")
+venster.open_computer()
+tegels = venster.computer.widget().findChildren(b.SchijfRij)
 tegels[0].geklikt.emit()
 klopt(venster.huidig == stick and not venster.in_computer and not venster.uitwerp_knop.isHidden()
       and venster.plek_naam() == "Stick van Bugie", "stick openen: naam bovenin en 'Veilig verwijderen'")

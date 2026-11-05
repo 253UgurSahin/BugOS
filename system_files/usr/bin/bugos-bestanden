@@ -739,6 +739,7 @@ QWidget#computer_binnen {{ background: transparent; }}
 QFrame#kaart {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-radius: 16px; }}
 QFrame#schijfrij {{ background: transparent; border-radius: 12px; }}
 QFrame#schijfrij:hover {{ background: {K['knop']}; }}
+QFrame#schijfrij:focus {{ border: 2px solid {K['accent']}; }}
 QFrame#schijfrij[leeg="true"]:hover {{ background: transparent; }}
 QPushButton#legenda {{ background: transparent; border: none; border-radius: 10px; padding: 5px 10px 5px 6px;
     text-align: left; font-size: 14px; font-weight: 400; color: {K['tekst']}; }}
@@ -798,6 +799,10 @@ class SchijfRij(QFrame):
             self.setProperty("leeg", "true")
         else:
             self.setCursor(Qt.CursorShape.PointingHandCursor)
+            # Ook met het toetsenbord: Tab erheen, Enter of spatie opent hem. Schermlezers lezen de naam voor.
+            self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+            self.setAccessibleName(naam)
+            self.setAccessibleDescription(uitleg)
         self.setMinimumHeight(60)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(14, 8, 10, 8)
@@ -841,6 +846,12 @@ class SchijfRij(QFrame):
         if e.button() == Qt.MouseButton.LeftButton and self.rect().contains(e.position().toPoint()):
             self.geklikt.emit()
         super().mouseReleaseEvent(e)
+
+    def keyPressEvent(self, e) -> None:  # noqa: N802
+        if e.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space) and self.focusPolicy() != Qt.FocusPolicy.NoFocus:
+            self.geklikt.emit()
+            return
+        super().keyPressEvent(e)
 
 
 def stip_icoon(kleur_: QColor, hol: bool = False) -> QIcon:
