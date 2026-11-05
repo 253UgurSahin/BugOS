@@ -225,6 +225,30 @@ try:
     app.processEvents()
     rijen = venster.paginas["opstarten"].findChildren(tb.OpstartRij)
     klopt(len(rijen) == 2, "venster: Opstarten toont de programma's met een schuifje")
+    # Sluiten mag het venster niet laten vastlopen, ook als KWin traag antwoordt.
+    import time as _tijd  # noqa: E402
+    _gestopt: list = []
+    tb.Taakbeheer.sluit_vensters = staticmethod(lambda pids: (_tijd.sleep(1.5), True)[1])
+    _oud_stop = tb.bt.stop
+    tb.bt.stop = lambda pids, hard=False: _gestopt.append((sorted(pids), hard)) or len(pids)
+    begin = _tijd.monotonic()
+    venster.sluiten(venster.rijen[firefox_sleutel].taak)
+    klopt(_tijd.monotonic() - begin < 0.5, "sluiten: het venster loopt niet vast terwijl KWin de vensters sluit")
+    while venster.draden and _tijd.monotonic() - begin < 10:
+        app.processEvents()
+        _tijd.sleep(0.02)
+    klopt(not venster.draden and "wordt gesloten" in venster.programmas.melding.tekst.text(),
+          "sluiten: daarna de melding 'wordt gesloten'")
+    # 'Geforceerd sluiten' kijkt pas bij het klikken welke processen er nu bij horen.
+    venster.forceren_sleutel("bestaat-niet-meer", "Weg")
+    klopt("al gesloten" in venster.programmas.melding.tekst.text() and not _gestopt,
+          "geforceerd sluiten: programma is intussen weg, dan wordt er niets gestopt")
+    venster.forceren_sleutel(firefox_sleutel, "Firefox webbrowser")
+    while venster.draden and _tijd.monotonic() - begin < 20:
+        app.processEvents()
+        _tijd.sleep(0.02)
+    klopt(_gestopt == [([100, 101], True)], "geforceerd sluiten: precies de processen die er nu bij Firefox horen")
+    tb.bt.stop = _oud_stop
 finally:
     venster.close()  # stopt ook het meten op de achtergrond
 

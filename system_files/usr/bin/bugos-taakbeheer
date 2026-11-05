@@ -36,6 +36,23 @@ GESCHIEDENIS = 60      # hoeveel metingen de grafiekjes laten zien (2 minuten)
 TUSSENPOOS_MS = 2000   # elke 2 seconden meten
 
 
+class Klusdraad(QThread):
+    """Eén traag klusje op de achtergrond; 'klaar' komt terug in het venster (de hoofddraad)."""
+
+    klaar = Signal(object)
+
+    def __init__(self, werk):
+        super().__init__()
+        self.werk = werk
+
+    def run(self) -> None:
+        try:
+            uitkomst = self.werk()
+        except Exception as e:  # noqa: BLE001  (nooit het venster laten vastlopen)
+            uitkomst = e
+        self.klaar.emit(uitkomst)
+
+
 # =============================================================== metingen ===
 
 class Meetdraad(QThread):
@@ -297,6 +314,7 @@ class Taakbeheer(Venster):
         self.achter_rijen: dict[str, TaakRij] = {}
         self.laatste: dict | None = None
         self.gekozen: str | None = None
+        self.draden: list[Klusdraad] = []  # lopende klusjes (vasthouden, anders ruimt Python ze te vroeg op)
         self.statussen: list[Status] = []
 
         self.voeg_pagina("programmas", "apps", t("Programma's", "Programs"), self.maak_programmas())
@@ -574,36 +592,69 @@ class Taakbeheer(Venster):
             leeg.setVisible(not taken)
 
     # ------------------------------------------------------------- sluiten
+    def op_achtergrond(self, werk, klaar) -> None:
+        """Iets traags (KWin vragen, systemctl) op de achtergrond, zodat het venster nooit vastloopt."""
+        draad = Klusdraad(werk)
+        self.draden.append(draad)
+        draad.klaar.connect(lambda uitkomst: (self.draden.remove(draad), klaar(uitkomst)))
+        draad.start()
+
     def sluiten(self, taak: bt.Taak) -> None:
         """Netjes sluiten: de vensters dicht, zoals op het kruisje klikken (het programma kan nog vragen
         of je wilt opslaan). Achtergrondtaken krijgen een vriendelijk stopverzoek."""
-        if taak.soort == "app" and self.sluit_vensters(taak.pids):
-            self.programmas.melding.toon(t(f"{taak.naam} wordt gesloten…", f"Closing {taak.naam}…"), seconden=6)
-        else:
-            bt.stop(taak.pids)
-            self.programmas.melding.toon(t(f"{taak.naam} wordt gestopt…", f"Stopping {taak.naam}…"), seconden=6)
-        QTimer.singleShot(6000, lambda: self.nog_open(taak))
+        sleutel, naam, pids, app = taak.sleutel, taak.naam, list(taak.pids), taak.soort == "app"
 
-    def nog_open(self, taak: bt.Taak) -> None:
-        if not bt.leeft(taak.pids):
-            self.programmas.melding.toon(t(f"{taak.naam} is gesloten.", f"{taak.naam} is closed."), "goed", seconden=5)
+        def werk() -> bool:
+            if app and self.sluit_vensters(pids):
+                return True
+            bt.stop(pids)
+            return False
+
+        def klaar(vensters) -> None:
+            self.programmas.melding.toon(t(f"{naam} wordt gesloten…", f"Closing {naam}…") if vensters is True
+                                         else t(f"{naam} wordt gestopt…", f"Stopping {naam}…"), seconden=6)
+            QTimer.singleShot(6000, lambda: self.nog_open(sleutel, naam, pids))
+
+        self.programmas.melding.toon(t(f"{naam} wordt gesloten…", f"Closing {naam}…"), seconden=6)
+        self.op_achtergrond(werk, klaar)
+
+    def nog_open(self, sleutel: str, naam: str, pids: list[int]) -> None:
+        if not bt.leeft(pids):
+            self.programmas.melding.toon(t(f"{naam} is gesloten.", f"{naam} is closed."), "goed", seconden=5)
             return
+        # De knop werkt alleen een minuut: daarna kan een procesnummer al van een ander programma zijn.
         self.programmas.melding.toon(
-            t(f"{taak.naam} is nog open. Vraagt het iets, bijvoorbeeld of je wilt opslaan? Kijk dan even in dat "
+            t(f"{naam} is nog open. Vraagt het iets, bijvoorbeeld of je wilt opslaan? Kijk dan even in dat "
               "venster. Reageert het niet? Sluit het dan geforceerd.",
-              f"{taak.naam} is still open. Is it asking something, for example whether to save? Then look at that "
+              f"{naam} is still open. Is it asking something, for example whether to save? Then look at that "
               "window. Not responding? Then force it to close."),
-            "let_op", knop=t("Geforceerd sluiten", "Force close"), actie=lambda: self.forceren(taak), seconden=0)
+            "let_op", knop=t("Geforceerd sluiten", "Force close"), actie=lambda: self.forceren_sleutel(sleutel, naam),
+            seconden=60)
+
+    def forceren_sleutel(self, sleutel: str, naam: str) -> None:
+        """Pas op het moment van klikken kijken welke processen er nu bij dit programma horen."""
+        taak = self.taak_van(sleutel)
+        if taak is None:
+            self.programmas.melding.toon(t(f"{naam} is al gesloten.", f"{naam} is already closed."), "goed", seconden=5)
+            return
+        self.forceren(taak)
 
     def forceren(self, taak: bt.Taak) -> None:
         if taak.beschermd:
             return
-        bt.stop(taak.pids, hard=True)
-        if taak.soort == "app" and taak.eenheid and shutil.which("systemctl"):
-            subprocess.run(["systemctl", "--user", "kill", "--signal=SIGKILL", taak.eenheid],
-                           capture_output=True, timeout=10)
-        self.programmas.melding.toon(t(f"{taak.naam} is geforceerd gesloten.", f"{taak.naam} was force closed."),
-                                     "goed", seconden=5)
+        naam, pids, eenheid = taak.naam, list(taak.pids), taak.eenheid if taak.soort == "app" else ""
+
+        def werk() -> None:
+            bt.stop(pids, hard=True)
+            if eenheid and shutil.which("systemctl"):
+                try:
+                    subprocess.run(["systemctl", "--user", "kill", "--signal=SIGKILL", eenheid],
+                                   capture_output=True, timeout=10)
+                except (OSError, subprocess.SubprocessError):
+                    pass
+
+        self.op_achtergrond(werk, lambda _: self.programmas.melding.toon(
+            t(f"{naam} is geforceerd gesloten.", f"{naam} was force closed."), "goed", seconden=5))
 
     @staticmethod
     def sluit_vensters(pids: list[int]) -> bool:
@@ -637,6 +688,8 @@ class Taakbeheer(Venster):
 
     def closeEvent(self, e) -> None:  # noqa: N802
         self.stop_meten()
+        for draad in list(self.draden):  # een lopend klusje eerst laten afmaken (hooguit een paar seconden)
+            draad.wait(12000)
         super().closeEvent(e)
 
 
