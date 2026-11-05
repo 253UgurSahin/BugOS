@@ -129,6 +129,17 @@ klopt(bi.lees_autologin(["[General]\nx=1\n", "[Autologin]\nUser=bugie\nSession=p
       and not bi.lees_autologin(["[Autologin]\nUser=sanne\n"], "bugie"), "inloggen: 'zonder wachtwoord' uit sddm lezen")
 hash_ = bi.versleutel("geheim123")
 klopt(hash_.startswith("$6$") and len(hash_) > 90, "inloggen: wachtwoord versleutelen zoals /etc/shadow")
+# De hash mag nooit op een opdrachtregel staan (dan leest elke gebruiker hem in 'ps').
+_oud = (bi.VOORBEELD, bi.draai, bi._accounts_dbus)
+_opdrachten: list = []
+_dbus: list = []
+bi.VOORBEELD = False
+bi.draai = lambda *cmd, **kw: (_opdrachten.append(cmd), (0, ""))[1]
+bi._accounts_dbus = lambda methode, *args, **kw: (_dbus.append((methode, args)), (True, ""))[1]
+_goed, _ = bi.zet_wachtwoord("geheim123")
+bi.VOORBEELD, bi.draai, bi._accounts_dbus = _oud
+klopt(_goed and not _opdrachten and _dbus and _dbus[0][0] == "SetPassword" and _dbus[0][1][0].startswith("$6$"),
+      "inloggen: nieuw wachtwoord via D-Bus in het programma, niet via een opdracht")
 klopt(bi.lees_tot("2999,12,31,0,0,0") and not bi.lees_tot("2001,1,1,0,0,0") and not bi.lees_tot("")
       and bi.lees_tot("2999-01-01T00:00:00") and not bi.lees_tot("onzin"),
       "meldingen: 'niet storen tot' lezen (lijstje van KDE of ISO-tijd)")
