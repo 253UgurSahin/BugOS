@@ -140,6 +140,20 @@ _goed, _ = bi.zet_wachtwoord("geheim123")
 bi.VOORBEELD, bi.draai, bi._accounts_dbus = _oud
 klopt(_goed and not _opdrachten and _dbus and _dbus[0][0] == "SetPassword" and _dbus[0][1][0].startswith("$6$"),
       "inloggen: nieuw wachtwoord via D-Bus in het programma, niet via een opdracht")
+# B001: Fedora 44 heeft geen powerprofilesctl (tuned-ppd); dan via busctl.
+klopt(bi.lees_busctl_tekst('s "performance"\n') == "performance" and bi.lees_busctl_tekst("onzin") == "",
+      "energie: het antwoord van busctl lezen")
+_oud = (bi.VOORBEELD, bi.draai, bi.shutil.which)
+_opdrachten = []
+bi.VOORBEELD = False
+bi.shutil.which = lambda naam: None if naam == "powerprofilesctl" else "/usr/bin/" + naam
+bi.draai = lambda *cmd, **kw: (_opdrachten.append(cmd), (0, 's "balanced"'))[1]
+_profiel = bi.energieprofiel()
+_gezet = bi.zet_energieprofiel("performance")
+bi.VOORBEELD, bi.draai, bi.shutil.which = _oud
+klopt(_profiel == "balanced" and _gezet and _opdrachten[-1][:3] == ("busctl", "--system", "set-property")
+      and _opdrachten[-1][-2:] == ("s", "performance"),
+      "energie: zonder powerprofilesctl lezen en zetten via D-Bus (busctl)")
 klopt(bi.lees_tot("2999,12,31,0,0,0") and not bi.lees_tot("2001,1,1,0,0,0") and not bi.lees_tot("")
       and bi.lees_tot("2999-01-01T00:00:00") and not bi.lees_tot("onzin"),
       "meldingen: 'niet storen tot' lezen (lijstje van KDE of ISO-tijd)")

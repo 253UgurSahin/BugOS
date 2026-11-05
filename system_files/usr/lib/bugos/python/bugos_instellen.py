@@ -407,18 +407,35 @@ def zet_nachtlicht(aan: bool) -> None:
 PROFIELEN = ("power-saver", "balanced", "performance")
 
 
+# Fedora 44 heeft tuned-ppd: dezelfde dienst op D-Bus, maar zonder het programma powerprofilesctl.
+STROOM = ("net.hadess.PowerProfiles", "/net/hadess/PowerProfiles", "net.hadess.PowerProfiles", "ActiveProfile")
+
+
+def lees_busctl_tekst(uit: str) -> str:
+    """'s "balanced"' (wat busctl get-property geeft) wordt 'balanced'."""
+    uit = uit.strip()
+    return uit[3:-1] if uit.startswith('s "') and uit.endswith('"') else ""
+
+
 def energieprofiel() -> str | None:
     if VOORBEELD:
         return _VB["profiel"]
-    code, uit = draai("powerprofilesctl", "get", timeout=5)
-    return uit.strip() if code == 0 and uit.strip() in PROFIELEN else None
+    if shutil.which("powerprofilesctl"):
+        code, uit = draai("powerprofilesctl", "get", timeout=5)
+        profiel = uit.strip()
+    else:
+        code, uit = draai("busctl", "--system", "get-property", *STROOM, timeout=5)
+        profiel = lees_busctl_tekst(uit)
+    return profiel if code == 0 and profiel in PROFIELEN else None
 
 
 def zet_energieprofiel(profiel: str) -> bool:
     if VOORBEELD:
         _VB["profiel"] = profiel
         return True
-    return draai("powerprofilesctl", "set", profiel, timeout=8)[0] == 0
+    if shutil.which("powerprofilesctl"):
+        return draai("powerprofilesctl", "set", profiel, timeout=8)[0] == 0
+    return draai("busctl", "--system", "set-property", *STROOM, "s", profiel, timeout=8)[0] == 0
 
 
 @dataclass
