@@ -77,6 +77,8 @@ jobs:
         run: bash tools/test_pakket.sh
       - name: Game-modus testen (twee keer aan, dan uit zet alles terug; met nep-programma's)
         run: bash tools/test_spelmodus.sh
+      - name: Lichte stand testen (uit zet je eigen instellingen terug; met nep-programma's)
+        run: bash tools/test_lichte_stand.sh
       - name: Back-up testen (ruimte, maken en terugzetten; met tijdelijke mappen)
         run: python3 tools/test_backup.py
       - name: Uitzetscherm testen (laadt het, en kloppen de knoppen per situatie)
