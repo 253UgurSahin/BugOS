@@ -3,7 +3,7 @@ widgetStyle=kvantum
 SingleClick=false
 
 [kdeglobals][General]
-ColorScheme=BugOSLicht
+ColorScheme=BugOSLight
 
 [kdeglobals][Icons]
 Theme=BugOS

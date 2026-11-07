@@ -1,0 +1,58 @@
+#!/usr/bin/bash
+# bugos-developer - de "Ontwikkelaarsmodus" aan of uit.
+#
+#   bugos-developer aan | uit | status
+#
+# Aan zet klaar:
+#   • Visual Studio Code (uit de Winkel)
+#   • Podman met Docker-commando's (containers)
+#   • een "dev"-doosje (Distrobox) met git, Python, Node.js, Rust, Go, C/C++
+# Gewone gebruikers merken hier niets van zolang het uit staat.
+
+# shellcheck source=system_files/usr/share/bugos/lib.sh
+. /usr/share/bugos/lib.sh
+
+MARKER="$BUGOS_CONFIG/ontwikkelaar-aan"
+DOOS=dev
+DOOS_BEELD=registry.fedoraproject.org/fedora-toolbox:latest
+DEV_PAKKETTEN="git gcc gcc-c++ make cmake python3 python3-pip nodejs npm rust cargo golang jq"
+
+aan() {
+    mkdir -p "$BUGOS_CONFIG"
+    melding "$(t "Ontwikkelaarsmodus wordt klaargezet..." "Setting up developer mode...")" \
+        "$(t "Dit kan 5 tot 10 minuten duren." "This can take 5 to 10 minutes.")"
+
+    flatpak install --user --noninteractive flathub com.visualstudio.code >/dev/null 2>&1 ||
+        flatpak install --noninteractive flathub com.visualstudio.code >/dev/null 2>&1
+
+    systemctl --user enable --now podman.socket >/dev/null 2>&1
+
+    if ! distrobox list 2>/dev/null | grep -q " $DOOS "; then
+        distrobox create --yes --name "$DOOS" --image "$DOOS_BEELD" \
+            --additional-packages "$DEV_PAKKETTEN" >/dev/null 2>&1
+    fi
+    # Eerste keer binnengaan maakt het doosje echt af.
+    distrobox enter "$DOOS" -- true >/dev/null 2>&1
+
+    touch "$MARKER"
+    melding "$(t "Ontwikkelaarsmodus staat AAN 🛠️" "Developer mode is ON 🛠️")" \
+        "$(t "Open de Terminal en typ 'distrobox enter dev' voor je dev-doosje." \
+            "Open the Terminal and type 'distrobox enter dev' for your dev box.")"
+}
+
+uit() {
+    # We gooien niets weg: je code en doosjes blijven bewaard.
+    rm -f "$MARKER"
+    melding "$(t "Ontwikkelaarsmodus staat UIT" "Developer mode is OFF")" \
+        "$(t "Je bestanden en doosjes zijn bewaard." "Your files and boxes are kept.")"
+}
+
+case "${1:-status}" in
+aan) aan ;;
+uit) uit ;;
+status) if [ -f "$MARKER" ]; then echo aan; else echo uit; fi ;;
+*)
+    echo "Gebruik: bugos-developer aan|uit|status" >&2
+    exit 2
+    ;;
+esac

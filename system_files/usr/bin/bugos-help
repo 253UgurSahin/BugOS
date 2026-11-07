@@ -1,0 +1,387 @@
+#!/usr/bin/python3
+"""BugOS Hulp - "Er werkt iets niet".
+
+Jip-en-Janneke: BugOS loopt een lijstje af (internet, wifi, bluetooth,
+geluid, printer, opslag, updates). Bij elk probleem staat een knop
+"Repareer" die het voor je probeert op te lossen.
+
+  bugos-help            -> het venster
+  bugos-help --tekst    -> alleen de uitslag in de terminal (handig voor hulpgevers)
+"""
+
+import os
+import shutil
+import sys
+from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/bugos/python")
+
+from bugos_ui import bestaat, draai, kde_instelling, start, t  # noqa: E402
+
+OK, LET_OP, PROBLEEM, ONBEKEND = "ok", "let_op", "probleem", "onbekend"
+
+
+@dataclass
+class Uitslag:
+    naam: str
+    stand: str
+    tekst: str
+    repareer: Callable[[], None] | None = None
+    repareer_tekst: str = ""
+    icoon: str = ""
+
+
+# ------------------------------------------------------------- controles ----
+
+def controle_internet() -> Uitslag:
+    naam = t("Internet", "Internet")
+    if not bestaat("nmcli"):
+        return Uitslag(naam, ONBEKEND, t("Kon het niet controleren.", "Could not check."))
+    _, uit = draai("nmcli", "-t", "-f", "CONNECTIVITY", "general")
+    stand = uit.strip()
+    if stand == "full":
+        return Uitslag(naam, OK, t("Je bent verbonden met internet.", "You are connected to the internet."))
+    if stand == "portal":
+        return Uitslag(naam, LET_OP,
+                       t("Je moet nog inloggen op het netwerk (bijv. in een hotel of trein). Open je browser.",
+                         "You still need to sign in to the network (e.g. hotel or train). Open your browser."),
+                       lambda: start("xdg-open", "http://neverssl.com"), t("Browser openen", "Open browser"))
+    if stand == "limited":
+        return Uitslag(naam, PROBLEEM,
+                       t("Je hebt wel netwerk, maar geen internet. Vaak helpt het om opnieuw te verbinden.",
+                         "You have a network but no internet. Reconnecting often helps."),
+                       herstart_netwerk, t("Opnieuw verbinden", "Reconnect"))
+    return Uitslag(naam, PROBLEEM, t("Geen verbinding. Kies hieronder je wifi.", "Not connected. Choose your Wi-Fi."),
+                   lambda: kde_instelling("kcm_networkmanagement"), t("Wifi kiezen", "Choose Wi-Fi"))
+
+
+def herstart_netwerk() -> None:
+    draai("nmcli", "networking", "off", timeout=10)
+    draai("nmcli", "networking", "on", timeout=10)
+
+
+def controle_wifi() -> Uitslag:
+    naam = t("Wifi", "Wi-Fi")
+    if not bestaat("nmcli"):
+        return Uitslag(naam, ONBEKEND, t("Kon het niet controleren.", "Could not check."))
+    _, apparaten = draai("nmcli", "-t", "-f", "TYPE", "device")
+    if "wifi" not in apparaten.split():
+        return Uitslag(naam, OK, t("Deze computer heeft geen wifi (of gebruikt een kabel). Dat is prima.",
+                                   "This computer has no Wi-Fi (or uses a cable). That's fine."))
+    _, radio = draai("nmcli", "radio", "wifi")
+    if radio.strip() != "enabled":
+        return Uitslag(naam, PROBLEEM, t("Wifi staat uit.", "Wi-Fi is turned off."),
+                       lambda: (draai("rfkill", "unblock", "wifi"), draai("nmcli", "radio", "wifi", "on")),
+                       t("Wifi aanzetten", "Turn Wi-Fi on"))
+    return Uitslag(naam, OK, t("Wifi staat aan.", "Wi-Fi is on."))
+
+
+def controle_bluetooth() -> Uitslag:
+    naam = "Bluetooth"
+    if not bestaat("bluetoothctl"):
+        return Uitslag(naam, ONBEKEND, t("Kon het niet controleren.", "Could not check."))
+    code, uit = draai("bluetoothctl", "show", timeout=5)
+    if code != 0 or "Controller" not in uit:
+        return Uitslag(naam, OK, t("Geen bluetooth gevonden op deze computer.", "No Bluetooth found on this computer."))
+    if "Powered: yes" in uit:
+        return Uitslag(naam, OK, t("Bluetooth staat aan.", "Bluetooth is on."))
+    return Uitslag(naam, LET_OP, t("Bluetooth staat uit.", "Bluetooth is off."),
+                   lambda: (draai("rfkill", "unblock", "bluetooth"), draai("bluetoothctl", "power", "on")),
+                   t("Bluetooth aanzetten", "Turn Bluetooth on"))
+
+
+def controle_geluid() -> Uitslag:
+    naam = t("Geluid", "Sound")
+    if not bestaat("wpctl"):
+        return Uitslag(naam, ONBEKEND, t("Kon het niet controleren.", "Could not check."))
+    code, uit = draai("wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@", timeout=5)
+    if code != 0:
+        return Uitslag(naam, PROBLEEM, t("Er is geen luidspreker gevonden.", "No speaker was found."),
+                       herstart_geluid, t("Geluid herstarten", "Restart sound"))
+    if "MUTED" in uit:
+        return Uitslag(naam, PROBLEEM, t("Het geluid staat op stil.", "Sound is muted."),
+                       lambda: draai("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "0"),
+                       t("Geluid aanzetten", "Unmute"))
+    try:
+        volume = float(uit.split()[1])
+    except (IndexError, ValueError):
+        volume = 1.0
+    if volume < 0.1:
+        return Uitslag(naam, LET_OP, t("Het geluid staat heel zacht.", "Sound is very quiet."),
+                       lambda: draai("wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "0.5"),
+                       t("Harder zetten", "Turn up"))
+    return Uitslag(naam, OK, t("Geluid werkt.", "Sound works."))
+
+
+def herstart_geluid() -> None:
+    draai("systemctl", "--user", "restart", "wireplumber", "pipewire", "pipewire-pulse", timeout=20)
+
+
+def controle_printer() -> Uitslag:
+    naam = t("Printer", "Printer")
+    if not bestaat("lpstat"):
+        return Uitslag(naam, ONBEKEND, t("Kon het niet controleren.", "Could not check."))
+    code, uit = draai("lpstat", "-r", timeout=5)
+    if code != 0 or "not running" in uit:
+        return Uitslag(naam, LET_OP, t("De printerdienst draait niet.", "The printing service is not running."),
+                       lambda: start("pkexec", "systemctl", "restart", "cups"), t("Printerdienst starten", "Start printing service"))
+    # Zijn er printers? lpstat -e geeft alleen hun namen (leeg als er geen is). lpstat -p zegt zonder
+    # printer "No destinations added." (in de taal van de computer), en dat is geen printer.
+    _, namen = draai("lpstat", "-e", timeout=5)
+    _, printers = draai("lpstat", "-p", timeout=5)
+    if not namen.strip():
+        return Uitslag(naam, OK, t("Er is nog geen printer toegevoegd.", "No printer has been added yet."),
+                       lambda: kde_instelling("kcm_printer_manager"), t("Printer toevoegen", "Add printer"))
+    if "disabled" in printers:
+        return Uitslag(naam, LET_OP, t("Een printer staat op pauze.", "A printer is paused."),
+                       lambda: start("bugos-settings", "printers"), t("Printers bekijken", "View printers"))
+    return Uitslag(naam, OK, t("Printer is klaar.", "Printer is ready."))
+
+
+def controle_opslag() -> Uitslag:
+    naam = t("Opslag", "Storage")
+    try:
+        gebruik = shutil.disk_usage(str(Path.home()))
+    except OSError:
+        return Uitslag(naam, ONBEKEND, t("Kon het niet controleren.", "Could not check."))
+    vrij_gb = gebruik.free / 1024**3
+    if vrij_gb < 2 or gebruik.free / gebruik.total < 0.03:
+        return Uitslag(naam, PROBLEEM,
+                       t(f"Je schijf is bijna vol (nog {vrij_gb:.1f} GB). Ruim oude downloads op.",
+                         f"Your disk is almost full ({vrij_gb:.1f} GB left). Clean up old downloads."),
+                       lambda: start("filelight", str(Path.home())) if bestaat("filelight") else start("dolphin", str(Path.home() / "Downloads")),
+                       t("Laat zien wat ruimte inneemt", "Show what takes up space"))
+    if vrij_gb < 10:
+        return Uitslag(naam, LET_OP, t(f"Nog {vrij_gb:.0f} GB vrij. Dat raakt op.", f"{vrij_gb:.0f} GB free. Running low."))
+    return Uitslag(naam, OK, t(f"Genoeg ruimte: {vrij_gb:.0f} GB vrij.", f"Enough space: {vrij_gb:.0f} GB free."))
+
+
+def controle_updates() -> Uitslag:
+    naam = t("Updates", "Updates")
+    if not bestaat("rpm-ostree"):
+        return Uitslag(naam, ONBEKEND, t("Kon het niet controleren.", "Could not check."))
+    code, uit = draai("rpm-ostree", "status", "--json", timeout=15)
+    if code != 0:
+        return Uitslag(naam, ONBEKEND, t("Kon het niet controleren.", "Could not check."))
+    import json
+    try:
+        deploys = json.loads(uit).get("deployments", [])
+    except ValueError:
+        deploys = []
+    if deploys and not deploys[0].get("booted", True):
+        return Uitslag(naam, LET_OP,
+                       t("Er staat een update klaar. Start de computer opnieuw op om hem te gebruiken.",
+                         "An update is ready. Restart the computer to use it."),
+                       lambda: start("qdbus6", "org.kde.LogoutPrompt", "/LogoutPrompt", "promptReboot"),
+                       t("Nu herstarten", "Restart now"))
+    return Uitslag(naam, OK, t("Alles is bijgewerkt.", "Everything is up to date."))
+
+
+CONTROLES = [controle_internet, controle_wifi, controle_bluetooth, controle_geluid,
+             controle_printer, controle_opslag, controle_updates]
+
+
+def alles_controleren() -> list[Uitslag]:
+    uitslagen = []
+    for c in CONTROLES:
+        try:
+            u = c()
+        except Exception as e:  # een controle mag de app nooit laten crashen
+            u = Uitslag(c.__name__, ONBEKEND, str(e))
+        u.icoon = ICONEN.get(c.__name__, "")
+        uitslagen.append(u)
+    return uitslagen
+
+
+# ------------------------------------------------------------------ venster ----
+
+TEKEN = {OK: "✅", LET_OP: "⚠️", PROBLEEM: "❌", ONBEKEND: "❔"}
+
+ICONEN = {
+    "controle_internet": "lijn:wereld", "controle_wifi": "lijn:wifi", "controle_bluetooth": "lijn:bluetooth",
+    "controle_geluid": "lijn:geluid", "controle_printer": "lijn:printer",
+    "controle_opslag": "lijn:opslag", "controle_updates": "lijn:verversen",
+}
+TINT = {OK: "groen", LET_OP: "oranje", PROBLEEM: "rood", ONBEKEND: "grijs"}
+
+
+def venster() -> int:
+    from bugos_ui import (
+        K, Chip, Groep, IcoonChip, Kaart, Knop, label, maak_app, pagina, sectie, uitvoeren,
+    )
+    from PySide6.QtCore import QThread, QTimer, Signal
+    from PySide6.QtWidgets import QApplication, QHBoxLayout, QScrollArea, QVBoxLayout, QWidget
+
+    class Klusje(QThread):
+        """Iets traags (alles nakijken, een reparatie) op de achtergrond, zodat het venster niet vastloopt."""
+
+        klaar = Signal(object)
+
+        def __init__(self, werk):
+            super().__init__()
+            self.werk = werk
+
+        def run(self) -> None:
+            try:
+                uitkomst = self.werk()
+            except Exception as e:  # noqa: BLE001  (een controle die faalt mag het venster niet stoppen)
+                uitkomst = e
+            self.klaar.emit(uitkomst)
+
+    class Hulp(QScrollArea):
+        def __init__(self):
+            super().__init__()
+            self.setObjectName("venster")
+            self.setWindowTitle(t("Er werkt iets niet", "Something is not working"))
+            self.resize(880, 760)
+            self.setWidgetResizable(True)
+            w, lay = pagina()
+            self.setWidget(w)
+            self.laatste: list[Uitslag] = []
+
+            # Samenvatting bovenaan
+            self.kaart = Kaart(marge=24, ruimte=18, richting="h")
+            self.chip_plek = QHBoxLayout()
+            self.kaart.lay.addLayout(self.chip_plek)
+            blok = QVBoxLayout()
+            blok.setSpacing(4)
+            self.kop = label(t("Even kijken…", "Let me check…"), "titel")
+            self.sub = label(t("BugOS loopt alles na. Dit duurt maar een paar seconden.",
+                               "BugOS is checking everything. This only takes a few seconds."), "sub")
+            blok.addWidget(self.kop)
+            blok.addWidget(self.sub)
+            self.kaart.lay.addLayout(blok, 1)
+            opnieuw = Knop(t("Opnieuw controleren", "Check again"), "rand", "lijn:verversen")
+            opnieuw.clicked.connect(self.vul)
+            self.kaart.lay.addWidget(opnieuw)
+            lay.addWidget(self.kaart)
+
+            lay.addWidget(sectie(t("Wat ik heb nagekeken", "What I checked")))
+            self.groep_plek = QVBoxLayout()
+            self.groep_plek.setSpacing(0)
+            lay.addLayout(self.groep_plek)
+
+            onder = QHBoxLayout()
+            self.kopieer_knop = Knop(t("Uitslag kopiëren", "Copy results"), "stil", "lijn:kopieer")
+            self.kopieer_knop.clicked.connect(self.kopieer)
+            onder.addWidget(self.kopieer_knop)
+            onder.addWidget(label(t("Handig om naar iemand te sturen die je helpt.",
+                                    "Handy to send to someone who is helping you."), "klein"), 1)
+            lay.addLayout(onder)
+            lay.addStretch(1)
+            self.groep = None
+            self.klusjes: list[Klusje] = []
+            self.bezig = False
+            QTimer.singleShot(60, self.vul)
+
+        def op_achtergrond(self, werk, klaar) -> None:
+            k = Klusje(werk)
+            self.klusjes.append(k)
+            k.klaar.connect(lambda uit: (self.klusjes.remove(k), klaar(uit)))
+            k.start()
+
+        def vul(self) -> None:
+            if self.bezig:
+                return
+            self.bezig = True
+            self.kop.setText(t("Even kijken…", "Let me check…"))
+            self.op_achtergrond(alles_controleren, self.toon)
+
+        def repareer(self, knop, f) -> None:
+            knop.setEnabled(False)
+            knop.setText(t("Bezig…", "Busy…"))
+            self.op_achtergrond(f, lambda _: QTimer.singleShot(1500, self.vul))
+
+        def closeEvent(self, e) -> None:  # noqa: N802
+            for k in list(self.klusjes):  # een lopende reparatie eerst laten afmaken
+                k.wait(25000)
+            super().closeEvent(e)
+
+        def toon(self, uitslagen) -> None:
+            self.bezig = False
+            if isinstance(uitslagen, Exception):
+                self.kop.setText(t("Nakijken lukte niet", "Checking did not work"))
+                self.sub.setText(t("Probeer het opnieuw, of start de computer opnieuw op.",
+                                   "Try again, or restart the computer."))
+                return
+            self.laatste = uitslagen
+            problemen = [u for u in self.laatste if u.stand in (PROBLEEM, LET_OP)]
+            n = len(problemen)
+            while self.chip_plek.count():
+                oud = self.chip_plek.takeAt(0).widget()
+                if oud:
+                    oud.deleteLater()
+            if not problemen:
+                self.chip_plek.addWidget(IcoonChip("vink", "groen", 64))
+                self.kop.setText(t("Alles ziet er goed uit", "Everything looks good"))
+                self.sub.setText(t("Werkt er toch iets niet? Start de computer opnieuw op; dat lost veel op.",
+                                   "Still something wrong? Restart the computer; that fixes a lot."))
+            else:
+                ernstig = any(u.stand == PROBLEEM for u in problemen)
+                self.chip_plek.addWidget(IcoonChip("uitroep", "rood" if ernstig else "oranje", 64))
+                self.kop.setText(t(f"{n} {'ding' if n == 1 else 'dingen'} om naar te kijken",
+                                   f"{n} {'thing' if n == 1 else 'things'} to look at"))
+                self.sub.setText(t("Druk op de knop ernaast, dan probeert BugOS het voor je op te lossen.",
+                                   "Press the button next to it and BugOS will try to fix it for you."))
+
+            if self.groep is not None:
+                self.groep_plek.removeWidget(self.groep)
+                self.groep.deleteLater()
+            self.groep = Groep()
+            volgorde = {PROBLEEM: 0, LET_OP: 1, ONBEKEND: 2, OK: 3}
+            for u in sorted(self.laatste, key=lambda x: volgorde[x.stand]):
+                rij = QWidget()
+                r = QHBoxLayout(rij)
+                r.setContentsMargins(18, 14, 18, 14)
+                r.setSpacing(14)
+                # Rustig: alleen wat aandacht nodig heeft krijgt kleur.
+                r.addWidget(IcoonChip(u.icoon or "lijn:vink", "neutraal", 40, vol=False))
+                b = QVBoxLayout()
+                b.setSpacing(2)
+                b.addWidget(label(u.naam, "kop3"))
+                b.addWidget(label(u.tekst, "klein"))
+                r.addLayout(b, 1)
+                if u.repareer:
+                    knop = Knop(u.repareer_tekst or t("Repareer", "Fix"), "gewoon")
+                    knop.clicked.connect(lambda _=False, k=knop, f=u.repareer: self.repareer(k, f))
+                    r.addWidget(knop)
+                elif u.stand == OK:
+                    goed = label(f'<span style="color:{K["goed"]}">\u25CF</span>&nbsp; ' + t("In orde", "OK"), "klein", wrap=False)
+                    r.addWidget(goed)
+                else:
+                    r.addWidget(Chip({OK: t("In orde", "OK"), LET_OP: t("Let op", "Note"),
+                                      PROBLEEM: t("Probleem", "Problem"), ONBEKEND: t("Onbekend", "Unknown")}[u.stand],
+                                     {OK: "goed", LET_OP: "let_op", PROBLEEM: "fout", ONBEKEND: "grijs"}[u.stand]))
+                self.groep.voeg(rij)
+            self.groep_plek.addWidget(self.groep)
+
+        def kopieer(self) -> None:
+            QApplication.clipboard().setText(als_tekst(self.laatste))
+            self.kopieer_knop.setText(t("Gekopieerd ✓", "Copied ✓"))
+
+    app = maak_app("bugos-help", "bugos-help", sys.argv)
+    return uitvoeren(app, Hulp())
+
+
+def als_tekst(uitslagen: list[Uitslag]) -> str:
+    regels = ["BugOS hulp-uitslag"]
+    try:
+        regels.append(Path("/usr/share/bugos/image-info.json").read_text().strip())
+    except OSError:
+        pass
+    for u in uitslagen:
+        regels.append(f"{TEKEN[u.stand]} {u.naam}: {u.tekst}")
+    return "\n".join(regels)
+
+
+if __name__ == "__main__":
+    if "--tekst" in sys.argv:
+        print(als_tekst(alles_controleren()))
+        sys.exit(0)
+    if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY") \
+            and os.environ.get("QT_QPA_PLATFORM") != "offscreen":
+        print(als_tekst(alles_controleren()))
+        sys.exit(0)
+    sys.exit(venster())

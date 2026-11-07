@@ -1,0 +1,44 @@
+#!/usr/bin/bash
+# BugOS: inloggen zonder wachtwoord aan- of uitzetten (het inlogscherm, SDDM).
+# Instellingen roept dit aan via pkexec; KDE vraagt dan één keer je wachtwoord.
+#
+# Gebruik:  bugos-login status <gebruiker>
+#           bugos-login aan <gebruiker>
+#           bugos-login uit <gebruiker>
+set -euo pipefail
+
+BESTAND=/etc/sddm.conf.d/50-bugos-login.conf
+WAT="${1:-status}"
+GEBRUIKER="${2:-}"
+
+if ! [[ "$GEBRUIKER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || ! id "$GEBRUIKER" >/dev/null 2>&1; then
+    echo "Geen geldige gebruiker: '$GEBRUIKER'" >&2
+    exit 2
+fi
+
+case "$WAT" in
+status)
+    if [ -f "$BESTAND" ] && grep -qx "User=$GEBRUIKER" "$BESTAND"; then echo aan; else echo uit; fi
+    ;;
+aan)
+    [ "$(id -u)" -eq 0 ] || { echo "Alleen als beheerder (via pkexec)." >&2; exit 1; }
+    # De sessie van KDE (plasma op Wayland); de naam staat in /usr/share/wayland-sessions.
+    SESSIE=plasma
+    if [ ! -f /usr/share/wayland-sessions/plasma.desktop ]; then
+        EERSTE="$(find /usr/share/wayland-sessions -maxdepth 1 -name '*.desktop' 2>/dev/null | sort | head -1 || true)"
+        [ -n "$EERSTE" ] && SESSIE="$(basename -s .desktop "$EERSTE")"
+    fi
+    mkdir -p /etc/sddm.conf.d
+    printf '[Autologin]\nUser=%s\nSession=%s\nRelogin=false\n' "$GEBRUIKER" "$SESSIE" >"$BESTAND"
+    echo aan
+    ;;
+uit)
+    [ "$(id -u)" -eq 0 ] || { echo "Alleen als beheerder (via pkexec)." >&2; exit 1; }
+    rm -f "$BESTAND"
+    echo uit
+    ;;
+*)
+    echo "Gebruik: bugos-login status|aan|uit <gebruiker>" >&2
+    exit 2
+    ;;
+esac

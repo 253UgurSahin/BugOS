@@ -11,7 +11,7 @@
 # BugOS is een eigen systeem, net als Bazzite, dat op dezelfde basis bouwt.
 #
 # Het Fedora-nummer (44) staat vast, ook in .github/workflows/build.yml en
-# tools/iso-lokaal.sh: een nieuwe Fedora komt er nooit 's nachts vanzelf in.
+# tools/iso-local.sh: een nieuwe Fedora komt er nooit 's nachts vanzelf in.
 # Overstappen (bijv. naar 45): verander het nummer op die drie plekken, bouw
 # een test-ISO en kijk of thema en menu's nog kloppen (build.sh zegt "LET OP"
 # als een aanpassing niet meer past). Fedora 44 krijgt updates tot 2 juni 2027.

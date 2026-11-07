@@ -1,5 +1,5 @@
 # BugOS-programmastijl voor Kvantum (licht).
-# Gemaakt door tools/kvantum/maak.py uit tools/ontwerp/tokens.py; niet met de hand bewerken.
+# Gemaakt door tools/kvantum/make.py uit tools/design/tokens.py; niet met de hand bewerken.
 
 [%General]
 author=BugOS

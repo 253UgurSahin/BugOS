@@ -48,18 +48,18 @@ PlasmoidItem {
     Plasmoid.contextualActions: [
         PlasmaCore.Action {
             text: root.tr("Taakbeheer", "Task Manager")
-            icon.name: "bugos-taakbeheer"
-            onTriggered: root.startApp("bugos-taakbeheer.desktop")
+            icon.name: "bugos-task-manager"
+            onTriggered: root.startApp("bugos-task-manager.desktop")
         },
         PlasmaCore.Action {
             text: root.tr("Instellingen", "Settings")
-            icon.name: "bugos-instellingen"
-            onTriggered: root.startApp("bugos-instellingen.desktop")
+            icon.name: "bugos-settings"
+            onTriggered: root.startApp("bugos-settings.desktop")
         },
         PlasmaCore.Action {
             text: root.tr("Bestanden", "Files")
-            icon.name: "bugos-bestanden"
-            onTriggered: root.startApp("bugos-bestanden.desktop")
+            icon.name: "bugos-files"
+            onTriggered: root.startApp("bugos-files.desktop")
         },
         PlasmaCore.Action {
             text: root.tr("Terminal", "Terminal")
@@ -68,8 +68,8 @@ PlasmoidItem {
         },
         PlasmaCore.Action {
             text: root.tr("Er werkt iets niet", "Something is not working")
-            icon.name: "bugos-hulp"
-            onTriggered: root.startApp("bugos-hulp.desktop")
+            icon.name: "bugos-help"
+            onTriggered: root.startApp("bugos-help.desktop")
         }
     ]
 

@@ -1,4 +1,4 @@
-# BugOS-profiel voor de Terminal. Gemaakt door tools/konsole/maak.py: niet met de hand aanpassen.
+# BugOS-profiel voor de Terminal. Gemaakt door tools/konsole/make.py: niet met de hand aanpassen.
 
 [Appearance]
 ColorScheme=BugOS

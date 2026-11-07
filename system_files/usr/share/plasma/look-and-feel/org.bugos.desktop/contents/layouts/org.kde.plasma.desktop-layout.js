@@ -18,10 +18,10 @@ start.writeConfig("global", "Alt+F1");
 var taken = panel.addWidget("org.kde.plasma.icontasks");
 taken.currentConfigGroup = ["General"];
 taken.writeConfig("launchers", [
-    "applications:bugos-bestanden.desktop",
+    "applications:bugos-files.desktop",
     "applications:org.mozilla.firefox.desktop",
-    "applications:bugos-winkel.desktop",
-    "applications:bugos-instellingen.desktop"
+    "applications:bugos-store.desktop",
+    "applications:bugos-settings.desktop"
 ]);
 // De takenlijst rekt niet uit: de lege ruimte erachter is van de taakbalkruimte
 // hieronder. Zo kom je met de rechtermuisknop op een leeg stuk taakbalk bij
@@ -30,14 +30,14 @@ taken.writeConfig("fill", false);
 
 // Lege ruimte tussen de apps en het systeemvak, met Taakbeheer in het rechtermuismenu.
 // Vervangt de oude scheidingsruimte (marginsseparator): die vulde ook de ruimte, maar zonder menu.
-panel.addWidget("org.bugos.taakbalk");
+panel.addWidget("org.bugos.taskbar");
 // Snelmenu: grote knoppen voor wifi, bluetooth, geluid, donker en niet storen.
-panel.addWidget("org.bugos.snelmenu");
+panel.addWidget("org.bugos.quickmenu");
 var vakje = panel.addWidget("org.kde.plasma.systemtray");
 // Het snelmenu doet geluid, wifi, bluetooth, helderheid en batterij al. De KDE-
 // pictogrammen daarvoor (en een paar die je bijna nooit nodig hebt) verbergen we;
 // ze blijven op de achtergrond werken (volumetoetsen, melding bij lege batterij).
-// Dezelfde lijst staat in bugos-paneel (voor wie al een taakbalk had).
+// Dezelfde lijst staat in bugos-panel (voor wie al een taakbalk had).
 // Plasma 6: de lijst hoort bij het systeemvak zelf ([General] hiddenItems).
 vakje.currentConfigGroup = ["General"];
 vakje.writeConfig("hiddenItems", ["org.kde.plasma.volume", "org.kde.plasma.networkmanagement",

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=BugOS Light mode
+Name[nl]=BugOS Lichte stand
+Exec=bugos-light-mode auto
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=1
+NoDisplay=true

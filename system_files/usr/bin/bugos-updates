@@ -17,8 +17,8 @@ CONF=/etc/bugos/updates.conf
 
 # BugOS regelt updates zelf, met twee diensten (zie build_files/build.sh):
 #   rpm-ostreed-automatic.timer  -> het systeem (BugOS zelf)
-#   bugos-apps-bijwerken.timer   -> de apps (Flatpak)
-TIMERS=(rpm-ostreed-automatic.timer bugos-apps-bijwerken.timer)
+#   bugos-update-apps.timer   -> de apps (Flatpak)
+TIMERS=(rpm-ostreed-automatic.timer bugos-update-apps.timer)
 
 als_beheerder() {
     if [ "$(id -u)" -ne 0 ]; then

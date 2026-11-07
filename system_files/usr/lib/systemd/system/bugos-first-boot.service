@@ -1,0 +1,15 @@
+[Unit]
+Description=BugOS: set up the default apps after installing
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=!/var/lib/bugos/eerste-start-klaar
+ConditionKernelCommandLine=!rd.live.image
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bugos-first-boot
+Restart=on-failure
+RestartSec=5min
+
+[Install]
+WantedBy=multi-user.target

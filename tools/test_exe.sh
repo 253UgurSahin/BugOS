@@ -16,7 +16,7 @@ nep() { printf '#!/usr/bin/bash\n%s\n' "$2" >"$TMP/bin/$1"; chmod +x "$TMP/bin/$
 sed "s|/usr/share/bugos|$ROOT/system_files/usr/share/bugos|g" "$ROOT/system_files/usr/bin/bugos-exe" >"$TMP/exe"
 nep kdialog 'printf "%s\n" "$@" >>"'"$TMP"'/dialogen"'
 nep notify-send 'exit 0'
-nep bugos-thema 'echo licht'
+nep bugos-theme 'echo licht'
 nep wine 'exit 1'                                   # het programma stopt meteen met een fout
 nep wineboot 'mkdir -p "$WINEPREFIX/half"; exit 1'  # klaarzetten mislukt halverwege
 nep winepath 'echo "$2"'

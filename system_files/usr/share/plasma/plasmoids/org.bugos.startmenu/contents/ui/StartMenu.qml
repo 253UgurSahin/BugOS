@@ -33,7 +33,7 @@ Rectangle {
 
     // Huisstijl
     readonly property bool donker: palette.window.hslLightness < 0.5
-    readonly property Ontwerp o: Ontwerp { donker: menu.donker }   // zelfde kleuren en maten als de BugOS-apps
+    readonly property Design o: Design { donker: menu.donker }   // zelfde kleuren en maten als de BugOS-apps
     readonly property color rood: o.accent
     readonly property color tekst: palette.windowText
     readonly property color tekst2: o.tekst2
@@ -347,7 +347,7 @@ Rectangle {
                 Layout.fillWidth: true
                 elide: Text.ElideRight
             }
-            OnderKnop { icoon: "configure"; tekst: menu.tr("Instellingen", "Settings"); onGeklikt: { menu.start("/usr/share/applications/bugos-instellingen.desktop"); menu.sluiten() } }
+            OnderKnop { icoon: "configure"; tekst: menu.tr("Instellingen", "Settings"); onGeklikt: { menu.start("/usr/share/applications/bugos-settings.desktop"); menu.sluiten() } }
             OnderKnop { icoon: "system-lock-screen"; tekst: menu.tr("Vergrendelen", "Lock"); onGeklikt: { menu.aanUit("slot"); menu.sluiten() } }
             OnderKnop { icoon: "system-log-out"; tekst: menu.tr("Uitloggen", "Log out"); onGeklikt: { menu.aanUit("uitloggen"); menu.sluiten() } }
             OnderKnop { icoon: "system-reboot"; tekst: menu.tr("Herstarten", "Restart"); onGeklikt: { menu.aanUit("herstarten"); menu.sluiten() } }

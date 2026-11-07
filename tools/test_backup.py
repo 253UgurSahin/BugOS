@@ -70,7 +70,7 @@ klopt(code == 2 and (doel / "Pictures" / "vakantie.jpg").exists(),
       "deels: Documents lukt niet helemaal, Pictures (erna) wordt toch gekopieerd, met een melding")
 
 lader = importlib.machinery.SourceFileLoader("bugos_overstap",
-                                             str(ROOT / "system_files" / "usr" / "bin" / "bugos-overstap"))
+                                             str(ROOT / "system_files" / "usr" / "bin" / "bugos-switch"))
 spec = importlib.util.spec_from_loader("bugos_overstap", lader)
 bo = importlib.util.module_from_spec(spec)
 lader.exec_module(bo)

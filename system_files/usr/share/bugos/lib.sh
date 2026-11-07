@@ -10,7 +10,7 @@ bugos_taal() {
 }
 
 # t "Nederlandse tekst" "English text"  -> geeft de juiste taal terug.
-# Andere talen komen uit /usr/share/bugos/vertalingen/<taal>.json (Engels -> vertaling).
+# Andere talen komen uit /usr/share/bugos/translations/<taal>.json (Engels -> vertaling).
 t() {
     local taal bestand vertaald
     taal="$(bugos_taal)"
@@ -18,7 +18,7 @@ t() {
         echo "$1"
         return
     fi
-    bestand="/usr/share/bugos/vertalingen/$taal.json"
+    bestand="/usr/share/bugos/translations/$taal.json"
     if [ "$taal" != en ] && [ -f "$bestand" ] && command -v jq >/dev/null 2>&1; then
         vertaald="$(jq -r --arg k "$2" '.[$k] // empty' "$bestand" 2>/dev/null)"
         if [ -n "$vertaald" ]; then
@@ -73,7 +73,7 @@ stroomprofiel_zet() {
 }
 
 # Niet storen (geen berichtjes in beeld). Eén plek voor alle scripts;
-# Instellingen (bugos_instellen.py) schrijft precies dezelfde waarde.
+# Instellingen (bugos_config.py) schrijft precies dezelfde waarde.
 NIET_STOREN_TOT="2999,12,31,0,0,0"
 niet_storen_aan() {
     kwriteconfig6 --file plasmanotifyrc --group DoNotDisturb --key Until --notify "$NIET_STOREN_TOT" 2>/dev/null

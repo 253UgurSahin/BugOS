@@ -41,5 +41,5 @@ exfatprogs
 dosfstools
 kde-partitionmanager
 
-# --- Eén ontwerptaal: de BugOS-stijl voor alle KDE-programma's (zie tools/ontwerp/README.md) ---
+# --- Eén ontwerptaal: de BugOS-stijl voor alle KDE-programma's (zie tools/design/README.md) ---
 kvantum
