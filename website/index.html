@@ -190,7 +190,7 @@ code { font-family: var(--f-code); font-size: .9em; }
 /* het verhaal */
 .verhaal .groot { margin-top: 28px; font: 500 clamp(30px, 4vw, 54px)/1.18 var(--f-display); letter-spacing: -0.03em; color: var(--tekst3); max-width: 23em; text-wrap: pretty; }
 .verhaal .groot b { color: var(--inkt); font-weight: 600; }
-.js .verhaal .groot.vul, .js .verhaal .groot.vul b { color: var(--vaag); }
+.js .verhaal .groot.vul, .js .verhaal .groot.vul b { color: var(--tekst3); } /* nog niet gelezen: rustig grijs, wel leesbaar (4.5:1) */
 .verhaal .groot .w { transition: color .35s ease; }
 .js .verhaal .groot.vul .w.aan { color: var(--inkt); }
 .js .verhaal .groot.vul b .w.aan { color: var(--inkt); }
@@ -237,10 +237,12 @@ code { font-family: var(--f-code); font-size: .9em; }
 .moment.smal-beeld figure { max-width: 420px; }
 .podium { display: none; }
 @media (min-width: 1000px) {
-  .js .verloop.actief .moment { min-height: 72vh; display: flex; flex-direction: column; justify-content: center; padding-block: 0; opacity: .32; transition: opacity .5s ease; }
+  .js .verloop.actief .moment { min-height: 72vh; display: flex; flex-direction: column; justify-content: center; padding-block: 0; }
+  /* De andere momenten: rustig grijs in plaats van doorzichtig, zodat ze leesbaar blijven (4.5:1). */
+  .js .verloop.actief .moment h3, .js .verloop.actief .moment p, .js .verloop.actief .moment .wie { transition: color .5s ease; }
+  .js .verloop.actief .moment:not(.nu) h3, .js .verloop.actief .moment:not(.nu) p, .js .verloop.actief .moment:not(.nu) .wie { color: var(--tekst3); }
   .js .verloop.actief .moment:first-child { min-height: 60vh; justify-content: flex-start; padding-top: 8vh; }
   .js .verloop.actief .moment:last-child { min-height: 60vh; }
-  .js .verloop.actief .moment.nu { opacity: 1; }
   .js .verloop.actief .moment.nu time::before { background: var(--rood); border-color: var(--rood); box-shadow: 0 0 0 6px var(--rood-zacht); }
   .js .verloop.actief .moment.nu time { color: var(--inkt); }
   .js .verloop.actief .moment time::before { top: auto; }
