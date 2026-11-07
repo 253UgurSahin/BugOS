@@ -9,7 +9,7 @@ same look from these parts:
 | Icon theme "BugOS" | `system_files/usr/share/icons/BugOS` | `python3 tools/icons/make.py` (one module per group: `apps.py`, `status.py`, `places.py`, `settings.py`) |
 | Application style (Kvantum) "BugOS" / "BugOSDark" | `system_files/usr/share/Kvantum` | see `tools/kvantum/` |
 | Plasma style "bugos" (taskbar, pop-ups, tooltips) | `system_files/usr/share/plasma/desktoptheme/bugos` | SVG files |
-| Window title bar | Breeze with BugOS settings | `build_files/build.sh` |
+| Window title bar | Breeze with BugOS settings | `build_files/style.sh` |
 | GTK layer `bugos.css` (GTK 3 and 4, also libadwaita) | `system_files/usr/share/bugos/gtk` | `python3 tools/gtk/make.py`; test: `xvfb-run -a python3 tools/gtk/preview.py` |
 | Terminal (Konsole) "BugOS" / "BugOSDark" | `system_files/usr/share/konsole` | `python3 tools/konsole/make.py` |
 | Windows programs (Wine system colors) | `system_files/usr/share/bugos/wine` | `python3 tools/wine/make.py` |

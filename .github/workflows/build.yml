@@ -169,7 +169,7 @@ jobs:
           echo "DIGEST=$(cat /tmp/digest)" >> "$GITHUB_ENV"
 
       # Ondertekenen: computers met BugOS installeren alleen een update met deze handtekening
-      # (zie build_files/build.sh, "Ondertekende updates"). De sleutel staat als geheim in GitHub
+      # (zie build_files/system.sh, "Ondertekende updates"). De sleutel staat als geheim in GitHub
       # (SIGNING_SECRET, gemaakt met "cosign generate-key-pair"); zonder dat geheim slaan we dit over.
       - name: Ondertekenen hulpmiddel (cosign)
         if: github.event_name != 'pull_request' && env.HEEFT_SLEUTEL == 'ja'
