@@ -120,6 +120,16 @@ html = bo.chrome_naar_html({"Edge": WIN / "Bladwijzers" / "Edge.json"})
 klopt("<script>" not in html and "&lt;script&gt;" in html and 'a=1&amp;b=&quot;2&quot;' in html,
       "overstap: een bladwijzer met HTML in naam of adres wordt veilig in het bestand gezet")
 
+# F03-E4 (B006): een stick met de nieuwe én de oude map (beide versies gebruikt) staat er één keer
+BEIDE = TMP / "stick-beide"
+schrijf(BEIDE / "BugOS-Switch" / "bugos-switch.json", json.dumps({"computer": "NIEUW"}).encode())
+schrijf(BEIDE / "BugOS-Overstap" / "bugos-overstap.json", json.dumps({"computer": "OUD"}).encode())
+os.environ["BUGOS_SCHIJVEN"] = str(BEIDE)
+gevonden = bo.zoek_overstap()
+klopt([m.name for m in gevonden] == ["BugOS-Switch"],
+      f"overstap: een stick met beide mappen staat er één keer, met de nieuwe map ({[m.name for m in gevonden]})")
+del os.environ["BUGOS_SCHIJVEN"]
+
 # F12-H1 (A036): elk Icon= uit een BugOS-.desktop-bestand bestaat in het BugOS-pictogramthema
 THEMA = SYSTEM / "usr" / "share" / "icons" / "BugOS"
 # Wat de bouw zelf als pictogram neerlegt (zoals bugos-logo in hicolor), telt ook.

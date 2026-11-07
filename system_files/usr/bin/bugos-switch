@@ -51,8 +51,12 @@ def gebruikersmap(xdg: str, standaard: str) -> Path:
 
 
 def _op_schijf(schijf: Path) -> list[Path]:
-    """De overstap-mappen op één schijf (BugOS-Switch, of BugOS-Overstap van de oude versie)."""
-    return [schijf / naam for naam, bestand in MAPPEN if (schijf / naam / bestand).is_file()]
+    """De overstap-map op één schijf: BugOS-Switch, of anders BugOS-Overstap van de oude versie.
+    Staan ze er allebei (beide versies gebruikt), dan alleen de nieuwe: anders staat de stick er twee keer."""
+    for naam, bestand in MAPPEN:
+        if (schijf / naam / bestand).is_file():
+            return [schijf / naam]
+    return []
 
 
 def zoek_overstap() -> list[Path]:
