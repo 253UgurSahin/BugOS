@@ -1,0 +1,30 @@
+#!/usr/bin/bash
+# Test van de Windows-overstap: elk startbestand (.bat) opent een script dat echt bestaat.
+# Na een hernoeming opende "Start BugOS Switch.bat" nog het oude BugOS-Overstap.ps1, en omdat
+# het venster verborgen is, gebeurde er dan helemaal niets (A030).
+#
+# Gebruik:  bash tools/test_windows_start.sh
+set -u
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fouten=0
+aantal=0
+
+for bat in "$ROOT"/windows-switch/*.bat; do
+    # Elke "%~dp0naam.ps1" in het startbestand moet naast het startbestand staan.
+    while IFS= read -r naam; do
+        aantal=$((aantal + 1))
+        if [ -f "$ROOT/windows-switch/$naam" ]; then
+            echo "OK    $(basename "$bat") opent $naam"
+        else
+            echo "FOUT  $(basename "$bat") opent $naam, maar dat bestand bestaat niet"
+            fouten=$((fouten + 1))
+        fi
+    done < <(tr -d '\r' <"$bat" | grep -o '%~dp0[^"]*\.ps1' | sed 's/^%~dp0//')
+done
+
+if [ "$aantal" -eq 0 ]; then
+    echo "FOUT  geen startbestand gevonden dat een .ps1 opent"
+    fouten=$((fouten + 1))
+fi
+echo "$fouten fout(en)."
+[ "$fouten" -eq 0 ]
