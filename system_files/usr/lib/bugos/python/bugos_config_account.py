@@ -1,0 +1,289 @@
+"""BugOS Instellingen: tijd en taal (timedatectl, plasma-localerc) en inloggen en wachtwoord
+(AccountsService, bugos-login, kscreenlockerrc).
+
+Hoort bij bugos_config (importeer het via daar). draai, VOORBEELD, _VB en de KDE-hulpjes komen via
+bugos_config (_c.draai), zodat een test die bi.draai of bi.VOORBEELD vervangt dat ook hier ziet.
+"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from pathlib import Path
+
+import bugos_config as _c
+
+
+# ============================================================ tijd en taal ===
+
+@dataclass
+class Tijd:
+    zone: str           # bv. Europe/Amsterdam
+    auto: bool          # klok vanzelf gelijkzetten via internet
+    gelijk: bool        # en dat is ook gelukt
+
+
+def lees_timedatectl(uitvoer: str) -> Tijd:
+    """Uit: timedatectl show."""
+    d = dict(r.split("=", 1) for r in uitvoer.splitlines() if "=" in r)
+    return Tijd(d.get("Timezone", "") or "UTC", d.get("NTP", "no") == "yes", d.get("NTPSynchronized", "no") == "yes")
+
+
+def tijd() -> Tijd:
+    if _c.VOORBEELD:
+        return Tijd(_c._VB["zone"], _c._VB["tijd_auto"], _c._VB["tijd_auto"])
+    return lees_timedatectl(_c.draai("timedatectl", "show", timeout=5)[1])
+
+
+WERELDDEEL = {"Europe": ("Europa", "Europe"), "America": ("Amerika", "America"), "Asia": ("Azië", "Asia"),
+              "Africa": ("Afrika", "Africa"), "Australia": ("Australië", "Australia"),
+              "Pacific": ("Stille Oceaan", "Pacific"), "Atlantic": ("Atlantische Oceaan", "Atlantic"),
+              "Indian": ("Indische Oceaan", "Indian Ocean"), "Antarctica": ("Antarctica", "Antarctica"),
+              "Arctic": ("Noordpool", "Arctic")}
+
+
+def mooie_zone(zone: str, nl: bool = True) -> str:
+    """'Europe/Amsterdam' -> 'Amsterdam (Europa)'."""
+    if "/" not in zone:
+        return zone
+    deel, stad = zone.split("/", 1)
+    stad = stad.replace("_", " ").replace("/", " / ")
+    naam = WERELDDEEL.get(deel)
+    return f"{stad} ({naam[0] if nl else naam[1]})" if naam else f"{stad} ({deel})"
+
+
+def tijdzones() -> list[str]:
+    if _c.VOORBEELD:
+        return ["Europe/Amsterdam", "Europe/Brussels", "Europe/Berlin", "Europe/London", "Europe/Istanbul",
+                "America/New_York", "America/Curacao", "Asia/Tokyo", "Australia/Sydney"]
+    zones = [z.strip() for z in _c.draai("timedatectl", "list-timezones", timeout=5)[1].splitlines()]
+    return [z for z in zones if "/" in z and not z.startswith("Etc/")]
+
+
+def zet_tijdzone(zone: str) -> bool:
+    """Via timedatectl; KDE vraagt het wachtwoord, net als Windows."""
+    if _c.VOORBEELD:
+        _c._VB["zone"] = zone
+        return True
+    return _c.draai("timedatectl", "set-timezone", zone, timeout=60)[0] == 0
+
+
+def zet_tijd_auto(aan: bool) -> bool:
+    if _c.VOORBEELD:
+        _c._VB["tijd_auto"] = aan
+        return True
+    return _c.draai("timedatectl", "set-ntp", "true" if aan else "false", timeout=60)[0] == 0
+
+
+# (code, landcode voor de klok en getallen, naam in die taal zelf)
+TALEN = [("en", "en_US", "English"), ("nl", "nl_NL", "Nederlands"), ("de", "de_DE", "Deutsch"),
+         ("fr", "fr_FR", "Français"), ("es", "es_ES", "Español"), ("it", "it_IT", "Italiano"),
+         ("pt", "pt_PT", "Português"), ("pl", "pl_PL", "Polski"), ("tr", "tr_TR", "Türkçe"),
+         ("uk", "uk_UA", "Українська"), ("ar", "ar_EG", "العربية")]
+
+
+def taal() -> str:
+    if _c.VOORBEELD:
+        return _c._VB["taal"]
+    tekst = _c.kde_lees("plasma-localerc", "Translations", "LANGUAGE", "")
+    if not tekst:
+        tekst = _c.kde_lees("plasma-localerc", "Formats", "LANG", "") or os.environ.get("LANG", "")
+    code = tekst.split(":")[0].split(".")[0].split("_")[0].lower()
+    return code if any(code == c for c, _l, _n in TALEN) else "en"
+
+
+def zet_taal(code: str) -> bool:
+    """De taal van KDE en de BugOS-programma's; geldt na opnieuw inloggen (zo doet KDE dat ook)."""
+    if _c.VOORBEELD:
+        _c._VB["taal"] = code
+        return True
+    land = next((land for c, land, _n in TALEN if c == code), None)
+    if land is None:
+        return False
+    goed = _c.kde_schrijf("plasma-localerc", "Translations", "LANGUAGE", code if code == "en" else f"{code}:en_US")
+    goed = _c.kde_schrijf("plasma-localerc", "Formats", "LANG", f"{land}.UTF-8") and goed
+    return goed
+
+
+def afmelden() -> None:
+    """Vraag netjes of je wilt afmelden (het scherm van KDE)."""
+    if _c.VOORBEELD:
+        return
+    _c.draai("gdbus", "call", "--session", "--dest", "org.kde.LogoutPrompt", "--object-path", "/LogoutPrompt",
+          "--method", "org.kde.LogoutPrompt.promptLogout", timeout=5)
+
+
+# ================================================== inloggen en wachtwoord ===
+
+@dataclass
+class Gebruiker:
+    naam: str               # inlognaam, bv. bugie
+    volledige_naam: str     # bv. Bugie
+    beheerder: bool
+    auto_inloggen: bool
+
+
+SDDM_BESTANDEN = ("/etc/sddm.conf", "/etc/sddm.conf.d")
+
+
+def lees_autologin(teksten: list[str], naam: str) -> bool:
+    """Staat in een sddm-bestand [Autologin] User=<naam>?"""
+    for tekst in teksten:
+        groep = ""
+        for regel in tekst.splitlines():
+            regel = regel.strip()
+            if regel.startswith("[") and regel.endswith("]"):
+                groep = regel[1:-1]
+            elif groep == "Autologin" and "=" in regel:
+                sleutel, waarde = (x.strip() for x in regel.split("=", 1))
+                if sleutel == "User" and waarde == naam:
+                    return True
+    return False
+
+
+def gebruiker() -> Gebruiker:
+    if _c.VOORBEELD:
+        return Gebruiker("bugie", _c._VB["volledige_naam"], True, _c._VB["auto_inloggen"])
+    import grp
+    import pwd
+    try:
+        pw = pwd.getpwuid(os.getuid())
+        naam, vol = pw.pw_name, pw.pw_gecos.split(",")[0].strip()
+    except KeyError:
+        naam, vol = os.environ.get("USER", "?"), ""
+    try:
+        beheerder = naam in grp.getgrnam("wheel").gr_mem
+    except KeyError:
+        beheerder = False
+    teksten = []
+    for pad in SDDM_BESTANDEN:
+        p = Path(pad)
+        bestanden = sorted(p.glob("*.conf")) if p.is_dir() else [p]
+        for b in bestanden:
+            try:
+                teksten.append(b.read_text(encoding="utf-8"))
+            except OSError:
+                pass
+    return Gebruiker(naam, vol or naam.capitalize(), beheerder, lees_autologin(teksten, naam))
+
+
+def _accounts(methode: str, *args: str, timeout: int = 60) -> tuple[int, str]:
+    return _c.draai("gdbus", "call", "--system", "--interactive", "--dest", "org.freedesktop.Accounts", "--object-path",
+                 f"/org/freedesktop/Accounts/User{os.getuid()}", "--method",
+                 f"org.freedesktop.Accounts.User.{methode}", *args, timeout=timeout)
+
+
+def zet_volledige_naam(naam: str) -> bool:
+    if _c.VOORBEELD:
+        _c._VB["volledige_naam"] = naam
+        return True
+    return _accounts("SetRealName", naam)[0] == 0
+
+
+def versleutel(wachtwoord: str) -> str:
+    """Zoals /etc/shadow het bewaart (SHA-512 met zout), via de libcrypt van het systeem."""
+    import ctypes
+    import secrets
+    tekens = "./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    zout = "$6$" + "".join(secrets.choice(tekens) for _ in range(16))
+    # Fedora heeft alleen libcrypt.so.2 (libxcrypt); .so.1 is de oude naam (o.a. Ubuntu).
+    lib = None
+    for naam in ("libcrypt.so.2", "libcrypt.so.1"):
+        try:
+            lib = ctypes.CDLL(naam)
+            break
+        except OSError:
+            continue
+    if lib is None:
+        raise OSError("libcrypt niet gevonden")
+    lib.crypt.restype = ctypes.c_char_p
+    lib.crypt.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+    uit = lib.crypt(wachtwoord.encode("utf-8"), zout.encode("ascii"))
+    return uit.decode("ascii") if uit else ""
+
+
+def zet_wachtwoord(nieuw: str) -> tuple[bool, str]:
+    """Nieuw wachtwoord via AccountsService; KDE vraagt eerst je huidige wachtwoord."""
+    if _c.VOORBEELD:
+        return True, ""
+    try:
+        hash_ = versleutel(nieuw)
+    except OSError:
+        hash_ = ""
+    if not hash_:
+        return False, "crypt"
+    # Niet via gdbus: dan staat de hash op de opdrachtregel en kan elke gebruiker hem in 'ps' lezen.
+    return _c._accounts_dbus("SetPassword", hash_, "")
+
+
+def _accounts_dbus(methode: str, *args: str, timeout: int = 60) -> tuple[bool, str]:
+    """AccountsService rechtstreeks over D-Bus (in dit proces), met de wachtwoordvraag van KDE erbij."""
+    try:
+        from PySide6.QtDBus import QDBus, QDBusConnection, QDBusMessage
+    except ImportError:
+        return False, "dbus"
+    bericht = QDBusMessage.createMethodCall("org.freedesktop.Accounts", f"/org/freedesktop/Accounts/User{os.getuid()}",
+                                            "org.freedesktop.Accounts.User", methode)
+    bericht.setArguments(list(args))
+    bericht.setInteractiveAuthorizationAllowed(True)
+    antwoord = QDBusConnection.systemBus().call(bericht, QDBus.CallMode.Block, timeout * 1000)
+    if antwoord.type() == QDBusMessage.MessageType.ErrorMessage:
+        return False, antwoord.errorMessage()
+    return True, ""
+
+
+def zet_auto_inloggen(aan: bool, naam: str) -> bool:
+    """Inloggen zonder wachtwoord: een klein hulpje als beheerder (pkexec vraagt het wachtwoord één keer)."""
+    if _c.VOORBEELD:
+        _c._VB["auto_inloggen"] = aan
+        return True
+    return _c.draai("pkexec", "/usr/bin/bugos-login", "aan" if aan else "uit", naam, timeout=120)[0] == 0
+
+
+SLOT_KEUZES = (5, 15, 30, 0)   # minuten; 0 = nooit
+
+
+def slot_na() -> int:
+    """Na hoeveel minuten niets doen gaat het scherm op slot (0 = nooit)."""
+    if _c.VOORBEELD:
+        return _c._VB["slot_na"]
+    if _c.kde_lees("kscreenlockerrc", "Daemon", "Autolock", "true") != "true":
+        return 0
+    try:
+        return int(_c.kde_lees("kscreenlockerrc", "Daemon", "Timeout", "5"))
+    except ValueError:
+        return 5
+
+
+def slot_herlees() -> None:
+    _c.draai("gdbus", "call", "--session", "--dest", "org.freedesktop.ScreenSaver", "--object-path", "/ScreenSaver",
+          "--method", "org.kde.screensaver.configure", timeout=5)
+
+
+def zet_slot_na(minuten: int) -> None:
+    if _c.VOORBEELD:
+        _c._VB["slot_na"] = minuten
+        return
+    _c.kde_schrijf("kscreenlockerrc", "Daemon", "Autolock", "true" if minuten else "false")
+    if minuten:
+        _c.kde_schrijf("kscreenlockerrc", "Daemon", "Timeout", str(minuten))
+    slot_herlees()
+
+
+def slot_na_slapen() -> bool:
+    if _c.VOORBEELD:
+        return _c._VB["slot_na_slapen"]
+    return _c.kde_lees("kscreenlockerrc", "Daemon", "LockOnResume", "true") == "true"
+
+
+def zet_slot_na_slapen(aan: bool) -> None:
+    if _c.VOORBEELD:
+        _c._VB["slot_na_slapen"] = aan
+        return
+    _c.kde_schrijf("kscreenlockerrc", "Daemon", "LockOnResume", "true" if aan else "false")
+    slot_herlees()
+
+
+def vergrendel() -> None:
+    if not _c.VOORBEELD:
+        _c.draai("loginctl", "lock-session", timeout=5)
