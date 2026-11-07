@@ -41,6 +41,23 @@ actual: #6B707A on #0B0B0D is 3.95:1
 evidence: an axe scan after scrolling through the whole page (color-contrast, .terminal .c), in F01-H1 and F01-H2 once B004 is out of the way
 fixed in: 2c653c9
 
+## B006 [medium] [fixed] A USB stick used with both versions of the Windows switch shows up twice
+case: F03-E4   screen: Your files from Windows (bugos-switch)   build: 074a3df (built image)   browser: - (Qt app in the BugOS image, 780px)
+steps: plug in a drive that has both BugOS-Switch and BugOS-Overstap (the tool was used before and after the rename); open "Your files from Windows"
+expected: the drive once, with the newest folder
+actual: two identical rows "Bugie's USB stick, From Bugie on LIVING-ROOM-PC"; caused by the A033 fix (3e39404 fixes it)
+evidence: photo studio inside the built image (switch-licht.png); tools/test_edges.py "een stick met beide mappen staat er één keer"
+fixed in: 3e39404
+
+## B007 [low] [fixed] In sample mode, Settings says Wi-Fi is "Not connected"
+case: F06-E2   screen: Settings, home page (sample mode, used for the website screenshots)   build: 074a3df (built image)   browser: - (Qt app in the BugOS image, 1120px)
+steps: start Settings in sample mode (the photo studio does this); look at the Wi-Fi card
+expected: "Connected to Home", as the sample data says
+actual: "Not connected": the sample data says Home, the sample network list still said Thuis
+evidence: photo studio inside the built image (settings-donker.png); tools/test_edges.py "wifi is verbonden met 'Home' uit de lijst"
+fixed in: 85233e4
+
 ## To check
 - The numbered dots in the logo drawing (.opbouw .nr): checked after scrolling the whole page; axe finds no problem there.
 - The text on top of the big photo at the top (menu, heading, "Download", the four facts): axe cannot work out the contrast over a picture. Check by eye in light and dark (see test-plan.md, manual).
+- bootc container lint gives 2 warnings (no failures): /run/setrans has content, and /var/lib/samba/winbindd_privileged has no tmpfiles.d entry. Both come from Fedora packages, not from BugOS's own files. Check whether a newer base image still has them.
