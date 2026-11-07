@@ -77,11 +77,16 @@ jobs:
 
       - name: Namen bepalen
         id: naam
+        # De invoer via env: in plaats van ${{ }} in het script, zodat een rare waarde geen opdracht wordt (A035).
+        env:
+          VARIANT: ${{ inputs.variant }}
+          TAG: ${{ inputs.tag }}
         run: |
+          [[ "$TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || { echo "::error::Geen geldige bouw: $TAG"; exit 1; }
           REGISTRY="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
-          echo "image=${REGISTRY}/${{ inputs.variant }}:${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          echo "image=${REGISTRY}/${VARIANT}:${TAG}" >> "$GITHUB_OUTPUT"
           echo "datum=$(date -u +%Y.%m.%d)" >> "$GITHUB_OUTPUT"
-          if [ "${{ inputs.variant }}" = bugos-nvidia ]; then echo "soort=nvidia" >> "$GITHUB_OUTPUT"; else echo "soort=main" >> "$GITHUB_OUTPUT"; fi
+          if [ "$VARIANT" = bugos-nvidia ]; then echo "soort=nvidia" >> "$GITHUB_OUTPUT"; else echo "soort=main" >> "$GITHUB_OUTPUT"; fi
 
       - name: Inloggen bij GitHub Packages
         run: |
@@ -197,8 +202,12 @@ jobs:
 
       - name: ISO-instellingen invullen
         id: prep
+        env:
+          VARIANT: ${{ inputs.variant }}
+          TAG: ${{ inputs.tag }}
         run: |
-          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${{ inputs.variant }}:${{ inputs.tag }}"
+          [[ "$TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || { echo "::error::Geen geldige bouw: $TAG"; exit 1; }
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${VARIANT}:${TAG}"
           sed "s|@IMAGE@|${IMAGE}|g" disk_config/iso.toml > /tmp/iso.toml
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
           echo "uid=$(id -u)" >> "$GITHUB_OUTPUT"
