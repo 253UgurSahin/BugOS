@@ -90,6 +90,8 @@ jobs:
         run: bash tools/test_exe.sh
       - name: Windows-overstap testen (het startbestand opent een script dat bestaat)
         run: bash tools/test_windows_start.sh
+      - name: Randgevallen testen (rare namen, pictogrammen, alles laadt, bouwregels)
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_edges.py
       - name: "'Er werkt iets niet' testen (nakijken en repareren op de achtergrond)"
         run: QT_QPA_PLATFORM=offscreen python3 tools/test_help.py
       - name: Overstappen op ondertekende updates testen (met een nep-rpm-ostree)

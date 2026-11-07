@@ -1,0 +1,12 @@
+{
+  "name": "bugos-e2e",
+  "private": true,
+  "description": "End-to-end tests for the BugOS website (forge-test). Not part of the BugOS image.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.11.0",
+    "@playwright/test": "1.63.0"
+  }
+}
