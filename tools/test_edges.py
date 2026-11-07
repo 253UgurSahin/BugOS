@@ -130,6 +130,14 @@ klopt([m.name for m in gevonden] == ["BugOS-Switch"],
       f"overstap: een stick met beide mappen staat er één keer, met de nieuwe map ({[m.name for m in gevonden]})")
 del os.environ["BUGOS_SCHIJVEN"]
 
+# F06-E2 (B007): in de voorbeeldstand (screenshots) is wifi verbonden met een netwerk uit de lijst
+import bugos_config as bi  # noqa: E402
+bi.VOORBEELD = True
+verbonden = [n.naam for n in bi.netwerken() if n.verbonden]
+klopt(verbonden == [bi._VB["verbonden"]] and bi.bekend_netwerk(bi._VB["verbonden"]),
+      f"instellingen (voorbeeld): wifi is verbonden met '{bi._VB['verbonden']}' uit de lijst ({verbonden})")
+bi.VOORBEELD = False
+
 # F12-H1 (A036): elk Icon= uit een BugOS-.desktop-bestand bestaat in het BugOS-pictogramthema
 THEMA = SYSTEM / "usr" / "share" / "icons" / "BugOS"
 # Wat de bouw zelf als pictogram neerlegt (zoals bugos-logo in hicolor), telt ook.

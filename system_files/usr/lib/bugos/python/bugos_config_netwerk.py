@@ -73,7 +73,7 @@ def netwerken(opnieuw_zoeken: bool = False) -> list[Netwerk]:
     if _c.VOORBEELD:
         if not _c._VB["wifi"]:
             return []
-        lijst = [Netwerk("Thuis", 86, True, False), Netwerk("Thuis-5G", 72, True, False),
+        lijst = [Netwerk("Home", 86, True, False), Netwerk("Home-5G", 72, True, False),
                  Netwerk("Buren", 41, True, False), Netwerk("Bibliotheek gratis", 35, False, False),
                  Netwerk("Ziggo1234", 22, True, False)]
         for n in lijst:
@@ -99,7 +99,7 @@ def verbind(naam: str, wachtwoord: str = "") -> tuple[bool, str]:
 def bekend_netwerk(naam: str) -> bool:
     """Zijn we hier al eens mee verbonden geweest (dan weet BugOS het wachtwoord nog)?"""
     if _c.VOORBEELD:
-        return naam in ("Thuis", "Thuis-5G")
+        return naam in ("Home", "Home-5G")
     _, uit = _c.draai("nmcli", "-t", "-f", "NAME,TYPE", "connection", "show")
     return any(splits_nmcli(r)[:2] == [naam, "802-11-wireless"] for r in uit.splitlines())
 
