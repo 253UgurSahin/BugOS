@@ -158,6 +158,9 @@ jobs:
             --label containers.bootc=1 \
             -t localhost/${{ matrix.image }}:build .
 
+      - name: Testen in het gebouwde beeld (naam, pictogrammen, diensten, stijl; elk programma laadt)
+        run: sudo podman run --rm -v "$PWD:/repo:ro" --entrypoint /usr/bin/bash localhost/${{ matrix.image }}:build /repo/tools/test_image.sh
+
       - name: Uploaden naar GitHub Packages
         if: github.event_name != 'pull_request'
         env:
