@@ -54,7 +54,7 @@ The most important idea: **BugOS can't break.**
 ## How does an update reach the user? (the bakery)
 
 1. We change something in this repo.
-2. GitHub automatically bakes a new BugOS. This also happens every night, so security updates from Fedora come along.
+2. GitHub bakes a new BugOS when we start it by hand, and by itself once a week (Monday night), so security updates from Fedora come along.
 3. The user's computer fetches it in the background.
 4. The next time the computer starts, the new version runs.
 5. Problems? Then you pick the previous version in the startup menu, and everything is back to how it was yesterday.
@@ -109,7 +109,7 @@ The most important idea: **BugOS can't break.**
 
 | Workflow | What it does |
 |---|---|
-| `build.yml` | Builds BugOS (normal and Nvidia), on every change and every night. |
+| `build.yml` | Builds BugOS (normal and Nvidia), by hand and once a week by itself. |
 | `iso.yml` | Makes a USB stick (ISO) on request. By default that is the "try first" stick with the new installer. On request it puts the ISO in pieces of less than 2 GB in a GitHub Release. |
 | `windows-switch.yml` | Checks the Windows program on a real Windows computer and packs it. With a version tag (like `v0.2`) it turns it into a download. |
 | `website.yml` | Puts the website (`website/`) online through GitHub Pages. Set to manual for now. |
@@ -161,7 +161,7 @@ The most important idea: **BugOS can't break.**
   - BugOS Overstap can't download BugOS,
   - and installed computers get no updates.
   - (Installing from the "try first" stick does work: BugOS itself is on the stick.)
-- [ ] In **Settings**, set the default branch to `main`. Then the nightly build (with security updates) runs on `main`.
+- [ ] In **Settings**, set the default branch to `main`. Then the weekly build (with security updates) runs on `main`.
 - [ ] Signing through SignPath, volunteers and a domain name (see above).
 
 ### Next: testing on real computers

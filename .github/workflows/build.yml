@@ -1,20 +1,23 @@
 ---
 # BugOS bouwen
-# Jip-en-Janneke: elke keer als er iets verandert (en elke nacht), bouwt
-# GitHub een nieuwe BugOS. Computers met BugOS halen die vanzelf op als update.
+# Jip-en-Janneke: elke week (en als je het met de hand start) bouwt GitHub een
+# nieuwe BugOS. Computers met BugOS halen die vanzelf op als update.
 name: BugOS bouwen
 
-# Alleen met de hand starten (Actions > Build > Run workflow): automatisch draaien gaf elke keer een mail.
-# Weer automatisch? Haal de # weg bij de regels hieronder.
+# Met de hand starten kan altijd (Actions > Build > Run workflow).
+# Eén keer per week bouwt GitHub vanzelf, zodat beveiligingsupdates van Fedora bij de computers
+# komen; zonder dat blijven ze bij GitHub hangen (A031). Te veel mail? Zet in GitHub bij
+# Settings > Notifications > Actions "Only notify for failed workflows" aan.
+# Bij elke verandering bouwen? Haal de # weg bij push en pull_request.
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1" # elke maandagnacht
 #  push:
 #    branches: [main, "claude/**"]
 #    paths-ignore: ["**.md", "docs/**", "tools/screenshots/**", ".github/workflows/screenshots.yml"]
 #  pull_request:
 #    branches: [main]
-#  schedule:
-#    - cron: "17 3 * * *" # elke nacht, zodat beveiligingsupdates meekomen
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
