@@ -76,6 +76,22 @@ test('F01-H3 every image on the page loads, lazy ones too, and has a text or is 
   expect(noAlt).toEqual([]);
 });
 
+test('F01-H4 after scrolling through the whole page, every revealed part passes the accessibility scan', async ({ page }) => {
+  // The scroll-driven text (.moment, the story words .w) is B004 and is checked by F01-H1; here
+  // the rest of the page, as it looks once everything has come in (the desktop stage, the terminal).
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    await page.goto('/');
+    await scrollThrough(page);
+    const result = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .exclude('.moment').exclude('.w')
+      .analyze();
+    expect(result.violations.map((v) => `${scheme} ${v.id}: ${v.nodes.map((n) => String(n.target)).join(', ')}`))
+      .toEqual([]);
+  }
+});
+
 test('F01-E1 every link inside the page goes to a part that exists', async ({ page }) => {
   await page.goto('/');
   const missing = await page.evaluate(() => [...document.querySelectorAll('a[href^="#"]')]
