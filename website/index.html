@@ -583,7 +583,7 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
           <time datetime="21:00">21:00</time>
           <h3>Sanne starts coding.</h3><p>One switch sets up VS Code, containers and programming languages. Everything lives in its own little box, so the system stays intact. Bugie never sees any of it.</p><span class="wie">For developers</span>
           <figure>
-            <div class="terminal" role="img" aria-label="A terminal: developer mode is on and Sanne opens her project in VS Code.">
+            <div class="terminal" role="img" tabindex="0" aria-label="A terminal: developer mode is on and Sanne opens her project in VS Code.">
               <div class="balk" aria-hidden="true"><i></i><i></i><i></i></div>
               <div><span class="c"># Developer mode is on</span></div>
               <div><span class="p">$</span> distrobox enter dev</div>
@@ -909,7 +909,7 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
   momenten.forEach(function (m) {
     var s = document.createElement("div"); s.className = "scherm";
     var f = m.querySelector("figure").cloneNode(true);
-    f.querySelectorAll("[role=img]").forEach(function (n) { n.removeAttribute("role"); n.removeAttribute("aria-label"); });
+    f.querySelectorAll("[role=img]").forEach(function (n) { n.removeAttribute("role"); n.removeAttribute("aria-label"); n.removeAttribute("tabindex"); });
     f.querySelectorAll("img").forEach(function (i) { i.alt = ""; i.removeAttribute("loading"); });
     s.appendChild(f); podium.appendChild(s); schermen.push(s);
   });
