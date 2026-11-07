@@ -26,7 +26,8 @@ sys.path.insert(0, "/usr/lib/bugos/python")
 
 from bugos_ui import t  # noqa: E402
 
-MAP = "BugOS-Switch"
+# Mapnaam en infobestand van de Windows-overstap: de nieuwe en de oude (van voor de hernoeming).
+MAPPEN = (("BugOS-Switch", "bugos-switch.json"), ("BugOS-Overstap", "bugos-overstap.json"))
 
 # Windows-mapnaam -> xdg-naam van de BugOS-map
 KOPPELING = {
@@ -49,27 +50,33 @@ def gebruikersmap(xdg: str, standaard: str) -> Path:
     return Path.home() / standaard
 
 
+def _op_schijf(schijf: Path) -> list[Path]:
+    """De overstap-mappen op één schijf (BugOS-Switch, of BugOS-Overstap van de oude versie)."""
+    return [schijf / naam for naam, bestand in MAPPEN if (schijf / naam / bestand).is_file()]
+
+
 def zoek_overstap() -> list[Path]:
-    """Zoek op alle aangesloten schijven naar de map BugOS-Switch."""
+    """Zoek op alle aangesloten schijven naar de map BugOS-Switch (of de oude BugOS-Overstap)."""
     if os.environ.get("BUGOS_SCHIJVEN"):  # voor tests en screenshots
-        return [Path(p) / MAP for p in os.environ["BUGOS_SCHIJVEN"].split(":")
-                if (Path(p) / MAP / "bugos-switch.json").is_file()]
+        return [m for p in os.environ["BUGOS_SCHIJVEN"].split(":") for m in _op_schijf(Path(p))]
     gebruiker = getpass.getuser()
     gevonden = []
     for basis in (Path("/run/media") / gebruiker, Path("/media") / gebruiker, Path("/media")):
         if basis.is_dir():
             for schijf in basis.iterdir():
-                kandidaat = schijf / MAP
-                if (kandidaat / "bugos-switch.json").is_file():
-                    gevonden.append(kandidaat)
+                gevonden.extend(_op_schijf(schijf))
     return gevonden
 
 
 def info(map_: Path) -> dict:
-    try:
-        return json.loads((map_ / "bugos-switch.json").read_text(encoding="utf-8-sig"))
-    except (OSError, ValueError):
-        return {}
+    for _naam, bestand in MAPPEN:
+        try:
+            return json.loads((map_ / bestand).read_text(encoding="utf-8-sig"))
+        except FileNotFoundError:
+            continue
+        except (OSError, ValueError):
+            return {}
+    return {}
 
 
 # --------------------------------------------------------- bladwijzers ----

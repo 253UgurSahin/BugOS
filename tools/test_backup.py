@@ -93,6 +93,17 @@ klopt(html1.read_text() == "mijn eigen aanpassing"
       and (THUIS / "nieuw" / "Documents" / "Bladwijzers-van-Windows (2).html").exists()
       and (THUIS / "nieuw" / "Pictures" / "Windows-achtergrond (2).jpg").exists(),
       "overstap: nog een keer doen overschrijft niets (bladwijzers en achtergrond krijgen '(2)')")
+
+# Een stick van de nieuwe Windows-overstap (BugOS-Switch) en een van de oude (BugOS-Overstap,
+# van voor de hernoeming): bugos-switch moet ze allebei vinden en de info lezen (A033).
+NIEUW_STICK, OUD_STICK = TMP / "stick-nieuw", TMP / "stick-oud"
+schrijf(NIEUW_STICK / "BugOS-Switch" / "bugos-switch.json", json.dumps({"computer": "NIEUW"}).encode())
+schrijf(OUD_STICK / "BugOS-Overstap" / "bugos-overstap.json", json.dumps({"computer": "OUD"}).encode())
+os.environ["BUGOS_SCHIJVEN"] = f"{NIEUW_STICK}:{OUD_STICK}"
+gevonden = bo.zoek_overstap()
+klopt(sorted(bo.info(m).get("computer", "") for m in gevonden) == ["NIEUW", "OUD"],
+      "overstap: vindt de map van de nieuwe (BugOS-Switch) en de oude Windows-versie (BugOS-Overstap)")
+del os.environ["BUGOS_SCHIJVEN"]
 os.environ["PATH"] = "/usr/bin:/bin"
 
 # 3. terugzetten na opnieuw installeren: de computer heet anders, de oude back-up moet je toch zien
