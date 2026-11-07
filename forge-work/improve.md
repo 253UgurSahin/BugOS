@@ -2,7 +2,7 @@
 Date: 2026-11-07   Branch: ccr-5bd1cae9-pccs3q   Started from: main at 4b393b7 (+ audit report 44bc1f7)
 Picked: A030, A031, A033, A035, then "Alles" with A034 confirmed as "Alles opsplitsen".
 The user said: "A030 (Recommended),A031 (Recommended),A033 (Recommended),A035,Alles", then for A034 "Alles opsplitsen".
-Tests after /forge-test: 20 checks passed, 0 failed (tools/test_edges.py added); website e2e 8 of 13 passed, the 5 others only B004.
+Tests after /forge-test: 20 checks passed, 0 failed (tools/test_edges.py added); website e2e 13 of 13 passed.
 Tests before: 17 passed, 1 failed (the design makers; my first count said 18 passed because the test
 script hid that failure, see A036). After: 19 passed, 0 failed (one new test, test_windows_start).
 Security (forge-secure scanners: secretscan, codecheck, deps, trackers): PASS, no findings.
@@ -116,7 +116,7 @@ verify: build an image and open each BugOS app once (Files, Settings, Task Manag
 - B002 fixed in b2237c7, see bugs.md
 - B003 fixed in 4c4ffbf, see bugs.md
 - B005 fixed in 2c653c9, see bugs.md
-- B004 (low, scroll text on the website) is open, waiting for your call; see bugs.md
+- B004 fixed in 8780e30 (your option 1), see bugs.md
 - The image build itself (podman build + bootc container lint) was not run here: it needs a big runner.
   The build.sh split and the renamed icons are the parts to watch in the first build.
 - tools/screenshots/studio.py: the welcome scene sometimes crashes on exit ("pure virtual method called"),

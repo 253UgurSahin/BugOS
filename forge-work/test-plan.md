@@ -1,6 +1,6 @@
 # Test plan: BugOS
 
-Build: 2c653c9  Date: 2026-11-07  Profile: none (a Linux system image; website: static)  PWA: no
+Build: 8780e30  Date: 2026-11-07  Profile: none (a Linux system image; website: static)  PWA: no
 Runs against: the BugOS apps in this container (Qt offscreen, fake programs, temporary folders) and the
 website at http://localhost:8080 (`python3 -m http.server 8080 --directory website`). scope.py: exit 0 (localhost)
 
@@ -24,16 +24,16 @@ log out.
 
 | case | flow | type | steps | expected | auto | result |
 | --- | --- | --- | --- | --- | --- | --- |
-| F01-H1 | website | happy | open the home page (light) | heading, Download, no console errors or broken files, axe WCAG 2.2 AA clean | e2e | fail B004 (B001 fixed) |
-| F01-H2 | | happy: dark | the same with the computer in dark mode | axe clean | e2e | fail B004 (B001, B002 fixed) |
+| F01-H1 | website | happy | open the home page (light) | heading, Download, no console errors or broken files, axe WCAG 2.2 AA clean | e2e | pass (B001, B004 fixed) |
+| F01-H2 | | happy: dark | the same with the computer in dark mode | axe clean | e2e | pass (B001, B002, B004 fixed) |
 | F01-H3 | | happy: images | scroll to the end | every visible image loaded, every image has alt | e2e | pass |
-| F01-H4 | | happy: after scrolling | scroll through, then scan (light and dark) | axe clean apart from B004's scroll text | e2e | pass (B005 fixed) |
+| F01-H4 | | happy: after scrolling | scroll through, then scan (light and dark) | axe clean, scroll text included | e2e | pass (B004, B005 fixed) |
 | F01-E1 | | edge: links | every #link | goes to a part that exists | e2e | pass |
-| F01-E2 | | edge: theme remembered | light/dark button, reload | dark stays, screenshots swap, axe clean | e2e | fail B004 |
-| F01-E3 | | edge: 390px | phone width, menu open and close | no sideways scroll, menu works, axe clean | e2e | fail B004 (B003 fixed) |
+| F01-E2 | | edge: theme remembered | light/dark button, reload | dark stays, screenshots swap, axe clean | e2e | pass (B004 fixed) |
+| F01-E3 | | edge: 390px | phone width, menu open and close | no sideways scroll, menu works, axe clean | e2e | pass (B003, B004 fixed) |
 | F01-E4 | | edge: keyboard only | Tab, Enter, Space | menu and buttons reachable, focus visible, questions open | e2e | pass |
 | F01-E5 | | edge: slider | arrow keys on the light/dark slider | value changes | e2e | pass |
-| F01-E6 | | edge: demo undo | "Pretend something goes wrong", "Pick yesterday" | "One more time", axe clean | e2e | fail B004 |
+| F01-E6 | | edge: demo undo | "Pretend something goes wrong", "Pick yesterday" | "One more time", axe clean | e2e | pass (B004 fixed) |
 | F01-E7 | | edge: full motion | scroll through without reduced motion | no errors | e2e | pass |
 | F01-N1 | | negative: storage blocked | private window, storage throws | page and theme button work | e2e | pass |
 | F01-N2 | | negative: wrong address | /this-page-does-not-exist | 404 | e2e | pass |
@@ -85,9 +85,9 @@ auto: `e2e` (a Playwright spec), `unit` (the project's own tests in tools/) or `
 
 ## Result
 
-Cases: 46 in the plan. 40 run automatically (13 e2e, 27 unit): 35 passed, 5 failed (all B004), 0 skipped. 6 manual cases are for you.
+Cases: 46 in the plan. 40 run automatically (13 e2e, 27 unit): 40 passed, 0 failed, 0 skipped. 6 manual cases are for you.
 Behind the unit cases: 400 checks in 16 test files, all passed, plus shellcheck, the compile check,
 the makers and the GTK check.
 Bugs (the counts `../forge-test/bugs.py` prints): 0 critical, 0 high, 2 medium, 3 low;
-1 open (B004, low), 4 fixed, 0 wontfix.
+0 open, 5 fixed, 0 wontfix.
 `python3 ../forge-test/bugs.py forge-work/bugs.md`: exit 0.

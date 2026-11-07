@@ -24,14 +24,14 @@ actual: the terminal (role="img") is wider than the screen and scrolls sideways 
 evidence: e2e/f01-website.spec.ts "F01-E3" (axe: scrollable-region-focusable, .terminal)
 fixed in: 4c4ffbf
 
-## B004 [low] [open] Text that fills in while you scroll is grey and hard to read until you reach it
+## B004 [low] [fixed] Text that fills in while you scroll is grey and hard to read until you reach it
 case: F01-H1, F01-E3, F01-E6   screen: website, "The story" and "A day at home"   build: 18ce410   browser: Chromium, 390px and 1440px
 steps: open the website; look at the words of the story and the moments of "A day at home" that are not the current one
 expected: readable text (4.5:1), also for people who turned off animations
 actual: the moments not yet reached are 1.6:1 (light) and 1.78:1 (dark), their headings 2.1:1 and 2.6:1; the story words 1.6:1 until scrolled past. With "reduce motion" on, the moments still start grey
 evidence: e2e/f01-website.spec.ts "F01-H1" and "F01-E3" (axe: color-contrast, .moment and .w)
-fixed in: -
-waiting for you: fixing it changes how the scroll effect looks (see the checkpoint)
+fixed in: 8780e30
+the user chose: "B004 fix it 1" (option 1: the text not yet reached becomes a readable grey instead of faded)
 
 ## B005 [low] [fixed] The comment lines in the terminal picture are too faint
 case: F01-H1, F01-H2   screen: website, "Sanne starts coding" (desktop width)   build: b2237c7   browser: Chromium, 1440px wide, light and dark
