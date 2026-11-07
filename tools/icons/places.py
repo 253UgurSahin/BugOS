@@ -655,8 +655,8 @@ def _verschuif(d: str, dx: float, dy: float, s: float) -> str:
 # ---------------------------------------------------------------- bestandssoorten ---
 
 def _soorten_uit_bestanden() -> dict[str, tuple[str, str]]:
-    """SOORTEN uit bugos-files (extensie -> (kleur, tekentje)), zodat Dolphin en Bestanden gelijk blijven."""
-    bron = SYSTEM / "usr" / "bin" / "bugos-files"
+    """SOORTEN uit Bestanden (extensie -> (kleur, tekentje)), zodat Dolphin en Bestanden gelijk blijven."""
+    bron = SYSTEM / "usr" / "lib" / "bugos" / "python" / "bugos_files_plekken.py"
     try:
         boom = ast.parse(bron.read_text(encoding="utf-8"))
         for knoop in boom.body:
