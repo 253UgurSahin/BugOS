@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 HIER = Path(__file__).resolve().parent
-sys.path.insert(0, str(HIER.parent / "ontwerp"))
+sys.path.insert(0, str(HIER.parent / "design"))
 from tokens import KLEUREN, MATEN, SYSTEM  # noqa: E402
 
 UIT = SYSTEM / "usr" / "share" / "plasma" / "desktoptheme" / "bugos"

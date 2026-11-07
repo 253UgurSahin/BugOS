@@ -37,8 +37,8 @@ from __future__ import annotations
 
 import math
 
-import basis
-from basis import LIJN, STIJLBLAD
+import base as basis
+from base import LIJN, STIJLBLAD
 
 VAAG = 0.35          # niet-gevulde niveaus (boogjes, golfjes, streepjes)
 NIVEAUS = (0, 20, 40, 60, 80, 100)

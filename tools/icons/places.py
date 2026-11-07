@@ -43,8 +43,8 @@ import math
 import re
 from xml.etree import ElementTree as ET
 
-import basis
-from basis import STIJLBLAD, klein, symbolisch
+import base as basis
+from base import STIJLBLAD, klein, symbolisch
 from tokens import KLEUREN, LIJN, ROOD, SYSTEM, TINTEN
 
 # ------------------------------------------------------------------ mappen in index.theme ---

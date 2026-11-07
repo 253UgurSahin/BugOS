@@ -31,7 +31,7 @@ import sys
 from pathlib import Path
 
 HIER = Path(__file__).resolve().parent
-sys.path.insert(0, str(HIER.parent / "ontwerp"))
+sys.path.insert(0, str(HIER.parent / "design"))
 
 from tokens import KLEUREN, MATEN, REPO, ROOD_VERLOOP  # noqa: E402
 

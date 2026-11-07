@@ -2,8 +2,8 @@
 """BugOS-kleuren voor Windows-programma's (Wine), licht en donker.
 
 Schrijft:
-  system_files/usr/share/bugos/wine/light.reg
-  system_files/usr/share/bugos/wine/dark.reg
+  system_files/usr/share/bugos/wine/licht.reg
+  system_files/usr/share/bugos/wine/donker.reg
 
 Jip-en-Janneke: een Windows-programma tekent zijn knoppen en vensters met de
 "systeemkleuren" van Windows (ButtonFace, Window, Hilight...). Wine leest die uit
@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 
 HIER = Path(__file__).resolve().parent
-sys.path.insert(0, str(HIER.parent / "ontwerp"))
+sys.path.insert(0, str(HIER.parent / "design"))
 
 from tokens import KLEUREN, REPO, rgb  # noqa: E402
 
