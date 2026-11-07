@@ -29,7 +29,7 @@
 :root {
   --bg: #FFFFFF; --bg2: #F7F5F5; --vlak: #FFFFFF; --vlak2: #FBFAFA;
   --inkt: #0E0F12; --tekst2: #5A5F6B; --tekst3: #696D75; --vaag: #C9C6C6; --lijn: #ECE9E9; --lijn2: #DEDADA;
-  --rood: #DE2F3E; --rood-diep: #B81E33; --koraal: #FF5C50; --rood-zacht: #FDECEC; --rood-tekst: #C1222F; --groen: #14965A;
+  --rood: #DE2F3E; --rood-diep: #B81E33; --knop-rood: #DE2F3E; --knop-rood-hover: #B81E33; --koraal: #FF5C50; --rood-zacht: #FDECEC; --rood-tekst: #C1222F; --groen: #14965A;
   --merk-kop: #16171C; --merk-oog: #FFFFFF;
   --nacht: #050506; --nacht-tekst: #F2F2F4; --nacht-tekst2: #A2A7B1; --nacht-lijn: #202126;
   --f-display: "Funnel Display", "Segoe UI", system-ui, sans-serif;
@@ -46,7 +46,7 @@
   :root:not([data-theme="light"]) {
     --bg: #08080A; --bg2: #0E0E11; --vlak: #131316; --vlak2: #111114;
     --inkt: #F2F2F4; --tekst2: #A2A7B1; --tekst3: #7C818B; --vaag: #34353B; --lijn: #1F2024; --lijn2: #2B2C31;
-    --rood: #F04452; --rood-diep: #D22E3E; --koraal: #FF6A5E; --rood-zacht: #2B1519; --rood-tekst: #FF7C85; --groen: #3FD17F;
+    --rood: #F04452; --rood-diep: #D22E3E; --knop-rood: #D22E3E; --knop-rood-hover: #B81E33; --koraal: #FF6A5E; --rood-zacht: #2B1519; --rood-tekst: #FF7C85; --groen: #3FD17F;
     --merk-kop: #F4F2F2; --merk-oog: #16171C;
     --schaduw: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -12px rgba(0,0,0,.6);
     --schaduw-groot: 0 2px 6px rgba(0,0,0,.4), 0 48px 96px -36px rgba(0,0,0,.85);
@@ -57,7 +57,7 @@
 :root[data-theme="dark"] {
   --bg: #08080A; --bg2: #0E0E11; --vlak: #131316; --vlak2: #111114;
   --inkt: #F2F2F4; --tekst2: #A2A7B1; --tekst3: #7C818B; --vaag: #34353B; --lijn: #1F2024; --lijn2: #2B2C31;
-  --rood: #F04452; --rood-diep: #D22E3E; --koraal: #FF6A5E; --rood-zacht: #2B1519; --rood-tekst: #FF7C85; --groen: #3FD17F;
+  --rood: #F04452; --rood-diep: #D22E3E; --knop-rood: #D22E3E; --knop-rood-hover: #B81E33; --koraal: #FF6A5E; --rood-zacht: #2B1519; --rood-tekst: #FF7C85; --groen: #3FD17F;
   --merk-kop: #F4F2F2; --merk-oog: #16171C;
   --schaduw: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -12px rgba(0,0,0,.6);
   --schaduw-groot: 0 2px 6px rgba(0,0,0,.4), 0 48px 96px -36px rgba(0,0,0,.85);
@@ -101,8 +101,8 @@ code { font-family: var(--f-code); font-size: .9em; }
 .knop:active { transform: scale(.98); }
 .knop svg { width: 18px; height: 18px; flex: none; transition: transform .25s var(--zacht); }
 .knop:hover svg.pijl { transform: translateY(2px); }
-.knop-rood { background: var(--rood); color: #fff; box-shadow: 0 12px 32px -12px rgba(222,47,62,.85), inset 0 1px 0 rgba(255,255,255,.22); }
-.knop-rood:hover { background: var(--rood-diep); box-shadow: 0 16px 40px -12px rgba(222,47,62,.95), inset 0 1px 0 rgba(255,255,255,.22); }
+.knop-rood { background: var(--knop-rood); color: #fff; box-shadow: 0 12px 32px -12px rgba(222,47,62,.85), inset 0 1px 0 rgba(255,255,255,.22); }
+.knop-rood:hover { background: var(--knop-rood-hover); box-shadow: 0 16px 40px -12px rgba(222,47,62,.95), inset 0 1px 0 rgba(255,255,255,.22); }
 .knop-glas { color: #F2F2F4; border-color: rgba(255,255,255,.16); background: rgba(255,255,255,.05); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .knop-glas:hover { background: rgba(255,255,255,.1); }
 .knop-rand { color: var(--inkt); border-color: var(--lijn2); background: transparent; }
