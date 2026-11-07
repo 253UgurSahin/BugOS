@@ -1,0 +1,192 @@
+"""BugOS Instellingen: de pagina's Wifi en internet, en Bluetooth."""
+
+from __future__ import annotations
+
+import bugos_config as bi
+from bugos_ui import Knop, Rij, bestaat, kde_instelling, leeg_groep, sectie, start, t
+from bugos_settings_onderdelen import Blad, meer_knop, op_achtergrond, schuifje
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QHBoxLayout, QInputDialog, QLineEdit
+
+
+# ================================================================== wifi ===
+
+def sterkte_woord(n: int) -> str:
+    return t("Sterk", "Strong") if n >= 70 else t("Goed", "Good") if n >= 45 else t("Zwak", "Weak")
+
+
+class WifiPagina(Blad):
+    sleutel, icoon = "wifi", "wifi"
+    titel_nl, titel_en = "Wifi en internet", "Wi-Fi and internet"
+    uitleg_nl = "Klik op een netwerk om te verbinden. BugOS onthoudt het wachtwoord."
+    uitleg_en = "Click a network to connect. BugOS remembers the password."
+    zoekwoorden = "wifi wlan internet netwerk draadloos wachtwoord kabel ethernet verbinding"
+    kde = "kcm_networkmanagement"
+
+    def bouw(self) -> None:
+        g = self.kaart()
+        self.schakel = schuifje(True, self.zet_wifi)
+        self.hoofd = Rij("wifi", t("Wifi", "Wi-Fi"), "", self.schakel)
+        g.voeg(self.hoofd)
+        self.kabel = Rij("computer", t("Kabel", "Cable"), t("Verbonden met een netwerkkabel", "Connected by cable"))
+        self.kabel.hide()
+        g.voeg(self.kabel)
+        kop = QHBoxLayout()
+        kop.addWidget(sectie(t("Netwerken in de buurt", "Networks nearby")), 1)
+        self.zoek_knop = Knop(t("Opnieuw zoeken", "Search again"), "stil", "lijn:verversen")
+        self.zoek_knop.clicked.connect(lambda _c=False: self.ververs(True))
+        kop.addWidget(self.zoek_knop)
+        self.lay.addLayout(kop)
+        self.lijst = self.kaart()
+
+    def ververs(self, opnieuw: bool = False) -> None:
+        self.hoofd.zet_uitleg(t("Even zoeken…", "Searching…"))
+        op_achtergrond(self, lambda: (bi.wifi_aan(), bi.netwerken(opnieuw), bi.kabel_verbonden()), self.toon)
+
+    def toon(self, uitkomst) -> None:
+        if not uitkomst:
+            return
+        aan, netwerken, kabel = uitkomst
+        self.schakel.zet_stil(aan)
+        self.kabel.setVisible(kabel)
+        nu = next((n for n in netwerken if n.verbonden), None)
+        self.hoofd.zet_uitleg(t(f"Verbonden met {nu.naam}", f"Connected to {nu.naam}") if nu else
+                              (t("Niet verbonden", "Not connected") if aan else t("Uit", "Off")))
+        leeg_groep(self.lijst)
+        for n in netwerken:
+            slot = t(" · met wachtwoord", " · with password") if n.beveiligd else t(" · open netwerk", " · open network")
+            if n.verbonden:
+                meer = meer_knop(lambda x=n: [("kruis", t("Verbreken", "Disconnect"), lambda: self.verbreek(x))])
+                self.lijst.voeg(Rij("vink", n.naam, t("Verbonden · ", "Connected · ") + sterkte_woord(n.sterkte) + slot,
+                                    meer))
+            else:
+                rij = Rij("slot" if n.beveiligd else "wifi", n.naam, sterkte_woord(n.sterkte) + slot, klikbaar=True,
+                          pijl=False)
+                rij.geklikt.connect(lambda x=n: self.verbind(x))
+                self.lijst.voeg(rij)
+        if not netwerken:
+            self.lijst.voeg(Rij("wifi", t("Geen netwerken gevonden", "No networks found") if aan else
+                                t("Wifi staat uit", "Wi-Fi is off"),
+                                t("Zet wifi aan of zoek opnieuw.", "Turn on Wi-Fi or search again.")))
+
+    def zet_wifi(self, aan: bool) -> None:
+        op_achtergrond(self, lambda: bi.zet_wifi(aan), lambda _u: QTimer.singleShot(1500, self.ververs))
+
+    def verbind(self, n: bi.Netwerk) -> None:
+        if not n.beveiligd:
+            self.verbind_met(n, bekend=True)
+            return
+        # Kennen we dit netwerk al? (nmcli kan even duren: op de achtergrond, het venster blijft reageren.)
+        self.melding.toon(t(f"Even kijken bij {n.naam}…", f"Checking {n.naam}…"), seconden=15)
+        op_achtergrond(self, lambda: bi.bekend_netwerk(n.naam), lambda bekend: self.verbind_met(n, bekend is True))
+
+    def verbind_met(self, n: bi.Netwerk, bekend: bool) -> None:
+        wachtwoord = ""
+        if n.beveiligd and not bekend:
+            d = QInputDialog(self)
+            d.setWindowTitle(t("Wachtwoord", "Password"))
+            d.setLabelText(t(f"Wat is het wachtwoord van '{n.naam}'?\n(Het staat vaak op de onderkant van het modem.)",
+                             f"What is the password of '{n.naam}'?\n(It is often on the bottom of the router.)"))
+            d.setTextEchoMode(QLineEdit.EchoMode.Password)
+            d.setOkButtonText(t("Verbinden", "Connect"))
+            d.setCancelButtonText(t("Annuleren", "Cancel"))
+            if not d.exec() or not d.textValue():
+                return
+            wachtwoord = d.textValue()
+        self.melding.toon(t(f"Verbinden met {n.naam}…", f"Connecting to {n.naam}…"), seconden=30)
+
+        def klaar(uitkomst) -> None:
+            gelukt = bool(uitkomst and uitkomst[0])
+            self.melding.toon(t(f"Verbonden met {n.naam}.", f"Connected to {n.naam}.") if gelukt else
+                              t("Verbinden lukte niet. Klopt het wachtwoord? Probeer het nog eens.",
+                                "Connecting did not work. Is the password right? Try again."),
+                              "goed" if gelukt else "fout")
+            self.ververs()
+
+        op_achtergrond(self, lambda: bi.verbind(n.naam, wachtwoord), klaar)
+
+    def verbreek(self, n: bi.Netwerk) -> None:
+        op_achtergrond(self, lambda: bi.verbreek(n.naam), lambda _u: self.ververs())
+
+
+# ============================================================= bluetooth ===
+
+def apparaat_icoon(soort: str) -> str:
+    if soort.startswith("audio"):
+        return "geluid"
+    if soort.startswith("input-gaming"):
+        return "spel"
+    if soort == "phone":
+        return "praten"
+    return "bluetooth"
+
+
+class BluetoothPagina(Blad):
+    sleutel, icoon = "bluetooth", "bluetooth"
+    titel_nl, titel_en = "Bluetooth", "Bluetooth"
+    uitleg_nl = "Koptelefoons, muizen, toetsenborden en telefoons zonder draad. Klik op een apparaat om te verbinden."
+    uitleg_en = "Headphones, mice, keyboards and phones without a cable. Click a device to connect."
+    zoekwoorden = "bluetooth koptelefoon oortjes muis toetsenbord telefoon koppelen draadloos"
+    kde = "kcm_bluetooth"
+
+    def bouw(self) -> None:
+        g = self.kaart()
+        self.schakel = schuifje(True, self.zet_bt)
+        self.hoofd = Rij("bluetooth", "Bluetooth", "", self.schakel)
+        g.voeg(self.hoofd)
+        kop = QHBoxLayout()
+        kop.addWidget(sectie(t("Jouw apparaten", "Your devices")), 1)
+        nieuw = Knop(t("Nieuw apparaat koppelen", "Pair a new device"), "stil", "lijn:map-plus")
+        nieuw.clicked.connect(lambda _c=False: start("bluedevil-wizard") if bestaat("bluedevil-wizard")
+                              else kde_instelling("kcm_bluetooth"))
+        kop.addWidget(nieuw)
+        self.lay.addLayout(kop)
+        self.lijst = self.kaart()
+
+    def ververs(self) -> None:
+        op_achtergrond(self, lambda: (bi.bt_aan(), bi.bt_apparaten()), self.toon)
+
+    def toon(self, uitkomst) -> None:
+        if not uitkomst:
+            return
+        aan, apparaten = uitkomst
+        self.schakel.zet_stil(aan)
+        verbonden = sum(1 for a in apparaten if a.verbonden)
+        self.hoofd.zet_uitleg((t(f"Aan · {verbonden} verbonden", f"On · {verbonden} connected") if verbonden
+                               else t("Aan", "On")) if aan else t("Uit", "Off"))
+        leeg_groep(self.lijst)
+        for a in apparaten:
+            batterij = t(f" · batterij {a.batterij}%", f" · battery {a.batterij}%") if a.batterij is not None else ""
+            if a.verbonden:
+                meer = meer_knop(lambda x=a: [("kruis", t("Verbreken", "Disconnect"), lambda: self.verbind(x)),
+                                              ("prullenbak", t("Vergeten", "Forget"), lambda: self.vergeet(x))])
+                self.lijst.voeg(Rij("vink", a.naam, t("Verbonden", "Connected") + batterij, meer))
+            else:
+                rij = Rij(apparaat_icoon(a.soort), a.naam, t("Niet verbonden", "Not connected") + batterij,
+                          klikbaar=aan, pijl=False)
+                rij.geklikt.connect(lambda x=a: self.verbind(x))
+                self.lijst.voeg(rij)
+        if not apparaten:
+            self.lijst.voeg(Rij("bluetooth", t("Nog niets gekoppeld", "Nothing paired yet"),
+                                t("Kies 'Nieuw apparaat koppelen' en zet je apparaat in koppelstand.",
+                                  "Choose 'Pair a new device' and put your device in pairing mode.")))
+
+    def zet_bt(self, aan: bool) -> None:
+        op_achtergrond(self, lambda: bi.zet_bt(aan), lambda _u: QTimer.singleShot(800, self.ververs))
+
+    def verbind(self, a: bi.Apparaat) -> None:
+        self.melding.toon(t(f"{a.naam}: even geduld…", f"{a.naam}: one moment…"), seconden=20)
+
+        def klaar(gelukt) -> None:
+            if gelukt:
+                self.melding.toon(t(f"{a.naam} is verbroken.", f"{a.naam} is disconnected.") if a.verbonden else
+                                  t(f"{a.naam} is verbonden.", f"{a.naam} is connected."), "goed")
+            else:
+                self.melding.toon(t(f"Dat lukte niet. Staat {a.naam} aan en dichtbij?",
+                                    f"That did not work. Is {a.naam} on and nearby?"), "fout")
+            self.ververs()
+
+        op_achtergrond(self, lambda: bi.bt_verbind(a.adres, not a.verbonden), klaar)
+
+    def vergeet(self, a: bi.Apparaat) -> None:
+        op_achtergrond(self, lambda: bi.bt_vergeet(a.adres), lambda _u: self.ververs())
