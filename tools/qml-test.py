@@ -5,6 +5,7 @@ Gebruik: QT_QPA_PLATFORM=offscreen python3 tools/qml-test.py [map-voor-plaatjes]
 Stopt met een fout als een menu niet laadt of iets niet klopt.
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -92,6 +93,24 @@ def main() -> int:
         klopt(kind(snel, "helderheid").property("visible") is True and kind(snel, "batterij").property("visible") is True,
               "snelmenu: laptop: ook helderheid en batterij")
         views.append((SNELMENU, snel))
+
+    # De opdrachten van het snelmenu gaan via een shell: elke waarde moet heel aankomen, wat er ook in staat.
+    import re
+    import shutil
+    import subprocess
+    from PySide6.QtQml import QJSEngine
+    bron = (ROOT / "org.bugos.snelmenu/contents/ui/main.qml").read_text(encoding="utf-8")
+    m = re.search(r"function aanhalen\(tekst\) \{.*?\}\s*$", bron, re.M)
+    klopt(m is not None, "snelmenu: main.qml heeft een functie om waarden aan te halen")
+    if m and shutil.which("bash"):
+        js = QJSEngine()
+        js.evaluate(m.group(0))
+        lastig = "wifi'; touch /tmp/gehackt; echo '$(x) `y` \"z\""
+        aangehaald = js.evaluate(f"aanhalen({json.dumps(lastig)})").toString()
+        terug = subprocess.run(["bash", "-c", "printf %s " + aangehaald], capture_output=True, text=True).stdout
+        klopt(terug == lastig, "snelmenu: een waarde met ' ; $( ) ` komt precies zo aan (er wordt niets uitgevoerd)")
+        klopt("root.aanhalen(wat)" in bron and "root.aanhalen(waarde)" in bron,
+              "snelmenu: --zet en bugos-instellingen gebruiken de aanhalingstekens")
 
     def klaar():
         if uit:

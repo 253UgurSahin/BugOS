@@ -27,10 +27,10 @@ UIT="${2:?geef de uitvoermap voor de ISO}"
 VARIANT="${3:-main}"
 
 if [ "$VARIANT" = nvidia ]; then
-    BASIS=ghcr.io/ublue-os/kinoite-nvidia:latest
+    BASIS=ghcr.io/ublue-os/kinoite-nvidia:${FEDORA:-44}
     NAAM=bugos-nvidia
 else
-    BASIS=ghcr.io/ublue-os/kinoite-main:latest
+    BASIS=ghcr.io/ublue-os/kinoite-main:${FEDORA:-44}
     NAAM=bugos
 fi
 # De naam die BugOS op de stick en na het installeren krijgt (voor updates).

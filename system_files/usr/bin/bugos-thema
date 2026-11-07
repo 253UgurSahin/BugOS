@@ -61,7 +61,10 @@ gtk_laag() {
             # Vooraan: @import moet in CSS boven de rest staan.
             { echo "$regel"; cat "$css" 2>/dev/null || true; } >"$css.bugos" && mv -f "$css.bugos" "$css"
         fi
-        mkdir -p "$BUGOS_CONFIG" && touch "$BUGOS_CONFIG/gtk-$v"
+        # Merkje alleen als de regel er echt in staat (lukte schrijven niet, dan de volgende keer opnieuw).
+        if grep -qxF "$regel" "$css" 2>/dev/null; then
+            mkdir -p "$BUGOS_CONFIG" && touch "$BUGOS_CONFIG/gtk-$v"
+        fi
     done
 }
 
@@ -127,6 +130,7 @@ inloggen)
 eerste-keer)
     MARKER="$BUGOS_CONFIG/thema-1"
     [ -f "$MARKER" ] && exit 0
+    gelukt=1  # merkteken alleen als alles lukte; anders bij de volgende keer inloggen opnieuw
     geen_accent
     # Kvantum: zonder eigen instelling kiest hij zijn eigen standaard (niet BugOS).
     if [ ! -f "$KVANTUM" ] || ! grep -q '^theme=' "$KVANTUM"; then
@@ -136,17 +140,19 @@ eerste-keer)
     # koos (bijv. Oxygen of Papirus), houdt dat.
     stijl="$(kreadconfig6 --file kdeglobals --group KDE --key widgetStyle 2>/dev/null)"
     case "$stijl" in
-    "" | Breeze | breeze) kwriteconfig6 --file kdeglobals --group KDE --key widgetStyle kvantum ;;
+    "" | Breeze | breeze) kwriteconfig6 --file kdeglobals --group KDE --key widgetStyle kvantum || gelukt=0 ;;
     esac
     iconen="$(kreadconfig6 --file kdeglobals --group Icons --key Theme 2>/dev/null)"
     case "$iconen" in
-    "" | breeze | breeze-dark) kwriteconfig6 --file kdeglobals --group Icons --key Theme BugOS ;;
+    "" | breeze | breeze-dark) kwriteconfig6 --file kdeglobals --group Icons --key Theme BugOS || gelukt=0 ;;
     esac
     plasma="$(kreadconfig6 --file plasmarc --group Theme --key name 2>/dev/null)"
     case "$plasma" in
-    "" | default | breeze-dark | breeze-light) plasma-apply-desktoptheme bugos >/dev/null 2>&1 ;;
+    "" | default | breeze-dark | breeze-light) plasma-apply-desktoptheme bugos >/dev/null 2>&1 || gelukt=0 ;;
     esac
-    mkdir -p "$BUGOS_CONFIG" && touch "$MARKER"
+    if [ "$gelukt" = 1 ]; then
+        mkdir -p "$BUGOS_CONFIG" && touch "$MARKER"
+    fi
     ;;
 *)
     echo "Gebruik: bugos-thema licht|donker|status|inloggen|eerste-keer" >&2

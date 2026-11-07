@@ -50,6 +50,28 @@ info() {
     kdialog --title BugOS --msgbox "$(printf '%b' "$1")" 2>/dev/null || echo "$1"
 }
 
+# Stroomprofiel (power-saver, balanced, performance). Fedora 44 heeft tuned-ppd: dezelfde dienst
+# op D-Bus (net.hadess.PowerProfiles), maar zonder het programma powerprofilesctl. Dus: dat als het
+# er is, anders rechtstreeks via D-Bus. Mag zonder wachtwoord voor wie achter de computer zit.
+STROOM=(net.hadess.PowerProfiles /net/hadess/PowerProfiles net.hadess.PowerProfiles)
+stroomprofiel_get() {
+    if command -v powerprofilesctl >/dev/null 2>&1; then
+        powerprofilesctl get 2>/dev/null
+        return
+    fi
+    local uit
+    uit="$(busctl --system get-property "${STROOM[@]}" ActiveProfile 2>/dev/null)" || return 1
+    uit="${uit#s \"}"
+    printf '%s\n' "${uit%\"}"
+}
+stroomprofiel_zet() {
+    if command -v powerprofilesctl >/dev/null 2>&1; then
+        powerprofilesctl set "$1" 2>/dev/null
+        return
+    fi
+    busctl --system set-property "${STROOM[@]}" ActiveProfile s "$1" 2>/dev/null
+}
+
 # Niet storen (geen berichtjes in beeld). Eén plek voor alle scripts;
 # Instellingen (bugos_instellen.py) schrijft precies dezelfde waarde.
 NIET_STOREN_TOT="2999,12,31,0,0,0"

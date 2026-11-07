@@ -55,6 +55,40 @@ def bron_mappen() -> list[Path]:
     return [p for p in (gebruikersmap(x, s) for x, s in MAPPEN) if p.is_dir()]
 
 
+LIJSTJE = "bugos-mappen.json"  # in de back-up: welke map welke soort is ({"PICTURES": "Afbeeldingen", ...})
+
+
+def schrijf_lijstje(doel: Path) -> None:
+    """Onthoud bij de back-up dat bijv. 'Afbeeldingen' de map PICTURES is. Dan komt hij bij het
+    terugzetten in de juiste map, ook als de nieuwe computer Engels is ('Pictures')."""
+    lijstje = {x: m.name for x, s in MAPPEN if (m := gebruikersmap(x, s)).is_dir()}
+    try:
+        (doel / LIJSTJE).write_text(json.dumps(lijstje, ensure_ascii=False))
+    except OSError:
+        pass
+
+
+def terug_opdrachten(bron: Path, thuis: Path) -> list[list[str]]:
+    """Per map in de back-up één rsync, naar de echte map op deze computer."""
+    try:
+        lijstje = json.loads((bron / LIJSTJE).read_text())
+    except (OSError, ValueError):
+        lijstje = {}
+    soort_van = {naam: xdg for xdg, naam in lijstje.items()}
+    soort_van.update({s: x for x, s in MAPPEN if s not in soort_van})  # oude back-ups: de Engelse namen
+    opdrachten = []
+    try:
+        mappen = sorted(p for p in bron.iterdir() if p.is_dir())
+    except OSError:
+        return []
+    for m in mappen:
+        xdg = soort_van.get(m.name)
+        standaard = next((s for x, s in MAPPEN if x == xdg), m.name)
+        naar = gebruikersmap(xdg, standaard) if xdg else thuis / m.name
+        opdrachten.append(rsync_terug(m, naar))
+    return opdrachten
+
+
 def schijven() -> list[Path]:
     """Alle aangesloten USB-schijven en losse schijven waarop je mag schrijven."""
     if os.environ.get("BUGOS_SCHIJVEN"):  # voor tests en screenshots
@@ -73,28 +107,52 @@ def backup_doel(schijf: Path) -> Path:
     return schijf / "BugOS-Backup" / f"{getpass.getuser()}@{socket.gethostname()}"
 
 
+def backups_op(schijf: Path) -> list[Path]:
+    """Alle back-ups op deze schijf, die van deze computer eerst. Na opnieuw installeren of op een
+    nieuwe pc heet de computer (of de gebruiker) vaak anders: die back-ups moet je ook terug kunnen zetten."""
+    eigen = backup_doel(schijf)
+    try:
+        alle = sorted(p for p in (schijf / "BugOS-Backup").iterdir() if p.is_dir())
+    except OSError:
+        return []
+    return sorted(alle, key=lambda p: p != eigen)
+
+
 def rsync_maak(bron: Path, doel: Path) -> list[str]:
     # Geen --delete: wat ooit in de back-up staat, blijft daar staan.
     # --modify-window: USB-schijven (FAT/exFAT) onthouden tijd minder precies.
-    return ["rsync", "-rt", "--modify-window=2", "--info=progress2", "--no-inc-recursive",
+    # -l: snelkoppelingen (symlinks) gaan ook mee (op FAT/exFAT kan dat niet; dan zegt rsync 23: "deels").
+    return ["rsync", "-rtl", "--modify-window=2", "--info=progress2", "--no-inc-recursive",
             f"{bron}/", f"{doel / bron.name}/"]
 
 
 def rsync_terug(doel: Path, thuis: Path) -> list[str]:
     # --update: een nieuwer bestand op de computer wordt nooit overschreven.
-    return ["rsync", "-rt", "--update", "--modify-window=2", "--info=progress2", "--no-inc-recursive",
+    return ["rsync", "-rtl", "--update", "--modify-window=2", "--info=progress2", "--no-inc-recursive",
             f"{doel}/", f"{thuis}/"]
 
 
-def ruimte_genoeg(schijf: Path, mappen: list[Path]) -> tuple[bool, int, int]:
+def ruimte_genoeg(schijf: Path, mappen: list[Path], doel: Path | None = None) -> tuple[bool, int, int]:
+    """Past wat er nog gekopieerd moet worden? Wat al (even groot) in de back-up staat, telt niet mee:
+    rsync kopieert alleen wat nieuw of veranderd is."""
     nodig = 0
     for m in mappen:
         for wortel, _, bestanden in os.walk(m):
             for b in bestanden:
+                bron = Path(wortel) / b
                 try:
-                    nodig += (Path(wortel) / b).stat().st_size
+                    grootte = bron.stat().st_size
                 except OSError:
-                    pass
+                    continue
+                if doel is not None:
+                    try:
+                        oud = (doel / m.name / bron.relative_to(m)).stat().st_size
+                    except (OSError, ValueError):
+                        oud = None
+                    if oud == grootte:
+                        continue  # staat er al
+                # Nieuw of veranderd: rsync schrijft eerst een volledige kopie (en gooit dan pas de oude weg).
+                nodig += grootte
     vrij = shutil.disk_usage(str(schijf)).free
     return nodig < vrij, nodig, vrij
 
@@ -117,13 +175,32 @@ def laatste_backup() -> str:
         return t("Je hebt nog nooit een back-up gemaakt.", "You have never made a backup.")
 
 
+# rsync: 0 = goed, 24 = een bestand verdween tijdens het kopiëren (geen probleem),
+# 23 = sommige bestanden konden niet mee (bijv. een naam met : of ? of groter dan 4 GB op een
+# FAT32-stick). Bij 23 gaan we gewoon door met de volgende mappen en zeggen we het erbij.
+GOED, DEELS = (0, 24), (23,)
+
+DEELS_UITLEG = t("Een paar bestanden konden niet mee: {mappen}. Dat komt meestal door een naam met : ? * of \", "
+                 "of een bestand groter dan 4 GB op een FAT32-schijf. De rest staat er wel.",
+                 "A few files could not be copied: {mappen}. Usually a name with : ? * or \", or a file larger "
+                 "than 4 GB on a FAT32 drive. Everything else is there.")
+
+
 def zonder_venster(schijf: Path) -> int:
     doel = backup_doel(schijf)
     doel.mkdir(parents=True, exist_ok=True)
+    schrijf_lijstje(doel)
+    deels = []
     for m in bron_mappen():
-        if subprocess.call(rsync_maak(m, doel)) not in (0, 24):  # 24 = bestand verdween tijdens kopiëren
+        code = subprocess.call(rsync_maak(m, doel))
+        if code in DEELS:
+            deels.append(m.name)
+        elif code not in GOED:
             return 1
     onthoud(schijf)
+    if deels:
+        print(DEELS_UITLEG.format(mappen=", ".join(deels)), file=sys.stderr)
+        return 2
     return 0
 
 
@@ -135,7 +212,7 @@ def venster() -> int:
         raster, schijf_info, sectie, uitvoeren,
     )
     from PySide6.QtCore import QProcess, QTimer
-    from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QWidget
+    from PySide6.QtWidgets import QFrame, QHBoxLayout, QInputDialog, QMessageBox, QVBoxLayout, QWidget
 
     def wat_mee_gaat() -> QWidget:
         """Zes kleine kaartjes: deze mappen gaan mee in de back-up."""
@@ -193,6 +270,8 @@ def venster() -> int:
             lay.addLayout(rij)
 
             self.wachtrij: list[list[str]] = []
+            self.nu: list[str] = []     # de opdracht die nu loopt
+            self.deels: list[str] = []  # mappen waarvan een paar bestanden niet mee konden
             self.proces = QProcess(self)
             self.proces.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
             self.proces.readyReadStandardOutput.connect(self.lees)
@@ -216,7 +295,7 @@ def venster() -> int:
                 return
             s = self.gekozen()
             self.maak.setEnabled(s is not None)
-            self.terugzetten.setEnabled(s is not None and backup_doel(s).exists())
+            self.terugzetten.setEnabled(s is not None and bool(backups_op(s)))
 
         def ververs_schijven(self) -> None:
             if self.proces.state() != QProcess.ProcessState.NotRunning:
@@ -224,7 +303,7 @@ def venster() -> int:
             items = []
             for s in schijven():
                 extra = schijf_info(s)
-                if backup_doel(s).exists():
+                if backups_op(s):
                     extra += t("  ·  heeft al een back-up", "  ·  already has a backup")
                 items.append((str(s), s.name, extra))
             self.kiezer.zet(items)
@@ -234,7 +313,7 @@ def venster() -> int:
             if not self.wachtrij:
                 self.klaar()
                 return
-            cmd = self.wachtrij.pop(0)
+            cmd = self.nu = self.wachtrij.pop(0)
             self.proces.start(cmd[0], cmd[1:])
 
         def lees(self) -> None:
@@ -244,7 +323,9 @@ def venster() -> int:
                     self.balk.setValue(int(stuk[:-1]))
 
         def klaar_met_een(self, code: int, _status) -> None:
-            if code not in (0, 24):
+            if code in DEELS:
+                self.deels.append(Path(self.nu[-2].rstrip("/")).name or "~")
+            elif code not in GOED:
                 self.melding.zet(t("Het lukte niet helemaal. Zit de schijf er nog in? Probeer het opnieuw.",
                                    "It did not fully work. Is the drive still plugged in? Try again."), "fout")
                 self.wachtrij.clear()
@@ -253,6 +334,13 @@ def venster() -> int:
             self.volgende()
 
         def klaar(self) -> None:
+            if self.deels:
+                if self.stand["klus"] == "maak":
+                    onthoud(self.stand["schijf"])
+                    self.wanneer.setText(laatste_backup())
+                self.melding.zet(DEELS_UITLEG.format(mappen=", ".join(self.deels)), "let_op")
+                self.stop(True)
+                return
             if self.stand["klus"] == "maak":
                 onthoud(self.stand["schijf"])
                 self.wanneer.setText(laatste_backup())
@@ -269,6 +357,7 @@ def venster() -> int:
             self.knoppen()
 
         def bezig(self, tekst: str) -> None:
+            self.deels = []
             self.melding.zet(tekst, "bezig")
             self.balk.setValue(0)
             self.balk.show()
@@ -281,7 +370,7 @@ def venster() -> int:
             if schijf is None:
                 return
             mappen = bron_mappen()
-            past, nodig, vrij = ruimte_genoeg(schijf, mappen)
+            past, nodig, vrij = ruimte_genoeg(schijf, mappen, backup_doel(schijf))
             if not past:
                 self.melding.zet(t(f"Te weinig ruimte op de schijf: nodig {nodig / 1024**3:.1f} GB, vrij {vrij / 1024**3:.1f} GB.",
                                    f"Not enough space on the drive: need {nodig / 1024**3:.1f} GB, free {vrij / 1024**3:.1f} GB."),
@@ -289,6 +378,7 @@ def venster() -> int:
                 return
             doel = backup_doel(schijf)
             doel.mkdir(parents=True, exist_ok=True)
+            schrijf_lijstje(doel)
             self.stand.update(klus="maak", schijf=schijf)
             self.wachtrij[:] = [rsync_maak(m, doel) for m in mappen]
             self.bezig(t("Bezig met kopiëren… Haal de schijf er niet uit.", "Copying… Do not unplug the drive."))
@@ -298,8 +388,31 @@ def venster() -> int:
             schijf = self.gekozen()
             if schijf is None:
                 return
+            lijst = backups_op(schijf)
+            if not lijst:
+                return
+            bron = lijst[0]
+            if len(lijst) > 1 and lijst[0] != backup_doel(schijf):
+                # Geen back-up van deze computer, wel van andere: laat kiezen (bijv. "bugie@oude-laptop").
+                keuze, ok = QInputDialog.getItem(
+                    self, t("Welke back-up?", "Which backup?"),
+                    t("Er staan meer back-ups op deze schijf. Welke wil je terugzetten?",
+                      "There are several backups on this drive. Which one do you want to restore?"),
+                    [p.name for p in lijst], 0, False)
+                if not ok:
+                    return
+                bron = next(p for p in lijst if p.name == keuze)
+            vraag = QMessageBox.question(
+                self, t("Terugzetten?", "Restore?"),
+                t("Je bestanden van de back-up komen terug op je computer. Een bestand dat op je computer ouder is "
+                  "dan in de back-up, wordt vervangen. Nieuwere bestanden op je computer blijven staan.",
+                  "Your files from the backup come back to your computer. A file that is older on your computer "
+                  "than in the backup is replaced. Newer files on your computer are kept."),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Cancel)
+            if vraag != QMessageBox.StandardButton.Yes:
+                return
             self.stand.update(klus="terug", schijf=schijf)
-            self.wachtrij[:] = [rsync_terug(backup_doel(schijf), Path.home())]
+            self.wachtrij[:] = terug_opdrachten(bron, Path.home())
             self.bezig(t("Bezig met terugzetten… Nieuwere bestanden op je computer blijven gewoon staan.",
                          "Restoring… Newer files on your computer are kept."))
             self.volgende()

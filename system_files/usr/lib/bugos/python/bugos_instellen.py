@@ -407,18 +407,35 @@ def zet_nachtlicht(aan: bool) -> None:
 PROFIELEN = ("power-saver", "balanced", "performance")
 
 
+# Fedora 44 heeft tuned-ppd: dezelfde dienst op D-Bus, maar zonder het programma powerprofilesctl.
+STROOM = ("net.hadess.PowerProfiles", "/net/hadess/PowerProfiles", "net.hadess.PowerProfiles", "ActiveProfile")
+
+
+def lees_busctl_tekst(uit: str) -> str:
+    """'s "balanced"' (wat busctl get-property geeft) wordt 'balanced'."""
+    uit = uit.strip()
+    return uit[3:-1] if uit.startswith('s "') and uit.endswith('"') else ""
+
+
 def energieprofiel() -> str | None:
     if VOORBEELD:
         return _VB["profiel"]
-    code, uit = draai("powerprofilesctl", "get", timeout=5)
-    return uit.strip() if code == 0 and uit.strip() in PROFIELEN else None
+    if shutil.which("powerprofilesctl"):
+        code, uit = draai("powerprofilesctl", "get", timeout=5)
+        profiel = uit.strip()
+    else:
+        code, uit = draai("busctl", "--system", "get-property", *STROOM, timeout=5)
+        profiel = lees_busctl_tekst(uit)
+    return profiel if code == 0 and profiel in PROFIELEN else None
 
 
 def zet_energieprofiel(profiel: str) -> bool:
     if VOORBEELD:
         _VB["profiel"] = profiel
         return True
-    return draai("powerprofilesctl", "set", profiel, timeout=8)[0] == 0
+    if shutil.which("powerprofilesctl"):
+        return draai("powerprofilesctl", "set", profiel, timeout=8)[0] == 0
+    return draai("busctl", "--system", "set-property", *STROOM, "s", profiel, timeout=8)[0] == 0
 
 
 @dataclass
@@ -910,7 +927,16 @@ def versleutel(wachtwoord: str) -> str:
     import secrets
     tekens = "./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
     zout = "$6$" + "".join(secrets.choice(tekens) for _ in range(16))
-    lib = ctypes.CDLL("libcrypt.so.1")
+    # Fedora heeft alleen libcrypt.so.2 (libxcrypt); .so.1 is de oude naam (o.a. Ubuntu).
+    lib = None
+    for naam in ("libcrypt.so.2", "libcrypt.so.1"):
+        try:
+            lib = ctypes.CDLL(naam)
+            break
+        except OSError:
+            continue
+    if lib is None:
+        raise OSError("libcrypt niet gevonden")
     lib.crypt.restype = ctypes.c_char_p
     lib.crypt.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
     uit = lib.crypt(wachtwoord.encode("utf-8"), zout.encode("ascii"))
@@ -927,8 +953,24 @@ def zet_wachtwoord(nieuw: str) -> tuple[bool, str]:
         hash_ = ""
     if not hash_:
         return False, "crypt"
-    code, uit = _accounts("SetPassword", hash_, "")
-    return code == 0, uit
+    # Niet via gdbus: dan staat de hash op de opdrachtregel en kan elke gebruiker hem in 'ps' lezen.
+    return _accounts_dbus("SetPassword", hash_, "")
+
+
+def _accounts_dbus(methode: str, *args: str, timeout: int = 60) -> tuple[bool, str]:
+    """AccountsService rechtstreeks over D-Bus (in dit proces), met de wachtwoordvraag van KDE erbij."""
+    try:
+        from PySide6.QtDBus import QDBus, QDBusConnection, QDBusMessage
+    except ImportError:
+        return False, "dbus"
+    bericht = QDBusMessage.createMethodCall("org.freedesktop.Accounts", f"/org/freedesktop/Accounts/User{os.getuid()}",
+                                            "org.freedesktop.Accounts.User", methode)
+    bericht.setArguments(list(args))
+    bericht.setInteractiveAuthorizationAllowed(True)
+    antwoord = QDBusConnection.systemBus().call(bericht, QDBus.CallMode.Block, timeout * 1000)
+    if antwoord.type() == QDBusMessage.MessageType.ErrorMessage:
+        return False, antwoord.errorMessage()
+    return True, ""
 
 
 def zet_auto_inloggen(aan: bool, naam: str) -> bool:

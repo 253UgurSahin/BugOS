@@ -1,0 +1,17 @@
+[Unit]
+Description=BugOS: switch to signed updates (once)
+Documentation=https://github.com/253UgurSahin/BugOS/blob/main/docs/ONDERTEKENEN.md
+Wants=network-online.target
+After=network-online.target rpm-ostreed.service
+ConditionPathExists=/etc/pki/containers/bugos.pub
+ConditionPathExists=!/var/lib/bugos/ondertekend
+ConditionKernelCommandLine=!rd.live.image
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bugos-ondertekend
+Nice=19
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

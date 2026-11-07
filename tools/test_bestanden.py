@@ -100,11 +100,76 @@ try:
     klopt(False, "map in zichzelf kopiëren wordt geweigerd")
 except ValueError:
     klopt(True, "map in zichzelf kopiëren wordt geweigerd")
+# 6b. gaat het halverwege mis (schijf vol, stick eruit), dan blijft er geen halve kopie achter
+import shutil as _sh  # noqa: E402
+_echt_copy2 = _sh.copy2
+
+
+def _halverwege(bron, doel_, **kw):
+    _echt_copy2(bron, doel_, **kw)
+    if Path(bron).name == "binnen.txt":
+        raise OSError(28, "No space left on device")
+
+
+_echt_copytree = _sh.copytree
+_sh.copytree = lambda s, d, **kw: _echt_copytree(s, d, copy_function=_halverwege, **kw)
+voor = sorted(p.name for p in doel.iterdir())
+try:
+    b.kopieer_een(docs / "map", doel, verplaats=False)
+    klopt(False, "kopie mislukt halverwege: fout gemeld")
+except (OSError, _sh.Error):
+    klopt(sorted(p.name for p in doel.iterdir()) == voor, "kopie mislukt halverwege: geen halve map achtergebleven")
+_sh.copytree = _echt_copytree
+# 6c. verplaatsen naar een andere schijf: eerst helemaal kopiëren, dan pas het origineel weg
+_echt_rename = os.rename
+_keer = []
+
+
+def _andere_schijf(a, c):
+    if not _keer:  # alleen de eerste poging (het verplaatsen zelf) zegt: andere schijf
+        _keer.append(1)
+        raise OSError(18, "Invalid cross-device link")
+    return _echt_rename(a, c)
+
+
+os.rename = _andere_schijf
+(docs / "verhuis").mkdir()
+(docs / "verhuis" / "a.txt").write_text("a")
+v2 = b.kopieer_een(docs / "verhuis", doel, verplaats=True)
+os.rename = _echt_rename
+klopt(v2 == doel / "verhuis" and (v2 / "a.txt").read_text() == "a" and not (docs / "verhuis").exists()
+      and not any(p.name.endswith(".bugos-bezig") for p in doel.iterdir()),
+      "verplaatsen naar een andere schijf: alles over, origineel weg, geen tijdelijke map over")
 
 # 7. prullenbak legen
 b.prullenbak_legen()
 klopt(b.prullenbak_inhoud() == [], "prullenbak legen: leeg")
 klopt((docs / "kopie.txt").exists() is False and (doel / "kopie.txt").exists(), "prullenbak legen: rest blijft heel")
+# 7b. kan iets niet weg, dan blijft het zichtbaar in de prullenbak (geen verborgen restjes)
+(docs / "vast").mkdir()
+(docs / "vast" / "x.txt").write_text("x")
+(docs / "los.txt").write_text("l")
+b.naar_prullenbak(docs / "vast")
+b.naar_prullenbak(docs / "los.txt")
+_echt_rmtree = _sh.rmtree
+
+
+def _weigert(p, *a, **kw):
+    if Path(p).name == "vast":
+        raise PermissionError(13, "Permission denied")
+    return _echt_rmtree(p, *a, **kw)
+
+
+_sh.rmtree = _weigert
+mislukt = b.prullenbak_legen()
+_sh.rmtree = _echt_rmtree
+klopt(mislukt == 1 and [x[0].name for x in b.prullenbak_inhoud()] == ["vast"],
+      "prullenbak legen: wat niet weg kan, telt als mislukt en blijft zichtbaar; de rest is weg")
+b.prullenbak_legen()
+
+# 7c. snelkoppelingen: telt waar de koppeling zelf staat (kapot of naar een andere schijf)
+(docs / "kapot").symlink_to(TMP / "bestaat-niet")
+klopt(b.zelfde_schijf(docs / "kapot", thuis), "snelkoppeling: een kapotte koppeling in Documenten mag naar de prullenbak")
 
 # 8. namen tonen
 klopt(b.toon_naam("Recept.odt", False) == "Recept", "naam: bekende extensie verborgen")
@@ -258,6 +323,29 @@ klopt(venster.keuzebalk.knoppen["terugzetten"].isHidden(), "kiezen: geen Zet ter
 venster.ga_naar(thuis)
 klopt(venster.gekozen() == [] and venster.keuzebalk.isHidden(), "andere map: niets blijft gekozen, balk weg")
 
+
+class _BezigeKlus:
+    def isRunning(self):  # noqa: N802
+        return True
+
+
+venster.show()
+venster.klus = _BezigeKlus()
+venster.close()
+klopt(venster.isVisible() and venster.sluit_na_klus, "sluiten tijdens kopiëren: venster wacht tot het klaar is")
+venster.klus = None
+venster._klus_klaar(1, "", False)
+for _ in range(20):
+    app.processEvents()
+klopt(not venster.isVisible(), "sluiten tijdens kopiëren: na het kopiëren gaat het venster vanzelf dicht")
+venster.sluit_na_klus = False
+venster.show()
+# ongedaan maken dat niet lukt (het ding is intussen weg uit de prullenbak): geen 'Teruggezet.'
+venster.laatst_weg = [(thuis / ".local" / "share" / "Trash" / "files" / "bestaat-niet.txt",
+                       thuis / ".local" / "share" / "Trash" / "info" / "bestaat-niet.txt.trashinfo")]
+venster.ongedaan()
+klopt("niet terug" in venster.melding.tekst.text(), "ongedaan maken dat mislukt: zegt dat het niet lukte")
+
 # kopiëren en plakken via het venster
 klopt(venster.plak_knop.isHidden(), "plakken: geen knop zolang er niets gekopieerd is")
 venster.ga_naar(docs)
@@ -305,7 +393,31 @@ menu = venster.schijf_menu(venster.lijst_schijven[0])
 klopt([a.text() for a in menu.actions() if a.text()] == ["Openen", "Naam wijzigen…", "Controleren en repareren",
                                                           "Leegmaken (alles wissen)…", "Veilig verwijderen"],
       "beheer: openen, naam wijzigen, repareren, leegmaken, veilig verwijderen")
+windows = sch.Schijf("/dev/nvme0n1p3", "Windows", "intern", "/dev/nvme0n1", "/dev/nvme0n1p3", fs="ntfs")
+klopt("Leegmaken (alles wissen)…" not in [a.text() for a in venster.schijf_menu(windows).actions()],
+      "beheer: een interne schijf (Windows) kun je hier niet wissen")
+_gewist: list = []
+_oud_vraag, _oud_beheer = venster.vraag_ja, venster.beheer
+venster.vraag_ja = lambda *a, **kw: True
+venster.beheer = lambda x, *a, **kw: _gewist.append(x.apparaat)
+andere = sch.Schijf("/dev/sdq1", "Andere stick", "stick", "/dev/sdq", "/dev/sdq1", fs="vfat")
+venster.leegmaak_schijf(andere)                     # zit er niet (meer) in
+venster.leegmaak_schijf(windows)                    # intern: nooit
+venster.leegmaak_schijf(venster.lijst_schijven[0])  # de stick die er echt in zit
+venster.vraag_ja, venster.beheer = _oud_vraag, _oud_beheer
+klopt(_gewist == ["/dev/sdx1"], "leegmaken: alleen de stick die er nu echt in zit (geen andere, geen interne)")
 klopt(venster.ruimte_balk is not None and venster.status.text() == "1 aangesloten", "Deze computer: ruimte bovenaan, en 1 aangesloten")
+from PySide6.QtCore import QEvent, Qt  # noqa: E402
+from PySide6.QtGui import QKeyEvent  # noqa: E402
+
+klopt(tegels[0].focusPolicy() == Qt.FocusPolicy.StrongFocus and tegels[0].accessibleName() == "Stick van Bugie",
+      "toetsenbord: de stick-rij is met Tab te bereiken en heeft een naam voor schermlezers")
+_geopend = []
+tegels[0].geklikt.connect(lambda: _geopend.append(1))
+tegels[0].keyPressEvent(QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Return, Qt.KeyboardModifier.NoModifier))
+klopt(_geopend == [1] and venster.huidig == stick, "toetsenbord: Enter op de stick-rij opent hem")
+venster.open_computer()
+tegels = venster.computer.widget().findChildren(b.SchijfRij)
 tegels[0].geklikt.emit()
 klopt(venster.huidig == stick and not venster.in_computer and not venster.uitwerp_knop.isHidden()
       and venster.plek_naam() == "Stick van Bugie", "stick openen: naam bovenin en 'Veilig verwijderen'")

@@ -224,22 +224,25 @@ standaard:*)
         sleep 2
     done
     bureaublad_er || exit 0  # volgende keer opnieuw proberen
+    # Een merkteken alleen als de stap echt lukte; anders probeert hij het bij de volgende keer inloggen opnieuw.
+    mkdir -p "$BUGOS_CONFIG"
     if [ ! -f "$MARKER" ]; then
+        gelukt=1
         if [ "$(status_van org.kde.plasma.kickoff)" = aan ]; then
-            plasma_script "$JS vervang(\"org.kde.plasma.kickoff\", \"org.bugos.startmenu\", \"\");" >/dev/null
+            plasma_script "$JS vervang(\"org.kde.plasma.kickoff\", \"org.bugos.startmenu\", \"\");" >/dev/null || gelukt=0
         fi
-        plasma_script "$JS vervang(\"\", \"org.bugos.snelmenu\", \"org.kde.plasma.systemtray\");" >/dev/null
-        mkdir -p "$BUGOS_CONFIG" && touch "$MARKER"
+        plasma_script "$JS vervang(\"\", \"org.bugos.snelmenu\", \"org.kde.plasma.systemtray\");" >/dev/null || gelukt=0
+        [ "$gelukt" = 1 ] && touch "$MARKER"
     fi
     if [ ! -f "$MARKER2" ]; then
+        gelukt=1
         if [ "$(status_van org.bugos.snelmenu)" = aan ]; then
-            plasma_script "$JS systeemvak(true);" >/dev/null
+            plasma_script "$JS systeemvak(true);" >/dev/null || gelukt=0
         fi
-        mkdir -p "$BUGOS_CONFIG" && touch "$MARKER2"
+        [ "$gelukt" = 1 ] && touch "$MARKER2"
     fi
     if [ ! -f "$MARKER3" ]; then
-        plasma_script "$JS taakbalkruimte();" >/dev/null
-        mkdir -p "$BUGOS_CONFIG" && touch "$MARKER3"
+        plasma_script "$JS taakbalkruimte();" >/dev/null && touch "$MARKER3"
     fi
     ;;
 *)

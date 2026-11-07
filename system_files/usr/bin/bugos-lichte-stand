@@ -13,6 +13,17 @@
 
 MARKER="$BUGOS_CONFIG/lichte-stand"
 GEKEKEN="$BUGOS_CONFIG/lichte-stand-gecontroleerd"
+VOOR="$BUGOS_CONFIG/lichte-stand-voor"  # hoe het was vóór de lichte stand (zodat 'uit' precies dat terugzet)
+
+# bestand groep sleutel: de instellingen die de lichte stand verandert.
+INSTELLINGEN=(
+    "kdeglobals KDE AnimationDurationFactor"
+    "kwinrc Plugins blurEnabled"
+    "kwinrc Plugins contrastEnabled"
+    "kwinrc Plugins slidingpopupsEnabled"
+)
+
+baloo() { balooctl6 "$@" 2>/dev/null || balooctl "$@" 2>/dev/null; }
 
 is_traag() {
     local geheugen_kb kernen
@@ -22,7 +33,21 @@ is_traag() {
 }
 
 aan() {
+    [ -f "$MARKER" ] && return 0  # staat al aan: niet de lichte stand zelf als "hoe het was" onthouden
     mkdir -p "$BUGOS_CONFIG"
+    # Onthoud hoe het nu is. "-" = niet ingesteld (dan geldt de standaard van KDE).
+    : >"$VOOR"
+    local regel bestand groep sleutel waarde
+    for regel in "${INSTELLINGEN[@]}"; do
+        read -r bestand groep sleutel <<<"$regel"
+        waarde="$(kreadconfig6 --file "$bestand" --group "$groep" --key "$sleutel" 2>/dev/null)"
+        printf '%s\t%s\n' "$regel" "${waarde:--}" >>"$VOOR"
+    done
+    if baloo status | grep -qi disabled; then
+        printf 'baloo\tuit\n' >>"$VOOR"
+    else
+        printf 'baloo\taan\n' >>"$VOOR"
+    fi
     # Animaties uit, doorzichtige/wazige effecten uit.
     kwriteconfig6 --file kdeglobals --group KDE --key AnimationDurationFactor 0
     kwriteconfig6 --file kwinrc --group Plugins --key blurEnabled false
@@ -35,13 +60,33 @@ aan() {
 }
 
 uit() {
-    kwriteconfig6 --file kdeglobals --group KDE --key AnimationDurationFactor --delete
-    kwriteconfig6 --file kwinrc --group Plugins --key blurEnabled --delete
-    kwriteconfig6 --file kwinrc --group Plugins --key contrastEnabled --delete
-    kwriteconfig6 --file kwinrc --group Plugins --key slidingpopupsEnabled --delete
-    balooctl6 enable >/dev/null 2>&1 || balooctl enable >/dev/null 2>&1
+    local regel bestand groep sleutel waarde baloo_was=aan
+    if [ -f "$VOOR" ]; then
+        # Precies terug naar hoe het was vóór de lichte stand (ook wat je zelf had ingesteld).
+        while IFS=$'\t' read -r regel waarde; do
+            if [ "$regel" = baloo ]; then
+                baloo_was="$waarde"
+                continue
+            fi
+            read -r bestand groep sleutel <<<"$regel"
+            if [ "$waarde" = - ]; then
+                kwriteconfig6 --file "$bestand" --group "$groep" --key "$sleutel" --delete
+            else
+                kwriteconfig6 --file "$bestand" --group "$groep" --key "$sleutel" "$waarde"
+            fi
+        done <"$VOOR"
+    else
+        # Lichte stand van vóór deze versie: terug naar de standaard van KDE.
+        for regel in "${INSTELLINGEN[@]}"; do
+            read -r bestand groep sleutel <<<"$regel"
+            kwriteconfig6 --file "$bestand" --group "$groep" --key "$sleutel" --delete
+        done
+    fi
+    if [ "$baloo_was" = aan ]; then
+        baloo enable >/dev/null
+    fi
     qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1
-    rm -f "$MARKER"
+    rm -f "$MARKER" "$VOOR"
 }
 
 case "${1:-auto}" in

@@ -232,10 +232,9 @@ lang en_US.UTF-8
 keyboard --vckeymap=us --xlayouts='us'
 
 %onerror
-run0 --user=liveuser --setenv=WAYLAND_DISPLAY=wayland-0 --setenv=DISPLAY=:0 \\
+tail -n 60 /tmp/anaconda.log | run0 --user=liveuser --setenv=WAYLAND_DISPLAY=wayland-0 --setenv=DISPLAY=:0 \\
     yad --timeout=0 --text-info --no-buttons --width=640 --height=420 \\
-    --title=BugOS --text="Installing BugOS did not work. If this happened before copying started, nothing on your computer was changed. Take a photo of this screen and report it at github.com/253UgurSahin/BugOS/issues" \\
-    </tmp/anaconda.log
+    --title=BugOS --text="Installing BugOS did not work. If this happened before copying started, nothing on your computer was changed. Take a photo of this screen and report it at github.com/253UgurSahin/BugOS/issues\n\nThat page is public: check the photo for your name, your computer's name or other personal details first."
 %end
 
 # BugOS vanaf de stick zelf installeren (zie stap 1): geen internet nodig.
@@ -257,14 +256,26 @@ EOF
 # Universal Blue. Die moet bij Secure Boot één keer worden toegevoegd.
 if [ "$BUGOS_VARIANT" = nvidia ]; then
     mkdir -p /usr/share/bugos
-    curl --retry 3 -Lo /usr/share/bugos/sb_pubkey.der https://github.com/ublue-os/akmods/raw/main/certs/public_key.der
+    # Vaste versie (commit) en controlegetal: de pc gaat deze sleutel vertrouwen, dus nooit
+    # zomaar "wat er nu op main staat". Nieuwe sleutel bij Universal Blue? Dan hier beide bijwerken.
+    SB_COMMIT=20fce9fe76de494ff901f017a50d6f4dfc1661e0
+    SB_SHA256=4e5c68474cb133fd8984d9599762cece9100c3e6cd8a9709aeaabd85dd9e70d1
+    curl -fsSL --retry 3 -o /usr/share/bugos/sb_pubkey.der \
+        "https://github.com/ublue-os/akmods/raw/${SB_COMMIT}/certs/public_key.der"
+    echo "${SB_SHA256}  /usr/share/bugos/sb_pubkey.der" | sha256sum -c -
     cat >>/usr/share/anaconda/post-scripts/bugos-updates.ks <<'EOF'
 %post --nochroot --log=/tmp/bugos_logs/secureboot.log
 if [ -d /sys/firmware/efi ] && mokutil --sb-state 2>/dev/null | grep -q enabled; then
-    printf 'bugos\nbugos\n' | mokutil --import /usr/share/bugos/sb_pubkey.der || true
-    run0 --user=liveuser --setenv=WAYLAND_DISPLAY=wayland-0 --setenv=DISPLAY=:0 \
-        yad --on-top --width=560 --title=BugOS --button=OK:0 \
-        --text="<b>One more step when the computer restarts</b>\n\nYour computer will show a blue screen (MOK Manager). Choose:\n  1. <b>Enroll MOK</b>\n  2. <b>Continue</b>\n  3. <b>Yes</b>\n  4. Type the password: <b>bugos</b>\n  5. <b>Reboot</b>\n\nThis is needed so your Nvidia graphics card works properly." || true
+    if printf 'bugos\nbugos\n' | mokutil --import /usr/share/bugos/sb_pubkey.der; then
+        run0 --user=liveuser --setenv=WAYLAND_DISPLAY=wayland-0 --setenv=DISPLAY=:0 \
+            yad --on-top --width=560 --title=BugOS --button=OK:0 \
+            --text="<b>One more step when the computer restarts</b>\n\nYour computer will show a blue screen (MOK Manager). Choose:\n  1. <b>Enroll MOK</b>\n  2. <b>Continue</b>\n  3. <b>Yes</b>\n  4. Type the password: <b>bugos</b>\n  5. <b>Reboot</b>\n\nThis is needed so your Nvidia graphics card works properly." || true
+    else
+        echo "BugOS: mokutil --import lukte niet" >&2
+        run0 --user=liveuser --setenv=WAYLAND_DISPLAY=wayland-0 --setenv=DISPLAY=:0 \
+            yad --on-top --width=560 --title=BugOS --button=OK:0 \
+            --text="<b>The Nvidia key could not be added</b>\n\nBugOS is installed, but with Secure Boot on, the Nvidia driver may not start.\nTurn Secure Boot off in the BIOS/UEFI settings, or open 'Something is not working' after the restart." || true
+    fi
 fi
 %end
 EOF

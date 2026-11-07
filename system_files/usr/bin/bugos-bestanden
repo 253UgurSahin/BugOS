@@ -14,6 +14,7 @@ Gebruik:  bugos-bestanden [map of bestand]
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import os
 import shutil
@@ -228,8 +229,10 @@ def prullenbak() -> Path:
 
 
 def zelfde_schijf(a: Path, b: Path) -> bool:
+    """Staat 'a' zelf op dezelfde schijf als 'b'? Bij een snelkoppeling telt waar de koppeling staat,
+    niet waar hij naar wijst (die gaat gewoon naar de prullenbak, ook als hij naar een stick wijst)."""
     try:
-        return os.stat(a).st_dev == os.stat(b).st_dev
+        return os.lstat(a).st_dev == os.stat(b).st_dev
     except OSError:
         return False
 
@@ -302,16 +305,35 @@ def prullenbak_inhoud() -> list[tuple[Path, Path, Path | None]]:
     return uit
 
 
-def prullenbak_legen() -> None:
+def prullenbak_legen() -> int:
+    """Gooi alles in de prullenbak echt weg. Geeft terug hoeveel dingen niet weg konden.
+
+    Het info-bestand gaat pas weg als het ding zelf weg is: wat niet weg kon, blijft dus gewoon
+    zichtbaar in de prullenbak (en neemt niet stiekem ruimte in)."""
     bak = prullenbak()
-    for map_ in (bak / "files", bak / "info"):
-        if not map_.is_dir():
-            continue
-        for p in map_.iterdir():
+    mislukt = 0
+
+    def weg(p: Path) -> bool:
+        try:
             if p.is_dir() and not p.is_symlink():
-                shutil.rmtree(p, ignore_errors=True)
+                shutil.rmtree(p)
             else:
                 p.unlink(missing_ok=True)
+            return True
+        except OSError:
+            return False
+
+    if (bak / "info").is_dir():
+        for info in (bak / "info").glob("*.trashinfo"):
+            if weg(bak / "files" / info.name[: -len(".trashinfo")]):
+                info.unlink(missing_ok=True)
+            else:
+                mislukt += 1
+    if (bak / "files").is_dir():  # losse dingen zonder info-bestand
+        for p in (bak / "files").iterdir():
+            if not (bak / "info" / f"{p.name}.trashinfo").exists() and not weg(p):
+                mislukt += 1
+    return mislukt
 
 
 def zit_in(kind: Path, ouder: Path) -> bool:
@@ -330,12 +352,41 @@ def kopieer_een(bron: Path, doelmap: Path, verplaats: bool) -> Path | None:
         return bron  # staat er al
     doel = vrije_naam(doelmap / bron.name)
     if verplaats:
-        shutil.move(str(bron), str(doel))
-    elif bron.is_dir() and not bron.is_symlink():
-        shutil.copytree(bron, doel, symlinks=True)
-    else:
-        shutil.copy2(bron, doel, follow_symlinks=False)
+        try:
+            os.rename(bron, doel)  # op dezelfde schijf: in één keer, niets half
+            return doel
+        except OSError as e:
+            if e.errno != errno.EXDEV:
+                raise
+    # Eerst onder een verborgen tijdelijke naam; pas als alles er is, krijgt hij zijn echte naam.
+    # Gaat het mis (schijf vol, stick eruit, venster dicht), dan blijft er geen halve kopie achter.
+    tijdelijk = vrije_naam(doelmap / f".{doel.name}.bugos-bezig")
+    try:
+        if bron.is_dir() and not bron.is_symlink():
+            shutil.copytree(bron, tijdelijk, symlinks=True)
+        else:
+            shutil.copy2(bron, tijdelijk, follow_symlinks=False)
+        os.rename(tijdelijk, doel)
+    except BaseException:
+        ruim_op(tijdelijk)
+        raise
+    if verplaats:  # naar een andere schijf: het origineel pas weg als de kopie helemaal klaar is
+        if bron.is_dir() and not bron.is_symlink():
+            shutil.rmtree(bron)
+        else:
+            bron.unlink()
     return doel
+
+
+def ruim_op(pad: Path) -> None:
+    """Haal een halve kopie weg (stil: er was al een fout)."""
+    try:
+        if pad.is_dir() and not pad.is_symlink():
+            shutil.rmtree(pad, ignore_errors=True)
+        else:
+            pad.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 class Klus(QThread):
@@ -688,6 +739,7 @@ QWidget#computer_binnen {{ background: transparent; }}
 QFrame#kaart {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-radius: 16px; }}
 QFrame#schijfrij {{ background: transparent; border-radius: 12px; }}
 QFrame#schijfrij:hover {{ background: {K['knop']}; }}
+QFrame#schijfrij:focus {{ border: 2px solid {K['accent']}; }}
 QFrame#schijfrij[leeg="true"]:hover {{ background: transparent; }}
 QPushButton#legenda {{ background: transparent; border: none; border-radius: 10px; padding: 5px 10px 5px 6px;
     text-align: left; font-size: 14px; font-weight: 400; color: {K['tekst']}; }}
@@ -747,6 +799,10 @@ class SchijfRij(QFrame):
             self.setProperty("leeg", "true")
         else:
             self.setCursor(Qt.CursorShape.PointingHandCursor)
+            # Ook met het toetsenbord: Tab erheen, Enter of spatie opent hem. Schermlezers lezen de naam voor.
+            self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+            self.setAccessibleName(naam)
+            self.setAccessibleDescription(uitleg)
         self.setMinimumHeight(60)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(14, 8, 10, 8)
@@ -791,6 +847,12 @@ class SchijfRij(QFrame):
             self.geklikt.emit()
         super().mouseReleaseEvent(e)
 
+    def keyPressEvent(self, e) -> None:  # noqa: N802
+        if e.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space) and self.focusPolicy() != Qt.FocusPolicy.NoFocus:
+            self.geklikt.emit()
+            return
+        super().keyPressEvent(e)
+
 
 def stip_icoon(kleur_: QColor, hol: bool = False) -> QIcon:
     """Een rond gekleurd stipje voor de uitleg bij de ruimtebalk (hol = een rondje, voor 'Vrij')."""
@@ -821,6 +883,7 @@ class Bestanden(Venster):
         self.huidig = thuis()
         self.in_prullenbak = False
         self.klus: Klus | None = None
+        self.sluit_na_klus = False
         self.laatst_weg: list[tuple[Path, Path]] = []
         self.in_computer = False                 # de pagina 'Deze computer' staat open
         self.lijst_schijven: list[Schijf] = []   # USB-sticks en andere schijven
@@ -1282,6 +1345,14 @@ class Bestanden(Venster):
         balk.plaats(QRect(self.stapel.mapTo(self, QPoint(0, 0)), self.stapel.size()))
 
     def closeEvent(self, e) -> None:  # noqa: N802
+        if self.klus and self.klus.isRunning():
+            # Nooit midden in het kopiëren stoppen: wacht tot het klaar is en sluit dan vanzelf.
+            self.sluit_na_klus = True
+            self.melding.toon(t("Even wachten: het kopiëren is nog bezig. Daarna gaat het venster vanzelf dicht.",
+                                "One moment: copying is still busy. The window closes by itself afterwards."),
+                              seconden=0)
+            e.ignore()
+            return
         self.apparaten.stop()
         self.voorbeelden.stop()
         STOP.set()
@@ -1441,6 +1512,8 @@ class Bestanden(Venster):
                                 f"Done: {gelukt} {'item' if gelukt == 1 else 'items'} {'moved' if knip else 'copied'}."), "goed")
         if knip:
             QApplication.clipboard().clear()
+        if self.sluit_na_klus:
+            QTimer.singleShot(0, self.close)
 
     # ------------------------------------------------------------ vragen
     def vraag_tekst(self, titel: str, vraag: str, tekst: str, ok: str = "") -> str | None:
@@ -1479,7 +1552,7 @@ class Bestanden(Venster):
             self.melding.toon(t("Een naam mag geen / bevatten.", "A name cannot contain /."), "fout")
             return
         doel = oud.with_name(nieuw)
-        if doel.exists():
+        if doel.exists() or doel.is_symlink():  # ook een kapotte snelkoppeling niet overschrijven
             self.melding.toon(t(f"Er staat al iets met de naam '{nieuw}'.", f"Something named '{nieuw}' already exists."), "fout")
             return
         try:
@@ -1540,28 +1613,40 @@ class Bestanden(Venster):
                               knop=t("Ongedaan maken", "Undo"), actie=self.ongedaan, seconden=10)
 
     def ongedaan(self) -> None:
+        mislukt = 0
         for bestand, info in self.laatst_weg:
             try:
                 terugzetten(bestand, info)
             except OSError:
-                pass
+                mislukt += 1
         self.laatst_weg = []
-        self.melding.toon(t("Teruggezet.", "Restored."), "goed")
+        if mislukt:
+            self.melding.toon(t(f"{mislukt} {'ding kon' if mislukt == 1 else 'dingen konden'} niet terug. "
+                                "Kijk in de prullenbak.",
+                                f"{mislukt} {'item' if mislukt == 1 else 'items'} could not be restored. "
+                                "Look in the trash."), "fout")
+        else:
+            self.melding.toon(t("Teruggezet.", "Restored."), "goed")
 
     # ------------------------------------------------------ prullenbak
     def zet_terug(self) -> None:
         if not self.in_prullenbak:
             return
         sel = self.lijst.selectionModel().selectedIndexes()
-        n = 0
+        n = mislukt = 0
         for i in sel:
             try:
                 terugzetten(Path(i.data(PAD_ROL)), Path(i.data(INFO_ROL)))
                 n += 1
             except OSError:
-                pass
+                mislukt += 1
         self.open_prullenbak(geschiedenis=False)
-        if n:
+        if mislukt:
+            self.melding.toon(t(f"{n} teruggezet, {mislukt} {'lukte' if mislukt == 1 else 'lukten'} niet "
+                                "(is de plek waar het stond er nog, en mag je daar schrijven?).",
+                                f"{n} restored, {mislukt} could not be restored "
+                                "(does the original place still exist, and may you write there?)."), "fout")
+        elif n:
             self.melding.toon(t(f"{n} {'ding' if n == 1 else 'dingen'} teruggezet.", f"{n} {'item' if n == 1 else 'items'} restored."), "goed")
 
     def leegmaken(self) -> None:
@@ -1569,9 +1654,15 @@ class Bestanden(Venster):
                          t("Alles in de prullenbak wordt echt weggegooid. Dit kan niet ongedaan worden.",
                            "Everything in the trash will be deleted for good. This cannot be undone."),
                          t("Leegmaken", "Empty")):
-            prullenbak_legen()
+            mislukt = prullenbak_legen()
             self.open_prullenbak(geschiedenis=False)
-            self.melding.toon(t("De prullenbak is leeg.", "The trash is empty."), "goed")
+            if mislukt:
+                self.melding.toon(t(f"{mislukt} {'ding kon' if mislukt == 1 else 'dingen konden'} niet weg. "
+                                    "Ze staan nog in de prullenbak.",
+                                    f"{mislukt} {'item' if mislukt == 1 else 'items'} could not be deleted. "
+                                    "They are still in the trash."), "fout")
+            else:
+                self.melding.toon(t("De prullenbak is leeg.", "The trash is empty."), "goed")
 
     # --------------------------------------------- schijven en USB-sticks
     def schijf_uitleg(self, x: Schijf) -> str:
@@ -1735,8 +1826,11 @@ class Bestanden(Venster):
                   vrij_spel and not x.op_slot and x.fs in MAX_NAAM)
             actie("vink", t("Controleren en repareren", "Check and repair"), lambda: self.repareer_schijf(x),
                   vrij_spel and not x.op_slot)
-            actie("prullenbak", t("Leegmaken (alles wissen)…", "Erase (delete everything)…"),
-                  lambda: self.leegmaak_schijf(x), vrij_spel, "fout")
+            # Alleen voor schijven die je eruit kunt halen: nooit per ongeluk de Windows-schijf of een
+            # andere interne schijf wissen (daarvoor is Schijfbeheer, voor gevorderden).
+            if x.los:
+                actie("prullenbak", t("Leegmaken (alles wissen)…", "Erase (delete everything)…"),
+                      lambda: self.leegmaak_schijf(x), vrij_spel, "fout")
         if x.los:
             m.addSeparator()
             actie("uitwerpen", t("Veilig verwijderen", "Safely remove"), lambda: self.uitwerpen(x.station), vrij_spel)
@@ -1793,6 +1887,15 @@ class Bestanden(Venster):
                                f"Everything on '{x.naam}' will be erased. This cannot be undone.\n\n"
                                "Afterwards it is empty and works on any computer (Windows and Mac too)."),
                              t("Alles wissen", "Erase everything")):
+            return
+        # Zit precies dezelfde schijf er nog in? (Er kan intussen een andere stick in zitten.)
+        nu = next((s for s in schijven() if s.apparaat == x.apparaat), None)
+        if not x.los or nu is None or (nu.station, nu.grootte, nu.naam, nu.udisks_deel) != (
+                x.station, x.grootte, x.naam, x.udisks_deel):
+            self.melding.toon(t(f"'{x.naam}' zit er niet meer in. Er is niets gewist.",
+                                f"'{x.naam}' is no longer there. Nothing was erased."), "fout")
+            self._zijbalk_sleutels = None
+            self.vul_zijbalk()
             return
         naam = x.naam if len(x.naam) <= 15 and "(" not in x.naam else t("USB-stick", "USB stick")
         self.beheer(x, leegmaak_stappen(x, naam),

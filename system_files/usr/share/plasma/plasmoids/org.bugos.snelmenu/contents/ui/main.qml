@@ -30,6 +30,8 @@ PlasmoidItem {
         }
     }
     function voerUit(cmd) { opdracht.connectSource(cmd) }
+    // De opdracht gaat via een shell: zet elke waarde tussen enkele aanhalingstekens (zoals het startmenu).
+    function aanhalen(tekst) { return "'" + String(tekst).replace(/'/g, "'\\''") + "'" }
 
     Component.onCompleted: voerUit("bugos-start-data --snel")
     onExpandedChanged: if (expanded) voerUit("bugos-start-data --snel")
@@ -78,10 +80,10 @@ PlasmoidItem {
             // Wit op een rode (aan) tegel, anders gewoon de tekstkleur (zoals overal).
             color: wit ? "white" : Kirigami.Theme.textColor
         }
-        onZet: (wat, waarde) => root.voerUit("bugos-start-data --zet " + wat + " " + waarde)
+        onZet: (wat, waarde) => root.voerUit("bugos-start-data --zet " + root.aanhalen(wat) + " " + root.aanhalen(waarde))
         onOpen: wat => {
             // "instellingen" = de startpagina van BugOS Instellingen, anders één pagina (wifi, geluid, ...)
-            root.voerUit(wat === "instellingen" ? "bugos-instellingen" : "bugos-instellingen " + wat)
+            root.voerUit(wat === "instellingen" ? "bugos-instellingen" : "bugos-instellingen " + root.aanhalen(wat))
             root.expanded = false
         }
     }

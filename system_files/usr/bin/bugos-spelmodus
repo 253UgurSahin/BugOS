@@ -17,9 +17,12 @@ STOREN_MARKER="$BUGOS_CONFIG/niet-storen-voor-spelmodus"
 ENVFILE="${XDG_CONFIG_HOME:-$HOME/.config}/environment.d/90-bugos-spelmodus.conf"
 
 aan() {
+    # Staat hij al aan? Dan niets doen: anders onthouden we "volle kracht" en "niet storen" als hoe
+    # het eerst was, en zet 'uit' ze nooit meer terug.
+    [ -f "$MARKER" ] && return 0
     mkdir -p "$BUGOS_CONFIG" "$(dirname "$ENVFILE")"
-    powerprofilesctl get >"$BUGOS_CONFIG/stroomprofiel-voor-spelmodus" 2>/dev/null
-    powerprofilesctl set performance 2>/dev/null
+    stroomprofiel_get >"$BUGOS_CONFIG/stroomprofiel-voor-spelmodus"
+    stroomprofiel_zet performance
     # Melding eerst, anders wordt hij door 'niet storen' meteen stilgehouden.
     melding "$(t "Game-modus staat aan" "Game mode is on")" \
         "$(t "Volle kracht, meldingen stil, FPS-teller in games." "Full power, notifications muted, FPS counter in games.")"
@@ -32,8 +35,9 @@ aan() {
 
 uit() {
     local vorig
-    vorig="$(cat "$BUGOS_CONFIG/stroomprofiel-voor-spelmodus" 2>/dev/null || echo balanced)"
-    powerprofilesctl set "$vorig" 2>/dev/null
+    vorig="$(cat "$BUGOS_CONFIG/stroomprofiel-voor-spelmodus" 2>/dev/null)"
+    [ -n "$vorig" ] || vorig=balanced
+    stroomprofiel_zet "$vorig"
     # Niet storen alleen uitzetten als het door de game-modus aan is gegaan.
     if [ "$(cat "$STOREN_MARKER" 2>/dev/null)" != aan ]; then
         niet_storen_uit

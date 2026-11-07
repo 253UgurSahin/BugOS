@@ -38,21 +38,23 @@ case "$BESTAND" in
     ;;
 esac
 [ -z "$NAAM" ] && NAAM="$(basename "$BESTAND")"
+# De meldingen lezen \n als nieuwe regel (printf %b): een \ in de naam moet dus dubbel.
+TOON="${NAAM//\\/\\\\}"
 
 # Stap 1: staat het in de Winkel?
 GEVONDEN="$(flatpak search --columns=application "$NAAM" 2>/dev/null | head -n1)"
 if [ -n "$GEVONDEN" ] && [ "$GEVONDEN" != "No matches found" ]; then
     if vraag "$(t \
-        "\"$NAAM\" staat ook in de BugOS Winkel. Dat is veiliger en krijgt vanzelf updates.\n\nWil je het uit de Winkel halen?" \
-        "\"$NAAM\" is also in the BugOS Store. That is safer and updates automatically.\n\nDo you want to get it from the Store?")"; then
+        "\"$TOON\" staat ook in de BugOS Winkel. Dat is veiliger en krijgt vanzelf updates.\n\nWil je het uit de Winkel halen?" \
+        "\"$TOON\" is also in the BugOS Store. That is safer and updates automatically.\n\nDo you want to get it from the Store?")"; then
         exec bugos-winkel "appstream://$GEVONDEN"
     fi
 fi
 
 # Stap 2: in een doosje installeren.
 vraag "$(t \
-    "Wil je \"$NAAM\" installeren?\n\nBugOS zet het in een veilig doosje. Daarna staat het gewoon in je startmenu." \
-    "Do you want to install \"$NAAM\"?\n\nBugOS puts it in a safe box. Afterwards it is in your start menu.")" || exit 0
+    "Wil je \"$TOON\" installeren?\n\nBugOS zet het in een veilig doosje. Daarna staat het gewoon in je startmenu." \
+    "Do you want to install \"$TOON\"?\n\nBugOS puts it in a safe box. Afterwards it is in your start menu.")" || exit 0
 
 melding "$(t "Bezig met installeren..." "Installing...")" \
     "$(t "Dit kan een paar minuten duren. Je mag gewoon doorwerken." "This can take a few minutes. You can keep working.")"
@@ -64,19 +66,24 @@ if ! distrobox list 2>/dev/null | grep -q " $DOOS "; then
     }
 fi
 
+# De bestandsnaam gaat als los argument ($1) mee, nooit in de opdrachttekst zelf: een naam als
+# 'app$(…).rpm' of met een " erin kan dan niets uitvoeren of de installatie breken.
 if [ "$SOORT" = rpm ]; then
-    INSTALL="sudo dnf install -y \"$BESTAND\""
+    # shellcheck disable=SC2016  # $1 is voor de bash in het doosje
+    INSTALL='sudo dnf install -y "$1"'
 else
-    INSTALL="sudo apt-get update && sudo apt-get install -y \"$BESTAND\""
+    # shellcheck disable=SC2016
+    INSTALL='sudo apt-get update && sudo apt-get install -y "$1"'
 fi
 
 # Programma's van dit pakket naar het startmenu brengen.
-EXPORT="for d in \$( (rpm -qlp \"$BESTAND\" 2>/dev/null || dpkg-deb -c \"$BESTAND\" 2>/dev/null | awk '{print \$6}') | grep -E 'share/applications/.*\\.desktop\$'); do distrobox-export --app \"\$(basename \"\$d\" .desktop)\"; done"
+# shellcheck disable=SC2016
+EXPORT='for d in $( (rpm -qlp "$1" 2>/dev/null || dpkg-deb -c "$1" 2>/dev/null | awk '\''{print $6}'\'') | grep -E '\''share/applications/.*\.desktop$'\''); do distrobox-export --app "$(basename "$d" .desktop)"; done'
 
-if distrobox enter "$DOOS" -- bash -c "$INSTALL && $EXPORT" >/dev/null 2>&1; then
-    melding "$(t "Klaar!" "Done!")" "$(t "\"$NAAM\" staat nu in je startmenu." "\"$NAAM\" is now in your start menu.")"
+if distrobox enter "$DOOS" -- bash -c "$INSTALL && $EXPORT" bugos-pakket "$BESTAND" >/dev/null 2>&1; then
+    melding "$(t "Klaar!" "Done!")" "$(t "\"$TOON\" staat nu in je startmenu." "\"$TOON\" is now in your start menu.")"
 else
-    fout "$(t "Het installeren van \"$NAAM\" is niet gelukt. Je computer is niet veranderd." \
-        "Installing \"$NAAM\" did not work. Your computer has not changed.")"
+    fout "$(t "Het installeren van \"$TOON\" is niet gelukt. Je computer is niet veranderd." \
+        "Installing \"$TOON\" did not work. Your computer has not changed.")"
     exit 1
 fi

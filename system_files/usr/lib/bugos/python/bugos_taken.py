@@ -32,7 +32,17 @@ APP_EENHEID = re.compile(r"^app-(?:(?:flatpak|gnome|kde|snap|dbus)-)?(?P<id>.+?)
 BESCHERMD = {"kwin_wayland", "kwin_x11", "plasmashell", "ksmserver", "kded6", "kded5", "plasma_session",
              "Xwayland", "systemd", "dbus-broker", "dbus-daemon", "startplasma-wayland", "startplasma-x11",
              "polkit-kde-authentication-agent-1", "xdg-desktop-portal", "xdg-desktop-portal-kde", "pipewire",
-             "wireplumber", "pipewire-pulse", "bugos-taakbeheer", "sddm", "sddm-helper"}
+             "wireplumber", "pipewire-pulse", "bugos-taakbeheer", "sddm", "sddm-helper", "kwin_wayland_wrapper"}
+# De kernel bewaart een procesnaam (comm) in maximaal 15 tekens: "xdg-desktop-portal-kde" heet daar
+# "xdg-desktop-por". Vergelijk dus op die ingekorte naam, anders herkennen we lange namen nooit.
+BESCHERMD_KORT = {naam[:15] for naam in BESCHERMD}
+# Ook alles wat in een eenheid van het bureaublad zelf draait (plasma-*.service) of in de inlogsessie
+# (session-*.scope, daar draait startplasma) hoort bij BugOS: stoppen sluit alle vensters.
+# En wat de sessie onder water nodig heeft: de berichtenbus (dbus/dbus-broker, en wat die zelf start:
+# dbus-:<id>-<naam>.service), het gebruikersbeheer (init.scope: systemd --user en (sd-pam)),
+# toegankelijkheid voor schermlezers (at-spi), instellingen (dconf) en de Flatpak-portalen (xdg-*).
+BESCHERMDE_EENHEID = re.compile(r"^(plasma-.+\.service|session-[^/]+\.scope|init\.scope|dbus(-broker)?\.service"
+                                r"|dbus-:.+\.service|at-spi-dbus-bus\.service|dconf\.service|xdg-.+\.service)$")
 BEKENDE_NAMEN = {  # achtergrond: gewone woorden in plaats van programmanamen
     "plasmashell": ("Bureaublad (Plasma)", "Desktop (Plasma)"),
     "kwin_wayland": ("Vensters (KWin)", "Windows (KWin)"),
@@ -346,7 +356,8 @@ def groepeer(lijst: list[Proces], procent: dict[int, float]) -> list[Taak]:
         taak.processor += procent.get(p.pid, 0.0)
         taak.geheugen += p.geheugen
         taak.eigen = taak.eigen and p.eigen
-        if p.naam in BESCHERMD or p.pid == eigen_pid or soort == "systeem":
+        if (p.naam[:15] in BESCHERMD_KORT or p.pid == eigen_pid or soort == "systeem"
+                or BESCHERMDE_EENHEID.match(eenheid)):
             taak.beschermd = True
     return sorted(taken.values(), key=lambda x: (x.soort != "app", x.naam.lower()))
 
@@ -441,23 +452,56 @@ def opstart_lijst() -> list[Opstart]:
     return sorted(lijst, key=lambda x: x.naam.lower())
 
 
+ALLEEN_UIT = "[Desktop Entry]\nHidden=true\n"  # wat wij neerzetten om een systeem-programma uit te zetten
+
+
+def met_hidden(tekst: str, waarde: str) -> str:
+    """Zet alleen de regel Hidden= in [Desktop Entry]; de rest (ook commentaar en eigen Exec) blijft precies zo."""
+    regels = tekst.splitlines()
+    groep, invoeg = "", None
+    for i, regel in enumerate(regels):
+        kaal = regel.strip()
+        if kaal.startswith("[") and kaal.endswith("]"):
+            groep = kaal
+            if groep == "[Desktop Entry]":
+                invoeg = i + 1
+            continue
+        if groep == "[Desktop Entry]" and kaal.split("=", 1)[0].strip() == "Hidden":
+            regels[i] = f"Hidden={waarde}"
+            return "\n".join(regels) + "\n"
+    if invoeg is None:
+        return f"[Desktop Entry]\nHidden={waarde}\n" + tekst
+    regels.insert(invoeg, f"Hidden={waarde}")
+    return "\n".join(regels) + "\n"
+
+
+def schrijf_veilig(pad: Path, tekst: str) -> None:
+    """Eerst naar een tijdelijk bestand, dan in één keer op zijn plek: nooit een half bestand."""
+    tijdelijk = pad.with_name(f".{pad.name}.bugos-nieuw")
+    tijdelijk.write_text(tekst, encoding="utf-8")
+    os.replace(tijdelijk, pad)
+
+
 def zet_opstart(item: Opstart, aan: bool) -> None:
-    """Aan of uit, alleen voor jou (in ~/.config/autostart). Het origineel blijft heel."""
+    """Aan of uit, alleen voor jou (in ~/.config/autostart). Het origineel blijft heel, en een eigen
+    aangepaste versie (andere opdracht, extra opties) ook: we veranderen alleen 'Hidden'."""
     map_ = config_thuis() / "autostart"
     map_.mkdir(parents=True, exist_ok=True)
     pad = map_ / item.bestand
-    if item.van_systeem:
-        if aan:
-            pad.unlink(missing_ok=True)  # dan geldt het origineel weer
-        else:
-            pad.write_text("[Desktop Entry]\nHidden=true\n", encoding="utf-8")
+    try:
+        eigen = pad.read_text(encoding="utf-8")
+    except OSError:
+        eigen = None
+    if item.van_systeem and eigen is None:
+        if not aan:
+            schrijf_veilig(pad, ALLEEN_UIT)
         return
-    c = lees_bureaublad(pad)
-    if c is None:
+    if item.van_systeem and aan and eigen.strip() == ALLEEN_UIT.strip():
+        pad.unlink(missing_ok=True)  # alleen ons eigen 'uit'-briefje: weg ermee, dan geldt het origineel weer
         return
-    c["Desktop Entry"]["Hidden"] = "false" if aan else "true"
-    with open(pad, "w", encoding="utf-8") as f:
-        c.write(f, space_around_delimiters=False)
+    if eigen is None:
+        return
+    schrijf_veilig(pad, met_hidden(eigen, "false" if aan else "true"))
 
 
 # ================================================================ maten ===

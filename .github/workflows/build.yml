@@ -73,6 +73,22 @@ jobs:
         run: QT_QPA_PLATFORM=offscreen python3 tools/test_instellingen.py
       - name: Startmenu-gegevens testen (apps, instellingen zoeken, snelmenu-status; met nep-programma's)
         run: python3 tools/test_start_data.py
+      - name: Pakket installeren testen (rare bestandsnamen voeren niets uit; met nep-programma's)
+        run: bash tools/test_pakket.sh
+      - name: Game-modus testen (twee keer aan, dan uit zet alles terug; met nep-programma's)
+        run: bash tools/test_spelmodus.sh
+      - name: Lichte stand testen (uit zet je eigen instellingen terug; met nep-programma's)
+        run: bash tools/test_lichte_stand.sh
+      - name: Taakbalk instellen testen (lukt het niet, dan volgende keer opnieuw; met nep-programma's)
+        run: bash tools/test_paneel.sh
+      - name: Windows-programma openen testen (rare namen, mislukte Wine-start; met nep-programma's)
+        run: bash tools/test_exe.sh
+      - name: "'Er werkt iets niet' testen (nakijken en repareren op de achtergrond)"
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_hulp.py
+      - name: Overstappen op ondertekende updates testen (met een nep-rpm-ostree)
+        run: bash tools/test_ondertekend.sh
+      - name: Back-up testen (ruimte, maken en terugzetten; met tijdelijke mappen)
+        run: python3 tools/test_backup.py
       - name: Uitzetscherm testen (laadt het, en kloppen de knoppen per situatie)
         run: |
           if [ -f tools/test_uitzetscherm.py ]; then
@@ -88,16 +104,18 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      HEEFT_SLEUTEL: ${{ secrets.SIGNING_SECRET != '' && 'ja' || 'nee' }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - variant: main
             image: bugos
-            base: ghcr.io/ublue-os/kinoite-main:latest
+            base: ghcr.io/ublue-os/kinoite-main:44
           - variant: nvidia
             image: bugos-nvidia
-            base: ghcr.io/ublue-os/kinoite-nvidia:latest
+            base: ghcr.io/ublue-os/kinoite-nvidia:44
     steps:
       - uses: actions/checkout@v4
 
@@ -139,5 +157,27 @@ jobs:
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login ghcr.io -u "${{ github.actor }}" --password-stdin
           for tag in ${TAGS}; do
-            sudo podman push localhost/${{ matrix.image }}:build "${REGISTRY}/${{ matrix.image }}:${tag}"
+            sudo podman push --digestfile /tmp/digest localhost/${{ matrix.image }}:build "${REGISTRY}/${{ matrix.image }}:${tag}"
           done
+          echo "DIGEST=$(cat /tmp/digest)" >> "$GITHUB_ENV"
+
+      # Ondertekenen: computers met BugOS installeren alleen een update met deze handtekening
+      # (zie build_files/build.sh, "Ondertekende updates"). De sleutel staat als geheim in GitHub
+      # (SIGNING_SECRET, gemaakt met "cosign generate-key-pair"); zonder dat geheim slaan we dit over.
+      - name: Ondertekenen hulpmiddel (cosign)
+        if: github.event_name != 'pull_request' && env.HEEFT_SLEUTEL == 'ja'
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Ondertekenen
+        if: github.event_name != 'pull_request'
+        env:
+          REGISTRY: ${{ steps.meta.outputs.registry }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+          COSIGN_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+        run: |
+          if [ -z "${COSIGN_PRIVATE_KEY}" ]; then
+            echo "::warning::Geen SIGNING_SECRET: deze BugOS is niet ondertekend. Zie docs/ONDERTEKENEN.md."
+            exit 0
+          fi
+          echo "${{ secrets.GITHUB_TOKEN }}" | cosign login ghcr.io -u "${{ github.actor }}" --password-stdin
+          cosign sign -y --key env://COSIGN_PRIVATE_KEY "${REGISTRY}/${{ matrix.image }}@${DIGEST}"

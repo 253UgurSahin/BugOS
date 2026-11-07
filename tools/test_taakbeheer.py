@@ -128,6 +128,32 @@ klopt(taken["Bureaublad (Plasma)"].beschermd and taken["Bureaublad (Plasma)"].so
       "groeperen: het bureaublad heeft een gewone naam en kan niet per ongeluk dicht")
 klopt(taken["Netwerk"].soort == "systeem" and taken["Netwerk"].beschermd, "groeperen: systeem (Netwerk) beschermd")
 klopt(next(x for x in m["taken"]).soort == "app", "volgorde: eerst de programma's")
+# Lange namen kort de kernel in tot 15 tekens; die moeten toch beschermd zijn.
+SESSIE = f"{GEBRUIKER}/session.slice"
+lang = [bt.Proces(400, "xdg-desktop-por", 1, 1, 1, True, f"{SESSIE}/xdg-desktop-portal-kde.service"),
+        bt.Proces(401, "polkit-kde-auth", 1, 1, 1, True, f"{SESSIE}/plasma-polkit-agent.service"),
+        bt.Proces(402, "kwin_wayland_wr", 1, 1, 1, True, f"{SESSIE}/plasma-kwin_wayland.service"),
+        bt.Proces(403, "startplasma-way", 1, 1, 1, True, "/user.slice/user-1000.slice/session-2.scope"),
+        bt.Proces(404, "spotify", 1, 1, 1, True, f"{SESSIE}/spotify-helper.service")]
+beschermd = {x.pids[0]: x.beschermd for x in bt.groepeer(lang, {})}
+klopt(all(beschermd[p] for p in (400, 401, 402, 403)) and not beschermd[404],
+      "beschermd: ook lange namen (xdg-desktop-portal-kde, kwin_wayland_wrapper, startplasma) en plasma-diensten")
+# B002: de rest van wat de sessie nodig heeft (gezien in de echte BugOS live-sessie, met hun eenheden).
+GEB = "/user.slice/user-1000.slice/user@1000.service"
+kern = [bt.Proces(500, "dbus-broker-lau", 1, 1, 1, True, f"{GEB}/session.slice/dbus-broker.service"),
+        bt.Proces(501, "(sd-pam)", 1, 1, 1, True, f"{GEB}/init.scope"),
+        bt.Proces(502, "at-spi-bus-laun", 1, 1, 1, True, f"{GEB}/session.slice/at-spi-dbus-bus.service"),
+        bt.Proces(503, "at-spi2-registr", 1, 1, 1, True,
+                  f"{GEB}/session.slice/dbus-:1.28-org.a11y.atspi.Registry@0.service"),
+        bt.Proces(504, "dconf-service", 1, 1, 1, True, f"{GEB}/session.slice/dconf.service"),
+        bt.Proces(505, "xdg-document-po", 1, 1, 1, True, f"{GEB}/app.slice/xdg-document-portal.service"),
+        bt.Proces(506, "xdg-permission-", 1, 1, 1, True, f"{GEB}/app.slice/xdg-permission-store.service"),
+        bt.Proces(507, "ssh-agent", 1, 1, 1, True, f"{GEB}/app.slice/ssh-agent.service"),
+        bt.Proces(508, "kdeconnectd", 1, 1, 1, True, f"{GEB}/app.slice/app-org.kde.kdeconnect.daemon@autostart.service")]
+beschermd = {x.pids[0]: x.beschermd for x in bt.groepeer(kern, {})}
+klopt(all(beschermd[p] for p in range(500, 507)),
+      "beschermd: sessie-berichtenbus, gebruikersbeheer, toegankelijkheid, dconf en de Flatpak-portalen")
+klopt(not beschermd[507] and not beschermd[508], "niet beschermd: gewone achtergrondhulpjes (ssh-agent, KDE Connect)")
 
 # 5. advies in gewone woorden
 klopt(bt.advies([10, 20, 30], 4, 16, m["taken"])[0] == "goed", "advies: rustig -> 'Alles loopt soepel'")
@@ -163,6 +189,19 @@ klopt(not (eigen / "discord.desktop").exists() and {x.naam: x for x in bt.opstar
 bt.zet_opstart(lijst["Notities"], False)
 klopt("Hidden=true" in (eigen / "notities.desktop").read_text() and "Exec=notities" in (eigen / "notities.desktop")
       .read_text(), "opstarten uit (eigen programma): Hidden=true, de rest blijft")
+# Een eigen aangepaste versie van een systeem-programma (andere opdracht, commentaar) blijft heel.
+aangepast = "# mijn eigen versie\n[Desktop Entry]\nType=Application\nName=Discord\nExec=discord --start-minimized\n"
+schrijf(eigen / "discord.desktop", aangepast)
+d = {x.naam: x for x in bt.opstart_lijst()}["Discord"]
+bt.zet_opstart(d, False)
+tekst = (eigen / "discord.desktop").read_text()
+klopt("Exec=discord --start-minimized" in tekst and "# mijn eigen versie" in tekst and "Hidden=true" in tekst,
+      "opstarten uit (eigen aangepaste versie): eigen opdracht en commentaar blijven, alleen Hidden=true erbij")
+bt.zet_opstart({x.naam: x for x in bt.opstart_lijst()}["Discord"], True)
+tekst = (eigen / "discord.desktop").read_text()
+klopt((eigen / "discord.desktop").exists() and "Exec=discord --start-minimized" in tekst and "Hidden=false" in tekst,
+      "opstarten weer aan (eigen aangepaste versie): het bestand blijft, met Hidden=false")
+klopt(not list(eigen.glob(".*bugos-nieuw")), "opstarten: geen tijdelijke bestanden achtergebleven")
 
 # 8. het venster (zonder scherm)
 lader = importlib.machinery.SourceFileLoader("taakbeheer", str(ROOT / "system_files" / "usr" / "bin" /
@@ -202,6 +241,30 @@ try:
     app.processEvents()
     rijen = venster.paginas["opstarten"].findChildren(tb.OpstartRij)
     klopt(len(rijen) == 2, "venster: Opstarten toont de programma's met een schuifje")
+    # Sluiten mag het venster niet laten vastlopen, ook als KWin traag antwoordt.
+    import time as _tijd  # noqa: E402
+    _gestopt: list = []
+    tb.Taakbeheer.sluit_vensters = staticmethod(lambda pids: (_tijd.sleep(1.5), True)[1])
+    _oud_stop = tb.bt.stop
+    tb.bt.stop = lambda pids, hard=False: _gestopt.append((sorted(pids), hard)) or len(pids)
+    begin = _tijd.monotonic()
+    venster.sluiten(venster.rijen[firefox_sleutel].taak)
+    klopt(_tijd.monotonic() - begin < 0.5, "sluiten: het venster loopt niet vast terwijl KWin de vensters sluit")
+    while venster.draden and _tijd.monotonic() - begin < 10:
+        app.processEvents()
+        _tijd.sleep(0.02)
+    klopt(not venster.draden and "wordt gesloten" in venster.programmas.melding.tekst.text(),
+          "sluiten: daarna de melding 'wordt gesloten'")
+    # 'Geforceerd sluiten' kijkt pas bij het klikken welke processen er nu bij horen.
+    venster.forceren_sleutel("bestaat-niet-meer", "Weg")
+    klopt("al gesloten" in venster.programmas.melding.tekst.text() and not _gestopt,
+          "geforceerd sluiten: programma is intussen weg, dan wordt er niets gestopt")
+    venster.forceren_sleutel(firefox_sleutel, "Firefox webbrowser")
+    while venster.draden and _tijd.monotonic() - begin < 20:
+        app.processEvents()
+        _tijd.sleep(0.02)
+    klopt(_gestopt == [([100, 101], True)], "geforceerd sluiten: precies de processen die er nu bij Firefox horen")
+    tb.bt.stop = _oud_stop
 finally:
     venster.close()  # stopt ook het meten op de achtergrond
 

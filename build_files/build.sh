@@ -167,6 +167,31 @@ cat >/etc/xdg/fastfetch/config.jsonc <<'EOF'
 }
 EOF
 
+# Ondertekende updates. GitHub ondertekent elke BugOS met cosign (build.yml,
+# "Ondertekenen"). Staat de bijbehorende openbare sleutel in deze repo
+# (system_files/etc/pki/containers/bugos.pub), dan installeren computers alleen
+# nog een update met die handtekening: wie stiekem een ander beeld in GitHub
+# Packages zet, komt er niet in. Zonder sleutel (nog niet ingesteld) blijft
+# alles zoals het was; zie docs/ONDERTEKENEN.md.
+SLEUTEL=/etc/pki/containers/bugos.pub
+if [ -s "$SLEUTEL" ]; then
+    BEELD_BRON="ostree-image-signed:docker://ghcr.io/253ugursahin/${BEELD_ID}"
+    # Regel voor onze plek in GitHub Packages; de rest van policy.json (ook die van
+    # Universal Blue) blijft zoals hij is.
+    jq --arg sleutel "$SLEUTEL" '.transports.docker["ghcr.io/253ugursahin"] =
+        [{"type": "sigstoreSigned", "keyPath": $sleutel, "signedIdentity": {"type": "matchRepository"}}]' \
+        /etc/containers/policy.json >/tmp/policy.json
+    install -m0644 /tmp/policy.json /etc/containers/policy.json
+    rm -f /tmp/policy.json
+    mkdir -p /etc/containers/registries.d
+    printf 'docker:\n  ghcr.io/253ugursahin:\n    use-sigstore-attachments: true\n' \
+        >/etc/containers/registries.d/bugos.yaml
+    systemctl enable bugos-ondertekend.service
+else
+    BEELD_BRON="ostree-unverified-registry:ghcr.io/253ugursahin/${BEELD_ID}"
+    echo "LET OP: geen $SLEUTEL; updates worden niet op een handtekening gecontroleerd (zie docs/ONDERTEKENEN.md)."
+fi
+
 # Wat ujust en de andere Universal Blue-hulpjes over "dit systeem" lezen.
 # Daar stond kinoite-main; dan zou bijvoorbeeld "ujust rebase-helper" de
 # computer naar kaal Kinoite kunnen omzetten.
@@ -176,7 +201,7 @@ cat >/usr/share/ublue-os/image-info.json <<EOF
   "image-name": "${BEELD_ID}",
   "image-flavor": "${BUGOS_VARIANT}",
   "image-vendor": "253ugursahin",
-  "image-ref": "ostree-unverified-registry:ghcr.io/253ugursahin/${BEELD_ID}",
+  "image-ref": "${BEELD_BRON}",
   "image-tag": "latest",
   "base-image-name": "kinoite",
   "fedora-version": "$(. /usr/lib/os-release && echo "${VERSION_ID}")"
