@@ -92,6 +92,8 @@ jobs:
         run: bash tools/test_windows_start.sh
       - name: Randgevallen testen (rare namen, pictogrammen, alles laadt, bouwregels)
         run: QT_QPA_PLATFORM=offscreen python3 tools/test_edges.py
+      - name: OS-systeem testen (updates, ontwikkelaar, taal, lichte stand, game-modus, diensten; met nep-programma's)
+        run: bash tools/test_os_system.sh
       - name: "'Er werkt iets niet' testen (nakijken en repareren op de achtergrond)"
         run: QT_QPA_PLATFORM=offscreen python3 tools/test_help.py
       - name: Overstappen op ondertekende updates testen (met een nep-rpm-ostree)
