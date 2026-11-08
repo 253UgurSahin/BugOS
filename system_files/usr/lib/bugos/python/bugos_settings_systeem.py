@@ -202,9 +202,18 @@ class UpdatesPagina(Blad):
         if code in (126, 127):
             # pkexec: 126 = je klikte Annuleren, 127 = geen toestemming.
             self.melding.toon(t("Niets gedaan: er was geen toestemming.", "Nothing done: permission was not given."))
+        elif wat == "terug" and code == 3:
+            # bugos-updates: er is nog geen vorige versie (dat zegt het zelf, in de taal van de gebruiker)
+            regels = [r.strip() for r in uit.splitlines() if r.strip()]
+            self.melding.toon(regels[-1] if regels else t("Er is nog geen vorige versie.",
+                                                          "There is no previous version yet."))
         elif code != 0:
             self.melding.toon(t("Dat lukte niet. Ben je online? Probeer het later nog eens.",
                                 "That did not work. Are you online? Try again later."), "fout", seconden=0)
+        elif wat == "nu" and "bugos-update-klaar" in uit:
+            self.melding.toon(t("Er staat al een nieuwe BugOS klaar. Start de computer opnieuw op om hem te gebruiken.",
+                                "A new BugOS is already waiting. Restart the computer to use it."),
+                              "goed", t("Nu opnieuw opstarten", "Restart now"), herstart, seconden=0)
         elif wat == "nu" and "No upgrade available" in uit:
             self.melding.toon(t("BugOS is al helemaal bij.", "BugOS is already up to date."), "goed")
         else:

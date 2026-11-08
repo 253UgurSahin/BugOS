@@ -49,6 +49,12 @@ nu)
     mislukt=0
     rpm-ostree upgrade || mislukt=1
     flatpak update --system --noninteractive --assumeyes || true
+    # Stond er al een nieuwere versie klaar (bijv. vannacht vanzelf opgehaald)? Dan zegt rpm-ostree
+    # "No upgrade available", maar moet je wel opnieuw opstarten. Dat geven we door aan Instellingen.
+    if [ "$mislukt" = 0 ] && rpm-ostree status --json 2>/dev/null | jq -e '(.deployments[] | select(.booted)
+        | .timestamp) as $nu | .deployments[0] | (.booted == false and (.timestamp // 0) > ($nu // 0))' >/dev/null 2>&1; then
+        echo "bugos-update-klaar"
+    fi
     exit "$mislukt"
     ;;
 terug)
@@ -59,6 +65,12 @@ terug)
         t "Dat staat al klaar. Start de computer opnieuw op om terug te gaan." \
             "That is already set. Restart the computer to go back."
         exit 0
+    fi
+    # Is er nog geen vorige versie (net geïnstalleerd)? Dan valt er niets terug te zetten: zeg dat (code 3).
+    if [ "$(rpm-ostree status --json 2>/dev/null | jq '.deployments | length' 2>/dev/null)" = 1 ]; then
+        t "Er is nog geen vorige versie. Die komt er na de eerste update." \
+            "There is no previous version yet. There will be one after the first update."
+        exit 3
     fi
     rpm-ostree rollback || exit 1
     # Gaan updates vanzelf, dan zou BugOS de nieuwe versie (waar je net vanaf wilde) meteen weer klaarzetten.

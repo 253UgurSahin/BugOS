@@ -72,6 +72,18 @@ echo UPDATES=hand >"$TMP/etc-bugos/updates.conf"
 rm -f "$TMP/systemctl"
 draai bugos-updates terug
 klopt '[ ! -f "$TMP/systemctl" ] && ! grep -q "no longer automatic" "$TMP/uit"' "updates terug (zelf updaten): verder niets aangepast"
+# U041: geen vorige versie -> zeggen (code 3), niet "mislukt"; "nu" met een al klaarstaande update -> doorgeven.
+printf '{"deployments":[{"booted":true,"timestamp":2000}]}' >"$TMP/status.json"
+rm -f "$TMP/rollback"
+draai bugos-updates terug
+klopt '[ $code -eq 3 ] && [ ! -f "$TMP/rollback" ] && grep -q "no previous version" "$TMP/uit"' "U041: terug zonder vorige versie: zegt dat (code 3)"
+nep rpm-ostree 'case "$1" in status) cat "'"$TMP"'/status.json";; upgrade) echo "No upgrade available.";; esac'
+printf '{"deployments":[{"booted":false,"timestamp":3000},{"booted":true,"timestamp":2000}]}' >"$TMP/status.json"
+draai bugos-updates nu
+klopt '[ $code -eq 0 ] && grep -qx bugos-update-klaar "$TMP/uit"' "U041: nu, terwijl er al een nieuwere versie klaarstaat: dat wordt doorgegeven"
+printf '{"deployments":[{"booted":true,"timestamp":2000},{"booted":false,"timestamp":1000}]}' >"$TMP/status.json"
+draai bugos-updates nu
+klopt '! grep -q bugos-update-klaar "$TMP/uit"' "U041: nu, niets klaar: niets doorgegeven"
 nep systemctl 'exit 0'
 kopie bugos-updates
 

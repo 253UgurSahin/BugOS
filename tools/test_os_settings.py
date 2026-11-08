@@ -268,6 +268,12 @@ mislukt = update_proef("nu", 1)
 gelukt = update_proef("nu", 0)
 herstart_knop = upd.melding.knop.isVisibleTo(upd.melding)
 terug_tekst = update_proef("terug", 0)   # nep-pkexec zegt "uitvoer van terug": dat moet Instellingen tonen
+geen_vorige = update_proef("terug", 3)   # bugos-updates: er is nog geen vorige versie
+(nep_pk / "pkexec").write_text(f'#!/usr/bin/bash\necho "$2" >>"{nep_pk}/gedaan"\necho bugos-update-klaar\n'
+                               f'exit "$(cat "{nep_pk}/code")"\n')
+al_klaar = update_proef("nu", 0)
+(nep_pk / "pkexec").write_text(f'#!/usr/bin/bash\necho "$2" >>"{nep_pk}/gedaan"\necho "uitvoer van $2"\n'
+                               f'exit "$(cat "{nep_pk}/code")"\n')
 geannuleerd = update_proef("terug", 126)
 upd.auto.setChecked(False)        # jij zet 'Updates vanzelf' uit, en klikt dan Annuleren bij het wachtwoord
 for _ in range(200):
@@ -307,8 +313,12 @@ klopt(any("FPS" in x and ("meteen" in x or "at once" in x) for x in _teksten),
 klopt("lukte niet" in mislukt, "U006: 'Nu updaten' mislukt: dat zegt Instellingen ook")
 klopt("opnieuw op" in gelukt and herstart_knop, "U006: 'Nu updaten' gelukt: klaar, met een knop om opnieuw op te starten")
 klopt("toestemming" in geannuleerd, "U006: Annuleren bij het wachtwoord: niets gedaan")
+klopt(geen_vorige == "uitvoer van terug" and "online" not in geen_vorige,
+      "U041: 'Terug' zonder vorige versie: Instellingen zegt wat bugos-updates zegt, niet 'Ben je online?'")
+klopt("klaar" in al_klaar and "opnieuw op" in al_klaar,
+      "U041: 'Nu updaten' terwijl er al een update klaarstaat: zegt 'staat al klaar, start opnieuw op'")
 klopt(terug_tekst == "uitvoer van terug", "U033: na 'Terug' toont Instellingen wat bugos-updates zegt (bijv. dat updates nu uit staan)")
-klopt(upd.auto.isChecked() and (nep_pk / "gedaan").read_text().split()[:5] == ["nu", "nu", "terug", "terug", "hand"],
+klopt(upd.auto.isChecked() and (nep_pk / "gedaan").read_text().split()[:7] == ["nu", "nu", "terug", "terug", "nu", "terug", "hand"],
       "U006: Annuleren bij 'Updates vanzelf' uit: de schakelaar springt terug")
 
 
