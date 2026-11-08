@@ -117,8 +117,10 @@ verify: build an image and open each BugOS app once (Files, Settings, Task Manag
 - B003 fixed in 4c4ffbf, see bugs.md
 - B005 fixed in 2c653c9, see bugs.md
 - B004 fixed in 8780e30 (your option 1), see bugs.md
-- The image build itself (podman build + bootc container lint) was not run here: it needs a big runner.
-  The build.sh split and the renamed icons are the parts to watch in the first build.
+- B006 fixed in 3e39404 (a side effect of the A033 fix: a stick with both folders showed twice), see bugs.md
+- B007 fixed in 85233e4, see bugs.md
+- The real image was built and tested here (tools/test_image.sh, 73 checks, all pass; bootc container lint passes). See test-plan.md, F18.
+- The image build was run here later, in /forge-test: build.sh with system.sh and style.sh works, the renamed icons are in place (test-plan.md, F18).
 - tools/screenshots/studio.py: the welcome scene sometimes crashes on exit ("pure virtual method called"),
   before and after these changes; its run function never closes the window, so a thread is still alive.
 - Settings demo mode: the Wi-Fi card says "Not connected" because the demo network is "Home" but the sample list says "Thuis".

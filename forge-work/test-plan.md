@@ -1,6 +1,6 @@
 # Test plan: BugOS
 
-Build: 8780e30  Date: 2026-11-07  Profile: none (a Linux system image; website: static)  PWA: no
+Build: 85233e4 (website: 8780e30)  Date: 2026-11-07  Profile: none (a Linux system image; website: static)  PWA: no
 Runs against: the BugOS apps in this container (Qt offscreen, fake programs, temporary folders) and the
 website at http://localhost:8080 (`python3 -m http.server 8080 --directory website`). scope.py: exit 0 (localhost)
 
@@ -68,6 +68,12 @@ log out.
 | F15-N1 | ISO build (A035) | negative | tags "x;id", "$(id)", "a b", backticks | refused; "latest" and branch names work | unit | pass (test_edges) |
 | F16-N1 | install .rpm/.deb | negative | strange file names | nothing runs | unit | pass (test_package) |
 | F17-H1 | game mode, light mode, taskbar, log out | happy | on twice then off; off restores; retry; buttons per situation | | unit | pass (test_game_mode, test_light_mode, test_panel, test_logout) |
+| F03-E4 | files from Windows (B006) | edge | a stick with both BugOS-Switch and BugOS-Overstap | listed once, with the new folder | unit | pass (B006 fixed) |
+| F06-E2 | Settings (B007) | edge | sample mode, the Wi-Fi card | connected to a network from the sample list | unit | pass (B007 fixed) |
+| F18-H1 | the built image | happy | build the real image (Containerfile, base kinoite-main:44) | build.sh, system.sh and style.sh run; bootc container lint passes | manual | pass (12 checks, 2 warnings from Fedora packages) |
+| F18-H2 | | happy: what the build put in place | tools/test_image.sh inside the image | os-release BugOS, logo, permissions, launchers and icons, services, update settings, the look, everything loads | unit | pass (57 checks) |
+| F18-H3 | | happy: the repo tests on Fedora | the 16 test files inside the image | all pass with Fedora's own Qt, KDE, rsync and Plasma QML | unit | pass |
+| F18-H4 | | happy: the apps on screen | photo studio inside the image: 8 apps, light and dark | every app opens and looks right | manual | pass (16 screenshots looked at; found B006, B007) |
 | M01 | install | manual | build the image, make the ISO, install in a VM and on a real PC | BugOS starts, app icons show, apps open | manual | for you |
 | M02 | screen reader | manual | Orca on BugOS: Files, Settings, Welcome | every button and row is read out | manual | for you |
 
@@ -76,8 +82,10 @@ auto: `e2e` (a Playwright spec), `unit` (the project's own tests in tools/) or `
 
 ## Not tested
 
-- The image build (podman build, bootc container lint) and the ISO: they need a big runner and the base
-  image. The first build after merging is the test for the build.sh split and the renamed icons.
+- The image was built here (docker, the normal variant, not Nvidia), with the session's proxy and its
+  certificate added for the build only and removed again before bootc container lint. Not tested: the
+  Nvidia variant, the ISO, and starting the image as a computer (no virtual machine here).
+- The Store screenshots have no app icons: the real photo studio first downloads them from Flathub.
 - Real hardware, Nvidia and Secure Boot, a real Windows PC, a screen reader: see the manual cases.
 - The apps' look on screen: tools/screenshots/studio.py made pixel-identical screenshots before and after
   the A034 split (forge-work/improve.md); no new screenshots in this round.
@@ -85,9 +93,9 @@ auto: `e2e` (a Playwright spec), `unit` (the project's own tests in tools/) or `
 
 ## Result
 
-Cases: 46 in the plan. 40 run automatically (13 e2e, 27 unit): 40 passed, 0 failed, 0 skipped. 6 manual cases are for you.
-Behind the unit cases: 400 checks in 16 test files, all passed, plus shellcheck, the compile check,
+Cases: 52 in the plan. 46 run (13 e2e, 31 unit, 2 manual by me in the built image): 46 passed, 0 failed, 0 skipped. 6 manual cases are for you.
+Behind the unit cases: 406 checks in 16 test files, all passed (here and inside the built image), plus 73 checks of tools/test_image.sh in the image, plus shellcheck, the compile check,
 the makers and the GTK check.
-Bugs (the counts `../forge-test/bugs.py` prints): 0 critical, 0 high, 2 medium, 3 low;
-0 open, 5 fixed, 0 wontfix.
+Bugs (the counts `../forge-test/bugs.py` prints): 0 critical, 0 high, 3 medium, 4 low;
+0 open, 7 fixed, 0 wontfix.
 `python3 ../forge-test/bugs.py forge-work/bugs.md`: exit 0.
