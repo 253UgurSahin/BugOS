@@ -195,6 +195,13 @@ klopt '! grep -q "^Type=oneshot" "$SD/system/bugos-first-boot.service"' \
     "eerste start: geen oneshot (het opstarten wacht dan op het downloaden en opnieuw proberen)"
 klopt 'grep -q "^Restart=on-failure" "$SD/system/bugos-first-boot.service"' "eerste start: probeert het later opnieuw"
 klopt 'sd_goed "$SD/system/bugos-first-boot.service"' "eerste start: systemd kan de dienst lezen"
+# U021: elke dag op de klok, ook op laptops die slapen (een dag "na de vorige keer" telt niet door in slaap).
+for klok in "$SD/system/bugos-update-apps.timer" "$SD/user/bugos-updatecheck.timer"; do
+    naam="$(basename "$klok")"
+    klopt 'grep -q "^OnCalendar=daily" "$klok" && grep -q "^Persistent=true" "$klok" &&
+        ! grep -qE "^OnUnit(In)?[Aa]ctiveSec=" "$klok"' "$naam: elke dag op de klok, en inhalen als hij gemist is"
+    klopt 'sd_goed "$klok" "${klok%.timer}.service"' "$naam: systemd kan hem lezen"
+done
 
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
