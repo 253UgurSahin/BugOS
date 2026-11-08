@@ -290,7 +290,13 @@ def scherm_uit_na() -> int:
     # Staat 'scherm uitzetten' helemaal uit, dan is het 'nooit' (welke tijd er ook staat).
     if _c.kde_lees_groepen("powerdevilrc", ["AC", "Display"], "TurnOffDisplayWhenIdle", "true") == "false":
         return 0
-    return _energie_getal("Display", "TurnOffDisplayIdleTimeoutSec", 600)
+    seconden = _energie_getal("Display", "TurnOffDisplayIdleTimeoutSec", 600)
+    if seconden <= 0:
+        # Zo schreef een oudere BugOS 'nooit' weg, maar KDE zet het scherm dan toch na 30 s uit.
+        # Je koos 'nooit': dat zetten we nu goed, zodat het ook echt nooit is.
+        zet_scherm_uit_na(0)
+        return 0
+    return seconden
 
 
 def zet_scherm_uit_na(seconden: int) -> None:

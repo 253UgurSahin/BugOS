@@ -84,6 +84,10 @@ _, na = vang(bi.scherm_uit_na, antwoord=lambda c: (0, "false" if "TurnOffDisplay
 klopt(na == 0, "U001: staat uitzetten uit, dan leest Instellingen 'nooit'")
 _, na = vang(bi.scherm_uit_na, antwoord=lambda c: (0, "true" if "TurnOffDisplayWhenIdle" in c else "300"))
 klopt(na == 300, "U001: staat uitzetten aan, dan de tijd")
+opdr, na = vang(bi.scherm_uit_na, antwoord=lambda c: (0, "true" if "WhenIdle" in c else "0"))
+s = kde_sleutels(opdr)
+klopt(na == 0 and s.get(("AC/Display", "TurnOffDisplayWhenIdle")) == "false",
+      "U001: 'nooit' van een oudere BugOS (tijd 0, uitzetten nog aan) wordt bij het lezen goed gezet")
 
 
 # U002: inloggen zonder wachtwoord op Fedora 44 (Plasma Login); SDDM alleen als Plasma Login er niet is.
