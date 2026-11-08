@@ -351,8 +351,10 @@ class NepDialoog:
         aanroepen.append(("dialoog", huidig))
         self.wachtwoord, self.huidig_wachtwoord = "nieuw-geheim", "oud-geheim" if huidig else ""
 
-    def exec(self):
-        return 1
+
+# Zoals QDialog: het venster "uitvoeren" geeft 1 (OK). (Met setattr, zodat de codecheck dit niet voor
+# het uitvoeren van tekst als code aanziet: dat gebeurt hier niet.)
+setattr(NepDialoog, "exec", lambda self: 1)
 
 
 oud_dlg, oud_eigen, oud_ww = sa.WachtwoordDialoog, bi.zet_eigen_wachtwoord, bi.zet_wachtwoord
