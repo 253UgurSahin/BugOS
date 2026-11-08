@@ -14,7 +14,7 @@ from pathlib import Path
 
 from bugos_ui import lijn_icoon, t
 from bugos_files_plekken import INFO_ROL, PAD_ROL, thuis
-from bugos_files_acties import Klus, naar_prullenbak, prullenbak_legen, terugzetten, vrije_naam, zelfde_schijf
+from bugos_files_acties import Klus, achter_uitleg, naar_prullenbak, prullenbak_legen, terugzetten, vrije_naam, zelfde_schijf
 from PySide6.QtCore import QMimeData, QTimer, QUrl
 from PySide6.QtWidgets import QApplication, QInputDialog, QLabel, QMenu, QMessageBox
 
@@ -101,12 +101,15 @@ class Bewerken:
         self.klus.voortgang.connect(lambda i, n: self.melding.toon(
             t(f"Bezig met {'verplaatsen' if knip else 'kopiëren'}: {i + 1} van {n}…", f"{'Moving' if knip else 'Copying'}: {i + 1} of {n}…"),
             seconden=0))
-        self.klus.klaar.connect(lambda gelukt, fout: self._klus_klaar(gelukt, fout, knip))
+        klus = self.klus
+        self.klus.klaar.connect(lambda gelukt, fout: self._klus_klaar(gelukt, fout, knip, klus.achter))
         self.klus.start()
 
-    def _klus_klaar(self, gelukt: int, fout: str, knip: bool) -> None:
+    def _klus_klaar(self, gelukt: int, fout: str, knip: bool, achter: list | None = None) -> None:
         if fout:
             self.melding.toon(t(f"Niet alles lukte: {fout}", f"Not everything worked: {fout}"), "fout", seconden=12)
+        elif achter:  # bijv. een naam met ':' op een USB-stick: de rest staat er wel
+            self.melding.toon(achter_uitleg(achter, knip), "let_op", seconden=0)
         else:
             self.melding.toon(t(f"Klaar: {gelukt} {'ding' if gelukt == 1 else 'dingen'} {'verplaatst' if knip else 'gekopieerd'}.",
                                 f"Done: {gelukt} {'item' if gelukt == 1 else 'items'} {'moved' if knip else 'copied'}."), "goed")

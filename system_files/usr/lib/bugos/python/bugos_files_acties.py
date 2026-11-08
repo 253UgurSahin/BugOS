@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import errno
 import os
+import re
 import shutil
 import urllib.parse
 from datetime import datetime
@@ -146,8 +147,89 @@ def prullenbak_legen() -> int:
     return mislukt
 
 
-def kopieer_een(bron: Path, doelmap: Path, verplaats: bool) -> Path | None:
-    """Kopieer of verplaats één ding naar 'doelmap'. Nooit overschrijven; nooit een map in zichzelf."""
+# Een USB-stick (FAT/exFAT) kent niet alles wat je computer kent. Dat zijn geen echte fouten:
+# - een naam met : ? * " < > | (of te lang): dat ene bestand kan er niet op, de rest wel;
+# - een bestand groter dan 4 GB op FAT32;
+# - een snelkoppeling (symlink): die kan zo'n stick niet bewaren;
+# - de rechten (wie mag lezen, chmod): die kan zo'n stick niet onthouden. De inhoud staat er dan gewoon.
+NAAM_FOUTEN = (errno.EINVAL, errno.EILSEQ, errno.ENAMETOOLONG)
+RECHTEN_FOUTEN = (errno.EPERM, errno.ENOTSUP, errno.EACCES)
+
+
+class KopieFout(OSError):
+    """Een echte fout bij het kopiëren, met de uitleg al in gewone woorden (in strerror)."""
+
+
+def _foutnummer(tekst: str) -> int | None:
+    """copytree bewaart van elke fout alleen de tekst ('[Errno 22] Invalid argument: ...'): haal het nummer eruit."""
+    m = re.match(r"\[Errno (\d+)\]", tekst)
+    return int(m.group(1)) if m else None
+
+
+def _reden(nummer: int | None, bron: str) -> str | None:
+    """Waarom kon dit ene ding niet mee? None = een echte fout (schijf vol, stick eruit)."""
+    if nummer in NAAM_FOUTEN:
+        return t("de naam heeft een teken dat deze schijf niet kent (zoals : ? * of \")",
+                 "the name has a character this drive does not allow (like : ? * or \")")
+    if nummer == errno.EFBIG:
+        return t("groter dan 4 GB, en dat past niet op deze schijf", "larger than 4 GB, which this drive cannot store")
+    if nummer in RECHTEN_FOUTEN and os.path.islink(bron):
+        return t("een snelkoppeling, en die kan deze schijf niet bewaren", "a shortcut, which this drive cannot store")
+    return None
+
+
+def leesbare_fout(nummer: int | None, wat: str) -> str:
+    """Een fout in gewone woorden, zonder Python-lijstjes."""
+    if nummer == errno.ENOSPC:
+        uitleg = t("de schijf is vol", "the drive is full")
+    elif nummer in (errno.EIO, errno.ENODEV, errno.ENXIO, errno.ENOENT):
+        uitleg = t("de schijf reageert niet meer (is hij eruit gehaald?)", "the drive stopped responding (was it unplugged?)")
+    elif nummer:
+        uitleg = os.strerror(nummer)
+    else:
+        uitleg = t("er ging iets mis", "something went wrong")
+    return t(f"'{wat}' lukte niet: {uitleg}.", f"'{wat}' did not work: {uitleg}.")
+
+
+def _kopieer_bestand(bron: Path, doel: Path) -> None:
+    """Eén bestand kopiëren met inhoud en datum. Kan de schijf de rechten niet bewaren, dan is dat goed zo."""
+    shutil.copyfile(bron, doel, follow_symlinks=False)
+    try:
+        shutil.copystat(bron, doel, follow_symlinks=False)
+    except OSError as e:
+        if e.errno not in RECHTEN_FOUTEN:
+            raise
+
+
+def _bekijk_fouten(fouten: list, bron: Path, tijdelijk: Path, achter: list) -> None:
+    """Loop de fouten van copytree na. Wat de schijf alleen niet kan bewaren, komt in 'achter';
+    is er één echte fout bij, dan gaat de hele kopie weg (dat doet de beller)."""
+    for fout in fouten:
+        if not (isinstance(fout, tuple) and len(fout) == 3):
+            raise KopieFout(errno.EIO, leesbare_fout(None, bron.name))
+        van, naar, tekst = (str(x) for x in fout)
+        nummer = _foutnummer(tekst)
+        if nummer in RECHTEN_FOUTEN and os.path.lexists(naar) and not os.path.islink(van):
+            try:  # alleen de rechten of de datum: de inhoud staat er wel (even groot = helemaal)
+                if os.path.isdir(van) or os.path.getsize(van) == os.path.getsize(naar):
+                    continue
+            except OSError:
+                pass
+        reden = _reden(nummer, van)
+        if reden is None:
+            raise KopieFout(nummer or errno.EIO, leesbare_fout(nummer, bron.name))
+        if os.path.lexists(naar):
+            ruim_op(Path(naar))  # half bestand (te groot): weg, het staat in de lijst
+        rel = os.path.relpath(van, bron)
+        achter.append((Path(van), bron.name if rel == "." else f"{bron.name}/{rel}", reden))
+
+
+def kopieer_een(bron: Path, doelmap: Path, verplaats: bool, achter: list | None = None) -> Path | None:
+    """Kopieer of verplaats één ding naar 'doelmap'. Nooit overschrijven; nooit een map in zichzelf.
+
+    Kan de schijf een paar bestanden niet bewaren (een naam met ':' op een stick), dan komt de rest wel
+    over en staan die bestanden in 'achter' als (pad, naam, reden). Bij verplaatsen blijven ze op de oude plek."""
+    achter = [] if achter is None else achter
     if bron.is_dir() and zit_in(doelmap, bron):
         raise ValueError(t(f"'{bron.name}' kan niet in zichzelf.", f"'{bron.name}' cannot go inside itself."))
     if verplaats and bron.parent.resolve() == doelmap.resolve():
@@ -162,22 +244,62 @@ def kopieer_een(bron: Path, doelmap: Path, verplaats: bool) -> Path | None:
                 raise
     # Eerst onder een verborgen tijdelijke naam; pas als alles er is, krijgt hij zijn echte naam.
     # Gaat het mis (schijf vol, stick eruit, venster dicht), dan blijft er geen halve kopie achter.
+    # Alleen wat de schijf niet kan bewaren (zie NAAM_FOUTEN) blijft achter, en dat zeggen we erbij.
     tijdelijk = vrije_naam(doelmap / f".{doel.name}.bugos-bezig")
+    hier = len(achter)
     try:
         if bron.is_dir() and not bron.is_symlink():
-            shutil.copytree(bron, tijdelijk, symlinks=True)
+            try:
+                shutil.copytree(bron, tijdelijk, symlinks=True)
+            except shutil.Error as e:
+                _bekijk_fouten(list(e.args[0]) if e.args and isinstance(e.args[0], list) else [None],
+                               bron, tijdelijk, achter)
         else:
-            shutil.copy2(bron, tijdelijk, follow_symlinks=False)
+            _kopieer_bestand(bron, tijdelijk)
         os.rename(tijdelijk, doel)
+    except OSError as e:
+        ruim_op(tijdelijk)
+        reden = _reden(e.errno, str(bron))
+        if reden is None or len(achter) > hier:
+            del achter[hier:]  # alles is weg, dus ook niets 'achtergebleven'
+            raise
+        achter.append((bron, bron.name, reden))  # het hele ding kan er niet op (bijv. de naam zelf)
+        return None
     except BaseException:
         ruim_op(tijdelijk)
         raise
     if verplaats:  # naar een andere schijf: het origineel pas weg als de kopie helemaal klaar is
         if bron.is_dir() and not bron.is_symlink():
-            shutil.rmtree(bron)
+            if len(achter) > hier:
+                weg_behalve(bron, [p for p, _n, _r in achter[hier:]])
+            else:
+                shutil.rmtree(bron)
         else:
             bron.unlink()
     return doel
+
+
+def weg_behalve(map_: Path, bewaar: list[Path]) -> None:
+    """Gooi een verplaatste map weg, maar laat staan wat niet mee kon (en de mappen eromheen)."""
+    def bewaren(p: Path) -> bool:
+        return any(p == b or b in p.parents for b in bewaar)
+
+    for wortel, mappen, bestanden in os.walk(map_, topdown=False):
+        for naam in bestanden + [m for m in mappen if os.path.islink(os.path.join(wortel, m))]:
+            p = Path(wortel) / naam
+            if not bewaren(p):
+                p.unlink(missing_ok=True)
+        for naam in mappen:
+            p = Path(wortel) / naam
+            if not p.is_symlink() and not bewaren(p):
+                try:
+                    p.rmdir()  # alleen als hij leeg is
+                except OSError:
+                    pass
+    try:
+        map_.rmdir()
+    except OSError:
+        pass
 
 
 def ruim_op(pad: Path) -> None:
@@ -200,14 +322,30 @@ class Klus(QThread):
     def __init__(self, bronnen: list[Path], doelmap: Path, verplaats: bool):
         super().__init__()
         self.bronnen, self.doelmap, self.verplaats = bronnen, doelmap, verplaats
+        self.achter: list[tuple[Path, str, str]] = []  # wat de schijf niet kon bewaren: (pad, naam, reden)
 
     def run(self) -> None:
         gelukt, fout = 0, ""
         for i, bron in enumerate(self.bronnen):
             self.voortgang.emit(i, len(self.bronnen))
             try:
-                kopieer_een(bron, self.doelmap, self.verplaats)
-                gelukt += 1
-            except (OSError, ValueError, shutil.Error) as e:
+                if kopieer_een(bron, self.doelmap, self.verplaats, self.achter) is not None:
+                    gelukt += 1
+            except ValueError as e:
                 fout = str(e)
+            except (OSError, shutil.Error) as e:
+                fout = e.strerror if isinstance(e, KopieFout) else \
+                    leesbare_fout(e.errno if isinstance(e, OSError) else None, bron.name)
         self.klaar.emit(gelukt, fout)
+
+
+def achter_uitleg(achter: list[tuple[Path, str, str]], verplaats: bool) -> str:
+    """'2 bestanden konden niet mee: ...' in gewone woorden (de eerste paar met de reden)."""
+    n = len(achter)
+    regels = [f"'{naam}': {reden}" for _p, naam, reden in achter[:3]]
+    if n > 3:
+        regels.append(t(f"en nog {n - 3}", f"and {n - 3} more"))
+    lijst = "; ".join(regels)
+    plek = t(" Ze staan nog op de oude plek.", " They are still in their old place.") if verplaats else ""
+    return t(f"{n} {'bestand kon' if n == 1 else 'bestanden konden'} niet mee: {lijst}. De rest staat er wel.{plek}",
+             f"{n} {'file' if n == 1 else 'files'} could not go along: {lijst}. Everything else is there.{plek}")

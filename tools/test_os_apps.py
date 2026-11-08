@@ -1,0 +1,197 @@
+#!/usr/bin/env python3
+"""Test van de fixes in de BugOS-apps (Bestanden, Back-up, Overstap, Winkel, Welkom, schermlezers, vertalen).
+
+Alles gebeurt in een tijdelijke map met een nep-thuismap; je echte bestanden worden niet aangeraakt.
+Gebruik:  QT_QPA_PLATFORM=offscreen python3 tools/test_os_apps.py
+"""
+
+from __future__ import annotations
+
+import errno
+import importlib.machinery
+import importlib.util
+import os
+import shutil
+import stat
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "system_files" / "usr" / "lib" / "bugos" / "python"))
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+TMP = Path(tempfile.mkdtemp(prefix="bugos-os-apps-test-"))
+THUIS = TMP / "thuis"
+os.environ["HOME"] = str(THUIS)
+os.environ["XDG_DATA_HOME"] = str(THUIS / ".local" / "share")
+os.environ["XDG_CONFIG_HOME"] = str(THUIS / ".config")
+os.environ["BUGOS_LSBLK"] = ""  # geen echte schijven in de test
+os.environ["LC_ALL"] = "nl_NL.UTF-8"  # de test kijkt naar de Nederlandse teksten
+os.environ.pop("LANGUAGE", None)
+(THUIS / ".config").mkdir(parents=True)
+
+
+def laad(naam: str, programma: str):
+    lader = importlib.machinery.SourceFileLoader(naam, str(ROOT / "system_files" / "usr" / "bin" / programma))
+    spec = importlib.util.spec_from_loader(naam, lader)
+    m = importlib.util.module_from_spec(spec)
+    sys.modules[naam] = m  # nodig voor @dataclass
+    lader.exec_module(m)
+    return m
+
+
+b = laad("bestanden", "bugos-files")
+import bugos_files_acties as acties  # noqa: E402
+fouten = 0
+
+
+def klopt(voorwaarde: bool, wat: str) -> None:
+    global fouten
+    print(("OK    " if voorwaarde else "FOUT  ") + wat)
+    if not voorwaarde:
+        fouten += 1
+
+
+def stick_map(naam: str) -> Path:
+    p = TMP / naam
+    p.mkdir()
+    return p
+
+
+# ============================================ U003: een stick die niet alles kan bewaren ===
+# Wat FAT/exFAT doen: een naam met ':' geeft EINVAL, en chmod naar rechten die hij niet kent geeft EPERM.
+_echt_copyfile, _echt_chmod, _echt_rename = shutil.copyfile, os.chmod, os.rename
+STICK = stick_map("stick")
+
+
+def nep_stick(aan: bool) -> None:
+    def copyfile(s, d, *a, **k):
+        if str(d).startswith(str(STICK)) and ":" in os.path.basename(d):
+            raise OSError(errno.EINVAL, "Invalid argument", str(d))
+        return _echt_copyfile(s, d, *a, **k)
+
+    def chmod(p, mode, *a, **k):
+        if str(p).startswith(str(STICK)) and stat.S_IMODE(mode) & 0o044 != 0o044:
+            raise PermissionError(errno.EPERM, "Operation not permitted", str(p))
+        return _echt_chmod(p, mode, *a, **k)
+
+    shutil.copyfile = copyfile if aan else _echt_copyfile
+    os.chmod = chmod if aan else _echt_chmod
+
+
+def eerste_rename_andere_schijf() -> None:
+    """Het verplaatsen zelf zegt 'andere schijf' (EXDEV); daarna werkt rename gewoon."""
+    keer = []
+
+    def rename(a, c):
+        if not keer:
+            keer.append(1)
+            raise OSError(errno.EXDEV, "Invalid cross-device link")
+        return _echt_rename(a, c)
+
+    os.rename = rename
+
+
+vakantie = THUIS / "Vakantie"
+vakantie.mkdir(parents=True)
+for i in range(3):
+    (vakantie / f"foto{i}.jpg").write_text(f"foto {i}")
+(vakantie / "Meeting 10:30.docx").write_text("x")
+nep_stick(True)
+achter: list = []
+try:
+    kopie = b.kopieer_een(vakantie, STICK, verplaats=False, achter=achter)
+    fout = ""
+except Exception as e:  # noqa: BLE001
+    kopie, fout = None, f"{type(e).__name__}: {e}"
+klopt(kopie == STICK / "Vakantie" and sorted(p.name for p in kopie.iterdir()) == ["foto0.jpg", "foto1.jpg", "foto2.jpg"],
+      f"U003: map met één naam die de stick niet kent: de rest komt er wel op {fout}")
+klopt([naam for _p, naam, _r in achter] == ["Vakantie/Meeting 10:30.docx"],
+      "U003: het bestand dat niet mee kon, staat in het lijstje (met de map ervoor)")
+uitleg = acties.achter_uitleg(achter, False)
+klopt("Meeting 10:30.docx" in uitleg and "De rest staat er wel" in uitleg and "Errno" not in uitleg
+      and "[(" not in uitleg, f"U003: de melding is gewone taal: {uitleg!r}")
+klopt(not any(p.name.endswith(".bugos-bezig") for p in STICK.iterdir()), "U003: geen tijdelijke map achtergebleven")
+
+# rechten die een stick niet kan bewaren (een 0600-bestand, een 0700-map): de inhoud gaat gewoon mee
+geheim = THUIS / "Geheim"
+geheim.mkdir()
+(geheim / "rekening.pdf").write_text("geld")
+os.chmod(geheim / "rekening.pdf", 0o600)
+os.chmod(geheim, 0o700)
+try:
+    los = b.kopieer_een(geheim / "rekening.pdf", STICK, verplaats=False)
+    hele = b.kopieer_een(geheim, STICK, verplaats=False)
+    fout = ""
+except Exception as e:  # noqa: BLE001
+    los = hele = None
+    fout = f"{type(e).__name__}: {e}"
+klopt(los is not None and los.read_text() == "geld" and hele is not None and (hele / "rekening.pdf").read_text() == "geld",
+      f"U003: een 0600-bestand en een 0700-map gaan mee, ook al kan de stick de rechten niet bewaren {fout}")
+
+# verplaatsen naar de stick: wat niet mee kon, blijft op de oude plek; de rest is verhuisd
+verhuis = THUIS / "Verhuis"
+(verhuis / "binnen").mkdir(parents=True)
+(verhuis / "a.txt").write_text("a")
+(verhuis / "binnen" / "b.txt").write_text("b")
+(verhuis / "binnen" / "kwart?.txt").write_text("?")
+(verhuis / "binnen" / "c:d.txt").write_text("c")
+achter = []
+eerste_rename_andere_schijf()
+try:
+    weg = b.kopieer_een(verhuis, STICK, verplaats=True, achter=achter)
+except Exception as e:  # noqa: BLE001
+    weg = None
+    print("   ", type(e).__name__, e)
+os.rename = _echt_rename
+klopt(weg is not None and (weg / "a.txt").exists() and (weg / "binnen" / "b.txt").exists()
+      and not (weg / "binnen" / "c:d.txt").exists(),
+      "U003: verplaatsen met één naam die niet mag: de rest staat op de stick")
+klopt((verhuis / "binnen" / "c:d.txt").read_text() == "c" and not (verhuis / "a.txt").exists()
+      and not (verhuis / "binnen" / "b.txt").exists() and (verhuis / "binnen" / "kwart?.txt").exists() is False,
+      "U003: verplaatsen: wat niet mee kon, staat nog op de oude plek; de rest is daar weg")
+klopt("oude plek" in acties.achter_uitleg(achter, True),
+      "U003: verplaatsen: de melding zegt dat het nog op de oude plek staat")
+nep_stick(False)
+
+# een echte fout (schijf vol) halverwege: nog steeds geen halve map (de belofte van A011)
+vol = THUIS / "Vol"
+vol.mkdir()
+for i in range(3):
+    (vol / f"f{i}.txt").write_text("x")
+
+
+def schijf_vol(s, d, *a, **k):
+    if os.path.basename(d) == "f1.txt":
+        raise OSError(errno.ENOSPC, "No space left on device", str(d))
+    return _echt_copyfile(s, d, *a, **k)
+
+
+shutil.copyfile = schijf_vol
+voor = sorted(p.name for p in STICK.iterdir())
+try:
+    b.kopieer_een(vol, STICK, verplaats=False)
+    melding = None
+except OSError as e:
+    melding = e.strerror or str(e)
+shutil.copyfile = _echt_copyfile
+klopt(melding is not None and sorted(p.name for p in STICK.iterdir()) == voor,
+      "U003: schijf vol halverwege: niets achtergebleven op de stick, en een fout")
+klopt(melding is not None and "Errno" not in melding and "[(" not in melding and "vol" in melding,
+      f"U003: schijf vol: de fout is gewone taal: {melding!r}")
+
+# de klus op de achtergrond geeft het lijstje door aan het venster
+nep_stick(True)
+klus = b.Klus([vakantie], STICK, False)
+uitslag: list = []
+klus.klaar.connect(lambda g, f: uitslag.append((g, f)))
+klus.run()  # gewoon hier, zonder draad: dan is het meteen klaar
+nep_stick(False)
+klopt(uitslag == [(1, "")] and [n for _p, n, _r in getattr(klus, "achter", [])] == ["Vakantie/Meeting 10:30.docx"],
+      "U003: de klus telt de map als gelukt en onthoudt wat achterbleef")
+
+print()
+shutil.rmtree(TMP, ignore_errors=True)  # alleen onze eigen tijdelijke testmap
+print("Alles goed." if not fouten else f"{fouten} fout(en).")
+sys.exit(1 if fouten else 0)
