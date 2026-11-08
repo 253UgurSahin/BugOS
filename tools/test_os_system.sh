@@ -188,7 +188,9 @@ nep notify-send 'exit 0'
 SD="$ROOT/system_files/usr/lib/systemd"
 sd_goed() {  # geen klachten behalve "programma bestaat hier niet" (dat komt pas in BugOS zelf)
     command -v systemd-analyze >/dev/null 2>&1 || return 0
-    ! systemd-analyze verify --man=no "$@" 2>&1 | grep -v "is not executable" | grep -q .
+    # IPv6, lookup, initialize, connect: meldingen van een container zonder echte systemd, geen fouten in de dienst.
+    ! systemd-analyze verify --man=no "$@" 2>&1 |
+        grep -v -E "is not executable|IPv6|Failed to (lookup|initialize|connect|open)|not running" | grep -q .
 }
 # U020: zonder internet mag de eerste start de computer niet in "bezig met opstarten" houden.
 klopt '! grep -q "^Type=oneshot" "$SD/system/bugos-first-boot.service"' \
