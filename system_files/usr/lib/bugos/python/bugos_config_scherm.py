@@ -163,7 +163,8 @@ def zet_nachtlicht(aan: bool) -> None:
     if _c.VOORBEELD:
         _c._VB["nachtlicht"] = aan
         return
-    _c.draai("kwriteconfig6", "--file", "kwinrc", "--group", "NightColor", "--key", "Active", "true" if aan else "false")
+    # Met --notify (via kde_schrijf), anders ziet KWin het pas na opnieuw inloggen.
+    _c.kde_schrijf("kwinrc", "NightColor", "Active", "true" if aan else "false")
     _c.draai("gdbus", "call", "--session", "--dest", "org.kde.KWin", "--object-path", "/KWin", "--method",
           "org.kde.KWin.reconfigure", timeout=5)
 

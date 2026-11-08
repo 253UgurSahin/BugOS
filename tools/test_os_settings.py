@@ -178,6 +178,12 @@ os.environ["PATH"] = oud_pad
 os.environ.pop("LANGUAGE")
 
 
+# U009: nachtlicht moet KWin het meteen laten weten (--notify), niet pas na opnieuw inloggen.
+opdr, _ = vang(bi.zet_nachtlicht, True)
+klopt(any(c[0] == "kwriteconfig6" and "--notify" in c and "NightColor" in c and c[-1] == "true" for c in opdr),
+      "U009: nachtlicht aan zegt het meteen tegen KWin (--notify)")
+
+
 shutil.rmtree(TMP, ignore_errors=True)
 print()
 print("Alles goed." if not fouten else f"{fouten} fout(en).")
