@@ -101,6 +101,9 @@ class Bewerken:
         self.klus.voortgang.connect(lambda i, n: self.melding.toon(
             t(f"Bezig met {'verplaatsen' if knip else 'kopiëren'}: {i + 1} van {n}…", f"{'Moving' if knip else 'Copying'}: {i + 1} of {n}…"),
             seconden=0))
+        self.klus.wegschrijven.connect(lambda: self.melding.toon(
+            t("Bezig met wegschrijven… Haal de stick er nog niet uit.", "Writing to the stick… Do not unplug it yet."),
+            seconden=0))
         klus = self.klus
         self.klus.klaar.connect(lambda gelukt, fout: self._klus_klaar(gelukt, fout, knip, klus.achter))
         self.klus.start()

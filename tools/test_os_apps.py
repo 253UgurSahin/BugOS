@@ -191,6 +191,53 @@ nep_stick(False)
 klopt(uitslag == [(1, "")] and [n for _p, n, _r in getattr(klus, "achter", [])] == ["Vakantie/Meeting 10:30.docx"],
       "U003: de klus telt de map als gelukt en onthoudt wat achterbleef")
 
+# ============================= U004: verplaatsen naar een stick: eerst echt wegschrijven, dan pas weg ===
+_echt_schrijf_weg = acties.schrijf_weg
+gezien: list = []
+
+
+def kijk_schrijf_weg(pad):
+    gezien.append((Path(pad), (THUIS / "Naar stick" / "a.txt").exists()))
+    return _echt_schrijf_weg(pad)
+
+
+acties.schrijf_weg = kijk_schrijf_weg
+(THUIS / "Naar stick").mkdir()
+(THUIS / "Naar stick" / "a.txt").write_text("a")
+klus = b.Klus([THUIS / "Naar stick"], STICK, True)
+seinen: list = []
+klus.wegschrijven.connect(lambda: seinen.append("wegschrijven"))
+klus.klaar.connect(lambda g, f: seinen.append(("klaar", g, f)))
+eerste_rename_andere_schijf()
+klus.run()
+os.rename = _echt_rename
+acties.schrijf_weg = _echt_schrijf_weg
+klopt(gezien == [(STICK / "Naar stick", True)] and not (THUIS / "Naar stick").exists()
+      and (STICK / "Naar stick" / "a.txt").read_text() == "a",
+      "U004: verplaatsen naar een andere schijf: eerst wegschrijven (origineel staat er dan nog), daarna pas weg")
+klopt(seinen == ["wegschrijven", ("klaar", 1, "")], "U004: het venster hoort 'bezig met wegschrijven' vóór 'klaar'")
+_echt_schrijf_weg(STICK)  # het echte wegschrijven werkt ook (syncfs)
+klopt(True, "U004: echt wegschrijven naar een map geeft geen fout")
+
+
+def stuk_schrijf_weg(pad):
+    raise acties.KopieFout(errno.EIO, acties.leesbare_fout(errno.EIO, Path(pad).name))
+
+
+acties.schrijf_weg = stuk_schrijf_weg
+(THUIS / "Blijft").mkdir()
+(THUIS / "Blijft" / "b.txt").write_text("b")
+eerste_rename_andere_schijf()
+try:
+    b.kopieer_een(THUIS / "Blijft", STICK, verplaats=True)
+    gemeld = False
+except OSError:
+    gemeld = True
+os.rename = _echt_rename
+acties.schrijf_weg = _echt_schrijf_weg
+klopt(gemeld and (THUIS / "Blijft" / "b.txt").read_text() == "b",
+      "U004: lukt het wegschrijven niet (stick eruit), dan blijft het origineel staan")
+
 print()
 shutil.rmtree(TMP, ignore_errors=True)  # alleen onze eigen tijdelijke testmap
 print("Alles goed." if not fouten else f"{fouten} fout(en).")

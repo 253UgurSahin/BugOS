@@ -7,6 +7,7 @@ achtergrond, zonder halve kopieën als het misgaat.
 
 from __future__ import annotations
 
+import ctypes
 import errno
 import os
 import re
@@ -224,7 +225,27 @@ def _bekijk_fouten(fouten: list, bron: Path, tijdelijk: Path, achter: list) -> N
         achter.append((Path(van), bron.name if rel == "." else f"{bron.name}/{rel}", reden))
 
 
-def kopieer_een(bron: Path, doelmap: Path, verplaats: bool, achter: list | None = None) -> Path | None:
+def schrijf_weg(pad: Path) -> None:
+    """Zorg dat wat we kopieerden echt op de schijf staat, niet alleen in het geheugen van de computer.
+
+    Een USB-stick krijgt het pas later; trek je hem er dan uit, dan is het weg. Dit kan even duren,
+    dus alleen op de achtergrond (in de Klus). Lukt het wegschrijven niet, dan is dat een echte fout."""
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+        fd = os.open(pad, os.O_RDONLY)
+    except (OSError, AttributeError):
+        os.sync()  # dan maar alles in één keer
+        return
+    try:
+        if libc.syncfs(fd) != 0:  # alleen de schijf waar 'pad' op staat
+            nummer = ctypes.get_errno()
+            raise KopieFout(nummer, leesbare_fout(nummer, pad.name))
+    finally:
+        os.close(fd)
+
+
+def kopieer_een(bron: Path, doelmap: Path, verplaats: bool, achter: list | None = None,
+                bij_wegschrijven=None) -> Path | None:
     """Kopieer of verplaats één ding naar 'doelmap'. Nooit overschrijven; nooit een map in zichzelf.
 
     Kan de schijf een paar bestanden niet bewaren (een naam met ':' op een stick), dan komt de rest wel
@@ -269,6 +290,9 @@ def kopieer_een(bron: Path, doelmap: Path, verplaats: bool, achter: list | None 
         ruim_op(tijdelijk)
         raise
     if verplaats:  # naar een andere schijf: het origineel pas weg als de kopie helemaal klaar is
+        if bij_wegschrijven:
+            bij_wegschrijven()
+        schrijf_weg(doel)  # ... en echt op de stick staat, niet alleen in het geheugen
         if bron.is_dir() and not bron.is_symlink():
             if len(achter) > hier:
                 weg_behalve(bron, [p for p, _n, _r in achter[hier:]])
@@ -317,6 +341,7 @@ class Klus(QThread):
     """Kopiëren of verplaatsen op de achtergrond, zodat het venster niet vastloopt."""
 
     voortgang = Signal(int, int)
+    wegschrijven = Signal()  # bezig met echt wegschrijven naar de stick: nog niet eruit halen
     klaar = Signal(int, str)
 
     def __init__(self, bronnen: list[Path], doelmap: Path, verplaats: bool):
@@ -329,13 +354,20 @@ class Klus(QThread):
         for i, bron in enumerate(self.bronnen):
             self.voortgang.emit(i, len(self.bronnen))
             try:
-                if kopieer_een(bron, self.doelmap, self.verplaats, self.achter) is not None:
+                if kopieer_een(bron, self.doelmap, self.verplaats, self.achter, self.wegschrijven.emit) is not None:
                     gelukt += 1
             except ValueError as e:
                 fout = str(e)
             except (OSError, shutil.Error) as e:
                 fout = e.strerror if isinstance(e, KopieFout) else \
                     leesbare_fout(e.errno if isinstance(e, OSError) else None, bron.name)
+        if gelukt and not self.verplaats and not all(zelfde_schijf(x, self.doelmap) for x in self.bronnen):
+            # Gekopieerd naar een andere schijf (een stick): pas 'Klaar' als het er echt op staat.
+            self.wegschrijven.emit()
+            try:
+                schrijf_weg(self.doelmap)
+            except OSError as e:
+                fout = e.strerror or leesbare_fout(e.errno, self.doelmap.name)
         self.klaar.emit(gelukt, fout)
 
 
