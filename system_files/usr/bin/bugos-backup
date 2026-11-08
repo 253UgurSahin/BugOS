@@ -376,6 +376,7 @@ def venster() -> int:
                 self.melding.zet(t("Het lukte niet helemaal. Zit de schijf er nog in? Probeer het opnieuw.",
                                    "It did not fully work. Is the drive still plugged in? Try again."), "fout")
                 self.wachtrij.clear()
+                self.sluit_na = False  # ook na 'Eerst afmaken': de foutmelding moet je kunnen zien
                 self.stop(False)
                 return
             self.volgende()
@@ -386,6 +387,7 @@ def venster() -> int:
                     onthoud(self.stand["schijf"])
                     self.wanneer.setText(laatste_backup())
                 self.melding.zet(DEELS_UITLEG.format(mappen=", ".join(self.deels)), "let_op")
+                self.sluit_na = False  # niet alles kon mee: dat moet je kunnen lezen, ook na 'Eerst afmaken'
                 self.stop(True)
                 return
             if self.stand["klus"] == "maak":

@@ -303,6 +303,7 @@ w.close()
 # ======================================== U015: Back-up of Overstap sluiten terwijl hij bezig is ===
 # Een nep-rsync die even wacht (zo zien we het venster 'bezig'), daarna doet hij het echt.
 nep_programma("rsync", 'if [ -n "$BUGOS_TEST_VAST" ]; then exec /usr/bin/sleep 60; fi\n'
+                       'if [ -n "$BUGOS_TEST_FOUT" ]; then /usr/bin/sleep 1; exit 11; fi\n'
                        '/usr/bin/sleep "${BUGOS_TEST_SLAAP:-0}"\nexec /usr/bin/rsync "$@"\n')
 bo = laad("bugos_overstap", "bugos-switch")
 WIN = stick_map("windows-stick")
@@ -338,6 +339,20 @@ for naam, module, schijf, begin in (("Back-up", bb, SCHIJF, "maak_backup"), ("Ov
     klopt(wacht(lambda: not w.isVisible() and not draait(w), 8000),
           f"U015: {naam}: 'Nu stoppen': het kopiëren stopt en het venster gaat dicht")
     del os.environ["BUGOS_TEST_VAST"], os.environ["BUGOS_TEST_SLAAP"]
+    # 3. U038: 'Eerst afmaken', maar het mislukt (stick eruit): de foutmelding blijft staan, het venster blijft open
+    os.environ["BUGOS_TEST_FOUT"] = "1"
+    w = open_venster(module)
+    w.vraag_stoppen = lambda: False
+    getattr(w, begin)()
+    wacht(lambda: draait(w), 5000)
+    w.close()
+    wacht(lambda: not draait(w), 15000)
+    for _ in range(20):
+        app.processEvents()
+    klopt(w.isVisible() and "lukte niet" in w.melding.tekst.text(),
+          f"U038: {naam}: mislukt het na 'Eerst afmaken', dan blijft het venster open met de foutmelding")
+    w.close()
+    del os.environ["BUGOS_TEST_FOUT"]
 os.environ["BUGOS_SCHIJVEN"] = str(SCHIJF)
 
 # ========================================== U014: ruimte tellen op de achtergrond (het venster loopt niet vast) ===
@@ -530,6 +545,12 @@ vb = b.Bestanden(leeg_map)
 vb.show()
 wacht(lambda: vb.stapel.currentWidget() is vb.leeg, 3000)
 klopt(vb.stapel.currentWidget() is vb.leeg and "Sleep" in vb.leeg_sub.text(), "U028: een lege map zegt 'Sleep er iets naartoe'")
+# U038 (Bestanden): sluiten tijdens het kopiëren wacht; mislukt het daarna, dan blijft het venster open met de melding.
+vb.sluit_na_klus = True
+vb._klus_klaar(0, "de stick is eruit getrokken", False)
+app.processEvents()
+klopt(vb.isVisible() and not vb.sluit_na_klus and "stick" in vb.melding.tekst.text(),
+      "U038: Bestanden: mislukt het kopiëren nadat je het venster sloot, dan blijft het open met de foutmelding")
 
 
 def laat_los(waar, pad: Path, shift: bool = False) -> bool:

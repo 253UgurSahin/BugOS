@@ -321,6 +321,7 @@ def venster() -> int:
                                        "Is je computer vol, of is de stick eruit? Probeer het opnieuw.",
                                        "Your files are there, but the bookmarks or wallpaper did not work. "
                                        "Is your computer full, or was the stick unplugged? Try again."), "fout")
+                    self.sluit_na = False  # de foutmelding moet je kunnen zien, ook na 'Eerst afmaken'
                     self.vrij()
                     return
                 self.balk.setValue(100)
@@ -328,6 +329,8 @@ def venster() -> int:
                        else t("Klaar! Je bestanden staan op hun plek.", "Done! Your files are in place."))
                 self.melding.zet(kop + ("\n\n• " + "\n• ".join(gedaan) if gedaan else ""),
                                  "let_op" if self.deels else "goed")
+                if self.deels:
+                    self.sluit_na = False  # niet alles kon mee: dat moet je kunnen lezen, ook na 'Eerst afmaken'
                 self.vrij()
                 return
             tekst, cmd = self.wachtrij.pop(0)
@@ -352,6 +355,7 @@ def venster() -> int:
                 self.melding.zet(t("Het lukte niet helemaal. Zit de schijf er nog in? Probeer het opnieuw.",
                                    "It did not fully work. Is the drive still plugged in? Try again."), "fout")
                 self.wachtrij.clear()
+                self.sluit_na = False  # ook na 'Eerst afmaken': de foutmelding moet je kunnen zien
                 self.vrij()
                 return
             self.volgende()

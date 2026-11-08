@@ -151,7 +151,10 @@ class Bewerken:
         if knip and klembord:
             QApplication.clipboard().clear()
         if self.sluit_na_klus:
-            QTimer.singleShot(0, self.close)
+            if fout or achter:
+                self.sluit_na_klus = False  # niet alles lukte: dat moet je kunnen lezen, dus het venster blijft open
+            else:
+                QTimer.singleShot(0, self.close)
 
     # ------------------------------------------------------------ vragen
     def vraag_tekst(self, titel: str, vraag: str, tekst: str, ok: str = "") -> str | None:
