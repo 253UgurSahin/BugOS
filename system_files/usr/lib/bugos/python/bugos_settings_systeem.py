@@ -174,7 +174,8 @@ class UpdatesPagina(Blad):
             if gedaan:
                 return
             gedaan.append(True)
-            self.bezig = False
+            if wat in ("nu", "terug"):
+                self.bezig = False   # alleen de update zelf; een schakelaar die tussendoor klaar is, telt niet
             try:
                 uit = bytes(proces.readAll()).decode(errors="ignore")
                 proces.deleteLater()
@@ -210,6 +211,13 @@ class UpdatesPagina(Blad):
             tekst = (t("Klaar. Start de computer opnieuw op om de nieuwe versie te gebruiken.",
                        "Done. Restart the computer to use the new version.") if wat == "nu" else
                      t("Klaar. Start de computer opnieuw op om terug te gaan.", "Done. Restart the computer to go back."))
+            if wat == "terug":
+                # bugos-updates zegt zelf wat er gebeurde (al klaar, of: updates gaan nu niet meer vanzelf),
+                # en zet misschien 'Updates vanzelf' uit: de schakelaar opnieuw lezen.
+                regels = [r.strip() for r in uit.splitlines() if r.strip()]
+                if regels:
+                    tekst = regels[-1]
+                op_achtergrond(self, lambda: status_van("bugos-updates"), lambda aan: self.auto.zet_stil(aan is True))
             self.melding.toon(tekst, "goed", t("Nu opnieuw opstarten", "Restart now"), herstart, seconden=0)
 
 

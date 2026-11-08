@@ -48,6 +48,33 @@ nep rpm-ostree 'exit 0'
 draai bugos-updates terug
 klopt '[ $code -eq 0 ] && grep -q Done "$TMP/uit"' "updates terug: rollback gelukt -> 'Done'"
 
+# U033/U034: "terug" zet automatische updates uit (anders komt de nieuwe versie terug), en twee keer
+# "terug" gaat niet weer vooruit.
+sed -e "s|/usr/share/bugos|$ROOT/system_files/usr/share/bugos|g" -e "s|/etc/bugos|$TMP/etc-bugos|g" \
+    "$BIN/bugos-updates" >"$TMP/bugos-updates"
+mkdir -p "$TMP/etc-bugos"
+echo UPDATES=auto >"$TMP/etc-bugos/updates.conf"
+nep systemctl 'echo "$*" >>"'"$TMP"'/systemctl"'
+nep rpm-ostree 'case "$1" in status) cat "'"$TMP"'/status.json";; rollback) echo rollback >>"'"$TMP"'/rollback";; esac'
+printf '{"deployments":[{"booted":true,"timestamp":2000},{"booted":false,"timestamp":1000}]}' >"$TMP/status.json"
+rm -f "$TMP/systemctl" "$TMP/rollback"
+draai bugos-updates terug
+klopt '[ $code -eq 0 ] && [ -f "$TMP/rollback" ] && grep -qx UPDATES=hand "$TMP/etc-bugos/updates.conf" && grep -q "disable --now rpm-ostreed-automatic.timer" "$TMP/systemctl"' \
+    "updates terug (vanzelf): teruggezet, en updates gaan niet meer vanzelf"
+klopt 'grep -q "no longer automatic" "$TMP/uit"' "updates terug (vanzelf): zegt dat updates nu uit staan"
+printf '{"deployments":[{"booted":false,"timestamp":1000},{"booted":true,"timestamp":2000}]}' >"$TMP/status.json"
+rm -f "$TMP/rollback"
+draai bugos-updates terug
+klopt '[ $code -eq 0 ] && [ ! -f "$TMP/rollback" ] && grep -q "already set" "$TMP/uit"' \
+    "updates terug, tweede keer: niet weer vooruit, zegt dat het al klaarstaat"
+printf '{"deployments":[{"booted":true,"timestamp":2000},{"booted":false,"timestamp":1000}]}' >"$TMP/status.json"
+echo UPDATES=hand >"$TMP/etc-bugos/updates.conf"
+rm -f "$TMP/systemctl"
+draai bugos-updates terug
+klopt '[ ! -f "$TMP/systemctl" ] && ! grep -q "no longer automatic" "$TMP/uit"' "updates terug (zelf updaten): verder niets aangepast"
+nep systemctl 'exit 0'
+kopie bugos-updates
+
 # U024: na "terug naar de vorige versie" staat de oude versie bovenaan; dat is geen nieuwe update.
 kopie bugos-updatecheck
 nep bugos-updates 'echo hand'

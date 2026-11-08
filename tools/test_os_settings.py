@@ -267,6 +267,7 @@ bi.VOORBEELD = False
 mislukt = update_proef("nu", 1)
 gelukt = update_proef("nu", 0)
 herstart_knop = upd.melding.knop.isVisibleTo(upd.melding)
+terug_tekst = update_proef("terug", 0)   # nep-pkexec zegt "uitvoer van terug": dat moet Instellingen tonen
 geannuleerd = update_proef("terug", 126)
 upd.auto.setChecked(False)        # jij zet 'Updates vanzelf' uit, en klikt dan Annuleren bij het wachtwoord
 for _ in range(200):
@@ -276,11 +277,16 @@ for _ in range(200):
     if upd.auto.isChecked():
         break
 # Instellingen sluiten terwijl een update loopt: niet stoppen, wachten en daarna vanzelf dicht.
-(nep_pk / "pkexec").write_text(f'#!/usr/bin/bash\nsleep 1\necho "$2" >>"{nep_pk}/gedaan"\nexit 0\n')
+# ("nu" duurt even; een schakelaar die tussendoor klaar is, mag de update niet als klaar laten tellen.)
+(nep_pk / "pkexec").write_text(f'#!/usr/bin/bash\n[ "$2" = nu ] && sleep 2\necho "$2" >>"{nep_pk}/gedaan"\nexit 0\n')
 (nep_pk / "code").write_text("0")
 venster.show()
 upd.updates("nu")
-app.processEvents()
+upd.updates("auto")
+for _ in range(50):
+    app.processEvents()
+    time.sleep(0.02)
+klopt(upd.bezig, "U006: een schakelaar die klaar is terwijl 'Nu updaten' loopt, laat de update niet als klaar tellen")
 venster.close()
 bleef_open = venster.isVisible() and upd.bezig
 for _ in range(300):
@@ -301,7 +307,8 @@ klopt(any("FPS" in x and ("meteen" in x or "at once" in x) for x in _teksten),
 klopt("lukte niet" in mislukt, "U006: 'Nu updaten' mislukt: dat zegt Instellingen ook")
 klopt("opnieuw op" in gelukt and herstart_knop, "U006: 'Nu updaten' gelukt: klaar, met een knop om opnieuw op te starten")
 klopt("toestemming" in geannuleerd, "U006: Annuleren bij het wachtwoord: niets gedaan")
-klopt(upd.auto.isChecked() and (nep_pk / "gedaan").read_text().split()[:4] == ["nu", "nu", "terug", "hand"],
+klopt(terug_tekst == "uitvoer van terug", "U033: na 'Terug' toont Instellingen wat bugos-updates zegt (bijv. dat updates nu uit staan)")
+klopt(upd.auto.isChecked() and (nep_pk / "gedaan").read_text().split()[:5] == ["nu", "nu", "terug", "terug", "hand"],
       "U006: Annuleren bij 'Updates vanzelf' uit: de schakelaar springt terug")
 
 

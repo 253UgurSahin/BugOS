@@ -53,8 +53,28 @@ nu)
     ;;
 terug)
     als_beheerder "$@"
-    rpm-ostree rollback &&
+    # Staat er al een oudere versie bovenaan (je koos al 'terug')? Nog een keer zou weer vooruit gaan.
+    if rpm-ostree status --json 2>/dev/null | jq -e '(.deployments[] | select(.booted) | .timestamp) as $nu
+        | .deployments[0] | (.booted == false and (.timestamp // 0) < ($nu // 0))' >/dev/null 2>&1; then
+        t "Dat staat al klaar. Start de computer opnieuw op om terug te gaan." \
+            "That is already set. Restart the computer to go back."
+        exit 0
+    fi
+    rpm-ostree rollback || exit 1
+    # Gaan updates vanzelf, dan zou BugOS de nieuwe versie (waar je net vanaf wilde) meteen weer klaarzetten.
+    # Daarom zetten we ze uit, en zeggen dat.
+    MODUS=auto
+    # shellcheck source=/dev/null
+    [ -f "$CONF" ] && . "$CONF" && MODUS="${UPDATES:-auto}"
+    if [ "$MODUS" = auto ]; then
+        mkdir -p /etc/bugos
+        echo "UPDATES=hand" >"$CONF"
+        systemctl disable --now "${TIMERS[@]}"
+        t "Klaar. Start de computer opnieuw op om terug te gaan. Updates gaan nu niet meer vanzelf, anders komt de nieuwe versie terug; zet ze weer aan in Instellingen als het mag." \
+            "Done. Restart the computer to go back. Updates are no longer automatic, or the new version would come back; turn them on again in Settings when it is fine."
+    else
         t "Klaar. Start de computer opnieuw op om terug te gaan." "Done. Restart the computer to go back."
+    fi
     ;;
 status)
     MODUS=auto
