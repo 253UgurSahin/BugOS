@@ -44,8 +44,12 @@ hand)
     ;;
 nu)
     als_beheerder "$@"
-    rpm-ostree upgrade
+    # Lukt het systeem niet, dan toch de apps bijwerken, maar wel eerlijk "mislukt" teruggeven
+    # (bugos-updatecheck en Instellingen zeggen anders "klaar").
+    mislukt=0
+    rpm-ostree upgrade || mislukt=1
     flatpak update --system --noninteractive --assumeyes || true
+    exit "$mislukt"
     ;;
 terug)
     als_beheerder "$@"
