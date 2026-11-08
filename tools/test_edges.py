@@ -228,6 +228,23 @@ for k, v in _oud.items():
     else:
         os.environ[k] = v
 
+# U042: het vertaalsjabloon is bij: elke tekst die de apps tonen, staat erin (anders kan niemand hem vertalen).
+_vt = importlib.machinery.SourceFileLoader("vertalingen", str(ROOT / "tools" / "collect-translations.py"))
+_vm = importlib.util.module_from_spec(importlib.util.spec_from_loader("vertalingen", _vt))
+_vt.exec_module(_vm)
+_nu: set = set()
+for _p in _vm.BRONNEN.rglob("*"):
+    if _p.is_file() and "__pycache__" not in _p.parts:
+        _kop = _p.read_bytes()[:40]
+        if _p.suffix == ".py" or _kop.startswith(b"#!/usr/bin/python3"):
+            _nu |= _vm.uit_python(_p)
+        elif _p.suffix == ".sh" or _kop.startswith(b"#!/usr/bin/bash"):
+            _nu |= _vm.uit_bash(_p)
+_sjabloon = set(json.loads((_vm.DOEL / "template.json").read_text(encoding="utf-8")))
+_mist = sorted(_nu - _sjabloon)
+klopt(not _mist, "vertalingen: template.json is bij (draai anders: python3 tools/collect-translations.py)"
+      + (f"; mist {len(_mist)}: {_mist[:2]}" if _mist else ""))
+
 # X002: elke actie van buiten GitHub staat op een vaste commit (een label als @v2 kan verschuiven)
 los = []
 for wf in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
