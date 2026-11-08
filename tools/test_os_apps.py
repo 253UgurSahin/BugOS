@@ -403,6 +403,49 @@ kaart = next((k for k in ww.kaarten if k.app["id"] == "org.videolan.VLC"), None)
 klopt(kaart is not None and kaart.knop.text() == "Installeren", "U013: een app die er echt niet is: 'Installeren'")
 ww.close()
 
+# ================================== U016: een schermlezer hoort een naam bij schuifjes, regels en keuzekaarten ===
+from PySide6.QtGui import QAccessible  # noqa: E402
+
+
+def lezer(w) -> tuple[str, str, str]:
+    i = QAccessible.queryAccessibleInterface(w)
+    return (i.role().name, i.text(QAccessible.Text.Name), i.text(QAccessible.Text.Description)) if i else ("", "", "")
+
+
+kiezer = bugos_ui.SchijfKiezer("Steek een USB-schijf in…")
+kiezer.zet([("/run/media/u/STICK", "STICK", "29 GB vrij van 29 GB")])
+klopt(lezer(next(iter(kiezer.kaarten.values())))[1:] == ("STICK", "29 GB vrij van 29 GB"),
+      f"U016: de schijfkaart in Back-up/Overstap heeft de naam van de stick: {lezer(next(iter(kiezer.kaarten.values())))}")
+
+welkom = laad("bugos_welkom", "bugos-welcome")
+for pagina in (welkom.Uiterlijk(), welkom.Updates()):
+    kaarten = pagina.findChildren(bugos_ui.KeuzeKaart)
+    namen = [lezer(k)[1] for k in kaarten]
+    klopt(kaarten and all(namen), f"U016: Welkom ({type(pagina).__name__}): elke keuze heeft een naam: {namen}")
+
+os.environ["BUGOS_INSTELLINGEN_VOORBEELD"] = "1"
+inst = laad("bugos_instellingen", "bugos-settings")
+from bugos_shell import Rij  # noqa: E402
+from bugos_widgets import Schuif  # noqa: E402
+
+vi = inst.Instellingen("wifi")
+vi.show()
+for sleutel in list(vi.paginas):  # elke pagina een keer laten zien (zoals iemand die rondklikt)
+    vi.ga_naar(sleutel)
+    for _ in range(10):
+        app.processEvents()
+schuiven = vi.findChildren(Schuif)
+zonder = [s for s in schuiven if not lezer(s)[1]]
+klopt(schuiven and not zonder, f"U016: Instellingen: elk schuifje heeft een naam ({len(zonder)} van {len(schuiven)} zonder)")
+rijen = [r for r in vi.findChildren(Rij) if r.property("klikbaar") == "true"]
+slecht = [r.titel.text() for r in rijen if lezer(r)[0] != "Button" or lezer(r)[1] != r.titel.text()]
+klopt(rijen and not slecht, f"U016: Instellingen: elke klikbare regel is een knop met de titel als naam (mis: {slecht[:3]})")
+r = rijen[0]
+r.titel.setText("Nieuwe titel")
+klopt(lezer(r)[1] == "Nieuwe titel", "U016: verandert de titel van een regel, dan hoort de schermlezer de nieuwe")
+vi.close()
+del os.environ["BUGOS_INSTELLINGEN_VOORBEELD"]
+
 print()
 shutil.rmtree(TMP, ignore_errors=True)  # alleen onze eigen tijdelijke testmap
 print("Alles goed." if not fouten else f"{fouten} fout(en).")

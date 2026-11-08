@@ -280,6 +280,17 @@ class Schuif(QAbstractButton):
 
     stand = Property(float, _get, _set)
 
+    def showEvent(self, e) -> None:  # noqa: N802
+        # Een schermlezer moet weten wát je aan- of uitzet. Heeft niemand een naam gegeven, neem dan
+        # de eerste tekst die ernaast staat (de titel van de regel of het tegeltje).
+        ouder = self.parentWidget()
+        if not self.accessibleName() and ouder is not None:
+            naast = ouder.findChildren(QLabel, "", Qt.FindChildOption.FindDirectChildrenOnly)
+            tekst = next((x.text() for x in naast if x.text()), "")
+            if tekst:
+                self.setAccessibleName(tekst)
+        super().showEvent(e)
+
     def zet_stil(self, aan: bool) -> None:
         """Zet de stand zonder signaal (bijv. bij het inlezen)."""
         self.blockSignals(True)
@@ -412,3 +423,9 @@ class KeuzeKaart(QPushButton):
         lay.setSizeConstraint(QVBoxLayout.SizeConstraint.SetMinimumSize)
         lay.addWidget(inhoud)
         inhoud.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        # Een schermlezer ziet alleen de knop, niet de tekst erin: geef hem de eerste tekst als naam
+        # (bijv. "Donker" of de naam van de USB-stick) en de rest als uitleg.
+        teksten = [x.text() for x in inhoud.findChildren(QLabel) if x.text()]
+        if teksten:
+            self.setAccessibleName(teksten[0])
+            self.setAccessibleDescription(" · ".join(teksten[1:]))

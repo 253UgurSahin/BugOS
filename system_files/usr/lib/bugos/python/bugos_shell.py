@@ -6,9 +6,9 @@ Apps halen dit uit bugos_ui (from bugos_ui import Venster, Pagina, Rij ...); dit
 from __future__ import annotations
 
 from PySide6.QtCore import QRect, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QIcon
+from PySide6.QtGui import QAccessible, QColor, QIcon
 from PySide6.QtWidgets import (
-    QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QPushButton, QScrollArea, QStackedWidget, QVBoxLayout,
+    QAbstractButton, QAccessibleWidget, QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QPushButton, QScrollArea, QStackedWidget, QVBoxLayout,
     QWidget,
 )
 
@@ -88,6 +88,9 @@ class Rij(QFrame):
         self.rechts = rechts
         if rechts is not None:
             lay.addWidget(rechts, 0, Qt.AlignmentFlag.AlignVCenter)
+            if isinstance(rechts, QAbstractButton) and not rechts.accessibleName():
+                rechts.setAccessibleName(titel_tekst)  # het schuifje heet zoals de regel
+                rechts.setAccessibleDescription(uitleg_tekst)
         self.pijl = None
         if pijl is None:
             pijl = klikbaar and rechts is None
@@ -119,6 +122,31 @@ class Rij(QFrame):
             self.geklikt.emit()
             return
         super().keyPressEvent(e)
+
+
+class _RijVoorSchermlezer(QAccessibleWidget):
+    """Wat een schermlezer hoort bij een regel waar je op kunt klikken: 'knop', met de titel als naam
+    en de uitleg erbij. Hij leest ze elke keer opnieuw, dus ook als de titel later verandert."""
+
+    def __init__(self, rij: Rij):
+        super().__init__(rij, QAccessible.Role.Button)
+        self.rij = rij
+
+    def text(self, soort):
+        if soort == QAccessible.Text.Name:
+            return self.rij.accessibleName() or self.rij.titel.text()
+        if soort == QAccessible.Text.Description:
+            return self.rij.accessibleDescription() or self.rij.uitleg.text()
+        return super().text(soort)
+
+
+def _schermlezer(_soort: str, ding):
+    if isinstance(ding, Rij) and ding.property("klikbaar") == "true":
+        return _RijVoorSchermlezer(ding)
+    return None
+
+
+QAccessible.installFactory(_schermlezer)
 
 
 class Melding(QFrame):
