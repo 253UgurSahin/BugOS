@@ -70,7 +70,8 @@ nep notify-send 'exit 0'
 # Hulp (bugos-help, Python): één controle draaien met de nep-programma's; print stand en tekst.
 # hulp <controle> repareer  -> druk daarna ook op de knop.
 hulp() {
-    HOME="$TMP/thuis" PATH="$TMP/bin:$PATH" LC_ALL=C.UTF-8 QT_QPA_PLATFORM=offscreen PYTHONDONTWRITEBYTECODE=1 \
+    HOME="$TMP/thuis" PATH="$TMP/bin:$PATH" LC_ALL="${HULP_LC_ALL-C.UTF-8}" LANG="${HULP_LANG-}" \
+        QT_QPA_PLATFORM=offscreen PYTHONDONTWRITEBYTECODE=1 \
         python3 - "$ROOT" "$@" <<'PY' 2>&1
 import importlib.machinery, importlib.util, sys, time
 root, naam = sys.argv[1], sys.argv[2]
@@ -124,6 +125,16 @@ klopt '[ "$(grep -c "org.kde.KWin.reconfigure" "$TMP/dbus" 2>/dev/null)" = 1 ]' 
 rm -f "$TMP/dbus"
 draai bugos-light-mode uit
 klopt '[ "$(grep -c "org.kde.KWin.reconfigure" "$TMP/dbus" 2>/dev/null)" = 1 ]' "lichte stand uit: KWin wordt herladen (gdbus)"
+
+# U008: Hulp leest wat nmcli zegt; in het Nederlands zegt nmcli "ingeschakeld" i.p.v. "enabled".
+# Nep-nmcli praat Nederlands, behalve als LC_ALL=C (zoals echte programma's).
+nep nmcli 'nl() { [ "${LC_ALL:-}" != C ]; }
+case "$*" in
+"-t -f TYPE device") echo wifi ;;
+"radio wifi") if nl; then echo ingeschakeld; else echo enabled; fi ;;
+"-t -f WIFI radio") if nl; then echo ingeschakeld; else echo enabled; fi ;;
+esac'
+klopt '[[ "$(HULP_LC_ALL="" HULP_LANG=nl_NL.UTF-8 hulp controle_wifi)" == ok* ]]' "hulp in het Nederlands: wifi die aan staat heet 'aan'"
 
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

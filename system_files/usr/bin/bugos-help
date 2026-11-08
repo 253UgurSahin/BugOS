@@ -18,7 +18,14 @@ from pathlib import Path
 
 sys.path.insert(0, "/usr/lib/bugos/python")
 
-from bugos_ui import bestaat, draai, kde_instelling, start, t  # noqa: E402
+from bugos_ui import bestaat, kde_instelling, start, t  # noqa: E402
+from bugos_ui import draai as _draai  # noqa: E402
+
+
+def draai(*cmd: str, timeout: int = 20) -> tuple[int, str]:
+    """Zoals draai uit bugos_ui, maar het programma praat Engels (LC_ALL=C): wij lezen wat het zegt,
+    en "enabled" of "not running" heet in het Nederlands of Duits anders."""
+    return _draai("env", "LC_ALL=C", *cmd, timeout=timeout)
 
 OK, LET_OP, PROBLEEM, ONBEKEND = "ok", "let_op", "probleem", "onbekend"
 
@@ -70,7 +77,7 @@ def controle_wifi() -> Uitslag:
     if "wifi" not in apparaten.split():
         return Uitslag(naam, OK, t("Deze computer heeft geen wifi (of gebruikt een kabel). Dat is prima.",
                                    "This computer has no Wi-Fi (or uses a cable). That's fine."))
-    _, radio = draai("nmcli", "radio", "wifi")
+    _, radio = draai("nmcli", "-t", "-f", "WIFI", "radio")
     if radio.strip() != "enabled":
         return Uitslag(naam, PROBLEEM, t("Wifi staat uit.", "Wi-Fi is turned off."),
                        lambda: (draai("rfkill", "unblock", "wifi"), draai("nmcli", "radio", "wifi", "on")),
