@@ -47,30 +47,39 @@ nu)
     # Lukt het systeem niet, dan toch de apps bijwerken, maar wel eerlijk "mislukt" teruggeven
     # (bugos-updatecheck en Instellingen zeggen anders "klaar").
     mislukt=0
+    # Stond er vóór deze update al een nieuwere versie klaar? (Dan is "No upgrade available" geen "al bij".)
+    klaar_voor="$(rpm-ostree status --json 2>/dev/null | jq -r '(.deployments[] | select(.booted) | .timestamp) as $nu
+        | .deployments[0] | (.booted == false and (.timestamp // 0) > ($nu // 0))' 2>/dev/null)"
     rpm-ostree upgrade || mislukt=1
     flatpak update --system --noninteractive --assumeyes || true
     # Stond er al een nieuwere versie klaar (bijv. vannacht vanzelf opgehaald)? Dan zegt rpm-ostree
     # "No upgrade available", maar moet je wel opnieuw opstarten. Dat geven we door aan Instellingen.
-    if [ "$mislukt" = 0 ] && rpm-ostree status --json 2>/dev/null | jq -e '(.deployments[] | select(.booted)
-        | .timestamp) as $nu | .deployments[0] | (.booted == false and (.timestamp // 0) > ($nu // 0))' >/dev/null 2>&1; then
+    if [ "$mislukt" = 0 ] && [ "$klaar_voor" = true ]; then
         echo "bugos-update-klaar"
     fi
     exit "$mislukt"
     ;;
 terug)
     als_beheerder "$@"
+    STATUS="$(rpm-ostree status --json 2>/dev/null)"
     # Staat er al een oudere versie bovenaan (je koos al 'terug')? Nog een keer zou weer vooruit gaan.
-    if rpm-ostree status --json 2>/dev/null | jq -e '(.deployments[] | select(.booted) | .timestamp) as $nu
+    if echo "$STATUS" | jq -e '(.deployments[] | select(.booted) | .timestamp) as $nu
         | .deployments[0] | (.booted == false and (.timestamp // 0) < ($nu // 0))' >/dev/null 2>&1; then
         t "Dat staat al klaar. Start de computer opnieuw op om terug te gaan." \
             "That is already set. Restart the computer to go back."
         exit 0
     fi
-    # Is er nog geen vorige versie (net geïnstalleerd)? Dan valt er niets terug te zetten: zeg dat (code 3).
-    if [ "$(rpm-ostree status --json 2>/dev/null | jq '.deployments | length' 2>/dev/null)" = 1 ]; then
-        t "Er is nog geen vorige versie. Die komt er na de eerste update." \
-            "There is no previous version yet. There will be one after the first update."
+    # Is er geen oudere versie dan deze (net geïnstalleerd, of je ging al terug en startte opnieuw op)?
+    # Dan zou rpm-ostree juist naar de nieuwere gaan: niet doen, en dat zeggen (code 3).
+    if [ -n "$STATUS" ] && ! echo "$STATUS" | jq -e '(.deployments[] | select(.booted) | .timestamp) as $nu
+        | any(.deployments[]; .booted == false and (.timestamp // 0) < ($nu // 0))' >/dev/null 2>&1; then
+        t "Er is geen oudere versie om naar terug te gaan." "There is no older version to go back to."
         exit 3
+    fi
+    # Staat er een update klaar voor de volgende keer opstarten, dan weigert rpm-ostree terug te gaan:
+    # die update eerst weghalen (hij komt later gewoon weer).
+    if echo "$STATUS" | jq -e '.deployments[0] | (.booted == false and (.staged // false))' >/dev/null 2>&1; then
+        rpm-ostree cleanup -p || exit 1
     fi
     rpm-ostree rollback || exit 1
     # Gaan updates vanzelf, dan zou BugOS de nieuwe versie (waar je net vanaf wilde) meteen weer klaarzetten.

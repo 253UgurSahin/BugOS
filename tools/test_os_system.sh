@@ -76,7 +76,21 @@ klopt '[ ! -f "$TMP/systemctl" ] && ! grep -q "no longer automatic" "$TMP/uit"' 
 printf '{"deployments":[{"booted":true,"timestamp":2000}]}' >"$TMP/status.json"
 rm -f "$TMP/rollback"
 draai bugos-updates terug
-klopt '[ $code -eq 3 ] && [ ! -f "$TMP/rollback" ] && grep -q "no previous version" "$TMP/uit"' "U041: terug zonder vorige versie: zegt dat (code 3)"
+klopt '[ $code -eq 3 ] && [ ! -f "$TMP/rollback" ] && grep -q "no older version" "$TMP/uit"' "U041: terug zonder vorige versie: zegt dat (code 3)"
+# U044: al teruggegaan en opnieuw opgestart (de oudere draait, de nieuwere staat erna): niet weer vooruit.
+printf '{"deployments":[{"booted":true,"timestamp":1000},{"booted":false,"timestamp":2000}]}' >"$TMP/status.json"
+rm -f "$TMP/rollback"
+draai bugos-updates terug
+klopt '[ $code -eq 3 ] && [ ! -f "$TMP/rollback" ] && grep -q "no older version" "$TMP/uit"' \
+    "U044: terug terwijl de oudste al draait: niet vooruit naar de nieuwere, zegt dat er geen oudere is"
+# U043: er staat een update klaar (staged) voor de volgende keer opstarten: eerst weghalen, dan pas terug.
+nep rpm-ostree 'case "$1" in status) cat "'"$TMP"'/status.json";; cleanup) echo "cleanup $*" >>"'"$TMP"'/rollback";;
+rollback) grep -q cleanup "'"$TMP"'/rollback" 2>/dev/null || { echo "error: Staged deployment" >&2; exit 1; }; echo rollback >>"'"$TMP"'/rollback";; esac'
+printf '{"deployments":[{"booted":false,"staged":true,"timestamp":3000},{"booted":true,"timestamp":2000},{"booted":false,"timestamp":1000}]}' >"$TMP/status.json"
+rm -f "$TMP/rollback"
+draai bugos-updates terug
+klopt '[ $code -eq 0 ] && grep -q "cleanup -p" "$TMP/rollback" && grep -qx rollback "$TMP/rollback"' \
+    "U043: terug terwijl er een update op een herstart wacht: die eerst weg, dan wel terug (niet 'mislukt')"
 nep rpm-ostree 'case "$1" in status) cat "'"$TMP"'/status.json";; upgrade) echo "No upgrade available.";; esac'
 printf '{"deployments":[{"booted":false,"timestamp":3000},{"booted":true,"timestamp":2000}]}' >"$TMP/status.json"
 draai bugos-updates nu
@@ -84,6 +98,12 @@ klopt '[ $code -eq 0 ] && grep -qx bugos-update-klaar "$TMP/uit"' "U041: nu, ter
 printf '{"deployments":[{"booted":true,"timestamp":2000},{"booted":false,"timestamp":1000}]}' >"$TMP/status.json"
 draai bugos-updates nu
 klopt '! grep -q bugos-update-klaar "$TMP/uit"' "U041: nu, niets klaar: niets doorgegeven"
+# Een gewone update die nu pas binnenkomt, is geen "stond al klaar".
+nep rpm-ostree 'case "$1" in status) cat "'"$TMP"'/status.json";; upgrade)
+printf "{\"deployments\":[{\"booted\":false,\"staged\":true,\"timestamp\":3000},{\"booted\":true,\"timestamp\":2000}]}" >"'"$TMP"'/status.json";; esac'
+printf '{"deployments":[{"booted":true,"timestamp":2000}]}' >"$TMP/status.json"
+draai bugos-updates nu
+klopt '[ $code -eq 0 ] && ! grep -q bugos-update-klaar "$TMP/uit"' "U041: nu, een update die nu pas binnenkomt: gewoon 'klaar', niet 'stond al klaar'"
 nep systemctl 'exit 0'
 kopie bugos-updates
 
