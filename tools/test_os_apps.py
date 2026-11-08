@@ -559,6 +559,29 @@ wacht(lambda: not (vb.klus and vb.klus.isRunning()), 5000)
 klopt(not laat_los(vb.lijst.viewport(), leeg_map / "lied.mp3"), "U028: iets uit deze map hier loslaten doet niets")
 vb.close()
 
+# ================================================= U019: het vertaal-sjabloon komt waar de apps kijken ===
+import json  # noqa: E402
+
+import bugos_base  # noqa: E402
+
+lader = importlib.machinery.SourceFileLoader("verzamel", str(ROOT / "tools" / "collect-translations.py"))
+spec = importlib.util.spec_from_loader("verzamel", lader)
+verzamel = importlib.util.module_from_spec(spec)
+lader.exec_module(verzamel)
+klopt(verzamel.DOEL.relative_to(verzamel.BRONNEN).as_posix() == bugos_base.VERTALINGEN.relative_to("/usr").as_posix(),
+      f"U019: het script schrijft naar de map die de apps lezen ({verzamel.DOEL.relative_to(ROOT)})")
+verzamel.DOEL, verzamel.ROOT = TMP / "vertalingen", TMP  # niet in BugOS zelf schrijven
+oud_argv = sys.argv
+sys.argv = ["collect-translations.py"]
+verzamel.main()
+sys.argv = oud_argv
+sjabloon = verzamel.DOEL / "template.json"
+klopt(sjabloon.is_file() and len(json.loads(sjabloon.read_text())) > 400,
+      "U019: zonder taalcode maakt het script template.json, met alle teksten")
+echt = json.loads((ROOT / "system_files" / "usr" / "share" / "bugos" / "translations" / "template.json").read_text())
+klopt("Writing to the stick… Do not unplug it yet." in echt and len(echt) > 400,
+      f"U019: het sjabloon in BugOS is bijgewerkt ({len(echt)} teksten)")
+
 print()
 shutil.rmtree(TMP, ignore_errors=True)  # alleen onze eigen tijdelijke testmap
 print("Alles goed." if not fouten else f"{fouten} fout(en).")

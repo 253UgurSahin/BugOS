@@ -41,4 +41,15 @@ To update an existing language (translations that are already there are kept):
 python3 tools/collect-translations.py de
 ```
 
-Note: texts with a number in them (like "12 GB free") are not translated yet. For now they stay in English.
+The script writes to `system_files/usr/share/bugos/translations/`, the same folder the apps read from.
+Run it again after merging new screens, so `template.json` has every text.
+
+### What cannot be translated yet
+
+Texts with a changing part in them are written as an f-string, like `t(f"{n} GB vrij", f"{n} GB free")`.
+The English text is different every time, so it cannot be looked up in a dictionary: these texts stay in
+English for now. The script skips them and tells you how many there are (about 115 at the moment).
+
+To make such a text translatable, write it with a placeholder and fill it in afterwards:
+`t("{n} GB vrij", "{n} GB free").format(n=n)`. Then `"{n} GB free"` lands in `template.json`, and the
+translator keeps `{n}` exactly as it is.
