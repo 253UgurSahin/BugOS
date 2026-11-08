@@ -237,11 +237,12 @@ class KiesDialoog(QDialog):
 
 
 class WachtwoordDialoog(QDialog):
-    """Twee keer het nieuwe wachtwoord typen; pas als ze gelijk zijn, kan het."""
+    """Twee keer het nieuwe wachtwoord typen; pas als ze gelijk zijn, kan het.
+    huidig=True: ook je huidige wachtwoord hier (voor wie geen beheerder is: dan vraagt KDE het niet)."""
 
     MINIMUM = 6
 
-    def __init__(self, ouder: QWidget):
+    def __init__(self, ouder: QWidget, huidig: bool = False):
         super().__init__(ouder)
         self.setWindowTitle(t("Nieuw wachtwoord", "New password"))
         self.setMinimumWidth(520)
@@ -249,9 +250,18 @@ class WachtwoordDialoog(QDialog):
         lay.setContentsMargins(24, 22, 24, 20)
         lay.setSpacing(10)
         lay.addWidget(label(t("Kies een nieuw wachtwoord", "Choose a new password"), "kop2"))
-        lay.addWidget(label(t(f"Minstens {self.MINIMUM} tekens. Daarna vraagt BugOS nog één keer je huidige wachtwoord.",
-                              f"At least {self.MINIMUM} characters. BugOS then asks for your current password once more."),
-                            "klein"))
+        uitleg = (t(f"Eerst je huidige wachtwoord, dan het nieuwe (minstens {self.MINIMUM} tekens).",
+                    f"First your current password, then the new one (at least {self.MINIMUM} characters).")
+                  if huidig else
+                  t(f"Minstens {self.MINIMUM} tekens. Daarna vraagt BugOS nog één keer je huidige wachtwoord.",
+                    f"At least {self.MINIMUM} characters. BugOS then asks for your current password once more."))
+        lay.addWidget(label(uitleg, "klein"))
+        self.nu: QLineEdit | None = None
+        if huidig:
+            self.nu = QLineEdit()
+            self.nu.setEchoMode(QLineEdit.EchoMode.Password)
+            self.nu.setPlaceholderText(t("Huidig wachtwoord", "Current password"))
+            lay.addWidget(self.nu)
         self.een = QLineEdit()
         self.een.setEchoMode(QLineEdit.EchoMode.Password)
         self.een.setPlaceholderText(t("Nieuw wachtwoord", "New password"))
@@ -279,14 +289,17 @@ class WachtwoordDialoog(QDialog):
         lay.addLayout(knoppen)
         self.een.textChanged.connect(self.controleer)
         self.twee.textChanged.connect(self.controleer)
+        if self.nu is not None:
+            self.nu.textChanged.connect(self.controleer)
 
     def laat_zien(self, aan: bool) -> None:
-        for veld in (self.een, self.twee):
-            veld.setEchoMode(QLineEdit.EchoMode.Normal if aan else QLineEdit.EchoMode.Password)
+        for veld in (self.een, self.twee, self.nu):
+            if veld is not None:
+                veld.setEchoMode(QLineEdit.EchoMode.Normal if aan else QLineEdit.EchoMode.Password)
 
     def controleer(self) -> None:
         a, b = self.een.text(), self.twee.text()
-        self.ok.setEnabled(len(a) >= self.MINIMUM and a == b)
+        self.ok.setEnabled(len(a) >= self.MINIMUM and a == b and (self.nu is None or bool(self.nu.text())))
         if a and len(a) < self.MINIMUM:
             self.fout.setText(t("Nog te kort.", "Still too short."))
         elif a and b and a != b:
@@ -297,6 +310,10 @@ class WachtwoordDialoog(QDialog):
     @property
     def wachtwoord(self) -> str:
         return self.een.text()
+
+    @property
+    def huidig_wachtwoord(self) -> str:
+        return self.nu.text() if self.nu is not None else ""
 
 
 def dichtstbij(keuzes: tuple, waarde: int) -> int:

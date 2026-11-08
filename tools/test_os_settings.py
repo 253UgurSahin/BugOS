@@ -280,6 +280,76 @@ klopt(upd.auto.isChecked() and (nep_pk / "gedaan").read_text().split() == ["nu",
       "U006: Annuleren bij 'Updates vanzelf' uit: de schakelaar springt terug")
 
 
+# U010: wie geen beheerder is, verandert zijn eigen wachtwoord via passwd (PAM), in een nep-terminal;
+# geen wachtwoord op de opdrachtregel, en geen vraag om het wachtwoord van een beheerder.
+nep_pw = TMP / "nep-pw"
+nep_pw.mkdir()
+(nep_pw / "passwd").write_text(f"""#!/usr/bin/bash
+[ -t 0 ] || {{ echo "geen terminal"; exit 3; }}
+echo "$*" >"{nep_pw}/argv"
+echo "Changing password for user jan."
+printf "Current password: "; read -r a
+printf "New password: "; read -r b
+if [ "${{#b}}" -lt 8 ]; then echo "BAD PASSWORD: The password is shorter than 8 characters"
+    printf "New password: "; read -r b; exit 1; fi
+printf "Retype new password: "; read -r c
+[ "$a" = "oud-geheim" ] || {{ echo "passwd: Authentication token manipulation error"; exit 1; }}
+[ "$b" = "$c" ] || exit 1
+echo "$b" >"{nep_pw}/nieuw"
+echo "passwd: all authentication tokens updated successfully."
+""")
+(nep_pw / "passwd").chmod(0o755)
+os.environ.update(PATH=f"{nep_pw}:{oud_pad}", LC_ALL="C.UTF-8")
+bi.VOORBEELD = False
+goed = bi.zet_eigen_wachtwoord("oud-geheim", "nieuw-geheim-123", timeout=10)
+fout_oud = bi.zet_eigen_wachtwoord("verkeerd", "nieuw-geheim-123", timeout=10)
+simpel = bi.zet_eigen_wachtwoord("oud-geheim", "kort", timeout=10)
+bi.VOORBEELD = True
+os.environ.update(PATH=oud_pad, LC_ALL="nl_NL.UTF-8")
+klopt(goed == (True, "") and (nep_pw / "nieuw").read_text().strip() == "nieuw-geheim-123"
+      and (nep_pw / "argv").read_text().strip() == "",
+      "U010: eigen wachtwoord via passwd in een nep-terminal (niets op de opdrachtregel)")
+klopt(fout_oud == (False, "fout"), "U010: verkeerd huidig wachtwoord: lukt niet")
+klopt(simpel == (False, "simpel"), "U010: te makkelijk wachtwoord: dat zeggen we (en we blijven niet hangen)")
+w = mod.WachtwoordDialoog(venster, huidig=True)
+w.een.setText("nieuw-geheim")
+w.twee.setText("nieuw-geheim")
+zonder = w.ok.isEnabled()
+w.nu.setText("oud-geheim")
+klopt(not zonder and w.ok.isEnabled() and w.huidig_wachtwoord == "oud-geheim",
+      "U010: wie geen beheerder is, typt ook zijn huidige wachtwoord in het venster")
+import bugos_settings_account as sa  # noqa: E402
+venster.ga_naar("inloggen")
+wacht()
+inl = venster.paginas["inloggen"]
+aanroepen: list = []
+
+
+class NepDialoog:
+    def __init__(self, ouder, huidig=False):
+        aanroepen.append(("dialoog", huidig))
+        self.wachtwoord, self.huidig_wachtwoord = "nieuw-geheim", "oud-geheim" if huidig else ""
+
+    def exec(self):
+        return 1
+
+
+oud_dlg, oud_eigen, oud_ww = sa.WachtwoordDialoog, bi.zet_eigen_wachtwoord, bi.zet_wachtwoord
+sa.WachtwoordDialoog = NepDialoog
+bi.zet_eigen_wachtwoord = lambda h, n: (aanroepen.append(("passwd", h, n)), (True, ""))[1]
+bi.zet_wachtwoord = lambda n: (aanroepen.append(("accounts", n)), (True, ""))[1]
+inl.gebruiker = bi.Gebruiker("jan", "Jan", False, False)
+inl.wijzig_wachtwoord()
+wacht()
+inl.gebruiker = bi.Gebruiker("bugie", "Bugie", True, False)
+inl.wijzig_wachtwoord()
+wacht()
+sa.WachtwoordDialoog, bi.zet_eigen_wachtwoord, bi.zet_wachtwoord = oud_dlg, oud_eigen, oud_ww
+klopt(aanroepen == [("dialoog", True), ("passwd", "oud-geheim", "nieuw-geheim"), ("dialoog", False),
+                    ("accounts", "nieuw-geheim")],
+      "U010: geen beheerder: via passwd; beheerder: zoals eerst via AccountsService")
+
+
 venster.close()
 shutil.rmtree(TMP, ignore_errors=True)
 print()

@@ -8,6 +8,7 @@ bugos_config (_c.draai), zodat een test die bi.draai of bi.VOORBEELD vervangt da
 from __future__ import annotations
 
 import os
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -222,6 +223,68 @@ def zet_wachtwoord(nieuw: str) -> tuple[bool, str]:
         return False, "crypt"
     # Niet via gdbus: dan staat de hash op de opdrachtregel en kan elke gebruiker hem in 'ps' lezen.
     return _c._accounts_dbus("SetPassword", hash_, "")
+
+
+def zet_eigen_wachtwoord(huidig: str, nieuw: str, timeout: int = 60) -> tuple[bool, str]:
+    """Voor wie geen beheerder is: AccountsService wil dan het wachtwoord van een beheerder. Daarom 'passwd',
+    precies zoals in een terminal: het vraagt je huidige wachtwoord en twee keer het nieuwe (via PAM).
+    passwd leest van een terminal, dus geven we het een eigen nep-terminal (pty) en typen we de antwoorden
+    als het erom vraagt. Niets op de opdrachtregel. Geeft (gelukt, reden): reden 'simpel' als het nieuwe
+    wachtwoord te makkelijk is, anders 'fout'."""
+    if _c.VOORBEELD:
+        return True, ""
+    import select
+    import subprocess
+    import termios
+    import time
+    if not shutil.which("passwd"):
+        return False, "fout"
+    baas, slaaf = os.openpty()
+    stand = termios.tcgetattr(slaaf)
+    stand[3] &= ~termios.ECHO    # wat wij typen, komt niet terug op het scherm
+    termios.tcsetattr(slaaf, termios.TCSANOW, stand)
+    try:
+        proces = subprocess.Popen(["passwd"], stdin=slaaf, stdout=slaaf, stderr=slaaf, start_new_session=True,
+                                  env=_c.omgeving("passwd"), close_fds=True)
+    except OSError:
+        os.close(baas)
+        os.close(slaaf)
+        return False, "fout"
+    os.close(slaaf)
+    antwoorden = [huidig, nieuw, nieuw]
+    alles = nu = ""
+    einde = time.monotonic() + timeout
+    try:
+        while time.monotonic() < einde:
+            klaar, _, _ = select.select([baas], [], [], 0.5)
+            if not klaar:
+                if proces.poll() is not None:
+                    break
+                continue
+            try:
+                stuk = os.read(baas, 1024).decode(errors="ignore")
+            except OSError:      # passwd is klaar (de nep-terminal is dicht)
+                break
+            if not stuk:
+                break
+            alles += stuk
+            nu += stuk
+            if "BAD PASSWORD" in alles:
+                break            # te makkelijk: passwd zou het opnieuw vragen, maar wij stoppen
+            if nu.rstrip().lower().endswith("password:"):
+                if not antwoorden:
+                    break        # vraagt het nog eens: dan klopte er iets niet
+                time.sleep(0.05)
+                os.write(baas, (antwoorden.pop(0) + "\n").encode())
+                nu = ""
+    finally:
+        if proces.poll() is None:
+            proces.kill()
+        code = proces.wait()
+        os.close(baas)
+    if code == 0 and not antwoorden:
+        return True, ""
+    return False, "simpel" if "BAD PASSWORD" in alles else "fout"
 
 
 def _accounts_dbus(methode: str, *args: str, timeout: int = 60) -> tuple[bool, str]:

@@ -202,20 +202,36 @@ class InloggenPagina(Blad):
                 self.ververs()))
 
     def wijzig_wachtwoord(self) -> None:
-        d = WachtwoordDialoog(self)
+        # Een beheerder mag het via AccountsService (KDE vraagt dan je wachtwoord). Wie geen beheerder is, zou
+        # daar het wachtwoord van een beheerder moeten typen; dan gaat het zoals in een terminal (passwd).
+        eigen = self.gebruiker is not None and not self.gebruiker.beheerder
+        d = WachtwoordDialoog(self, huidig=eigen)
         if not d.exec():
             return
-        nieuw = d.wachtwoord
-        self.melding.toon(t("Even geduld… BugOS vraagt eerst je huidige wachtwoord.",
-                            "One moment… BugOS first asks for your current password."), seconden=90)
+        nieuw, huidig = d.wachtwoord, d.huidig_wachtwoord
+        if eigen:
+            self.melding.toon(t("Even geduld…", "One moment…"), seconden=90)
+        else:
+            self.melding.toon(t("Even geduld… BugOS vraagt eerst je huidige wachtwoord.",
+                                "One moment… BugOS first asks for your current password."), seconden=90)
 
         def klaar(uitkomst) -> None:
             goed = bool(uitkomst and uitkomst[0])
-            self.melding.toon(t("Je wachtwoord is veranderd.", "Your password has been changed.") if goed else
-                              t("Dat lukte niet. Klopte je huidige wachtwoord?",
-                                "That did not work. Was your current password right?"), "goed" if goed else "fout")
+            if goed:
+                self.melding.toon(t("Je wachtwoord is veranderd.", "Your password has been changed."), "goed")
+            elif uitkomst and uitkomst[1] == "simpel":
+                self.melding.toon(t("Dat wachtwoord is te makkelijk te raden. Kies een langer wachtwoord, "
+                                    "met verschillende soorten tekens.",
+                                    "That password is too easy to guess. Choose a longer one, "
+                                    "with different kinds of characters."), "fout", seconden=12)
+            else:
+                self.melding.toon(t("Dat lukte niet. Klopte je huidige wachtwoord?",
+                                    "That did not work. Was your current password right?"), "fout")
 
-        op_achtergrond(self, lambda: bi.zet_wachtwoord(nieuw), klaar)
+        if eigen:
+            op_achtergrond(self, lambda: bi.zet_eigen_wachtwoord(huidig, nieuw), klaar)
+        else:
+            op_achtergrond(self, lambda: bi.zet_wachtwoord(nieuw), klaar)
 
     def zet_auto(self, aan: bool) -> None:
         naam = self.gebruiker.naam if self.gebruiker else ""
