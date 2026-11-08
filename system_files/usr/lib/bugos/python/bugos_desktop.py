@@ -37,6 +37,10 @@ def lees_bureaublad(pad: Path) -> configparser.RawConfigParser | None:
 def vertaald(sectie: configparser.SectionProxy, sleutel: str) -> str:
     """Name[nl_NL], dan Name[nl], dan Name: in de taal van de gebruiker als dat er is."""
     taal = os.environ.get("LC_ALL") or os.environ.get("LC_MESSAGES") or os.environ.get("LANG") or ""
+    # De taal die je in KDE kiest (LANGUAGE, bijv. "nl:en_US") gaat voor, net als in bugos_base; behalve bij taal C.
+    eerste = next((x for x in os.environ.get("LANGUAGE", "").split(":") if x), "")
+    if eerste and taal.split(".")[0] not in ("C", "POSIX"):
+        taal = eerste
     code = taal.split(".")[0].split("@")[0]
     kandidaten = [f"{sleutel}[{code}]", f"{sleutel}[{code.split('_')[0]}]"] if code else []
     for k in kandidaten + [sleutel]:

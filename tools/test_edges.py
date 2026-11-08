@@ -208,6 +208,26 @@ tests = sorted(p.name for p in (ROOT / "tools").glob("test_*") if p.suffix in ("
 mist = [t for t in tests if f"tools/{t}" not in bouw]
 klopt(not mist, f"build.yml: draait elke test uit tools/ ({len(tests)})" + (f"; mist: {mist}" if mist else ""))
 
+# U022: app-namen volgen de taal die je in KDE kiest (LANGUAGE), ook als LANG Engels is
+import configparser as _cp  # noqa: E402
+import bugos_desktop  # noqa: E402
+_ini = _cp.ConfigParser(interpolation=None)
+_ini.optionxform = str
+_ini.read_string("[Desktop Entry]\nName=Files\nName[nl]=Bestanden\n")
+_oud = {k: os.environ.get(k) for k in ("LANGUAGE", "LANG", "LC_ALL", "LC_MESSAGES")}
+for k in ("LC_ALL", "LC_MESSAGES"):
+    os.environ.pop(k, None)
+os.environ.update(LANG="en_US.UTF-8", LANGUAGE="nl:en_US")
+klopt(bugos_desktop.vertaald(_ini["Desktop Entry"], "Name") == "Bestanden",
+      "app-namen: LANGUAGE=nl wint van LANG=en_US ('Bestanden')")
+os.environ.update(LANG="C", LANGUAGE="nl")
+klopt(bugos_desktop.vertaald(_ini["Desktop Entry"], "Name") == "Files", "app-namen: bij taal C blijft het Engels")
+for k, v in _oud.items():
+    if v is None:
+        os.environ.pop(k, None)
+    else:
+        os.environ[k] = v
+
 # X002: elke actie van buiten GitHub staat op een vaste commit (een label als @v2 kan verschuiven)
 los = []
 for wf in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
