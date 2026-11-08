@@ -232,6 +232,20 @@ MANGOHUD=1 MANGOHUD_CONFIGFILE="$MHC" draai bugos-game-mode uit
 klopt 'grep -qx no_display "$MHC" && grep -qx MANGOHUD=1 "$CF/environment.d/80-bugos-mangohud.conf"' \
     "fps meteen + game-modus uit: meteen verborgen, MangoHud blijft klaar"
 klopt '! grep -q "log in again" "$TMP/meldingen"' "fps meteen + game-modus uit: niets over opnieuw inloggen"
+# U032: de keuze uitzetten terwijl deze sessie ons bestand nog gebruikt: niet weggooien (anders de volle teller).
+MANGOHUD=1 MANGOHUD_CONFIGFILE="$MHC" draai bugos-game-mode fps uit
+klopt 'grep -qx no_display "$MHC" && [ ! -f "$CF/environment.d/80-bugos-mangohud.conf" ]' \
+    "U032: fps meteen uit in een sessie die het gebruikt: teller blijft verborgen tot opnieuw inloggen"
+# U035: je eigen MangoHud.conf (indeling) gaat mee in ons bestand.
+mkdir -p "$CF/MangoHud"
+printf 'fps_only\nposition=top-right\n' >"$CF/MangoHud/MangoHud.conf"
+draai bugos-game-mode fps aan
+klopt 'grep -qx fps_only "$MHC" && grep -qx "position=top-right" "$MHC" && grep -qx no_display "$MHC"' \
+    "U035: fps meteen: je eigen MangoHud-indeling gaat mee (en verborgen als game-modus uit staat)"
+MANGOHUD=1 MANGOHUD_CONFIGFILE="$MHC" draai bugos-game-mode aan
+klopt 'grep -qx fps_only "$MHC" && ! grep -q no_display "$MHC"' "U035: game-modus aan: je eigen indeling, zichtbaar"
+MANGOHUD=1 MANGOHUD_CONFIGFILE="$MHC" draai bugos-game-mode uit
+rm -rf "$CF/MangoHud"
 draai bugos-game-mode aan
 draai bugos-game-mode fps uit
 klopt '[ ! -f "$MHC" ] && [ ! -f "$CF/environment.d/80-bugos-mangohud.conf" ] && grep -qx MANGOHUD=1 "$CF/environment.d/90-bugos-game-mode.conf"' \

@@ -22,14 +22,19 @@ FPS_METEEN="$BUGOS_CONFIG/fps-meteen"
 MH_ENV="${XDG_CONFIG_HOME:-$HOME/.config}/environment.d/80-bugos-mangohud.conf"
 MH_CONF="$BUGOS_CONFIG/mangohud.conf"
 
-# Ons eigen MangoHud-bestand (niet dat van de gebruiker): zichtbaar of verborgen (no_display).
+# Ons eigen MangoHud-bestand: zichtbaar of verborgen (no_display). Heb je zelf een MangoHud.conf
+# (eigen indeling), dan nemen we die over: MangoHud kijkt met MANGOHUD_CONFIGFILE alleen naar ons bestand.
 mangohud_bestand() {
+    local eigen="${XDG_CONFIG_HOME:-$HOME/.config}/MangoHud/MangoHud.conf"
     mkdir -p "$BUGOS_CONFIG"
-    if [ "$1" = zichtbaar ]; then
-        printf '# Gemaakt door bugos-game-mode: de FPS-teller staat aan.\n' >"$MH_CONF"
-    else
-        printf '# Gemaakt door bugos-game-mode: de FPS-teller is verborgen (game-modus staat uit).\nno_display\n' >"$MH_CONF"
-    fi
+    {
+        printf '# Gemaakt door bugos-game-mode (een kopie van je eigen MangoHud.conf, als je die hebt).\n'
+        [ -f "$eigen" ] && cat "$eigen" && printf '\n'
+        [ "$1" = zichtbaar ] || printf '# De FPS-teller is verborgen (game-modus staat uit).\nno_display\n'
+    } >"$MH_CONF.nieuw"
+    # Op dezelfde plek overschrijven (niet verplaatsen): MangoHud let op dit bestand en ziet de wijziging zo.
+    cat "$MH_CONF.nieuw" >"$MH_CONF"
+    rm -f "$MH_CONF.nieuw"
 }
 
 # Heeft deze sessie MangoHud al met ons bestand? Dan werkt aan/uit meteen, zonder opnieuw in te loggen.
@@ -52,7 +57,14 @@ fps_aan() {
 }
 
 fps_uit() {
-    rm -f "$FPS_METEEN" "$MH_ENV" "$MH_CONF"
+    rm -f "$FPS_METEEN" "$MH_ENV"
+    if fps_meteen_actief; then
+        # Deze sessie gebruikt ons bestand nog (tot opnieuw inloggen). Weggooien zou MangoHud de volle teller
+        # laten tonen; dus laten staan zoals game-modus nu is. Bij de volgende keer inloggen is het niet meer in gebruik.
+        if [ -f "$MARKER" ]; then mangohud_bestand zichtbaar; else mangohud_bestand verborgen; fi
+    else
+        rm -f "$MH_CONF"
+    fi
     systemctl --user unset-environment MANGOHUD_CONFIGFILE 2>/dev/null
     if [ -f "$MARKER" ]; then
         # Game-modus staat aan: zoals vroeger, MANGOHUD=1 voor de volgende keer inloggen.
