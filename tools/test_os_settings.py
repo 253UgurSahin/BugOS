@@ -319,6 +319,7 @@ w.nu.setText("oud-geheim")
 klopt(not zonder and w.ok.isEnabled() and w.huidig_wachtwoord == "oud-geheim",
       "U010: wie geen beheerder is, typt ook zijn huidige wachtwoord in het venster")
 import bugos_settings_account as sa  # noqa: E402
+import bugos_settings_onderdelen as mod_onderdelen  # noqa: E402
 venster.ga_naar("inloggen")
 wacht()
 inl = venster.paginas["inloggen"]
@@ -364,6 +365,24 @@ sd.start("instelling:wifi")
 sd.los_starten = oud_los
 klopt(gestart == [("bugos-settings",), ("bugos-settings", "wifi")],
       "U025: instelling: opent de startpagina, instelling:wifi de wifi-pagina")
+
+
+# U026: een bluetooth-apparaat dat niet verbonden is, kun je ook vergeten ('…'-menu op elke regel).
+venster.ga_naar("bluetooth")
+wacht()
+bt = venster.paginas["bluetooth"]
+bt.toon((True, [bi.Apparaat("AA:BB:CC:DD:EE:02", "Oude koptelefoon", "audio-headset", False, None)]))
+rijen = [r for r in bt.lijst.findChildren(mod.Rij) if r.titel.text() == "Oude koptelefoon"]
+klopt(len(rijen) == 1 and rijen[0].rechts is not None, "U026: een apparaat dat niet verbonden is, heeft ook een '…'-menu")
+vergeten: list = []
+oud_menu, oud_vergeet = mod_onderdelen.menu_bij, bi.bt_vergeet
+mod_onderdelen.menu_bij = lambda knop, items: [f() for _ic, tekst, f in items if tekst == "Vergeten"]
+bi.bt_vergeet = lambda adres: vergeten.append(adres)
+if rijen:
+    rijen[0].rechts.click()
+wacht()
+mod_onderdelen.menu_bij, bi.bt_vergeet = oud_menu, oud_vergeet
+klopt(vergeten == ["AA:BB:CC:DD:EE:02"], "U026: 'Vergeten' werkt ook als het apparaat niet verbonden is")
 
 
 venster.close()

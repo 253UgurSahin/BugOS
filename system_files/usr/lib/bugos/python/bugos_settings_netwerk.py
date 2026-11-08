@@ -180,7 +180,9 @@ class BluetoothPagina(Blad):
                                               ("prullenbak", t("Vergeten", "Forget"), lambda: self.vergeet(x))])
                 self.lijst.voeg(Rij("vink", a.naam, t("Verbonden", "Connected") + batterij, meer))
             else:
-                rij = Rij(apparaat_icoon(a.soort), a.naam, t("Niet verbonden", "Not connected") + batterij,
+                # Ook een apparaat dat niet verbonden is, kun je vergeten (bv. een oude koptelefoon).
+                meer = meer_knop(lambda x=a: [("prullenbak", t("Vergeten", "Forget"), lambda: self.vergeet(x))])
+                rij = Rij(apparaat_icoon(a.soort), a.naam, t("Niet verbonden", "Not connected") + batterij, meer,
                           klikbaar=aan, pijl=False)
                 rij.geklikt.connect(lambda x=a: self.verbind(x))
                 self.lijst.voeg(rij)
