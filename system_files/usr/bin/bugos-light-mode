@@ -6,7 +6,7 @@
 #   bugos-light-mode uit   -> alle effecten weer aan
 #   bugos-light-mode status
 #
-# "Oud of traag" = minder dan 6 GB geheugen, of 2 of minder processorkernen.
+# "Oud of traag" = 4 GB geheugen of minder, of 2 of minder processorkernen.
 
 # shellcheck source=system_files/usr/share/bugos/lib.sh
 . /usr/share/bugos/lib.sh
@@ -34,7 +34,8 @@ is_traag() {
     local geheugen_kb kernen
     geheugen_kb="$(awk '/MemTotal/ {print $2}' /proc/meminfo)"
     kernen="$(nproc)"
-    [ "$geheugen_kb" -lt 6000000 ] || [ "$kernen" -le 2 ]
+    # Onder de 5 GB: een pc met 6 GB laat er vaak maar 5,6 GB van zien (de rest is voor beeld en BIOS).
+    [ "$geheugen_kb" -lt 5000000 ] || [ "$kernen" -le 2 ]
 }
 
 aan() {

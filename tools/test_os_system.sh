@@ -150,5 +150,21 @@ for soort in sh py; do
     klopt '[ "$(taal_$soort LANGUAGE=nl LC_ALL=C)" != nl ]' "taal ($soort): LC_ALL=C blijft Engels (zoals bij gettext)"
 done
 
+# U023: een gewone pc met 6 GB (Linux ziet daar zo'n 5,6-5,8 GB van) is niet "oud of traag".
+kopie bugos-light-mode
+sed -i "s|/proc/meminfo|$TMP/meminfo|" "$TMP/bugos-light-mode"
+nep nproc 'echo 4'
+licht_auto() {  # $1 = MemTotal in kB; print aan/uit
+    printf 'MemTotal:       %s kB\n' "$1" >"$TMP/meminfo"
+    rm -rf "$TMP/thuis/.config/bugos"
+    draai bugos-light-mode auto
+    draai bugos-light-mode status
+    cat "$TMP/uit"
+}
+klopt '[ "$(licht_auto 5800000)" = uit ]' "lichte stand: 6 GB-pc (5,8 GB zichtbaar) -> niet vanzelf aan"
+klopt '[ "$(licht_auto 7600000)" = uit ]' "lichte stand: 8 GB-pc -> niet vanzelf aan"
+klopt '[ "$(licht_auto 3800000)" = aan ]' "lichte stand: 4 GB-pc -> wel vanzelf aan"
+rm -f "$TMP/bin/nproc"
+
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
