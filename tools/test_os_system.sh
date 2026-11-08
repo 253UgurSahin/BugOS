@@ -166,5 +166,23 @@ klopt '[ "$(licht_auto 7600000)" = uit ]' "lichte stand: 8 GB-pc -> niet vanzelf
 klopt '[ "$(licht_auto 3800000)" = aan ]' "lichte stand: 4 GB-pc -> wel vanzelf aan"
 rm -f "$TMP/bin/nproc"
 
+# U017: de FPS-teller (MANGOHUD=1) komt pas in games na opnieuw inloggen; game-modus moet dat eerlijk zeggen.
+kopie bugos-game-mode
+nep powerprofilesctl 'echo balanced'
+nep notify-send 'echo "$*" >>"'"$TMP"'/meldingen"'
+rm -rf "$TMP/thuis/.config/bugos" "$TMP/meldingen"
+draai bugos-game-mode aan
+klopt 'grep -q "log in again" "$TMP/meldingen"' "game-modus aan: zegt dat de FPS-teller na opnieuw inloggen komt"
+rm -f "$TMP/meldingen"
+MANGOHUD=1 draai bugos-game-mode uit
+klopt 'grep -q "log in again" "$TMP/meldingen"' "game-modus uit: zegt dat de FPS-teller na opnieuw inloggen weggaat"
+rm -f "$TMP/meldingen"
+MANGOHUD=1 draai bugos-game-mode aan
+klopt '! grep -q "log in again" "$TMP/meldingen"' "game-modus aan terwijl MangoHud al meedraait: niets over inloggen"
+rm -f "$TMP/meldingen"
+draai bugos-game-mode uit
+klopt '! grep -q "log in again" "$TMP/meldingen"' "game-modus uit zonder FPS-teller in deze sessie: niets over inloggen"
+nep notify-send 'exit 0'
+
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
