@@ -11,7 +11,10 @@ Gebruik:  QT_QPA_PLATFORM=offscreen python3 tools/test_os_settings.py
 from __future__ import annotations
 
 import os
+import pwd
+import re
 import shutil
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -78,6 +81,67 @@ _, na = vang(bi.scherm_uit_na, antwoord=lambda c: (0, "false" if "TurnOffDisplay
 klopt(na == 0, "U001: staat uitzetten uit, dan leest Instellingen 'nooit'")
 _, na = vang(bi.scherm_uit_na, antwoord=lambda c: (0, "true" if "TurnOffDisplayWhenIdle" in c else "300"))
 klopt(na == 300, "U001: staat uitzetten aan, dan de tijd")
+
+
+# U002: inloggen zonder wachtwoord op Fedora 44 (Plasma Login); SDDM alleen als Plasma Login er niet is.
+def login_hulpje(wortel: Path) -> Path:
+    """bugos-login, maar met /etc en /usr/lib/plasmalogin in een tijdelijke map, en 'id -u' zegt 0 (beheerder)."""
+    (wortel / "bin").mkdir(parents=True, exist_ok=True)
+    tekst = (BIN / "bugos-login").read_text(encoding="utf-8")
+    tekst = tekst.replace("/usr/lib/plasmalogin", f"{wortel}/usr/lib/plasmalogin").replace("/etc/", f"{wortel}/etc/")
+    (wortel / "login").write_text(tekst, encoding="utf-8")
+    nep_id = wortel / "bin" / "id"
+    nep_id.write_text('#!/usr/bin/bash\nif [ "$1" = -u ]; then echo 0; else exec /usr/bin/id "$@"; fi\n')
+    nep_id.chmod(0o755)
+    return wortel / "login"
+
+
+def login(wortel: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["bash", str(wortel / "login"), *args], capture_output=True, text=True,
+                          env={**os.environ, "PATH": f"{wortel}/bin:{os.environ['PATH']}"})
+
+
+ik = pwd.getpwuid(os.getuid()).pw_name
+wortel = TMP / "login-pl"
+login_hulpje(wortel)
+(wortel / "usr" / "lib" / "plasmalogin").mkdir(parents=True)
+r = login(wortel, "aan", ik)
+pl = wortel / "etc" / "plasmalogin.conf.d" / "50-bugos-login.conf"
+klopt(r.returncode == 0 and pl.is_file() and f"User={ik}" in pl.read_text() and "[Autologin]" in pl.read_text()
+      and not (wortel / "etc" / "sddm.conf.d").exists(),
+      "U002: met Plasma Login komt 'zonder wachtwoord' in /etc/plasmalogin.conf.d")
+klopt(login(wortel, "status", ik).stdout.strip() == "aan", "U002: status leest Plasma Login")
+r = login(wortel, "uit", ik)
+klopt(r.returncode == 0 and not pl.exists() and login(wortel, "status", ik).stdout.strip() == "uit",
+      "U002: weer uit haalt het bestand weg")
+wortel = TMP / "login-sddm"
+login_hulpje(wortel)
+r = login(wortel, "aan", ik)
+klopt(r.returncode == 0 and (wortel / "etc" / "sddm.conf.d" / "50-bugos-login.conf").is_file()
+      and login(wortel, "status", ik).stdout.strip() == "aan", "U002: zonder Plasma Login nog steeds via SDDM")
+# Een geldige inlognaam met een punt (jan.jansen) mag; rare namen niet. Of hij bestaat checkt 'id'.
+regel = next(r for r in (BIN / "bugos-login").read_text().splitlines() if "=~" in r)
+patroon = re.search(r"\^\S*\$", regel).group(0)
+klopt(re.fullmatch(patroon, "jan.jansen") and re.fullmatch(patroon, "bugie")
+      and not re.fullmatch(patroon, "-root") and not re.fullmatch(patroon, ".x") and not re.fullmatch(patroon, "a b")
+      and not re.fullmatch(patroon, "a;rm"), "U002: inlognaam jan.jansen mag, rare namen niet")
+klopt(login(TMP / "login-sddm", "status", "bestaat.niet.echt").returncode == 2, "U002: een naam die niet bestaat: nee")
+# Instellingen leest wat het inlogscherm echt gebruikt.
+import bugos_config_account as acc  # noqa: E402
+oud = (acc.PLASMALOGIN, acc.PLASMALOGIN_BESTANDEN, acc.SDDM_BESTANDEN, bi.VOORBEELD)
+wortel = TMP / "login-lees"
+(wortel / "etc" / "plasmalogin.conf.d").mkdir(parents=True)
+(wortel / "etc" / "sddm.conf.d").mkdir(parents=True)
+(wortel / "etc" / "plasmalogin.conf.d" / "50-bugos-login.conf").write_text(f"[Autologin]\nUser={ik}\nSession=plasma\n")
+acc.PLASMALOGIN = str(wortel / "usr" / "lib" / "plasmalogin")
+acc.PLASMALOGIN_BESTANDEN = (str(wortel / "etc" / "plasmalogin.conf"), str(wortel / "etc" / "plasmalogin.conf.d"))
+acc.SDDM_BESTANDEN = (str(wortel / "etc" / "sddm.conf"), str(wortel / "etc" / "sddm.conf.d"))
+bi.VOORBEELD = False
+zonder_pl = bi.gebruiker().auto_inloggen
+Path(acc.PLASMALOGIN).mkdir(parents=True)
+met_pl = bi.gebruiker().auto_inloggen
+acc.PLASMALOGIN, acc.PLASMALOGIN_BESTANDEN, acc.SDDM_BESTANDEN, bi.VOORBEELD = oud
+klopt(met_pl and not zonder_pl, "U002: Instellingen leest Plasma Login als dat er is (en anders SDDM)")
 
 
 shutil.rmtree(TMP, ignore_errors=True)

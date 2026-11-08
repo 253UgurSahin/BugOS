@@ -123,11 +123,19 @@ class Gebruiker:
     auto_inloggen: bool
 
 
+# Fedora 44 heeft Plasma Login (plasmalogin); SDDM alleen als Plasma Login er niet is (net als bugos-login).
+PLASMALOGIN = "/usr/lib/plasmalogin"
+PLASMALOGIN_BESTANDEN = ("/etc/plasmalogin.conf", "/etc/plasmalogin.conf.d")
 SDDM_BESTANDEN = ("/etc/sddm.conf", "/etc/sddm.conf.d")
 
 
+def inlog_bestanden() -> tuple[str, ...]:
+    """De instellingen van het inlogscherm dat echt gebruikt wordt."""
+    return PLASMALOGIN_BESTANDEN if Path(PLASMALOGIN).is_dir() else SDDM_BESTANDEN
+
+
 def lees_autologin(teksten: list[str], naam: str) -> bool:
-    """Staat in een sddm-bestand [Autologin] User=<naam>?"""
+    """Staat in een bestand van het inlogscherm [Autologin] User=<naam>?"""
     for tekst in teksten:
         groep = ""
         for regel in tekst.splitlines():
@@ -156,7 +164,7 @@ def gebruiker() -> Gebruiker:
     except KeyError:
         beheerder = False
     teksten = []
-    for pad in SDDM_BESTANDEN:
+    for pad in inlog_bestanden():
         p = Path(pad)
         bestanden = sorted(p.glob("*.conf")) if p.is_dir() else [p]
         for b in bestanden:
