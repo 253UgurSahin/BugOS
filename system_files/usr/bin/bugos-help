@@ -170,7 +170,9 @@ def controle_updates() -> Uitslag:
         deploys = json.loads(uit).get("deployments", [])
     except ValueError:
         deploys = []
-    if deploys and not deploys[0].get("booted", True):
+    # Alleen een nieuwere versie bovenaan is een update: na "terug naar de vorige versie" staat de oude daar.
+    nu = next((d.get("timestamp") or 0 for d in deploys if d.get("booted")), 0)
+    if deploys and not deploys[0].get("booted", True) and (deploys[0].get("timestamp") or 0) > nu:
         return Uitslag(naam, LET_OP,
                        t("Er staat een update klaar. Start de computer opnieuw op om hem te gebruiken.",
                          "An update is ready. Restart the computer to use it."),

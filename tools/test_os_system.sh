@@ -15,11 +15,11 @@ klopt() { if eval "$1"; then echo "OK    $2"; else echo "FOUT  $2"; fouten=$((fo
 nep() { printf '#!/usr/bin/bash\n%s\n' "$2" >"$TMP/bin/$1"; chmod +x "$TMP/bin/$1"; }
 # Een script met lib.sh uit deze map (niet die van de computer).
 kopie() { sed "s|/usr/share/bugos|$ROOT/system_files/usr/share/bugos|g" "$BIN/$1" >"$TMP/$1"; }
-# Draai een gekopieerd script met de nep-programma's, in het Engels; geeft de afsluitcode.
+# Draai een gekopieerd script met de nep-programma's, in het Engels (C.UTF-8: die taal is er altijd); geeft de afsluitcode.
 draai() {
     local naam="$1"
     shift
-    HOME="$TMP/thuis" XDG_CONFIG_HOME="$TMP/thuis/.config" PATH="$TMP/bin:$PATH" LC_ALL=en_US.UTF-8 \
+    HOME="$TMP/thuis" XDG_CONFIG_HOME="$TMP/thuis/.config" PATH="$TMP/bin:$PATH" LC_ALL=C.UTF-8 \
         bash "$TMP/$naam" "$@" >"$TMP/uit" 2>&1
     code=$?
 }
@@ -47,6 +47,44 @@ klopt '[ $code -ne 0 ] && ! grep -q Done "$TMP/uit"' "updates terug: rollback mi
 nep rpm-ostree 'exit 0'
 draai bugos-updates terug
 klopt '[ $code -eq 0 ] && grep -q Done "$TMP/uit"' "updates terug: rollback gelukt -> 'Done'"
+
+# U024: na "terug naar de vorige versie" staat de oude versie bovenaan; dat is geen nieuwe update.
+kopie bugos-updatecheck
+nep bugos-updates 'echo hand'
+nep skopeo 'exit 1'
+nep notify-send 'echo "$*" >>"'"$TMP"'/meldingen"'
+status_json() {  # $1 = tijd van de bovenste versie, $2 = tijd van de versie die nu draait
+    printf '{"deployments":[{"booted":false,"timestamp":%s},{"booted":true,"timestamp":%s}]}' "$1" "$2" >"$TMP/status.json"
+}
+nep rpm-ostree 'cat "'"$TMP"'/status.json"'
+status_json 1000 2000   # bovenaan staat de oudere versie (na terug)
+rm -f "$TMP/meldingen"
+draai bugos-updatecheck
+klopt '! grep -q "Update is ready" "$TMP/meldingen" 2>/dev/null' "updatecheck: na terugzetten geen 'Update is ready'"
+status_json 3000 2000   # bovenaan staat een nieuwere versie
+rm -f "$TMP/meldingen"
+draai bugos-updatecheck
+klopt 'grep -q "Update is ready" "$TMP/meldingen" 2>/dev/null' "updatecheck: nieuwere versie klaar -> 'Update is ready'"
+nep notify-send 'exit 0'
+
+# Hulp (bugos-help, Python): één controle draaien met de nep-programma's; print stand en tekst.
+hulp() {
+    HOME="$TMP/thuis" PATH="$TMP/bin:$PATH" LC_ALL=C.UTF-8 QT_QPA_PLATFORM=offscreen PYTHONDONTWRITEBYTECODE=1 \
+        python3 - "$ROOT" "$1" <<'PY' 2>&1
+import importlib.machinery, importlib.util, sys
+root, naam = sys.argv[1], sys.argv[2]
+sys.path.insert(0, root + "/system_files/usr/lib/bugos/python")
+lader = importlib.machinery.SourceFileLoader("bugos_help", root + "/system_files/usr/bin/bugos-help")
+bh = importlib.util.module_from_spec(importlib.util.spec_from_loader("bugos_help", lader))
+lader.exec_module(bh)
+u = getattr(bh, naam)()
+print(u.stand, u.tekst)
+PY
+}
+status_json 1000 2000
+klopt '[[ "$(hulp controle_updates)" == ok* ]]' "hulp: na terugzetten staat er geen update klaar"
+status_json 3000 2000
+klopt '[[ "$(hulp controle_updates)" == let_op* ]]' "hulp: nieuwere versie klaar -> 'An update is ready'"
 
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

@@ -12,7 +12,10 @@
 STATUS="$(rpm-ostree status --json 2>/dev/null)" || exit 0
 
 # Staat er al een update klaar die nog niet gebruikt wordt? Dan vragen om te herstarten.
-if [ "$(echo "$STATUS" | jq -r '.deployments[0].booted')" = false ]; then
+# Alleen als die bovenste versie nieuwer is: na "terug naar de vorige versie" staat de oude bovenaan.
+KLAAR="$(echo "$STATUS" | jq -r '(.deployments[] | select(.booted) | .timestamp) as $nu
+    | .deployments[0] | (.booted == false and (.timestamp // 0) > ($nu // 0))')"
+if [ "$KLAAR" = true ]; then
     melding "$(t "Update staat klaar" "Update is ready")" \
         "$(t "Start de computer opnieuw op om de nieuwe versie te gebruiken." "Restart the computer to use the new version.")"
     exit 0
