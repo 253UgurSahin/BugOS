@@ -98,6 +98,36 @@ klopt(isinstance(_uit, Path) and (_uit / "Vakantie" / "b.jpg").read_text() == "b
       f"U040: een map met submappen komt op een stick die mapsrechten weigert ({_uit})")
 
 
+# U037: naar een stick zonder hoofdletters (FAT/exFAT): 'IMG_1.JPG' en 'img_1.jpg' overschrijven elkaar niet,
+# de tweede blijft staan en wordt genoemd; bij verplaatsen blijft hij op de oude plek.
+klopt(acties.kent_hoofdletters(TMP), "U037: een gewone Linux-map kent hoofdletters (dan verandert er niets)")
+_echt_kent = acties.kent_hoofdletters
+acties.kent_hoofdletters = lambda map_: False   # doe alsof STICK een FAT-stick is
+for _verplaats in (False, True):
+    _b = TMP / f"thuis-u037-{_verplaats}" / "Camera"
+    (_b / "Sub").mkdir(parents=True)
+    (_b / "IMG_1.JPG").write_text("groot")
+    (_b / "img_1.jpg").write_text("klein")
+    (_b / "Sub" / "a.txt").write_text("a")
+    _achter: list = []
+    if _verplaats:  # een stick is een andere schijf: rename lukt daar niet (EXDEV)
+        _keer: list = []
+        os.rename = lambda a, c, k=_keer: (k.append(1), (_ for _ in ()).throw(OSError(errno.EXDEV, "cross-device")))[1] \
+            if not k else _echt_rename(a, c)
+    _doel = acties.kopieer_een(_b, STICK, _verplaats, _achter)
+    os.rename = _echt_rename
+    _op_stick = sorted(p.name for p in _doel.iterdir())
+    klopt(_op_stick == ["IMG_1.JPG", "Sub"] and (_doel / "IMG_1.JPG").read_text() == "groot"
+          and [n for _p, n, _r in _achter] == ["Camera/img_1.jpg"] and "hoofdletters" in _achter[0][2].lower()
+          + "capitals",
+          f"U037: {'verplaatsen' if _verplaats else 'kopiëren'}: één van de twee mee, de andere genoemd ({_op_stick}, {_achter})")
+    if _verplaats:
+        klopt((_b / "img_1.jpg").read_text() == "klein" and not (_b / "IMG_1.JPG").exists(),
+              "U037: verplaatsen: wat niet mee kon, staat nog op de oude plek; de rest is weg")
+    shutil.rmtree(_doel)
+acties.kent_hoofdletters = _echt_kent
+
+
 def eerste_rename_andere_schijf() -> None:
     """Het verplaatsen zelf zegt 'andere schijf' (EXDEV); daarna werkt rename gewoon."""
     keer = []

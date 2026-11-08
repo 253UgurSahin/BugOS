@@ -226,6 +226,38 @@ def _bekijk_fouten(fouten: list, bron: Path, tijdelijk: Path, achter: list) -> N
         achter.append((Path(van), bron.name if rel == "." else f"{bron.name}/{rel}", reden))
 
 
+def hoofdletter_reden() -> str:
+    return t("er staat al iets met dezelfde naam in andere hoofdletters, en deze schijf ziet dat als hetzelfde",
+             "something with the same name in other capitals is already there, and this drive sees them as the same")
+
+
+def kent_hoofdletters(map_: Path) -> bool:
+    """Ziet deze schijf 'Foto.jpg' en 'foto.jpg' als twee bestanden? (FAT/exFAT op een USB-stick: nee.)"""
+    proef = map_ / f".bugos-Hoofdletters-{os.getpid()}"
+    try:
+        proef.touch(exist_ok=False)
+    except OSError:
+        return True  # kunnen we niet proberen: dan doen we zoals altijd
+    try:
+        return not (map_ / proef.name.lower()).exists()
+    finally:
+        proef.unlink(missing_ok=True)
+
+
+def dubbele_namen(map_: Path) -> list[Path]:
+    """Alles in 'map_' (ook dieper) dat alleen in hoofdletters verschilt van iets ernaast: de tweede en verder."""
+    dubbel = []
+    for wortel, mappen, bestanden in os.walk(map_):
+        gezien: set[str] = set()
+        for naam in sorted(mappen + bestanden):
+            sleutel = naam.casefold()
+            if sleutel in gezien:
+                dubbel.append(Path(wortel) / naam)
+            gezien.add(sleutel)
+        mappen[:] = [m for m in mappen if (Path(wortel) / m) not in dubbel]
+    return dubbel
+
+
 def schrijf_weg(pad: Path) -> None:
     """Zorg dat wat we kopieerden echt op de schijf staat, niet alleen in het geheugen van de computer.
 
@@ -271,8 +303,18 @@ def kopieer_een(bron: Path, doelmap: Path, verplaats: bool, achter: list | None 
     hier = len(achter)
     try:
         if bron.is_dir() and not bron.is_symlink():
+            # Op een stick die geen hoofdletters kent, zou 'IMG_1.JPG' 'img_1.jpg' overschrijven (en bij
+            # verplaatsen ben je er dan één kwijt). Zo'n tweede blijft hier staan, en dat zeggen we.
+            overslaan: set[Path] = set()
+            if not kent_hoofdletters(doelmap):
+                for p in dubbele_namen(bron):
+                    overslaan.add(p)
+                    rel = os.path.relpath(p, bron)
+                    achter.append((p, f"{bron.name}/{rel}", hoofdletter_reden()))
             try:
-                shutil.copytree(bron, tijdelijk, symlinks=True)
+                shutil.copytree(bron, tijdelijk, symlinks=True,
+                                ignore=(lambda map_, namen: {n for n in namen if Path(map_) / n in overslaan})
+                                if overslaan else None)
             except shutil.Error as e:
                 _bekijk_fouten(list(e.args[0]) if e.args and isinstance(e.args[0], list) else [None],
                                bron, tijdelijk, achter)
