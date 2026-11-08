@@ -406,6 +406,21 @@ klopt(start_data_taal(LANG="en_US.UTF-8", LANGUAGE="nl:en_US") == "nl"
       "U022: bugos-start-data: de eerste taal uit LANGUAGE wint, behalve bij C/POSIX")
 
 
+# U027: de live-stick in twee talen: eerst Engels, dan Nederlands (opstartmenu en de vensters bij installeren).
+iso_yaml = (ROOT / "iso_live/src/iso.yaml").read_text(encoding="utf-8")
+namen = re.findall(r'name: "([^"]*)"', iso_yaml)
+klopt(len(namen) == 2 and all(" / " in n for n in namen) and namen[0].startswith("Try or install BugOS")
+      and "proberen of installeren" in namen[0] and "veilige stand" in namen[1] and "safe mode" in namen[1],
+      "U027: opstartmenu van de stick: Engels / Nederlands")
+iso_bouw = (ROOT / "iso_live/src/build.sh").read_text(encoding="utf-8")
+teksten = re.findall(r'--text(?:-info)?[^"]*?--text="([^"]*)"|--text="([^"]*)"', iso_bouw)
+teksten = [a or b for a, b in teksten]
+paren = (("Installing BugOS did not work", "is niet gelukt"), ("One more step", "Nog één stap"),
+         ("could not be added", "kon niet worden toegevoegd"))
+klopt(len(teksten) == 3 and all(0 <= x.find(en) < x.find(nl) for x, (en, nl) in zip(teksten, paren)),
+      "U027: de vensters bij het installeren: eerst Engels, dan Nederlands")
+
+
 venster.close()
 shutil.rmtree(TMP, ignore_errors=True)
 print()
