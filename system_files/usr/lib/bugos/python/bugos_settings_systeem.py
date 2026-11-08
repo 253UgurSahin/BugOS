@@ -11,8 +11,8 @@ from pathlib import Path
 
 import bugos_config as bi
 from bugos_ui import Kaart, Knop, Rij, bestaat, draai, label, start, t
-from bugos_settings_onderdelen import Blad, schuifje
-from PySide6.QtCore import Qt
+from bugos_settings_onderdelen import Blad, op_achtergrond, schuifje
+from PySide6.QtCore import QProcess, Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
@@ -72,6 +72,12 @@ def systeem_info() -> list[tuple[str, str]]:
     return info
 
 
+def herstart() -> None:
+    """Vraag netjes of je opnieuw wilt opstarten (het scherm van KDE: opgeslagen werk eerst)."""
+    start("gdbus", "call", "--session", "--dest", "org.kde.LogoutPrompt", "--object-path", "/LogoutPrompt",
+          "--method", "org.kde.LogoutPrompt.promptReboot")
+
+
 # ======================================================= updates en meer ===
 
 class UpdatesPagina(Blad):
@@ -84,21 +90,19 @@ class UpdatesPagina(Blad):
     def bouw(self) -> None:
         g = self.kaart(t("Updates", "Updates"))
         auto = status_van("bugos-updates") or not bestaat("bugos-updates")
+        self.auto = schuifje(auto, lambda aan: None if bi.VOORBEELD else self.updates("auto" if aan else "hand"))
         g.voeg(Rij("verversen", t("Updates vanzelf", "Automatic updates"),
                    t("Aan: BugOS houdt zichzelf stil bij. Uit: jij kiest wanneer.",
-                     "On: BugOS quietly keeps itself up to date. Off: you choose when."),
-                   schuifje(auto, lambda aan: None if bi.VOORBEELD else
-                            start("pkexec", "/usr/bin/bugos-updates", "auto" if aan else "hand"))))
+                     "On: BugOS quietly keeps itself up to date. Off: you choose when."), self.auto))
         knoppen = QWidget()
         kr = QHBoxLayout(knoppen)
         kr.setContentsMargins(52, 4, 14, 12)
-        nu = Knop(t("Nu updaten", "Update now"), "gewoon", "lijn:verversen")
-        nu.clicked.connect(lambda _c=False: None if bi.VOORBEELD else start("pkexec", "/usr/bin/bugos-updates", "nu"))
-        terug = Knop(t("Terug naar de vorige versie", "Back to the previous version"), "stil", "lijn:terug")
-        terug.clicked.connect(lambda _c=False: None if bi.VOORBEELD else
-                              start("pkexec", "/usr/bin/bugos-updates", "terug"))
-        kr.addWidget(nu)
-        kr.addWidget(terug)
+        self.nu = Knop(t("Nu updaten", "Update now"), "gewoon", "lijn:verversen")
+        self.nu.clicked.connect(lambda _c=False: None if bi.VOORBEELD else self.updates("nu"))
+        self.terug = Knop(t("Terug naar de vorige versie", "Back to the previous version"), "stil", "lijn:terug")
+        self.terug.clicked.connect(lambda _c=False: None if bi.VOORBEELD else self.updates("terug"))
+        kr.addWidget(self.nu)
+        kr.addWidget(self.terug)
         kr.addStretch(1)
         g.lay.addWidget(knoppen)
         g = self.kaart(t("Spelen en werken", "Play and work"))
@@ -137,6 +141,58 @@ class UpdatesPagina(Blad):
             rij = Rij(ic, t(nl, en), t(unl, uen), klikbaar=True)
             rij.geklikt.connect(lambda p=programma: None if bi.VOORBEELD else start(p))
             g.voeg(rij)
+
+    def updates(self, wat: str) -> None:
+        """bugos-updates nu/terug/auto/hand als beheerder, zonder dat het venster vastloopt; daarna zeggen hoe
+        het ging. (Een update kan lang duren: daarom QProcess en geen draai.)"""
+        if wat in ("nu", "terug"):
+            self.nu.setEnabled(False)
+            self.terug.setEnabled(False)
+            bezig = (t("Bezig met updaten… Dit kan even duren. Laat Instellingen open tot het klaar is.",
+                       "Updating… This can take a while. Keep Settings open until it is done.") if wat == "nu" else
+                     t("Bezig met teruggaan naar de vorige versie…", "Going back to the previous version…"))
+            self.melding.toon(bezig, seconden=0)
+        proces = QProcess(self)
+        proces.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        gedaan: list[bool] = []
+
+        def af(code: int = 1, status=QProcess.ExitStatus.CrashExit) -> None:
+            if gedaan:
+                return
+            gedaan.append(True)
+            try:
+                uit = bytes(proces.readAll()).decode(errors="ignore")
+                proces.deleteLater()
+                self.klaar_met(wat, code if status == QProcess.ExitStatus.NormalExit else 1, uit)
+            except RuntimeError:
+                pass    # Instellingen ging dicht terwijl het nog bezig was: niemand meer om het te zeggen.
+
+        proces.finished.connect(af)
+        proces.errorOccurred.connect(lambda soort: af() if soort == QProcess.ProcessError.FailedToStart else None)
+        proces.start("pkexec", ["/usr/bin/bugos-updates", wat])
+
+    def klaar_met(self, wat: str, code: int, uit: str) -> None:
+        if wat in ("auto", "hand"):
+            # Lees opnieuw wat er echt staat: zei je 'Annuleren' bij het wachtwoord, dan springt de schakelaar terug.
+            op_achtergrond(self, lambda: status_van("bugos-updates"), lambda aan: self.auto.zet_stil(aan is True))
+            if code != 0 and code not in (126, 127):
+                self.melding.toon(t("Dat lukte niet. Probeer het nog eens.", "That did not work. Try again."), "fout")
+            return
+        self.nu.setEnabled(True)
+        self.terug.setEnabled(True)
+        if code in (126, 127):
+            # pkexec: 126 = je klikte Annuleren, 127 = geen toestemming.
+            self.melding.toon(t("Niets gedaan: er was geen toestemming.", "Nothing done: permission was not given."))
+        elif code != 0:
+            self.melding.toon(t("Dat lukte niet. Ben je online? Probeer het later nog eens.",
+                                "That did not work. Are you online? Try again later."), "fout", seconden=0)
+        elif wat == "nu" and "No upgrade available" in uit:
+            self.melding.toon(t("BugOS is al helemaal bij.", "BugOS is already up to date."), "goed")
+        else:
+            tekst = (t("Klaar. Start de computer opnieuw op om de nieuwe versie te gebruiken.",
+                       "Done. Restart the computer to use the new version.") if wat == "nu" else
+                     t("Klaar. Start de computer opnieuw op om terug te gaan.", "Done. Restart the computer to go back."))
+            self.melding.toon(tekst, "goed", t("Nu opnieuw opstarten", "Restart now"), herstart, seconden=0)
 
 
 # ===================================================== over deze computer ===

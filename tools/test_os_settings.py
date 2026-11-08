@@ -18,6 +18,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import tempfile
 from pathlib import Path
 
@@ -227,6 +228,56 @@ wacht()
 bi.verbind = oud_verbind
 klopt(pogingen == [("Home", "", True), ("Home", "nieuw-geheim", True)] and gevraagd == [True],
       "U011: lukt een bekend netwerk niet, dan vraagt Instellingen het (nieuwe) wachtwoord en probeert opnieuw")
+
+
+# U006: 'Nu updaten' en 'Terug' zeggen hoe het ging; Annuleren bij het wachtwoord zet de schakelaar terug.
+# Nep-pkexec doet wat in het bestand 'code' staat; nep-bugos-updates zegt 'auto'.
+nep_pk = TMP / "nep-pk"
+nep_pk.mkdir()
+(nep_pk / "pkexec").write_text(f'#!/usr/bin/bash\necho "$2" >>"{nep_pk}/gedaan"\necho "uitvoer van $2"\n'
+                               f'exit "$(cat "{nep_pk}/code")"\n')
+(nep_pk / "bugos-updates").write_text("#!/usr/bin/bash\necho auto\n")
+for f in ("pkexec", "bugos-updates"):
+    (nep_pk / f).chmod(0o755)
+venster.ga_naar("updates")
+wacht()
+upd = venster.paginas["updates"]
+
+
+def update_proef(wat: str, code: int) -> str:
+    (nep_pk / "code").write_text(str(code))
+    upd.melding.hide()
+    upd.updates(wat)
+    for _ in range(200):
+        app.processEvents()
+        time.sleep(0.02)
+        if upd.nu.isEnabled() and not upd.melding.isHidden():
+            break
+    return upd.melding.tekst.text()
+
+
+# (LC_ALL=C.UTF-8: in deze testomgeving bestaat nl_NL niet, en dan klaagt bash op stderr; de taal van
+# Instellingen zelf ligt al vast.)
+os.environ.update(PATH=f"{nep_pk}:{oud_pad}", LC_ALL="C.UTF-8")
+bi.VOORBEELD = False
+mislukt = update_proef("nu", 1)
+gelukt = update_proef("nu", 0)
+herstart_knop = upd.melding.knop.isVisibleTo(upd.melding)
+geannuleerd = update_proef("terug", 126)
+upd.auto.setChecked(False)        # jij zet 'Updates vanzelf' uit, en klikt dan Annuleren bij het wachtwoord
+for _ in range(200):
+    app.processEvents()
+    QThreadPool.globalInstance().waitForDone(20)
+    time.sleep(0.02)
+    if upd.auto.isChecked():
+        break
+bi.VOORBEELD = True
+os.environ.update(PATH=oud_pad, LC_ALL="nl_NL.UTF-8")
+klopt("lukte niet" in mislukt, "U006: 'Nu updaten' mislukt: dat zegt Instellingen ook")
+klopt("opnieuw op" in gelukt and herstart_knop, "U006: 'Nu updaten' gelukt: klaar, met een knop om opnieuw op te starten")
+klopt("toestemming" in geannuleerd, "U006: Annuleren bij het wachtwoord: niets gedaan")
+klopt(upd.auto.isChecked() and (nep_pk / "gedaan").read_text().split() == ["nu", "nu", "terug", "hand"],
+      "U006: Annuleren bij 'Updates vanzelf' uit: de schakelaar springt terug")
 
 
 venster.close()
