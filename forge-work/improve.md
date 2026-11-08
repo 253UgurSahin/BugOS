@@ -149,7 +149,9 @@ there (and in pull request #2).
   (no_display), which MangoHud re-reads; or else say clearly "after logging in again".
   commit: f0e7b2e game mode says honestly that the FPS counter needs a new login
   test:   tools/test_os_system.sh
-  note:   chosen fix: the honest message ("the FPS counter appears after you log in again"). Making it work at once would mean MangoHud loaded (hidden) in every Vulkan app all the time: a decision for you, see For you.
+  note:   first the honest message ("after you log in again"); then, as the user asked ("instelbaar maken"),
+          a choice in Settings: "FPS counter ready at once" (commit 6d3f8e7 feat(U017)). On: MangoHud always runs
+          hidden with BugOS's own MangoHud file and game mode shows/hides the counter at once. Off (default): as before.
 
 ### U018 [medium] qdbus6 does not exist on Fedora 44: Help's "Restart now" button does nothing; light mode does not reload KWin.
   where: system_files/usr/bin/bugos-help:177 (start("qdbus6",...)); bugos-light-mode:58, :88
@@ -246,8 +248,8 @@ there (and in pull request #2).
 ## Skipped
 
 ## For you
-- U017: do you want the FPS counter to switch on at once? That means MANGOHUD=1 in every session for good and
-  MangoHud loaded (hidden) in every Vulkan app; game mode then only shows or hides it. Now it says "after you log in again".
+- The user said (2026-11-08): real-PC tests (below) come once an improve round finds nothing more; the GitHub
+  settings (signing key, default branch, private reporting) and the merge are theirs; no merge before the real-PC test.
 - U010: test changing your password once as a family member who is not an administrator, on a real BugOS PC
   (tested here with real PAM in the Fedora 44 image, not on hardware).
 - U002, U004, U012: test once on a real PC: log in without a password after a restart; move files to a USB stick and
