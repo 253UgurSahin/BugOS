@@ -96,6 +96,8 @@ jobs:
         run: bash tools/test_os_system.sh
       - name: OS-instellingen testen (scherm, inloggen, wifi, printers, updates, wachtwoord, menu's; met nep-programma's)
         run: QT_QPA_PLATFORM=offscreen python3 tools/test_os_settings.py
+      - name: OS-apps testen (kopiëren naar USB, wegschrijven, back-up, winkel, schermlezer, slepen; met tijdelijke mappen)
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_os_apps.py
       - name: "'Er werkt iets niet' testen (nakijken en repareren op de achtergrond)"
         run: QT_QPA_PLATFORM=offscreen python3 tools/test_help.py
       - name: Overstappen op ondertekende updates testen (met een nep-rpm-ostree)
