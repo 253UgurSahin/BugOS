@@ -158,7 +158,13 @@ class Bewerken:
             self.melding.toon(t("Een naam mag geen / bevatten.", "A name cannot contain /."), "fout")
             return
         doel = oud.with_name(nieuw)
-        if doel.exists() or doel.is_symlink():  # ook een kapotte snelkoppeling niet overschrijven
+        # Op een USB-stick (FAT/exFAT) zijn Foto.JPG en Foto.jpg hetzelfde bestand: dan is het
+        # alleen andere hoofdletters, en dat mag gewoon.
+        try:
+            alleen_hoofdletters = nieuw.lower() == oud.name.lower() and doel.exists() and oud.samefile(doel)
+        except OSError:
+            alleen_hoofdletters = False
+        if (doel.exists() or doel.is_symlink()) and not alleen_hoofdletters:  # ook een kapotte snelkoppeling niet overschrijven
             self.melding.toon(t(f"Er staat al iets met de naam '{nieuw}'.", f"Something named '{nieuw}' already exists."), "fout")
             return
         try:

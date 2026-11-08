@@ -446,6 +446,50 @@ klopt(lezer(r)[1] == "Nieuwe titel", "U016: verandert de titel van een regel, da
 vi.close()
 del os.environ["BUGOS_INSTELLINGEN_VOORBEELD"]
 
+# ===================================== U029: Foto.JPG -> Foto.jpg op een stick (FAT/exFAT kent geen hoofdletters) ===
+from bugos_files_bewerken import Bewerken  # noqa: E402
+
+
+class NepMelding:
+    def __init__(self):
+        self.teksten: list[str] = []
+
+    def toon(self, tekst, *a, **k):
+        self.teksten.append(tekst)
+
+
+class NepVenster(Bewerken):
+    """Alleen wat 'Naam wijzigen' nodig heeft."""
+
+    def __init__(self, gekozen: Path, nieuw: str):
+        self.in_prullenbak, self._gekozen, self._nieuw, self.melding = False, gekozen, nieuw, NepMelding()
+
+    def gekozen(self):
+        return [self._gekozen]
+
+    def vraag_tekst(self, *a, **k):
+        return self._nieuw
+
+
+FAT = stick_map("fat-stick")
+(FAT / "Foto.JPG").write_text("foto")
+os.link(FAT / "Foto.JPG", FAT / "Foto.jpg")  # zo ziet een FAT-stick het: twee namen, één bestand
+hernoemd: list = []
+_echt_path_rename = Path.rename
+Path.rename = lambda self, doel: hernoemd.append((self.name, Path(doel).name)) or Path(doel)
+nv = NepVenster(FAT / "Foto.JPG", "Foto.jpg")
+nv.hernoem()
+klopt(hernoemd == [("Foto.JPG", "Foto.jpg")] and not any("al iets" in x for x in nv.melding.teksten),
+      f"U029: alleen hoofdletters anders op een stick: de naam wordt gewoon gewijzigd {nv.melding.teksten}")
+(FAT / "Brief.txt").write_text("een")
+(FAT / "brief.txt").write_text("twee")  # echt twee bestanden (op een gewone schijf kan dat)
+hernoemd.clear()
+nv = NepVenster(FAT / "Brief.txt", "brief.txt")
+nv.hernoem()
+Path.rename = _echt_path_rename
+klopt(hernoemd == [] and any("al iets" in x for x in nv.melding.teksten),
+      "U029: bestaat er echt een ander bestand met die naam, dan blijft het geweigerd")
+
 print()
 shutil.rmtree(TMP, ignore_errors=True)  # alleen onze eigen tijdelijke testmap
 print("Alles goed." if not fouten else f"{fouten} fout(en).")
