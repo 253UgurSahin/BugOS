@@ -84,12 +84,16 @@ def netwerken(opnieuw_zoeken: bool = False) -> list[Netwerk]:
     return lees_netwerken(uit)
 
 
-def verbind(naam: str, wachtwoord: str = "") -> tuple[bool, str]:
-    """Verbind met een wifi-netwerk. Het wachtwoord gaat via de invoer, niet op de opdrachtregel."""
+def verbind(naam: str, wachtwoord: str = "", bekend: bool = False) -> tuple[bool, str]:
+    """Verbind met een wifi-netwerk. Het wachtwoord gaat via de invoer, niet op de opdrachtregel.
+    bekend: het netwerk is al opgeslagen, maar het wachtwoord is veranderd. Dan het opgeslagen netwerk
+    starten met --ask: werkt het oude wachtwoord niet, dan vraagt nmcli het nieuwe (en dat lezen we uit de invoer)."""
     if _c.VOORBEELD:
         _c._VB["verbonden"] = naam
         return True, ""
-    if wachtwoord:
+    if wachtwoord and bekend:
+        code, uit = _c.draai("nmcli", "--ask", "connection", "up", "id", naam, invoer=wachtwoord + "\n", timeout=60)
+    elif wachtwoord:
         code, uit = _c.draai("nmcli", "--ask", "device", "wifi", "connect", naam, invoer=wachtwoord + "\n", timeout=45)
     else:
         code, uit = _c.draai("nmcli", "device", "wifi", "connect", naam, timeout=45)

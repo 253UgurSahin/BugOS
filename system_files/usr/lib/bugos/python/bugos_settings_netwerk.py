@@ -80,30 +80,48 @@ class WifiPagina(Blad):
         self.melding.toon(t(f"Even kijken bij {n.naam}…", f"Checking {n.naam}…"), seconden=15)
         op_achtergrond(self, lambda: bi.bekend_netwerk(n.naam), lambda bekend: self.verbind_met(n, bekend is True))
 
-    def verbind_met(self, n: bi.Netwerk, bekend: bool) -> None:
-        wachtwoord = ""
-        if n.beveiligd and not bekend:
-            d = QInputDialog(self)
-            d.setWindowTitle(t("Wachtwoord", "Password"))
+    def vraag_wachtwoord(self, n: bi.Netwerk, veranderd: bool = False) -> str:
+        """Vraag het wachtwoord van een netwerk ('' = niet ingevuld of geannuleerd)."""
+        d = QInputDialog(self)
+        d.setWindowTitle(t("Wachtwoord", "Password"))
+        if veranderd:
+            d.setLabelText(t(f"Verbinden met '{n.naam}' lukte niet. Misschien is het wachtwoord veranderd.\n"
+                             "Wat is het wachtwoord nu?",
+                             f"Connecting to '{n.naam}' did not work. Maybe the password changed.\n"
+                             "What is the password now?"))
+        else:
             d.setLabelText(t(f"Wat is het wachtwoord van '{n.naam}'?\n(Het staat vaak op de onderkant van het modem.)",
                              f"What is the password of '{n.naam}'?\n(It is often on the bottom of the router.)"))
-            d.setTextEchoMode(QLineEdit.EchoMode.Password)
-            d.setOkButtonText(t("Verbinden", "Connect"))
-            d.setCancelButtonText(t("Annuleren", "Cancel"))
-            if not d.exec() or not d.textValue():
+        d.setTextEchoMode(QLineEdit.EchoMode.Password)
+        d.setOkButtonText(t("Verbinden", "Connect"))
+        d.setCancelButtonText(t("Annuleren", "Cancel"))
+        if not d.exec():
+            return ""
+        return d.textValue()
+
+    def verbind_met(self, n: bi.Netwerk, bekend: bool, wachtwoord: str = "") -> None:
+        if n.beveiligd and not bekend:
+            wachtwoord = self.vraag_wachtwoord(n)
+            if not wachtwoord:
                 return
-            wachtwoord = d.textValue()
         self.melding.toon(t(f"Verbinden met {n.naam}…", f"Connecting to {n.naam}…"), seconden=30)
 
         def klaar(uitkomst) -> None:
             gelukt = bool(uitkomst and uitkomst[0])
+            if not gelukt and bekend and n.beveiligd and not wachtwoord:
+                # Een bekend netwerk dat niet meer wil: vaak is het wachtwoord veranderd. Vraag het nieuwe.
+                self.melding.hide()
+                nieuw = self.vraag_wachtwoord(n, veranderd=True)
+                if nieuw:
+                    self.verbind_met(n, True, nieuw)
+                    return
             self.melding.toon(t(f"Verbonden met {n.naam}.", f"Connected to {n.naam}.") if gelukt else
                               t("Verbinden lukte niet. Klopt het wachtwoord? Probeer het nog eens.",
                                 "Connecting did not work. Is the password right? Try again."),
                               "goed" if gelukt else "fout")
             self.ververs()
 
-        op_achtergrond(self, lambda: bi.verbind(n.naam, wachtwoord), klaar)
+        op_achtergrond(self, lambda: bi.verbind(n.naam, wachtwoord, bekend), klaar)
 
     def verbreek(self, n: bi.Netwerk) -> None:
         op_achtergrond(self, lambda: bi.verbreek(n.naam), lambda _u: self.ververs())

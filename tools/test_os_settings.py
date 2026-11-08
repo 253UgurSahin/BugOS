@@ -184,6 +184,52 @@ klopt(any(c[0] == "kwriteconfig6" and "--notify" in c and "NightColor" in c and 
       "U009: nachtlicht aan zegt het meteen tegen KWin (--notify)")
 
 
+# U011: een bekend netwerk met een veranderd wachtwoord: opnieuw vragen, en het opgeslagen netwerk starten met
+# --ask (wachtwoord via de invoer, nooit op de opdrachtregel).
+oud = (bi.VOORBEELD, bi.draai)
+opdr = []
+bi.VOORBEELD = False
+bi.draai = lambda *cmd, **kw: (opdr.append((cmd, kw.get("invoer"))), (0, ""))[1]
+bi.verbind("Thuis", "nieuw-geheim", True)
+bi.VOORBEELD, bi.draai = oud
+klopt(opdr and opdr[0][0][:6] == ("nmcli", "--ask", "connection", "up", "id", "Thuis")
+      and not any("nieuw-geheim" in x for x in opdr[0][0]) and opdr[0][1] == "nieuw-geheim\n",
+      "U011: bekend netwerk met nieuw wachtwoord: nmcli --ask connection up, wachtwoord via de invoer")
+
+# Het venster (voorbeeldstand), voor de pagina's hieronder.
+lader = importlib.machinery.SourceFileLoader("instellingen", str(BIN / "bugos-settings"))
+spec = importlib.util.spec_from_loader("instellingen", lader)
+mod = importlib.util.module_from_spec(spec)
+sys.modules["instellingen"] = mod
+lader.exec_module(mod)
+from PySide6.QtCore import QThreadPool  # noqa: E402
+
+app = mod.maak_app("bugos-settings", "bugos-settings", ["test"])
+venster = mod.Instellingen("start")
+
+
+def wacht() -> None:
+    for _ in range(5):
+        QThreadPool.globalInstance().waitForDone(5000)
+        app.processEvents()
+
+
+venster.ga_naar("wifi")
+wacht()
+wifi = venster.paginas["wifi"]
+pogingen: list = []
+gevraagd: list = []
+oud_verbind = bi.verbind
+bi.verbind = lambda naam, ww="", bekend=False: (pogingen.append((naam, ww, bekend)), (len(pogingen) > 1, ""))[1]
+wifi.vraag_wachtwoord = lambda n, veranderd=False: (gevraagd.append(veranderd), "nieuw-geheim")[1]
+wifi.verbind_met(bi.Netwerk("Home", 86, True, False), True)
+wacht()
+bi.verbind = oud_verbind
+klopt(pogingen == [("Home", "", True), ("Home", "nieuw-geheim", True)] and gevraagd == [True],
+      "U011: lukt een bekend netwerk niet, dan vraagt Instellingen het (nieuwe) wachtwoord en probeert opnieuw")
+
+
+venster.close()
 shutil.rmtree(TMP, ignore_errors=True)
 print()
 print("Alles goed." if not fouten else f"{fouten} fout(en).")
