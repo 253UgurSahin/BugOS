@@ -22,17 +22,28 @@ aan() {
     melding "$(t "Ontwikkelaarsmodus wordt klaargezet..." "Setting up developer mode...")" \
         "$(t "Dit kan 5 tot 10 minuten duren." "This can take 5 to 10 minutes.")"
 
+    # Lukt een stap niet, dan zeggen we dat eerlijk en blijft de modus uit (geen "AAN" zonder dat het werkt).
+    local gelukt=ja
     flatpak install --user --noninteractive flathub com.visualstudio.code >/dev/null 2>&1 ||
-        flatpak install --noninteractive flathub com.visualstudio.code >/dev/null 2>&1
+        flatpak install --noninteractive flathub com.visualstudio.code >/dev/null 2>&1 ||
+        gelukt=nee
 
     systemctl --user enable --now podman.socket >/dev/null 2>&1
 
-    if ! distrobox list 2>/dev/null | grep -q " $DOOS "; then
+    if [ "$gelukt" = ja ] && ! distrobox list 2>/dev/null | grep -q " $DOOS "; then
         distrobox create --yes --name "$DOOS" --image "$DOOS_BEELD" \
-            --additional-packages "$DEV_PAKKETTEN" >/dev/null 2>&1
+            --additional-packages "$DEV_PAKKETTEN" >/dev/null 2>&1 || gelukt=nee
     fi
     # Eerste keer binnengaan maakt het doosje echt af.
-    distrobox enter "$DOOS" -- true >/dev/null 2>&1
+    if [ "$gelukt" = ja ]; then
+        distrobox enter "$DOOS" -- true >/dev/null 2>&1 || gelukt=nee
+    fi
+
+    if [ "$gelukt" != ja ]; then
+        fout "$(t "Ontwikkelaarsmodus klaarzetten lukte niet. Ben je online? Probeer het daarna opnieuw." \
+            "Setting up developer mode did not work. Are you online? Then try again.")"
+        return 1
+    fi
 
     touch "$MARKER"
     melding "$(t "Ontwikkelaarsmodus staat AAN 🛠️" "Developer mode is ON 🛠️")" \

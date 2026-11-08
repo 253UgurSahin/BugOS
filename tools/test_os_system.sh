@@ -86,5 +86,25 @@ klopt '[[ "$(hulp controle_updates)" == ok* ]]' "hulp: na terugzetten staat er g
 status_json 3000 2000
 klopt '[[ "$(hulp controle_updates)" == let_op* ]]' "hulp: nieuwere versie klaar -> 'An update is ready'"
 
+# U007: ontwikkelaarsmodus mag niet AAN zeggen als het klaarzetten mislukt (bijv. geen internet).
+kopie bugos-developer
+nep flatpak 'exit 1'
+nep distrobox 'case "$1" in list) exit 0;; *) exit 1;; esac'
+nep kdialog 'echo "$*" >>"'"$TMP"'/vensters"'
+draai bugos-developer aan
+klopt '[ $code -ne 0 ] && [ "$(HOME="$TMP/thuis" XDG_CONFIG_HOME="$TMP/thuis/.config" bash "$TMP/bugos-developer" status)" = uit ]' \
+    "ontwikkelaar: alles mislukt -> afsluitcode niet 0 en status uit"
+klopt 'grep -qi "online" "$TMP/vensters" 2>/dev/null' "ontwikkelaar: mislukt -> uitleg 'Are you online?'"
+nep flatpak 'exit 0'
+draai bugos-developer aan
+klopt '[ $code -ne 0 ] && [ ! -e "$TMP/thuis/.config/bugos/ontwikkelaar-aan" ]' "ontwikkelaar: dev-doosje mislukt -> niet aan"
+nep distrobox 'case "$1" in list) exit 0;; enter) exit 1;; *) exit 0;; esac'
+draai bugos-developer aan
+klopt '[ $code -ne 0 ] && [ ! -e "$TMP/thuis/.config/bugos/ontwikkelaar-aan" ]' "ontwikkelaar: doosje binnengaan mislukt -> niet aan"
+nep distrobox 'exit 0'
+draai bugos-developer aan
+klopt '[ $code -eq 0 ] && [ -e "$TMP/thuis/.config/bugos/ontwikkelaar-aan" ]' "ontwikkelaar: alles gelukt -> aan"
+nep kdialog 'exit 0'
+
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
