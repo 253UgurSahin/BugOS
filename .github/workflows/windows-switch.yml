@@ -106,7 +106,7 @@ jobs:
 
       - name: Release maken (bij een versie-tag zoals v0.2)
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           files: BugOS-Switch.zip
           generate_release_notes: true

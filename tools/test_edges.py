@@ -208,5 +208,14 @@ tests = sorted(p.name for p in (ROOT / "tools").glob("test_*") if p.suffix in ("
 mist = [t for t in tests if f"tools/{t}" not in bouw]
 klopt(not mist, f"build.yml: draait elke test uit tools/ ({len(tests)})" + (f"; mist: {mist}" if mist else ""))
 
+# X002: elke actie van buiten GitHub staat op een vaste commit (een label als @v2 kan verschuiven)
+los = []
+for wf in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+    for nr, regel in enumerate(wf.read_text(encoding="utf-8").splitlines(), 1):
+        m = re.search(r"uses:\s*([^@\s]+)@(\S+)", regel)
+        if m and not m.group(1).startswith("actions/") and not re.fullmatch(r"[0-9a-f]{40}", m.group(2)):
+            los.append(f"{wf.name}:{nr} {m.group(1)}@{m.group(2)}")
+klopt(not los, "workflows: elke actie van buiten GitHub staat op een vaste commit" + (f"; los: {los}" if los else ""))
+
 print(f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)
