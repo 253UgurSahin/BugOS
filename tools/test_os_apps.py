@@ -238,6 +238,67 @@ acties.schrijf_weg = _echt_schrijf_weg
 klopt(gemeld and (THUIS / "Blijft" / "b.txt").read_text() == "b",
       "U004: lukt het wegschrijven niet (stick eruit), dan blijft het origineel staan")
 
+# ================================================= de vensters van Back-up en Overstap, met nep-programma's ===
+import bugos_ui  # noqa: E402
+from PySide6.QtCore import QElapsedTimer  # noqa: E402
+from PySide6.QtWidgets import QApplication  # noqa: E402
+
+app = QApplication.instance() or b.maak_app("bugos-test", "bugos-test", ["test"])
+bugos_ui.maak_app = lambda *a, **k: app  # elk venster deelt deze ene app
+_gevangen: list = []
+bugos_ui.uitvoeren = lambda _app, w: _gevangen.append(w) or 0  # niet wachten: geef het venster terug
+
+NEP = TMP / "nep-bin"
+NEP.mkdir()
+LOG = TMP / "opdrachten.log"
+
+
+def nep_programma(naam: str, inhoud: str) -> None:
+    (NEP / naam).write_text("#!/usr/bin/bash\n" + inhoud)
+    (NEP / naam).chmod(0o755)
+
+
+nep_programma("sync", f'echo "sync $*" >> "{LOG}"\nexit 0\n')
+nep_programma("xdg-user-dir", "exit 1\n")
+os.environ["PATH"] = f"{NEP}:/usr/bin:/bin"
+
+
+def wacht(voorwaarde, ms: int = 10000) -> bool:
+    klok = QElapsedTimer()
+    klok.start()
+    while not voorwaarde() and klok.elapsed() < ms:
+        app.processEvents()
+    return voorwaarde()
+
+
+def open_venster(module):
+    _gevangen.clear()
+    module.venster()
+    w = _gevangen[-1]
+    w.show()
+    return w
+
+
+bb = laad("bugos_backup", "bugos-backup")
+SCHIJF = stick_map("backup-schijf")
+os.environ["BUGOS_SCHIJVEN"] = str(SCHIJF)
+(THUIS / "Documents").mkdir()
+(THUIS / "Documents" / "brief.txt").write_text("hallo")
+
+# ===================================================== U012: Back-up zegt pas 'eruit halen' na het wegschrijven ===
+LOG.write_text("")
+klopt(bb.zonder_venster(SCHIJF) == 0 and f"sync -f {bb.backup_doel(SCHIJF)}" in LOG.read_text(),
+      "U012: back-up zonder venster schrijft alles echt weg (sync -f) voor hij klaar zegt")
+LOG.write_text("")
+w = open_venster(bb)
+w.maak_backup()
+wacht(lambda: "uithalen" in w.melding.tekst.text() or "lukte" in w.melding.tekst.text())
+klopt("sync -f" in LOG.read_text() and "uithalen" in w.melding.tekst.text(),
+      "U012: venster: eerst wegschrijven, dan pas 'Je mag hem er nu uithalen'")
+klopt(bb.wegschrijven(SCHIJF) == ["sync", "-f", str(SCHIJF)],
+      "U012: de laatste stap is sync -f op de schijf zelf (niet de hele computer)")
+w.close()
+
 print()
 shutil.rmtree(TMP, ignore_errors=True)  # alleen onze eigen tijdelijke testmap
 print("Alles goed." if not fouten else f"{fouten} fout(en).")

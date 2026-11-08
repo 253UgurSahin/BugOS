@@ -157,6 +157,12 @@ def ruimte_genoeg(schijf: Path, mappen: list[Path], doel: Path | None = None) ->
     return nodig < vrij, nodig, vrij
 
 
+def wegschrijven(doel: Path) -> list[str]:
+    """De laatste stap: alles echt naar de schijf schrijven. Tot dan zit een deel nog in het geheugen
+    van de computer, en wie de schijf er dan uittrekt, mist dat stuk. Dit kan even duren."""
+    return ["sync", "-f", str(doel)]
+
+
 def onthoud(schijf: Path) -> None:
     CONFIG.mkdir(parents=True, exist_ok=True)
     LOG.write_text(json.dumps({"schijf": str(schijf), "tijd": int(time.time())}))
@@ -197,6 +203,8 @@ def zonder_venster(schijf: Path) -> int:
             deels.append(m.name)
         elif code not in GOED:
             return 1
+    if subprocess.call(wegschrijven(doel)) != 0:
+        return 1
     onthoud(schijf)
     if deels:
         print(DEELS_UITLEG.format(mappen=", ".join(deels)), file=sys.stderr)
@@ -314,6 +322,9 @@ def venster() -> int:
                 self.klaar()
                 return
             cmd = self.nu = self.wachtrij.pop(0)
+            if cmd[0] == "sync":
+                self.melding.zet(t("Bezig met wegschrijven… Haal de schijf er nog niet uit.",
+                                   "Writing to the drive… Do not unplug it yet."), "bezig")
             self.proces.start(cmd[0], cmd[1:])
 
         def lees(self) -> None:
@@ -380,7 +391,7 @@ def venster() -> int:
             doel.mkdir(parents=True, exist_ok=True)
             schrijf_lijstje(doel)
             self.stand.update(klus="maak", schijf=schijf)
-            self.wachtrij[:] = [rsync_maak(m, doel) for m in mappen]
+            self.wachtrij[:] = [rsync_maak(m, doel) for m in mappen] + [wegschrijven(doel)]
             self.bezig(t("Bezig met kopiëren… Haal de schijf er niet uit.", "Copying… Do not unplug the drive."))
             self.volgende()
 
