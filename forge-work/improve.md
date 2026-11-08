@@ -245,6 +245,34 @@ there (and in pull request #2).
   commit: c36ff6c search works when Files is started with a relative folder (bugos-files Documents)
   test:   tools/test_os_apps.py
 
+## Round 3 (2026-11-08, while the user slept: "B, ga ik doen pas als je in een improve ronde niks meer vind")
+A new read-only review of the OS part, now including this round's fixes, found 11 more. All fixed, with a test that
+failed first. Tests after: 23 passed, 0 failed (here).
+
+### U032 [medium] Turning "FPS counter ready at once" off showed MangoHud's full overlay in every game until the next login
+  commit: 6ba5c9d fix(U032, U035)   test: tools/test_os_system.sh
+### U033 [medium] "Back to the previous version" was undone by automatic updates within the hour
+  commit: a310cf9 fix(U033, U034, U036)   test: tools/test_os_system.sh, tools/test_os_settings.py
+  note: "Back" now turns automatic updates off and says so; Settings shows it and re-reads the switch.
+### U034 [low] Pressing "Back" twice went forward again
+  commit: a310cf9   test: tools/test_os_system.sh
+### U035 [low] With "FPS counter ready at once" on, your own MangoHud.conf layout was ignored
+  commit: 6ba5c9d   test: tools/test_os_system.sh
+### U036 [low] A switch finishing during "Update now" let Settings close and stop the update (found while fixing U033)
+  commit: a310cf9   test: tools/test_os_settings.py
+### U037 [medium] Moving a folder to a FAT/exFAT stick could lose files whose names differ only in capitals
+  commit: 43ee3e6   test: tools/test_os_apps.py (with a stand-in for a case-insensitive drive; a real FAT stick is for you)
+### U038 [medium] After "Finish first", a failure closed the window, so the error was never seen (Backup, Switch, Files)
+  commit: 20d5164   test: tools/test_os_apps.py
+### U039 [low] Screen readers read the row title instead of a button's own text (a side effect of U016)
+  commit: b3c2dab   test: tools/test_os_apps.py
+### U040 [low] A folder with subfolders still failed completely on a stick that refuses folder rights
+  commit: 526a793   test: tools/test_os_apps.py
+### U041 [low] "Update now" said "up to date" while an update waited for a restart; "Back" with no older version said "Are you online?"
+  commit: 594010d   test: tools/test_os_system.sh, tools/test_os_settings.py
+### U042 [low] The new texts were missing from the translation template
+  commit: 59dab47   test: tools/test_edges.py now fails when the template is behind
+
 ## Skipped
 
 ## For you
