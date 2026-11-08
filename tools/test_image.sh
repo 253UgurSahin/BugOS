@@ -43,7 +43,8 @@ done
 klopt '[ "$(systemctl --global is-enabled bugos-updatecheck.timer 2>/dev/null)" = enabled ]' "dienst: bugos-updatecheck.timer staat aan voor elke gebruiker"
 klopt 'grep -qx "UPDATES=auto" /etc/bugos/updates.conf' "updates: standaard automatisch"
 klopt 'grep -q "^AutomaticUpdatePolicy=stage" /etc/rpm-ostreed.conf' "updates: rpm-ostree zet updates klaar (stage)"
-uit="$(systemd-analyze verify /usr/lib/systemd/system/bugos-*.service /usr/lib/systemd/system/bugos-*.timer 2>&1 | grep -v -E 'Failed to (connect|open)|Cannot|not running|IPv6' || true)  # meldingen van de bouwcontainer zelf"
+# IPv6, connect, not running: meldingen van de bouwcontainer zelf, geen fouten in de diensten.
+uit="$(systemd-analyze verify /usr/lib/systemd/system/bugos-*.service /usr/lib/systemd/system/bugos-*.timer 2>&1 | grep -v -E 'Failed to (connect|open)|Cannot|not running|IPv6' || true)"
 klopt '[ -z "$uit" ]' "diensten: systemd-analyze verify vindt geen fouten ${uit:+($uit)}"
 for p in /usr/share/polkit-1/actions/org.bugos.*.policy; do
     klopt 'python3 -c "import sys, xml.etree.ElementTree as E; E.parse(sys.argv[1])" "$p"' "polkit: $(basename "$p") is geldige XML"
