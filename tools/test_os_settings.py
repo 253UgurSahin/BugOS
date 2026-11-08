@@ -271,12 +271,28 @@ for _ in range(200):
     time.sleep(0.02)
     if upd.auto.isChecked():
         break
+# Instellingen sluiten terwijl een update loopt: niet stoppen, wachten en daarna vanzelf dicht.
+(nep_pk / "pkexec").write_text(f'#!/usr/bin/bash\nsleep 1\necho "$2" >>"{nep_pk}/gedaan"\nexit 0\n')
+(nep_pk / "code").write_text("0")
+venster.show()
+upd.updates("nu")
+app.processEvents()
+venster.close()
+bleef_open = venster.isVisible() and upd.bezig
+for _ in range(300):
+    app.processEvents()
+    time.sleep(0.02)
+    if not venster.isVisible():
+        break
+dicht_na_afloop = not venster.isVisible() and not upd.bezig
 bi.VOORBEELD = True
 os.environ.update(PATH=oud_pad, LC_ALL="nl_NL.UTF-8")
+klopt(bleef_open, "U006: Instellingen sluiten tijdens 'Nu updaten': het venster blijft open, de update loopt door")
+klopt(dicht_na_afloop, "U006: daarna gaat Instellingen vanzelf dicht")
 klopt("lukte niet" in mislukt, "U006: 'Nu updaten' mislukt: dat zegt Instellingen ook")
 klopt("opnieuw op" in gelukt and herstart_knop, "U006: 'Nu updaten' gelukt: klaar, met een knop om opnieuw op te starten")
 klopt("toestemming" in geannuleerd, "U006: Annuleren bij het wachtwoord: niets gedaan")
-klopt(upd.auto.isChecked() and (nep_pk / "gedaan").read_text().split() == ["nu", "nu", "terug", "hand"],
+klopt(upd.auto.isChecked() and (nep_pk / "gedaan").read_text().split()[:4] == ["nu", "nu", "terug", "hand"],
       "U006: Annuleren bij 'Updates vanzelf' uit: de schakelaar springt terug")
 
 

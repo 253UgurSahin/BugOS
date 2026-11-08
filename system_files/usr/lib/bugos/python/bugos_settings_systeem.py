@@ -87,6 +87,8 @@ class UpdatesPagina(Blad):
     uitleg_en = "Turn things on or off with one tap. You can always undo it."
     zoekwoorden = "update bijwerken versie terug game spel modus ontwikkelaar programmeren lichte stand startmenu snelmenu"
 
+    bezig = False   # loopt "Nu updaten" of "Terug" nog?
+
     def bouw(self) -> None:
         g = self.kaart(t("Updates", "Updates"))
         auto = status_van("bugos-updates") or not bestaat("bugos-updates")
@@ -155,15 +157,21 @@ class UpdatesPagina(Blad):
         proces = QProcess(self)
         proces.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
         gedaan: list[bool] = []
+        if wat in ("nu", "terug"):
+            self.bezig = True   # Instellingen gaat pas dicht als dit klaar is (zie Instellingen.closeEvent)
 
         def af(code: int = 1, status=QProcess.ExitStatus.CrashExit) -> None:
             if gedaan:
                 return
             gedaan.append(True)
+            self.bezig = False
             try:
                 uit = bytes(proces.readAll()).decode(errors="ignore")
                 proces.deleteLater()
                 self.klaar_met(wat, code if status == QProcess.ExitStatus.NormalExit else 1, uit)
+                venster = self.window()
+                if getattr(venster, "sluit_na_update", False):
+                    venster.close()   # je wilde al sluiten: nu het klaar is, gaat het dicht
             except RuntimeError:
                 pass    # Instellingen ging dicht terwijl het nog bezig was: niemand meer om het te zeggen.
 
