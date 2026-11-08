@@ -299,6 +299,46 @@ klopt(bb.wegschrijven(SCHIJF) == ["sync", "-f", str(SCHIJF)],
       "U012: de laatste stap is sync -f op de schijf zelf (niet de hele computer)")
 w.close()
 
+# ======================================== U015: Back-up of Overstap sluiten terwijl hij bezig is ===
+# Een nep-rsync die even wacht (zo zien we het venster 'bezig'), daarna doet hij het echt.
+nep_programma("rsync", 'if [ -n "$BUGOS_TEST_VAST" ]; then exec /usr/bin/sleep 60; fi\n'
+                       '/usr/bin/sleep "${BUGOS_TEST_SLAAP:-0}"\nexec /usr/bin/rsync "$@"\n')
+bo = laad("bugos_overstap", "bugos-switch")
+WIN = stick_map("windows-stick")
+(WIN / "BugOS-Switch" / "Documents").mkdir(parents=True)
+(WIN / "BugOS-Switch" / "bugos-switch.json").write_text('{"computer": "PC"}')
+(WIN / "BugOS-Switch" / "Documents" / "cv.txt").write_text("cv")
+
+
+def draait(w) -> bool:
+    return w.proces.state() != w.proces.ProcessState.NotRunning
+
+
+for naam, module, schijf, begin in (("Back-up", bb, SCHIJF, "maak_backup"), ("Overstap", bo, WIN, "begin")):
+    os.environ["BUGOS_SCHIJVEN"] = str(schijf)
+    # 1. 'Eerst afmaken': het venster blijft open en gaat vanzelf dicht als het klaar is
+    os.environ["BUGOS_TEST_SLAAP"] = "1"
+    w = open_venster(module)
+    gevraagd: list = []
+    w.vraag_stoppen = lambda g=gevraagd: g.append(1) or False
+    getattr(w, begin)()
+    wacht(lambda: draait(w), 5000)
+    w.close()
+    klopt(gevraagd == [1] and w.isVisible() and draait(w),
+          f"U015: {naam}: sluiten tijdens het kopiëren vraagt het eerst, en stopt niet stilletjes")
+    klopt(wacht(lambda: not w.isVisible(), 15000), f"U015: {naam}: 'Eerst afmaken': daarna gaat het venster vanzelf dicht")
+    # 2. 'Nu stoppen': het proces stopt netjes en het venster gaat dicht
+    os.environ["BUGOS_TEST_VAST"] = "1"
+    w = open_venster(module)
+    w.vraag_stoppen = lambda: True
+    getattr(w, begin)()
+    wacht(lambda: draait(w), 5000)
+    w.close()
+    klopt(wacht(lambda: not w.isVisible() and not draait(w), 8000),
+          f"U015: {naam}: 'Nu stoppen': het kopiëren stopt en het venster gaat dicht")
+    del os.environ["BUGOS_TEST_VAST"], os.environ["BUGOS_TEST_SLAAP"]
+os.environ["BUGOS_SCHIJVEN"] = str(SCHIJF)
+
 print()
 shutil.rmtree(TMP, ignore_errors=True)  # alleen onze eigen tijdelijke testmap
 print("Alles goed." if not fouten else f"{fouten} fout(en).")

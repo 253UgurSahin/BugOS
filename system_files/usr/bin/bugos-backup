@@ -285,6 +285,8 @@ def venster() -> int:
             self.proces.readyReadStandardOutput.connect(self.lees)
             self.proces.finished.connect(self.klaar_met_een)
             self.stand: dict = {"klus": "", "schijf": None}
+            self.sluit_na = False  # het venster ging dicht tijdens het kopiëren: sluiten zodra het klaar is
+            self.gestopt = False   # de gebruiker koos 'Nu stoppen'
             self.maak.clicked.connect(self.maak_backup)
             self.terugzetten.clicked.connect(self.zet_terug)
             self.kiezer.gewijzigd.connect(self.knoppen)
@@ -334,6 +336,10 @@ def venster() -> int:
                     self.balk.setValue(int(stuk[:-1]))
 
         def klaar_met_een(self, code: int, _status) -> None:
+            if self.gestopt:
+                self.wachtrij.clear()
+                self.stop(False)
+                return
             if code in DEELS:
                 self.deels.append(Path(self.nu[-2].rstrip("/")).name or "~")
             elif code not in GOED:
@@ -366,6 +372,45 @@ def venster() -> int:
             self.balk.setValue(100 if gelukt else self.balk.value())
             self.kiezer.setEnabled(True)
             self.knoppen()
+            if self.sluit_na:
+                QTimer.singleShot(0, self.close)
+
+        def vraag_stoppen(self) -> bool:
+            """Het venster gaat dicht terwijl we bezig zijn: stoppen, of eerst afmaken?"""
+            maak = self.stand["klus"] == "maak"
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Icon.Question)
+            box.setWindowTitle(t("Nog bezig", "Still busy"))
+            box.setText(t("De back-up is nog bezig." if maak else "Het terugzetten is nog bezig.",
+                          "The backup is still busy." if maak else "Restoring is still busy."))
+            box.setInformativeText(
+                t("Maak je het eerst af, dan gaat het venster daarna vanzelf dicht. Stop je nu, dan is nog niet "
+                  "alles gekopieerd (wat er al staat, blijft gewoon staan).",
+                  "If you let it finish, the window closes by itself afterwards. If you stop now, not everything "
+                  "is copied yet (what is already there stays)."))
+            door = box.addButton(t("Eerst afmaken", "Finish first"), QMessageBox.ButtonRole.AcceptRole)
+            stop = box.addButton(t("Nu stoppen", "Stop now"), QMessageBox.ButtonRole.DestructiveRole)
+            box.setDefaultButton(door)
+            box.exec()
+            return box.clickedButton() is stop
+
+        def closeEvent(self, e) -> None:  # noqa: N802
+            if self.proces.state() == QProcess.ProcessState.NotRunning:
+                super().closeEvent(e)
+                return
+            # Nooit stilletjes midden in een back-up stoppen: vraag het, en sluit pas als het proces klaar is.
+            e.ignore()
+            if self.sluit_na:
+                return  # al gevraagd; we wachten
+            self.sluit_na = True
+            if self.vraag_stoppen():
+                self.gestopt = True
+                self.wachtrij.clear()
+                self.melding.zet(t("Bezig met stoppen…", "Stopping…"), "bezig")
+                self.proces.terminate()  # rsync ruimt zijn halve bestand zelf op
+            else:
+                self.melding.zet(t("Even wachten: het venster gaat vanzelf dicht als het klaar is.",
+                                   "One moment: the window closes by itself when it is done."), "bezig")
 
         def bezig(self, tekst: str) -> None:
             self.deels = []
