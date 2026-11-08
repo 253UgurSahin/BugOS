@@ -89,8 +89,9 @@ class Rij(QFrame):
         self.rechts = rechts
         if rechts is not None:
             lay.addWidget(rechts, 0, Qt.AlignmentFlag.AlignVCenter)
-            if isinstance(rechts, QAbstractButton) and not rechts.accessibleName():
-                rechts.setAccessibleName(titel_tekst)  # het schuifje heet zoals de regel
+            # Een schuifje heet zoals de regel; een knop met tekst ("Nu vergrendelen") houdt zijn eigen tekst.
+            if isinstance(rechts, QAbstractButton) and not rechts.accessibleName() and not rechts.text().strip():
+                rechts.setAccessibleName(titel_tekst)
                 rechts.setAccessibleDescription(uitleg_tekst)
         self.pijl = None
         if pijl is None:

@@ -81,6 +81,23 @@ def nep_stick(aan: bool) -> None:
     os.chmod = chmod if aan else _echt_chmod
 
 
+# U040: een map MET submappen naar een stick die de rechten van mappen weigert: de rest komt er toch op.
+nep_stick(True)
+_bron = TMP / "thuis-u040" / "Fotos"
+(_bron / "Vakantie").mkdir(parents=True)
+(_bron / "a.jpg").write_text("a")
+(_bron / "Vakantie" / "b.jpg").write_text("b")
+os.chmod(_bron / "Vakantie", 0o700)   # rechten die de stick niet kan bewaren
+_achter: list = []
+try:
+    _uit = acties.kopieer_een(_bron, STICK, False, _achter)
+except OSError as e:
+    _uit = f"mislukt: {e}"
+nep_stick(False)
+klopt(isinstance(_uit, Path) and (_uit / "Vakantie" / "b.jpg").read_text() == "b",
+      f"U040: een map met submappen komt op een stick die mapsrechten weigert ({_uit})")
+
+
 def eerste_rename_andere_schijf() -> None:
     """Het verplaatsen zelf zegt 'andere schijf' (EXDEV); daarna werkt rename gewoon."""
     keer = []
@@ -459,6 +476,12 @@ klopt(rijen and not slecht, f"U016: Instellingen: elke klikbare regel is een kno
 r = rijen[0]
 r.titel.setText("Nieuwe titel")
 klopt(lezer(r)[1] == "Nieuwe titel", "U016: verandert de titel van een regel, dan hoort de schermlezer de nieuwe")
+# U039: een knop met tekst in een regel ("Nu vergrendelen") houdt zijn eigen tekst als naam, niet de titel van de regel.
+from PySide6.QtWidgets import QAbstractButton  # noqa: E402
+knoppen = [k for k in vi.findChildren(QAbstractButton) if not isinstance(k, Schuif) and k.text().strip()
+           and isinstance(k.parent(), Rij)]
+verkeerd = [(k.text(), lezer(k)[1]) for k in knoppen if lezer(k)[1] not in ("", k.text())]
+klopt(knoppen and not verkeerd, f"U039: knoppen met tekst in een regel heten zoals hun tekst ({len(knoppen)} knoppen, mis: {verkeerd[:3]})")
 vi.close()
 del os.environ["BUGOS_INSTELLINGEN_VOORBEELD"]
 

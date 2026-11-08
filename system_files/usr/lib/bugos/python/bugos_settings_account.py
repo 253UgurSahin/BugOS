@@ -40,6 +40,8 @@ class TijdPagina(Blad):
     def bouw(self) -> None:
         g = self.kaart()
         self.auto = schuifje(True, self.zet_auto)
+        # De regel toont de klok; het schuifje zelf zet de tijd vanzelf goed (anders noemt een schermlezer de tijd).
+        self.auto.setAccessibleName(t("Tijd vanzelf instellen", "Set the time automatically"))
         self.klok_rij = Rij("klok", nu_tekst(), "", self.auto)
         g.voeg(self.klok_rij)
         self.tik = QTimer(self)
