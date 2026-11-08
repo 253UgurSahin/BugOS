@@ -143,6 +143,8 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
         self.lijst.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.lijst.setDragEnabled(True)
         self.lijst.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
+        self.lijst.viewport().setAcceptDrops(True)  # loslaten vangen we zelf op (zie eventFilter)
+        self.lijst.viewport().installEventFilter(self)
         self.lijst.setMouseTracking(True)
         self.lijst.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.lijst.setItemDelegate(TegelTekenaar(self.voorbeelden, bijzondere_mappen()))
@@ -166,6 +168,8 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
         self.leeg_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         for w in (self.leeg_beeld, self.leeg_kop, self.leeg_sub):
             ll.addWidget(w)
+        self.leeg.setAcceptDrops(True)  # "Sleep er iets naartoe": dat moet dan ook werken
+        self.leeg.installEventFilter(self)
         ll.addStretch(2)
         self.computer = QScrollArea()
         self.computer.setFrameShape(QFrame.Shape.NoFrame)
@@ -300,6 +304,16 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
         if e.type() == QEvent.Type.WindowActivate:
             self.ververs_plak()  # er kan in een ander programma iets gekopieerd zijn
         return super().event(e)
+
+    def eventFilter(self, ding, e) -> bool:  # noqa: N802
+        if e.type() in (QEvent.Type.DragEnter, QEvent.Type.DragMove, QEvent.Type.Drop) and \
+                ding in (self.lijst.viewport(), self.leeg):
+            if self.slepen(e, ding):
+                return True
+            if e.type() != QEvent.Type.DragMove:
+                e.ignore()
+                return True
+        return super().eventFilter(ding, e)
 
     def ververs_plak(self) -> None:
         self.plak_knop.setVisible(not self.in_prullenbak and not self.in_computer and self.klembord_heeft_bestanden())

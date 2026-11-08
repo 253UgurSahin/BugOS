@@ -15,6 +15,7 @@ import shutil
 import stat
 import sys
 import tempfile
+import warnings
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -515,6 +516,48 @@ bugos_drives.TAAL = "en"
 klopt(bugos_drives.mooie_maat(3_200_000_000) == "3.2 GB" and bugos_drives.mooie_maat(64_000_000_000) == "64 GB",
       f"U030: Engels: 3.2 GB (met een punt): {bugos_drives.mooie_maat(3_200_000_000)}")
 bugos_drives.TAAL = "nl"
+
+# ============================================== U028: "Sleep er iets naartoe": loslaten kopieert het echt ===
+from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl  # noqa: E402
+from PySide6.QtGui import QDragEnterEvent, QDropEvent  # noqa: E402
+
+leeg_map = THUIS / "Leeg"
+leeg_map.mkdir()
+(THUIS / "Ergens").mkdir()
+(THUIS / "Ergens" / "lied.mp3").write_text("la")
+(THUIS / "Ergens" / "verhuis.txt").write_text("weg")
+vb = b.Bestanden(leeg_map)
+vb.show()
+wacht(lambda: vb.stapel.currentWidget() is vb.leeg, 3000)
+klopt(vb.stapel.currentWidget() is vb.leeg and "Sleep" in vb.leeg_sub.text(), "U028: een lege map zegt 'Sleep er iets naartoe'")
+
+
+def laat_los(waar, pad: Path, shift: bool = False) -> bool:
+    data = QMimeData()
+    data.setUrls([QUrl.fromLocalFile(str(pad))])
+    mods = Qt.KeyboardModifier.ShiftModifier if shift else Qt.KeyboardModifier.NoModifier
+    acties_ = Qt.DropAction.CopyAction | Qt.DropAction.MoveAction
+    with warnings.catch_warnings():  # Qt 6 heeft voor DragEnter alleen nog de oude maker met een QPoint
+        warnings.simplefilter("ignore", DeprecationWarning)
+        binnen = QDragEnterEvent(QPointF(20, 20).toPoint(), acties_, data, Qt.MouseButton.LeftButton, mods)
+    QApplication.sendEvent(waar, binnen)
+    if not binnen.isAccepted():
+        return False
+    los = QDropEvent(QPointF(20, 20), acties_, data, Qt.MouseButton.LeftButton, mods)
+    QApplication.sendEvent(waar, los)
+    return los.isAccepted()
+
+
+klopt(laat_los(vb.leeg, THUIS / "Ergens" / "lied.mp3"), "U028: de lege map neemt iets aan dat je erop loslaat")
+klopt(wacht(lambda: (leeg_map / "lied.mp3").exists() and not (vb.klus and vb.klus.isRunning()), 5000)
+      and (THUIS / "Ergens" / "lied.mp3").exists(), "U028: loslaten kopieert het (het origineel blijft staan)")
+wacht(lambda: vb.stapel.currentWidget() is vb.lijst, 3000)
+klopt(laat_los(vb.lijst.viewport(), THUIS / "Ergens" / "verhuis.txt", shift=True)
+      and wacht(lambda: (leeg_map / "verhuis.txt").exists() and not (THUIS / "Ergens" / "verhuis.txt").exists(), 5000),
+      "U028: met Shift loslaten op de tegels verplaatst het")
+wacht(lambda: not (vb.klus and vb.klus.isRunning()), 5000)
+klopt(not laat_los(vb.lijst.viewport(), leeg_map / "lied.mp3"), "U028: iets uit deze map hier loslaten doet niets")
+vb.close()
 
 print()
 shutil.rmtree(TMP, ignore_errors=True)  # alleen onze eigen tijdelijke testmap

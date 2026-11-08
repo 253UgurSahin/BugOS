@@ -15,7 +15,7 @@ from pathlib import Path
 from bugos_ui import lijn_icoon, t
 from bugos_files_plekken import INFO_ROL, PAD_ROL, thuis
 from bugos_files_acties import Klus, achter_uitleg, naar_prullenbak, prullenbak_legen, terugzetten, vrije_naam, zelfde_schijf
-from PySide6.QtCore import QMimeData, QTimer, QUrl
+from PySide6.QtCore import QEvent, QMimeData, Qt, QTimer, QUrl
 from PySide6.QtWidgets import QApplication, QInputDialog, QLabel, QMenu, QMessageBox
 
 
@@ -97,7 +97,11 @@ class Bewerken:
             bytes(data.data("x-special/gnome-copied-files")).startswith(b"cut")
         if not bronnen:
             return
-        self.klus = Klus(bronnen, self.huidig, knip)
+        self._start_klus(bronnen, self.huidig, knip)
+
+    def _start_klus(self, bronnen: list[Path], doelmap: Path, knip: bool, klembord: bool = True) -> None:
+        """Kopiëren of verplaatsen op de achtergrond, met een melding per stap (klembord: het kwam van Plakken)."""
+        self.klus = Klus(bronnen, doelmap, knip)
         self.klus.voortgang.connect(lambda i, n: self.melding.toon(
             t(f"Bezig met {'verplaatsen' if knip else 'kopiëren'}: {i + 1} van {n}…", f"{'Moving' if knip else 'Copying'}: {i + 1} of {n}…"),
             seconden=0))
@@ -105,10 +109,36 @@ class Bewerken:
             t("Bezig met wegschrijven… Haal de stick er nog niet uit.", "Writing to the stick… Do not unplug it yet."),
             seconden=0))
         klus = self.klus
-        self.klus.klaar.connect(lambda gelukt, fout: self._klus_klaar(gelukt, fout, knip, klus.achter))
+        self.klus.klaar.connect(lambda gelukt, fout: self._klus_klaar(gelukt, fout, knip, klus.achter, klembord))
         self.klus.start()
 
-    def _klus_klaar(self, gelukt: int, fout: str, knip: bool, achter: list | None = None) -> None:
+    # ---------------------------------------------- slepen en loslaten
+    def slepen(self, e, waar) -> bool:
+        """Iets uit een ander venster (of uit deze map) hierheen gesleept: kopiëren, met Shift verplaatsen.
+        Laat je het op een map los, dan gaat het in die map. Geeft True als wij het afhandelen."""
+        data = e.mimeData()
+        bronnen = [Path(u.toLocalFile()) for u in data.urls() if u.isLocalFile()] if data and data.hasUrls() else []
+        bronnen = [b for b in bronnen if b.exists() or b.is_symlink()]
+        if not bronnen or self.in_prullenbak or self.in_computer or (self.klus and self.klus.isRunning()):
+            return False
+        doelmap = self.huidig
+        if waar is self.lijst.viewport():
+            index = self.lijst.indexAt(e.position().toPoint())
+            pad = Path(index.data(PAD_ROL)) if index.isValid() and index.data(PAD_ROL) else None
+            if pad and pad.is_dir() and pad not in bronnen:
+                doelmap = pad
+        if all(b.parent == doelmap for b in bronnen):
+            return False  # staat er al: niets te doen
+        if e.type() == QEvent.Type.Drop:
+            knip = bool(e.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+            self._start_klus(bronnen, doelmap, knip, klembord=False)
+        # Altijd 'kopiëren' terugzeggen: verplaatsen doen we zelf, het andere programma hoeft niets weg te gooien.
+        e.setDropAction(Qt.DropAction.CopyAction)
+        e.accept()
+        return True
+
+    def _klus_klaar(self, gelukt: int, fout: str, knip: bool, achter: list | None = None,
+                    klembord: bool = True) -> None:
         if fout:
             self.melding.toon(t(f"Niet alles lukte: {fout}", f"Not everything worked: {fout}"), "fout", seconden=12)
         elif achter:  # bijv. een naam met ':' op een USB-stick: de rest staat er wel
@@ -116,7 +146,7 @@ class Bewerken:
         else:
             self.melding.toon(t(f"Klaar: {gelukt} {'ding' if gelukt == 1 else 'dingen'} {'verplaatst' if knip else 'gekopieerd'}.",
                                 f"Done: {gelukt} {'item' if gelukt == 1 else 'items'} {'moved' if knip else 'copied'}."), "goed")
-        if knip:
+        if knip and klembord:
             QApplication.clipboard().clear()
         if self.sluit_na_klus:
             QTimer.singleShot(0, self.close)
