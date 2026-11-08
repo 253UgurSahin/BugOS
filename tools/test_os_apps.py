@@ -490,6 +490,23 @@ Path.rename = _echt_path_rename
 klopt(hernoemd == [] and any("al iets" in x for x in nv.melding.teksten),
       "U029: bestaat er echt een ander bestand met die naam, dan blijft het geweigerd")
 
+# ============================================= U031: 'bugos-files Documents' vanuit een terminal: zoeken werkt ===
+docs = THUIS / "Documenten"
+docs.mkdir()
+for n in ("recept.txt", "brief.txt", "foto.jpg"):
+    (docs / n).write_text("x")
+oude_map = os.getcwd()
+os.chdir(THUIS)
+start, kies = b.start_pad(["Documenten"])
+klopt(start == docs and start.is_absolute(), f"U031: een map zonder volledig pad wordt een volledig pad: {start}")
+vb = b.Bestanden(start, kies)
+wacht(lambda: vb.lijst.model().rowCount(vb.lijst.rootIndex()) == 3, 5000)
+vb.zoek.setText("recept")
+wacht(lambda: vb.lijst.model().rowCount(vb.lijst.rootIndex()) == 1, 3000)
+klopt(vb.lijst.model().rowCount(vb.lijst.rootIndex()) == 1, "U031: zoeken in die map vindt alleen 'recept'")
+vb.close()
+os.chdir(oude_map)
+
 print()
 shutil.rmtree(TMP, ignore_errors=True)  # alleen onze eigen tijdelijke testmap
 print("Alles goed." if not fouten else f"{fouten} fout(en).")

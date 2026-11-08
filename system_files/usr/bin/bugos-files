@@ -14,6 +14,7 @@ Gebruik:  bugos-files [map of bestand]
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -45,6 +46,9 @@ def start_pad(args: list[str]) -> tuple[Path | None, Path | None]:
     """Map om te openen (en eventueel een bestand om te kiezen) uit de opdrachtregel."""
     for a in args:
         pad = Path(QUrl(a).toLocalFile()) if a.startswith("file:") else Path(a).expanduser()
+        # 'bugos-files Documents' vanuit een terminal: maak er een volledig pad van (anders werkt zoeken niet).
+        # abspath en niet resolve: een snelkoppeling naar een map blijft gewoon zo heten.
+        pad = Path(os.path.abspath(pad))
         if pad.is_dir():
             return pad, None
         if pad.exists():
