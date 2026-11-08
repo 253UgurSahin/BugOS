@@ -25,6 +25,11 @@ INSTELLINGEN=(
 
 baloo() { balooctl6 "$@" 2>/dev/null || balooctl "$@" 2>/dev/null; }
 
+# KWin de nieuwe instellingen laten lezen. Via gdbus: dat is er altijd (qdbus6 bestaat niet op Fedora 44).
+kwin_herladen() {
+    gdbus call --session --dest org.kde.KWin --object-path /KWin --method org.kde.KWin.reconfigure >/dev/null 2>&1
+}
+
 is_traag() {
     local geheugen_kb kernen
     geheugen_kb="$(awk '/MemTotal/ {print $2}' /proc/meminfo)"
@@ -55,7 +60,7 @@ aan() {
     kwriteconfig6 --file kwinrc --group Plugins --key slidingpopupsEnabled false
     # Bestanden-zoeker (die steeds alles doorzoekt) op een laag pitje.
     balooctl6 disable >/dev/null 2>&1 || balooctl disable >/dev/null 2>&1
-    qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1
+    kwin_herladen
     touch "$MARKER"
 }
 
@@ -85,7 +90,7 @@ uit() {
     if [ "$baloo_was" = aan ]; then
         baloo enable >/dev/null
     fi
-    qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1
+    kwin_herladen
     rm -f "$MARKER" "$VOOR"
 }
 

@@ -176,7 +176,9 @@ def controle_updates() -> Uitslag:
         return Uitslag(naam, LET_OP,
                        t("Er staat een update klaar. Start de computer opnieuw op om hem te gebruiken.",
                          "An update is ready. Restart the computer to use it."),
-                       lambda: start("qdbus6", "org.kde.LogoutPrompt", "/LogoutPrompt", "promptReboot"),
+                       # gdbus is er altijd (qdbus6 bestaat niet op Fedora 44).
+                       lambda: start("gdbus", "call", "--session", "--dest", "org.kde.LogoutPrompt", "--object-path",
+                                     "/LogoutPrompt", "--method", "org.kde.LogoutPrompt.promptReboot"),
                        t("Nu herstarten", "Restart now"))
     return Uitslag(naam, OK, t("Alles is bijgewerkt.", "Everything is up to date."))
 

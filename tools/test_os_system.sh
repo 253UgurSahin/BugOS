@@ -68,10 +68,11 @@ klopt 'grep -q "Update is ready" "$TMP/meldingen" 2>/dev/null' "updatecheck: nie
 nep notify-send 'exit 0'
 
 # Hulp (bugos-help, Python): één controle draaien met de nep-programma's; print stand en tekst.
+# hulp <controle> repareer  -> druk daarna ook op de knop.
 hulp() {
     HOME="$TMP/thuis" PATH="$TMP/bin:$PATH" LC_ALL=C.UTF-8 QT_QPA_PLATFORM=offscreen PYTHONDONTWRITEBYTECODE=1 \
-        python3 - "$ROOT" "$1" <<'PY' 2>&1
-import importlib.machinery, importlib.util, sys
+        python3 - "$ROOT" "$@" <<'PY' 2>&1
+import importlib.machinery, importlib.util, sys, time
 root, naam = sys.argv[1], sys.argv[2]
 sys.path.insert(0, root + "/system_files/usr/lib/bugos/python")
 lader = importlib.machinery.SourceFileLoader("bugos_help", root + "/system_files/usr/bin/bugos-help")
@@ -79,6 +80,9 @@ bh = importlib.util.module_from_spec(importlib.util.spec_from_loader("bugos_help
 lader.exec_module(bh)
 u = getattr(bh, naam)()
 print(u.stand, u.tekst)
+if "repareer" in sys.argv[3:] and u.repareer:  # en druk op de knop
+    u.repareer()
+    time.sleep(1)
 PY
 }
 status_json 1000 2000
@@ -105,6 +109,21 @@ nep distrobox 'exit 0'
 draai bugos-developer aan
 klopt '[ $code -eq 0 ] && [ -e "$TMP/thuis/.config/bugos/ontwikkelaar-aan" ]' "ontwikkelaar: alles gelukt -> aan"
 nep kdialog 'exit 0'
+
+# U018: qdbus6 bestaat niet op Fedora 44. Herstarten (Hulp) en KWin herladen (lichte stand) gaan via gdbus.
+nep gdbus 'echo "$*" >>"'"$TMP"'/dbus"'
+rm -f "$TMP/dbus"
+status_json 3000 2000
+hulp controle_updates repareer >/dev/null
+klopt 'grep -q "org.kde.LogoutPrompt.promptReboot" "$TMP/dbus" 2>/dev/null' "hulp: 'Nu herstarten' vraagt echt om te herstarten (gdbus)"
+kopie bugos-light-mode
+for p in kreadconfig6 kwriteconfig6 balooctl6; do nep "$p" 'exit 0'; done
+rm -f "$TMP/dbus"
+draai bugos-light-mode aan
+klopt '[ "$(grep -c "org.kde.KWin.reconfigure" "$TMP/dbus" 2>/dev/null)" = 1 ]' "lichte stand aan: KWin wordt herladen (gdbus)"
+rm -f "$TMP/dbus"
+draai bugos-light-mode uit
+klopt '[ "$(grep -c "org.kde.KWin.reconfigure" "$TMP/dbus" 2>/dev/null)" = 1 ]' "lichte stand uit: KWin wordt herladen (gdbus)"
 
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
