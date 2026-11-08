@@ -286,6 +286,9 @@ def _zet_energie(groep: str, sleutel: str, waarde: int) -> None:
 def scherm_uit_na() -> int:
     if _c.VOORBEELD:
         return _c._VB["scherm_uit"]
+    # Staat 'scherm uitzetten' helemaal uit, dan is het 'nooit' (welke tijd er ook staat).
+    if _c.kde_lees_groepen("powerdevilrc", ["AC", "Display"], "TurnOffDisplayWhenIdle", "true") == "false":
+        return 0
     return _energie_getal("Display", "TurnOffDisplayIdleTimeoutSec", 600)
 
 
@@ -293,8 +296,15 @@ def zet_scherm_uit_na(seconden: int) -> None:
     if _c.VOORBEELD:
         _c._VB["scherm_uit"] = seconden
         return
-    _zet_energie("Display", "TurnOffDisplayIdleTimeoutSec", seconden)
-    _zet_energie("Display", "DimDisplayIdleTimeoutSec", max(60, seconden - 60) if seconden else 0)
+    # Een tijd van 0 is voor KDE niet 'nooit': dan zet hij het scherm toch uit (na 30 s) en dimt hij meteen.
+    # Daarom voor 'nooit' het uitzetten en dimmen zelf uitzetten, en anders weer aan.
+    aan = "true" if seconden else "false"
+    for profiel in PROFIELGROEPEN:
+        _c.kde_schrijf("powerdevilrc", [profiel, "Display"], "TurnOffDisplayWhenIdle", aan)
+        _c.kde_schrijf("powerdevilrc", [profiel, "Display"], "DimDisplayWhenIdle", aan)
+    if seconden:
+        _zet_energie("Display", "TurnOffDisplayIdleTimeoutSec", seconden)
+        _zet_energie("Display", "DimDisplayIdleTimeoutSec", max(60, seconden - 60))
     energie_herlees()
 
 
