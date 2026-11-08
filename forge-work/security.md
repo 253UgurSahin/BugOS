@@ -7,6 +7,14 @@ Project: BugOS at commit 08cbab8 (branch ccr-5bd1cae9-pccs3q). A bootable Fedora
 bootc), its own apps (Python/Qt, bash), Plasma menus (QML), a Windows tool (PowerShell), GitHub Actions and a
 static website. No accounts, no server, no payments, no database.
 
+## Run again on 2026-11-08 after the OS round (U001-U031)
+- secretscan 8,687 files, codecheck 94 files, deps, trackers: no findings. (codecheck first flagged `def exec` in
+  tools/test_os_settings.py: a stand-in for QDialog.exec() in a test, not text run as code; rewritten with setattr in
+  022c45b, no opt-out used.)
+- The new password helper (U010) puts no password on a command line: passwd runs in its own pty with echo off;
+  tested with real PAM in the Fedora 44 image. Wi-Fi passwords (U011) go to nmcli on stdin.
+- Verdict stays PASS.
+
 ## What was checked
 - secretscan (8,682 files, no findings), codecheck (92 files, no findings), deps (e2e/package-lock.json with
   npm audit: no findings), trackers (117 files, no third-party services), AVG/GDPR checklist

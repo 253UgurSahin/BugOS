@@ -2,6 +2,9 @@
 Date: 2026-11-08   Branch: ccr-5bd1cae9-pccs3q   Started from: ccr-5bd1cae9-pccs3q at d285f6c
 Picked: U001-U031 (all). The user said: "/forge-improve bugos os, niet dewebsite of eromheen echt het os gedeelte", then "fix alles"
 Tests before: 20 passed, 0 failed (build.yml check job, run here); after: 23 passed, 0 failed (3 new test files: test_os_system.sh, test_os_settings.py, test_os_apps.py). 31 fixed, 0 skipped.
+In the built image (kinoite-main:44 + all fixes, built here): bootc container lint passes; tools/test_image.sh 75 of 75
+checks pass, including the three new OS test files run on Fedora 44 itself; 16 app screenshots (8 apps, light and dark)
+open without errors. Security (forge-secure scanners): PASS, 0 findings.
 Secrets before: none (secretscan: no findings).
 All changes: git diff d285f6c ccr-5bd1cae9-pccs3q
 
