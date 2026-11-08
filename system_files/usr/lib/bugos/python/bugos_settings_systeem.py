@@ -179,10 +179,17 @@ class UpdatesPagina(Blad):
             try:
                 uit = bytes(proces.readAll()).decode(errors="ignore")
                 proces.deleteLater()
-                self.klaar_met(wat, code if status == QProcess.ExitStatus.NormalExit else 1, uit)
+                echt = code if status == QProcess.ExitStatus.NormalExit else 1
+                self.klaar_met(wat, echt, uit)
                 venster = self.window()
-                if getattr(venster, "sluit_na_update", False):
-                    venster.close()   # je wilde al sluiten: nu het klaar is, gaat het dicht
+                if wat in ("nu", "terug") and getattr(venster, "sluit_na_update", False):
+                    if echt == 0:
+                        # Je wilde al sluiten: de uitkomst (opnieuw opstarten, updates uit) als melding, dan dicht.
+                        start("notify-send", "--app-name=BugOS", "--icon=system-software-update",
+                              t("Instellingen", "Settings"), self.melding.tekst.text())
+                        venster.close()
+                    else:
+                        venster.sluit_na_update = False   # mislukt: open laten, zodat je de melding ziet
             except RuntimeError:
                 pass    # Instellingen ging dicht terwijl het nog bezig was: niemand meer om het te zeggen.
 

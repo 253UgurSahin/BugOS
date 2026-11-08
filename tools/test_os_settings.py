@@ -286,6 +286,8 @@ for _ in range(200):
 # ("nu" duurt even; een schakelaar die tussendoor klaar is, mag de update niet als klaar laten tellen.)
 (nep_pk / "pkexec").write_text(f'#!/usr/bin/bash\n[ "$2" = nu ] && sleep 2\necho "$2" >>"{nep_pk}/gedaan"\nexit 0\n')
 (nep_pk / "code").write_text("0")
+(nep_pk / "notify-send").write_text(f'#!/usr/bin/bash\necho "$*" >"{nep_pk}/melding"\n')
+(nep_pk / "notify-send").chmod(0o755)
 venster.show()
 upd.updates("nu")
 upd.updates("auto")
@@ -301,10 +303,29 @@ for _ in range(300):
     if not venster.isVisible():
         break
 dicht_na_afloop = not venster.isVisible() and not upd.bezig
+# ... en mislukt de update, dan blijft Instellingen open met de foutmelding (niet stil dicht).
+(nep_pk / "pkexec").write_text(f'#!/usr/bin/bash\nsleep 1\necho "$2" >>"{nep_pk}/gedaan"\nexit 1\n')
+venster.show()
+venster.sluit_na_update = False
+upd.updates("nu")
+app.processEvents()
+venster.close()
+for _ in range(300):
+    app.processEvents()
+    time.sleep(0.02)
+    if not upd.bezig:
+        break
+for _ in range(10):
+    app.processEvents()
+open_na_fout = venster.isVisible() and "lukte niet" in upd.melding.tekst.text()
+venster.close()
 bi.VOORBEELD = True
 os.environ.update(PATH=oud_pad, LC_ALL="nl_NL.UTF-8")
 klopt(bleef_open, "U006: Instellingen sluiten tijdens 'Nu updaten': het venster blijft open, de update loopt door")
 klopt(dicht_na_afloop, "U006: daarna gaat Instellingen vanzelf dicht")
+klopt(open_na_fout, "U046: mislukt de update nadat je Instellingen sloot, dan blijft het open met de foutmelding")
+klopt((nep_pk / "melding").exists() and "opnieuw op" in (nep_pk / "melding").read_text(),
+      "U046: gaat Instellingen vanzelf dicht na de update, dan zie je de uitkomst als melding (opnieuw opstarten)")
 # U017 (instelbaar): onder Game-modus staat de keuze "FPS-teller meteen klaar".
 from PySide6.QtWidgets import QLabel  # noqa: E402
 _teksten = [w.text() for w in upd.findChildren(QLabel)]
