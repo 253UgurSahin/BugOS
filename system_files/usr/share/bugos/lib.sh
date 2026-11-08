@@ -3,7 +3,15 @@
 
 # Taal van de gebruiker als twee letters, bijv. nl, en, de, tr.
 bugos_taal() {
-    local lang="${LC_ALL:-${LC_MESSAGES:-${LANG:-en}}}"
+    local lang="${LC_ALL:-${LC_MESSAGES:-${LANG:-en}}}" eerste
+    # De taal die je in KDE kiest staat in LANGUAGE (bijv. "nl:en_US"): die gaat voor, net als bij
+    # alle andere programma's. Behalve bij taal C: dan wil iemand bewust Engels.
+    eerste="${LANGUAGE#:}"
+    eerste="${eerste%%:*}"
+    case "$lang" in
+    C | C.* | POSIX) ;;
+    *) [ -n "$eerste" ] && lang="$eerste" ;;
+    esac
     lang="${lang%%.*}"
     lang="${lang%%_*}"
     echo "${lang,,}"

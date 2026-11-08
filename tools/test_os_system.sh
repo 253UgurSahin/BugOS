@@ -136,5 +136,19 @@ case "$*" in
 esac'
 klopt '[[ "$(HULP_LC_ALL="" HULP_LANG=nl_NL.UTF-8 hulp controle_wifi)" == ok* ]]' "hulp in het Nederlands: wifi die aan staat heet 'aan'"
 
+# U022: KDE zet de gekozen taal in LANGUAGE (bijv. "nl:en_US"); BugOS moet die volgen (bash en Python).
+taal_sh() { env -i PATH="$PATH" "$@" bash -c '. "$1/system_files/usr/share/bugos/lib.sh"; bugos_taal' _ "$ROOT"; }
+taal_py() {
+    env -i PATH="$PATH" PYTHONDONTWRITEBYTECODE=1 "$@" python3 -c \
+        'import sys; sys.path.insert(0, sys.argv[1]); import bugos_base; print(bugos_base.TAAL)' \
+        "$ROOT/system_files/usr/lib/bugos/python"
+}
+for soort in sh py; do
+    klopt '[ "$(taal_$soort LANGUAGE=nl:en_US LANG=en_US.UTF-8)" = nl ]' "taal ($soort): KDE in het Nederlands (LANGUAGE=nl:en_US) -> nl"
+    klopt '[ "$(taal_$soort LANGUAGE=en_US LANG=nl_NL.UTF-8)" = en ]' "taal ($soort): KDE in het Engels op een Nederlandse computer -> en"
+    klopt '[ "$(taal_$soort LANG=nl_NL.UTF-8)" = nl ]' "taal ($soort): zonder LANGUAGE geldt LANG"
+    klopt '[ "$(taal_$soort LANGUAGE=nl LC_ALL=C)" != nl ]' "taal ($soort): LC_ALL=C blijft Engels (zoals bij gettext)"
+done
+
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

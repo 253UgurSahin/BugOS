@@ -23,6 +23,11 @@ def _taal() -> str:
     lang = os.environ.get("LC_ALL") or os.environ.get("LC_MESSAGES") or os.environ.get("LANG") or ""
     if not lang:
         lang = locale.getlocale()[0] or ""
+    # De taal die je in KDE kiest staat in LANGUAGE (bijv. "nl:en_US"): die gaat voor, net als bij
+    # alle andere programma's. Behalve bij taal C: dan wil iemand bewust Engels.
+    eerste = next((x for x in os.environ.get("LANGUAGE", "").split(":") if x), "")
+    if eerste and lang.split(".")[0] not in ("C", "POSIX"):
+        lang = eerste
     code = lang.split(".")[0].split("_")[0].lower()
     return code if code.isalpha() and len(code) in (2, 3) else "en"
 
