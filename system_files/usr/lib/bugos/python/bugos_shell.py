@@ -8,7 +8,8 @@ from __future__ import annotations
 from PySide6.QtCore import QRect, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAccessible, QColor, QIcon
 from PySide6.QtWidgets import (
-    QAbstractButton, QAccessibleWidget, QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QPushButton, QScrollArea, QStackedWidget, QVBoxLayout,
+    QAbstractButton, QAccessibleWidget, QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QPushButton,
+    QScrollArea, QStackedWidget, QVBoxLayout,
     QWidget,
 )
 

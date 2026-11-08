@@ -14,7 +14,9 @@ from pathlib import Path
 
 from bugos_ui import lijn_icoon, t
 from bugos_files_plekken import INFO_ROL, PAD_ROL, thuis
-from bugos_files_acties import Klus, achter_uitleg, naar_prullenbak, prullenbak_legen, terugzetten, vrije_naam, zelfde_schijf
+from bugos_files_acties import (
+    Klus, achter_uitleg, naar_prullenbak, prullenbak_legen, terugzetten, vrije_naam, zelfde_schijf,
+)
 from PySide6.QtCore import QEvent, QMimeData, Qt, QTimer, QUrl
 from PySide6.QtWidgets import QApplication, QInputDialog, QLabel, QMenu, QMessageBox
 
