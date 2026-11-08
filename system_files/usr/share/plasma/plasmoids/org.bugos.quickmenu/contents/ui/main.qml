@@ -82,8 +82,11 @@ PlasmoidItem {
         }
         onZet: (wat, waarde) => root.voerUit("bugos-start-data --zet " + root.aanhalen(wat) + " " + root.aanhalen(waarde))
         onOpen: wat => {
-            // "instellingen" = de startpagina van BugOS Instellingen, anders één pagina (wifi, geluid, ...)
-            root.voerUit(wat === "instellingen" ? "bugos-settings" : "bugos-settings " + root.aanhalen(wat))
+            // "instellingen" = de startpagina van BugOS Instellingen, anders één pagina (wifi, geluid, ...).
+            // Via bugos-start-data (zoals het startmenu): dat start Instellingen los van Plasma, zodat het
+            // niet meegaat als het snelmenu stopt, en een tweede klik ook weer werkt.
+            const pagina = wat === "instellingen" ? "" : wat
+            root.voerUit("bugos-start-data --start " + root.aanhalen("instelling:" + pagina))
             root.expanded = false
         }
     }

@@ -350,6 +350,22 @@ klopt(aanroepen == [("dialoog", True), ("passwd", "oud-geheim", "nieuw-geheim"),
       "U010: geen beheerder: via passwd; beheerder: zoals eerst via AccountsService")
 
 
+# U025: het snelmenu start Instellingen via bugos-start-data --start instelling:<pagina> (los van Plasma).
+qml = (ROOT / "system_files/usr/share/plasma/plasmoids/org.bugos.quickmenu/contents/ui/main.qml").read_text()
+open_regels = qml[qml.index("onOpen:"):]
+klopt('"bugos-start-data --start " + root.aanhalen("instelling:" + pagina)' in open_regels
+      and 'voerUit(wat === "instellingen" ? "bugos-settings"' not in qml,
+      "U025: het snelmenu opent Instellingen via bugos-start-data (los, en elke klik werkt)")
+gestart: list = []
+oud_los = sd.los_starten
+sd.los_starten = lambda *cmd: (gestart.append(cmd), True)[1]
+sd.start("instelling:")
+sd.start("instelling:wifi")
+sd.los_starten = oud_los
+klopt(gestart == [("bugos-settings",), ("bugos-settings", "wifi")],
+      "U025: instelling: opent de startpagina, instelling:wifi de wifi-pagina")
+
+
 venster.close()
 shutil.rmtree(TMP, ignore_errors=True)
 print()
