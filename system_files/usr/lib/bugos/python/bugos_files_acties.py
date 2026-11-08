@@ -208,7 +208,8 @@ def _bekijk_fouten(fouten: list, bron: Path, tijdelijk: Path, achter: list) -> N
     for fout in fouten:
         if not (isinstance(fout, tuple) and len(fout) == 3):
             raise KopieFout(errno.EIO, leesbare_fout(None, bron.name))
-        van, naar, tekst = (str(x) for x in fout)
+        # os.fspath: bij submappen geeft copytree een os.DirEntry in plaats van tekst
+        van, naar, tekst = (os.fspath(x) if isinstance(x, (str, os.PathLike)) else str(x) for x in fout)
         nummer = _foutnummer(tekst)
         if nummer in RECHTEN_FOUTEN and os.path.lexists(naar) and not os.path.islink(van):
             try:  # alleen de rechten of de datum: de inhoud staat er wel (even groot = helemaal)
