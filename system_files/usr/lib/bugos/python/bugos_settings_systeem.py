@@ -120,6 +120,16 @@ class UpdatesPagina(Blad):
                   "Heavy effects off, so an older computer stays fast."))):
             g.voeg(Rij(ic, t(nl, en), t(unl, uen),
                        schuifje(status_van(script), lambda aan, s=script: zet_script(s, aan))))
+            if script == "bugos-game-mode":
+                # De FPS-teller meteen (MangoHud altijd verborgen klaar in games) of pas na opnieuw inloggen.
+                g.voeg(Rij("grafiek", t("FPS-teller meteen klaar", "FPS counter ready at once"),
+                           t("Aan: de teller gaat meteen aan en uit met game-modus; MangoHud draait dan verborgen mee "
+                             "in games. Uit: de teller komt pas na opnieuw inloggen.",
+                             "On: the counter turns on and off at once with game mode; MangoHud then runs hidden in "
+                             "games. Off: the counter only appears after you log in again."),
+                           schuifje(status_van("bugos-game-mode", "fps"),
+                                    lambda aan: None if bi.VOORBEELD else start("bugos-game-mode", "fps",
+                                                                                "aan" if aan else "uit"))))
         g = self.kaart(t("Taakbalk", "Taskbar"))
         for onderdeel, ic, (nl, en), (unl, uen) in (
                 ("startmenu", "apps", ("BugOS-startmenu", "BugOS start menu"),

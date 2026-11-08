@@ -2,11 +2,14 @@
 # bugos-game-mode - game-modus aan of uit.
 #
 #   bugos-game-mode aan | uit | wissel | status
+#   bugos-game-mode fps aan | uit | status     -> FPS-teller meteen klaar (instelling)
 #
 # Game-modus aan betekent:
 #   • computer op volle kracht (stroomprofiel "prestaties")
 #   • meldingen even stil (niet storen)
-#   • FPS-teller (MangoHud) in Steam-games, vanaf de volgende keer inloggen
+#   • FPS-teller (MangoHud) in games: normaal vanaf de volgende keer inloggen; met "FPS-teller meteen
+#     klaar" (Instellingen) meteen, want dan draait MangoHud altijd verborgen mee en zetten we hem
+#     alleen zichtbaar of onzichtbaar in ons eigen MangoHud-bestand (MangoHud leest dat opnieuw als het verandert).
 # Uit zet alles terug zoals het was (ook niet storen: stond dat al aan, dan blijft het aan).
 
 # shellcheck source=system_files/usr/share/bugos/lib.sh
@@ -15,6 +18,49 @@
 MARKER="$BUGOS_CONFIG/spelmodus-aan"
 STOREN_MARKER="$BUGOS_CONFIG/niet-storen-voor-spelmodus"
 ENVFILE="${XDG_CONFIG_HOME:-$HOME/.config}/environment.d/90-bugos-game-mode.conf"
+FPS_METEEN="$BUGOS_CONFIG/fps-meteen"
+MH_ENV="${XDG_CONFIG_HOME:-$HOME/.config}/environment.d/80-bugos-mangohud.conf"
+MH_CONF="$BUGOS_CONFIG/mangohud.conf"
+
+# Ons eigen MangoHud-bestand (niet dat van de gebruiker): zichtbaar of verborgen (no_display).
+mangohud_bestand() {
+    mkdir -p "$BUGOS_CONFIG"
+    if [ "$1" = zichtbaar ]; then
+        printf '# Gemaakt door bugos-game-mode: de FPS-teller staat aan.\n' >"$MH_CONF"
+    else
+        printf '# Gemaakt door bugos-game-mode: de FPS-teller is verborgen (game-modus staat uit).\nno_display\n' >"$MH_CONF"
+    fi
+}
+
+# Heeft deze sessie MangoHud al met ons bestand? Dan werkt aan/uit meteen, zonder opnieuw in te loggen.
+fps_meteen_actief() {
+    [ "${MANGOHUD:-}" = 1 ] && [ "${MANGOHUD_CONFIGFILE:-}" = "$MH_CONF" ]
+}
+
+fps_aan() {
+    mkdir -p "$BUGOS_CONFIG" "$(dirname "$MH_ENV")"
+    touch "$FPS_METEEN"
+    if [ -f "$MARKER" ]; then mangohud_bestand zichtbaar; else mangohud_bestand verborgen; fi
+    printf 'MANGOHUD=1\nMANGOHUD_CONFIGFILE=%s\n' "$MH_CONF" >"$MH_ENV"
+    rm -f "$ENVFILE"   # niet meer nodig: MangoHud staat nu altijd klaar
+    systemctl --user set-environment MANGOHUD=1 "MANGOHUD_CONFIGFILE=$MH_CONF" 2>/dev/null
+    if ! fps_meteen_actief; then
+        melding "$(t "FPS-teller meteen klaar" "FPS counter ready at once")" \
+            "$(t "Log één keer opnieuw in. Daarna gaat de FPS-teller meteen aan en uit met game-modus." \
+                "Log in again once. After that the FPS counter turns on and off at once with game mode.")"
+    fi
+}
+
+fps_uit() {
+    rm -f "$FPS_METEEN" "$MH_ENV" "$MH_CONF"
+    systemctl --user unset-environment MANGOHUD_CONFIGFILE 2>/dev/null
+    if [ -f "$MARKER" ]; then
+        # Game-modus staat aan: zoals vroeger, MANGOHUD=1 voor de volgende keer inloggen.
+        printf 'MANGOHUD=1\n' >"$ENVFILE"
+    else
+        systemctl --user unset-environment MANGOHUD 2>/dev/null
+    fi
+}
 
 aan() {
     # Staat hij al aan? Dan niets doen: anders onthouden we "volle kracht" en "niet storen" als hoe
@@ -25,7 +71,9 @@ aan() {
     stroomprofiel_zet performance
     # Melding eerst, anders wordt hij door 'niet storen' meteen stilgehouden.
     # De FPS-teller (MANGOHUD=1) krijgen games pas mee na opnieuw inloggen: dat zeggen we eerlijk,
-    # behalve als deze sessie hem al heeft (dan was game-modus aan bij het inloggen).
+    # behalve als deze sessie hem al heeft (dan was game-modus aan bij het inloggen, of staat
+    # "FPS-teller meteen klaar" aan: dan zetten we hem hier gewoon zichtbaar).
+    [ -f "$FPS_METEEN" ] && mangohud_bestand zichtbaar
     if [ "${MANGOHUD:-}" = 1 ]; then
         melding "$(t "Game-modus staat aan" "Game mode is on")" \
             "$(t "Volle kracht, meldingen stil, FPS-teller in games." "Full power, notifications muted, FPS counter in games.")"
@@ -36,8 +84,10 @@ aan() {
     fi
     niet_storen_status >"$STOREN_MARKER"
     niet_storen_aan
-    printf 'MANGOHUD=1\n' >"$ENVFILE"
-    systemctl --user set-environment MANGOHUD=1 2>/dev/null
+    if [ ! -f "$FPS_METEEN" ]; then
+        printf 'MANGOHUD=1\n' >"$ENVFILE"
+        systemctl --user set-environment MANGOHUD=1 2>/dev/null
+    fi
     touch "$MARKER"
 }
 
@@ -51,6 +101,12 @@ uit() {
         niet_storen_uit
     fi
     rm -f "$ENVFILE" "$MARKER" "$STOREN_MARKER"
+    if [ -f "$FPS_METEEN" ]; then
+        # MangoHud blijft klaarstaan, alleen verborgen: meteen weg, ook in een game die al draait.
+        mangohud_bestand verborgen
+        melding "$(t "Game-modus staat uit" "Game mode is off")" ""
+        return 0
+    fi
     systemctl --user unset-environment MANGOHUD 2>/dev/null
     # Had deze sessie de FPS-teller, dan blijft hij in games tot je opnieuw inlogt.
     if [ "${MANGOHUD:-}" = 1 ]; then
@@ -66,8 +122,16 @@ aan) aan ;;
 uit) uit ;;
 wissel) if [ -f "$MARKER" ]; then uit; else aan; fi ;;
 status) if [ -f "$MARKER" ]; then echo aan; else echo uit; fi ;;
+fps)
+    case "${2:-status}" in
+    aan) fps_aan ;;
+    uit) fps_uit ;;
+    status) if [ -f "$FPS_METEEN" ]; then echo aan; else echo uit; fi ;;
+    *) echo "Gebruik: bugos-game-mode fps aan|uit|status" >&2; exit 2 ;;
+    esac
+    ;;
 *)
-    echo "Gebruik: bugos-game-mode aan|uit|wissel|status" >&2
+    echo "Gebruik: bugos-game-mode aan|uit|wissel|status|fps" >&2
     exit 2
     ;;
 esac

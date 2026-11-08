@@ -182,6 +182,35 @@ klopt '! grep -q "log in again" "$TMP/meldingen"' "game-modus aan terwijl MangoH
 rm -f "$TMP/meldingen"
 draai bugos-game-mode uit
 klopt '! grep -q "log in again" "$TMP/meldingen"' "game-modus uit zonder FPS-teller in deze sessie: niets over inloggen"
+
+# FPS-teller meteen klaar (instelbaar): MangoHud altijd klaar met ons eigen bestand; game-modus zet hem zichtbaar/verborgen.
+CF="$TMP/thuis/.config"
+MHC="$CF/bugos/mangohud.conf"
+rm -rf "$CF/bugos" "$CF/environment.d" "$TMP/meldingen"
+draai bugos-game-mode fps status
+klopt 'grep -qx uit "$TMP/uit"' "fps meteen: staat standaard uit"
+draai bugos-game-mode fps aan
+klopt 'grep -qx "MANGOHUD=1" "$CF/environment.d/80-bugos-mangohud.conf" && grep -qx "MANGOHUD_CONFIGFILE=$MHC" "$CF/environment.d/80-bugos-mangohud.conf"' \
+    "fps meteen aan: MangoHud altijd klaar, met het BugOS-bestand"
+klopt 'grep -qx no_display "$MHC"' "fps meteen aan, game-modus uit: de teller is verborgen"
+klopt 'grep -q "Log in again once" "$TMP/meldingen"' "fps meteen aan: zegt dat het na één keer opnieuw inloggen werkt"
+draai bugos-game-mode fps status
+klopt 'grep -qx aan "$TMP/uit"' "fps meteen: status aan"
+rm -f "$TMP/meldingen"
+MANGOHUD=1 MANGOHUD_CONFIGFILE="$MHC" draai bugos-game-mode aan
+klopt '! grep -q no_display "$MHC" && [ ! -f "$CF/environment.d/90-bugos-game-mode.conf" ]' "fps meteen + game-modus aan: de teller is meteen zichtbaar"
+klopt '! grep -q "log in again" "$TMP/meldingen"' "fps meteen + game-modus aan: niets over opnieuw inloggen"
+rm -f "$TMP/meldingen"
+MANGOHUD=1 MANGOHUD_CONFIGFILE="$MHC" draai bugos-game-mode uit
+klopt 'grep -qx no_display "$MHC" && grep -qx MANGOHUD=1 "$CF/environment.d/80-bugos-mangohud.conf"' \
+    "fps meteen + game-modus uit: meteen verborgen, MangoHud blijft klaar"
+klopt '! grep -q "log in again" "$TMP/meldingen"' "fps meteen + game-modus uit: niets over opnieuw inloggen"
+draai bugos-game-mode aan
+draai bugos-game-mode fps uit
+klopt '[ ! -f "$MHC" ] && [ ! -f "$CF/environment.d/80-bugos-mangohud.conf" ] && grep -qx MANGOHUD=1 "$CF/environment.d/90-bugos-game-mode.conf"' \
+    "fps meteen uit terwijl game-modus aan staat: terug naar de gewone manier (na opnieuw inloggen)"
+draai bugos-game-mode uit
+klopt '[ ! -f "$CF/environment.d/90-bugos-game-mode.conf" ]' "daarna game-modus uit: niets van MangoHud blijft staan"
 nep notify-send 'exit 0'
 
 # Diensten (systemd). Met systemd-analyze (als dat er is) kijken we of systemd ze kan lezen.

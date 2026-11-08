@@ -293,6 +293,11 @@ bi.VOORBEELD = True
 os.environ.update(PATH=oud_pad, LC_ALL="nl_NL.UTF-8")
 klopt(bleef_open, "U006: Instellingen sluiten tijdens 'Nu updaten': het venster blijft open, de update loopt door")
 klopt(dicht_na_afloop, "U006: daarna gaat Instellingen vanzelf dicht")
+# U017 (instelbaar): onder Game-modus staat de keuze "FPS-teller meteen klaar".
+from PySide6.QtWidgets import QLabel  # noqa: E402
+_teksten = [w.text() for w in upd.findChildren(QLabel)]
+klopt(any("FPS" in x and ("meteen" in x or "at once" in x) for x in _teksten),
+      "U017: Instellingen heeft de keuze 'FPS-teller meteen klaar'")
 klopt("lukte niet" in mislukt, "U006: 'Nu updaten' mislukt: dat zegt Instellingen ook")
 klopt("opnieuw op" in gelukt and herstart_knop, "U006: 'Nu updaten' gelukt: klaar, met een knop om opnieuw op te starten")
 klopt("toestemming" in geannuleerd, "U006: Annuleren bij het wachtwoord: niets gedaan")
