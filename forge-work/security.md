@@ -77,8 +77,8 @@ fixed: 08cbab8. The policy: default-src 'none'; script-src with the SHA-256 of t
   so headers.py could not run. Passive only in any case (not in forge-work/scope.json).
 - The update signature check itself: no signing key yet (A032, for you), so `ostree-image-signed` was not tried.
 - Git history not scanned for secrets (no gitleaks here).
-- Breach plan: who answers if someone reports a security problem? There is no SECURITY.md. A question for you,
-  not a finding.
+- Reporting security problems: SECURITY.md (added after the check) sends people to GitHub's private reporting.
+  For you: switch it on (Settings > Code security > Private vulnerability reporting), or the button does not show.
 
 ## Accepted risks
 None.

@@ -111,6 +111,9 @@ verify: build an image and open each BugOS app once (Files, Settings, Task Manag
   Actions > "Only notify for failed workflows".
 - Merge ccr-5bd1cae9-pccs3q into main when you are happy with it, then start "BugOS bouwen" once by hand.
 
+- SECURITY.md: switch on private vulnerability reporting (Settings > Code security > Private vulnerability
+  reporting), otherwise the "Report a vulnerability" button that SECURITY.md points to does not show.
+
 ## Found on the way
 - B001 fixed in 04e18fb, see bugs.md
 - B002 fixed in b2237c7, see bugs.md
