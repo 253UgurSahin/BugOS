@@ -1,0 +1,8 @@
+# Wat de bouw van BugOS (Containerfile) te zien krijgt: alleen wat erin hoort.
+# Een witte lijst: alles eruit, dan alleen deze drie erbij. Zo komen .git, forge-work/,
+# e2e/, de website en eventuele bestanden met geheimen nooit in de bouw (of in BugOS zelf).
+# podman leest dit bestand ook (zonder .containerignore).
+*
+!Containerfile
+!build_files/
+!system_files/
