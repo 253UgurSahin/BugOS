@@ -376,6 +376,33 @@ klopt(wacht(lambda: "Te weinig ruimte" in w.melding.tekst.text()) and wacht(lamb
 w.close()
 bb.ruimte_genoeg = _echt_ruimte
 
+# ============================== U013: de Winkel ziet Firefox en Steam die al in BugOS zitten (geen Flatpak) ===
+os.environ.pop("BUGOS_GEINSTALLEERD", None)
+winkel = laad("bugos_winkel", "bugos-store")
+APPS = TMP / "applications"
+APPS.mkdir()
+(APPS / "org.mozilla.firefox.desktop").write_text("[Desktop Entry]\nName=Firefox\nExec=firefox\n")
+(APPS / "steam.desktop").write_text("[Desktop Entry]\nName=Steam\nExec=steam\n")
+winkel.APP_MAPPEN = [APPS]
+gestart: list = []
+winkel.start = lambda *a: gestart.append(a)
+cat = winkel.lees_catalogus(ROOT / "system_files" / "usr" / "share" / "bugos" / "store.json")
+ww = winkel.Winkel(cat)
+for zoek, app_id in (("Firefox", "org.mozilla.firefox"), ("Steam", "com.valvesoftware.Steam")):
+    ww.zoek.setText(zoek)
+    kaart = next((k for k in ww.kaarten if k.app["id"] == app_id), None)
+    klopt(kaart is not None and kaart.knop.text() == "Openen" and not kaart.chip.isHidden(),
+          f"U013: {zoek} (systeemprogramma) heet 'Geïnstalleerd' met 'Openen', niet 'Installeren'")
+    gestart.clear()
+    if kaart:
+        kaart.klik()
+    klopt(len(gestart) == 1 and gestart[0][0] in ("kioclient", "gio") and gestart[0][-1].endswith(".desktop"),
+          f"U013: {zoek} openen start het eigen programma (niet 'flatpak run'): {gestart}")
+ww.zoek.setText("VLC")
+kaart = next((k for k in ww.kaarten if k.app["id"] == "org.videolan.VLC"), None)
+klopt(kaart is not None and kaart.knop.text() == "Installeren", "U013: een app die er echt niet is: 'Installeren'")
+ww.close()
+
 print()
 shutil.rmtree(TMP, ignore_errors=True)  # alleen onze eigen tijdelijke testmap
 print("Alles goed." if not fouten else f"{fouten} fout(en).")

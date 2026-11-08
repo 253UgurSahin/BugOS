@@ -50,6 +50,31 @@ def geinstalleerd() -> set[str]:
     return {regel.strip() for regel in uit.splitlines() if regel.strip()}
 
 
+# Waar gewone programma's (geen Flatpak) hun .desktop-bestand hebben. Firefox en Steam zitten
+# bijvoorbeeld al in BugOS zelf: die zijn er dus al, ook al staan ze niet in 'flatpak list'.
+APP_MAPPEN = [Path("/usr/share/applications"), Path("/usr/local/share/applications"),
+              Path.home() / ".local/share/applications"]
+# Sommige programma's heten als systeemprogramma anders dan in Flathub.
+SYSTEEM_NAMEN = {
+    "org.mozilla.firefox": ("org.mozilla.firefox", "firefox"),
+    "com.valvesoftware.Steam": ("steam",),
+}
+
+
+def systeem_apps(apps: list[dict]) -> dict[str, Path]:
+    """Apps uit de winkel die er al als gewoon programma op staan: app-id -> hun .desktop-bestand."""
+    if os.environ.get("BUGOS_GEINSTALLEERD") is not None:  # voor screenshots: alleen dat lijstje
+        return {}
+    gevonden = {}
+    for app in apps:
+        for naam in SYSTEEM_NAMEN.get(app["id"], (app["id"],)):
+            bestand = next((m / f"{naam}.desktop" for m in APP_MAPPEN if (m / f"{naam}.desktop").is_file()), None)
+            if bestand:
+                gevonden[app["id"]] = bestand
+                break
+    return gevonden
+
+
 def icoon_voor(app_id: str) -> QIcon:
     for map_ in ICOON_MAPPEN:
         for ext in (".png", ".svg"):
@@ -118,8 +143,14 @@ class AppKaart(Kaart):
         self.knop.style().polish(self.knop)
 
     def klik(self) -> None:
-        if self.app["id"] in self.winkel.installed:
+        if self.app["id"] in self.winkel.flatpaks:
             start("flatpak", "run", self.app["id"])
+        elif self.app["id"] in self.winkel.systeem:  # een gewoon programma (bijv. Firefox in BugOS zelf)
+            bestand = str(self.winkel.systeem[self.app["id"]])
+            if bestaat("kioclient"):
+                start("kioclient", "exec", bestand)
+            else:
+                start("gio", "launch", bestand)
         else:
             self.winkel.installeer(self.app)
 
@@ -129,7 +160,9 @@ class Winkel(Venster):
         scroll = QScrollArea()
         super().__init__(t("BugOS Winkel", "BugOS Store"), inhoud=scroll, maat=(1180, 800))
         self.cat = catalogus
-        self.installed = geinstalleerd()
+        self.systeem = systeem_apps(self.cat["apps"])
+        self.flatpaks = geinstalleerd()
+        self.installed = self.flatpaks | set(self.systeem)
         self.bezig_met: str | None = None
         self.kaarten: list[AppKaart] = []
         self.kolommen = 2
@@ -249,7 +282,8 @@ class Winkel(Venster):
         app_id = self.bezig_met
         naam = next((a["naam"] for a in self.cat["apps"] if a["id"] == app_id), app_id)
         self.bezig_met = None
-        self.installed = geinstalleerd() | ({app_id} if code == 0 else set())
+        self.flatpaks = geinstalleerd() | ({app_id} if code == 0 else set())
+        self.installed = self.flatpaks | set(self.systeem)
         if code == 0:
             self.melding.zet(t(f"✅ {naam} is geïnstalleerd. Je vindt het in het startmenu.",
                                f"✅ {naam} is installed. You can find it in the start menu."), "goed")
