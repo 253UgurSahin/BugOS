@@ -10,6 +10,8 @@ Gebruik:  QT_QPA_PLATFORM=offscreen python3 tools/test_os_settings.py
 
 from __future__ import annotations
 
+import importlib.machinery
+import importlib.util
 import os
 import pwd
 import re
@@ -142,6 +144,38 @@ Path(acc.PLASMALOGIN).mkdir(parents=True)
 met_pl = bi.gebruiker().auto_inloggen
 acc.PLASMALOGIN, acc.PLASMALOGIN_BESTANDEN, acc.SDDM_BESTANDEN, bi.VOORBEELD = oud
 klopt(met_pl and not zonder_pl, "U002: Instellingen leest Plasma Login als dat er is (en anders SDDM)")
+
+
+# U008: uitvoer lezen we in het Engels, ook als jij Nederlands of Duits hebt (nep-nmcli en nep-lpstat praten
+# Nederlands/Duits, net als de echte, tenzij LC_ALL=C.UTF-8; nmcli -t vertaalt nooit).
+nep = TMP / "nep-bin"
+nep.mkdir()
+for naam, tekst in {
+    "nmcli": 'if [ "$1" = -t ] || [ "$LC_ALL" = C.UTF-8 ]; then echo enabled; else echo ingeschakeld; fi',
+    "lpstat": 'if [ "$LC_ALL" != C.UTF-8 ]; then d=Drucker; i="ist im Leerlauf"; else d=printer; i="is idle"; fi\n'
+              'case "$1" in -d) echo "system default destination: HP";; *) printf "%s HP %s.  enabled since Mon\\n" '
+              '"$d" "$i";; esac',
+    "bluetoothctl": 'echo "Controller AA"; printf "\\tPowered: yes\\n"',
+    "bugos-taal": 'echo "${LC_ALL:-leeg}"',
+}.items():
+    (nep / naam).write_text(f"#!/usr/bin/bash\n{tekst}\n")
+    (nep / naam).chmod(0o755)
+oud_pad = os.environ["PATH"]
+os.environ.update(PATH=f"{nep}:{oud_pad}", LC_ALL="nl_NL.UTF-8", LANGUAGE="nl")
+bi.VOORBEELD = False
+klopt(bi.wifi_aan(), "U008: Instellingen ziet wifi aan, ook in het Nederlands")
+klopt([p.naam for p in bi.printers()] == ["HP"], "U008: printers verschijnen, ook als CUPS Duits praat")
+klopt(bi.draai("bugos-taal")[1].strip() == "nl_NL.UTF-8", "U008: onze eigen bugos-hulpjes houden je taal (meldingen)")
+bi.VOORBEELD = True
+lader = importlib.machinery.SourceFileLoader("startdata", str(BIN / "bugos-start-data"))
+spec = importlib.util.spec_from_loader("startdata", lader)
+sd = importlib.util.module_from_spec(spec)
+lader.exec_module(sd)
+klopt(sd.snel_status()["wifi"] is True and sd.tray_status()["wifi"] is True,
+      "U008: het snelmenu en het taakbalk-icoontje zien wifi aan, ook in het Nederlands")
+klopt(sd.draai("bugos-taal").strip() == "nl_NL.UTF-8", "U008: bugos-start-data laat bugos-hulpjes in je taal")
+os.environ["PATH"] = oud_pad
+os.environ.pop("LANGUAGE")
 
 
 shutil.rmtree(TMP, ignore_errors=True)

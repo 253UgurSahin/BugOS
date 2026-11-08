@@ -231,8 +231,14 @@ def gebruiker() -> dict:
 
 
 def draai(*cmd: str) -> str:
+    # We lezen de uitvoer, dus in het Engels (C.UTF-8): anders zegt nmcli 'ingeschakeld'. Onze eigen
+    # bugos-hulpjes houden je taal, want die laten een melding zien.
+    env = dict(os.environ)
+    if not os.path.basename(cmd[0]).startswith("bugos-"):
+        env["LC_ALL"] = "C.UTF-8"
+        env.pop("LANGUAGE", None)
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=5).stdout
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=5, env=env).stdout
     except (OSError, subprocess.SubprocessError):
         return ""
 
@@ -320,7 +326,7 @@ def snel_status() -> dict:
                 "volume": 60, "stil": False, "niet_storen": False,
                 "helderheid": 70, "batterij": 76, "laadt": False}
     s: dict = {}
-    s["wifi"] = draai("nmcli", "radio", "wifi").strip() == "enabled" if shutil.which("nmcli") else None
+    s["wifi"] = draai("nmcli", "-t", "-f", "WIFI", "radio").strip() == "enabled" if shutil.which("nmcli") else None
     bt = draai("bluetoothctl", "show") if shutil.which("bluetoothctl") else ""
     s["bluetooth"] = None if "Controller" not in bt else ("Powered: yes" in bt)
     s["spel"] = draai("bugos-game-mode", "status").strip() == "aan" if shutil.which("bugos-game-mode") else None
@@ -336,7 +342,7 @@ def tray_status() -> dict:
     """Korte status voor een icoontje op de taakbalk: internet, volume, batterij."""
     s: dict = {"internet": "geen", "wifi": None, "volume": None, "stil": False, "batterij": None, "laadt": False}
     if shutil.which("nmcli"):
-        s["wifi"] = draai("nmcli", "radio", "wifi").strip() == "enabled"
+        s["wifi"] = draai("nmcli", "-t", "-f", "WIFI", "radio").strip() == "enabled"
         soorten = set()
         for regel in draai("nmcli", "-t", "-f", "TYPE,STATE", "device").splitlines():
             delen = regel.split(":")

@@ -31,12 +31,23 @@ import subprocess
 VOORBEELD = bool(os.environ.get("BUGOS_INSTELLINGEN_VOORBEELD"))
 
 
+def omgeving(programma: str) -> dict[str, str]:
+    """De omgeving voor een opdracht. We lezen de uitvoer, dus die moet in het Engels (C.UTF-8): anders zegt
+    nmcli 'ingeschakeld' en lpstat 'Drucker'. Onze eigen bugos-hulpjes houden je taal (die laten meldingen zien)."""
+    env = dict(os.environ)
+    if not os.path.basename(programma).startswith("bugos-"):
+        env["LC_ALL"] = "C.UTF-8"
+        env.pop("LANGUAGE", None)
+    return env
+
+
 def draai(*cmd: str, invoer: str | None = None, timeout: int = 15) -> tuple[int, str]:
     """Voer een opdracht uit; geef (code, uitvoer). Bestaat het programma niet, dan (127, '')."""
     if not shutil.which(cmd[0]):
         return 127, ""
     try:
-        r = subprocess.run(list(cmd), input=invoer, capture_output=True, text=True, timeout=timeout)
+        r = subprocess.run(list(cmd), input=invoer, capture_output=True, text=True, timeout=timeout,
+                           env=omgeving(cmd[0]))
         return r.returncode, r.stdout
     except (OSError, subprocess.SubprocessError):
         return 1, ""
