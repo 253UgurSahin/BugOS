@@ -26,7 +26,19 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 HOME = Path.home()
-TAAL = (os.environ.get("LC_ALL") or os.environ.get("LC_MESSAGES") or os.environ.get("LANG") or "en")[:2].lower()
+
+
+def _taal() -> str:
+    """Twee letters, bv. nl. KDE zet je gekozen taal in LANGUAGE (bv. nl:en_US): de eerste daarvan wint,
+    behalve als de taalinstelling C of POSIX is (dan telt LANGUAGE niet, net als bij gettext)."""
+    lang = os.environ.get("LC_ALL") or os.environ.get("LC_MESSAGES") or os.environ.get("LANG") or ""
+    eerste = os.environ.get("LANGUAGE", "").split(":")[0]
+    if eerste and lang.split(".")[0] not in ("C", "POSIX"):
+        lang = eerste
+    return (lang or "en")[:2].lower()
+
+
+TAAL = _taal()
 
 # Sommige programma's hebben twee namen: als rpm en als Flatpak. De eerste die bestaat, telt.
 ZELFDE_APP = {

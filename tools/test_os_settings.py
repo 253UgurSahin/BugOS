@@ -385,6 +385,27 @@ mod_onderdelen.menu_bij, bi.bt_vergeet = oud_menu, oud_vergeet
 klopt(vergeten == ["AA:BB:CC:DD:EE:02"], "U026: 'Vergeten' werkt ook als het apparaat niet verbonden is")
 
 
+# U022: het start- en snelmenu volgen de taal die je in KDE koos (LANGUAGE), behalve bij C/POSIX.
+def start_data_taal(**env) -> str:
+    oud_env = dict(os.environ)
+    for k in ("LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"):
+        os.environ.pop(k, None)
+    os.environ.update(env)
+    try:
+        return sd._taal()
+    finally:
+        os.environ.clear()
+        os.environ.update(oud_env)
+
+
+klopt(start_data_taal(LANG="en_US.UTF-8", LANGUAGE="nl:en_US") == "nl"
+      and start_data_taal(LC_ALL="en_US.UTF-8", LANGUAGE="de") == "de"
+      and start_data_taal(LANG="nl_NL.UTF-8") == "nl"
+      and start_data_taal(LANG="C.UTF-8", LANGUAGE="nl") != "nl"
+      and start_data_taal(LC_ALL="POSIX", LANGUAGE="nl") != "nl",
+      "U022: bugos-start-data: de eerste taal uit LANGUAGE wint, behalve bij C/POSIX")
+
+
 venster.close()
 shutil.rmtree(TMP, ignore_errors=True)
 print()
