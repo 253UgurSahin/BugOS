@@ -132,12 +132,16 @@ def rsync_terug(doel: Path, thuis: Path) -> list[str]:
             f"{doel}/", f"{thuis}/"]
 
 
-def ruimte_genoeg(schijf: Path, mappen: list[Path], doel: Path | None = None) -> tuple[bool, int, int]:
+def ruimte_genoeg(schijf: Path, mappen: list[Path], doel: Path | None = None,
+                  stop=None) -> tuple[bool, int, int]:
     """Past wat er nog gekopieerd moet worden? Wat al (even groot) in de back-up staat, telt niet mee:
-    rsync kopieert alleen wat nieuw of veranderd is."""
+    rsync kopieert alleen wat nieuw of veranderd is. Bij veel bestanden duurt dit even: het venster
+    doet het op de achtergrond, en 'stop' (een threading.Event) breekt het tellen af."""
     nodig = 0
     for m in mappen:
         for wortel, _, bestanden in os.walk(m):
+            if stop is not None and stop.is_set():
+                return False, nodig, 0
             for b in bestanden:
                 bron = Path(wortel) / b
                 try:
@@ -219,8 +223,28 @@ def venster() -> int:
         Banner, Chip, IcoonChip, Knop, SchijfKiezer, Voortgang, kop_met_icoon, label, maak_app, pagina,
         raster, schijf_info, sectie, uitvoeren,
     )
-    from PySide6.QtCore import QProcess, QTimer
+    import threading
+
+    from PySide6.QtCore import QProcess, QThread, QTimer, Signal
     from PySide6.QtWidgets import QFrame, QHBoxLayout, QInputDialog, QMessageBox, QVBoxLayout, QWidget
+
+    class Teller(QThread):
+        """Tel op de achtergrond of alles op de schijf past: bij duizenden foto's duurt dat even,
+        en dan mag het venster niet vastlopen."""
+
+        klaar = Signal(bool, object, object)  # past, nodig, vrij (object: getallen boven de 2 GB)
+
+        def __init__(self, schijf: Path, mappen: list[Path], doel: Path):
+            super().__init__()
+            self.schijf, self.mappen, self.doel = schijf, mappen, doel
+            self.stop = threading.Event()
+
+        def run(self) -> None:
+            try:
+                past, nodig, vrij = ruimte_genoeg(self.schijf, self.mappen, self.doel, self.stop)
+            except OSError:  # de schijf is er intussen uit
+                past, nodig, vrij = False, 0, -1
+            self.klaar.emit(past, nodig, vrij)
 
     def wat_mee_gaat() -> QWidget:
         """Zes kleine kaartjes: deze mappen gaan mee in de back-up."""
@@ -287,6 +311,7 @@ def venster() -> int:
             self.stand: dict = {"klus": "", "schijf": None}
             self.sluit_na = False  # het venster ging dicht tijdens het kopiëren: sluiten zodra het klaar is
             self.gestopt = False   # de gebruiker koos 'Nu stoppen'
+            self.teller: Teller | None = None  # telt of alles past
             self.maak.clicked.connect(self.maak_backup)
             self.terugzetten.clicked.connect(self.zet_terug)
             self.kiezer.gewijzigd.connect(self.knoppen)
@@ -300,15 +325,20 @@ def venster() -> int:
             g = self.kiezer.gekozen()
             return Path(g) if g else None
 
+        def druk(self) -> bool:
+            """Zijn we bezig (ruimte tellen of kopiëren)?"""
+            return self.proces.state() != QProcess.ProcessState.NotRunning or \
+                (self.teller is not None and self.teller.isRunning())
+
         def knoppen(self) -> None:
-            if self.proces.state() != QProcess.ProcessState.NotRunning:
+            if self.druk():
                 return
             s = self.gekozen()
             self.maak.setEnabled(s is not None)
             self.terugzetten.setEnabled(s is not None and bool(backups_op(s)))
 
         def ververs_schijven(self) -> None:
-            if self.proces.state() != QProcess.ProcessState.NotRunning:
+            if self.druk():
                 return
             items = []
             for s in schijven():
@@ -395,6 +425,12 @@ def venster() -> int:
             return box.clickedButton() is stop
 
         def closeEvent(self, e) -> None:  # noqa: N802
+            if self.teller is not None and self.teller.isRunning():
+                # Nog aan het tellen (er is nog niets gekopieerd): stop het tellen, en sluit daarna.
+                e.ignore()
+                self.sluit_na = True
+                self.teller.stop.set()
+                return
             if self.proces.state() == QProcess.ProcessState.NotRunning:
                 super().closeEvent(e)
                 return
@@ -425,12 +461,32 @@ def venster() -> int:
             schijf = self.gekozen()
             if schijf is None:
                 return
+            if self.druk():
+                return
             mappen = bron_mappen()
-            past, nodig, vrij = ruimte_genoeg(schijf, mappen, backup_doel(schijf))
+            self.bezig(t("Even kijken of alles op de schijf past…", "Checking whether everything fits on the drive…"))
+            self.teller = Teller(schijf, mappen, backup_doel(schijf))
+            self.teller.klaar.connect(lambda past, nodig, vrij: self.geteld(schijf, mappen, past, nodig, vrij))
+            self.teller.start()
+
+        def geteld(self, schijf: Path, mappen: list[Path], past: bool, nodig: int, vrij: int) -> None:
+            if self.teller is not None:
+                self.teller.wait()  # de draad is net klaar; even netjes afsluiten
+            if self.sluit_na:  # het venster ging dicht tijdens het tellen
+                self.stop(False)
+                return
+            if vrij < 0:
+                self.melding.zet(t("De schijf reageert niet. Zit hij er nog in? Probeer het opnieuw.",
+                                   "The drive does not respond. Is it still plugged in? Try again."), "fout")
+                self.balk.hide()
+                self.stop(False)
+                return
             if not past:
                 self.melding.zet(t(f"Te weinig ruimte op de schijf: nodig {nodig / 1024**3:.1f} GB, vrij {vrij / 1024**3:.1f} GB.",
                                    f"Not enough space on the drive: need {nodig / 1024**3:.1f} GB, free {vrij / 1024**3:.1f} GB."),
                                  "fout")
+                self.balk.hide()
+                self.stop(False)
                 return
             doel = backup_doel(schijf)
             doel.mkdir(parents=True, exist_ok=True)

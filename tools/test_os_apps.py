@@ -339,6 +339,43 @@ for naam, module, schijf, begin in (("Back-up", bb, SCHIJF, "maak_backup"), ("Ov
     del os.environ["BUGOS_TEST_VAST"], os.environ["BUGOS_TEST_SLAAP"]
 os.environ["BUGOS_SCHIJVEN"] = str(SCHIJF)
 
+# ========================================== U014: ruimte tellen op de achtergrond (het venster loopt niet vast) ===
+import threading  # noqa: E402
+import time  # noqa: E402
+
+_echt_ruimte = bb.ruimte_genoeg
+telde_in: list = []
+
+
+def traag_tellen(*a, **k):
+    telde_in.append(threading.current_thread() is threading.main_thread())
+    time.sleep(1.5)  # duizenden foto's
+    return _echt_ruimte(*a, **k)
+
+
+bb.ruimte_genoeg = traag_tellen
+w = open_venster(bb)
+klok = time.monotonic()
+w.maak_backup()
+duur = time.monotonic() - klok
+klopt(duur < 0.5 and not w.maak.isEnabled() and "past" in w.melding.tekst.text(),
+      f"U014: 'Maak back-up' komt meteen terug ({duur:.1f} s) en zegt 'Even kijken of alles past'")
+klopt(wacht(lambda: "uithalen" in w.melding.tekst.text(), 15000) and telde_in == [False],
+      "U014: het tellen gebeurde op de achtergrond, daarna gaat de back-up gewoon door")
+w.close()
+# sluiten tijdens het tellen: geen crash, het venster gaat netjes dicht
+w = open_venster(bb)
+w.maak_backup()
+w.close()
+klopt(wacht(lambda: not w.isVisible() and not w.druk(), 8000), "U014: sluiten tijdens het tellen: stopt netjes")
+bb.ruimte_genoeg = lambda *a, **k: (False, 5 * 1024**3, 1024**3)
+w = open_venster(bb)
+w.maak_backup()
+klopt(wacht(lambda: "Te weinig ruimte" in w.melding.tekst.text()) and wacht(lambda: w.maak.isEnabled()),
+      "U014: past het niet, dan zegt hij dat en kun je het opnieuw proberen")
+w.close()
+bb.ruimte_genoeg = _echt_ruimte
+
 print()
 shutil.rmtree(TMP, ignore_errors=True)  # alleen onze eigen tijdelijke testmap
 print("Alles goed." if not fouten else f"{fouten} fout(en).")
