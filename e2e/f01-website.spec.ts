@@ -201,6 +201,25 @@ test('F01-N1 storage blocked (private window, cookies off): the page and the the
   await context.close();
 });
 
+test('F01-N3 the Content-Security-Policy blocks a script that is not ours (X003)', async ({ page }) => {
+  await page.goto('/');
+  const policy = await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content');
+  expect(policy).toContain("default-src 'none'");
+  expect(policy).not.toContain('unsafe-eval');
+  expect(policy).toMatch(/script-src 'sha256-[^']+' 'sha256-[^']+';/);
+  // A script someone slips into the page must not run; the browser reports the block, which is expected here.
+  problems = [];
+  const ran = await page.evaluate(() => new Promise<boolean>((done) => {
+    (window as any).vreemd = false;
+    const s = document.createElement('script');
+    s.textContent = 'window.vreemd = true;';
+    document.body.appendChild(s);
+    setTimeout(() => done((window as any).vreemd), 100);
+  }));
+  expect(ran).toBe(false);
+  problems = problems.filter((p) => !p.includes('Content Security Policy'));
+});
+
 test('F01-N2 a page that does not exist gives a 404, not the home page', async ({ page }) => {
   const response = await page.request.get('/this-page-does-not-exist');
   expect(response.status()).toBe(404);
