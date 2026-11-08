@@ -6,7 +6,9 @@ ConditionPathExists=!/var/lib/bugos/eerste-start-klaar
 ConditionKernelCommandLine=!rd.live.image
 
 [Service]
-Type=oneshot
+# exec, niet oneshot: dan is het opstarten klaar zodra dit begint, en wacht de computer niet op
+# het downloaden van de apps (of, zonder internet, op het steeds opnieuw proberen).
+Type=exec
 ExecStart=/usr/bin/bugos-first-boot
 Restart=on-failure
 RestartSec=5min

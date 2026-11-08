@@ -184,5 +184,17 @@ draai bugos-game-mode uit
 klopt '! grep -q "log in again" "$TMP/meldingen"' "game-modus uit zonder FPS-teller in deze sessie: niets over inloggen"
 nep notify-send 'exit 0'
 
+# Diensten (systemd). Met systemd-analyze (als dat er is) kijken we of systemd ze kan lezen.
+SD="$ROOT/system_files/usr/lib/systemd"
+sd_goed() {  # geen klachten behalve "programma bestaat hier niet" (dat komt pas in BugOS zelf)
+    command -v systemd-analyze >/dev/null 2>&1 || return 0
+    ! systemd-analyze verify --man=no "$@" 2>&1 | grep -v "is not executable" | grep -q .
+}
+# U020: zonder internet mag de eerste start de computer niet in "bezig met opstarten" houden.
+klopt '! grep -q "^Type=oneshot" "$SD/system/bugos-first-boot.service"' \
+    "eerste start: geen oneshot (het opstarten wacht dan op het downloaden en opnieuw proberen)"
+klopt 'grep -q "^Restart=on-failure" "$SD/system/bugos-first-boot.service"' "eerste start: probeert het later opnieuw"
+klopt 'sd_goed "$SD/system/bugos-first-boot.service"' "eerste start: systemd kan de dienst lezen"
+
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
