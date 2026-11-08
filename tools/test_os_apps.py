@@ -507,6 +507,15 @@ klopt(vb.lijst.model().rowCount(vb.lijst.rootIndex()) == 1, "U031: zoeken in die
 vb.close()
 os.chdir(oude_map)
 
+# ============================================================ U030: 3,2 GB in het Nederlands, 3.2 GB in het Engels ===
+import bugos_drives  # noqa: E402
+
+klopt(bugos_drives.mooie_maat(3_200_000_000) == "3,2 GB", "U030: Nederlands: 3,2 GB (met een komma)")
+bugos_drives.TAAL = "en"
+klopt(bugos_drives.mooie_maat(3_200_000_000) == "3.2 GB" and bugos_drives.mooie_maat(64_000_000_000) == "64 GB",
+      f"U030: Engels: 3.2 GB (met een punt): {bugos_drives.mooie_maat(3_200_000_000)}")
+bugos_drives.TAAL = "nl"
+
 print()
 shutil.rmtree(TMP, ignore_errors=True)  # alleen onze eigen tijdelijke testmap
 print("Alles goed." if not fouten else f"{fouten} fout(en).")

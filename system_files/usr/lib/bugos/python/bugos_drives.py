@@ -13,7 +13,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from bugos_ui import t
+from bugos_ui import TAAL, t
 
 
 def mooie_maat(n: int | float) -> str:
@@ -21,7 +21,8 @@ def mooie_maat(n: int | float) -> str:
         if n < 1000 or eenheid == "TB":
             if eenheid == "bytes":
                 return f"{int(n)} bytes"
-            return f"{n:.1f} {eenheid}".replace(".", ",") if n < 10 else f"{n:.0f} {eenheid}"
+            tekst = f"{n:.1f} {eenheid}" if n < 10 else f"{n:.0f} {eenheid}"
+            return tekst.replace(".", ",") if TAAL == "nl" else tekst  # 3,2 GB in het Nederlands, 3.2 GB in het Engels
         n /= 1000
     return ""
 
