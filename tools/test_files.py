@@ -189,13 +189,15 @@ _n = sch.losse_openen([sch.Schijf(apparaat="/dev/sdb1", naam="Stick", soort="sti
                         sch.Schijf(apparaat="/dev/sdc1", naam="Al open", soort="stick", station="/dev/sdc", fs="vfat",
                                    wortel="/run/media/x/A"),
                         sch.Schijf(apparaat="/dev/sda2", naam="D", soort="intern", station="/dev/sda", fs="ntfs")])
+_log1 = (_ub / "log").read_text()
 _n2 = sch.losse_openen([sch.Schijf(apparaat="/dev/sdb1", naam="Stick", soort="stick", station="/dev/sdb", fs="vfat")])
+_log2 = (_ub / "log").read_text()
 sch.losse_openen([])   # eruit gehaald
 _n3 = sch.losse_openen([sch.Schijf(apparaat="/dev/sdb1", naam="Stick", soort="stick", station="/dev/sdb", fs="vfat")])
 os.environ["PATH"] = _oud_pad
-klopt(_n == 1 and (_ub / "log").read_text().split() == ["mount", "-b", "/dev/sdb1", "--no-user-interaction"],
+klopt(_n == 1 and _log1.split() == ["mount", "-b", "/dev/sdb1", "--no-user-interaction"],
       "U139: een dichte USB-stick gaat vanzelf open (zonder te vragen); open en interne schijven niet")
-klopt(_n2 == 0 and (_ub / "log").read_text().count("mount") == 1,
+klopt(_n2 == 0 and _log2.count("mount") == 1,
       "U164: weer dicht ('Veilig verwijderen') of lukte openen niet: niet elke 3 seconden opnieuw openzetten")
 klopt(_n3 == 1, "U183: dezelfde stick eruit en weer erin (Back-up blijft open): hij gaat weer vanzelf open")
 _sys = TMP / "sys-mmc"
