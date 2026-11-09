@@ -117,12 +117,25 @@ def controle_bluetooth() -> Uitslag:
         return Uitslag(naam, ONBEKEND, t("Kon het niet controleren.", "Could not check."))
     code, uit = draai("bluetoothctl", "show", timeout=5)
     if code != 0 or "Controller" not in uit:
-        return Uitslag(naam, OK, t("Geen bluetooth gevonden op deze computer.", "No Bluetooth found on this computer."))
-    if "Powered: yes" in uit:
+        # Uitgezet met de vliegtuigstand of een Fn-toets: dan is er geen 'Controller', maar wel bluetooth (U290).
+        from bugos_config_netwerk import bt_hardware
+        if not bt_hardware():
+            return Uitslag(naam, OK, t("Geen bluetooth gevonden op deze computer.", "No Bluetooth found on this computer."))
+    elif "Powered: yes" in uit:
         return Uitslag(naam, OK, t("Bluetooth staat aan.", "Bluetooth is on."))
-    return Uitslag(naam, LET_OP, t("Bluetooth staat uit.", "Bluetooth is off."),
-                   lambda: (draai("rfkill", "unblock", "bluetooth"), draai("bluetoothctl", "power", "on")),
+    return Uitslag(naam, LET_OP, t("Bluetooth staat uit.", "Bluetooth is off."), bluetooth_aanzetten,
                    t("Bluetooth aanzetten", "Turn Bluetooth on"))
+
+
+def bluetooth_aanzetten() -> None:
+    """Na 'rfkill unblock' komt de bluetooth-kaart pas na een tel terug: even wachten, dan aanzetten (U290)."""
+    import time
+    draai("rfkill", "unblock", "bluetooth")
+    for _ in range(10):
+        if "Controller" in draai("bluetoothctl", "show", timeout=3)[1]:
+            break
+        time.sleep(0.5)
+    draai("bluetoothctl", "power", "on")
 
 
 def controle_geluid() -> Uitslag:
@@ -186,7 +199,8 @@ def controle_opslag() -> Uitslag:
         return Uitslag(naam, PROBLEEM,
                        t(f"Je schijf is bijna vol (nog {vrij_gb:.1f} GB). Ruim oude downloads op.".replace(".", ",", 1),
                          f"Your disk is almost full ({vrij_gb:.1f} GB left). Clean up old downloads."),
-                       lambda: start("filelight", str(Path.home())) if bestaat("filelight") else start("dolphin", str(Path.home() / "Downloads")),
+                       lambda: start("filelight", str(Path.home())) if bestaat("filelight") else
+                       start("bugos-files", str(Path.home() / "Downloads")),   # BugOS Bestanden, niet Dolphin (U291)
                        t("Laat zien wat ruimte inneemt", "Show what takes up space"))
     if vrij_gb < 10:
         return Uitslag(naam, LET_OP, t(f"Nog {vrij_gb:.0f} GB vrij. Dat raakt op.", f"{vrij_gb:.0f} GB free. Running low."))

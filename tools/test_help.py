@@ -116,6 +116,32 @@ klopt(time.monotonic() - begin < 0.5 and not knop.isEnabled(), "repareren: op de
 klopt(wacht(lambda: gerepareerd == [1] and not w.klusjes and not w.bezig, 15), "repareren: daarna opnieuw nagekeken")
 w.close()
 
+# U290: bluetooth uitgezet met de vliegtuigstand (geen Controller, wel een rfkill-schakelaar die uit staat):
+# Hulp zegt 'staat uit' met een knop, niet 'geen bluetooth'.
+import os  # noqa: E402
+import tempfile as _tf  # noqa: E402
+
+_sys = Path(_tf.mkdtemp())
+(_sys / "class" / "rfkill" / "rfkill0").mkdir(parents=True)
+(_sys / "class" / "rfkill" / "rfkill0" / "type").write_text("bluetooth\n")
+(_sys / "class" / "rfkill" / "rfkill0" / "soft").write_text("1\n")
+(_sys / "class" / "bluetooth").mkdir(parents=True)
+_oud_sys = os.environ.get("BUGOS_SYS")
+os.environ["BUGOS_SYS"] = str(_sys)
+_echt2 = (bh.draai, bh.bestaat)
+bh.draai = lambda *cmd, **kw: (1, "No default controller available")
+bh.bestaat = lambda _p: True
+_u = bh.controle_bluetooth()
+bh.draai, bh.bestaat = _echt2
+if _oud_sys is None:
+    os.environ.pop("BUGOS_SYS", None)
+else:
+    os.environ["BUGOS_SYS"] = _oud_sys
+klopt(_u.stand == bh.LET_OP and _u.repareer is not None,
+      f"U290: bluetooth uit door de vliegtuigstand: 'staat uit' met een knop om hem aan te zetten ({_u.stand})")
+klopt('start("bugos-files"' in (ROOT / "system_files/usr/bin/bugos-help").read_text(),
+      "U291: 'Laat zien wat ruimte inneemt' opent BugOS Bestanden (niet Dolphin)")
+
 # U237: 'schijf bijna vol' schrijft in het Nederlands een komma (1,5 GB), zoals de rest van BugOS.
 from collections import namedtuple as _nt  # noqa: E402
 
