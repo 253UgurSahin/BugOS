@@ -740,6 +740,30 @@ echt = json.loads((ROOT / "system_files" / "usr" / "share" / "bugos" / "translat
 klopt("Writing to the stick… Do not unplug it yet." in echt and len(echt) > 400,
       f"U019: het sjabloon in BugOS is bijgewerkt ({len(echt)} teksten)")
 
+# ========================== U076: een bestand met een heel lange naam kan ook naar de prullenbak ===
+_lang_map = TMP / "lang"
+_lang_map.mkdir()
+_mislukt = []
+for _naam in ("a" * 248 + ".jpg", "é" * 125 + ".txt", "b" * 255):
+    _bron = _lang_map / _naam
+    _bron.write_text("x")
+    try:
+        _in_bak, _info = acties.naar_prullenbak(_bron)
+        _terug = acties.terugzetten(_in_bak, _info)
+        if _terug != _bron or not _bron.exists() or _info.exists() or len(_info.name.encode()) > 255 \
+                or _in_bak.suffix != _bron.suffix:
+            _mislukt.append((len(_naam.encode()), "terug", _terug.name[:20]))
+    except OSError as e:
+        _mislukt.append((len(_naam.encode()), str(e)))
+klopt(not _mislukt, f"U076: namen tot 255 bytes kunnen naar de prullenbak en weer terug, de extensie blijft ({_mislukt})")
+_bron = _lang_map / ("c" * 250 + ".png")
+_bron.write_text("1")
+_a, _ = acties.naar_prullenbak(_bron)
+_bron.write_text("2")
+_b2, _ = acties.naar_prullenbak(_bron)
+klopt(_a != _b2 and _a.read_text() == "1" and _b2.read_text() == "2" and _b2.suffix == ".png",
+      "U076: twee keer dezelfde lange naam: allebei in de prullenbak, niets overschreven")
+
 # ========================== U067: 'Grote letters' maakt ook de letters van de BugOS-apps groter ===
 from PySide6.QtGui import QFont  # noqa: E402
 

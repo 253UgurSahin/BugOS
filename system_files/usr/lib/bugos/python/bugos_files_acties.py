@@ -49,6 +49,19 @@ def zelfde_schijf(a: Path, b: Path) -> bool:
         return False
 
 
+# Een naam mag 255 bytes zijn; het info-bestand heet "<naam>.trashinfo" (10 bytes langer). Bij een heel
+# lange naam korten we de naam in de prullenbak in (de extensie blijft); Path= houdt de echte naam (U076).
+_MAX_NAAM = 255 - len(".trashinfo")
+
+
+def _prullenbak_naam(stam: str, ext: str, achter: str) -> str:
+    if len(ext.encode()) > 40:   # vreemd lange "extensie": gewoon als deel van de naam zien
+        stam, ext = stam + ext, ""
+    while stam and len(f"{stam}{achter}{ext}".encode()) > _MAX_NAAM:
+        stam = stam[:-1]
+    return f"{stam}{achter}{ext}"
+
+
 def naar_prullenbak(pad: Path) -> tuple[Path, Path]:
     """Zet iets in de prullenbak (volgens de freedesktop-afspraak, dus ook KDE ziet het).
 
@@ -57,19 +70,20 @@ def naar_prullenbak(pad: Path) -> tuple[Path, Path]:
     bak = prullenbak()
     (bak / "files").mkdir(parents=True, exist_ok=True)
     (bak / "info").mkdir(parents=True, exist_ok=True)
-    naam, i = pad.name, 2
+    stam, ext = (pad.stem, pad.suffix) if pad.is_file() else (pad.name, "")
+    naam, i = _prullenbak_naam(stam, ext, ""), 2
     while True:
         info = bak / "info" / f"{naam}.trashinfo"
         try:  # naam vastleggen: maak het info-bestand als eerste, alleen als het nog niet bestaat
             fd = os.open(info, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         except FileExistsError:
-            naam = f"{pad.stem} ({i}){pad.suffix}" if pad.is_file() else f"{pad.name} ({i})"
+            naam = _prullenbak_naam(stam, ext, f" ({i})")
             i += 1
             continue
         if (bak / "files" / naam).exists():
             os.close(fd)
             info.unlink(missing_ok=True)
-            naam = f"{pad.stem} ({i}){pad.suffix}" if pad.is_file() else f"{pad.name} ({i})"
+            naam = _prullenbak_naam(stam, ext, f" ({i})")
             i += 1
             continue
         with os.fdopen(fd, "w", encoding="utf-8") as f:
