@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -116,6 +117,14 @@ def _getal(waarde) -> int | None:
         return None
 
 
+def mmc_soort(naam: str) -> str:
+    """'SD' voor een SD-kaart, 'MMC' voor ingebouwd eMMC-geheugen ('' als het niet te zien is)."""
+    try:
+        return (Path(os.environ.get("BUGOS_SYS", "/sys")) / "block" / naam / "device" / "type").read_text().strip()
+    except OSError:
+        return ""
+
+
 def schijven(apparaten: list[dict] | None = None) -> list[Schijf]:
     """Alle schijven die je in Bestanden ziet (dus niet de schijf van BugOS zelf)."""
     apparaten = lees_lsblk() if apparaten is None else apparaten
@@ -126,12 +135,15 @@ def schijven(apparaten: list[dict] | None = None) -> list[Schijf]:
         naam = station.get("name") or ""
         if naam.startswith(("zram", "loop", "ram", "nbd")):
             continue
+        if re.fullmatch(r"mmcblk\d+(boot\d+|rpmb)", naam):
+            continue   # vaste stukjes van ingebouwd eMMC-geheugen, geen echte schijf (U142)
         systeem = any(systeem_plek(m) for a in _alle(station) for m in _plekken_van(a))
         grootte_station = _getal(station.get("size")) or 0
         if station.get("type") == "rom":
             soort = "cd"
         elif naam.startswith("mmcblk"):
-            soort = "kaart"
+            # SD-kaart of ingebouwd eMMC-geheugen (goedkope laptops)? Dat zegt de kernel (U142).
+            soort = "intern" if mmc_soort(naam) == "MMC" else "kaart"
         elif station.get("rm") or station.get("hotplug") or station.get("tran") == "usb":
             soort = "stick" if station.get("rm") or grootte_station <= 128 * 10**9 else "extern"
         else:
@@ -289,6 +301,44 @@ def klaarmaak_stappen(s: Schijf, naam: str) -> list[list[str]]:
                         gvariant_tekst(""), "{}", gvariant_tekst(fs), opties),
         ["udisksctl", "mount", "-b", eerste_deel(s.station)],
     ]
+
+
+def losse_openen(lijst: list[Schijf] | None = None) -> int:
+    """Zet USB-sticks, externe schijven en SD-kaarten die er net in zitten open (zonder te vragen), zodat Back-up
+    en Overstap ze zien. KDE doet dat standaard niet (automount staat uit) (U139). Geeft hoeveel er opengingen."""
+    lijst = schijven() if lijst is None else lijst
+    gedaan = 0
+    for s in lijst:
+        if s.soort in ("stick", "extern", "kaart") and not s.wortel and not s.op_slot and not s.nieuw and s.fs:
+            try:
+                if subprocess.run(["udisksctl", "mount", "-b", s.fs_apparaat or s.apparaat, "--no-user-interaction"],
+                                  capture_output=True, timeout=20).returncode == 0:
+                    gedaan += 1
+            except (OSError, subprocess.SubprocessError):
+                pass
+    return gedaan
+
+
+_openen_bezig = []
+
+
+def losse_openen_op_achtergrond() -> None:
+    """losse_openen() in een eigen draad (udisks kan even duren): het venster loopt niet vast. De volgende keer
+    kijken ziet de stick dan open."""
+    if _openen_bezig:
+        return
+    import threading
+
+    def werk() -> None:
+        try:
+            losse_openen()
+        except Exception:  # noqa: BLE001  zonder lsblk/udisks: dan niet
+            pass
+        finally:
+            _openen_bezig.clear()
+
+    _openen_bezig.append(1)
+    threading.Thread(target=werk, daemon=True).start()
 
 
 def auto_open_stappen(lijst: list[Schijf]) -> list[list[str]]:

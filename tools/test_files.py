@@ -177,6 +177,37 @@ klopt(b.toon_naam("SpotifySetup.exe", False) == "SpotifySetup.exe", "naam: progr
 klopt(b.toon_naam("foto.jpg", True) == "foto.jpg", "naam: map houdt zijn naam")
 
 # 9. schijven herkennen (een nep-lijstje, zoals lsblk het geeft)
+# U139: een stick die er net in zit, wordt opengezet (KDE doet dat niet vanzelf), zodat Back-up en Overstap hem zien.
+# U142: de vaste stukjes van eMMC-geheugen (mmcblk0boot0) zijn geen 'SD-kaart', en ingebouwd eMMC is 'intern'.
+_ub = TMP / "nep-udisks"
+_ub.mkdir()
+(_ub / "udisksctl").write_text(f"#!/usr/bin/bash\necho \"$*\" >>{_ub}/log\n")
+(_ub / "udisksctl").chmod(0o755)
+_oud_pad = os.environ["PATH"]
+os.environ["PATH"] = f"{_ub}:{_oud_pad}"
+_n = sch.losse_openen([sch.Schijf(apparaat="/dev/sdb1", naam="Stick", soort="stick", station="/dev/sdb", fs="vfat"),
+                        sch.Schijf(apparaat="/dev/sdc1", naam="Al open", soort="stick", station="/dev/sdc", fs="vfat",
+                                   wortel="/run/media/x/A"),
+                        sch.Schijf(apparaat="/dev/sda2", naam="D", soort="intern", station="/dev/sda", fs="ntfs")])
+os.environ["PATH"] = _oud_pad
+klopt(_n == 1 and (_ub / "log").read_text().split() == ["mount", "-b", "/dev/sdb1", "--no-user-interaction"],
+      "U139: een dichte USB-stick gaat vanzelf open (zonder te vragen); open en interne schijven niet")
+_sys = TMP / "sys-mmc"
+for _d, _t in (("mmcblk0", "MMC"), ("mmcblk1", "SD")):
+    (_sys / "block" / _d / "device").mkdir(parents=True)
+    (_sys / "block" / _d / "device" / "type").write_text(_t + "\n")
+os.environ["BUGOS_SYS"] = str(_sys)
+_emmc = [{"name": "mmcblk0boot0", "path": "/dev/mmcblk0boot0", "type": "disk", "size": 4194304, "rm": False},
+         {"name": "mmcblk0", "path": "/dev/mmcblk0", "type": "disk", "size": 64000000000, "rm": False, "children": [
+             {"name": "mmcblk0p1", "path": "/dev/mmcblk0p1", "type": "part", "size": 64000000000, "fstype": "ntfs",
+              "label": "Data", "mountpoints": [None]}]},
+         {"name": "mmcblk1", "path": "/dev/mmcblk1", "type": "disk", "size": 32000000000, "rm": True, "children": [
+             {"name": "mmcblk1p1", "path": "/dev/mmcblk1p1", "type": "part", "size": 32000000000, "fstype": "exfat",
+              "mountpoints": [None]}]}]
+_lijst = sch.schijven(_emmc)
+del os.environ["BUGOS_SYS"]
+klopt(not any("boot0" in x.apparaat for x in _lijst) and [x.soort for x in _lijst] == ["intern", "kaart"],
+      f"U142: eMMC: geen nep-'SD-kaart (4,2 MB)', ingebouwd geheugen is intern, een echte SD-kaart is een kaart ({[(x.apparaat, x.soort) for x in _lijst]})")
 LINUX = "0fc63daf-8483-4772-8e79-3d69d8477de4"
 NEP = [
     {"name": "nvme0n1", "path": "/dev/nvme0n1", "type": "disk", "size": 512110190592, "rm": False, "hotplug": False,

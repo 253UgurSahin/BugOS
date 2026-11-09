@@ -67,6 +67,12 @@ def zoek_overstap() -> list[Path]:
     """Zoek op alle aangesloten schijven naar de map BugOS-Switch (of de oude BugOS-Overstap)."""
     if os.environ.get("BUGOS_SCHIJVEN"):  # voor tests en screenshots
         return [m for p in os.environ["BUGOS_SCHIJVEN"].split(":") for m in _op_schijf(Path(p))]
+    # Een stick die er net in zit, is nog dicht (KDE opent hem niet vanzelf): eerst openzetten (U139).
+    try:
+        import bugos_drives
+        bugos_drives.losse_openen_op_achtergrond()
+    except Exception:  # noqa: BLE001  zonder udisks/lsblk gewoon kijken wat er al open is
+        pass
     gebruiker = getpass.getuser()
     gevonden = []
     for basis in (Path("/run/media") / gebruiker, Path("/media") / gebruiker, Path("/media")):

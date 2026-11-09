@@ -105,6 +105,12 @@ def schijven() -> list[Path]:
     """Alle aangesloten USB-schijven en losse schijven waarop je mag schrijven."""
     if os.environ.get("BUGOS_SCHIJVEN"):  # voor tests en screenshots
         return [Path(p) for p in os.environ["BUGOS_SCHIJVEN"].split(":") if Path(p).is_dir()]
+    # Een stick die er net in zit, is nog dicht (KDE opent hem niet vanzelf): eerst openzetten (U139).
+    try:
+        import bugos_drives
+        bugos_drives.losse_openen_op_achtergrond()
+    except Exception:  # noqa: BLE001  zonder udisks/lsblk gewoon kijken wat er al open is
+        pass
     gebruiker = getpass.getuser()
     gevonden = []
     for basis in (Path("/run/media") / gebruiker, Path("/media") / gebruiker, Path("/media")):
