@@ -48,13 +48,15 @@ import re, sys
 s = open(sys.argv[1], encoding="utf-8-sig").read()
 f = s[s.index("function Test-NieuweNvidia"):s.index("function Get-IsoSoort")]
 pat = re.findall(r"-match '([^']+)'", f)   # (-notmatch 'NVIDIA' telt niet mee)
-def nieuw(g): return "NVIDIA" in g.upper() and any(re.search(p, g, re.I) for p in pat)
+assert "-split ',\\s*'" in f, "per kaart"
+def nieuw(g): return any("NVIDIA" in n.upper() and any(re.search(p, n, re.I) for p in pat) for n in re.split(r",\s*", g))
 uit = {g: nieuw(g) for g in ("NVIDIA GeForce GTX 1060 6GB", "NVIDIA GeForce GT 1030", "NVIDIA GeForce MX350",
-                              "NVIDIA GeForce RTX 3060", "NVIDIA GeForce GTX 1650", "NVIDIA GeForce MX450")}
-print("ok" if list(uit.values()) == [False, False, False, True, True, True] else uit)
+                              "NVIDIA GeForce RTX 3060", "NVIDIA GeForce GTX 1650", "NVIDIA GeForce MX450",
+                              "NVIDIA T500", "NVIDIA T2000", "Intel(R) Arc(TM) A770 Graphics, NVIDIA GeForce GTX 1060")}
+print("ok" if list(uit.values()) == [False, False, False, True, True, True, True, True, False] else uit)
 PY
 )"
-controle '[ "$NV" = ok ] && grep -q "if (Test-NieuweNvidia \$gpu) { .nvidia. }" <<<"$PS"' \
-    "U396: alleen GTX 16, RTX en MX 450+ krijgen de Nvidia-versie; oudere kaarten de gewone ($NV)"
+controle '[ "$NV" = ok ] && grep -q "if (Test-NieuweNvidia \$gpu) { .nvidia. }" <<<"$PS" && grep -q "Name) -join .\\(, \\). *$" <<<"$(grep -A1 "function Get-IsoSoort" <<<"$PS")"' \
+    "U396/U408: alleen GTX 16, RTX en MX 450+ krijgen de Nvidia-versie; oudere kaarten de gewone ($NV)"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
