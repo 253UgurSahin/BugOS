@@ -820,6 +820,25 @@ import bugos_tasks_ui as _tu  # noqa: E402
 klopt('QLabel[rol="rij"] { font-size: 18px;' in _blad and "font-size: 14px" not in _blad
       and all("font-size: 14px" not in m.stijl() for m in (_fo, _so, _tu)) and bugos_ui.px(13) == 16,
       "U067: met grote letters worden de pixelmaten in de stijlbladen 1,2 keer zo groot")
+# U085: vaste vakjes groeien mee: '100%' naast een schuif, de kolom Processor, de bestandstegel.
+from PySide6.QtGui import QFontMetrics  # noqa: E402
+import bugos_files_tegels as _ft  # noqa: E402
+
+_f = QFont("Inter")
+_f.setPixelSize(bugos_ui.px(15))
+_f.setWeight(QFont.Weight.DemiBold)
+_schuif = _so.Regelaar(50) if hasattr(_so, "Regelaar") else None
+_breed = _schuif.getal.width() if _schuif else 0
+_kop = QFont("Inter")
+_kop.setPixelSize(bugos_ui.px(13))
+_kop.setWeight(QFont.Weight.DemiBold)
+klopt(_schuif is not None and QFontMetrics(_f).horizontalAdvance("100%") <= _breed
+      and QFontMetrics(_kop).horizontalAdvance("Processor") <= bugos_ui.px(_tu.KOLOM_PROCESSOR)
+      and _ft.TegelTekenaar.maat().height() == bugos_ui.px(164),
+      f"U085: met grote letters past '100%' ({QFontMetrics(_f).horizontalAdvance('100%')} <= {_breed}), 'Processor' en de tegel")
+_groot2 = QFont("Inter")
+_groot2.setPointSizeF(20)
+klopt(bugos_ui.letter_schaal(_groot2) == 1.5, "U085: heel grote KDE-letters: BugOS groeit tot 1,5 keer (daarboven past het niet)")
 bugos_ui.SCHAAL = _oud_schaal
 klopt('QLabel[rol="rij"] { font-size: 15px;' in bugos_ui._stijlblad(bugos_ui.K), "U067: gewone letters: niets verandert")
 _qml = [ROOT / "system_files/usr/share/plasma/plasmoids/org.bugos.startmenu/contents/ui/StartMenu.qml",

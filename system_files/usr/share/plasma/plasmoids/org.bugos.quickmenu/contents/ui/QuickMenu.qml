@@ -15,7 +15,7 @@ Rectangle {
     // 'Grote letters' (KDE: 10 punten gewoon, 12 groot): de letters hier groeien mee (U067).
     // In Plasma zet main.qml dit via Kirigami.Theme (dat verandert meteen mee, Qt.application.font niet) (U084).
     property real schaal: Qt.application.font.pointSize > 0
-        ? Math.min(2, Math.max(1, Qt.application.font.pointSize / 10)) : 1
+        ? Math.min(1.5, Math.max(1, Qt.application.font.pointSize / 10)) : 1
 
     // Status van "bugos-start-data --snel".
     property var status: ({})
@@ -231,7 +231,7 @@ Rectangle {
                 text: Math.round(schuif.value) + "%"
                 color: snel.tekst2
                 font.pixelSize: Math.round(snel.o.letterKlein * snel.schaal)
-                Layout.preferredWidth: 40
+                Layout.preferredWidth: Math.round(44 * snel.schaal)
                 horizontalAlignment: Text.AlignRight
             }
             Pijltje { naar: rij.naar; Accessible.name: rij.meerNaam }

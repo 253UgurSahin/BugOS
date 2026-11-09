@@ -24,7 +24,7 @@ Item {
     id: root
     // 'Grote letters' (KDE: 10 punten gewoon, 12 groot): de letters hier groeien mee (U067).
     readonly property real schaal: Qt.application.font.pointSize > 0
-        ? Math.min(2, Math.max(1, Qt.application.font.pointSize / 10)) : 1
+        ? Math.min(1.5, Math.max(1, Qt.application.font.pointSize / 10)) : 1
     // Zo groot als het scherm: met screenGeometry (oud) of zonder (nieuw).
     width: typeof screenGeometry !== "undefined" ? screenGeometry.width : Screen.width
     height: typeof screenGeometry !== "undefined" ? screenGeometry.height : Screen.height

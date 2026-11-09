@@ -10,7 +10,10 @@ import os
 from pathlib import Path
 
 import bugos_tasks as bt
-from bugos_ui import K, Kaart, Rij, Schuif, label, lijn_icoon, schaal_css, t
+from bugos_ui import K, Kaart, Rij, Schuif, label, lijn_icoon, px, schaal_css, t
+
+# De breedte van de kolommen Processor en Geheugen (kop en regels gelijk), bij gewone letters.
+KOLOM_PROCESSOR, KOLOM_GEHEUGEN = 90, 96
 from PySide6.QtCore import QRectF, Qt, QThread, Signal
 from PySide6.QtGui import QColor, QIcon, QLinearGradient, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
@@ -206,10 +209,10 @@ class Getallen(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(14)
         self.processor = label("", "klein", wrap=False)
-        self.processor.setFixedWidth(84)
+        self.processor.setFixedWidth(px(KOLOM_PROCESSOR))
         self.processor.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.geheugen = label("", "klein", wrap=False)
-        self.geheugen.setFixedWidth(92)
+        self.geheugen.setFixedWidth(px(KOLOM_GEHEUGEN))
         self.geheugen.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         lay.addWidget(self.processor)
         lay.addWidget(self.geheugen)

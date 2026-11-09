@@ -138,7 +138,7 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
         self.lijst.setResizeMode(QListView.ResizeMode.Adjust)
         self.lijst.setMovement(QListView.Movement.Static)
         self.lijst.setUniformItemSizes(True)
-        self.lijst.setGridSize(TegelTekenaar.TEGEL)
+        self.lijst.setGridSize(TegelTekenaar.maat())
         self.lijst.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.lijst.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.lijst.setDragEnabled(True)

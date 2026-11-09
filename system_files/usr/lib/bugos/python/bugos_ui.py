@@ -98,7 +98,8 @@ def px(n: float) -> int:
 def letter_schaal(f: QFont) -> float:
     """De lettergrootte van KDE (10 punten is gewoon, 12 bij 'Grote letters') als factor, tussen 1 en 2."""
     punten = f.pointSizeF()
-    return min(2.0, max(1.0, punten / 10)) if punten > 0 else 1.0
+    # Tot 1,5 keer: de tegels en vaste vakjes groeien mee, maar daarboven past het ontwerp niet meer (U085).
+    return min(1.5, max(1.0, punten / 10)) if punten > 0 else 1.0
 
 
 def schaal_css(css: str) -> str:

@@ -102,7 +102,7 @@ PlasmoidItem {
     fullRepresentation: StartMenu {
         id: menu
         schaal: Kirigami.Theme.defaultFont.pointSize > 0
-            ? Math.min(2, Math.max(1, Kirigami.Theme.defaultFont.pointSize / 10)) : 1
+            ? Math.min(1.5, Math.max(1, Kirigami.Theme.defaultFont.pointSize / 10)) : 1
         Layout.preferredWidth: Kirigami.Units.gridUnit * 36
         Layout.preferredHeight: Kirigami.Units.gridUnit * 34
         Layout.minimumWidth: Kirigami.Units.gridUnit * 24

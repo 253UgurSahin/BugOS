@@ -68,7 +68,7 @@ PlasmoidItem {
 
     fullRepresentation: Snelmenu {
         schaal: Kirigami.Theme.defaultFont.pointSize > 0
-            ? Math.min(2, Math.max(1, Kirigami.Theme.defaultFont.pointSize / 10)) : 1
+            ? Math.min(1.5, Math.max(1, Kirigami.Theme.defaultFont.pointSize / 10)) : 1
         Layout.preferredWidth: Kirigami.Units.gridUnit * 22
         Layout.preferredHeight: implicitHeight
         color: "transparent"

@@ -228,7 +228,10 @@ def twee_regels(fm: QFontMetrics, tekst: str, breedte: int) -> list[str]:
 class TegelTekenaar(QStyledItemDelegate):
     """Tekent elk bestand als een tegel: voorbeeldje boven, naam eronder."""
 
-    TEGEL = QSize(148, 164)
+    @staticmethod
+    def maat() -> QSize:
+        """De tegel groeit mee met 'Grote letters' (de naam eronder past dan nog) (U085)."""
+        return QSize(px(148), px(164))
 
     def __init__(self, voorbeelden: Voorbeelden, bijzonder: dict[str, str]):
         super().__init__()
@@ -236,7 +239,7 @@ class TegelTekenaar(QStyledItemDelegate):
         self.bijzonder = bijzonder
 
     def sizeHint(self, _optie, _index) -> QSize:  # noqa: N802
-        return self.TEGEL
+        return self.maat()
 
     def paint(self, p: QPainter, optie, index) -> None:
         p.save()

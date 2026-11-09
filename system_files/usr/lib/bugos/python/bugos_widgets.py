@@ -384,7 +384,7 @@ class Tegel(QPushButton):
         self.setObjectName("tegel")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         # Vaste hoogte: ruimte voor de naam en twee regels uitleg (niets wordt afgeknipt).
-        self.setFixedHeight(102)
+        self.setFixedHeight(bugos_ui.px(102))
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.zoektekst = f"{naam} {tekst} {zoekwoorden}".lower()
         self.setAccessibleName(naam)

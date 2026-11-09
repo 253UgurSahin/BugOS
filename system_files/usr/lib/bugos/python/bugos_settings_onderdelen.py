@@ -5,7 +5,7 @@ onderdelen (keuzes, schuifbalken, menu's), Blad (een pagina) en de dialogen om i
 from __future__ import annotations
 
 from bugos_ui import (K, Knop, Pagina, Schuif, Venster, Zoekveld, kde_instelling, label, lijn_icoon, ronde_knop,
-                      schaal_css, t)
+                      px, schaal_css, t)
 from PySide6.QtCore import QObject, QRunnable, QSize, Qt, QThreadPool, QTimer, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView, QButtonGroup, QDialog, QFrame, QHBoxLayout, QLineEdit, QListWidget, QListWidgetItem, QMenu,
@@ -109,7 +109,7 @@ class Regelaar(QWidget):
         self.balk.setCursor(Qt.CursorShape.PointingHandCursor)
         lay.addWidget(self.balk, 1)
         self.getal = label(f"{waarde}%", "kop3", wrap=False)
-        self.getal.setFixedWidth(48)
+        self.getal.setFixedWidth(px(52))   # '100%' past, ook met grote letters (U085)
         self.getal.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         lay.addWidget(self.getal)
         self.wacht = QTimer(self)
