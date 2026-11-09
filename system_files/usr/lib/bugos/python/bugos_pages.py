@@ -107,8 +107,9 @@ def schijf_info(pad: Path) -> str:
     """'32 GB vrij van 64 GB' voor een schijf."""
     try:
         g = shutil.disk_usage(str(pad))
-        return t(f"{g.free / 1024**3:.0f} GB vrij van {g.total / 1024**3:.0f} GB",
-                 f"{g.free / 1024**3:.0f} GB free of {g.total / 1024**3:.0f} GB")
+        # Zoals Bestanden (1000, met een komma): niet '0 GB vrij' op een kleine stick met 450 MB vrij (U185).
+        from bugos_drives import mooie_maat
+        return t(f"{mooie_maat(g.free)} vrij van {mooie_maat(g.total)}", f"{mooie_maat(g.free)} free of {mooie_maat(g.total)}")
     except OSError:
         return ""
 

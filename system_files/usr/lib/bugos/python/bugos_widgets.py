@@ -293,6 +293,7 @@ class Schuif(QAbstractButton):
 
     def zet_stil(self, aan: bool) -> None:
         """Zet de stand zonder signaal (bijv. bij het inlezen)."""
+        self._anim.stop()   # een lopende schuif-animatie zou anders de oude stand tekenen (U184)
         self.blockSignals(True)
         self.setChecked(aan)
         self.blockSignals(False)

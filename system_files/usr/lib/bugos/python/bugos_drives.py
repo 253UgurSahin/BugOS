@@ -310,6 +310,8 @@ def losse_openen(lijst: list[Schijf] | None = None) -> int:
     """Zet USB-sticks, externe schijven en SD-kaarten die er net in zitten open (zonder te vragen), zodat Back-up
     en Overstap ze zien. KDE doet dat standaard niet (automount staat uit) (U139). Geeft hoeveel er opengingen."""
     lijst = schijven() if lijst is None else lijst
+    # Een stick die eruit is gehaald en weer terugkomt, mag opnieuw (alleen wat er nog in zit, blijft 'geprobeerd') (U183).
+    _al_geprobeerd.intersection_update({(s.fs_apparaat or s.apparaat, s.grootte) for s in lijst})
     gedaan = 0
     for s in lijst:
         if s.soort in ("stick", "extern", "kaart") and not s.wortel and not s.op_slot and not s.nieuw and s.fs:

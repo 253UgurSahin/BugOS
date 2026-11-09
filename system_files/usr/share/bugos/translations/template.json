@@ -588,6 +588,7 @@
   "something with the same name in other capitals is already there, and this drive sees them as the same": "",
   "the drive is full": "",
   "the drive stopped responding (was it unplugged?)": "",
+  "the file cannot be read": "",
   "the name has a character this drive does not allow (like : ? * or \")": "",
   "↑ nothing sent": ""
 }

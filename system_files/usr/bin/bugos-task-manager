@@ -181,17 +181,20 @@ class Taakbeheer(Venster):
             leeg.setContentsMargins(14, 12, 14, 12)
             kaart.lay.addWidget(leeg)
 
-    def zet_opstart(self, item: bt.Opstart, aan: bool) -> None:
+    def zet_opstart(self, item: bt.Opstart, aan: bool) -> bool:
         try:
             bt.zet_opstart(item, aan)
-            item.aan = aan
-            self.opstart_pagina.melding.toon(
-                t(f"{item.naam} start voortaan mee.", f"{item.naam} will start from now on.") if aan
-                else t(f"{item.naam} start voortaan niet meer mee.", f"{item.naam} will no longer start."),
-                "goed", seconden=5)
-        except OSError as e:
-            self.opstart_pagina.melding.toon(t(f"Dat lukte niet: {e.strerror}", f"That did not work: {e.strerror}"),
-                                             "fout")
+        except (OSError, ValueError) as e:   # ook een eigen bestand dat geen UTF-8 is (U186)
+            reden = e.strerror if isinstance(e, OSError) and e.strerror else t("het bestand is niet te lezen",
+                                                                                "the file cannot be read")
+            self.opstart_pagina.melding.toon(t(f"Dat lukte niet: {reden}", f"That did not work: {reden}"), "fout")
+            return False
+        item.aan = aan
+        self.opstart_pagina.melding.toon(
+            t(f"{item.naam} start voortaan mee.", f"{item.naam} will start from now on.") if aan
+            else t(f"{item.naam} start voortaan niet meer mee.", f"{item.naam} will no longer start."),
+            "goed", seconden=5)
+        return True
 
     def wissel_achtergrond(self) -> None:
         zichtbaar = not self.achter_kaart.isVisible()

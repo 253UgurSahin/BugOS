@@ -259,8 +259,15 @@ class OpstartRij(Rij):
         rl.addWidget(self.stand)
         rl.addWidget(self.schuif)
         super().__init__(app_icoon(item.icoon, "app"), item.naam, "", rechts)
-        self.schuif.toggled.connect(lambda aan: (omzetten(item, aan), self._tekst(aan)))
+        self.schuif.toggled.connect(lambda aan: self._omgezet(aan, omzetten(item, aan)))
         self._tekst(item.aan)
+
+    def _omgezet(self, aan: bool, gelukt) -> None:
+        """Lukte het niet (False), dan springt het schuifje terug (U186)."""
+        if gelukt is False:
+            self.schuif.zet_stil(not aan)
+            aan = not aan
+        self._tekst(aan)
 
     def _tekst(self, aan: bool) -> None:
         self.stand.setText(t("Start mee", "Starts") if aan else t("Start niet mee", "Does not start"))

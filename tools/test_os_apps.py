@@ -1232,6 +1232,33 @@ klopt(next(a for a in _store["apps"] if a["id"] == "org.kde.kcalc").get("naam_en
 klopt('draai("pkexec", "systemctl", "restart", "cups", timeout=120)' in (ROOT / "system_files/usr/bin/bugos-help").read_text(),
       "U177: Hulp wacht op het wachtwoord voor de printerdienst voor hij opnieuw kijkt")
 
+# ========================== U184-U186: schuifje, vrije ruimte, Opstarten ===
+from bugos_widgets import Schuif as _Schuif  # noqa: E402
+
+_s = _Schuif(False)
+_s.show()
+_s.click()
+_s.zet_stil(False)
+wacht(lambda: False, 400)
+klopt(not _s.isChecked() and _s.property("stand") == 0.0,
+      f"U184: een schuifje dat meteen wordt teruggezet, staat ook getekend op 'uit' ({_s.property('stand')})")
+_s.close()
+import bugos_pages as _bpg  # noqa: E402
+
+_echt_du = _bpg.shutil.disk_usage
+_bpg.shutil.disk_usage = lambda p_: type("G", (), {"free": 450 * 10**6, "total": 2 * 10**9})()
+_tekst = _bpg.schijf_info(TMP)
+_bpg.shutil.disk_usage = _echt_du
+klopt("0 GB vrij" not in _tekst and "0 GB free" not in _tekst and "450" in _tekst, f"U185: een kleine stick met 450 MB vrij: niet '0 GB vrij' ({_tekst})")
+import bugos_tasks_ui as _btu  # noqa: E402
+import bugos_tasks as _bts  # noqa: E402
+
+_it = _bts.Opstart("x.desktop", "X", "", True, False)
+_r = _btu.OpstartRij(_it, lambda item, aan: False)
+_r.schuif.setChecked(False)
+klopt(_r.schuif.isChecked() and "Start mee" in _r.stand.text() or "Starts" in _r.stand.text(),
+      "U186: Opstarten: lukt het omzetten niet, dan springt het schuifje terug")
+
 # ========================== U067: 'Grote letters' maakt ook de letters van de BugOS-apps groter ===
 from PySide6.QtGui import QFont  # noqa: E402
 

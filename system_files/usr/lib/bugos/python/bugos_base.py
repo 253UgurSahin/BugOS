@@ -39,7 +39,7 @@ def _catalogus(taal: str) -> dict[str, str]:
     try:
         data = json.loads((VERTALINGEN / f"{taal}.json").read_text(encoding="utf-8"))
         return {k: v for k, v in data.items() if isinstance(v, str) and v}
-    except (OSError, ValueError):
+    except (OSError, ValueError, AttributeError):   # ook een kapot bestand (geen object) laat geen app vallen
         return {}
 
 
