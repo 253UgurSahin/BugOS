@@ -34,5 +34,20 @@ nep wineboot 'mkdir -p "$WINEPREFIX"; exit 0'
 draai "$RAAR" >/dev/null
 klopt 'grep -qF "spel\\nieuw.exe" "$TMP/dialogen"' "rare naam (met \\n erin): staat precies zo in de melding, geen nieuwe regel"
 
+# U082: Annuleren in een installatie is geen "werkt niet op BugOS".
+touch "$TMP/setup.msi" "$TMP/MijnSpel-setup.exe" "$TMP/spel.exe"
+nep wine 'exit 1602'
+: >"$TMP/dialogen"
+code="$(draai "$TMP/setup.msi")"
+klopt '[ "$code" = 0 ] && ! grep -q "werkt niet" "$TMP/dialogen"' "U082: msiexec Annuleren (1602): geen foutmelding"
+nep wine 'exit 2'
+: >"$TMP/dialogen"
+draai "$TMP/MijnSpel-setup.exe" >/dev/null
+klopt 'grep -q "Annuleren" "$TMP/dialogen" && ! grep -q "werkt niet op BugOS" "$TMP/dialogen"' \
+    "U082: installatie stopt meteen met 2: vraagt of je op Annuleren klikte"
+: >"$TMP/dialogen"
+draai "$TMP/spel.exe" >/dev/null
+klopt 'grep -q "werkt niet op BugOS" "$TMP/dialogen"' "U082: een gewoon programma dat meteen stopt: zoals eerst"
+
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
