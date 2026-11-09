@@ -192,6 +192,9 @@ klopt '[ "$code" -ne 0 ] && grep -q "^Restart=on-failure" "$ROOT/system_files/us
     "U178: updatecheck zonder internet: later opnieuw proberen (code $code), niet pas morgen"
 klopt '! grep -qE "^TimeoutStartSec=[0-9]" "$ROOT/system_files/usr/lib/systemd/user/bugos-updatecheck.service"' \
     "U187: geen tijdslimiet op de updatecheck (die zou 'Nu updaten' afbreken)"
+# U488: 'Nu updaten' in de melding werkt ook je eigen apps en je .rpm/.deb-programma's bij (zoals in Instellingen).
+klopt 'grep -A4 "pkexec /usr/bin/bugos-updates nu" "$BIN/bugos-updatecheck" | grep -q "flatpak update --user" && grep -A6 "pkexec /usr/bin/bugos-updates nu" "$BIN/bugos-updatecheck" | grep -q "bugos-package --bijwerken"' \
+    "U488: 'Nu updaten' in de melding werkt ook je eigen apps bij"
 # U192: wel internet, maar de bron is er niet: niet elk half uur opnieuw.
 nep nmcli 'echo full'
 draai bugos-updatecheck

@@ -55,6 +55,9 @@ if [ "$KEUZE" = nu ]; then
     pkexec /usr/bin/bugos-updates nu
     uitkomst=$?
     if [ "$uitkomst" -eq 0 ]; then
+        # Net als 'Nu updaten' in Instellingen ook je eigen apps en je .rpm/.deb-programma's (als jezelf) (U488).
+        timeout 30m flatpak update --user --noninteractive --assumeyes >/dev/null 2>&1
+        [ -x /usr/bin/bugos-package ] && timeout 60m /usr/bin/bugos-package --bijwerken >/dev/null 2>&1
         melding "$(t "Update klaar ✅" "Update done ✅")" \
             "$(t "Start de computer opnieuw op wanneer het jou uitkomt." "Restart the computer whenever it suits you.")"
     elif [ "$uitkomst" -eq 126 ] || [ "$uitkomst" -eq 127 ]; then
