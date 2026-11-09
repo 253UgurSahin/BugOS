@@ -749,6 +749,61 @@ for _ in range(10):
 _bw.zelfde_schijf, vb.vraag_ja, vb.gekozen = _echt_zs, _echt_vraag, _echt_gekozen
 klopt(_op_achtergrond and not _grote.exists() and "weggegooid" in vb.melding.tekst.text(),
       f"U108: weggooien op een stick op de achtergrond, met een melding ({vb.melding.tekst.text()[:40]})")
+# U119: weggooien op een stick terwijl er nog iets loopt: eerst zeggen, niet eerst vragen.
+_gevraagd_ja: list = []
+
+
+class _Bezig:
+    def isRunning(self):
+        return True
+
+
+_bw.zelfde_schijf = lambda a, b_: False
+vb.vraag_ja = lambda *a, **k: (_gevraagd_ja.append(1), True)[1]
+(STICK / "nog een").mkdir()
+vb.gekozen = lambda: [STICK / "nog een"]
+_echte_klus, vb.klus = vb.klus, _Bezig()
+vb.weggooien()
+klopt(not _gevraagd_ja and (STICK / "nog een").exists() and "Even wachten" in vb.melding.tekst.text(),
+      "U119: weggooien terwijl er nog iets loopt: eerst zeggen, niet eerst 'Echt weggooien?' vragen")
+vb.klus = _echte_klus
+# U119: een gemengde keuze (thuis en stick): de melding telt allebei, en Ongedaan maken blijft.
+(THUIS / "naar-bak.txt").write_text("x")
+_bw.zelfde_schijf = lambda a, b_: not str(a).startswith(str(STICK))
+vb.gekozen = lambda: [THUIS / "naar-bak.txt", STICK / "nog een"]
+vb.weggooien()
+wacht(lambda: not (STICK / "nog een").exists() and not vb.klus.isRunning(), 5000)
+for _ in range(10):
+    app.processEvents()
+klopt("prullenbak" in vb.melding.tekst.text() and not vb.melding.knop.isHidden(),
+      f"U119: gemengd weggooien: telt allebei en houdt 'Ongedaan maken' ({vb.melding.tekst.text()})")
+_bw.zelfde_schijf, vb.vraag_ja, vb.gekozen = _echt_zs, _echt_vraag, _echt_gekozen
+# U120: na knippen en plakken in een ander venster staat 'Plakken' niet meer aan (de bestanden zijn weg).
+from PySide6.QtCore import QMimeData, QUrl  # noqa: E402
+
+_md = QMimeData()
+_md.setUrls([QUrl.fromLocalFile(str(TMP / "bestaat-niet-meer.txt"))])
+app.clipboard().setMimeData(_md)
+klopt(not vb.klembord_heeft_bestanden(), "U120: het klembord wijst naar bestanden die weg zijn: geen 'Plakken'")
+app.clipboard().setText("")
+# U116: Stoppen laat 'Haal de stick er nog niet uit' zien, en een late voortgang haalt de knop niet terug.
+_slome = TMP / "slome-bron"
+_slome.mkdir()
+(_slome / "a.bin").write_bytes(b"y" * (40 * 1024 * 1024))
+vb.gekozen = _echt_gekozen
+(TMP / "stop-doel").mkdir()
+vb._start_klus([_slome], TMP / "stop-doel", False, klembord=False)
+wacht(lambda: "kopiëren" in vb.melding.tekst.text() and not vb.melding.knop.isHidden(), 3000)
+vb.melding.knop.click()
+_na_stop = vb.melding.tekst.text()
+vb.klus.voortgang.emit(0, 1)
+_late = vb.melding.tekst.text()
+wacht(lambda: not vb.klus.isRunning(), 10000)
+for _ in range(10):
+    app.processEvents()
+klopt(("nog niet uit" in _na_stop or "Do not unplug" in _na_stop or "Gestopt" in _na_stop) and _late == _na_stop,
+      f"U116: na Stoppen: 'haal de stick er nog niet uit', en de knop komt niet terug ({_na_stop} / {_late})")
+
 # U106/U107: de melding noemt de (2)-namen, en knippen-plakken wist niet wat je intussen anders kopieerde.
 vb.sluit_na_klus = False
 
@@ -873,11 +928,11 @@ _echt_een = acties._kopieer_bestand
 _pogingen: list = []
 
 
-def _vol_na_twee(bron, doel):
+def _vol_na_twee(bron, doel, stop=None):
     _pogingen.append(bron)
     if len(_pogingen) > 2:
         raise OSError(_errno.ENOSPC, "No space left on device")
-    return _echt_een(bron, doel)
+    return _echt_een(bron, doel, stop)
 
 
 acties._kopieer_bestand = _vol_na_twee
@@ -909,6 +964,35 @@ os.utime(_oud, (1, 1))
 acties.ruim_oude_halve_op(_naar)
 klopt(not _oud.exists() and _nieuw.exists(), "U104: een oude halve kopie (stroom eraf) wordt opgeruimd, een lopende niet")
 _nieuw.rmdir()
+# U115: Stoppen tijdens één groot bestand dat je verplaatst: het origineel blijft, er staat niets half.
+_film = TMP / "film.mkv"
+_film.write_bytes(b"x" * (9 * 1024 * 1024))
+_echt_rename = os.rename
+_eerste_rename = []
+
+
+def _ander_schijf_rename(a, b_):
+    if not _eerste_rename:   # de eerste os.rename (verplaatsen) doet alsof het naar een andere schijf gaat
+        _eerste_rename.append(1)
+        raise OSError(_errno.EXDEV, "cross-device")
+    return _echt_rename(a, b_)
+
+
+acties.os.rename = _ander_schijf_rename
+try:
+    acties.kopieer_een(_film, _naar, True, [], stop=lambda: True)
+    _uitkomst = "klaar"
+except acties.Gestopt:
+    _uitkomst = "gestopt"
+acties.os.rename = _echt_rename
+klopt(_uitkomst == "gestopt" and _film.exists() and not (_naar / "film.mkv").exists()
+      and not list(_naar.glob(".*bugos-bezig")),
+      f"U115: stoppen tijdens één groot bestand (verplaatsen): het origineel blijft, niets half ({_uitkomst})")
+# U122: Stoppen als het al klaar is, telt niet als 'gestopt'.
+_k = b.Klus([], _naar, False)
+_k.stop()
+klopt(not _k.gestopt, "U122: Stoppen nadat het kopiëren al klaar was: niet 'Gestopt' melden")
+
 # U105: van een stick naar de computer kopiëren zegt niet 'Haal de stick er nog niet uit'.
 _ws: list = []
 _k = b.Klus([_src / "IMG_0.JPG"], TMP / "thuis-doel", False)

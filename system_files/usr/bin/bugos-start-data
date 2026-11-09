@@ -359,7 +359,9 @@ def snel_status() -> dict:
                 "helderheid": 70, "batterij": 76, "laadt": False}
     s: dict = {}
     # Geen wifi in deze computer (een pc aan een kabel)? Dan geen tegel, ook al zegt nmcli 'enabled' (U111).
-    heeft_wifi = shutil.which("nmcli") and any(r.strip() == "wifi" for r in draai("nmcli", "-t", "-f", "TYPE", "device").splitlines())
+    # Lukt nmcli (nog) niet, net na het inloggen: dan zoals Instellingen gewoon aannemen dat er wifi is (U123).
+    apparaten = draai("nmcli", "-t", "-f", "TYPE", "device").split() if shutil.which("nmcli") else []
+    heeft_wifi = bool(shutil.which("nmcli")) and (not apparaten or "wifi" in apparaten)
     s["wifi"] = draai("nmcli", "-t", "-f", "WIFI", "radio").strip() == "enabled" if heeft_wifi else None
     # Zonder bluetooth-hardware wacht 'bluetoothctl' tot zijn tijd op is: dan niet vragen (geen tegel).
     bt_map = Path(os.environ.get("BUGOS_SYS", "/sys")) / "class" / "bluetooth"

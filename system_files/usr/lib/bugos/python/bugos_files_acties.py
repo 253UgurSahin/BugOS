@@ -206,9 +206,17 @@ def leesbare_fout(nummer: int | None, wat: str) -> str:
     return t(f"'{wat}' lukte niet: {uitleg}.", f"'{wat}' did not work: {uitleg}.")
 
 
-def _kopieer_bestand(bron: Path, doel: Path) -> None:
-    """Eén bestand kopiëren met inhoud en datum. Kan de schijf de rechten niet bewaren, dan is dat goed zo."""
-    shutil.copyfile(bron, doel, follow_symlinks=False)
+def _kopieer_bestand(bron: Path, doel: Path, stop=None) -> None:
+    """Eén bestand kopiëren met inhoud en datum. Kan de schijf de rechten niet bewaren, dan is dat goed zo.
+    stop: dan in stukken, zodat 'Stoppen' ook midden in een grote film werkt (U115)."""
+    if stop is None or bron.is_symlink():
+        shutil.copyfile(bron, doel, follow_symlinks=False)
+    else:
+        with open(bron, "rb") as van, open(doel, "wb") as naar:
+            while blok := van.read(8 * 1024 * 1024):
+                if stop():
+                    raise Gestopt()
+                naar.write(blok)
     try:
         shutil.copystat(bron, doel, follow_symlinks=False)
     except OSError as e:
@@ -371,7 +379,9 @@ def kopieer_een(bron: Path, doelmap: Path, verplaats: bool, achter: list | None 
                 _bekijk_fouten(list(e.args[0]) if e.args and isinstance(e.args[0], list) else [None],
                                bron, tijdelijk, achter)
         else:
-            _kopieer_bestand(bron, tijdelijk)
+            _kopieer_bestand(bron, tijdelijk, stop) if stop else _kopieer_bestand(bron, tijdelijk)
+        if stop and stop():
+            raise Gestopt()   # Stoppen tijdens het laatste bestand: dan ook niets afmaken (en bij verplaatsen niets weg) (U115)
         os.rename(tijdelijk, doel)
     except OSError as e:
         ruim_op(tijdelijk)
@@ -447,7 +457,8 @@ class Klus(QThread):
         self.hernoemd = 0      # zoveel kregen een andere naam, omdat die naam er al was ("Foto (2).jpg") (U106)
 
     def stop(self) -> None:
-        self.gestopt = True
+        if self.isRunning():   # al klaar? dan is er niets meer te stoppen (U122)
+            self.gestopt = True
 
     def run(self) -> None:
         gelukt, fout, mislukt = 0, "", 0

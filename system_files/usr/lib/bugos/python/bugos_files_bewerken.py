@@ -15,7 +15,8 @@ from pathlib import Path
 from bugos_ui import lijn_icoon, t
 from bugos_files_plekken import INFO_ROL, PAD_ROL, thuis
 from bugos_files_acties import (
-    Klus, Weggooien, achter_uitleg, naar_prullenbak, prullenbak_legen, terugzetten, vrije_naam, zelfde_schijf,
+    Klus, Weggooien, achter_uitleg, naar_prullenbak, op_losse_schijf, prullenbak_legen, terugzetten, vrije_naam,
+    zelfde_schijf,
 )
 from PySide6.QtCore import QEvent, QMimeData, Qt, QTimer, QUrl
 from PySide6.QtWidgets import QApplication, QInputDialog, QLabel, QMenu, QMessageBox
@@ -87,7 +88,11 @@ class Bewerken:
 
     def klembord_heeft_bestanden(self) -> bool:
         data = QApplication.clipboard().mimeData()
-        return bool(data and data.hasUrls() and any(u.isLocalFile() for u in data.urls()))
+        # Alleen als er nog iets van bestaat: na knippen en plakken in een ander venster zijn de bestanden weg,
+        # dan geen 'Plakken' meer dat niets doet (U120).
+        return bool(data and data.hasUrls() and any(u.isLocalFile() and (Path(u.toLocalFile()).exists() or
+                                                                          Path(u.toLocalFile()).is_symlink())
+                                                    for u in data.urls()))
 
     def plak(self) -> None:
         if self.in_prullenbak or self.in_computer or not self.klembord_heeft_bestanden() or \
@@ -106,12 +111,21 @@ class Bewerken:
         self.klus = Klus(bronnen, doelmap, knip)
         klus = self.klus
         # Met een knop 'Stoppen': wat al klaar is blijft, wat half was wordt weggehaald (U104).
-        self.klus.voortgang.connect(lambda i, n: self.melding.toon(
+        def stoppen() -> None:
+            # Het bestand dat bezig is, moet nog even worden afgemaakt of weggehaald: zeg dat, anders trek je de stick eruit (U116).
+            klus.stop()
+            if klus.gestopt:
+                self.melding.toon(t("Stoppen… Haal de stick er nog niet uit.", "Stopping… Do not unplug the stick yet."),
+                                  seconden=0)
+
+        self.klus.voortgang.connect(lambda i, n: None if klus.gestopt else self.melding.toon(
             t(f"Bezig met {'verplaatsen' if knip else 'kopiëren'}: {i + 1} van {n}…", f"{'Moving' if knip else 'Copying'}: {i + 1} of {n}…"),
-            knop=t("Stoppen", "Stop"), actie=klus.stop, seconden=0))
+            knop=t("Stoppen", "Stop"), actie=stoppen, seconden=0))
+        # Alleen over 'de stick' praten als er een stick bij is (U121): tussen twee interne schijven gewoon 'opslaan'.
+        met_stick = op_losse_schijf(doelmap) or any(op_losse_schijf(b) for b in bronnen)
         self.klus.wegschrijven.connect(lambda: self.melding.toon(
-            t("Bezig met wegschrijven… Haal de stick er nog niet uit.", "Writing to the stick… Do not unplug it yet."),
-            seconden=0))
+            t("Bezig met wegschrijven… Haal de stick er nog niet uit.", "Writing to the stick… Do not unplug it yet.")
+            if met_stick else t("Bezig met opslaan…", "Saving…"), seconden=0))
         self.klus.klaar.connect(lambda gelukt, fout: self._klus_klaar(gelukt, fout, knip, klus.achter, klembord, klus))
         self.klus.start()
 
@@ -148,7 +162,7 @@ class Bewerken:
             self.melding.toon(t(f"Gestopt. {gelukt} {'ding' if gelukt == 1 else 'dingen'} {'verplaatst' if knip else 'gekopieerd'}; "
                                 "wat half was, is weggehaald.",
                                 f"Stopped. {gelukt} {'item' if gelukt == 1 else 'items'} {'moved' if knip else 'copied'}; "
-                                "what was half done has been removed."), "let_op", seconden=0)
+                                "what was half done has been removed.") + (f" {fout}" if fout else ""), "let_op", seconden=0)
         elif fout:
             # Wilde je al sluiten (en liep je weg), dan blijft de fout staan tot je hem ziet.
             self.melding.toon(t(f"Niet alles lukte: {fout}", f"Not everything worked: {fout}"), "fout",
@@ -248,6 +262,11 @@ class Bewerken:
         if not paden:
             return
         ver = [p for p in paden if not zelfde_schijf(p, thuis())]
+        if ver and self.klus and self.klus.isRunning():
+            # Eerst kijken, dan pas vragen: anders zeg je 'Ja' en gebeurt er niets (U119).
+            self.melding.toon(t("Even wachten: er loopt nog iets (kopiëren of weggooien).",
+                                "One moment: something is still busy (copying or deleting)."), "let_op")
+            return
         if ver:
             if not self.vraag_ja(t("Echt weggooien?", "Really delete?"),
                                  t("Dit staat op een USB-stick of een andere schijf. Weggooien kan daar niet ongedaan "
@@ -256,8 +275,6 @@ class Bewerken:
                                    "Really delete?"),
                                  t("Weggooien", "Delete")):
                 return
-        if ver and self.klus and self.klus.isRunning():
-            return   # er loopt al iets (kopiëren of weggooien)
         weg, fout = [], ""
         for p in paden:
             if p in ver:
@@ -270,7 +287,7 @@ class Bewerken:
         if ver:
             self.klus = Weggooien(ver)
             self.melding.toon(t("Bezig met weggooien…", "Deleting…"), seconden=0)
-            self.klus.klaar.connect(lambda n, f, eerder=fout: self._weg_klaar(n, f or eerder))
+            self.klus.klaar.connect(lambda n, f, eerder=fout, bak=len(weg): self._weg_klaar(n, f or eerder, bak))
             self.klus.start()
             return
         if fout:
@@ -280,14 +297,19 @@ class Bewerken:
             self.melding.toon(t(f"{n} {'ding' if n == 1 else 'dingen'} naar de prullenbak.", f"{n} {'item' if n == 1 else 'items'} moved to the trash."),
                               knop=t("Ongedaan maken", "Undo"), actie=self.ongedaan, seconden=10)
 
-    def _weg_klaar(self, n: int, fout: str) -> None:
-        self.ververs()
+    def _weg_klaar(self, n: int, fout: str, in_bak: int = 0) -> None:
+        # Alleen verversen als je nog in dezelfde map bent (niet in Deze computer of de prullenbak), en dan zonder
+        # je keuze, zoekterm en plek kwijt te raken: de lijst houdt de map zelf al in de gaten (U118).
         if fout:
             self.melding.toon(t(f"Niet alles kon weg: {fout}", f"Not everything could be deleted: {fout}"), "fout",
                               seconden=0 if self.sluit_na_klus else 12)
             self.sluit_na_klus = False
+        elif in_bak:   # een deel ging naar de prullenbak: dat kan nog terug (U119)
+            self.melding.toon(t(f"{n} weggegooid, {in_bak} naar de prullenbak.", f"{n} deleted, {in_bak} moved to the trash."),
+                              knop=t("Ongedaan maken", "Undo"), actie=self.ongedaan, seconden=10)
         else:
             self.melding.toon(t(f"{n} {'ding' if n == 1 else 'dingen'} weggegooid.", f"{n} {'item' if n == 1 else 'items'} deleted."), "goed")
+        if not fout:
             if self.sluit_na_klus:
                 QTimer.singleShot(0, self.close)
 

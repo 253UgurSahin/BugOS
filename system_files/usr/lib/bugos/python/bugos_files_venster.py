@@ -283,8 +283,8 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
         if self.klus and self.klus.isRunning():
             # Nooit midden in het kopiëren stoppen: wacht tot het klaar is en sluit dan vanzelf.
             self.sluit_na_klus = True
-            self.melding.toon(t("Even wachten: het kopiëren is nog bezig. Daarna gaat het venster vanzelf dicht.",
-                                "One moment: copying is still busy. The window closes by itself afterwards."),
+            self.melding.toon(t("Even wachten: er loopt nog iets (kopiëren of weggooien). Daarna gaat het venster vanzelf dicht.",
+                                "One moment: something is still busy (copying or deleting). The window closes by itself afterwards."),
                               seconden=0)
             e.ignore()
             return
