@@ -22,8 +22,14 @@ APPS=(
 )
 # Steam als Flatpak alleen als de systeemversie ontbreekt.
 command -v steam >/dev/null 2>&1 || APPS+=(com.valvesoftware.Steam)
-# Al eens klaargezet: alleen wat er later bij kwam.
-[ -f "$KLAAR" ] && APPS=(org.kde.gwenview org.kde.okular)
+# Al eens klaargezet: alleen wat er later bij kwam. Doe je updates zelf, dan ook dit niet vanzelf (U308).
+if [ -f "$KLAAR" ]; then
+    if ! /usr/bin/bugos-updates mag-vanzelf 2>/dev/null; then
+        touch "$KLAAR2"
+        exit 0
+    fi
+    APPS=(org.kde.gwenview org.kde.okular)
+fi
 
 # Niet over een verbinding met een databundel (telefoon-hotspot): dat is al gauw een paar gigabyte. Dan over
 # vijf minuten opnieuw kijken (Restart=on-failure), zoals de dagelijkse app-updates (U180).

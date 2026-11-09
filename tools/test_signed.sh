@@ -45,5 +45,10 @@ printf '{"deployments":[{"booted":false,"container-image-reference":"ostree-imag
 rm -f "$TMP/rebase"
 PATH="$TMP/bin:$PATH" bash "$TMP/ondertekend" >/dev/null 2>&1
 klopt '[ ! -e "$TMP/rebase" ]' "U303: staat de overstap al klaar, dan niet nog een keer"
+# U307: bewust 'terug' van een ondertekende (nieuwere) naar de oude versie zonder controle: niet meteen weer overstappen.
+printf '{"deployments":[{"booted":true,"timestamp":1000,"container-image-reference":"ostree-unverified-registry:ghcr.io/253ugursahin/bugos:latest"},{"booted":false,"timestamp":2000,"container-image-reference":"ostree-image-signed:docker://ghcr.io/253ugursahin/bugos:latest"}]}' >"$TMP/status.json"
+rm -f "$TMP/rebase"
+PATH="$TMP/bin:$PATH" bash "$TMP/ondertekend" >/dev/null 2>&1
+klopt '[ ! -e "$TMP/rebase" ]' "U307: na een bewuste 'terug' zet hij de nieuwere versie niet stiekem terug"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

@@ -476,7 +476,8 @@ rm -f "$TMP/thuis/.local/share/bugos/windows/.update-timestamp"
 nep wine 'exit 0'
 # U180: de eerste start downloadt de apps niet over een telefoon-hotspot (later opnieuw).
 kopie bugos-first-boot
-sed -i "s|/var/lib/bugos|$TMP/var-bugos|g" "$TMP/bugos-first-boot"
+sed -i -e "s|/var/lib/bugos|$TMP/var-bugos|g" -e "s|/usr/bin/bugos-updates|$TMP/bin/bugos-updates|g" "$TMP/bugos-first-boot"
+nep bugos-updates 'exit 0'   # updates vanzelf
 nep busctl 'echo "u 1"'
 nep flatpak 'echo "$*" >>"'"$TMP"'/flatpak-log"'
 : >"$TMP/flatpak-log"
@@ -494,6 +495,14 @@ rm -f "$TMP/var-bugos/standaard-apps-2"
 draai bugos-first-boot
 klopt 'grep -q "org.kde.gwenview" "$TMP/flatpak-log" && ! grep -q "LibreOffice" "$TMP/flatpak-log" && [ -e "$TMP/var-bugos/standaard-apps-2" ] && grep -q "standaard-apps-2" "$ROOT/system_files/usr/lib/systemd/system/bugos-first-boot.service"' \
     "U239: al klaargezet: alleen Gwenview en Okular erbij, één keer"
+# U308: doe je updates zelf, dan ook de nieuwe standaard-apps niet vanzelf (en niet elke 5 minuten opnieuw proberen).
+rm -f "$TMP/var-bugos/standaard-apps-2"
+: >"$TMP/flatpak-log"
+nep bugos-updates 'exit 1'
+draai bugos-first-boot
+klopt '[ "$code" -eq 0 ] && ! grep -q install "$TMP/flatpak-log" && [ -e "$TMP/var-bugos/standaard-apps-2" ]' \
+    "U308: 'zelf updaten': de nieuwe standaard-apps komen niet vanzelf"
+nep bugos-updates 'exit 0'
 klopt 'grep -q "^image/jpeg=org.kde.gwenview.desktop" "$ROOT/system_files/etc/xdg/kde-mimeapps.list" && grep -q "^application/pdf=org.kde.okular.desktop" "$ROOT/system_files/etc/xdg/kde-mimeapps.list"' \
     "U224: een foto opent standaard in Gwenview en een PDF in Okular"
 klopt 'grep -qx "kio-fuse" "$ROOT/build_files/packages.txt"' \

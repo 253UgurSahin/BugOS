@@ -23,6 +23,12 @@ REF="$(echo "$STATUS" | jq -r '.deployments[] | select(.booted) | ."container-im
 # Staat de overstap al klaar voor de volgende keer opstarten? Dan niet nog een keer.
 VOLGENDE="$(echo "$STATUS" | jq -r '.deployments[0] | select(.booted | not) | ."container-image-reference" // empty')"
 case "$VOLGENDE" in ostree-image-signed:*) exit 0 ;; esac
+# Is er een nieuwere, al ondertekende versie waar je bewust vanaf ging ('terug')? Dan niet meteen weer overstappen:
+# dat zou die nieuwere versie terugzetten. Na de volgende gewone update gebeurt het alsnog (U307).
+NIEUWER_ONDERTEKEND="$(echo "$STATUS" | jq -r '(.deployments[] | select(.booted) | .timestamp // 0) as $nu
+    | [.deployments[] | select((.booted | not) and ((."container-image-reference" // "") | startswith("ostree-image-signed:"))
+        and ((.timestamp // 0) > $nu))] | length')"
+[ "${NIEUWER_ONDERTEKEND:-0}" -gt 0 ] && exit 0
 
 case "$REF" in
 ostree-image-signed:*)

@@ -910,8 +910,10 @@ apps gone, dark mode showing as light (BugOSDonker), FPS counter stuck on
 - U294 (round 21, unsure): the kickstart sets `keyboard us`; check on a real install that AZERTY/QWERTZ users can
   pick their layout in the live installer.
 - U295 (round 21, unsure): Task Manager runs nvidia-smi on every refresh while open (may keep an Optimus GPU awake).
-- U304 (round 22, unsure): an older version you roll back to does not yet have the U300 conditions, so a rollback
-  to a version from before this round can still update forward once. Only fixable in versions that have it.
+- U304 (round 22, confirmed in round 23): an older version you roll back to does not have the U300 conditions. That
+  includes the released `main` image: on a PC upgraded from main, "back" goes to main, whose own /etc and timers still
+  say "automatic", so it stages the new version again after about an hour. Only fixable by writing into the rollback
+  deployment's own /etc (needs a writable /sysroot; M, test on a real PC), or by not going back to main.
 - U305 (round 22, unsure): whether Plasma's scripting `widget.type` still reports "org.bugos.snelmenu" for a widget
   whose plugin is missing (U302 relies on it); check once on a real PC that had the old image.
 - U306 (round 22, unsure): light mode switched on automatically by a pre-rename image below 6,000,000 kB is not
