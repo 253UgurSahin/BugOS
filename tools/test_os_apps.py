@@ -589,7 +589,8 @@ kaart = next((k for k in ww.kaarten if k.app["id"] == "org.videolan.VLC"), None)
 klopt(kaart is not None and kaart.knop.text() == "Installeren", "U013: een app die er echt niet is: 'Installeren'")
 # U052: de Winkel sluiten tijdens het installeren: niet afbreken, wachten en daarna vanzelf dicht;
 # mislukt het, dan blijft de Winkel open met de melding.
-nep_programma("flatpak", 'if [ "$1" = install ]; then echo "$*" >"$BUGOS_TEST_FLATPAK_ARGS"; /usr/bin/sleep 1; '
+nep_programma("flatpak", '[ "$1" = uninstall ] && echo "$*" >"$BUGOS_TEST_FLATPAK_ARGS.weg" && exit 0; '
+                          'if [ "$1" = install ]; then echo "$*" >"$BUGOS_TEST_FLATPAK_ARGS"; /usr/bin/sleep 1; '
                           '[ "${BUGOS_TEST_FLATPAK:-0}" = 9 ] && echo "error: Not authorized" && exit 1; '
                           '[ "${BUGOS_TEST_FLATPAK:-0}" = 8 ] && echo "error: No space left on device" && exit 1; '
                           'exit "${BUGOS_TEST_FLATPAK:-0}"; fi\nexit 0\n')
@@ -618,6 +619,20 @@ ww.show()
 ww.installeer(vlc)
 wacht(lambda: ww.proces.state() == ww.proces.ProcessState.NotRunning and ww.bezig_met is None, 8000)
 klopt("beheerder" in ww.melding.tekst.text(), f"U059: geen toestemming: de Winkel zegt dat een beheerder nodig is ({ww.melding.tekst.text()[:60]})")
+# U464: een app uit de Winkel kun je ook weer verwijderen (je bestanden alleen als je dat aanvinkt).
+del os.environ["BUGOS_TEST_FLATPAK"]
+ww.flatpaks.add(vlc["id"]); ww.installed.add(vlc["id"])
+for _k in ww.kaarten:
+    _k.ververs()
+_kv = next(k for k in ww.kaarten if k.app["id"] == vlc["id"])
+_zichtbaar464 = not _kv.weg.isHidden()
+ww.verwijder(vlc, False)
+wacht(lambda: ww.proces.state() == ww.proces.ProcessState.NotRunning and ww.bezig_met is None, 8000)
+_args464 = (TMP / "flatpak-args.weg").read_text() if (TMP / "flatpak-args.weg").exists() else ""
+klopt(_zichtbaar464 and "uninstall -y org.videolan.VLC" in _args464 and "--delete-data" not in _args464
+      and "verwijderd" in ww.melding.tekst.text() + "removed",
+      f"U464: een app verwijderen kan in de Winkel ({_args464.strip()!r}, {ww.melding.tekst.text()[:40]!r})")
+os.environ["BUGOS_TEST_FLATPAK"] = "9"
 # U411: een volle computer is geen 'heb je internet?'.
 os.environ["BUGOS_TEST_FLATPAK"] = "8"
 ww.installeer(vlc)

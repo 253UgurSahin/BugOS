@@ -24,7 +24,7 @@ from bugos_ui import (  # noqa: E402
 from PySide6.QtCore import QProcess, QProcessEnvironment, QSize, Qt, QTimer  # noqa: E402
 from PySide6.QtGui import QIcon, QPixmap  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QFrame, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
+    QCheckBox, QFrame, QHBoxLayout, QLabel, QMessageBox, QScrollArea, QVBoxLayout, QWidget,
 )
 
 CATALOGUS = Path("/usr/share/bugos/store.json")
@@ -121,6 +121,10 @@ class AppKaart(Kaart):
         blok.addStretch(1)
         rij = QHBoxLayout()
         rij.addStretch(1)
+        # Een app die je uit de Winkel haalde, kun je hier ook weer weghalen (U464). Niet voor wat in BugOS zelf zit.
+        self.weg = Knop(t("Verwijderen", "Remove"), "stil")
+        self.weg.clicked.connect(lambda: self.winkel.vraag_verwijderen(self.app))
+        rij.addWidget(self.weg)
         self.knop = Knop("", "hoofd")
         self.knop.setMinimumWidth(124)
         self.knop.clicked.connect(self.klik)
@@ -133,6 +137,8 @@ class AppKaart(Kaart):
         bezig = self.winkel.bezig_met == self.app["id"]
         er_al = self.app["id"] in self.winkel.installed
         self.chip.setVisible(er_al and not bezig)
+        self.weg.setVisible(self.app["id"] in self.winkel.flatpaks and not bezig)
+        self.weg.setEnabled(self.winkel.bezig_met is None)
         if bezig:
             self.knop.setText(t("Bezig…", "Working…"))
             self.knop.setEnabled(False)
@@ -310,7 +316,44 @@ class Winkel(Venster):
             return
         super().closeEvent(e)
 
+    def vraag_verwijderen(self, app: dict) -> None:
+        """Eerst vragen; je bestanden van de app (inloggen, instellingen) alleen weg als je dat aanvinkt (U464)."""
+        vraag = QMessageBox(QMessageBox.Icon.Question, t("Verwijderen?", "Remove?"),
+                            t(f"{app_naam(app)} van deze computer verwijderen?", f"Remove {app_naam(app)} from this computer?"),
+                            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel, self)
+        vraag.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        vraag.setCheckBox(QCheckBox(t("Ook de instellingen en bestanden van deze app weggooien",
+                                      "Also delete this app's settings and files")))
+        if vraag.exec() == QMessageBox.StandardButton.Yes:
+            self.verwijder(app, vraag.checkBox().isChecked())
+
+    def verwijder(self, app: dict, met_gegevens: bool) -> None:
+        self.bezig_met = app["id"]
+        self.klus = "verwijder"
+        self.melding.zet(t(f"{app_naam(app)} wordt verwijderd…", f"Removing {app_naam(app)}…"), "bezig")
+        for k in self.kaarten:
+            k.ververs()
+        omgeving = QProcessEnvironment.systemEnvironment()
+        omgeving.insert("LC_ALL", "C.UTF-8")
+        self.proces.setProcessEnvironment(omgeving)
+        self.proces.start("flatpak", ["uninstall", "-y", app["id"]] + (["--delete-data"] if met_gegevens else []))
+
+    def klaar_verwijderen(self, code: int, uit: str, app_id: str, naam: str) -> None:
+        self.flatpaks = geinstalleerd() - ({app_id} if code == 0 else set())
+        self.installed = self.flatpaks | set(self.systeem)
+        if code == 0:
+            self.melding.zet(t(f"{naam} is verwijderd.", f"{naam} has been removed."), "goed")
+        elif any(w in uit.lower() for w in ("not authorized", "not allowed", "authentication", "authoriz")):
+            self.melding.zet(t(f"{naam} verwijderen mag alleen met het wachtwoord van een beheerder.",
+                               f"Removing {naam} needs an administrator's password."), "fout")
+        else:
+            self.melding.zet(t(f"{naam} verwijderen lukte niet. Probeer het nog eens.",
+                               f"Removing {naam} did not work. Please try again."), "fout")
+        for k in self.kaarten:
+            k.ververs()
+
     def installeer(self, app: dict) -> None:
+        self.klus = "installeer"
         self.bezig_met = app["id"]
         self.melding.zet(t(f"{app_naam(app)} wordt geïnstalleerd. Dit kan een paar minuten duren…",
                            f"Installing {app_naam(app)}. This can take a few minutes…"), "bezig")
@@ -333,6 +376,12 @@ class Winkel(Venster):
         app_id = self.bezig_met
         naam = next((app_naam(a) for a in self.cat["apps"] if a["id"] == app_id), app_id)
         self.bezig_met = None
+        if getattr(self, "klus", "") == "verwijder":
+            self.klus = ""
+            self.klaar_verwijderen(code, uit, app_id, naam)
+            if getattr(self, "sluit_na", False):
+                QTimer.singleShot(0, self.close)
+            return
         self.flatpaks = geinstalleerd() | ({app_id} if code == 0 else set())
         self.installed = self.flatpaks | set(self.systeem)
         if code == 0:
