@@ -145,14 +145,20 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
     New-Item -ItemType Directory -Force -Path $doel | Out-Null
     $stap = 0
     $aantal = $script:Mappen.Count + 2
+    # Mappen waar een paar bestanden niet mee konden (open in een programma, groter dan 4 GB op FAT32, alleen in
+    # OneDrive): de rest gaat gewoon door (U094).
+    $script:Deels = @()
     foreach ($m in $script:Mappen) {
         $stap++
         $bron = Get-BekendeMap $m.Sleutel
         & $Voortgang ([int](100 * $stap / $aantal)) (T "Kopiëren: $($m.Naam)..." "Copying: $($m.Naam)...")
         if ($bron -and (Test-Path $bron)) {
-            # /E alle submappen, /R:1 /W:1 niet eindeloos wachten, /XJ geen snelkoppel-lussen.
-            $null = robocopy $bron (Join-Path $doel $m.Naam) /E /R:1 /W:1 /XJ /NFL /NDL /NJH /NJS /NP
-            if ($LASTEXITCODE -ge 8) { throw (T "Kopiëren van $($m.Naam) lukte niet." "Copying $($m.Naam) failed.") }
+            # /E alle submappen, /R:1 /W:1 niet eindeloos wachten, /XJ geen snelkoppel-lussen,
+            # /XF geen Windows-hulpbestanden (die zie je anders in elke map in BugOS) (U096).
+            $null = robocopy $bron (Join-Path $doel $m.Naam) /E /R:1 /W:1 /XJ /NFL /NDL /NJH /NJS /NP /XF desktop.ini Thumbs.db
+            # robocopy: 8 = een paar bestanden niet, 16 = helemaal mislukt (bijv. de schijf is weg).
+            if ($LASTEXITCODE -ge 16) { throw (T "Kopiëren van $($m.Naam) lukte niet." "Copying $($m.Naam) failed.") }
+            if ($LASTEXITCODE -ge 8) { $script:Deels += $m.Naam }
         }
     }
 
@@ -187,6 +193,7 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
         computer   = $env:COMPUTERNAME
         taal       = (Get-Culture).Name
         mappen     = @($script:Mappen | ForEach-Object { $_.Naam })
+        deels      = @($script:Deels)
     }
     $info | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $doel 'bugos-switch.json') -Encoding UTF8
     & $Voortgang 100 (T 'Klaar!' 'Done!')
@@ -211,6 +218,14 @@ function Invoke-Krimp([int] $gb) {
 
 function Get-UsbSchijven {
     Get-Disk | Where-Object { $_.BusType -eq 'USB' -and $_.Size -gt 7GB -and -not $_.IsBoot -and -not $_.IsSystem }
+}
+
+function Test-SwitchBestanden([int] $nummer) {
+    # Heeft een partitie op deze schijf de map BugOS-Switch met bugos-switch.json (uit stap 2)?
+    foreach ($p in @(Get-Partition -DiskNumber $nummer -ErrorAction SilentlyContinue)) {
+        if ("$($p.DriveLetter)" -match '^[A-Za-z]$' -and (Test-Path -LiteralPath "$($p.DriveLetter):\BugOS-Switch\bugos-switch.json")) { return $true }
+    }
+    return $false
 }
 
 function Write-IsoNaarSchijf([string] $iso, [int] $nummer, [scriptblock] $Voortgang) {
@@ -1015,7 +1030,7 @@ $Paginas += {
 $Paginas += {
     $kop.Text = (T 'Je bestanden meenemen' 'Take your files with you')
     $groot = [math]::Round((Get-MeeneemGrootte) / 1GB, 1)
-    $y = Nieuw-Tekst (T "Je documenten, foto's, muziek, video's, bureaublad, downloads, bladwijzers en achtergrond ($groot GB) gaan naar een USB-schijf. In BugOS zet je ze terug met één klik. Dit is ook meteen een back-up!" "Your documents, photos, music, videos, desktop, downloads, bookmarks and wallpaper ($groot GB) go to a USB drive. In BugOS you put them back with one click. This is also a backup!") 0
+    $y = Nieuw-Tekst (T "Je documenten, foto's, muziek, video's, bureaublad, downloads, bladwijzers en achtergrond ($groot GB) gaan naar een USB-schijf. In BugOS zet je ze terug met één klik. Dit is ook meteen een back-up! Gebruik een andere schijf dan de USB-stick voor BugOS (stap 4): die wordt gewist." "Your documents, photos, music, videos, desktop, downloads, bookmarks and wallpaper ($groot GB) go to a USB drive. In BugOS you put them back with one click. This is also a backup! Use a different drive than the USB stick for BugOS (step 4): that one is erased.") 0
     $y = Nieuw-Tekst (T 'Kies de USB-schijf:' 'Choose the USB drive:') ($y + 16) -Vet
     $script:W.schijf = Nieuw-Lijst ($y + 4) 400
     $lijst = $script:W.schijf
@@ -1035,8 +1050,14 @@ $Paginas += {
         $knop.Enabled = $false; $verder.Enabled = $false
         try {
             Invoke-Meenemen $letter { param($p, $t) Zet-Balk $balk $p; $status.Text = $t; [System.Windows.Forms.Application]::DoEvents() }
-            $status.Text = (T 'Klaar! Je bestanden staan in de map BugOS-Switch op de schijf.' 'Done! Your files are in the BugOS-Switch folder on the drive.')
-            $status.ForeColor = $Goed
+            if ($script:Deels.Count -gt 0) {
+                $welke = $script:Deels -join ', '
+                $status.Text = (T "Klaar, maar een paar bestanden uit $welke konden niet mee (bijv. open in een programma, groter dan 4 GB, of alleen in OneDrive). Sluit je programma's en klik nog een keer: wat er al staat, gaat sneller." "Done, but a few files from $welke could not be copied (e.g. open in a program, larger than 4 GB, or only in OneDrive). Close your programs and click again: what is already there goes faster.")
+                $status.ForeColor = $Grijs
+            } else {
+                $status.Text = (T 'Klaar! Je bestanden staan in de map BugOS-Switch op de schijf.' 'Done! Your files are in the BugOS-Switch folder on the drive.')
+                $status.ForeColor = $Goed
+            }
         } catch { Toon $_.Exception.Message 'Error'; $status.Text = '' }
         $knop.Enabled = $true; $verder.Enabled = $true
     })
@@ -1129,6 +1150,11 @@ $Paginas += {
         if (-not $script:IsoGekozen) { Toon (T 'Kies eerst het BugOS .iso-bestand.' 'Choose the BugOS .iso file first.'); return }
         if ($sticks.Count -eq 0) { Toon (T 'Steek eerst een USB-stick in.' 'Plug in a USB stick first.'); return }
         $stick = $sticks[$lijst.SelectedIndex]
+        # Staan je bestanden uit stap 2 op deze stick? Dan niet wissen: die ben je anders kwijt (U095).
+        if (Test-SwitchBestanden $stick.Number) {
+            Toon (T "Op '$($stick.FriendlyName)' staan je bestanden uit stap 2 (de map BugOS-Switch). Die zou je kwijtraken. Gebruik een andere USB-stick voor BugOS, of zet je bestanden eerst ergens anders neer." "'$($stick.FriendlyName)' holds your files from step 2 (the BugOS-Switch folder). You would lose them. Use a different USB stick for BugOS, or put your files somewhere else first.") 'Warning'
+            return
+        }
         if (-not (Vraag (T "ALLES op '$($stick.FriendlyName)' ($([math]::Round($stick.Size / 1GB)) GB) wordt gewist. Weet je het zeker?" "EVERYTHING on '$($stick.FriendlyName)' ($([math]::Round($stick.Size / 1GB)) GB) will be erased. Are you sure?"))) { return }
         $code = Start-AlsBeheerder @('-Taak', 'Usb', '-IsoPad', "`"$($script:IsoGekozen)`"", '-SchijfNummer', [string]$stick.Number)
         if ($code -eq 0) {

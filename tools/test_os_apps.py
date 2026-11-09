@@ -815,6 +815,16 @@ if _bv is not None:
 else:
     klopt(False, "U086: venster Bestanden niet gevonden")
 
+# U094-U096: het Windows-deel van Overstap (statisch: hier is geen PowerShell; de CI op Windows leest het script ook).
+_ps = (ROOT / "windows-switch" / "BugOS-Switch.ps1").read_text(encoding="utf-8-sig")
+klopt("$LASTEXITCODE -ge 16) { throw" in _ps and "$LASTEXITCODE -ge 8) { $script:Deels += $m.Naam }" in _ps
+      and "deels      = @($script:Deels)" in _ps,
+      "U094: robocopy 8 (een paar bestanden niet) stopt het meenemen niet; bugos-switch.json wordt toch geschreven")
+_maak = _ps[_ps.index("$maak.Add_Click"):]
+klopt("Test-SwitchBestanden $stick.Number" in _maak and _maak.index("Test-SwitchBestanden") < _maak.index("Vraag ("),
+      "U095: stap 4 wist geen stick waar je bestanden uit stap 2 op staan (eerst kijken, dan pas vragen)")
+klopt("/XF desktop.ini Thumbs.db" in _ps, "U096: desktop.ini en Thumbs.db gaan niet mee naar BugOS")
+
 # ========================== U067: 'Grote letters' maakt ook de letters van de BugOS-apps groter ===
 from PySide6.QtGui import QFont  # noqa: E402
 
