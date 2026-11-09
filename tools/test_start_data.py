@@ -189,6 +189,20 @@ for _ in range(50):  # bugos-theme start los (op de achtergrond): even wachten t
 klopt("bugos-theme donker" in logboek(),
       "zet donker: via bugos-theme (kleuren, KDE-programma's en Plasma-stijl in één keer, net als Instellingen)")
 
+# U260: game-modus vanuit het snelmenu wordt niet na 5 s afgebroken (dan bleef 'volle kracht' half aan staan).
+LOG.write_text("")
+(NEP / "bugos-game-mode").write_text(f'#!/usr/bin/bash\n[ "$1" = aan ] && sleep 6\necho "bugos-game-mode $*" >>"{LOG}"\necho uit\n')
+(NEP / "bugos-game-mode").chmod(0o755)
+_t0 = time.time()
+_spel = json.loads(draai("--zet", "spel", "aan"))
+_duur = time.time() - _t0
+for _ in range(100):
+    if "bugos-game-mode aan" in logboek():
+        break
+    time.sleep(0.1)
+klopt(_spel["spel"] is True and _duur < 5 and "bugos-game-mode aan" in logboek(),
+      f"U260: game-modus aan vanuit het snelmenu loopt helemaal door (los gestart) en toont meteen 'aan' ({_duur:.1f} s)")
+
 # 5. starten
 LOG.write_text("")
 nep("bugos-settings")

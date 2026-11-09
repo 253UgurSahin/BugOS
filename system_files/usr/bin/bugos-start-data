@@ -431,7 +431,8 @@ def snel_zet(wat: str, waarde: str) -> None:
             draai("rfkill", "unblock", "bluetooth")
         draai("bluetoothctl", "power", "on" if aan else "off")
     elif wat == "spel":
-        draai("bugos-game-mode", "aan" if aan else "uit")
+        # Los starten: na 5 s afbreken (draai) liet 'volle kracht' en 'niet storen' half aan staan (U260).
+        los_starten("bugos-game-mode", "aan" if aan else "uit")
     elif wat == "donker":
         # Eén plek voor licht/donker: kleuren, KDE-programma's (Kvantum) en de Plasma-stijl.
         los_starten("bugos-theme", "donker" if aan else "licht")
@@ -507,9 +508,9 @@ def main(args: list[str]) -> int:
     if len(args) == 3 and args[0] == "--zet":
         snel_zet(args[1], args[2])
         s = snel_status()
-        if args[1] == "donker":
-            # bugos-theme loopt nog: de kleuren staan er misschien nog niet. Toon wat je net koos (U128).
-            s["donker"] = args[2] in ("aan", "true", "1", "on")
+        if args[1] in ("donker", "spel"):
+            # bugos-theme of bugos-game-mode loopt nog: toon wat je net koos (U128, U260).
+            s[args[1]] = args[2] in ("aan", "true", "1", "on")
         print(json.dumps(s))
         return 0
     apps = alle_apps()
