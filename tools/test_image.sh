@@ -40,6 +40,8 @@ done
 for u in bugos-first-boot.service rpm-ostreed-automatic.timer bugos-update-apps.timer; do
     klopt '[ "$(systemctl is-enabled "$u" 2>/dev/null)" = enabled ]' "dienst: $u staat aan"
 done
+klopt '[ ! -e /usr/lib/systemd/user/flatpak-user-update.timer ] || [ "$(systemctl --global is-enabled flatpak-user-update.timer 2>/dev/null)" = masked ]' \
+    "dienst: flatpak-user-update.timer (per gebruiker) staat uit (U101)"
 # U087: alleen BugOS werkt de apps bij (anders gaat het door, ook als je 'Updates zelf doen' kiest).
 for u in flatpak-system-update.timer uupd.timer; do
     [ -e "/usr/lib/systemd/system/$u" ] || continue

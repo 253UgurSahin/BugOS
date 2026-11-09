@@ -175,11 +175,15 @@ EOF
 # tegelijk updaten, zitten elkaar in de weg.
 # Ook flatpak-system-update.timer van Universal Blue: BugOS werkt de apps bij met bugos-update-apps.timer, en
 # 'Updates zelf doen' zet alleen die uit; anders liepen de app-updates toch elke dag door (U087).
-for eenheid in uupd.timer ublue-update.timer flatpak-system-update.timer flatpak-user-update.timer; do
+for eenheid in uupd.timer ublue-update.timer flatpak-system-update.timer; do
     if [ -e "/usr/lib/systemd/system/$eenheid" ]; then
         systemctl mask "$eenheid"
     fi
 done
+# En de versie per gebruiker (een user-timer): die werkte apps van de gebruiker zelf bij, ook bij 'zelf doen' (U101).
+if [ -e /usr/lib/systemd/user/flatpak-user-update.timer ]; then
+    systemctl --global mask flatpak-user-update.timer
+fi
 
 # De zoekbalk (KRunner): Fedora zet hier zijn eigen keuzes neer. Zonder dat
 # bestand gelden de gewone KDE-instellingen.
