@@ -215,9 +215,12 @@ class Batterij:
 
 
 def batterij() -> Batterij | None:
+    """De batterij van deze computer. Een laptop met twee batterijen (veel ThinkPads) telt ze samen: anders zei BugOS
+    'aan de lader, laadt niet' terwijl hij op de andere batterij liep (U399)."""
     if _c.VOORBEELD:
         return Batterij(76, False, False)
     basis = Path(os.environ.get("BUGOS_SYS", "/sys")) / "class" / "power_supply"
+    gevonden = []
     # Een batterij herken je aan type=Battery (niet alleen 'BAT0': sommige laptops noemen hem anders), maar niet
     # die van een muis of toetsenbord (scope=Device) (U155).
     for pad in sorted(basis.glob("*")):
@@ -232,8 +235,28 @@ def batterij() -> Batterij | None:
             staat = (pad / "status").read_text().strip()
         except (OSError, ValueError):
             continue
-        return Batterij(procent, staat == "Charging", staat == "Full", staat == "Not charging")
-    return None
+        nu = vol = None
+        for a, b_ in (("energy_now", "energy_full"), ("charge_now", "charge_full")):
+            try:
+                nu, vol = int((pad / a).read_text()), int((pad / b_).read_text())
+                break
+            except (OSError, ValueError):
+                continue
+        gevonden.append((procent, staat, nu, vol))
+    if not gevonden:
+        return None
+    if len(gevonden) == 1:
+        procent, staat, _n, _v = gevonden[0]
+        return Batterij(procent, staat == "Charging", staat == "Full", staat == "Not charging" and _aan_stroom_kaal())
+    staten = [g[1] for g in gevonden]
+    if all(g[2] is not None and g[3] for g in gevonden):
+        procent = round(100 * sum(g[2] for g in gevonden) / sum(g[3] for g in gevonden))
+    else:
+        procent = round(sum(g[0] for g in gevonden) / len(gevonden))
+    laadt = "Charging" in staten
+    leeg_loopt = "Discharging" in staten
+    return Batterij(procent, laadt, all(st == "Full" for st in staten),
+                    not laadt and not leeg_loopt and _aan_stroom_kaal())
 
 
 # =============================================================== uiterlijk ===
@@ -333,6 +356,15 @@ def _profiel() -> str:
     if accu is None or accu.laadt or accu.vol or accu.aan_lader or _aan_stroom():
         return "AC"
     return "Battery"
+
+
+def _aan_stroom_kaal() -> bool:
+    """Zit de lader erin (Mains online)? Zonder Mains-melding (sommige laptops): ja, zoals vroeger."""
+    basis = Path(os.environ.get("BUGOS_SYS", "/sys")) / "class" / "power_supply"
+    netten = [p for p in basis.glob("*") if (p / "type").exists() and (p / "type").read_text().strip() == "Mains"]
+    if not netten:
+        return True
+    return any((p / "online").exists() and (p / "online").read_text().strip() == "1" for p in netten)
 
 
 def _aan_stroom() -> bool:

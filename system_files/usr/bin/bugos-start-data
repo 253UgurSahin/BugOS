@@ -379,6 +379,7 @@ def batterij() -> tuple[int | None, bool]:
     basis = Path(os.environ.get("BUGOS_SYS", "/sys")) / "class" / "power_supply"
     # Zoals Instellingen (U155): een batterij herken je aan type=Battery (niet alleen 'BAT0'), maar niet die van een
     # muis of toetsenbord (scope=Device) (U346).
+    gevonden = []
     for pad in sorted(basis.glob("*")):
         try:
             soort = (pad / "type").read_text().strip() if (pad / "type").exists() else \
@@ -387,10 +388,26 @@ def batterij() -> tuple[int | None, bool]:
                 continue
             if (pad / "scope").exists() and (pad / "scope").read_text().strip() == "Device":
                 continue
-            return int((pad / "capacity").read_text().strip()), (pad / "status").read_text().strip() == "Charging"
+            procent = int((pad / "capacity").read_text().strip())
+            staat = (pad / "status").read_text().strip()
         except (OSError, ValueError):
             continue
-    return None, False
+        nu = vol = None
+        for a, b in (("energy_now", "energy_full"), ("charge_now", "charge_full")):
+            try:
+                nu, vol = int((pad / a).read_text()), int((pad / b).read_text())
+                break
+            except (OSError, ValueError):
+                continue
+        gevonden.append((procent, staat, nu, vol))
+    if not gevonden:
+        return None, False
+    # Twee batterijen (veel ThinkPads): samen tellen, zoals Instellingen (U399).
+    if len(gevonden) > 1 and all(g[2] is not None and g[3] for g in gevonden):
+        procent = round(100 * sum(g[2] for g in gevonden) / sum(g[3] for g in gevonden))
+    else:
+        procent = round(sum(g[0] for g in gevonden) / len(gevonden))
+    return procent, any(g[1] == "Charging" for g in gevonden)
 
 
 def snel_status() -> dict:
