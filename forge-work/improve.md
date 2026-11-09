@@ -925,6 +925,30 @@ U321-U326). 9 fixed, each with a test that failed first. Tests after: 20 test fi
 ### U326 [low] Flathub "Install" links (appstream://) opened Discover instead of the BugOS Store
   commit: 4a49ea4   test: tools/test_os_system.sh
 
+## Round 25 (2026-11-09)
+Two reviewers: the round-24 fixes (no regressions; 1 small plus 3 unsure: U330, U331), and a QA tester working
+through a checklist of everyday actions in every BugOS app, with an unusual input for each (4 found, 3 missing
+actions, 3 unsure: U332-U338). 9 fixed, each with a test that failed first. Tests after: 20 test files passed (here).
+
+### U330 [low] (from U326) An `appstream:id` link (no //) or a lower-cased id opened the Store front page, not the app
+  commit: c19959f   test: tools/test_os_apps.py
+### U331 [low] (from U325) A dark colour with alpha (r,g,b,a) counted as light in bugos-theme
+  commit: c19959f   test: tools/test_os_system.sh
+### U332 [low-medium] Double-clicking a Wi-Fi row connected twice and asked for the password twice (also Bluetooth, sound)
+  commit: fb19978   test: tools/test_os_apps.py
+### U333 [low] Store: a search with no results replaced "X is being installed" for the rest of the install
+  commit: bce9a30   test: tools/test_os_apps.py
+### U334 [low] "Choose Wi-Fi" in Help and Welcome opened KDE's network editor instead of BugOS Settings > Wi-Fi
+  commit: bce9a30   test: tools/test_help.py
+### U335 [low] A wallpaper chosen from a USB stick (or Downloads) disappeared when the stick or file was gone
+  commit: bce9a30   test: tools/test_os_settings.py
+### U336 [low] Light/dark in Settings always said "Done", even when bugos-theme failed
+  commit: bce9a30   test: tools/test_os_settings.py
+### U337 [low] Two quick Deletes on the same file asked "Really delete? (on another drive)" and then failed
+  commit: bce9a30   test: tools/test_os_apps.py
+### U338 [low] There was no way to forget a Wi-Fi network in BugOS Settings
+  commit: bce9a30   test: tools/test_os_settings.py ("Forget" next to "Disconnect" for the connected network)
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -974,6 +998,10 @@ U321-U326). 9 fixed, each with a test that failed first. Tests after: 20 test fi
 - U328 (round 24, unsure): Fedora's global themes ("Fedora", "Fedora Dark") show in KDE's Global Theme page; they
   cannot be removed (plasma-workspace needs the package). Cosmetic.
 - U329 (round 24, unsure): KDE's Help Center and Info Center show next to BugOS Help and About (search duplicates).
+- U339 (round 25): Files has no "Open with…" and no zip/unzip; another program than the default needs Dolphin (M).
+- U340 (round 25, unsure): an accented ext4 label of 15-16 characters may be too long in bytes (udisks decides).
+- U341 (round 25, unsure): with Breeze Dark chosen in KDE, Kvantum stays on the light BugOS theme until you toggle
+  dark mode in BugOS once.
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
