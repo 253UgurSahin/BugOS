@@ -44,7 +44,19 @@ fps_meteen_actief() {
     [ "${MANGOHUD:-}" = 1 ] && [ "${MANGOHUD_CONFIGFILE:-}" = "$MH_CONF" ]
 }
 
-fps_aan() {
+fps_# Volle kracht is voor de hele computer, maar game-modus is per account. Wie nu gamet, staat als een leeg bestand in
+# /dev/shm (voor iedereen te zien, weg na opnieuw opstarten) (U385, U394).
+GAMER_MAP="${BUGOS_GAMER_MAP:-/dev/shm}"
+GAMER_MERK="$GAMER_MAP/bugos-spelmodus-$(id -u)"
+andere_gamers() {
+    local f
+    for f in "$GAMER_MAP"/bugos-spelmodus-*; do
+        [ -e "$f" ] && [ "$f" != "$GAMER_MERK" ] && return 0
+    done
+    return 1
+}
+
+aan() {
     mkdir -p "$BUGOS_CONFIG" "$(dirname "$MH_ENV")"
     touch "$FPS_METEEN"
     if [ -f "$MARKER" ]; then mangohud_bestand zichtbaar; else mangohud_bestand verborgen; fi
@@ -81,7 +93,13 @@ aan() {
     # het eerst was, en zet 'uit' ze nooit meer terug.
     [ -f "$MARKER" ] && return 0
     mkdir -p "$BUGOS_CONFIG" "$(dirname "$ENVFILE")"
-    stroomprofiel_get >"$BUGOS_CONFIG/stroomprofiel-voor-spelmodus"
+    # Speelt een ander account al (snel wisselen)? Dan is 'volle kracht' van die game-modus, niet jouw keuze (U394).
+    if andere_gamers; then
+        echo door-ander >"$BUGOS_CONFIG/stroomprofiel-voor-spelmodus"
+    else
+        stroomprofiel_get >"$BUGOS_CONFIG/stroomprofiel-voor-spelmodus"
+    fi
+    touch "$GAMER_MERK" 2>/dev/null
     stroomprofiel_zet performance
     # Melding eerst, anders wordt hij door 'niet storen' meteen stilgehouden.
     # De FPS-teller (MANGOHUD=1) krijgen games pas mee na opnieuw inloggen: dat zeggen we eerlijk,
@@ -117,8 +135,10 @@ uit() {
     # Volle kracht is voor de hele computer. Alleen terugzetten als hij nog op volle kracht staat (koos iemand intussen
     # zelf iets, dan blijft dat), en nooit 'volle kracht' terugzetten: dat was dan van een ander account dat ook aan
     # het gamen was, en dan bleef de pc voor altijd op volle kracht (U385).
-    if [ "$(stroomprofiel_get)" = performance ]; then
-        [ "$vorig" = performance ] && vorig=balanced
+    rm -f "$GAMER_MERK"
+    # Speelt een ander account nog? Dan blijft volle kracht aan (die zet het zelf terug) (U394).
+    if ! andere_gamers && [ "$(stroomprofiel_get)" = performance ]; then
+        [ "$vorig" = door-ander ] && vorig=balanced
         stroomprofiel_zet "$vorig"
     fi
     # Niet storen alleen uitzetten als het door de game-modus aan is gegaan.

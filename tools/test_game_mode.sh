@@ -14,6 +14,8 @@ klopt() { if eval "$1"; then echo "OK    $2"; else echo "FOUT  $2"; fouten=$((fo
 nep() { printf '#!/usr/bin/bash\n%s\n' "$2" >"$TMP/bin/$1"; chmod +x "$TMP/bin/$1"; }
 
 sed "s|/usr/share/bugos|$ROOT/system_files/usr/share/bugos|g" "$ROOT/system_files/usr/bin/bugos-game-mode" >"$TMP/spelmodus"
+mkdir -p "$TMP/shm"
+export BUGOS_GAMER_MAP="$TMP/shm"
 # Nep-stroomprofiel: onthoudt de stand in een bestand.
 echo balanced >"$TMP/profiel"
 nep powerprofilesctl 'case "$1" in get) cat "'"$TMP"'/profiel";; set) echo "$2" >"'"$TMP"'/profiel";; esac'
@@ -65,12 +67,19 @@ klopt '[ "$(cat "$TMP/profiel")" = power-saver ] && [ "$(cat "$TMP/until")" = "$
 # U385: twee gebruikers (snel wisselen): A aan, B aan, A uit, B uit -> de pc mag niet op volle kracht blijven staan.
 if [ -e "$TMP/bin/powerprofilesctl" ] || nep powerprofilesctl 'case "$1" in get) cat "'"$TMP"'/profiel";; set) echo "$2" >"'"$TMP"'/profiel";; esac'; then
     echo balanced >"$TMP/profiel"
-    gebruiker() { HOME="$TMP/$1" XDG_CONFIG_HOME="$TMP/$1/.config" PATH="$TMP/bin:$PATH" bash "$TMP/spelmodus" "$2" >/dev/null 2>&1; }
-    gebruiker anna aan
-    gebruiker bram aan
-    gebruiker anna uit
-    gebruiker bram uit
-    klopt '[ "$(cat "$TMP/profiel")" != performance ]' "U385: twee mensen met game-modus: daarna staat de pc niet voor altijd op volle kracht ($(cat "$TMP/profiel"))"
+    nep id 'if [ "$1" = -u ]; then echo "${NEP_UID:-1000}"; else /usr/bin/id "$@"; fi'
+    gebruiker() { NEP_UID="$3" HOME="$TMP/$1" XDG_CONFIG_HOME="$TMP/$1/.config" PATH="$TMP/bin:$PATH" bash "$TMP/spelmodus" "$2" >/dev/null 2>&1; }
+    gebruiker anna aan 1001
+    gebruiker bram aan 1002
+    gebruiker anna uit 1001
+    klopt '[ "$(cat "$TMP/profiel")" = performance ]' "U394: anna stopt terwijl bram nog gamet: volle kracht blijft"
+    gebruiker bram uit 1002
+    klopt '[ "$(cat "$TMP/profiel")" = balanced ]' "U385: twee mensen met game-modus: daarna staat de pc niet voor altijd op volle kracht ($(cat "$TMP/profiel"))"
+    # U394: zelf al op volle kracht, dan game-modus aan en uit: jouw volle kracht blijft.
+    echo performance >"$TMP/profiel"
+    gebruiker carla aan 1003
+    gebruiker carla uit 1003
+    klopt '[ "$(cat "$TMP/profiel")" = performance ]' "U394: wie zelf 'volle kracht' koos, houdt dat na game-modus uit"
 fi
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

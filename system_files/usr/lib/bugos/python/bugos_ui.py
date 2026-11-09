@@ -381,8 +381,13 @@ def luister(naam: str, venster: QWidget) -> None:
 
         sok.readyRead.connect(lees)
         sok.disconnected.connect(sok.deleteLater)
+        if sok.bytesAvailable():   # al binnen voor we luisterden (U395)
+            lees()
 
     server.newConnection.connect(nieuw)
+    # Kwam er al iets binnen voor de handler er was (bijv. een dialoog vóór het venster)? Dan nu afhandelen (U395).
+    while server.hasPendingConnections():
+        nieuw()
     venster._een_server = server
 
 

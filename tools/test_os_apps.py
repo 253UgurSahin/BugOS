@@ -1385,6 +1385,9 @@ _code388 = ("import sys, os, json; sys.path.insert(0, sys.argv[1]); os.environ['
 _p388 = _sp.Popen([sys.executable, "-c", _code388, str(ROOT / "system_files/usr/lib/bugos/python"), "test-u388", _js388.dumps(["wifi"])],
                   stdout=_sp.PIPE, text=True)
 _t388.sleep(0.8)   # het eerste venster wordt nog gebouwd (geen event-loop)
+for _ in range(20):   # U395: en er draait intussen even iets (een dialoog): de verbinding komt binnen zonder handler
+    app.processEvents()
+    _t388.sleep(0.02)
 _vak388 = _Vak()
 bugos_ui.luister("test-u388", _vak388)
 wacht(lambda: _p388.poll() is not None, 15000)
