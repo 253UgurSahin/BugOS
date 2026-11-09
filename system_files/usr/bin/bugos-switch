@@ -391,7 +391,12 @@ def venster() -> int:
 
         def klaar(self, code: int, _s) -> None:
             if self.gestopt:
+                # Gestopt: zeg het, en de volgende keer begint gewoon opnieuw (ook als je het venster weer opende) (U241).
+                self.gestopt = False
                 self.wachtrij.clear()
+                self.melding.zet(t("Gestopt. Wat al teruggezet was, blijft staan.",
+                                   "Stopped. What was already restored stays."), "info")
+                self.balk.hide()
                 self.vrij()
                 return
             soort = uitslag(code, self.nu, getattr(self, "uitvoer", ""))
@@ -462,6 +467,7 @@ def venster() -> int:
             if not gekozen:
                 return
             self.bron = Path(gekozen)
+            self.gestopt = False
             self.deels = []
             self.wachtrij[:] = stappen(self.bron)
             if not self.wachtrij:

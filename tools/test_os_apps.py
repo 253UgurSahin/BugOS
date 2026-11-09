@@ -475,6 +475,21 @@ for naam, module, schijf, begin in (("Back-up", bb, SCHIJF, "maak_backup"), ("Ov
     w.close()
     klopt(wacht(lambda: not w.isVisible() and not draait(w), 8000),
           f"U015: {naam}: 'Nu stoppen': het kopiëren stopt en het venster gaat dicht")
+    # 2b. U241: 'Nu stoppen' en het venster meteen weer openen: dat wordt gezegd, en een nieuwe klus stopt niet meteen
+    w = open_venster(module)
+    w.vraag_stoppen = lambda: True
+    getattr(w, begin)()
+    wacht(lambda: draait(w), 5000)
+    w.close()
+    w.sluit_na = False   # weer geopend (dat doet luister())
+    wacht(lambda: not draait(w), 8000)
+    for _ in range(20):
+        app.processEvents()
+    klopt("Gestopt" in w.melding.tekst.text() and not w.gestopt and w.isVisible(),
+          f"U241: {naam}: gestopt en weer geopend: 'Gestopt' (niet 'Bezig met stoppen…'), en de volgende klus gaat door "
+          f"({w.melding.tekst.text()!r}, gestopt={w.gestopt})")
+    w.close()
+    wacht(lambda: not w.isVisible(), 3000)
     del os.environ["BUGOS_TEST_VAST"], os.environ["BUGOS_TEST_SLAAP"]
     # 3. U038: 'Eerst afmaken', maar het mislukt (stick eruit): de foutmelding blijft staan, het venster blijft open
     os.environ["BUGOS_TEST_FOUT"] = "1"

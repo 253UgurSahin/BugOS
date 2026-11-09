@@ -510,7 +510,12 @@ def venster() -> int:
 
         def klaar_met_een(self, code: int, _status) -> None:
             if self.gestopt:
+                # Gestopt: zeg het, en de volgende keer begint gewoon opnieuw (ook als je het venster weer opende) (U241).
+                self.gestopt = False
                 self.wachtrij.clear()
+                self.melding.zet(t("Gestopt. Wat al gekopieerd was, blijft staan.",
+                                   "Stopped. What was already copied stays."), "info")
+                self.balk.hide()
                 self.stop(False)
                 return
             soort = uitslag(code, self.nu, getattr(self, "uitvoer", ""))
@@ -615,6 +620,7 @@ def venster() -> int:
                                    "One moment: the window closes by itself when it is done."), "bezig")
 
         def bezig(self, tekst: str) -> None:
+            self.gestopt = False
             self.deels = []
             self.melding.zet(tekst, "bezig")
             self.balk.setValue(0)
