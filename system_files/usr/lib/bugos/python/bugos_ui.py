@@ -226,8 +226,10 @@ QFrame#streep {{ background: {k['rand']}; min-width: 1px; max-width: 1px; border
 QScrollBar:vertical {{ background: transparent; width: 10px; margin: 4px 2px; }}
 QScrollBar::handle:vertical {{ background: {k['rand_sterk']}; border-radius: 3px; min-height: 40px; }}
 QScrollBar::handle:vertical:hover {{ background: {k['tekst3']}; }}
-QScrollBar::add-line, QScrollBar::sub-line, QScrollBar::add-page, QScrollBar::sub-page {{ height: 0; background: none; }}
-QScrollBar:horizontal {{ height: 0; }}
+QScrollBar::add-line, QScrollBar::sub-line, QScrollBar::add-page, QScrollBar::sub-page {{ height: 0; width: 0; background: none; }}
+QScrollBar:horizontal {{ background: transparent; height: 10px; margin: 2px 4px; }}
+QScrollBar::handle:horizontal {{ background: {k['rand_sterk']}; border-radius: 3px; min-width: 40px; }}
+QScrollBar::handle:horizontal:hover {{ background: {k['tekst3']}; }}
 
 QMenu {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 12px; padding: 6px; }}
 QMenu::item {{ padding: 9px 22px 9px 12px; border-radius: 8px; color: {k['tekst']}; }}

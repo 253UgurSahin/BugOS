@@ -488,6 +488,27 @@ klopt(_op_slot and _sch.isEnabled() and not _sch.isChecked(),
       "U126: lichte stand aanzetten lukt niet: de schakelaar was op slot en springt daarna terug naar uit")
 _up.deleteLater()
 
+# U133/U136: past een pagina niet (smal venster, grote letters), dan kun je opzij schuiven; de zijbalk groeit mee.
+import bugos_shell as _shell  # noqa: E402
+from PySide6.QtCore import Qt  # noqa: E402
+
+venster.resize(920, 600)
+venster.ga_naar("scherm")
+wacht()
+_pag = venster.paginas["scherm"]
+_hb = _pag.horizontalScrollBar()
+_past = _pag.widget().minimumSizeHint().width() <= _pag.viewport().width()
+klopt(_pag.horizontalScrollBarPolicy() != Qt.ScrollBarPolicy.ScrollBarAlwaysOff and (_past or _hb.maximum() > 0),
+      f"U133: Scherm op 920 breed: alles past, of je kunt opzij schuiven (max {_hb.maximum()})")
+_oud_s = _shell.bugos_ui.SCHAAL
+_shell.bugos_ui.SCHAAL = 1.2
+_v2 = _shell.Venster("x")
+_shell.bugos_ui.SCHAAL = _oud_s
+klopt(_v2.zij.width() == round(_shell.ZIJBALK_BREEDTE * 1.2) or _v2.zij.minimumWidth() == round(_shell.ZIJBALK_BREEDTE * 1.2),
+      "U136: met grote letters is de zijbalk breder (de namen passen)")
+_v2.deleteLater()
+venster.resize(1120, 760)
+
 # U010: wie geen beheerder is, verandert zijn eigen wachtwoord via passwd (PAM), in een nep-terminal;
 # geen wachtwoord op de opdrachtregel, en geen vraag om het wachtwoord van een beheerder.
 nep_pw = TMP / "nep-pw"

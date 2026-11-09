@@ -6,7 +6,7 @@ Apps halen dit uit bugos_ui (from bugos_ui import Venster, Pagina, Rij ...); dit
 from __future__ import annotations
 
 from PySide6.QtCore import QRect, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QAccessible, QColor, QIcon
+from PySide6.QtGui import QAccessible, QColor, QGuiApplication, QIcon
 from PySide6.QtWidgets import (
     QAbstractButton, QAccessibleWidget, QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QPushButton,
     QScrollArea, QStackedWidget, QVBoxLayout,
@@ -274,7 +274,8 @@ class Pagina(QScrollArea):
         super().__init__()
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setWidgetResizable(True)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Past een rij niet (smal venster, grote letters), dan kun je opzij schuiven: niets valt buiten bereik (U133).
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.viewport().setAutoFillBackground(False)
         buiten = QWidget()
         buiten.setObjectName("pagina")
@@ -337,6 +338,12 @@ class Venster(QWidget):
         super().__init__()
         self.setObjectName("venster")
         self.setWindowTitle(titel_tekst or naam)
+        # Nooit groter dan het scherm (bijv. 1920x1080 op 200%): anders valt de onderkant eraf (U133).
+        scherm = QGuiApplication.primaryScreen()
+        vrij = scherm.availableGeometry() if scherm else None
+        if vrij is not None and vrij.width() > 0:
+            minimum = (min(minimum[0], vrij.width()), min(minimum[1], vrij.height()))
+            maat = (min(maat[0], vrij.width()), min(maat[1], vrij.height()))
         self.resize(*maat)
         self.setMinimumSize(*minimum)
         hoofd = QHBoxLayout(self)
@@ -344,7 +351,7 @@ class Venster(QWidget):
         hoofd.setSpacing(0)
         self.zij = QWidget()
         self.zij.setObjectName("zijkant")
-        self.zij.setFixedWidth(ZIJBALK_BREEDTE)
+        self.zij.setFixedWidth(bugos_ui.px(ZIJBALK_BREEDTE))   # groeit mee met grote letters (U136)
         self.zij_lay = QVBoxLayout(self.zij)
         self.zij_lay.setContentsMargins(14, 22, 14, 14)
         self.zij_lay.setSpacing(12)
