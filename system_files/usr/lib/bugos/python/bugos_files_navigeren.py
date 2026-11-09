@@ -138,7 +138,8 @@ class Navigeren:
         self.in_prullenbak, self.in_computer = True, False
         self.bak_model.clear()
         for bestand, info, herkomst in prullenbak_inhoud():
-            it = QStandardItem(bestand.name)
+            # De echte naam (zoals Dolphin), niet die in de prullenbak ('Foto (2).jpg', of ingekort) (U086).
+            it = QStandardItem(herkomst.name if herkomst and herkomst.name else bestand.name)
             it.setData(str(bestand), PAD_ROL)
             it.setData(str(info), INFO_ROL)
             it.setData(str(herkomst or ""), HERKOMST_ROL)

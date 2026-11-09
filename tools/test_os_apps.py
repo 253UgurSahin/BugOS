@@ -802,6 +802,19 @@ _b2, _ = acties.naar_prullenbak(_bron)
 klopt(_a != _b2 and _a.read_text() == "1" and _b2.read_text() == "2" and _b2.suffix == ".png",
       "U076: twee keer dezelfde lange naam: allebei in de prullenbak, niets overschreven")
 
+# U086: de prullenbak in Bestanden toont de echte naam, niet de ingekorte naam in de prullenbak.
+_bron = _lang_map / ("d" * 250 + ".txt")
+_bron.write_text("x")
+acties.naar_prullenbak(_bron)
+_bv = b.Bestanden(THUIS) if hasattr(b, "Bestanden") else None
+if _bv is not None:
+    _bv.open_prullenbak()
+    _namen = [_bv.bak_model.item(i).text() for i in range(_bv.bak_model.rowCount())]
+    klopt(_bron.name in _namen, "U086: de prullenbak toont de echte (lange) naam")
+    _bv.close()
+else:
+    klopt(False, "U086: venster Bestanden niet gevonden")
+
 # ========================== U067: 'Grote letters' maakt ook de letters van de BugOS-apps groter ===
 from PySide6.QtGui import QFont  # noqa: E402
 
