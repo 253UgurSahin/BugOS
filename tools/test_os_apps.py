@@ -540,6 +540,15 @@ wacht(lambda: ww.proces.state() == ww.proces.ProcessState.NotRunning and ww.bezi
 klopt("beheerder" in ww.melding.tekst.text(), f"U059: geen toestemming: de Winkel zegt dat een beheerder nodig is ({ww.melding.tekst.text()[:60]})")
 del os.environ["BUGOS_TEST_FLATPAK"]
 ww.close()
+# U081: na je eerste app staat 'Mijn apps' meteen in de zijbalk (niet pas na opnieuw openen).
+_mijn = lambda: [i for i in range(ww.lijst.count()) if ww.lijst.item(i).data(winkel.Qt.ItemDataRole.UserRole) == "_mijn"]  # noqa: E731
+for _i in reversed(_mijn()):
+    ww.lijst.takeItem(_i)
+ww.bezig_met = "org.videolan.VLC"
+ww.klaar(0, None)
+ww.bezig_met = "org.videolan.VLC"
+ww.klaar(0, None)
+klopt(len(_mijn()) == 1, "U081: na de eerste app staat 'Mijn apps' er meteen (één keer)")
 
 # ================================== U016: een schermlezer hoort een naam bij schuifjes, regels en keuzekaarten ===
 from PySide6.QtGui import QAccessible  # noqa: E402

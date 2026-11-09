@@ -172,7 +172,7 @@ class Winkel(Venster):
         for c in self.cat["categorieen"]:
             self.lijst.voeg_toe(c["icoon"], c["nl" if TAAL == "nl" else "en"], c["id"])
         if self.installed:
-            self.lijst.voeg_toe("lijn:vink", t("Mijn apps", "My apps"), "_mijn")
+            self.mijn_apps_erbij()
         self.lijst.currentRowChanged.connect(lambda _: self.toon())
         self.onder_knop(t("Meer apps zoeken", "Search more apps"), "zoek", self.meer_apps,
                         tip=t("In de grote winkel (Discover), voor gevorderden", "In the big store (Discover), advanced"))
@@ -295,6 +295,11 @@ class Winkel(Venster):
         self.proces.setProcessEnvironment(omgeving)
         self.proces.start("flatpak", ["install", "-y", "flathub", app["id"]])
 
+    def mijn_apps_erbij(self) -> None:
+        """'Mijn apps' in de zijbalk, één keer (ook na je eerste app, zonder de Winkel opnieuw te openen) (U081)."""
+        if not any(self.lijst.item(i).data(Qt.ItemDataRole.UserRole) == "_mijn" for i in range(self.lijst.count())):
+            self.lijst.voeg_toe("lijn:vink", t("Mijn apps", "My apps"), "_mijn")
+
     def klaar(self, code: int, _status) -> None:
         uit = bytes(self.proces.readAll()).decode(errors="ignore")
         app_id = self.bezig_met
@@ -303,6 +308,7 @@ class Winkel(Venster):
         self.flatpaks = geinstalleerd() | ({app_id} if code == 0 else set())
         self.installed = self.flatpaks | set(self.systeem)
         if code == 0:
+            self.mijn_apps_erbij()
             self.melding.zet(t(f"✅ {naam} is geïnstalleerd. Je vindt het in het startmenu.",
                                f"✅ {naam} is installed. You can find it in the start menu."), "goed")
         elif any(w in uit.lower() for w in ("not authorized", "not allowed", "authentication", "authoriz")):
