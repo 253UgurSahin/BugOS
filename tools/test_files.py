@@ -496,6 +496,15 @@ def wacht_op(stappen, laatste=None):
 klopt(wacht_op([["true"], ["true"]], ["false"]) is True, "achtergrond: alles gelukt (de laatste stap mag mislukken)")
 klopt(wacht_op([["true"], ["false"], ["true"]]) is False, "achtergrond: stopt bij een stap die mislukt")
 klopt(wacht_op([["bestaat-niet-bugos"]]) is False, "achtergrond: een programma dat er niet is, geeft netjes 'mislukt'")
+# U141: naam wijzigen of repareren mislukt: de schijf gaat toch weer open (de laatste stap draait altijd).
+_teken = TMP / "weer-open"
+_uit: list = []
+venster.draai([["false"]], lambda ok, _u: _uit.append(ok), altijd=["touch", str(_teken)])
+_k = QElapsedTimer()
+_k.start()
+while not _uit and _k.elapsed() < 10000:
+    app.processEvents()
+klopt(_uit == [False] and _teken.exists(), "U141: mislukt het hernoemen of repareren, dan gaat de schijf toch weer open")
 
 venster.close()
 import shutil  # noqa: E402

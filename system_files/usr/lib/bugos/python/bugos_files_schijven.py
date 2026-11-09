@@ -102,7 +102,8 @@ class Schijven:
             actie("uitwerpen", t("Veilig verwijderen", "Safely remove"), lambda: self.uitwerpen(x.station), vrij_spel)
         return m
 
-    def beheer(self, x: Schijf, stappen: list[list[str]], bezig: str, gelukt: str, mislukt: str) -> None:
+    def beheer(self, x: Schijf, stappen: list[list[str]], bezig: str, gelukt: str, mislukt: str,
+               weer_open: bool = False) -> None:
         """Voer een beheer-klus uit op de achtergrond, met een melding voor en na."""
         if x.apparaat in self.bezig:
             return
@@ -120,7 +121,12 @@ class Schijven:
             self.vul_zijbalk()
             self.melding.toon(gelukt if ok else mislukt, "goed" if ok else "fout", seconden=10)
 
-        self.draai(stappen, klaar)
+        # Naam wijzigen en repareren: de laatste stap zet hem weer open. Ook als het mislukte, anders blijft de
+        # stick 'dicht' staan (U141).
+        if weer_open and stappen and stappen[-1][:2] == ["udisksctl", "mount"]:
+            self.draai(stappen[:-1], klaar, altijd=stappen[-1])
+        else:
+            self.draai(stappen, klaar)
 
     def hernoem_schijf(self, x: Schijf) -> None:
         maximum = MAX_NAAM.get(x.fs, 15)
@@ -135,7 +141,8 @@ class Schijven:
             return
         self.beheer(x, hernoem_stappen(x, naam), t(f"Naam wijzigen naar '{naam}'…", f"Renaming to '{naam}'…"),
                     t(f"De naam is nu '{naam}'.", f"The name is now '{naam}'."),
-                    t("Naam wijzigen lukte niet. Probeer het nog eens.", "Renaming did not work. Try again."))
+                    t("Naam wijzigen lukte niet. Probeer het nog eens.", "Renaming did not work. Try again."),
+                    weer_open=True)
 
     def repareer_schijf(self, x: Schijf) -> None:
         self.beheer(x, repareer_stappen(x),
@@ -143,8 +150,12 @@ class Schijven:
                       f"Checking and repairing '{x.naam}'… Do not unplug it."),
                     t(f"Klaar: '{x.naam}' is gecontroleerd en zo nodig gerepareerd.",
                       f"Done: '{x.naam}' was checked and repaired where needed."),
-                    t(f"Repareren lukte niet. Zet de bestanden van '{x.naam}' veilig en maak hem daarna leeg.",
-                      f"Repair did not work. Save the files from '{x.naam}' and erase it afterwards."))
+                    # Niet meteen 'maak hem leeg' zeggen: vaak kon het controleren hier alleen niet (U141).
+                    t(f"'{x.naam}' kon hier niet gecontroleerd worden. Je bestanden staan er nog. Doet hij raar? "
+                      "Zet je bestanden dan eerst veilig.",
+                      f"'{x.naam}' could not be checked here. Your files are still on it. Does it act strangely? "
+                      "Then save your files first."),
+                    weer_open=True)
 
     def leegmaak_schijf(self, x: Schijf) -> None:
         if not self.vraag_ja(t("Alles wissen?", "Erase everything?"),
@@ -194,7 +205,8 @@ class Schijven:
                     t("Klaarmaken lukte niet. Probeer het nog eens, of vraag hulp.",
                       "Setting up did not work. Try again, or ask for help."))
 
-    def draai(self, stappen: list[list[str]], klaar, laatste: list[str] | None = None) -> None:
+    def draai(self, stappen: list[list[str]], klaar, laatste: list[str] | None = None,
+              altijd: list[str] | None = None) -> None:
         """Voer opdrachten na elkaar uit, zonder dat het venster vastloopt (ook niet als KDE om een wachtwoord vraagt)."""
         rij = [list(x) for x in stappen]
         uitvoer: list[str] = []
@@ -224,9 +236,14 @@ class Schijven:
 
         def volgende(ok: bool = True) -> None:
             if not ok:
-                klaar(False, "".join(uitvoer))
+                if altijd:   # ook na een fout (bijv. de schijf weer openzetten)
+                    start(altijd, lambda _ok: klaar(False, "".join(uitvoer)))
+                else:
+                    klaar(False, "".join(uitvoer))
             elif rij:
                 start(rij.pop(0), volgende)
+            elif altijd:
+                start(altijd, lambda ok2: klaar(ok2, "".join(uitvoer)))
             elif laatste:
                 start(laatste, lambda _ok: klaar(True, "".join(uitvoer)))
             else:
