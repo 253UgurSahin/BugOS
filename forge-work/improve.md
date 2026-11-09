@@ -1083,6 +1083,34 @@ sensors, graphics cards (U396-U401). 10 fixed, each with a test that failed firs
 ### U401 [low-medium] On a low screen (1366x768 at 150%) Welcome, Backup and Switch had their buttons outside the window
   commit: 03b5c0c   test: tools/test_os_apps.py
 
+## Round 31 (2026-11-09)
+Two reviewers: the round-30 fixes (5 found plus 3 unsure: U404-U408), and a fresh sweep of "failure paths": no
+internet, a full disk, a cancelled password, a hanging command, a corrupt file (5 found plus 3 unsure: U409-U414).
+11 fixed, each with a test that failed first. Tests after: 20 test files passed (here).
+
+### U404 [medium-low] (from U394) Game mode markers lived in /dev/shm, which logout and restart wipe: the PC could stay on "Full power" again
+  commit: 6ecc6d7   test: tools/test_game_mode.sh (now /var/tmp/bugos-spel via tmpfiles.d; a lost marker comes back)
+### U405 [low] (from U399) Charging only over USB-C with a charge limit did not count as "on the charger"
+  commit: 65f3bda   test: tools/test_os_settings.py
+### U406 [low] (sibling of U400) Task Manager showed the first graphics card, not the busiest (an RTX next to a Ryzen iGPU never showed)
+  commit: 91d7430   test: tools/test_task_manager.py (a sleeping Nvidia card is not woken by nvidia-smi)
+### U407 [low] (from U397) Picking a size in Settings ran kscreen-doctor on the window thread (up to 8 s)
+  commit: 73152f4   test: tools/test_os_settings.py
+### U408 [low] (from U396) The Windows tool missed Quadro T500/T550/T2000, and Intel Arc next to an old GTX picked the Nvidia version
+  commit: d9db343   test: tools/test_windows_start.sh
+### U409 [medium] A backup to a read-only stick said "a few files could not be copied" and "Last backup: today", with nothing copied
+  commit: 61edec0   test: tools/test_backup.py
+### U410 [medium-low] When the computer was full, saving the backup date crashed the slot and the window hung on "Do not unplug"
+  commit: 61edec0   test: tools/test_backup.py
+### U411 [low-medium] A full computer was reported as "Are you online?" in the Store, Update now and Developer mode
+  commit: 9c9b7f6   test: tools/test_os_apps.py, tools/test_os_settings.py, tools/test_os_system.sh
+### U412 [low] Cancelling the password for the update choice in Welcome was silent; updates stayed automatic
+  commit: c917586   test: tools/test_os_apps.py
+### U413 [low] The update choice and "log in without a password" said "done" when writing failed; a half-written choice read as "auto"
+  commit: 1f254f2   test: tools/test_os_system.sh
+### U414 [low] A favourites file that was not a list (null) emptied the whole start menu
+  commit: fafb95c   test: tools/test_start_data.py
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -1155,6 +1183,14 @@ sensors, graphics cards (U396-U401). 10 fixed, each with a test that failed firs
   another account) changes it. Cosmetic.
 - U402 (round 30, S-M): one-finger touch scrolling (QScroller) in the BugOS apps; on a touch screen you now scroll
   with the scroll bar or two fingers. Needs a real touch screen to tune.
+- U415 (round 31, unsure): groot_genoeg uses QScreen size × devicePixelRatio; if Qt on Wayland ever reports a rounded
+  ratio, too-large sizes are offered again. Check on a real PC at 125%.
+- U416 (round 31, unsure): the 1024×700 minimum hides 175%/200% on every 1080p screen; low-vision users may want
+  those (Big letters and the magnifier remain). A design choice for you.
+- U417 (round 31, unsure): a second app start that waits more than 2 s gives up and opens its own window.
+- U418 (round 31, unsure): rpm-ostree upgrade via pkexec has no timeout; a stalled download keeps "Updating…" until
+  rpm-ostree itself gives up.
+- U419 (round 31, unsure): Task Manager says "force closed" even for a process stuck in the kernel (D state).
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
