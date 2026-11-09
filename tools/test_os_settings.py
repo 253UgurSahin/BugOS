@@ -103,6 +103,11 @@ def _nm(c):
     return 0, ""
 
 
+# U366: een netwerknaam met ':' (nmcli schrijft 'Cafe\:Gast') wordt ook gevonden.
+opdr2, _ = vang(bi.vergeet_netwerk, "Cafe:Gast", antwoord=lambda c: (0, "aaaa:802-11-wireless\n") if (c[-1] == "show" and "UUID,TYPE" in c)
+                 else ((0, "Cafe\\:Gast\n") if "802-11-wireless.ssid" in c else (0, "")))
+klopt(("nmcli", "connection", "delete", "uuid", "aaaa") in opdr2,
+      f"U366: 'Vergeten' vindt ook een netwerk met een ':' in de naam ({opdr2[-1:]})")
 opdr, _ = vang(bi.vergeet_netwerk, "Thuis", antwoord=_nm)
 _weg = [c[-1] for c in opdr if c[:3] == ("nmcli", "connection", "delete")]
 klopt(_weg == ["1234-abcd", "5678-ef01"],

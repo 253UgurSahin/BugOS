@@ -1103,6 +1103,6 @@ files passed (here).
   needs ntfsprogs (not in packages.txt); bugos-developer has no lock against two runs at once (Welcome no longer does it).
 - "Log in without a password" still asks through pkexec (org.bugos.login.policy, auth_admin_keep): a family member
   who is not an administrator cannot switch it; that is on purpose (it changes how the whole PC logs in).
-- The 117 texts built with f-strings cannot be translated to other languages yet (docs/TRANSLATING.md explains how).
+- The 131 texts built with f-strings cannot be translated to other languages yet (docs/TRANSLATING.md explains how).
 - KDE's Settings quick tiles in bugos-settings get their screen-reader names from the label next to them (U016's
   fallback); explicit names there would be cleaner.

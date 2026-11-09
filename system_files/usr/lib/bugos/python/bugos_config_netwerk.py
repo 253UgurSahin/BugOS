@@ -139,7 +139,9 @@ def vergeet_netwerk(naam: str) -> bool:
     for regel in uit.splitlines():
         delen = splits_nmcli(regel)
         if len(delen) >= 2 and delen[1] == "802-11-wireless":
-            ssid = _c.draai("nmcli", "-g", "802-11-wireless.ssid", "connection", "show", "uuid", delen[0])[1].strip()
+            # -g ontsnapt ':' en '\' (zoals -t): terug naar de echte naam, en spaties aan de rand horen erbij (U366).
+            ruw = _c.draai("nmcli", "-g", "802-11-wireless.ssid", "connection", "show", "uuid", delen[0])[1]
+            ssid = (splits_nmcli(ruw.rstrip("\n")) or [""])[0]
             if ssid == naam:
                 weg.append(delen[0])
     if not weg:

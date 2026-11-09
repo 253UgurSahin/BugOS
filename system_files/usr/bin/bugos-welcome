@@ -99,10 +99,10 @@ class Hallo(Pagina):
         tips = Groep()
         for icoon, tint, kop_t, sub_t in (
             ("lijn:vink", "neutraal", t("Kan niet stuk", "Can't break"),
-             t("Gaat er iets mis na een update? Dan kies je gewoon de vorige versie (in Instellingen, of houd bij "
-               "het opstarten Shift ingedrukt of druk op Esc).",
-               "Something wrong after an update? Just pick the previous version (in Settings, or hold Shift or "
-               "press Esc while the computer starts).")),   # het opstartmenu is normaal verborgen (U360)
+             t("Gaat er iets mis na een update? Dan ga je terug naar de vorige versie in Instellingen. Start de "
+               "computer niet meer goed? Houd bij het opstarten Shift ingedrukt (of druk op Esc) en kies de vorige.",
+               "Something wrong after an update? Go back to the previous version in Settings. If the computer does "
+               "not start properly, hold Shift (or press Esc) while it starts and pick the previous one.")),   # het opstartmenu is normaal verborgen (U360)
             ("lijn:ster", "neutraal", t("Alles in de BugOS Winkel", "Everything in the BugOS Store"),
              t("Apps installeer je met één klik, zoals op je telefoon.", "Install apps with one click, like on your phone.")),
             ("lijn:slot", "neutraal", t("Geen account, geen reclame", "No account, no ads"),
@@ -278,11 +278,11 @@ class Updates(Pagina):
     def __init__(self):
         super().__init__(t("Updates", "Updates"),
                          t("Updates houden je computer veilig. Ze worden pas actief na opnieuw opstarten, "
-                           "en gaat er ooit iets mis, dan kies je gewoon de vorige versie: in Instellingen, of houd "
-                           "bij het opstarten Shift ingedrukt (of druk op Esc) voor het opstartmenu.",
+                           "en gaat er ooit iets mis, dan ga je terug naar de vorige versie in Instellingen (of, als "
+                           "hij niet meer goed start: houd bij het opstarten Shift ingedrukt of druk op Esc).",
                            "Updates keep your computer safe. They only take effect after a restart, "
-                           "and if something ever goes wrong, just pick the previous version: in Settings, or hold "
-                           "Shift (or press Esc) while the computer starts to see the startup menu."))   # (U360)
+                           "and if something ever goes wrong, go back to the previous version in Settings (or, if it "
+                           "does not start properly: hold Shift or press Esc while it starts)."))   # (U360, U367)
         self.groep = QButtonGroup(self)
         self.auto = self._optie("lijn:vink", "neutraal", t("Vanzelf, stil op de achtergrond", "Automatically, quietly"),
                                 t("BugOS houdt zichzelf bij. Jij merkt er niks van.",
