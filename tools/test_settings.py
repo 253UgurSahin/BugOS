@@ -89,7 +89,8 @@ bi.VOORBEELD = False
 bat = bi.batterij()
 klopt(bat is not None and bat.procent == 64 and bat.laadt, "energie: batterij 64%, wordt opgeladen")
 bi.VOORBEELD = True
-klopt(len(bi.bugos_achtergronden()) == 2, "uiterlijk: de twee achtergronden van BugOS")
+klopt(len(bi.bugos_achtergronden()) == 3 and Path(bi.bugos_achtergronden()[0][1]).is_dir(),
+      "uiterlijk: de achtergronden van BugOS (eerst het pakket dat licht/donker volgt, U131)")
 
 # 6. voorbeeldstand: aanzetten en uitzetten werkt zonder iets aan de computer te doen
 bi.zet_wifi(False)
