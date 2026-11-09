@@ -33,7 +33,7 @@ from bugos_settings_onderdelen import (  # noqa: E402,F401  (KiesDialoog en Wach
 from bugos_settings_scherm import EnergiePagina, GeluidPagina, SchermPagina, UiterlijkPagina  # noqa: E402
 from bugos_settings_systeem import OverPagina, UpdatesPagina  # noqa: E402
 from bugos_settings_zien import MuisPagina, ZienPagina  # noqa: E402
-from PySide6.QtCore import QSize, QTimer  # noqa: E402
+from PySide6.QtCore import QEvent, QSize, QTimer  # noqa: E402
 from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout  # noqa: E402
 
 
@@ -187,6 +187,23 @@ class Instellingen(Venster):
         if getattr(self, "sluit_na_update", False):
             # Je opent Instellingen weer: het gaat na de update niet meer vanzelf dicht (U221).
             self.paginas["updates"].melding.toon(t("De update is nog bezig.", "The update is still busy."), seconden=0)
+
+    # Pagina's waar je een KDE-venster voor opent (koppelen, printer toevoegen) of een app voor installeert:
+    # kom je terug in Instellingen, dan opnieuw kijken (U227).
+    VERVERS_BIJ_TERUGKOMEN = ("bluetooth", "printers", "programmas")
+
+    def changeEvent(self, e) -> None:  # noqa: N802
+        super().changeEvent(e)
+        if e.type() != QEvent.Type.ActivationChange:
+            return
+        if not self.isActiveWindow():
+            self._was_weg = True   # een ander venster kreeg de aandacht
+            return
+        terug, self._was_weg = getattr(self, "_was_weg", False), False
+        if terug and self.huidige() in self.VERVERS_BIJ_TERUGKOMEN:
+            ververs = getattr(self.paginas.get(self.huidige()), "ververs", None)
+            if callable(ververs):
+                ververs()
 
     def closeEvent(self, e) -> None:  # noqa: N802
         # Nooit midden in een update of het teruggaan stoppen (dan stopt rpm-ostree ook): wacht tot het

@@ -767,6 +767,24 @@ klopt(len(teksten) == 3 and all(0 <= x.find(en) < x.find(nl) for x, (en, nl) in 
 
 
 venster.close()
+# U227: na een KDE-venster (koptelefoon koppelen, printer toevoegen) terug in Instellingen: opnieuw kijken.
+from PySide6.QtCore import QEvent as _QE  # noqa: E402
+
+venster.ga_naar("printers")
+wacht()
+_pr = venster.paginas["printers"]
+_tel = []
+_pr.ververs = lambda: _tel.append(1)
+_actief = [False]
+venster.isActiveWindow = lambda: _actief[0]
+app.sendEvent(venster, _QE(_QE.Type.ActivationChange))   # weg: het KDE-venster heeft de aandacht
+_actief[0] = True
+app.sendEvent(venster, _QE(_QE.Type.ActivationChange))   # terug
+app.sendEvent(venster, _QE(_QE.Type.ActivationChange))   # nog eens actief, zonder weg te zijn geweest
+klopt(_tel == [1], f"U227: terug in Instellingen na een KDE-venster: de printers worden opnieuw bekeken ({_tel})")
+del _pr.ververs
+del venster.isActiveWindow
+
 shutil.rmtree(TMP, ignore_errors=True)
 print()
 print("Alles goed." if not fouten else f"{fouten} fout(en).")
