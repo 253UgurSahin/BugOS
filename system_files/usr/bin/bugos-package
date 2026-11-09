@@ -21,7 +21,12 @@ if [ "${1:-}" = --bijwerken ]; then
     if [ -n "${XDG_RUNTIME_DIR:-}" ] && exec 9>"$XDG_RUNTIME_DIR/bugos-doosjes.slot"; then
         # Hoogstens een uur wachten; en het slot (9) niet doorgeven aan podman/conmon, die kunnen blijven draaien en
         # dan bleef het slot de hele sessie dicht (zoals U270) (U487).
-        flock -w 3600 9 2>/dev/null || true
+        if [ "${2:-}" = --nu ]; then
+            # Met de hand ('Nu updaten'): loopt de dagelijkse al, dan die laten doen, niet een uur wachten (U494).
+            flock -n 9 2>/dev/null || exit 0
+        else
+            flock -w 3600 9 2>/dev/null || true
+        fi
     fi
     lijst="$(distrobox list 2>/dev/null 9>&-)"
     mislukt=0

@@ -52,12 +52,15 @@ KEUZE="$(notify-send --app-name=BugOS --icon=system-software-update --hint=strin
     "$(t "Wil je nu updaten? Je kunt gewoon doorwerken." "Do you want to update now? You can keep working.")" 2>/dev/null)"
 
 if [ "$KEUZE" = nu ]; then
+    # Zeggen dat het loopt: anders zie je na het wachtwoord lang niets (U494).
+    melding "$(t "Bezig met updaten…" "Updating…")" "$(t "Je kunt gewoon doorwerken. Je krijgt een melding als het klaar is." \
+        "You can keep working. You get a notification when it is done.")"
     pkexec /usr/bin/bugos-updates nu
     uitkomst=$?
     if [ "$uitkomst" -eq 0 ]; then
         # Net als 'Nu updaten' in Instellingen ook je eigen apps en je .rpm/.deb-programma's (als jezelf) (U488).
         timeout 30m flatpak update --user --noninteractive --assumeyes >/dev/null 2>&1
-        [ -x /usr/bin/bugos-package ] && timeout 60m /usr/bin/bugos-package --bijwerken >/dev/null 2>&1
+        [ -x /usr/bin/bugos-package ] && timeout 60m /usr/bin/bugos-package --bijwerken --nu >/dev/null 2>&1
         melding "$(t "Update klaar ✅" "Update done ✅")" \
             "$(t "Start de computer opnieuw op wanneer het jou uitkomt." "Restart the computer whenever it suits you.")"
     elif [ "$uitkomst" -eq 126 ] || [ "$uitkomst" -eq 127 ]; then

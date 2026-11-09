@@ -91,5 +91,16 @@ rm -f "$TMP/bijgewerkt"
 HOME="$TMP/leeg" PATH="$TMP/bin:$PATH" bash "$TMP/bugos-package" --bijwerken >/dev/null 2>&1; c2=$?
 klopt '[ "$c1" -ne 0 ] && [ "$c2" -eq 0 ] && [ ! -e "$TMP/bijgewerkt" ] && grep -q "Metered" "$SDU/bugos-update-doosjes.service" && grep -qx "Restart=on-failure" "$SDU/bugos-update-doosjes.service" && grep -qx "StartLimitBurst=4" "$SDU/bugos-update-doosjes.service" && grep -q "flock -w 3600 9" "$TMP/bugos-package" && grep -q "distrobox upgrade \"\$doos\" >/dev/null 2>&1 9>&-" "$TMP/bugos-package"' \
     "U473: doosjes bijwerken: niet via een hotspot, later opnieuw als het mislukte, niets zonder doosjes ($c1, $c2)"
+# U494: met de hand ('Nu updaten') en de dagelijkse loopt al: niet wachten, gewoon klaar.
+mkdir -p "$TMP/run494"
+nep distrobox 'case "$1" in list) echo " bugos-ubuntu ";; upgrade) echo "$2" >>"'"$TMP"'/bijgewerkt";; esac; exit 0'
+rm -f "$TMP/bijgewerkt"
+flock "$TMP/run494/bugos-doosjes.slot" sleep 3 &
+sleep 0.5
+begin=$SECONDS
+HOME="$TMP/thuis" XDG_RUNTIME_DIR="$TMP/run494" PATH="$TMP/bin:$PATH" bash "$TMP/bugos-package" --bijwerken --nu >/dev/null 2>&1; c494=$?
+duur=$((SECONDS - begin))
+wait
+klopt '[ "$c494" -eq 0 ] && [ "$duur" -lt 2 ] && [ ! -e "$TMP/bijgewerkt" ]' "U494: 'Nu updaten' wacht niet op een dagelijkse doosjes-update die al loopt ($c494, ${duur}s)"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

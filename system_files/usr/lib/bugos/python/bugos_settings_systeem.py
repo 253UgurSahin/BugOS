@@ -316,7 +316,7 @@ class UpdatesPagina(Blad):
         p.errorOccurred.connect(lambda soort: einde() if soort == QProcess.ProcessError.FailedToStart else None)
         # Met een tijdslimiet: hangt het (internet weg), dan blijft Instellingen niet voor altijd 'bezig' (U487).
         p.start("bash", ["-c", "timeout 30m flatpak update --user --noninteractive --assumeyes; "
-                         "[ -x /usr/bin/bugos-package ] && timeout 60m /usr/bin/bugos-package --bijwerken; exit 0"])
+                         "[ -x /usr/bin/bugos-package ] && timeout 60m /usr/bin/bugos-package --bijwerken --nu; exit 0"])
 
     def klaar_met(self, wat: str, code: int, uit: str) -> None:
         if wat in ("auto", "hand"):
