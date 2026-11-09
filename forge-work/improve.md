@@ -1111,6 +1111,25 @@ internet, a full disk, a cancelled password, a hanging command, a corrupt file (
 ### U414 [low] A favourites file that was not a list (null) emptied the whole start menu
   commit: fafb95c   test: tools/test_start_data.py
 
+## Round 32 (2026-11-09)
+Two reviewers: the round-31 fixes (5 found plus 5 unsure: U420-U424), and a fresh sweep of "image and system
+integration": build scripts, units, tmpfiles, polkit, desktop files, icons, permissions, paths (1 found plus 5
+unsure: U425-U430). 6 fixed, each with a test that failed first. Tests after: 20 test files passed (here).
+Severity is now low across the board; the image sweep found no medium or high issue.
+
+### U420 [medium-low] (from U404) A game-mode marker of a deleted account, or one whose settings were wiped, kept the PC on "Full power" for good
+  commit: 820e0bb   test: tools/test_game_mode.sh
+### U421 [low] (from U406) On an Intel + Nvidia (Optimus) laptop, Task Manager woke the sleeping Nvidia card every refresh
+  commit: 4741f4b   test: tools/test_task_manager.py
+### U422 [low] (from U412/U413) Welcome said "permission was not given" when saving failed; Settings dropped bugos-updates' own reason
+  commit: 401d380   test: tools/test_os_apps.py, tools/test_os_settings.py
+### U423 [low] (from U413) "Back" ignored a failed save of "update yourself", so the newer version could come back
+  commit: 401d380   test: tools/test_os_system.sh
+### U424 [low] (sibling of U411) Installing a .rpm/.deb with a full computer said "Are you online?"
+  commit: 1a4f02f   test: tools/test_package.sh (also: Settings remembers a size you just picked)
+### U425 [low] The distributor-logo icon was installed in a folder icon lookup never searches (Breeze's logo showed instead)
+  commit: 286a4fa   test: tools/test_os_system.sh (plus a hicolor icon-cache refresh)
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -1191,6 +1210,14 @@ internet, a full disk, a cancelled password, a hanging command, a corrupt file (
 - U418 (round 31, unsure): rpm-ostree upgrade via pkexec has no timeout; a stalled download keeps "Updating…" until
   rpm-ostree itself gives up.
 - U419 (round 31, unsure): Task Manager says "force closed" even for a process stuck in the kernel (D state).
+- U426 (round 32, unsure): Wine prefixes may not run their update after a Wine upgrade (ostree gives wine.inf a fixed
+  mtime). Check on a real PC after an image with a newer Wine; fix would be `wineboot -u` when `wine --version` changes.
+- U427 (round 32, unsure): style.sh overwrites /usr/lib/plasmalogin/defaults.conf; check on a built image whether
+  plasmalogin ships that file with other keys, and that it reads it.
+- U428 (round 32, hardening): copying system_files makes /usr/share/polkit-1/rules.d 0755 root:root (Fedora: 0700
+  polkitd); it works, `rpm -V polkit` reports it.
+- U429 (round 32, unsure): BugOS app icons live only in the BugOS icon theme; switching to another theme loses them.
+- U430 (round 32, unsure): a UCSI USB-C port might report online=1 for a dock that does not charge (U405).
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
