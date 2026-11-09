@@ -88,6 +88,14 @@ klopt(bt.geheugen() == (16000000 * 1024, 8000000 * 1024), "geheugen: totaal en b
 klopt(bt.schijf_tellers() == (2000 * 512, 4000 * 512, 120), "schijf: alleen hele schijven (geen sda1, geen loop)")
 klopt(bt.netwerk_tellers() == (5000, 3000), "internet: zonder lo en docker")
 klopt(bt.temperatuur() is None and bt.videokaart() is None, "temperatuur en videokaart: niet aanwezig, geen fout")
+# U400: acpitz (moederbord) als hwmon0 en de echte processor als hwmon1: de processor telt.
+schrijf(TMP / "sys" / "class" / "hwmon" / "hwmon0" / "name", "acpitz\n")
+schrijf(TMP / "sys" / "class" / "hwmon" / "hwmon0" / "temp1_input", "27800\n")
+schrijf(TMP / "sys" / "class" / "hwmon" / "hwmon1" / "name", "coretemp\n")
+schrijf(TMP / "sys" / "class" / "hwmon" / "hwmon1" / "temp1_input", "61000\n")
+klopt(bt.temperatuur() == 61.0, f"U400: de processorsensor gaat voor acpitz ({bt.temperatuur()})")
+import shutil as _sh
+_sh.rmtree(TMP / "sys" / "class" / "hwmon" / "hwmon1")
 schrijf(TMP / "sys" / "class" / "hwmon" / "hwmon0" / "name", "k10temp\n")
 schrijf(TMP / "sys" / "class" / "hwmon" / "hwmon0" / "temp1_input", "52000\n")
 schrijf(TMP / "sys" / "class" / "drm" / "card0" / "device" / "gpu_busy_percent", "37\n")

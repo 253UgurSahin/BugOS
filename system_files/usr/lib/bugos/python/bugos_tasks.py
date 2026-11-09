@@ -139,12 +139,17 @@ def netwerk_tellers() -> tuple[int, int]:
 
 def temperatuur() -> float | None:
     """De temperatuur van de processor in graden, als de computer die doorgeeft."""
+    # De echte processorsensor eerst; acpitz (de moederbord-sensor) alleen als er niets anders is. De volgorde van
+    # hwmon0, hwmon1 ... verschilt per opstart, dus niet de eerste nemen die we tegenkomen (U400).
+    voorkeur = ("k10temp", "zenpower", "coretemp", "cpu_thermal", "acpitz")
+    gevonden: dict[str, float] = {}
     for map_ in sorted((sys_map() / "class" / "hwmon").glob("hwmon*")):
-        if lees(map_ / "name").strip() in ("k10temp", "coretemp", "zenpower", "cpu_thermal", "acpitz"):
+        naam = lees(map_ / "name").strip()
+        if naam in voorkeur and naam not in gevonden:
             waarde = lees(map_ / "temp1_input").strip()
             if waarde.lstrip("-").isdigit():
-                return int(waarde) / 1000
-    return None
+                gevonden[naam] = int(waarde) / 1000
+    return next((gevonden[n] for n in voorkeur if n in gevonden), None)
 
 
 def videokaart() -> float | None:
