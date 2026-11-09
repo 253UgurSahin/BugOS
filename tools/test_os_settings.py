@@ -72,13 +72,15 @@ def kde_sleutels(opdrachten) -> dict:
 # U001: scherm uit 'Nooit' moet ook echt nooit zijn (TurnOffDisplayWhenIdle=false), en niet meteen dimmen.
 opdr, _ = vang(bi.zet_scherm_uit_na, 0)
 s = kde_sleutels(opdr)
-klopt(all(s.get((f"{p}/Display", "TurnOffDisplayWhenIdle")) == "false" for p in bi.PROFIELGROEPEN)
-      and all(s.get((f"{p}/Display", "DimDisplayWhenIdle")) == "false" for p in bi.PROFIELGROEPEN),
+klopt(s.get(("AC/Display", "TurnOffDisplayWhenIdle")) == "false" and s.get(("AC/Display", "DimDisplayWhenIdle")) == "false",
       "U001: scherm uit 'nooit' zet uitzetten en dimmen echt uit")
+# U454: alleen de stand die nu geldt (hier: aan de lader); de accutijden van KDE blijven.
+klopt(not any(k[0].startswith(("Battery/", "LowBattery/")) for k in s),
+      f"U454: scherm uit kiezen aan de lader laat de accutijden staan ({sorted(k for k in s if not k[0].startswith('AC/'))})")
 opdr, _ = vang(bi.zet_scherm_uit_na, 600)
 s = kde_sleutels(opdr)
 klopt(s.get(("AC/Display", "TurnOffDisplayWhenIdle")) == "true" and s.get(("AC/Display", "DimDisplayWhenIdle")) == "true"
-      and s.get(("AC/Display", "TurnOffDisplayIdleTimeoutSec")) == "600",
+      and s.get(("AC/Display", "TurnOffDisplayIdleTimeoutSec")) == "--delete",   # KDE's eigen 10 min: weer de standaard (U454)
       "U001: scherm uit na 10 minuten zet het weer aan")
 _, na = vang(bi.scherm_uit_na, antwoord=lambda c: (0, "false" if "TurnOffDisplayWhenIdle" in c else "30"))
 klopt(na == 0, "U001: staat uitzetten uit, dan leest Instellingen 'nooit'")

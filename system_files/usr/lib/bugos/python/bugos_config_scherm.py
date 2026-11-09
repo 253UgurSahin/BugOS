@@ -395,7 +395,13 @@ def _energie_getal(groep: str, sleutel: str, standaard: int) -> int:
 
 
 def _zet_energie(groep: str, sleutel: str, waarde: int) -> None:
-    for profiel in PROFIELGROEPEN:
+    """Alleen voor de stand die nu geldt (aan de lader of op de accu), zoals de pagina hem toont. Eerst schreven we alle
+    drie, en dan waren KDE's kortere accutijden voor altijd weg, en sliep een bijna lege laptop niet meer (U454).
+    Is de keuze KDE's eigen tijd, dan de sleutel weghalen: dan geldt KDE's standaard weer."""
+    profiel = _profiel()
+    if _KDE_STANDAARD.get((profiel, sleutel)) == waarde:
+        _c.kde_schrijf("powerdevilrc", [profiel, groep], sleutel, None)
+    else:
         _c.kde_schrijf("powerdevilrc", [profiel, groep], sleutel, str(waarde))
 
 
@@ -421,9 +427,9 @@ def zet_scherm_uit_na(seconden: int) -> None:
     # Een tijd van 0 is voor KDE niet 'nooit': dan zet hij het scherm toch uit (na 30 s) en dimt hij meteen.
     # Daarom voor 'nooit' het uitzetten en dimmen zelf uitzetten, en anders weer aan.
     aan = "true" if seconden else "false"
-    for profiel in PROFIELGROEPEN:
-        _c.kde_schrijf("powerdevilrc", [profiel, "Display"], "TurnOffDisplayWhenIdle", aan)
-        _c.kde_schrijf("powerdevilrc", [profiel, "Display"], "DimDisplayWhenIdle", aan)
+    profiel = _profiel()   # alleen de stand die nu geldt (U454)
+    _c.kde_schrijf("powerdevilrc", [profiel, "Display"], "TurnOffDisplayWhenIdle", aan)
+    _c.kde_schrijf("powerdevilrc", [profiel, "Display"], "DimDisplayWhenIdle", aan)
     if seconden:
         _zet_energie("Display", "TurnOffDisplayIdleTimeoutSec", seconden)
         _zet_energie("Display", "DimDisplayIdleTimeoutSec", max(60, seconden - 60))

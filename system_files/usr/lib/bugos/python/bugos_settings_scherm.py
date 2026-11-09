@@ -196,8 +196,9 @@ class EnergiePagina(Blad):
         self.scherm_uit = Keuzes([(300, t("5 min", "5 min")), (600, t("10 min", "10 min")), (1800, t("30 min", "30 min")),
                                   (0, t("Nooit", "Never"))])
         self.scherm_uit.gekozen.connect(lambda s: op_achtergrond(self, lambda: bi.zet_scherm_uit_na(s), lambda _u: None))
-        g.voeg(Rij("computer", t("Scherm uit als je niets doet", "Screen off when you do nothing"),
-                   t("Even met de muis bewegen en het is terug", "Move the mouse and it is back"), self.scherm_uit))
+        self.scherm_rij = Rij("computer", t("Scherm uit als je niets doet", "Screen off when you do nothing"),
+                              t("Even met de muis bewegen en het is terug", "Move the mouse and it is back"), self.scherm_uit)
+        g.voeg(self.scherm_rij)
         self.slaap = Keuzes([(600, t("10 min", "10 min")), (900, t("15 min", "15 min")), (1800, t("30 min", "30 min")), (3600, t("1 uur", "1 hour")),
                              (0, t("Nooit", "Never"))])
         self.slaap.gekozen.connect(lambda s: op_achtergrond(self, lambda: bi.zet_slaap_na(s), lambda _u: None))
@@ -227,6 +228,13 @@ class EnergiePagina(Blad):
         self.aanuit.zet(aanuit if aanuit in (bi.KNOP_VRAGEN, bi.KNOP_SLAPEN, bi.KNOP_UIT) else bi.KNOP_VRAGEN)
         self.deksel.zet(deksel if deksel in (bi.KNOP_SLAPEN, bi.KNOP_SCHERM_UIT, bi.KNOP_NIETS) else bi.KNOP_SLAPEN)
         self.deksel_rij.setVisible(bat is not None)
+        # Een laptop heeft aparte tijden aan de lader en op de accu; we veranderen alleen die van nu (U454).
+        uitleg = t("Even met de muis bewegen en het is terug", "Move the mouse and it is back")
+        if bat is not None:
+            op_accu = not (bat.laadt or bat.vol or bat.aan_lader)
+            uitleg += " · " + (t("deze tijden gelden nu op de accu", "these times apply on battery now") if op_accu else
+                               t("deze tijden gelden nu aan de lader", "these times apply on the charger now"))
+        self.scherm_rij.zet_uitleg(uitleg)
         self.batterij_kaart.setVisible(bat is not None)
         if bat is not None:
             staat = t("vol", "full") if bat.vol else t("wordt opgeladen", "charging") if bat.laadt else \
