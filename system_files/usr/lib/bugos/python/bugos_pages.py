@@ -90,7 +90,7 @@ class SchijfKiezer(QWidget):
         if items:
             if huidig in self.kaarten:
                 self.kaarten[huidig].setChecked(True)
-            elif (huidig is None and not getattr(self, "_kwijt", False)) or len(self.kaarten) == 1:
+            elif huidig is None and not getattr(self, "_kwijt", False):   # ook niet als er nog maar één over is (U534)
                 next(iter(self.kaarten.values())).setChecked(True)
             else:
                 self._kwijt = True   # ook bij de volgende verversing niet vanzelf een andere kiezen

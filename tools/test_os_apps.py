@@ -676,6 +676,16 @@ def lezer(w) -> tuple[str, str, str]:
 
 
 kiezer = bugos_ui.SchijfKiezer("Steek een USB-schijf in…")
+# U533/U534: kies je A, en gaat A eruit terwijl B er nog in zit, dan wordt B niet stil gekozen.
+_k534 = bugos_ui.SchijfKiezer("Steek een USB-schijf in…")
+_k534.zet([("/a", "A", ""), ("/b", "B", "")])
+_k534.kaarten["/a"].click()
+_k534.zet([("/b", "B", "")])
+_na534 = _k534.gekozen()
+_k534.zet([("/b", "B", "2 GB vrij")])
+klopt(_na534 is None and _k534.gekozen() is None, f"U534: de gekozen schijf eruit: niet stil een andere kiezen ({_na534})")
+_k534.kaarten["/b"].click()
+klopt(_k534.gekozen() == "/b", "U534: zelf weer kiezen kan gewoon")
 kiezer.zet([("/run/media/u/STICK", "STICK", "29 GB vrij van 29 GB")])
 klopt(lezer(next(iter(kiezer.kaarten.values())))[1:] == ("STICK", "29 GB vrij van 29 GB"),
       f"U016: de schijfkaart in Back-up/Overstap heeft de naam van de stick: {lezer(next(iter(kiezer.kaarten.values())))}")
