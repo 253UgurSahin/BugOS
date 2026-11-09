@@ -85,7 +85,8 @@ aan() {
     # De FPS-teller (MANGOHUD=1) krijgen games pas mee na opnieuw inloggen: dat zeggen we eerlijk,
     # behalve als deze sessie hem al heeft (dan was game-modus aan bij het inloggen, of staat
     # "FPS-teller meteen klaar" aan: dan zetten we hem hier gewoon zichtbaar).
-    [ -f "$FPS_METEEN" ] && mangohud_bestand zichtbaar
+    # (Ook als je de keuze net uitzette: deze sessie leest ons bestand nog tot je opnieuw inlogt.)
+    { [ -f "$FPS_METEEN" ] || fps_meteen_actief; } && mangohud_bestand zichtbaar
     if [ "${MANGOHUD:-}" = 1 ]; then
         melding "$(t "Game-modus staat aan" "Game mode is on")" \
             "$(t "Volle kracht, meldingen stil, FPS-teller in games." "Full power, notifications muted, FPS counter in games.")"
@@ -113,7 +114,7 @@ uit() {
         niet_storen_uit
     fi
     rm -f "$ENVFILE" "$MARKER" "$STOREN_MARKER"
-    if [ -f "$FPS_METEEN" ]; then
+    if [ -f "$FPS_METEEN" ] || fps_meteen_actief; then
         # MangoHud blijft klaarstaan, alleen verborgen: meteen weg, ook in een game die al draait.
         mangohud_bestand verborgen
         melding "$(t "Game-modus staat uit" "Game mode is off")" ""
