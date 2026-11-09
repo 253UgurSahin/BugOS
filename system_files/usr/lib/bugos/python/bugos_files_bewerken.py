@@ -104,14 +104,15 @@ class Bewerken:
     def _start_klus(self, bronnen: list[Path], doelmap: Path, knip: bool, klembord: bool = True) -> None:
         """Kopiëren of verplaatsen op de achtergrond, met een melding per stap (klembord: het kwam van Plakken)."""
         self.klus = Klus(bronnen, doelmap, knip)
+        klus = self.klus
+        # Met een knop 'Stoppen': wat al klaar is blijft, wat half was wordt weggehaald (U104).
         self.klus.voortgang.connect(lambda i, n: self.melding.toon(
             t(f"Bezig met {'verplaatsen' if knip else 'kopiëren'}: {i + 1} van {n}…", f"{'Moving' if knip else 'Copying'}: {i + 1} of {n}…"),
-            seconden=0))
+            knop=t("Stoppen", "Stop"), actie=klus.stop, seconden=0))
         self.klus.wegschrijven.connect(lambda: self.melding.toon(
             t("Bezig met wegschrijven… Haal de stick er nog niet uit.", "Writing to the stick… Do not unplug it yet."),
             seconden=0))
-        klus = self.klus
-        self.klus.klaar.connect(lambda gelukt, fout: self._klus_klaar(gelukt, fout, knip, klus.achter, klembord))
+        self.klus.klaar.connect(lambda gelukt, fout: self._klus_klaar(gelukt, fout, knip, klus.achter, klembord, klus))
         self.klus.start()
 
     # ---------------------------------------------- slepen en loslaten
@@ -140,20 +141,34 @@ class Bewerken:
         return True
 
     def _klus_klaar(self, gelukt: int, fout: str, knip: bool, achter: list | None = None,
-                    klembord: bool = True) -> None:
-        if fout:
+                    klembord: bool = True, klus=None) -> None:
+        gestopt = bool(klus and klus.gestopt)
+        hernoemd = klus.hernoemd if klus else 0
+        if gestopt:
+            self.melding.toon(t(f"Gestopt. {gelukt} {'ding' if gelukt == 1 else 'dingen'} {'verplaatst' if knip else 'gekopieerd'}; "
+                                "wat half was, is weggehaald.",
+                                f"Stopped. {gelukt} {'item' if gelukt == 1 else 'items'} {'moved' if knip else 'copied'}; "
+                                "what was half done has been removed."), "let_op", seconden=0)
+        elif fout:
             # Wilde je al sluiten (en liep je weg), dan blijft de fout staan tot je hem ziet.
             self.melding.toon(t(f"Niet alles lukte: {fout}", f"Not everything worked: {fout}"), "fout",
                               seconden=0 if self.sluit_na_klus else 12)
         elif achter:  # bijv. een naam met ':' op een USB-stick: de rest staat er wel
             self.melding.toon(achter_uitleg(achter, knip), "let_op", seconden=0)
         else:
+            extra = t(f" {hernoemd} {'bestond' if hernoemd == 1 else 'bestonden'} hier al en {'kreeg' if hernoemd == 1 else 'kregen'} "
+                      "(2) achter de naam.",
+                      f" {hernoemd} already existed here and got (2) after the name.") if hernoemd else ""   # U106
             self.melding.toon(t(f"Klaar: {gelukt} {'ding' if gelukt == 1 else 'dingen'} {'verplaatst' if knip else 'gekopieerd'}.",
-                                f"Done: {gelukt} {'item' if gelukt == 1 else 'items'} {'moved' if knip else 'copied'}."), "goed")
-        if knip and klembord:
-            QApplication.clipboard().clear()
+                                f"Done: {gelukt} {'item' if gelukt == 1 else 'items'} {'moved' if knip else 'copied'}.") + extra,
+                              "let_op" if hernoemd else "goed", seconden=12 if hernoemd else 4)
+        if knip and klembord and not gestopt:
+            # Alleen ons eigen knippen wissen: kopieerde je intussen iets anders, dan blijft dat staan (U107).
+            kb = QApplication.clipboard()
+            if kb is not None and _ONS_KLEMBORD and (kb.ownsClipboard() or kb.mimeData() is _ONS_KLEMBORD[0]):
+                kb.clear()
         if self.sluit_na_klus:
-            if fout or achter:
+            if fout or achter or gestopt:
                 self.sluit_na_klus = False  # niet alles lukte: dat moet je kunnen lezen, dus het venster blijft open
             else:
                 QTimer.singleShot(0, self.close)

@@ -291,8 +291,45 @@ def schrijf_weg(pad: Path) -> None:
         os.close(fd)
 
 
+class Gestopt(BaseException):  # noqa: N818  geen fout: de gebruiker koos 'Stoppen'
+    """De gebruiker stopte het kopiëren (geen OSError: copytree mag hem niet opvangen)."""
+
+
+def _met_stop(stop):
+    def kopieer(bron, doel, **kw):
+        if stop():
+            raise Gestopt()
+        return shutil.copy2(bron, doel, **kw)
+    return kopieer
+
+
+def op_losse_schijf(pad: Path) -> bool:
+    """Staat dit op een USB-stick of andere losse schijf (in /run/media of /media)?"""
+    try:
+        echt = str(pad.resolve())
+    except OSError:
+        echt = str(pad)
+    return echt.startswith(("/run/media/", "/media/")) or bool(os.environ.get("BUGOS_LOSSE_SCHIJF")) and \
+        echt.startswith(os.environ["BUGOS_LOSSE_SCHIJF"])
+
+
+def ruim_oude_halve_op(doelmap: Path, uren: int = 24) -> None:
+    """Een halve kopie die bleef staan (stroom eraf, stick eruit tijdens het kopiëren): na een dag weghalen (U104)."""
+    import time
+    try:
+        kandidaten = list(doelmap.glob(".*.bugos-bezig"))
+    except OSError:
+        return
+    for p in kandidaten:
+        try:
+            if time.time() - p.lstat().st_mtime > uren * 3600:
+                ruim_op(p)
+        except OSError:
+            pass
+
+
 def kopieer_een(bron: Path, doelmap: Path, verplaats: bool, achter: list | None = None,
-                bij_wegschrijven=None) -> Path | None:
+                bij_wegschrijven=None, stop=None) -> Path | None:
     """Kopieer of verplaats één ding naar 'doelmap'. Nooit overschrijven; nooit een map in zichzelf.
 
     Kan de schijf een paar bestanden niet bewaren (een naam met ':' op een stick), dan komt de rest wel
@@ -328,7 +365,8 @@ def kopieer_een(bron: Path, doelmap: Path, verplaats: bool, achter: list | None 
             try:
                 shutil.copytree(bron, tijdelijk, symlinks=True,
                                 ignore=(lambda map_, namen: {n for n in namen if Path(map_) / n in overslaan})
-                                if overslaan else None)
+                                if overslaan else None,
+                                **({"copy_function": _met_stop(stop)} if stop else {}))
             except shutil.Error as e:
                 _bekijk_fouten(list(e.args[0]) if e.args and isinstance(e.args[0], list) else [None],
                                bron, tijdelijk, achter)
@@ -405,20 +443,44 @@ class Klus(QThread):
         super().__init__()
         self.bronnen, self.doelmap, self.verplaats = bronnen, doelmap, verplaats
         self.achter: list[tuple[Path, str, str]] = []  # wat de schijf niet kon bewaren: (pad, naam, reden)
+        self.gestopt = False   # de gebruiker koos 'Stoppen' (U104)
+        self.hernoemd = 0      # zoveel kregen een andere naam, omdat die naam er al was ("Foto (2).jpg") (U106)
+
+    def stop(self) -> None:
+        self.gestopt = True
 
     def run(self) -> None:
-        gelukt, fout = 0, ""
+        gelukt, fout, mislukt = 0, "", 0
+        n = len(self.bronnen)
+        ruim_oude_halve_op(self.doelmap)
         for i, bron in enumerate(self.bronnen):
-            self.voortgang.emit(i, len(self.bronnen))
+            if self.gestopt:
+                break
+            self.voortgang.emit(i, n)
             try:
-                if kopieer_een(bron, self.doelmap, self.verplaats, self.achter, self.wegschrijven.emit) is not None:
+                doel = kopieer_een(bron, self.doelmap, self.verplaats, self.achter, self.wegschrijven.emit,
+                                   stop=lambda: self.gestopt)
+                if doel is not None:
                     gelukt += 1
+                    if doel.name != bron.name:
+                        self.hernoemd += 1
+            except Gestopt:
+                break
             except ValueError as e:
-                fout = str(e)
+                fout, mislukt = str(e), mislukt + 1
             except (OSError, shutil.Error) as e:
+                mislukt += 1
                 fout = e.strerror if isinstance(e, KopieFout) else \
                     leesbare_fout(e.errno if isinstance(e, OSError) else None, bron.name)
-        if gelukt and not self.verplaats and not all(zelfde_schijf(x, self.doelmap) for x in self.bronnen):
+                if isinstance(e, OSError) and e.errno == errno.ENOSPC:
+                    break   # vol: de rest past ook niet, niet alles nog proberen (U103)
+        if fout and n > 1:
+            # Niet alleen de laatste fout: hoeveel er wel en niet mee zijn, zodat je weet wat er mist (U103).
+            klaar = t("verplaatst", "moved") if self.verplaats else t("gekopieerd", "copied")
+            fout = t(f"{gelukt} van {n} {klaar}, {n - gelukt} niet. {fout}", f"{gelukt} of {n} {klaar}, {n - gelukt} not. {fout}")
+        # Alleen naar een stick of andere losse schijf: pas 'Klaar' als het er echt op staat (U105).
+        if gelukt and not self.verplaats and op_losse_schijf(self.doelmap) and \
+                not all(zelfde_schijf(x, self.doelmap) for x in self.bronnen):
             # Gekopieerd naar een andere schijf (een stick): pas 'Klaar' als het er echt op staat.
             self.wegschrijven.emit()
             try:

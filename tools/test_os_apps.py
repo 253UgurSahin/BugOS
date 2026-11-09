@@ -730,6 +730,18 @@ app.processEvents()
 klopt(vb.isVisible() and not vb.sluit_na_klus and "stick" in vb.melding.tekst.text(),
       "U038: Bestanden: mislukt het kopiëren nadat je het venster sloot, dan blijft het open met de foutmelding")
 klopt(not vb.melding.klok.isActive(), "U047: Bestanden: die foutmelding blijft staan (verdwijnt niet na 12 seconden)")
+# U106/U107: de melding noemt de (2)-namen, en knippen-plakken wist niet wat je intussen anders kopieerde.
+vb.sluit_na_klus = False
+
+
+class _NepKlus:
+    gestopt, hernoemd, achter = False, 3, []
+
+
+app.clipboard().setText("https://voorbeeld.nl")
+vb._klus_klaar(5, "", True, [], True, _NepKlus())
+klopt("(2)" in vb.melding.tekst.text() and app.clipboard().text() == "https://voorbeeld.nl",
+      f"U106/U107: melding over (2)-namen ({vb.melding.tekst.text()[:60]}), het klembord van een ander blijft staan")
 
 
 def laat_los(waar, pad: Path, shift: bool = False) -> bool:
@@ -828,6 +840,81 @@ _maak = _ps[_ps.index("$maak.Add_Click"):]
 klopt("Test-SwitchBestanden $stick.Number" in _maak and _maak.index("Test-SwitchBestanden") < _maak.index("Vraag ("),
       "U095: stap 4 wist geen stick waar je bestanden uit stap 2 op staan (eerst kijken, dan pas vragen)")
 klopt("/XF desktop.ini Thumbs.db" in _ps, "U096: desktop.ini en Thumbs.db gaan niet mee naar BugOS")
+
+# ========================== U103-U107: kopiëren in Bestanden: vol, stoppen, de stick-melding, (2)-namen, klembord ===
+import errno as _errno  # noqa: E402
+
+_src = TMP / "camera"
+_src.mkdir()
+for _i in range(5):
+    (_src / f"IMG_{_i}.JPG").write_text("x")
+_naar = TMP / "foto-doel"
+_naar.mkdir()
+_echt_een = acties._kopieer_bestand
+_pogingen: list = []
+
+
+def _vol_na_twee(bron, doel):
+    _pogingen.append(bron)
+    if len(_pogingen) > 2:
+        raise OSError(_errno.ENOSPC, "No space left on device")
+    return _echt_een(bron, doel)
+
+
+acties._kopieer_bestand = _vol_na_twee
+_k = b.Klus(sorted(_src.iterdir()), _naar, False)
+_u: list = []
+_k.klaar.connect(lambda g, f: _u.append((g, f)))
+_k.run()
+acties._kopieer_bestand = _echt_een
+klopt(_u and _u[0][0] == 2 and "2 van 5" in _u[0][1] and len(_pogingen) == 3,
+      f"U103: schijf vol: zegt hoeveel er wel en niet mee zijn, en probeert de rest niet meer ({_u}, {len(_pogingen)} pogingen)")
+# U104: stoppen midden in een map: niets half achtergebleven; en oude halve kopieën worden na een dag opgeruimd.
+_map = TMP / "grote-map"
+_map.mkdir()
+for _i in range(5):
+    (_map / f"f{_i}.txt").write_text("x")
+_teller = []
+try:
+    acties.kopieer_een(_map, _naar, False, [], stop=lambda: (_teller.append(1), len(_teller) > 2)[1])
+    _gestopt = False
+except acties.Gestopt:
+    _gestopt = True
+klopt(_gestopt and not list(_naar.glob(".*bugos-bezig")) and not (_naar / "grote-map").exists(),
+      "U104: stoppen tijdens het kopiëren: niets half achtergebleven")
+_oud = _naar / ".oud.bugos-bezig"
+_oud.mkdir()
+_nieuw = _naar / ".nieuw.bugos-bezig"
+_nieuw.mkdir()
+os.utime(_oud, (1, 1))
+acties.ruim_oude_halve_op(_naar)
+klopt(not _oud.exists() and _nieuw.exists(), "U104: een oude halve kopie (stroom eraf) wordt opgeruimd, een lopende niet")
+_nieuw.rmdir()
+# U105: van een stick naar de computer kopiëren zegt niet 'Haal de stick er nog niet uit'.
+_ws: list = []
+_k = b.Klus([_src / "IMG_0.JPG"], TMP / "thuis-doel", False)
+(TMP / "thuis-doel").mkdir()
+_k.wegschrijven.connect(lambda: _ws.append(1))
+_echt_zelfde = acties.zelfde_schijf
+acties.zelfde_schijf = lambda a, b_: False   # doe alsof de stick een andere schijf is dan de computer
+_k.run()
+acties.zelfde_schijf = _echt_zelfde
+klopt(not _ws, "U105: kopiëren naar de computer (niet naar een stick): geen 'Haal de stick er nog niet uit'")
+os.environ["BUGOS_LOSSE_SCHIJF"] = str(TMP / "thuis-doel")   # nu is dit wel een stick
+acties.zelfde_schijf = lambda a, b_: False
+_k = b.Klus([_src / "IMG_1.JPG"], TMP / "thuis-doel", False)
+_k.wegschrijven.connect(lambda: _ws.append(1))
+_k.run()
+acties.zelfde_schijf = _echt_zelfde
+del os.environ["BUGOS_LOSSE_SCHIJF"]
+klopt(_ws == [1], "U105: kopiëren naar een stick: wel eerst wegschrijven ('Haal de stick er nog niet uit')")
+# U106: dezelfde foto's nog een keer: zeggen dat ze (2) achter de naam kregen.
+(TMP / "tweede-keer").mkdir()
+_k = b.Klus([_src / "IMG_0.JPG", _src / "IMG_1.JPG"], TMP / "tweede-keer", False)
+_k.run()
+_k2 = b.Klus([_src / "IMG_0.JPG", _src / "IMG_1.JPG"], TMP / "tweede-keer", False)
+_k2.run()
+klopt(_k.hernoemd == 0 and _k2.hernoemd == 2, f"U106: de tweede keer kregen 2 bestanden (2) achter de naam ({_k2.hernoemd})")
 
 # ========================== U067: 'Grote letters' maakt ook de letters van de BugOS-apps groter ===
 from PySide6.QtGui import QFont  # noqa: E402
