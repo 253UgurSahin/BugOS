@@ -252,7 +252,11 @@ def uitslag(code: int, cmd: list[str], uitvoer: str = "") -> str:
         return "vol"
     if code in GOED:
         return "goed"
-    if not Path(cmd[-2]).exists():
+    try:
+        weg = not Path(cmd[-2]).exists()
+    except OSError:   # een stick die eruit is, kan ook een leesfout geven
+        weg = True
+    if weg:
         return "weg"
     return "deels" if code in DEELS else "fout"
 
