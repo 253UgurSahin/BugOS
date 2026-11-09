@@ -196,7 +196,13 @@ def lees_aanwijzer(sysnaam: str, eigenschappen: dict) -> Aanwijzer | None:
         return None
     kan = {naam for naam, sleutel in (("aan", "supportsDisableEvents"), ("linkshandig", "supportsLeftHanded"),
                                       ("natuurlijk", "supportsNaturalScroll"), ("snelheid", "supportsPointerAcceleration"),
-                                      ("tikken", "supportsTapToClick")) if w(sleutel, False)}
+                                      ) if w(sleutel, False)}
+    # KWin heeft geen 'supportsTapToClick': tikken kan als het touchpad vingers telt (tapFingerCount > 0) (U153).
+    try:
+        if int(w("tapFingerCount", 0) or 0) > 0:
+            kan.add("tikken")
+    except (TypeError, ValueError):
+        pass
     versnelling = w("pointerAcceleration", 0.0) or 0.0
     return Aanwijzer(sysnaam, str(w("name", sysnaam)), bool(w("touchpad", False)), bool(w("enabled", True)),
                      bool(w("leftHanded", False)), bool(w("naturalScroll", False)),

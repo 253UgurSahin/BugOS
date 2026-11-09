@@ -116,8 +116,10 @@ klopt(muis is not None and muis.naam == "Logitech Muis" and muis.linkshandig and
       and muis.kan == {"linkshandig", "natuurlijk", "snelheid"}, "muis: naam, linkshandig, snelheid 75%, wat hij kan")
 klopt(bi.lees_aanwijzer("event1", {"pointer": {"type": "b", "data": False}, "keyboard": {"type": "b", "data": True}})
       is None, "muis: een toetsenbord is geen muis")
+# Met de echte namen van KWin: tikken kan als tapFingerCount > 0 (er bestaat geen supportsTapToClick) (U153).
 pad = bi.lees_aanwijzer("event7", {"name": "Touchpad", "pointer": True, "touchpad": True, "tapToClick": True,
-                                   "supportsTapToClick": True, "supportsDisableEvents": True, "enabled": False})
+                                   "tapFingerCount": {"type": "i", "data": 3}, "supportsDisableEvents": True,
+                                   "enabled": False})
 klopt(pad is not None and pad.touchpad and pad.tikken and not pad.aan and pad.kan == {"tikken", "aan"},
       "muis: ook als busctl de waarden zonder 'type' en 'data' geeft")
 tijd = bi.lees_timedatectl("Timezone=Europe/Amsterdam\nLocalRTC=no\nCanNTP=yes\nNTP=yes\nNTPSynchronized=yes\n")
