@@ -440,8 +440,13 @@ def venster() -> int:
 
         def volgende(self) -> None:
             if not self.wachtrij:
+                self.stap_nr = 0
                 self.klaar()
                 return
+            # Eén balk voor alle mappen samen (niet zes keer van 0 tot 100%) (U152).
+            if not getattr(self, "stap_nr", 0):
+                self.stappen_totaal = len(self.wachtrij)
+            self.stap_nr = getattr(self, "stap_nr", 0) + 1
             cmd = self.nu = self.wachtrij.pop(0)
             self.uitvoer = ""
             if cmd[0] == "sync":
@@ -454,7 +459,9 @@ def venster() -> int:
             self.uitvoer = (self.uitvoer + tekst)[-8000:]   # voor 'schijf vol' (U079)
             for stuk in tekst.replace("\r", "\n").split():
                 if stuk.endswith("%") and stuk[:-1].isdigit():
-                    self.balk.setValue(int(stuk[:-1]))
+                    totaal = max(getattr(self, "stappen_totaal", 1), 1)
+                    gedaan = max(getattr(self, "stap_nr", 1) - 1, 0)
+                    self.balk.setValue(int((gedaan + int(stuk[:-1]) / 100) / totaal * 100))
 
         def klaar_met_een(self, code: int, _status) -> None:
             if self.gestopt:
@@ -487,7 +494,12 @@ def venster() -> int:
                 if self.stand["klus"] == "maak":
                     onthoud(self.stand["schijf"])
                     self.wanneer.setText(laatste_backup())
-                self.melding.zet(DEELS_UITLEG.format(mappen=", ".join(self.deels)), "let_op")
+                # Terugzetten naar je computer: de redenen voor een stick (: ? *, 4 GB, hoofdletters) gelden dan niet (U150).
+                self.melding.zet(DEELS_UITLEG.format(mappen=", ".join(self.deels)) if self.stand["klus"] == "maak" else
+                                 t(f"Een paar bestanden uit {', '.join(self.deels)} konden niet terug (bijv. omdat je "
+                                   "daar niet mag schrijven). De rest staat er weer.",
+                                   f"A few files from {', '.join(self.deels)} could not be restored (for example "
+                                   "because you may not write there). Everything else is back."), "let_op")
                 self.sluit_na = False  # niet alles kon mee: dat moet je kunnen lezen, ook na 'Eerst afmaken'
                 self.stop(True)
                 return
@@ -502,6 +514,7 @@ def venster() -> int:
             self.stop(True)
 
         def stop(self, gelukt: bool) -> None:
+            self.stap_nr = 0
             self.balk.setValue(100 if gelukt else self.balk.value())
             self.kiezer.setEnabled(True)
             self.knoppen()

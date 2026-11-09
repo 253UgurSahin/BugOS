@@ -148,7 +148,7 @@ def stappen(bron: Path) -> list[tuple[str, list[str]]]:
         if (bron / win).is_dir():
             doel = gebruikersmap(xdg, win)
             # --ignore-existing: wat al op BugOS staat, wordt nooit overschreven.
-            lijst.append((t(f"{win} terugzetten...", f"Restoring {win}..."),
+            lijst.append((t(f"{mapnaam(win)} terugzetten...", f"Restoring {mapnaam(win)}..."),
                           ["rsync", "-rt", "--ignore-existing", "--modify-window=2", "--info=progress2",
                            "--no-inc-recursive", f"{bron / win}/", f"{doel}/"]))
     return lijst
@@ -221,7 +221,19 @@ def uitslag(code: int, cmd: list[str], uitvoer: str = "") -> str:
     return "deels" if code in DEELS else "fout"
 
 
+# De Windows-mapnamen in je eigen taal, voor de meldingen (U150).
+MAP_NAAM = {"Documents": ("Documenten", "Documents"), "Pictures": ("Afbeeldingen", "Pictures"),
+            "Music": ("Muziek", "Music"), "Videos": ("Video's", "Videos"), "Desktop": ("Bureaublad", "Desktop"),
+            "Downloads": ("Downloads", "Downloads")}
+
+
+def mapnaam(win: str) -> str:
+    nl, en = MAP_NAAM.get(win, (win, win))
+    return t(nl, en)
+
+
 def deels_uitleg(mappen: list[str]) -> str:
+    mappen = [mapnaam(m) for m in mappen]
     return t(f"Een paar bestanden uit {', '.join(mappen)} konden niet mee. De rest staat er wel.",
              f"A few files from {', '.join(mappen)} could not be copied. Everything else is there.")
 

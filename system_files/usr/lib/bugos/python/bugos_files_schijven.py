@@ -174,7 +174,8 @@ class Schijven:
             self._zijbalk_sleutels = None
             self.vul_zijbalk()
             return
-        naam = x.naam if len(x.naam) <= MAX_NAAM["exfat"] and "(" not in x.naam else t("USB-stick", "USB stick")
+        naam = x.naam if len(x.naam) <= MAX_NAAM["exfat"] and "(" not in x.naam else \
+            (t("SD-kaart", "SD card") if x.soort == "kaart" else t("USB-stick", "USB stick"))   # (U151)
         self.beheer(x, leegmaak_stappen(x, naam),
                     t(f"'{x.naam}' leegmaken… Haal hem er niet uit.", f"Erasing '{x.naam}'… Do not unplug it."),
                     t(f"Klaar: '{naam}' is leeg.", f"Done: '{naam}' is empty."),

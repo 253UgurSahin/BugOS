@@ -438,6 +438,16 @@ WIN = stick_map("windows-stick")
 (WIN / "BugOS-Switch" / "bugos-switch.json").write_text('{"computer": "PC"}')
 (WIN / "BugOS-Switch" / "Documents" / "cv.txt").write_text("cv")
 
+# U150/U152: Overstap noemt de mappen in je eigen taal; de balk van Back-up loopt één keer van 0 tot 100.
+klopt(bo.mapnaam("Pictures") in ("Afbeeldingen", "Pictures") and bo.deels_uitleg(["Pictures"]).count("Pictures") == 0
+      or bugos_ui.TAAL != "nl", f"U150: Overstap zegt 'Afbeeldingen', niet 'Pictures' ({bo.deels_uitleg(['Pictures'])})")
+w = open_venster(bb)
+w.stap_nr, w.stappen_totaal, w.uitvoer = 2, 3, ""
+w.proces.readAllStandardOutput = lambda: b"50%"
+w.lees()
+klopt(w.balk.value() == 50, f"U152: Back-up: map 2 van 3 op 50% is 50% van het geheel ({w.balk.value()})")
+w.close()
+
 
 def draait(w) -> bool:
     return w.proces.state() != w.proces.ProcessState.NotRunning
