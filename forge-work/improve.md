@@ -642,6 +642,44 @@ Python building blocks (4). Two were found twice. 15 fixed, each with a test tha
   commit: ecf799a   test: tools/test_os_apps.py
 ### U196 [low] (open, see For you) Switching to signed updates (bugos-ondertekend) removes the previous version
 
+## Round 15 (2026-11-09)
+Three reviewers: the round-14 fixes (5 found: U198-U202), a top-to-bottom sweep of every QML file (4: U203-U206),
+and of the app programs themselves (7: U207-U213). 16 found; all fixed, each with a test that failed first.
+Tests after: 20 test files passed (here).
+
+### U198 [high] (from U195) Installing a .rpm/.deb said "Done" when the install had failed
+  commit: d485274   test: tools/test_package.sh
+### U199 [medium] (from U191) Closing Help during a check left it running invisibly until logout
+  commit: d485274   test: tools/test_os_apps.py (static)
+### U200 [medium] (from U183) A stick you closed yourself was mounted again (size differs open/closed; an empty lsblk wiped the list)
+  commit: d485274   test: tools/test_files.py
+### U201 [low] (from U197) Saved previews were readable by other users; writers shared one temporary file name
+  commit: d485274   test: tools/test_os_apps.py
+### U202 [low] (from U187) The update check could hang forever on skopeo
+  commit: d485274   test: tools/test_os_apps.py (static)
+### U203 [medium] Clicking Start (or the quick-menu button) again closed the menu and opened it straight away
+  commit: b98d9c6   test: tools/test_menus.py
+### U204 [low] After "All apps" or "Back" with the keyboard, the focus was on a hidden button
+  commit: b98d9c6   test: tools/test_menus.py
+### U205 [low] Typing in the start menu only searched when the search field had focus
+  commit: b98d9c6   test: tools/test_menus.py
+### U206 [low] The quick menu said "Wifi" in English
+  commit: b98d9c6   test: tools/test_menus.py
+### U207 [medium] Closing Files during "Set up", "Erase", "Rename" or "Repair" of a drive stopped the job halfway
+  commit: 4e6c4a3   test: tools/test_files.py
+### U208 [low] A second start of an app opened a second window (two "Update now", two installs at once)
+  commit: c5dc16b   test: tools/test_os_apps.py
+### U209 [low] (from U175) The Store still said "Rekenmachine" in English while installing and searching
+  commit: 6e099b4   test: tools/test_os_apps.py
+### U210 [low] Names from outside (Wi-Fi networks, files) could show as HTML; "&" in a folder name became a shortcut
+  commit: 6e099b4   test: tools/test_os_apps.py
+### U211 [low] Backup stayed on "Checking whether everything fits" forever when its folder could not be made
+  commit: 6e099b4   test: tools/test_backup.py
+### U212 [low] Closing Welcome (X) or Settings with the password prompt open threw the update choice away
+  commit: 6e099b4   test: tools/test_os_apps.py
+### U213 [low] Welcome said "Language: Nederlands" on a system with LANG=C (English)
+  commit: 6e099b4
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
