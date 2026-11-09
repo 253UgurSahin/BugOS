@@ -792,6 +792,31 @@ developer tools (1 medium, 4 low, 3 unsure: U259-U264). 10 fixed, each with a te
 ### U264 [low] No FPS counter in games from the Store (Flatpak): MangoHud for Flatpak was not installed
   commit: 5fbec4e   test: tools/test_os_system.sh
 
+## Round 20 (2026-11-09)
+Two reviewers: the round-19 fixes (2 found plus 4 unsure: U269, U270), and a fresh sweep of languages and
+accessibility (6 found plus 3 unsure: U268, U271-U276). 8 fixed, each with a test that failed first; U276 documented;
+3 skipped (below). Tests after: 20 test files passed (here).
+
+### U268 [low-medium] Search missed the Turkish İ and accented names (also NFD names from a Mac): start menu, Files, Store, Settings
+  commit: 1e6c9f1   test: tools/test_start_data.py, tools/test_menus.py, tools/test_os_apps.py
+### U269 [medium] (from U256) Emptying a trash with many items read the whole thumbnail cache once per item (10 s instead of 0.06 s)
+  commit: cc40c0a   test: tools/test_files.py
+### U270 [medium] (from U262) The developer-mode lock was passed on to the running dev box, so "off" could wait forever
+  commit: 6776304   test: tools/test_os_system.sh
+### U271 [low-medium] No visible keyboard focus on choice buttons, wallpapers, the Files path and the storage legend
+  commit: 75206dd   test: tools/test_os_apps.py
+### U272 [low-medium] The Files path bar squeezed names until unreadable ("ocumen"); now elided with the full name as tip
+  commit: dab1e23   test: tools/test_os_apps.py
+### U273 [low] Contrast below 4.5:1 on dark main buttons, selected sidebar items, dark placeholders; the off-switch track was 1.5:1
+  commit: 66656db   test: tools/test_os_apps.py. Also regenerated the design files: icons, Kvantum and colour schemes
+  still had the colours from before U137, so the CI step "Ontwerptaal is bijgewerkt" would have failed.
+### U274 [low] Screen readers heard the drive rows in Files > This computer as "panel", not as buttons
+  commit: 63f2b9c   test: tools/test_os_apps.py
+### U275 [low] An Arabic Qt translation flipped the (Dutch/English) BugOS windows to right-to-left
+  commit: 2fbf06e   test: tools/test_os_apps.py
+### U276 [low, latent] The menus, taskbar and .desktop names cannot use the translation dictionaries yet
+  commit: e5c547c   documented in docs/TRANSLATING.md (making them translatable is M)
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -813,6 +838,12 @@ developer tools (1 medium, 4 low, 3 unsure: U259-U264). 10 fixed, each with a te
   KDE runtime branch falls back to the stock style (cosmetic).
 - U267 (round 19, unsure): with "FPS counter ready at once", MANGOHUD_CONFIGFILE points into ~/.config/bugos, which
   the Steam Flatpak cannot read; MangoHud may then show its default overlay.
+- U277 (round 20, unsure): the start-menu date uses KDE's language (a German user sees "Montag 9 November" next to
+  "Good morning"); arguably by design.
+- U278 (round 20, unsure): Task Manager, its Startup list and the Notifications app list sort by code point (Ä, Ş and
+  Cyrillic names in odd places). Cosmetic.
+- U279 (round 20, unsure): game mode from the quick menu can briefly flip back to "off" while the script still runs
+  (the same accepted pattern as dark mode, U128).
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
