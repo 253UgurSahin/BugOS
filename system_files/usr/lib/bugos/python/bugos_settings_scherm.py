@@ -247,6 +247,7 @@ class UiterlijkPagina(Blad):
             k.setCheckable(True)
             k.setCursor(Qt.CursorShape.PointingHandCursor)
             k.setToolTip(naam)
+            k.setAccessibleName(naam)   # een schermlezer hoort welke achtergrond het is
             beeld = QPixmap(pad)
             if not beeld.isNull():
                 k.setIcon(beeld.scaled(QSize(320, 180), Qt.AspectRatioMode.KeepAspectRatioByExpanding,

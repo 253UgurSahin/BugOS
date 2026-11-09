@@ -103,6 +103,13 @@ klopt(any(c[0] == "bluetoothctl" for c in opdr), "U061: met bluetooth-hardware w
 del os.environ["BUGOS_SYS"]
 
 
+# U063: de namen van de achtergronden staan ook in het Engels (en niet altijd "Stip (licht)").
+import bugos_config_scherm as _bcs  # noqa: E402
+_bron = (ROOT / "system_files" / "usr" / "lib" / "bugos" / "python" / "bugos_config_scherm.py").read_text(encoding="utf-8")
+klopt('t("Stip (licht)", "Dot (light)")' in _bron and 't("Stip (donker)", "Dot (dark)")' in _bron,
+      "U063: de achtergrondnamen worden vertaald (Dot (light) / Dot (dark))")
+
+
 # U002: inloggen zonder wachtwoord op Fedora 44 (Plasma Login); SDDM alleen als Plasma Login er niet is.
 def login_hulpje(wortel: Path) -> Path:
     """bugos-login, maar met /etc en /usr/lib/plasmalogin in een tijdelijke map, en 'id -u' zegt 0 (beheerder)."""

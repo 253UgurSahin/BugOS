@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import bugos_config as _c
+from bugos_base import t
 
 
 # ================================================================== geluid ===
@@ -246,7 +247,7 @@ def bugos_achtergronden() -> list[tuple[str, str]]:
     """[(naam, pad)] van de achtergronden van BugOS zelf."""
     basis = Path(os.environ.get("BUGOS_ACHTERGRONDEN", "/usr/share/wallpapers/bugos/contents"))
     lijst = []
-    for naam, map_ in (("Stip (licht)", "images"), ("Stip (donker)", "images_dark")):
+    for naam, map_ in ((t("Stip (licht)", "Dot (light)"), "images"), (t("Stip (donker)", "Dot (dark)"), "images_dark")):
         beelden = sorted((basis / map_).glob("*.jpg"))
         if beelden:
             lijst.append((naam, str(beelden[0])))
