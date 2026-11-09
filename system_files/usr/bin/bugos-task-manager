@@ -422,6 +422,13 @@ class Taakbeheer(Venster):
             except OSError:
                 pass
 
+    def tweede_start(self, args: list[str]) -> None:
+        """Naar de gevraagde pagina, ook als Taakbeheer al open was (U222)."""
+        if "--prestaties" in args:
+            self.ga_naar("prestaties")
+        elif "--opstarten" in args:
+            self.ga_naar("opstarten")
+
     def closeEvent(self, e) -> None:  # noqa: N802
         self.stop_meten()
         for draad in list(self.draden):  # een lopend klusje eerst laten afmaken (hooguit een paar seconden)
@@ -432,10 +439,7 @@ class Taakbeheer(Venster):
 def main() -> int:
     app = maak_app("bugos-task-manager", "bugos-task-manager", sys.argv, een_keer=True)   # (U208)
     venster = Taakbeheer()
-    if "--prestaties" in sys.argv:
-        venster.ga_naar("prestaties")
-    elif "--opstarten" in sys.argv:
-        venster.ga_naar("opstarten")
+    venster.tweede_start(sys.argv[1:])
     return uitvoeren(app, venster)
 
 

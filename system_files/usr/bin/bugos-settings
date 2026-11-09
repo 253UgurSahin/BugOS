@@ -184,6 +184,9 @@ class Instellingen(Venster):
         if any(a in self.paginas or a in OUDE_NAMEN for a in args):
             begin = OUDE_NAMEN.get(begin_pagina(args), begin_pagina(args))
             self.ga_naar(begin if begin in self.paginas else "start")
+        if getattr(self, "sluit_na_update", False):
+            # Je opent Instellingen weer: het gaat na de update niet meer vanzelf dicht (U221).
+            self.paginas["updates"].melding.toon(t("De update is nog bezig.", "The update is still busy."), seconden=0)
 
     def closeEvent(self, e) -> None:  # noqa: N802
         # Nooit midden in een update of het teruggaan stoppen (dan stopt rpm-ostree ook): wacht tot het

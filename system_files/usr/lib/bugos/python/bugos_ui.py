@@ -275,12 +275,19 @@ def _palet(k: dict[str, str]) -> QPalette:
 
 
 def _een_naam(naam: str) -> str:
+    """Het adres waarop een open programma luistert. In de eigen runtime-map (/run/user/<uid>, alleen voor jou):
+    een naam in de gedeelde /tmp kan een ander account op deze computer bezetten (U219)."""
+    map_ = os.environ.get("XDG_RUNTIME_DIR", "")
+    if map_ and os.path.isdir(map_) and os.stat(map_).st_uid == os.getuid():
+        return os.path.join(map_, f"bugos-{naam}")
     return f"bugos-{naam}-{os.getuid()}"
 
 
 def al_open(naam: str, args: Sequence[str]) -> bool:
     """Is dit programma al open (voor deze gebruiker)? Dan krijgt dat venster de opdracht (bijv. de pagina) en
-    komt het naar voren; geef True terug, dan stopt deze tweede start (U208)."""
+    komt het naar voren; geef True terug, dan stopt deze tweede start (U208).
+    Alleen als het open venster 'ok' terugzegt: hangt het, of is het net aan het afsluiten, dan gewoon een
+    nieuw venster (U220)."""
     if os.environ.get("BUGOS_MEERDERE"):   # voor tests: elke start een eigen venster
         return False
     from PySide6.QtNetwork import QLocalSocket
@@ -289,11 +296,27 @@ def al_open(naam: str, args: Sequence[str]) -> bool:
     if not sok.waitForConnected(300):
         return False
     import json as _json
-    sok.write(_json.dumps(list(args)).encode())
+    # Het startbewijs van Plasma meegeven: zonder dat mag een Wayland-venster niet naar voren komen (U218).
+    bericht = {"args": list(args), "token": os.environ.get("XDG_ACTIVATION_TOKEN", "")}
+    sok.write(_json.dumps(bericht).encode() + b"\n")
     sok.flush()
     sok.waitForBytesWritten(500)
+    antwoord = b""
+    while b"ok" not in antwoord and sok.waitForReadyRead(2000):
+        antwoord += bytes(sok.readAll())
     sok.disconnectFromServer()
-    return True
+    return b"ok" in antwoord
+
+
+def _naar_voren(venster: QWidget, token: str) -> None:
+    """Een open venster weer laten zien zoals het was: gemaximaliseerd blijft gemaximaliseerd, alleen
+    geminimaliseerd gaat eraf (U217)."""
+    if token:
+        os.environ["XDG_ACTIVATION_TOKEN"] = token   # Qt gebruikt dit bij activateWindow (Wayland) (U218)
+    venster.setWindowState(venster.windowState() & ~Qt.WindowState.WindowMinimized)
+    venster.show()
+    venster.raise_()
+    venster.activateWindow()
 
 
 def luister(naam: str, venster: QWidget) -> None:
@@ -303,6 +326,7 @@ def luister(naam: str, venster: QWidget) -> None:
         return
     from PySide6.QtNetwork import QLocalServer
     server = QLocalServer(venster)
+    server.setSocketOptions(QLocalServer.SocketOption.UserAccessOption)
     QLocalServer.removeServer(_een_naam(naam))   # een oude, achtergebleven naam (na een crash)
     if not server.listen(_een_naam(naam)):
         return
@@ -311,21 +335,34 @@ def luister(naam: str, venster: QWidget) -> None:
         sok = server.nextPendingConnection()
         if sok is None:
             return
+        buffer = bytearray()
 
         def lees() -> None:
             import json as _json
+            buffer.extend(bytes(sok.readAll()))
+            if b"\n" not in buffer:
+                return   # nog niet alles binnen
             try:
-                args = _json.loads(bytes(sok.readAll()).decode() or "[]")
+                bericht = _json.loads(bytes(buffer).split(b"\n", 1)[0].decode() or "{}")
             except ValueError:
-                args = []
+                bericht = {}
+            if isinstance(bericht, list):   # het oude formaat
+                bericht = {"args": bericht}
+            if not isinstance(bericht, dict):
+                bericht = {}
+            args = [str(a) for a in bericht.get("args") or []]
             if hasattr(venster, "tweede_start"):
                 try:
                     venster.tweede_start(args)
                 except Exception:  # noqa: BLE001  een rare opdracht mag het open venster niet laten vallen
                     pass
-            venster.showNormal()
-            venster.raise_()
-            venster.activateWindow()
+            # Je opent het opnieuw: dan niet meer vanzelf dichtgaan als een klus klaar is (U221).
+            for vlag in ("sluit_na", "sluit_na_update"):
+                if getattr(venster, vlag, False):
+                    setattr(venster, vlag, False)
+            _naar_voren(venster, str(bericht.get("token") or ""))
+            sok.write(b"ok")
+            sok.flush()
 
         sok.readyRead.connect(lees)
         sok.disconnected.connect(sok.deleteLater)
@@ -376,6 +413,9 @@ def uitvoeren(app: QApplication, venster: QWidget) -> int:
         luister(str(app.property("bugos_een_keer")), venster)
     venster.show()
     code = app.exec()
+    server = getattr(venster, "_een_server", None)
+    if server is not None:
+        server.close()   # wie nu start, krijgt een eigen venster in plaats van niets (U220)
     venster.hide()
     venster.deleteLater()
     del venster

@@ -235,6 +235,19 @@ class Winkel(Venster):
                 self.zoek.setText(app_naam(gevonden))
         self.lijst.setFocus()
 
+    def tweede_start(self, args: list[str]) -> None:
+        """De Winkel was al open en wordt opnieuw gestart, bijv. 'Uit de Winkel halen?' na een .exe (U222)."""
+        zoek, app_id = begin_uit(args)
+        if app_id:
+            gevonden = next((a for a in self.cat["apps"] if a["id"] == app_id), None)
+            if gevonden is None:
+                start("plasma-discover", args[0])   # niet in onze selectie: de grote winkel op die app
+                return
+            zoek = app_naam(gevonden)
+        if zoek:
+            self.zoek.setText(zoek)
+            self.lijst.setFocus()
+
     # ------------------------------------------------------------------
     def toon(self) -> None:
         for k in self.kaarten:
@@ -340,14 +353,18 @@ class Winkel(Venster):
             start("plasma-discover")
 
 
+def begin_uit(args: list[str]) -> tuple[str, str]:
+    """(zoektekst, app-id) uit de opdracht: '--zoek <tekst>' of 'appstream://<id>'."""
+    if len(args) >= 2 and args[0] == "--zoek":
+        return " ".join(args[1:]), ""
+    if args and args[0].startswith("appstream://"):
+        return "", args[0][len("appstream://"):].removesuffix(".desktop")
+    return "", ""
+
+
 def main() -> int:
     args = sys.argv[1:]
-    begin_zoek = ""
-    begin_app = ""
-    if len(args) >= 2 and args[0] == "--zoek":
-        begin_zoek = " ".join(args[1:])
-    elif args and args[0].startswith("appstream://"):
-        begin_app = args[0][len("appstream://"):].removesuffix(".desktop")
+    begin_zoek, begin_app = begin_uit(args)
     catalogus = lees_catalogus()
     if begin_app and not any(a["id"] == begin_app for a in catalogus["apps"]):
         # Niet in onze selectie: open de grote winkel op die app.

@@ -1304,16 +1304,79 @@ class _Vak(_QW):
         self.gekregen.append(args)
 
 
+_rt = TMP / "run-user"
+_rt.mkdir(mode=0o700)
+os.environ["XDG_RUNTIME_DIR"] = str(_rt)
+
+
+def _tweede(naam, args, token=""):
+    """Een echte tweede start (eigen proces): die wacht op 'ok' van het open venster."""
+    import json as _js
+    code = ("import sys, os, json; sys.path.insert(0, sys.argv[1]); os.environ['QT_QPA_PLATFORM']='offscreen'\n"
+            "from PySide6.QtCore import QCoreApplication; a = QCoreApplication([])\n"
+            "import bugos_ui; print(bugos_ui.al_open(sys.argv[2], json.loads(sys.argv[3])))")
+    omg = dict(os.environ, XDG_ACTIVATION_TOKEN=token)
+    p = _sp.Popen([sys.executable, "-c", code, str(ROOT / "system_files/usr/lib/bugos/python"), naam, _js.dumps(args)],
+                  stdout=_sp.PIPE, text=True, env=omg)
+    wacht(lambda: p.poll() is not None, 15000)
+    return p.communicate()[0].strip() == "True"
+
+
 _vak = _Vak()
 bugos_ui.luister("test-u208", _vak)
-_al = bugos_ui.al_open("test-u208", ["wifi"])
-wacht(lambda: bool(_vak.gekregen), 2000)
-_niet = bugos_ui.al_open("test-u208-niet-open", ["x"])
+_vak.show()
+_vak.showMaximized()
+wacht(lambda: False, 100)
+_al = _tweede("test-u208", ["wifi"], token="tok-123")
+_niet = _tweede("test-u208-niet-open", ["x"])
 klopt(_al and _vak.gekregen == [["wifi"]] and not _niet,
       f"U208: een tweede start geeft de opdracht aan het open venster en stopt zelf ({_vak.gekregen})")
+klopt(bool(_vak.windowState() & Qt.WindowState.WindowMaximized),
+      f"U217: een tweede start laat een gemaximaliseerd venster gemaximaliseerd ({_vak.windowState()})")
+klopt(os.environ.get("XDG_ACTIVATION_TOKEN") == "tok-123",
+      "U218: het startbewijs van Plasma gaat mee, zodat het venster op Wayland echt naar voren komt")
+os.environ.pop("XDG_ACTIVATION_TOKEN", None)
+_vak.showMinimized()
+wacht(lambda: False, 100)
+_tweede("test-u208", [])
+klopt(not (_vak.windowState() & Qt.WindowState.WindowMinimized) and _vak.isVisible(),
+      "U217: een geminimaliseerd venster komt bij een tweede start weer tevoorschijn")
+klopt(bugos_ui._een_naam("x").startswith(str(_rt) + "/"),
+      f"U219: het adres staat in je eigen runtime-map, niet in de gedeelde /tmp ({bugos_ui._een_naam('x')})")
+# U220: luistert er iets dat geen 'ok' zegt (vastgelopen, of net aan het afsluiten)? Dan gewoon zelf starten.
+from PySide6.QtNetwork import QLocalServer as _QLS  # noqa: E402
+
+_stom = _QLS()
+_stom.listen(bugos_ui._een_naam("test-u220"))
+klopt(not _tweede("test-u220", ["x"]), "U220: een open venster dat niet antwoordt, slikt een nieuwe start niet in")
+_stom.close()
+klopt("server.close()" in (ROOT / "system_files/usr/lib/bugos/python/bugos_ui.py").read_text().split("def uitvoeren")[1],
+      "U220: na het sluiten luistert het programma niet meer (een start dan geeft een nieuw venster)")
+# U221: weer openen terwijl het venster wacht om na een klus dicht te gaan: dan blijft het open.
+_vak.sluit_na = True
+_vak.sluit_na_update = True
+_tweede("test-u208", [])
+klopt(not _vak.sluit_na and not _vak.sluit_na_update,
+      "U221: je opent het venster weer: het gaat na de klus niet meer vanzelf dicht")
+klopt("self.isVisible()" in (ROOT / "system_files/usr/bin/bugos-help").read_text().split("def closeEvent")[1][:900],
+      "U221: Hulp weer geopend tijdens een reparatie: het venster blijft open als de reparatie klaar is")
 if _meer is not None:
     os.environ["BUGOS_MEERDERE"] = _meer
 _vak.deleteLater()
+# U222: de Winkel was al open; 'Uit de Winkel halen?' na een .exe gaat naar die app, en Taakbeheer naar de pagina.
+_ww2 = winkel.Winkel(cat)
+_ww2.tweede_start(["appstream://org.mozilla.firefox"])
+_z1 = _ww2.zoek.text()
+_ww2.tweede_start(["--zoek", "foto", "bewerken"])
+_z2 = _ww2.zoek.text()
+gestart.clear()
+_ww2.tweede_start(["appstream://org.example.NietBijOns"])
+klopt(_z1 == "Firefox" and _z2 == "foto bewerken" and gestart == [("plasma-discover", "appstream://org.example.NietBijOns")],
+      f"U222: een tweede start van de Winkel gaat naar de gevraagde app of zoekt ({_z1!r}, {_z2!r}, {gestart})")
+_ww2.deleteLater()
+_tb_tekst = (ROOT / "system_files/usr/bin/bugos-task-manager").read_text()
+klopt("def tweede_start" in _tb_tekst and "venster.tweede_start(sys.argv[1:])" in _tb_tekst,
+      "U222: Taakbeheer --prestaties gaat ook naar Prestaties als Taakbeheer al open was")
 _stukken = [(n, (ROOT / "system_files/usr/bin" / n).read_text()) for n in
             ("bugos-settings", "bugos-task-manager", "bugos-store", "bugos-welcome", "bugos-backup", "bugos-switch", "bugos-help")]
 klopt(all("een_keer=True" in tekst for _n, tekst in _stukken), "U208: Instellingen, Taakbeheer, Winkel, Welkom, Back-up, Overstap en Hulp openen maar één keer")
