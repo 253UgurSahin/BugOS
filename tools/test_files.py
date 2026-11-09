@@ -549,6 +549,77 @@ venster.zijbalk.itemActivated.emit(_it511)
 klopt(venster.huidig != docs, f"U511: Enter op een plek links opent die plek ({venster.huidig})")
 klopt("self.volgnummer" in (ROOT / "system_files/usr/lib/bugos/python/bugos_files_tegels.py").read_text(),
       "U512: voorbeelden: de nieuwste vraag eerst (wat je nu ziet)")
+# U519: een bestand op een map in hetzelfde venster slepen (binnenkomen boven het bestand zelf, loslaten op de map).
+from PySide6.QtCore import QMimeData as _QMD519, QPointF as _QPF519, QUrl as _QU519
+from PySide6.QtGui import QDragEnterEvent as _QDE519, QDragMoveEvent as _QDM519, QDropEvent as _QDR519
+_d519 = Path(tempfile.mkdtemp(prefix="bugos-slepen-"))
+(_d519 / "brief.txt").write_text("x")
+(_d519 / "Werk").mkdir()
+venster.show()
+venster.ga_naar(_d519)
+for _ in range(80):
+    app.processEvents()
+def _plek519(naam):
+    idx = venster.sorteer.mapFromSource(venster.model.index(str(_d519 / naam)))
+    return _QPF519(venster.lijst.visualRect(idx).center())
+_md519 = _QMD519()
+_md519.setUrls([_QU519.fromLocalFile(str(_d519 / "brief.txt"))])
+_vp519 = venster.lijst.viewport()
+_A = Qt.DropAction.CopyAction | Qt.DropAction.MoveAction
+_in519 = _QDE519(_plek519("brief.txt").toPoint(), _A, _md519, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+app.sendEvent(_vp519, _in519)
+_mv519 = _QDM519(_plek519("Werk").toPoint(), _A, _md519, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ShiftModifier)
+app.sendEvent(_vp519, _mv519)
+_dr519 = _QDR519(_plek519("Werk"), _A, _md519, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ShiftModifier)
+app.sendEvent(_vp519, _dr519)
+for _ in range(100):
+    app.processEvents()
+    if (_d519 / "Werk" / "brief.txt").exists():
+        break
+    __import__("time").sleep(0.02)
+klopt(_in519.isAccepted() and (_d519 / "Werk" / "brief.txt").exists(),
+      f"U519: een bestand op een map in hetzelfde venster slepen werkt ({_in519.isAccepted()}, {sorted(p.name for p in (_d519 / 'Werk').iterdir())})")
+# U521: plakken terwijl er nog iets loopt: niet stil niets doen.
+class _Bezig521:
+    def isRunning(self):  # noqa: N802
+        return True
+_oud_klus521 = venster.klus
+venster.klus = _Bezig521()
+from PySide6.QtWidgets import QApplication as _QA521
+_QA521.clipboard().setMimeData(_md519)
+(_d519 / "brief.txt").write_text("y")
+_md521 = _QMD519()
+_md521.setUrls([_QU519.fromLocalFile(str(_d519 / "brief.txt"))])
+_QA521.clipboard().setMimeData(_md521)
+venster.plak()
+_t521 = venster.melding.tekst.text()
+venster.klus = _oud_klus521
+_QA521.clipboard().clear()
+klopt("Even wachten" in _t521 or "One moment" in _t521, f"U521: plakken tijdens een klus zegt 'even wachten' ({_t521!r})")
+# U522: een plaatje uit Firefox (https, geen bestand) loslaten: zeggen hoe het wel kan.
+_md522 = _QMD519()
+_md522.setUrls([_QU519("https://example.org/foto.jpg")])
+app.sendEvent(_vp519, _QDE519(_plek519("brief.txt").toPoint(), _A, _md522, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier))
+app.sendEvent(_vp519, _QDR519(_plek519("brief.txt"), _A, _md522, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier))
+_t522 = venster.melding.tekst.text()
+klopt("internet" in _t522, f"U522: iets van internet loslaten zegt hoe je het bewaart ({_t522[:50]!r})")
+# U520/U523: Ctrl+klik (met 'enkele klik opent') opent niet; Enter met meer gekozen opent alles.
+_geopend = []
+_oud_open = venster.openen
+venster.openen = lambda index=None: _geopend.append("index" if index is not None else "alles")
+_idx = venster.sorteer.mapFromSource(venster.model.index(str(_d519 / "brief.txt")))
+_oud_mod = _QA521.keyboardModifiers
+venster._laatste_muis = __import__("time").monotonic()
+_QA521.keyboardModifiers = staticmethod(lambda: Qt.KeyboardModifier.ControlModifier)
+venster.geactiveerd(_idx)
+_QA521.keyboardModifiers = _oud_mod
+_na_ctrl = list(_geopend)
+venster._laatste_muis = 0.0
+venster.lijst.selectAll()
+venster.geactiveerd(_idx)
+venster.openen = _oud_open
+klopt(_na_ctrl == [] and _geopend == ["alles"], f"U520/U523: Ctrl+klik opent niet; Enter met meer gekozen opent alles ({_geopend})")
+venster.hide()
 venster.ga_naar(docs)
 venster.selecteer(docs / "map")
 klopt(not venster.keuzebalk.isHidden() and venster.keuzebalk.knoppen["naam"].isVisibleTo(venster.keuzebalk),

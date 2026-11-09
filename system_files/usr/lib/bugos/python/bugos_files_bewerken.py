@@ -75,7 +75,8 @@ class Bewerken:
         data = QMimeData()
         data.setUrls([QUrl.fromLocalFile(str(p)) for p in paden])
         data.setData("application/x-kde-cutselection", b"1" if knip else b"0")
-        regels = ["cut" if knip else "copy"] + [QUrl.fromLocalFile(str(p)).toString() for p in paden]
+        regels = ["cut" if knip else "copy"] + [QUrl.fromLocalFile(str(p)).toString(QUrl.ComponentFormattingOption.FullyEncoded)
+                                              for p in paden]   # GTK leest spaties alleen als %20
         data.setData("x-special/gnome-copied-files", "\n".join(regels).encode())
         zet_op_klembord(data)
         n = len(paden)
@@ -97,8 +98,12 @@ class Bewerken:
                                                     for u in data.urls()))
 
     def plak(self) -> None:
-        if self.in_prullenbak or self.in_computer or not self.klembord_heeft_bestanden() or \
-                (self.klus and self.klus.isRunning()):
+        if self.in_prullenbak or self.in_computer or not self.klembord_heeft_bestanden():
+            return
+        if self.klus and self.klus.isRunning():
+            # Niet stil niets doen (U521).
+            self.melding.toon(t("Even wachten: er loopt nog iets (kopiëren of weggooien).",
+                                "One moment: something is still busy (copying or deleting)."), "let_op")
             return
         data = QApplication.clipboard().mimeData()
         bronnen = [Path(u.toLocalFile()) for u in data.urls() if u.isLocalFile() and Path(u.toLocalFile()).exists()]
@@ -134,23 +139,56 @@ class Bewerken:
     # ---------------------------------------------- slepen en loslaten
     def slepen(self, e, waar) -> bool:
         """Iets uit een ander venster (of uit deze map) hierheen gesleept: kopiëren, met Shift verplaatsen.
-        Laat je het op een map los, dan gaat het in die map. Geeft True als wij het afhandelen."""
+        Laat je het op een map los, dan gaat het in die map. Geeft True als wij het afhandelen.
+        Bij binnenkomen altijd aannemen (ook boven het bestand dat je sleept): Qt stuurt anders de rest van het slepen
+        niet meer, en kon je een bestand nooit op een map in hetzelfde venster loslaten. Per beweging zeggen of het
+        hier kan (U519)."""
         data = e.mimeData()
-        bronnen = [Path(u.toLocalFile()) for u in data.urls() if u.isLocalFile()] if data and data.hasUrls() else []
-        bronnen = [b for b in bronnen if b.exists() or b.is_symlink()]
-        if not bronnen or self.in_prullenbak or self.in_computer or (self.klus and self.klus.isRunning()):
+        if not data or not data.hasUrls() or self.in_prullenbak or self.in_computer:
             return False
+        bronnen = [Path(u.toLocalFile()) for u in data.urls() if u.isLocalFile()]
+        bronnen = [b for b in bronnen if b.exists() or b.is_symlink()]
+        van_internet = not bronnen and any(not u.isLocalFile() for u in data.urls())
+        if not bronnen and not van_internet:
+            return False
+        if e.type() == QEvent.Type.DragEnter:
+            e.setDropAction(Qt.DropAction.CopyAction)
+            e.accept()
+            return True
+        bezig = bool(self.klus and self.klus.isRunning())
         doelmap = self.huidig
         if waar is self.lijst.viewport():
             index = self.lijst.indexAt(e.position().toPoint())
             pad = Path(index.data(PAD_ROL)) if index.isValid() and index.data(PAD_ROL) else None
             if pad and pad.is_dir() and pad not in bronnen:
                 doelmap = pad
-        if all(b.parent == doelmap for b in bronnen):
-            return False  # staat er al: niets te doen
-        if e.type() == QEvent.Type.Drop:
-            knip = bool(e.modifiers() & Qt.KeyboardModifier.ShiftModifier)
-            self._start_klus(bronnen, doelmap, knip, klembord=False)
+        kan = not van_internet and not bezig and not all(b.parent == doelmap for b in bronnen)
+        if e.type() == QEvent.Type.DragMove:
+            if kan or van_internet or bezig:   # internet en 'bezig': loslaten mag, dan zeggen we waarom het niet kan
+                e.setDropAction(Qt.DropAction.CopyAction)
+                e.accept()
+            else:
+                e.ignore()   # staat er al: niets te doen
+            return True
+        # Loslaten
+        if van_internet:
+            # Een plaatje uit Firefox of een bijlage uit Thunderbird is (nog) geen bestand (U522).
+            self.melding.toon(t("Dit komt van internet of uit een mail. Bewaar het eerst daar (rechtermuisknop > "
+                                "Opslaan als), dan staat het in Downloads.",
+                                "This comes from the internet or an e-mail. Save it there first (right-click > Save "
+                                "as), then it is in Downloads."), "let_op")
+            e.ignore()
+            return True
+        if bezig:
+            self.melding.toon(t("Even wachten: er loopt nog iets (kopiëren of weggooien).",
+                                "One moment: something is still busy (copying or deleting)."), "let_op")   # (U521)
+            e.ignore()
+            return True
+        if not kan:
+            e.ignore()
+            return True
+        knip = bool(e.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+        self._start_klus(bronnen, doelmap, knip, klembord=False)
         # Altijd 'kopiëren' terugzeggen: verplaatsen doen we zelf, het andere programma hoeft niets weg te gooien.
         e.setDropAction(Qt.DropAction.CopyAction)
         e.accept()
@@ -183,6 +221,8 @@ class Bewerken:
             kb = QApplication.clipboard()
             if kb is not None and _ONS_KLEMBORD and (kb.ownsClipboard() or kb.mimeData() is _ONS_KLEMBORD[0]):
                 kb.clear()
+        if hasattr(self, "ververs_plak"):
+            self.ververs_plak()   # na knippen en plakken: geen dode 'Plakken'-knop
         if self.sluit_na_klus:
             if fout or achter or gestopt:
                 self.sluit_na_klus = False  # niet alles lukte: dat moet je kunnen lezen, dus het venster blijft open

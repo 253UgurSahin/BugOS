@@ -162,7 +162,8 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
         self.lijst.setItemDelegate(TegelTekenaar(self.voorbeelden, bijzondere_mappen()))
         self.lijst.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.lijst.customContextMenuRequested.connect(self.menu)
-        self.lijst.activated.connect(self.openen)
+        self.lijst.activated.connect(self.geactiveerd)
+        self.lijst.pressed.connect(self._muis_gedrukt)
         self.voorbeelden.bijgewerkt.connect(self.lijst.viewport().update)
         self.model.directoryLoaded.connect(lambda _p: self.ververs_staat())
         self.sorteer.rowsInserted.connect(lambda *_: self.ververs_staat())
@@ -371,6 +372,10 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
             filter_ |= QDir.Filter.Hidden
         self.model.setFilter(filter_)
 
+    def _muis_gedrukt(self, _index) -> None:
+        import time as _tijd
+        self._laatste_muis = _tijd.monotonic()
+
     def _geklikt(self, item) -> None:
         import time as _tijd
         self._klik = (id(item), _tijd.monotonic())
@@ -397,6 +402,22 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
         if idx.isValid():
             self.lijst.setCurrentIndex(idx)
             self.lijst.scrollTo(idx)
+
+    def geactiveerd(self, index) -> None:
+        """Dubbelklik, Enter, of (met KDE's 'enkele klik') één klik."""
+        if QApplication.keyboardModifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier) \
+                and self._van_muis():
+            return   # Ctrl/Shift+klik is kiezen, niet openen (zoals Dolphin) (U520)
+        # Enter met meer dingen gekozen: alles openen, zoals de knop Openen (U523).
+        sel = self.lijst.selectionModel()
+        if sel is not None and sel.isSelected(index) and len(self.gekozen()) > 1:
+            self.openen()
+        else:
+            self.openen(index)
+
+    def _van_muis(self) -> bool:
+        import time as _tijd
+        return _tijd.monotonic() - getattr(self, "_laatste_muis", 0.0) < 0.5
 
     def openen(self, index=None) -> None:
         paden = [Path(index.data(PAD_ROL))] if index is not None and index.data(PAD_ROL) else self.gekozen()
