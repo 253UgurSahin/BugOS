@@ -17,6 +17,10 @@ if [ "${1:-}" = --bijwerken ]; then
     command -v distrobox >/dev/null 2>&1 || exit 0
     # Nog nooit een doosje gemaakt (geen podman-opslag)? Dan podman niet eens starten (U473).
     [ -d "${XDG_DATA_HOME:-$HOME/.local/share}/containers" ] || exit 0
+    # Eén tegelijk: 'Nu updaten' en de dagelijkse update niet door elkaar (dan faalt er een op het slot van dnf) (U480).
+    if [ -n "${XDG_RUNTIME_DIR:-}" ] && exec 9>"$XDG_RUNTIME_DIR/bugos-doosjes.slot"; then
+        flock 9 2>/dev/null || true
+    fi
     lijst="$(distrobox list 2>/dev/null)"
     mislukt=0
     for doos in bugos-fedora bugos-ubuntu; do

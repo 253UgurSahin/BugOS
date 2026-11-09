@@ -1011,15 +1011,23 @@ _tp474.zelf_rij.geklikt.emit()
 _sa474.kde_instelling = _oud474
 klopt(not _tp474.zelf_rij.isHidden() and _open474 == ["kcm_clock"] and "Meer instellingen" not in _tp474.klok_rij.uitleg.text(),
       f"U474: klok zelf instellen opent Datum en tijd ({_open474}, {_tp474.klok_rij.uitleg.text()!r})")
-# U475: 'Nu updaten' werkt ook je eigen apps en je .rpm/.deb-programma's bij.
-from PySide6.QtCore import QProcess as _QP475
-_gestart475 = []
-_oud475 = _QP475.startDetached
-sys.modules["bugos_settings_systeem"].QProcess.startDetached = staticmethod(lambda *a, **k: (_gestart475.append(a), True)[1])
-venster.paginas["updates"].klaar_met("nu", 0, "No upgrade available.\n")
-sys.modules["bugos_settings_systeem"].QProcess.startDetached = _oud475
-klopt(any(a[0] == "flatpak" and "--user" in a[1] for a in _gestart475) and any("bugos-package" in a[0] for a in _gestart475),
-      f"U475: 'Nu updaten' werkt ook je eigen apps bij ({_gestart475})")
+# U475/U480: 'Nu updaten' werkt daarna ook je eigen apps bij, en zegt pas dan 'Klaar' (geen herstart midden in die update).
+_nep480 = Path(tempfile.mkdtemp(prefix="bugos-nep480-"))
+(_nep480 / "flatpak").write_text(f"#!/usr/bin/bash\necho \"$*\" >>{_nep480}/log\n")
+(_nep480 / "flatpak").chmod(0o755)
+_pad480 = os.environ["PATH"]
+os.environ["PATH"] = f"{_nep480}:{_pad480}"
+_na480 = []
+venster.paginas["updates"].eigen_bijwerken(lambda: _na480.append(1))
+_t0 = time.time()
+while not _na480 and time.time() - _t0 < 10:
+    app.processEvents()
+    time.sleep(0.05)
+os.environ["PATH"] = _pad480
+_log480 = (_nep480 / "log").read_text() if (_nep480 / "log").exists() else ""
+klopt(_na480 == [1] and "update --user" in _log480 and "startDetached" not in
+      (ROOT / "system_files/usr/lib/bugos/python/bugos_settings_systeem.py").read_text(),
+      f"U475/U480: 'Nu updaten' werkt je eigen apps bij en wacht daarop ({_log480.strip()!r})")
 # U397: op een klein scherm (hier 800×600) worden groottes waarbij niets meer past, niet aangeboden.
 _sp2 = venster.paginas["scherm"]
 _sp2.toon((None, False, 1.0))

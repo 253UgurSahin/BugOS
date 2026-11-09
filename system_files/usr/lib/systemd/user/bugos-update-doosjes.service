@@ -1,6 +1,10 @@
 [Unit]
 Description=BugOS: update programs installed from a .rpm or .deb (their box)
 ConditionKernelCommandLine=!rd.live.image
+# Mislukt het elke keer (bijv. een kapotte bron van een programma), dan na een paar pogingen stoppen tot morgen,
+# niet elk half uur een zware update de hele dag door (U480).
+StartLimitIntervalSec=12h
+StartLimitBurst=4
 
 [Service]
 Type=oneshot

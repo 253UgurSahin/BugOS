@@ -258,14 +258,26 @@ class UpdatesPagina(Blad):
             if gedaan:
                 return
             gedaan.append(True)
+            echt = code if status == QProcess.ExitStatus.NormalExit else 1
+            if wat == "nu" and echt == 0:
+                # Daarna ook je eigen apps en je .rpm/.deb-programma's, en pas dan 'Klaar' (en 'Nu opnieuw opstarten'):
+                # opnieuw opstarten midden in die update kon een doosje half bijgewerkt achterlaten (U475, U480).
+                uit0 = bytes(proces.readAll()).decode(errors="ignore")
+                self.melding.toon(t("Bijna klaar: je eigen apps worden bijgewerkt…", "Almost done: updating your own apps…"),
+                                  seconden=0)
+                self.eigen_bijwerken(lambda: verder(echt, uit0))
+                return
+            verder(echt, None)
+
+        def verder(echt: int, uit: str | None) -> None:
             if wat in ("nu", "terug"):
                 self.bezig = False   # alleen de update zelf; een schakelaar die tussendoor klaar is, telt niet
             else:
                 self.bezig_keuze = False
             try:
-                uit = bytes(proces.readAll()).decode(errors="ignore")
+                if uit is None:
+                    uit = bytes(proces.readAll()).decode(errors="ignore")
                 proces.deleteLater()
-                echt = code if status == QProcess.ExitStatus.NormalExit else 1
                 self.klaar_met(wat, echt, uit)
                 venster = self.window()
                 if wat in ("auto", "hand") and getattr(venster, "sluit_na_update", False) and not self.bezig:
@@ -286,6 +298,24 @@ class UpdatesPagina(Blad):
         proces.errorOccurred.connect(lambda soort: af() if soort == QProcess.ProcessError.FailedToStart else None)
         proces.start("pkexec", ["/usr/bin/bugos-updates", wat])
 
+    def eigen_bijwerken(self, na) -> None:
+        """Je eigen apps (flatpak --user) en je .rpm/.deb-doosjes bijwerken, als jezelf (geen wachtwoord); daarna na()."""
+        p = QProcess(self)
+        p.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        klaar: list[bool] = []
+
+        def einde(*_a) -> None:
+            if klaar:
+                return
+            klaar.append(True)
+            p.deleteLater()
+            na()
+
+        p.finished.connect(einde)
+        p.errorOccurred.connect(lambda soort: einde() if soort == QProcess.ProcessError.FailedToStart else None)
+        p.start("bash", ["-c", "flatpak update --user --noninteractive --assumeyes; "
+                         "[ -x /usr/bin/bugos-package ] && /usr/bin/bugos-package --bijwerken; exit 0"])
+
     def klaar_met(self, wat: str, code: int, uit: str) -> None:
         if wat in ("auto", "hand"):
             # Lees opnieuw wat er echt staat: zei je 'Annuleren' bij het wachtwoord, dan springt de schakelaar terug.
@@ -299,11 +329,6 @@ class UpdatesPagina(Blad):
             return
         self.nu.setEnabled(True)
         self.terug.setEnabled(True)
-        if wat == "nu" and code == 0:
-            # 'Nu updaten' werkt als beheerder alleen de apps voor iedereen bij. Ook je eigen apps (VS Code uit de
-            # ontwikkelaarsmodus) en je .rpm/.deb-programma's: anders kregen die met 'Ik kies zelf' nooit een update (U475).
-            QProcess.startDetached("flatpak", ["update", "--user", "--noninteractive", "--assumeyes"])
-            QProcess.startDetached("/usr/bin/bugos-package", ["--bijwerken"])
         if code in (126, 127):
             # pkexec: 126 = je klikte Annuleren, 127 = geen toestemming.
             self.melding.toon(t("Niets gedaan: er was geen toestemming.", "Nothing done: permission was not given."))
