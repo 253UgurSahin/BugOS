@@ -414,6 +414,51 @@ Tests after: 20 test files passed (here); the image test of round 8 (build12) pa
 ### U096 [low] desktop.ini and Thumbs.db came along into every folder on BugOS
   commit: 708e5ff   test: tools/test_os_apps.py (static)
 
+## Round 10 (2026-11-09)
+Three reviewers: one checked the round-9 fixes (it found the quick menu did not load at all since the English
+rename, U099, plus U100-U102), one walked through everyday tasks end to end (Files, Settings, start and quick
+menu), one looked at robustness and local security (it was stopped early by the model's safety filter after its
+first finding, U097; that part of the review is not finished). 18 found; all fixed with a test that failed first.
+Tests after: 20 test files passed (here). The image test could not be built this round: the network proxy of this
+environment refused the Fedora mirrors (403), three times; the last image test (round 8) passed with 0 errors.
+
+### U097 [high] Restoring a backup used folder types from a file on the stick unchecked (they went to xdg-user-dir)
+  commit: a646bc6   test: tools/test_backup.py
+### U098 [medium] Start menu: typing a word and pressing Enter opened the wrong app ("settings" opened KDE's All settings)
+  commit: 8639b3e   test: tools/test_menus.py
+### U099 [critical] The quick menu on the taskbar did not load at all: main.qml still said "Snelmenu" after the rename
+  commit: a8ed793   test: tools/test_menus.py (checks every QML type in the plasmoids exists)
+### U100 [low] Help sent people to the Store for updates (it cannot update); it now opens Settings > Updates
+  commit: 58c75d2   test: tools/test_help.py
+### U101 [low] Universal Blue's per-user app updates (a user timer) still ran after "update myself"
+  commit: fbd406e   test: tools/test_os_system.sh, tools/test_image.sh
+### U102 [low] (from U080) The drive card took away keyboard focus when only its text changed
+  commit: 4f1c34a   test: tools/test_os_apps.py
+### U103 [medium] Files: "drive is full" named only the last file and hid how many were missing
+  commit: dc333a8   test: tools/test_os_apps.py
+### U104 [medium] Files: a long copy could not be stopped, and the only ways out left a hidden half copy for good
+  commit: dc333a8   test: tools/test_os_apps.py
+### U105 [low] Files: copying FROM a stick said "Writing to the stick… Do not unplug it yet"
+  commit: dc333a8   test: tools/test_os_apps.py
+### U106 [low] Files: "Done" even when every file got "(2)" after the name because it already existed
+  commit: dc333a8   test: tools/test_os_apps.py
+### U107 [low] Files: after cut and paste the clipboard was wiped, even if you had copied something else meanwhile
+  commit: dc333a8   test: tools/test_os_apps.py
+### U108 [low] Files: deleting a big folder on a stick froze the window
+  commit: f342c75   test: tools/test_os_apps.py
+### U109 [low] Settings: no way to join a hidden Wi-Fi network
+  commit: 8a5db9a   test: tools/test_os_settings.py
+### U110 [low] Settings: a failed open network asked "Is the password right?"
+  commit: 8a5db9a   test: tools/test_os_settings.py
+### U111 [low] A PC without Wi-Fi showed a Wi-Fi tile and switch that did nothing
+  commit: 8a5db9a   test: tools/test_os_settings.py, tools/test_start_data.py
+### U112 [low] Start menu: a new user picture only showed after logging in again
+  commit: cec84bb   test: tools/test_start_data.py
+### U113 [low] Start menu "Recently opened" missed the files of Store apps (Flatpak)
+  commit: cec84bb   test: tools/test_start_data.py
+### U114 [low] Settings > Appearance > "Choose your own photo" opened in Home instead of your Pictures folder
+  commit: cec84bb   test: tools/test_os_settings.py
+
 ## Skipped
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
@@ -429,6 +474,9 @@ Tests after: 20 test files passed (here); the image test of round 8 (build12) pa
   letters, and look at Settings, Files and the start menu (checked here against the KDE sources, not on a screen).
 - U088, U094, U095: on a real PC, try the logout screen with two monitors, and the Windows Switch tool (an open
   Outlook file in Documents; one USB stick for both step 2 and step 4).
+- U099: the quick menu did not load on the taskbar since 5 Nov; check once on a real PC that it now opens.
+- Round 10's robustness/security review was stopped early by the model's safety filter; if you want that part
+  finished, it needs a new session or another model (it only got as far as U097).
 - From the first round, still open (improve-2026-11-07.md "For you"): A032 signing key, default branch main,
   private vulnerability reporting, merge and build once.
 
