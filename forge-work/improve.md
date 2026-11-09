@@ -459,6 +459,61 @@ environment refused the Fedora mirrors (403), three times; the last image test (
 ### U114 [low] Settings > Appearance > "Choose your own photo" opened in Home instead of your Pictures folder
   commit: cec84bb   test: tools/test_os_settings.py
 
+## Round 11 (2026-11-09)
+Three reviewers: one checked the round-10 fixes (9 found: U115-U123, U117), one walked light/dark, game mode,
+light and developer mode, Welcome, the taskbar and Task Manager (9: U124-U132), one checked language and
+accessibility (6: U133-U138). 24 found; all fixed, each with a test that failed first. Tests after: 20 test files
+passed (here). The image build was blocked again by the network proxy (Fedora mirrors refused, 403).
+
+### U115 [medium] (from U104) Stop did not stop a single big file, and a move then deleted the original anyway
+  commit: 2a20ffd   test: tools/test_os_apps.py
+### U116 [medium] (from U104) Pressing Stop hid "do not unplug" while the copy was still writing
+  commit: 2a20ffd   test: tools/test_os_apps.py
+### U117 [medium] (from U101) Per-user apps (VS Code, Discover --user) never got updates; the timer now follows "Automatic updates"
+  commit: e097bff   test: tools/test_os_system.sh, tools/test_image.sh
+### U118 [low] (from U108) Finishing a delete on a stick threw away your folder, selection and search
+  commit: 2a20ffd   test: tools/test_os_apps.py
+### U119 [low] (from U108) Delete: asked "Really delete?" then did nothing while busy; mixed selections lost Undo
+  commit: 2a20ffd   test: tools/test_os_apps.py
+### U120 [low] (from U107) "Paste" stayed after the cut files were pasted in another window
+  commit: 2a20ffd   test: tools/test_os_apps.py
+### U121 [low] (from U105) Moving between two internal disks said "Do not unplug the stick"
+  commit: 2a20ffd   (message only)
+### U122 [low] (from U104) Stop after the copy had already finished said "Stopped"; an earlier error was lost
+  commit: 2a20ffd   test: tools/test_os_apps.py
+### U123 [low] (from U111) The quick menu hid the Wi-Fi tile when nmcli did not answer yet (Settings did not)
+  commit: 2a20ffd   test: tools/test_start_data.py
+### U124 [medium] Game mode turned a timed "Do not disturb" (1 hour) into "forever"
+  commit: 8400b58   test: tools/test_game_mode.sh
+### U125 [medium] Task Manager listed apps under whoever started them (Settings as "part of BugOS", the Store as "Welcome")
+  commit: 34c6ff6   test: tools/test_task_manager.py
+### U126 [low] Settings > Updates and more: switches were fire-and-forget and never re-read (wrong after a failure)
+  commit: 493d781 (+ flock in 8400b58)   test: tools/test_os_settings.py
+### U127 [low] Turning game mode or light mode off while already off changed your own settings
+  commit: 8400b58   test: tools/test_game_mode.sh, tools/test_light_mode.sh
+### U128 [low] The quick menu's Dark tile flipped back after a tap (bugos-theme was still running)
+  commit: b2ee102   test: tools/test_start_data.py
+### U129 [low] Welcome: the update choice counted as done even when the password was cancelled
+  commit: b2ee102   test: tools/test_os_apps.py
+### U130 [low] Welcome: "I'm going to play games" did nothing with a Flatpak Steam, yet said it was set up
+  commit: b2ee102   test: tools/test_os_apps.py
+### U131 [low] Choosing a BugOS background stopped it following light/dark, with no way back
+  commit: 7b92469   test: tools/test_os_settings.py
+### U132 [low] Light/dark did not reach installed Windows programs; a Welcome tip named a page that does not exist
+  commit: b954990, b2ee102   test: tools/test_os_system.sh
+### U133 [medium] Settings pages were cut off on the right with no way to scroll; the window could be taller than the screen
+  commit: 88a1f9d   test: tools/test_os_settings.py
+### U134 [medium] No visible keyboard focus on round buttons, outlined buttons and sliders
+  commit: b302e17   test: tools/test_os_apps.py
+### U135 [low] Weak focus in the start and quick menu; Enter did nothing on the quick menu's gear
+  commit: b302e17   test: tools/test_menus.py
+### U136 [low] The Settings sidebar names were cut off with big letters
+  commit: 88a1f9d   test: tools/test_os_settings.py
+### U137 [low] Small grey, green and orange text was below 4.5:1 contrast on the light theme
+  commit: 28ff16a   test: tools/test_os_apps.py
+### U138 [low] Language leftovers: the Help report title, "idle sent", Uitloggen/Afmelden and Herstarten/Opnieuw opstarten
+  commit: 04a2513   test: tools/test_os_apps.py
+
 ## Skipped
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
@@ -477,6 +532,8 @@ environment refused the Fedora mirrors (403), three times; the last image test (
 - U099: the quick menu did not load on the taskbar since 5 Nov; check once on a real PC that it now opens.
 - Round 10's robustness/security review was stopped early by the model's safety filter; if you want that part
   finished, it needs a new session or another model (it only got as far as U097).
+- U125: on a real PC, open Settings from the quick menu and check Task Manager lists it as "Settings" (closable).
+- U133-U137: try Settings with only the keyboard (Tab, Enter, Escape) and with "Big letters" on.
 - From the first round, still open (improve-2026-11-07.md "For you"): A032 signing key, default branch main,
   private vulnerability reporting, merge and build once.
 
