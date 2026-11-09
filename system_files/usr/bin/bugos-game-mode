@@ -45,8 +45,9 @@ fps_meteen_actief() {
 }
 
 # Volle kracht is voor de hele computer, maar game-modus is per account. Wie nu gamet, staat als een leeg bestand in
-# /dev/shm (voor iedereen te zien, weg na opnieuw opstarten) (U385, U394).
-GAMER_MAP="${BUGOS_GAMER_MAP:-/dev/shm}"
+# /var/tmp/bugos-spel (voor iedereen te zien) (U385, U394). Niet /dev/shm: dat wist uitloggen en opnieuw opstarten,
+# terwijl 'game-modus aan' van dat account blijft; dan dacht een ander dat 'volle kracht' zijn eigen keuze was (U404).
+GAMER_MAP="${BUGOS_GAMER_MAP:-/var/tmp/bugos-spel}"
 GAMER_MERK="$GAMER_MAP/bugos-spelmodus-$(id -u)"
 andere_gamers() {
     local f
@@ -99,6 +100,7 @@ aan() {
     else
         stroomprofiel_get >"$BUGOS_CONFIG/stroomprofiel-voor-spelmodus"
     fi
+    [ -d "$GAMER_MAP" ] || mkdir -m 1777 -p "$GAMER_MAP" 2>/dev/null
     touch "$GAMER_MERK" 2>/dev/null
     stroomprofiel_zet performance
     # Melding eerst, anders wordt hij door 'niet storen' meteen stilgehouden.
@@ -184,6 +186,12 @@ mkdir -p "$BUGOS_CONFIG"
 if [ "${1:-}" != status ]; then   # 'status' hoeft niet te wachten
     exec 9>"$BUGOS_CONFIG/.spelmodus.slot"
     flock 9 2>/dev/null || true
+fi
+
+# Staat game-modus aan maar is je merkje weg (oude BugOS, opgeruimd)? Dan weer neerzetten (U404).
+if [ -f "$MARKER" ] && [ ! -e "$GAMER_MERK" ]; then
+    [ -d "$GAMER_MAP" ] || mkdir -m 1777 -p "$GAMER_MAP" 2>/dev/null
+    touch "$GAMER_MERK" 2>/dev/null
 fi
 
 case "${1:-wissel}" in

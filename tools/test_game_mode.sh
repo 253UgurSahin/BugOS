@@ -79,7 +79,19 @@ if [ -e "$TMP/bin/powerprofilesctl" ] || nep powerprofilesctl 'case "$1" in get)
     echo performance >"$TMP/profiel"
     gebruiker carla aan 1003
     gebruiker carla uit 1003
-    klopt '[ "$(cat "$TMP/profiel")" = performance ]' "U394: wie zelf 'volle kracht' koos, houdt dat na game-modus uit"
+    klopt '[ "$(cat "$TMP/profiel")" = performance ]' "U394: wie zelf 'volle kracht' koos, houdt dat na game-modus uit"    # U404: anna gamet, logt uit (of de pc start opnieuw op): haar merkje blijft, net als haar 'game-modus aan'.
+    # Dan is volle kracht niet van dolf, en na zijn game-modus mag het niet voor altijd op volle kracht blijven.
+    echo balanced >"$TMP/profiel"
+    gebruiker anna aan 1001
+    klopt 'grep -q "^GAMER_MAP=\"\${BUGOS_GAMER_MAP:-/var/tmp/bugos-spel}\"" "$TMP/spelmodus" && grep -qx "d /var/tmp/bugos-spel 1777 root root -" "$ROOT/system_files/usr/lib/tmpfiles.d/bugos.conf"' \
+        "U404: de merkjes staan niet in /dev/shm (dat wist uitloggen en opnieuw opstarten)"
+    rm -f "$BUGOS_GAMER_MAP"/bugos-spelmodus-1001   # oude BugOS: merkje weg, game-modus nog aan
+    gebruiker anna status 1001
+    klopt '[ -e "$BUGOS_GAMER_MAP/bugos-spelmodus-1001" ]' "U404: game-modus staat aan maar het merkje is weg: het komt terug"
+    gebruiker dolf aan 1004
+    gebruiker dolf uit 1004
+    gebruiker anna uit 1001
+    klopt '[ "$(cat "$TMP/profiel")" = balanced ]' "U404: na anna en dolf staat de pc niet op volle kracht ($(cat "$TMP/profiel"))"
 fi
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
