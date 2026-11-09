@@ -64,7 +64,9 @@ def zet_grote_tekst(aan: bool) -> None:
             _c.kde_schrijf("kdeglobals", groep, sleutel, waarde if waarde else None)
         voor.unlink(missing_ok=True)
     else:
-        if aan and not voor.exists():
+        # Een nieuwe momentopname als 'Grote letters' nu uit staat: een oude (van voor je in KDE iets veranderde)
+        # zou anders later je nieuwere lettertypes terugdraaien (U383).
+        if aan and (not voor.exists() or not grote_tekst()):
             try:
                 voor.parent.mkdir(parents=True, exist_ok=True)
                 voor.write_text(json.dumps({f"{g}/{k}": _c.kde_lees("kdeglobals", g, k, "") for g, k in sleutels}),

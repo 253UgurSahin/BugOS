@@ -143,7 +143,8 @@ class UpdatesPagina(Blad):
             "Your files stay where they are. But what you changed in the system since the last update goes back too: "
             "a new password (the old one works again), new users, and Wi-Fi networks you added since."))
         ja = box.addButton(t("Terug", "Go back"), QMessageBox.ButtonRole.AcceptRole)
-        box.addButton(t("Annuleren", "Cancel"), QMessageBox.ButtonRole.RejectRole)
+        annuleer = box.addButton(t("Annuleren", "Cancel"), QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(annuleer)   # Enter uit gewoonte = niets doen, zoals bij weggooien in Bestanden (U380)
         box.exec()
         if box.clickedButton() is ja:
             self.updates("terug")

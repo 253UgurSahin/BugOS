@@ -880,14 +880,15 @@ del venster.isActiveWindow
 from PySide6.QtWidgets import QMessageBox as _QMB2  # noqa: E402
 
 _up = venster.paginas["updates"]
-_teksten, _gestart = [], []
+_teksten, _gestart, _std = [], [], []
 _oud_exec, _oud_up = _QMB2.exec, _up.updates
-_QMB2.exec = lambda self: _teksten.append(self.informativeText()) or 0   # 'Annuleren'
+_QMB2.exec = lambda self: (_teksten.append(self.informativeText()), _std.append(self.defaultButton().text() if self.defaultButton() else ""))[0] or 0   # 'Annuleren'
 _up.updates = lambda wat: _gestart.append(wat)
 _up.vraag_terug()
 _QMB2.exec, _up.updates = _oud_exec, _oud_up
 klopt(_teksten and "wachtwoord" in _teksten[0] and "wifi" in _teksten[0] and not _gestart,
       f"U368: 'terug' waarschuwt eerst dat wachtwoord, gebruikers en wifi ook teruggaan; Annuleren doet niets ({_gestart})")
+klopt(_std == ["Annuleren"], f"U380: in de vraag 'terug' doet Enter uit gewoonte niets (Annuleren is de standaard) ({_std})")
 
 # U374: 'Grote letters' uit zet terug wat er stond (eigen grootte en menulettertype), niet altijd 10 punten.
 _cfg = Path(tempfile.mkdtemp(prefix="bugos-cfg-"))
@@ -903,6 +904,20 @@ else:
 _terug = kde_sleutels(opdr)
 klopt(_terug.get(("General", "font")) == _eigen["font"] and _terug.get(("General", "menuFont")) == _eigen["menuFont"],
       f"U374: 'Grote letters' uit zet je eigen lettertypes terug ({_terug.get(('General', 'menuFont'))})")
+
+# U383: een oude momentopname van de lettertypes wordt vernieuwd als 'Grote letters' weer aangaat.
+_cfg2 = Path(tempfile.mkdtemp(prefix="bugos-cfg-"))
+(_cfg2 / "bugos").mkdir()
+(_cfg2 / "bugos" / "grote-letters-voor.json").write_text('{"General/menuFont": "Oud,9,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"}')
+_oud_cfg2 = os.environ.get("XDG_CONFIG_HOME")
+os.environ["XDG_CONFIG_HOME"] = str(_cfg2)
+vang(bi.zet_grote_tekst, True, antwoord=lambda c: (0, "Nieuw,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1") if "--key" in c else (0, ""))
+_snap = (_cfg2 / "bugos" / "grote-letters-voor.json").read_text()
+if _oud_cfg2 is None:
+    os.environ.pop("XDG_CONFIG_HOME", None)
+else:
+    os.environ["XDG_CONFIG_HOME"] = _oud_cfg2
+klopt("Oud" not in _snap and "Nieuw" in _snap, f"U383: 'Grote letters' aan maakt een nieuwe momentopname (geen oude) ({_snap[:60]})")
 
 # U353: zoeken in Instellingen vindt ook woorden die op de pagina's staan (taakbalk, fps, opslag, dubbelklikken…).
 _mist = []

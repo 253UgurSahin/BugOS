@@ -233,5 +233,10 @@ _kopie = [p for p in _th.rglob("Belasting") if p.is_file()]
 klopt(_r.returncode == 0 and _kopie and _kopie[0].read_text() == "mijn nieuwe bestand",
       f"U371: terugzetten laat geen bestand van je computer verdwijnen (een map met dezelfde naam) ({_bewaard})")
 
+import re as _re  # noqa: E402
+
+klopt(any(_re.search(r"--backup-dir=.*\d{4}-\d{2}-\d{2} \d{2}\.\d{2}\.\d{2}$", a) for a in bb.rsync_terug(_bk, _th)),
+      "U381: de map voor vervangen bestanden heeft ook de tijd: twee keer terugzetten op één dag overschrijft niets")
+
 print(f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)

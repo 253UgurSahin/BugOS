@@ -93,6 +93,12 @@ rm -f "$TMP/rollback"
 draai bugos-updates terug
 klopt '[ $code -eq 3 ] && [ ! -f "$TMP/rollback" ] && grep -q "no older version" "$TMP/uit"' \
     "U044: terug terwijl de oudste al draait: niet vooruit naar de nieuwere, zegt dat er geen oudere is"
+# U379: bij het opstarten de oudere gekozen (Shift/Esc), de nieuwere staat nog als vaste keuze bovenaan: 'terug' maakt
+# deze oudere versie vast (rollback), in plaats van 'er is geen oudere versie'.
+printf '{"deployments":[{"booted":false,"timestamp":2000},{"booted":true,"timestamp":1000}]}' >"$TMP/status.json"
+rm -f "$TMP/rollback"
+draai bugos-updates terug
+klopt '[ $code -eq 0 ] && [ -f "$TMP/rollback" ]' "U379: oudere versie via het opstartmenu gestart: 'terug' maakt hem vast"
 # U043: er staat een update klaar (staged) voor de volgende keer opstarten: eerst weghalen, dan pas terug.
 nep rpm-ostree 'case "$1" in status) cat "'"$TMP"'/status.json";; cleanup) echo "cleanup $*" >>"'"$TMP"'/rollback";;
 rollback) grep -q cleanup "'"$TMP"'/rollback" 2>/dev/null || { echo "error: Staged deployment" >&2; exit 1; }; echo rollback >>"'"$TMP"'/rollback";; esac'

@@ -107,16 +107,23 @@ terug)
             "That is already set. Restart the computer to go back."
         exit 0
     fi
+    # Koos je bij het opstarten (Shift/Esc) de oudere versie, en staat de nieuwere nog als vaste keuze bovenaan? Dan maakt
+    # rollback déze (oudere) versie vast: precies wat 'terug' moet doen (U379).
+    VASTZETTEN=0
+    if echo "$STATUS" | jq -e '(.deployments[] | select(.booted) | .timestamp) as $nu
+        | .deployments[0] | (.booted == false and ((.staged // false) | not) and (.timestamp // 0) > ($nu // 0))' >/dev/null 2>&1; then
+        VASTZETTEN=1   # (niet een update die alleen klaarstaat: die ruimen we hieronder op)
+    fi
     # Is er geen oudere versie dan deze (net geïnstalleerd, of je ging al terug en startte opnieuw op)?
     # Dan zou rpm-ostree juist naar de nieuwere gaan: niet doen, en dat zeggen (code 3).
-    if [ -n "$STATUS" ] && ! echo "$STATUS" | jq -e '(.deployments[] | select(.booted) | .timestamp) as $nu
+    if [ "$VASTZETTEN" = 0 ] && [ -n "$STATUS" ] && ! echo "$STATUS" | jq -e '(.deployments[] | select(.booted) | .timestamp) as $nu
         | any(.deployments[]; .booted == false and (.timestamp // 0) < ($nu // 0))' >/dev/null 2>&1; then
         t "Er is geen oudere versie om naar terug te gaan." "There is no older version to go back to."
         exit 3
     fi
     # Staat er een update klaar voor de volgende keer opstarten, dan weigert rpm-ostree terug te gaan:
     # die update eerst weghalen (hij komt later gewoon weer).
-    if echo "$STATUS" | jq -e '.deployments[0] | (.booted == false and (.staged // false))' >/dev/null 2>&1; then
+    if [ "$VASTZETTEN" = 0 ] && echo "$STATUS" | jq -e '.deployments[0] | (.booted == false and (.staged // false))' >/dev/null 2>&1; then
         rpm-ostree cleanup -p || exit 1
     fi
     rpm-ostree rollback || exit 1
@@ -129,6 +136,8 @@ terug)
         gebruiker_timer mask
         t "Klaar. Start de computer opnieuw op om terug te gaan. Updates gaan nu niet meer vanzelf, anders komt de nieuwe versie terug; zet ze weer aan in Instellingen als het mag." \
             "Done. Restart the computer to go back. Updates are no longer automatic, or the new version would come back; turn them on again in Settings when it is fine."
+    elif [ "$VASTZETTEN" = 1 ]; then
+        t "Klaar. Deze versie blijft nu ook na opnieuw opstarten." "Done. This version now stays, also after a restart."
     else
         t "Klaar. Start de computer opnieuw op om terug te gaan." "Done. Restart the computer to go back."
     fi

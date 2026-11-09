@@ -227,8 +227,11 @@ def _dubbel_in(basis: Path, m: Path, doel: Path | None) -> list[Path]:
 def rsync_terug(doel: Path, thuis: Path) -> list[str]:
     # --update: een nieuwer bestand op de computer wordt nooit overschreven. Maar rsync vervangt een bestand altijd als
     # de back-up op die plek een map of snelkoppeling heeft (ander soort): dan het oude bewaren met een naam erachter
-    # (--backup), in één map in je thuismap, zodat terugzetten nooit iets van je computer laat verdwijnen (U371).
-    bewaar = thuis / t(f"Vervangen bij terugzetten {time.strftime('%Y-%m-%d')}", f"Replaced when restoring {time.strftime('%Y-%m-%d')}")
+    # (--backup), in een map 'Vervangen bij terugzetten <datum tijd>' in die map (Documenten, Afbeeldingen…), zodat
+    # terugzetten nooit iets van je computer laat verdwijnen (U371). Met de tijd erbij: een tweede keer terugzetten op
+    # dezelfde dag overschrijft niet wat de eerste keer bewaarde (U381).
+    stempel = time.strftime("%Y-%m-%d %H.%M.%S")
+    bewaar = thuis / t(f"Vervangen bij terugzetten {stempel}", f"Replaced when restoring {stempel}")
     return ["rsync", "-rtl", "--update", "--backup", f"--backup-dir={bewaar}", "--modify-window=2",
             "--info=progress2", "--no-inc-recursive", f"{doel}/", f"{thuis}/"]
 
@@ -562,8 +565,10 @@ def venster() -> int:
                 self.melding.zet(t("Klaar! Je bestanden staan veilig op de schijf. Je mag hem er nu uithalen.",
                                    "Done! Your files are safe on the drive. You can unplug it now."), "goed")
             else:
-                self.melding.zet(t("Klaar! Je bestanden staan weer op je computer.",
-                                   "Done! Your files are back on your computer."), "goed")
+                self.melding.zet(t("Klaar! Je bestanden staan weer op je computer. Werd er iets vervangen, dan staat het "
+                                   "oude in een map 'Vervangen bij terugzetten'.",
+                                   "Done! Your files are back on your computer. If something was replaced, the old one "
+                                   "is in a folder 'Replaced when restoring'."), "goed")   # (U382)
             self.stop(True)
 
         def stop(self, gelukt: bool) -> None:
