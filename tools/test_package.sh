@@ -89,7 +89,7 @@ nep distrobox 'case "$1" in list) echo " bugos-ubuntu ";; upgrade) echo "$2" >>"
 HOME="$TMP/thuis" PATH="$TMP/bin:$PATH" bash "$TMP/bugos-package" --bijwerken >/dev/null 2>&1; c1=$?
 rm -f "$TMP/bijgewerkt"
 HOME="$TMP/leeg" PATH="$TMP/bin:$PATH" bash "$TMP/bugos-package" --bijwerken >/dev/null 2>&1; c2=$?
-klopt '[ "$c1" -ne 0 ] && [ "$c2" -eq 0 ] && [ ! -e "$TMP/bijgewerkt" ] && grep -q "Metered" "$SDU/bugos-update-doosjes.service" && grep -qx "Restart=on-failure" "$SDU/bugos-update-doosjes.service" && grep -qx "StartLimitBurst=4" "$SDU/bugos-update-doosjes.service" && grep -q "flock 9" "$TMP/bugos-package"' \
+klopt '[ "$c1" -ne 0 ] && [ "$c2" -eq 0 ] && [ ! -e "$TMP/bijgewerkt" ] && grep -q "Metered" "$SDU/bugos-update-doosjes.service" && grep -qx "Restart=on-failure" "$SDU/bugos-update-doosjes.service" && grep -qx "StartLimitBurst=4" "$SDU/bugos-update-doosjes.service" && grep -q "flock -w 3600 9" "$TMP/bugos-package" && grep -q "distrobox upgrade \"\$doos\" >/dev/null 2>&1 9>&-" "$TMP/bugos-package"' \
     "U473: doosjes bijwerken: niet via een hotspot, later opnieuw als het mislukte, niets zonder doosjes ($c1, $c2)"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

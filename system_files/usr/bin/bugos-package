@@ -19,13 +19,15 @@ if [ "${1:-}" = --bijwerken ]; then
     [ -d "${XDG_DATA_HOME:-$HOME/.local/share}/containers" ] || exit 0
     # Eén tegelijk: 'Nu updaten' en de dagelijkse update niet door elkaar (dan faalt er een op het slot van dnf) (U480).
     if [ -n "${XDG_RUNTIME_DIR:-}" ] && exec 9>"$XDG_RUNTIME_DIR/bugos-doosjes.slot"; then
-        flock 9 2>/dev/null || true
+        # Hoogstens een uur wachten; en het slot (9) niet doorgeven aan podman/conmon, die kunnen blijven draaien en
+        # dan bleef het slot de hele sessie dicht (zoals U270) (U487).
+        flock -w 3600 9 2>/dev/null || true
     fi
-    lijst="$(distrobox list 2>/dev/null)"
+    lijst="$(distrobox list 2>/dev/null 9>&-)"
     mislukt=0
     for doos in bugos-fedora bugos-ubuntu; do
         if grep -q " $doos " <<<"$lijst"; then
-            distrobox upgrade "$doos" >/dev/null 2>&1 || { echo "bugos-package: $doos bijwerken lukte niet" >&2; mislukt=1; }
+            distrobox upgrade "$doos" >/dev/null 2>&1 9>&- || { echo "bugos-package: $doos bijwerken lukte niet" >&2; mislukt=1; }
         fi
     done
     exit "$mislukt"   # mislukt: systemd probeert het later opnieuw (U473)

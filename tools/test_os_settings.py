@@ -1032,6 +1032,8 @@ while not _na480 and time.time() - _t0 < 10:
     time.sleep(0.05)
 os.environ["PATH"] = _pad480
 _log480 = (_nep480 / "log").read_text() if (_nep480 / "log").exists() else ""
+klopt("timeout 30m flatpak update --user" in (ROOT / "system_files/usr/lib/bugos/python/bugos_settings_systeem.py").read_text(),
+      "U487: je eigen apps bijwerken heeft een tijdslimiet (Instellingen blijft niet voor altijd bezig)")
 klopt(_na480 == [1] and "update --user" in _log480 and "startDetached" not in
       (ROOT / "system_files/usr/lib/bugos/python/bugos_settings_systeem.py").read_text(),
       f"U475/U480: 'Nu updaten' werkt je eigen apps bij en wacht daarop ({_log480.strip()!r})")
