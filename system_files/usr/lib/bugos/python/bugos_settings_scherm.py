@@ -277,9 +277,14 @@ class UiterlijkPagina(Blad):
         op_achtergrond(self, bi.donker, lambda d: self.thema[bool(d)].setChecked(True))
 
     def zet_thema(self, donker: bool) -> None:
-        op_achtergrond(self, lambda: bi.zet_donker(donker), lambda _u: self.melding.toon(
-            t("Klaar. Open programma's krijgen de nieuwe kleuren als je ze opnieuw opent.",
-              "Done. Open programs get the new colors when you open them again."), "goed"))
+        def klaar(ok) -> None:
+            if ok:
+                self.melding.toon(t("Klaar. Open programma's krijgen de nieuwe kleuren als je ze opnieuw opent.",
+                                    "Done. Open programs get the new colors when you open them again."), "goed")
+            else:   # niet 'Klaar' zeggen als het niet lukte; de knoppen weer zoals het echt is (U336)
+                self.melding.toon(t("Dat lukte niet. Probeer het nog eens.", "That did not work. Try again."), "fout")
+                self.ververs()
+        op_achtergrond(self, lambda: bi.zet_donker(donker), klaar)
 
     def zet_achtergrond(self, pad: str) -> None:
         op_achtergrond(self, lambda: bi.zet_achtergrond(pad), lambda ok: self.melding.toon(

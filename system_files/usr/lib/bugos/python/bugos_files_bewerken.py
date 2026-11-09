@@ -8,6 +8,7 @@ en de prullenbak (terugzetten, leegmaken). Dit is een stukje van het venster
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -258,7 +259,8 @@ class Bewerken:
     def weggooien(self) -> None:
         if self.in_prullenbak:
             return
-        paden = self.gekozen()
+        # Wat al weg is (twee keer snel op Delete), niet nog eens: anders leek het 'op een andere schijf' (U337).
+        paden = [p for p in self.gekozen() if os.path.lexists(p)]
         if not paden:
             return
         ver = [p for p in paden if not zelfde_schijf(p, thuis())]

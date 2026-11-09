@@ -252,12 +252,12 @@ def donker() -> bool:
     return r * 299 + g * 587 + b * 114 < 128000
 
 
-def zet_donker(aan: bool) -> None:
+def zet_donker(aan: bool) -> bool:
     if _c.VOORBEELD:
         _c._VB["donker"] = aan
-        return
-    # Eén plek voor licht/donker: kleuren, KDE-programma's (Kvantum) en de Plasma-stijl.
-    _c.draai("bugos-theme", "donker" if aan else "licht", timeout=30)
+        return True
+    # Eén plek voor licht/donker: kleuren, KDE-programma's (Kvantum) en de Plasma-stijl. Zeg of het lukte (U336).
+    return _c.draai("bugos-theme", "donker" if aan else "licht", timeout=30)[0] == 0
 
 
 def bugos_achtergronden() -> list[tuple[str, str]]:
@@ -274,9 +274,28 @@ def bugos_achtergronden() -> list[tuple[str, str]]:
     return lijst
 
 
+def eigen_achtergrond_map() -> Path:
+    return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "wallpapers" / "bugos-eigen"
+
+
 def zet_achtergrond(pad: str) -> bool:
     if _c.VOORBEELD:
         return True
+    # Een eigen foto eerst kopiëren: van een USB-stick of uit Downloads verdween hij anders zodra de stick eruit
+    # ging of je de foto weggooide (U335). BugOS' eigen achtergronden staan in /usr en blijven.
+    if not pad.startswith("/usr/"):
+        try:
+            eigen = eigen_achtergrond_map()
+            eigen.mkdir(parents=True, exist_ok=True)
+            doel = eigen / Path(pad).name
+            if Path(pad).resolve() != doel.resolve():
+                for oud in eigen.iterdir():   # alleen de laatste eigen foto bewaren
+                    if oud.is_file() and oud.name != doel.name:
+                        oud.unlink(missing_ok=True)
+                shutil.copy2(pad, doel)
+            pad = str(doel)
+        except OSError:
+            pass   # kopiëren lukt niet (vol?): dan het origineel gebruiken
     return _c.draai("plasma-apply-wallpaperimage", pad, timeout=15)[0] == 0
 
 

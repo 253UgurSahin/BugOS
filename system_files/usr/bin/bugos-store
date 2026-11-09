@@ -282,7 +282,11 @@ class Winkel(Venster):
         if not apps:
             self.melding.zet(t("Niet in de BugOS-selectie. Druk op \"Meer apps zoeken\" om verder te zoeken.",
                                "Not in the BugOS selection. Press \"Search more apps\" to search further."), "info")
-        elif self.bezig_met is None and not self.melding.tekst.text().startswith("✅"):
+        elif self.bezig_met is not None:
+            # Wordt er iets geïnstalleerd? Dan die melding terug (een zoekopdracht zonder uitkomst verving hem) (U333).
+            naam = next((app_naam(a) for a in self.cat["apps"] if a["id"] == self.bezig_met), self.bezig_met)
+            self.melding.zet(t(f"{naam} wordt geïnstalleerd…", f"Installing {naam}…"), "bezig")
+        elif not self.melding.tekst.text().startswith("✅"):
             self.melding.zet("")
 
     def resizeEvent(self, e):  # noqa: N802

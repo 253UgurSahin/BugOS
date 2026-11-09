@@ -1531,6 +1531,17 @@ for _s in (_QEv.Type.MouseButtonPress, _QEv.Type.MouseButtonRelease, _QEv.Type.M
     _muis(_s)
 klopt(len(_kl) == 2, f"U332: een dubbelklik op een regel telt als één klik (en een losse klik daarna gewoon) ({len(_kl)})")
 _rij.close()
+# U333: tijdens het installeren een zoekopdracht zonder uitkomst, dan weer leeg: de melding 'wordt geïnstalleerd' komt terug.
+_ww3 = winkel.Winkel(cat)
+_ww3.bezig_met = "org.mozilla.firefox"
+_ww3.zoek.setText("qqqzzzniets")
+_ww3.zoek.setText("")
+klopt("geïnstalleerd" in _ww3.melding.tekst.text() or "Installing" in _ww3.melding.tekst.text(),
+      f"U333: na een lege zoekopdracht staat 'wordt geïnstalleerd' er weer ({_ww3.melding.tekst.text()!r})")
+_ww3.bezig_met = None
+_ww3.deleteLater()
+klopt("os.path.lexists(p)" in (ROOT / "system_files/usr/lib/bugos/python/bugos_files_bewerken.py").read_text(),
+      "U337: twee keer snel Delete op hetzelfde bestand vraagt niet 'echt weggooien van een andere schijf?'")
 _stukken = [(n, (ROOT / "system_files/usr/bin" / n).read_text()) for n in
             ("bugos-settings", "bugos-task-manager", "bugos-store", "bugos-welcome", "bugos-backup", "bugos-switch", "bugos-help")]
 klopt(all("een_keer=True" in tekst for _n, tekst in _stukken), "U208: Instellingen, Taakbeheer, Winkel, Welkom, Back-up, Overstap en Hulp openen maar één keer")

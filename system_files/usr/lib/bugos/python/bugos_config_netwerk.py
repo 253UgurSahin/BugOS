@@ -125,6 +125,14 @@ def bekend_netwerk(naam: str) -> bool:
     return any(splits_nmcli(r)[:2] == [naam, "802-11-wireless"] for r in uit.splitlines())
 
 
+def vergeet_netwerk(naam: str) -> bool:
+    """Het opgeslagen wifi-netwerk (en zijn wachtwoord) weggooien: dan verbindt BugOS er niet meer vanzelf mee (U338)."""
+    if _c.VOORBEELD:
+        _c._VB["verbonden"] = ""
+        return True
+    return _c.draai("nmcli", "connection", "delete", "id", naam)[0] == 0
+
+
 def verbreek(naam: str) -> bool:
     if _c.VOORBEELD:
         _c._VB["verbonden"] = ""

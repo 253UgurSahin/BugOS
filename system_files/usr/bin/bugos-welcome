@@ -153,7 +153,7 @@ class Internet(Pagina):
         self.lay.addWidget(kaart)
         rij = QHBoxLayout()
         kies = Knop(t("Wifi kiezen", "Choose Wi-Fi"), "hoofd", "lijn:wifi", groot=True)
-        kies.clicked.connect(lambda: start("systemsettings", "kcm_networkmanagement"))
+        kies.clicked.connect(lambda: start("bugos-settings", "wifi"))   # de eenvoudige wifi-pagina van BugOS (U334)
         opnieuw = Knop(t("Opnieuw kijken", "Check again"), "stil", "lijn:verversen")
         opnieuw.clicked.connect(self.ververs)
         rij.addWidget(kies)

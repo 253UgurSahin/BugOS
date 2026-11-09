@@ -89,6 +89,26 @@ s = kde_sleutels(opdr)
 klopt(na == 0 and s.get(("AC/Display", "TurnOffDisplayWhenIdle")) == "false",
       "U001: 'nooit' van een oudere BugOS (tijd 0, uitzetten nog aan) wordt bij het lezen goed gezet")
 
+# U336: licht/donker zegt of het lukte (niet altijd 'Klaar'). U338: een wifi-netwerk vergeten. U335: een eigen
+# achtergrondfoto wordt gekopieerd (van een stick verdween hij anders).
+_, _ok = vang(bi.zet_donker, True, antwoord=lambda c: (1, ""))
+opdr, _ = vang(bi.vergeet_netwerk, "Thuis wifi")
+klopt(_ok is False and ("nmcli", "connection", "delete", "id", "Thuis wifi") in opdr,
+      f"U336/U338: mislukt licht/donker zegt 'mislukt'; 'Vergeten' gooit het opgeslagen netwerk weg ({opdr})")
+_stick = Path(tempfile.mkdtemp(prefix="bugos-stick-"))
+(_stick / "vakantie.jpg").write_bytes(b"jpg")
+_oud_data = os.environ.get("XDG_DATA_HOME")
+_data = Path(tempfile.mkdtemp(prefix="bugos-data-"))
+os.environ["XDG_DATA_HOME"] = str(_data)
+opdr, _ = vang(bi.zet_achtergrond, str(_stick / "vakantie.jpg"))
+if _oud_data is None:
+    os.environ.pop("XDG_DATA_HOME", None)
+else:
+    os.environ["XDG_DATA_HOME"] = _oud_data
+_kopie = _data / "wallpapers" / "bugos-eigen" / "vakantie.jpg"
+klopt(_kopie.exists() and any(c[0] == "plasma-apply-wallpaperimage" and c[1] == str(_kopie) for c in opdr),
+      f"U335: een eigen foto (van een stick) wordt eerst gekopieerd, zodat de achtergrond blijft ({opdr})")
+
 # U235: een laptop op de accu: Instellingen toont de accu-tijden (KDE: 5 min scherm uit), niet die van de lader.
 _sys235 = Path(tempfile.mkdtemp(prefix="bugos-sys-"))
 (_sys235 / "class" / "power_supply" / "BAT0").mkdir(parents=True)

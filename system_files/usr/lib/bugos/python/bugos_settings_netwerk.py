@@ -68,7 +68,8 @@ class WifiPagina(Blad):
         for n in netwerken:
             slot = t(" · met wachtwoord", " · with password") if n.beveiligd else t(" · open netwerk", " · open network")
             if n.verbonden:
-                meer = meer_knop(lambda x=n: [("kruis", t("Verbreken", "Disconnect"), lambda: self.verbreek(x))])
+                meer = meer_knop(lambda x=n: [("kruis", t("Verbreken", "Disconnect"), lambda: self.verbreek(x)),
+                                              ("prullenbak", t("Vergeten", "Forget"), lambda: self.vergeet_wifi(x))])
                 self.lijst.voeg(Rij("vink", n.naam, t("Verbonden · ", "Connected · ") + sterkte_woord(n.sterkte) + slot,
                                     meer))
             else:
@@ -171,6 +172,10 @@ class WifiPagina(Blad):
 
     def verbreek(self, n: bi.Netwerk) -> None:
         op_achtergrond(self, lambda: bi.verbreek(n.naam), lambda _u: self.ververs())
+
+    def vergeet_wifi(self, n: bi.Netwerk) -> None:
+        """Vergeten: verbreken en het wachtwoord weggooien (U338)."""
+        op_achtergrond(self, lambda: bi.vergeet_netwerk(n.naam), lambda _u: self.ververs())
 
 
 # ============================================================= bluetooth ===
