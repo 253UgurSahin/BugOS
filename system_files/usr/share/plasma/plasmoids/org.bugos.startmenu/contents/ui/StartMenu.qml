@@ -348,7 +348,9 @@ Rectangle {
                     Image {
                         id: fotoBeeld
                         anchors.fill: parent
-                        source: avatar.foto === "" ? "" : "file://" + avatar.foto
+                        // De tijd erachter: een nieuwe foto onder dezelfde naam wordt dan echt opnieuw geladen (U112).
+                        source: avatar.foto === "" ? "" : "file://" + avatar.foto + "?" + (menu.gegevens.gebruiker.foto_tijd || 0)
+                        cache: false
                         fillMode: Image.PreserveAspectCrop
                         sourceSize.width: 76
                         sourceSize.height: 76

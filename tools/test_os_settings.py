@@ -437,6 +437,28 @@ bi.verbind = _oud_verbind
 klopt("wachtwoord" not in _wp.melding.tekst.text().lower() and "password" not in _wp.melding.tekst.text().lower(),
       f"U110: een open netwerk dat niet lukt vraagt niet naar een wachtwoord ({_wp.melding.tekst.text()})")
 
+# U114: 'Eigen foto kiezen' begint in de echte map Afbeeldingen (uit user-dirs.dirs), niet altijd ~/Pictures.
+import bugos_settings_scherm as _scherm  # noqa: E402
+
+_xdg = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+_xdg.mkdir(parents=True, exist_ok=True)
+_echte = Path.home() / "Mijn Fotos"
+_echte.mkdir(exist_ok=True)
+_oud_dirs = (_xdg / "user-dirs.dirs").read_text() if (_xdg / "user-dirs.dirs").exists() else None
+(_xdg / "user-dirs.dirs").write_text('XDG_PICTURES_DIR="$HOME/Mijn Fotos"\n')
+_gevraagd: list = []
+_oud_dlg = _scherm.QFileDialog.getOpenFileName
+_scherm.QFileDialog.getOpenFileName = staticmethod(lambda *a, **k: (_gevraagd.append(a[2]), ("", ""))[1])
+venster.ga_naar("uiterlijk")
+wacht()
+venster.paginas["uiterlijk"].kies_foto()
+_scherm.QFileDialog.getOpenFileName = _oud_dlg
+if _oud_dirs is None:
+    (_xdg / "user-dirs.dirs").unlink()
+else:
+    (_xdg / "user-dirs.dirs").write_text(_oud_dirs)
+klopt(_gevraagd == [str(_echte)], f"U114: 'Eigen foto kiezen' begint in de map Afbeeldingen van de gebruiker ({_gevraagd})")
+
 # U010: wie geen beheerder is, verandert zijn eigen wachtwoord via passwd (PAM), in een nep-terminal;
 # geen wachtwoord op de opdrachtregel, en geen vraag om het wachtwoord van een beheerder.
 nep_pw = TMP / "nep-pw"

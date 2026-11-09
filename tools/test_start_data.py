@@ -192,6 +192,28 @@ import time  # noqa: E402
 time.sleep(0.5)
 klopt("bugos-settings wifi" in logboek(), "start: 'instelling:wifi' opent BugOS Instellingen op de wifi-pagina")
 
+# U112: de foto van de gebruiker met zijn tijd (dan laadt het startmenu een nieuwe foto opnieuw).
+# U113: ook recente bestanden van apps uit de Winkel (Flatpak, met een eigen lijst in ~/.var/app).
+import getpass  # noqa: E402
+
+_iconen = TMP / "accounts-iconen"
+_iconen.mkdir()
+(_iconen / getpass.getuser()).write_bytes(b"png")
+_doc = TMP / "thuis" / "brief.odt"
+_doc.parent.mkdir(parents=True, exist_ok=True)
+_doc.write_text("x")
+_flatpak = TMP / "thuis" / ".var" / "app" / "org.libreoffice.LibreOffice" / "data"
+_flatpak.mkdir(parents=True)
+(_flatpak / "recently-used.xbel").write_text(
+    '<?xml version="1.0"?><xbel version="1.0"><bookmark href="file://' + str(_doc) +
+    '" added="2026-11-09T10:00:00Z" modified="2026-11-09T10:00:00Z" visited="2026-11-09T10:00:00Z"/></xbel>')
+_d = json.loads(draai(env_extra={"BUGOS_ACCOUNTS_ICONEN": str(_iconen)}))
+klopt(_d["gebruiker"]["foto"] == str(_iconen / getpass.getuser()) and _d["gebruiker"].get("foto_tijd", 0) > 0,
+      f"U112: de foto van de gebruiker, met de tijd erbij ({_d['gebruiker']})")
+klopt(any(r["pad"] == str(_doc) for r in _d["recent"]), f"U113: recente bestanden van een Winkel-app staan erbij ({_d['recent'][:2]})")
+_sm = (ROOT / "system_files/usr/share/plasma/plasmoids/org.bugos.startmenu/contents/ui/StartMenu.qml").read_text()
+klopt("foto_tijd" in _sm and "cache: false" in _sm, "U112: het startmenu laadt een nieuwe foto opnieuw")
+
 # U072: 'niet storen tot' zoals KDE het echt schrijft (seconden met komma-deel, soms een tijdzone erachter).
 import importlib.machinery  # noqa: E402
 import importlib.util  # noqa: E402

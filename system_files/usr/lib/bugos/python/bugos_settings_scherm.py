@@ -281,7 +281,9 @@ class UiterlijkPagina(Blad):
             t("Dat lukte niet.", "That did not work."), "goed" if ok else "fout"))
 
     def kies_foto(self) -> None:
-        map_ = Path.home() / t("Afbeeldingen", "Pictures")
+        # De echte map Afbeeldingen (ook als je later een andere taal koos) (U114).
+        from bugos_files_plekken import xdg_map
+        map_ = xdg_map("PICTURES", "Pictures")
         pad, _ = QFileDialog.getOpenFileName(self, t("Kies een foto", "Choose a photo"),
                                              str(map_ if map_.exists() else Path.home()),
                                              t("Foto's (*.jpg *.jpeg *.png *.webp)", "Photos (*.jpg *.jpeg *.png *.webp)"))

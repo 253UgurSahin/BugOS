@@ -206,13 +206,17 @@ def favorieten(apps: list[dict]) -> list[dict]:
 
 
 def recente_bestanden(max_aantal: int = 8) -> list[dict]:
-    xbel = Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share")) / "recently-used.xbel"
-    try:
-        wortel = ET.parse(xbel).getroot()
-    except (OSError, ET.ParseError):
-        return []
+    # Ook die van apps uit de Winkel (Flatpak: LibreOffice, VLC, ...): die schrijven hun lijst in hun eigen map (U113).
+    lijsten = [Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share")) / "recently-used.xbel"]
+    lijsten += sorted((HOME / ".var" / "app").glob("*/data/recently-used.xbel"))
+    bookmarks = []
+    for xbel in lijsten:
+        try:
+            bookmarks += list(ET.parse(xbel).getroot().iter("bookmark"))
+        except (OSError, ET.ParseError):
+            continue
     items = []
-    for b in wortel.iter("bookmark"):
+    for b in bookmarks:
         url = urlparse(b.get("href", ""))
         if url.scheme != "file":
             continue
@@ -237,10 +241,15 @@ def gebruiker() -> dict:
         volledig = pwd.getpwnam(naam).pw_gecos.split(",")[0] or naam
     except KeyError:
         volledig = naam
-    foto = HOME / ".face.icon"
-    if not foto.exists():
-        foto = Path(f"/var/lib/AccountsService/icons/{naam}")
-    return {"naam": volledig, "foto": str(foto) if foto.exists() else ""}
+    # Eerst die van AccountsService (die verandert Instellingen > Gebruikers), dan een oude ~/.face.icon.
+    kandidaten = [Path(os.environ.get("BUGOS_ACCOUNTS_ICONEN", "/var/lib/AccountsService/icons")) / naam, HOME / ".face.icon"]
+    foto = next((k for k in kandidaten if k.exists()), None)
+    try:
+        tijd = int(foto.stat().st_mtime) if foto else 0
+    except OSError:
+        tijd = 0
+    # 'tijd': een nieuwe foto heeft dezelfde bestandsnaam; met de tijd erbij laadt het startmenu hem opnieuw (U112).
+    return {"naam": volledig, "foto": str(foto) if foto else "", "foto_tijd": tijd}
 
 
 def draai(*cmd: str) -> str:
