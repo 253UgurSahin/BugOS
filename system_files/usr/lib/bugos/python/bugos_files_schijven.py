@@ -18,7 +18,7 @@ from bugos_drives import (
 )
 from bugos_files_plekken import schijf_van, thuis, zit_in
 from bugos_files_onderdelen import SchijfRij
-from PySide6.QtCore import QProcess, Qt
+from PySide6.QtCore import QProcess, Qt, QTimer
 from PySide6.QtWidgets import QMenu
 
 
@@ -102,6 +102,14 @@ class Schijven:
             actie("uitwerpen", t("Veilig verwijderen", "Safely remove"), lambda: self.uitwerpen(x.station), vrij_spel)
         return m
 
+    def _na_schijfklus(self, ok: bool) -> None:
+        """Wilde je het venster al sluiten tijdens een schijfklus? Dan nu (als alles klaar is en lukte) (U207)."""
+        if getattr(self, "sluit_na_klus", False) and not self.bezig and not (self.klus and self.klus.isRunning()):
+            if ok:
+                self.close()
+            else:
+                self.sluit_na_klus = False   # mislukt: open laten, zodat je de melding ziet
+
     def beheer(self, x: Schijf, stappen: list[list[str]], bezig: str, gelukt: str, mislukt: str,
                weer_open: bool = False) -> None:
         """Voer een beheer-klus uit op de achtergrond, met een melding voor en na."""
@@ -118,6 +126,7 @@ class Schijven:
         def klaar(ok: bool, _uitvoer: str) -> None:
             self.bezig.discard(x.apparaat)
             self._zijbalk_sleutels = None
+            QTimer.singleShot(0, lambda ok=ok: self._na_schijfklus(ok))
             self.vul_zijbalk()
             self.melding.toon(gelukt if ok else mislukt, "goed" if ok else "fout", seconden=10)
 
@@ -272,6 +281,7 @@ class Schijven:
         def klaar(ok: bool, uitvoer: str) -> None:
             self.bezig.discard(x.apparaat)
             self._zijbalk_sleutels = None
+            QTimer.singleShot(0, lambda ok=ok: self._na_schijfklus(ok))
             self.vul_zijbalk()
             nu = self.schijf(x.apparaat)
             if nu and nu.wortel:
@@ -313,6 +323,7 @@ class Schijven:
         def klaar(ok: bool, _uitvoer: str) -> None:
             self.bezig.discard(station)
             self._zijbalk_sleutels = None
+            QTimer.singleShot(0, lambda ok=ok: self._na_schijfklus(ok))
             self.vul_zijbalk()
             if ok:
                 self.melding.toon(t(f"Je kunt '{naam}' er nu veilig uithalen.", f"You can now safely remove '{naam}'."),

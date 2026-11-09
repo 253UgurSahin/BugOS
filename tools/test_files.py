@@ -515,6 +515,17 @@ def wacht_op(stappen, laatste=None):
 klopt(wacht_op([["true"], ["true"]], ["false"]) is True, "achtergrond: alles gelukt (de laatste stap mag mislukken)")
 klopt(wacht_op([["true"], ["false"], ["true"]]) is False, "achtergrond: stopt bij een stap die mislukt")
 klopt(wacht_op([["bestaat-niet-bugos"]]) is False, "achtergrond: een programma dat er niet is, geeft netjes 'mislukt'")
+# U207: het venster sluiten terwijl een schijf klaargemaakt of gewist wordt: wachten, daarna vanzelf dicht.
+venster.show()
+venster.bezig.add("/dev/sdq1")
+venster.close()
+_bleef = venster.isVisible()
+venster.bezig.discard("/dev/sdq1")
+venster._na_schijfklus(True)
+app.processEvents()
+klopt(_bleef and not venster.isVisible(), "U207: sluiten tijdens een schijfklus: eerst afmaken, dan vanzelf dicht")
+venster.sluit_na_klus = False
+venster.show()
 # U141: naam wijzigen of repareren mislukt: de schijf gaat toch weer open (de laatste stap draait altijd).
 _teken = TMP / "weer-open"
 _uit: list = []

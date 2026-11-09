@@ -280,6 +280,14 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
         balk.plaats(QRect(self.stapel.mapTo(self, QPoint(0, 0)), self.stapel.size()))
 
     def closeEvent(self, e) -> None:  # noqa: N802
+        if self.bezig:
+            # Een schijf wordt klaargemaakt, gewist, hernoemd of gerepareerd: niet halverwege afbreken (U207).
+            self.sluit_na_klus = True
+            self.melding.toon(t("Even wachten: de schijf is nog bezig. Haal hem er niet uit; daarna gaat het venster "
+                                "vanzelf dicht.", "One moment: the drive is still busy. Do not unplug it; the window "
+                                "closes by itself afterwards."), seconden=0)
+            e.ignore()
+            return
         if self.klus and self.klus.isRunning():
             # Nooit midden in het kopiëren stoppen: wacht tot het klaar is en sluit dan vanzelf.
             self.sluit_na_klus = True
