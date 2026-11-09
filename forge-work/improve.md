@@ -273,6 +273,23 @@ failed first. Tests after: 23 passed, 0 failed (here).
 ### U042 [low] The new texts were missing from the translation template
   commit: 59dab47   test: tools/test_edges.py now fails when the template is behind
 
+## Round 4 (2026-11-09)
+The same review again, on the code with round 3 in it, found 6 more. All fixed, each with a test that failed first.
+Tests after: 23 passed, 0 failed (here).
+
+### U043 [medium] "Back" always failed while an update waited for a restart ("Are you online?")
+  commit: d50af57   test: tools/test_os_system.sh   note: the staged update is removed first (rpm-ostree cleanup -p)
+### U044 [medium] After going back and restarting, "Back" went forward again to the version you left
+  commit: d50af57   test: tools/test_os_system.sh
+### U045 [low] A normal "Update now" said "A new BugOS is already waiting"
+  commit: d50af57   test: tools/test_os_system.sh
+### U046 [medium] Closing Settings during an update hid how it ended (restart, updates off, or an error)
+  commit: 835006d   test: tools/test_os_settings.py   note: success: a desktop notification, then close; failure: stays open
+### U047 [low] In Files, the error after "close when done" vanished after 12 seconds
+  commit: 257e8f1   test: tools/test_os_apps.py
+### U048 [medium] A backup to a FAT/exFAT drive lost one of two names that differ only in capitals, and said "safe"
+  commit: 5d8da04   test: tools/test_os_apps.py (a stand-in for a case-insensitive drive; real FAT stick: for you)
+
 ## Skipped
 
 ## For you
