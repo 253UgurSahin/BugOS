@@ -949,6 +949,37 @@ actions, 3 unsure: U332-U338). 9 fixed, each with a test that failed first. Test
 ### U338 [low] There was no way to forget a Wi-Fi network in BugOS Settings
   commit: bce9a30   test: tools/test_os_settings.py ("Forget" next to "Disconnect" for the connected network)
 
+## Round 26 (2026-11-09)
+Two reviewers: the round-25 fixes (3 found plus 3 unsure: U342-U345), and a second QA tester working through the
+start menu, the quick menu, the remaining Settings pages and the .exe/.rpm/.deb tools (6 found plus 4 unsure:
+U346-U353). All low; nothing critical or medium. 12 fixed, each with a test that failed first. Tests after: 20 test
+files passed (here).
+
+### U342 [low] (from U336) Light/dark still said "Done" when bugos-theme failed (the script always exited 0)
+  commit: 5253533   test: tools/test_os_system.sh
+### U343 [low] (from U335) A different photo with the same file name kept the old background; old copies were deleted before applying
+  commit: 5253533   test: tools/test_os_settings.py
+### U344 [very low] (from U333) The Store's "closes by itself afterwards" notice was replaced by "Installing…"
+  commit: 5253533
+### U345 [low] (from U338) "Forget" used the SSID as profile name ("Home 1" stayed) and failed silently
+  commit: 5253533   test: tools/test_os_settings.py
+### U346 [low] (from U155) The quick menu showed no battery when it was not named BAT*
+  commit: 5f92c72   test: tools/test_start_data.py
+### U347 [low] The "Mute" tile looked usable without any sound device
+  commit: 5f92c72   test: tools/test_start_data.py
+### U348 [low] The scroll wheel did nothing on the quick menu's volume and brightness sliders
+  commit: 5f92c72   test: tools/test_menus.py
+### U349 [low] (from U149) Start menu: after clicking back into the search field, Enter opened another row than the highlighted one
+  commit: 5f92c72   test: tools/test_menus.py
+### U350 [low] Mouse/touchpad: a failed change left the switch in the new position
+  commit: 5f92c72   test: tools/test_os_settings.py
+### U351 [low] A broken .rpm was only reported after minutes of setting up the box
+  commit: 5f92c72   test: tools/test_package.sh
+### U352 [very low] Recent files: the home path was replaced by "~" anywhere in the folder text
+  commit: 5f92c72   test: tools/test_start_data.py
+### U353 [low] Settings search missed words printed on its own pages (taakbalk, fps, opslag, dubbelklikken…)
+  commit: 5f92c72   test: tools/test_os_settings.py
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -1002,6 +1033,10 @@ actions, 3 unsure: U332-U338). 9 fixed, each with a test that failed first. Test
 - U340 (round 25, unsure): an accented ext4 label of 15-16 characters may be too long in bytes (udisks decides).
 - U341 (round 25, unsure): with Breeze Dark chosen in KDE, Kvantum stays on the light BugOS theme until you toggle
   dark mode in BugOS once.
+- U354 (round 26, unsure): bugos-exe matches alternatives by substring, so "HP_OfficeJet_…Installer.exe" is offered
+  LibreOffice (only a question with "No").
+- U355 (round 26, unsure): pressing a Settings switch twice quickly starts two background writes at once; no mixed
+  end state was reproduced.
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
