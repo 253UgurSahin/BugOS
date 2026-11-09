@@ -180,10 +180,9 @@ for eenheid in uupd.timer ublue-update.timer flatpak-system-update.timer; do
         systemctl mask "$eenheid"
     fi
 done
-# En de versie per gebruiker (een user-timer): die werkte apps van de gebruiker zelf bij, ook bij 'zelf doen' (U101).
-if [ -e /usr/lib/systemd/user/flatpak-user-update.timer ]; then
-    systemctl --global mask flatpak-user-update.timer
-fi
+# De versie per gebruiker (flatpak-user-update.timer, een user-timer) blijft: BugOS werkt alleen de apps van het
+# hele systeem bij, en zonder die timer kregen apps die per gebruiker staan (VS Code van bugos-developer) nooit
+# updates. bugos-updates zet hem aan of uit met 'Updates vanzelf' (U101, U117).
 
 # De zoekbalk (KRunner): Fedora zet hier zijn eigen keuzes neer. Zonder dat
 # bestand gelden de gewone KDE-instellingen.

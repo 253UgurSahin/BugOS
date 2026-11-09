@@ -19,6 +19,12 @@ CONF=/etc/bugos/updates.conf
 #   rpm-ostreed-automatic.timer  -> het systeem (BugOS zelf)
 #   bugos-update-apps.timer   -> de apps (Flatpak)
 TIMERS=(rpm-ostreed-automatic.timer bugos-update-apps.timer)
+# Apps die per gebruiker staan (flatpak --user, bijv. VS Code): de user-timer van Universal Blue (U117).
+GEBRUIKER_TIMER=flatpak-user-update.timer
+gebruiker_timer() {
+    [ -e "${BUGOS_SYSTEMD_USER:-/usr/lib/systemd/user}/$GEBRUIKER_TIMER" ] || return 0
+    systemctl --global "$1" "$GEBRUIKER_TIMER" >/dev/null 2>&1 || true
+}
 
 als_beheerder() {
     if [ "$(id -u)" -ne 0 ]; then
@@ -32,6 +38,7 @@ auto)
     mkdir -p /etc/bugos
     echo "UPDATES=auto" >"$CONF"
     systemctl enable --now "${TIMERS[@]}"
+    gebruiker_timer unmask
     t "Updates gaan nu vanzelf." "Updates are now automatic."
     ;;
 hand)
@@ -39,6 +46,7 @@ hand)
     mkdir -p /etc/bugos
     echo "UPDATES=hand" >"$CONF"
     systemctl disable --now "${TIMERS[@]}"
+    gebruiker_timer mask   # (gaat in bij de volgende keer inloggen)
     # De BugOS Winkel (Discover) blijft melden als er updates zijn.
     t "Updates doe je nu zelf via de BugOS Winkel." "You now do updates yourself via the BugOS Store."
     ;;
@@ -98,6 +106,7 @@ terug)
         mkdir -p /etc/bugos
         echo "UPDATES=hand" >"$CONF"
         systemctl disable --now "${TIMERS[@]}"
+        gebruiker_timer mask
         t "Klaar. Start de computer opnieuw op om terug te gaan. Updates gaan nu niet meer vanzelf, anders komt de nieuwe versie terug; zet ze weer aan in Instellingen als het mag." \
             "Done. Restart the computer to go back. Updates are no longer automatic, or the new version would come back; turn them on again in Settings when it is fine."
     else

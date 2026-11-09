@@ -361,7 +361,19 @@ klopt '! gemeten "echo \"u 1\"" && ! gemeten "echo \"u 3\""' "U089: app-updates 
 klopt 'gemeten "echo \"u 2\"" && gemeten "echo \"u 4\"" && gemeten "echo \"u 0\"" && gemeten "exit 1"' \
     "U089: app-updates gaan door bij wifi/kabel, onbekend, of zonder NetworkManager"
 klopt 'grep -q "flatpak-system-update.timer" "$ROOT/build_files/system.sh"' "U087: de bouw zet Universal Blue's eigen app-updates uit"
-klopt 'grep -q "systemctl --global mask flatpak-user-update.timer" "$ROOT/build_files/system.sh"' \
-    "U101: ook de app-updates per gebruiker (user-timer) gaan uit"
+klopt '! grep -q "^ *systemctl --global mask flatpak-user-update" "$ROOT/build_files/system.sh"' \
+    "U117: de bouw zet de app-updates per gebruiker niet voor altijd uit"
+# U117: 'Updates vanzelf' aan/uit zet ook de app-updates per gebruiker aan/uit (niet voor altijd uit in de bouw).
+mkdir -p "$TMP/user-units"
+touch "$TMP/user-units/flatpak-user-update.timer"
+kopie bugos-updates
+nep systemctl 'echo "$*" >>"'"$TMP"'/systemctl-log"'
+: >"$TMP/systemctl-log"
+BUGOS_SYSTEMD_USER="$TMP/user-units" draai bugos-updates hand
+klopt 'grep -q -- "--global mask flatpak-user-update.timer" "$TMP/systemctl-log"' "U117: zelf updaten: ook de app-updates per gebruiker uit"
+: >"$TMP/systemctl-log"
+BUGOS_SYSTEMD_USER="$TMP/user-units" draai bugos-updates auto
+klopt 'grep -q -- "--global unmask flatpak-user-update.timer" "$TMP/systemctl-log"' "U117: updates vanzelf: de app-updates per gebruiker weer aan"
+nep systemctl 'exit 0'
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
