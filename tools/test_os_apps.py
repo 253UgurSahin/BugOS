@@ -128,6 +128,31 @@ for _verplaats in (False, True):
 acties.kent_hoofdletters = _echt_kent
 
 
+# U048: een back-up naar een schijf zonder hoofdletters: 'img_1.jpg' naast 'IMG_1.JPG' wordt niet overschreven,
+# maar overgeslagen en genoemd (geen "veilig" terwijl er één ontbreekt).
+_bb48 = laad("bugos_backup_u048", "bugos-backup")
+_thuis48 = TMP / "thuis-u048"
+(_thuis48 / "Pictures" / "Vakantie").mkdir(parents=True)
+(_thuis48 / "Pictures" / "IMG_1.JPG").write_text("groot")
+(_thuis48 / "Pictures" / "img_1.jpg").write_text("klein")
+(_thuis48 / "Pictures" / "Vakantie" / "a[1]*.jpg").write_text("a")
+(_thuis48 / "Pictures" / "Vakantie" / "A[1]*.JPG").write_text("A")
+klopt(_bb48.dubbel_op_schijf(TMP, [_thuis48 / "Pictures"]) == {}, "U048: een schijf die hoofdletters kent: niets overslaan")
+_bb48.kent_hoofdletters = lambda p: False
+_d48 = _bb48.dubbel_op_schijf(TMP, [_thuis48 / "Pictures"])
+_doel48 = TMP / "stick-u048" / "BugOS-Backup" / "x"
+_doel48.mkdir(parents=True)
+_cmd = _bb48.rsync_maak(_thuis48 / "Pictures", _doel48, _d48[_thuis48 / "Pictures"])
+import subprocess as _sp  # noqa: E402
+_sp.run(_cmd, capture_output=True, check=False)
+_op48 = sorted(str(p.relative_to(_doel48 / "Pictures")) for p in (_doel48 / "Pictures").rglob("*"))
+klopt(sorted(_d48[_thuis48 / "Pictures"]) == ["Vakantie/a[1]*.jpg", "img_1.jpg"]
+      and _op48 == ["IMG_1.JPG", "Vakantie", "Vakantie/A[1]*.JPG"],
+      f"U048: de tweede van elk paar gaat niet mee (ook met * en [ in de naam): {_op48}")
+klopt("hoofdletters" in _bb48.DEELS_UITLEG or "capitals" in _bb48.DEELS_UITLEG,
+      "U048: de melding 'konden niet mee' noemt ook namen die alleen in hoofdletters verschillen")
+
+
 def eerste_rename_andere_schijf() -> None:
     """Het verplaatsen zelf zegt 'andere schijf' (EXDEV); daarna werkt rename gewoon."""
     keer = []

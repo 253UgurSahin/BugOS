@@ -26,6 +26,7 @@ from pathlib import Path
 sys.path.insert(0, "/usr/lib/bugos/python")
 
 from bugos_ui import CONFIG, t  # noqa: E402
+from bugos_files_acties import dubbele_namen, kent_hoofdletters  # noqa: E402
 
 LOG = CONFIG / "backup.json"
 
@@ -118,12 +119,32 @@ def backups_op(schijf: Path) -> list[Path]:
     return sorted(alle, key=lambda p: p != eigen)
 
 
-def rsync_maak(bron: Path, doel: Path) -> list[str]:
+def rsync_maak(bron: Path, doel: Path, overslaan: list[str] | tuple = ()) -> list[str]:
     # Geen --delete: wat ooit in de back-up staat, blijft daar staan.
     # --modify-window: USB-schijven (FAT/exFAT) onthouden tijd minder precies.
     # -l: snelkoppelingen (symlinks) gaan ook mee (op FAT/exFAT kan dat niet; dan zegt rsync 23: "deels").
-    return ["rsync", "-rtl", "--modify-window=2", "--info=progress2", "--no-inc-recursive",
+    # overslaan: paden (binnen 'bron') die niet mee kunnen, zie dubbel_op_schijf.
+    weg = [f"--exclude=/{_rsync_letterlijk(r)}" for r in overslaan]
+    return ["rsync", "-rtl", "--modify-window=2", "--info=progress2", "--no-inc-recursive", *weg,
             f"{bron}/", f"{doel / bron.name}/"]
+
+
+def _rsync_letterlijk(pad: str) -> str:
+    """Een pad als rsync-patroon dat precies dat pad betekent (* ? [ en \\ niet als jokerteken)."""
+    return "".join("\\" + c if c in "*?[\\" else c for c in pad)
+
+
+def dubbel_op_schijf(schijf: Path, mappen: list[Path]) -> dict[Path, list[str]]:
+    """Kent de schijf geen hoofdletters (FAT/exFAT), dan zou 'IMG_1.JPG' 'img_1.jpg' overschrijven.
+    Geeft per map de tweede van zo'n paar (relatief), die laten we dan buiten de back-up (en zeggen dat)."""
+    if kent_hoofdletters(schijf):
+        return {}
+    uit = {}
+    for m in mappen:
+        dubbel = [os.path.relpath(p, m) for p in dubbele_namen(m)] if m.is_dir() else []
+        if dubbel:
+            uit[m] = dubbel
+    return uit
 
 
 def rsync_terug(doel: Path, thuis: Path) -> list[str]:
@@ -191,20 +212,25 @@ def laatste_backup() -> str:
 GOED, DEELS = (0, 24), (23,)
 
 DEELS_UITLEG = t("Een paar bestanden konden niet mee: {mappen}. Dat komt meestal door een naam met : ? * of \", "
-                 "of een bestand groter dan 4 GB op een FAT32-schijf. De rest staat er wel.",
-                 "A few files could not be copied: {mappen}. Usually a name with : ? * or \", or a file larger "
-                 "than 4 GB on a FAT32 drive. Everything else is there.")
+                 "een bestand groter dan 4 GB op een FAT32-schijf, of twee namen die alleen in hoofdletters "
+                 "verschillen (zo'n schijf ziet dat als hetzelfde). De rest staat er wel.",
+                 "A few files could not be copied: {mappen}. Usually a name with : ? * or \", a file larger "
+                 "than 4 GB on a FAT32 drive, or two names that differ only in capitals (such a drive sees "
+                 "them as the same). Everything else is there.")
 
 
 def zonder_venster(schijf: Path) -> int:
     doel = backup_doel(schijf)
     doel.mkdir(parents=True, exist_ok=True)
     schrijf_lijstje(doel)
-    deels = []
-    for m in bron_mappen():
-        code = subprocess.call(rsync_maak(m, doel))
+    mappen = bron_mappen()
+    dubbel = dubbel_op_schijf(schijf, mappen)
+    deels = [m.name for m in dubbel]
+    for m in mappen:
+        code = subprocess.call(rsync_maak(m, doel, dubbel.get(m, ())))
         if code in DEELS:
-            deels.append(m.name)
+            if m.name not in deels:
+                deels.append(m.name)
         elif code not in GOED:
             return 1
     if subprocess.call(wegschrijven(doel)) != 0:
@@ -239,9 +265,12 @@ def venster() -> int:
             self.schijf, self.mappen, self.doel = schijf, mappen, doel
             self.stop = threading.Event()
 
+        dubbel: dict = {}  # per map: wat niet mee kan omdat de schijf geen hoofdletters kent
+
         def run(self) -> None:
             try:
                 past, nodig, vrij = ruimte_genoeg(self.schijf, self.mappen, self.doel, self.stop)
+                self.dubbel = dubbel_op_schijf(self.schijf, self.mappen)
             except OSError:  # de schijf is er intussen uit
                 past, nodig, vrij = False, 0, -1
             self.klaar.emit(past, nodig, vrij)
@@ -371,7 +400,9 @@ def venster() -> int:
                 self.stop(False)
                 return
             if code in DEELS:
-                self.deels.append(Path(self.nu[-2].rstrip("/")).name or "~")
+                naam = Path(self.nu[-2].rstrip("/")).name or "~"
+                if naam not in self.deels:
+                    self.deels.append(naam)
             elif code not in GOED:
                 self.melding.zet(t("Het lukte niet helemaal. Zit de schijf er nog in? Probeer het opnieuw.",
                                    "It did not fully work. Is the drive still plugged in? Try again."), "fout")
@@ -494,8 +525,10 @@ def venster() -> int:
             doel.mkdir(parents=True, exist_ok=True)
             schrijf_lijstje(doel)
             self.stand.update(klus="maak", schijf=schijf)
-            self.wachtrij[:] = [rsync_maak(m, doel) for m in mappen] + [wegschrijven(doel)]
+            dubbel = self.teller.dubbel if self.teller is not None else {}
+            self.wachtrij[:] = [rsync_maak(m, doel, dubbel.get(m, ())) for m in mappen] + [wegschrijven(doel)]
             self.bezig(t("Bezig met kopiëren… Haal de schijf er niet uit.", "Copying… Do not unplug the drive."))
+            self.deels = [m.name for m in dubbel]  # die gaan niet mee: dat zeggen we straks
             self.volgende()
 
         def zet_terug(self) -> None:
