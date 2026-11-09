@@ -11,7 +11,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from bugos_ui import lijn_icoon, t
+from bugos_ui import lijn_icoon, platte_tip, t
 from bugos_drives import (
     MAX_NAAM, Schijf, hernoem_stappen, klaarmaak_stappen, leegmaak_stappen, mooie_maat, openen_stappen,
     repareer_stappen, schijven, uitwerp_stappen,
@@ -60,7 +60,7 @@ class Schijven:
             if x.grootte:
                 uitleg = f"{mooie_maat(x.grootte)} · " + uitleg
             rij = SchijfRij("slot" if x.op_slot else x.icoon, x.naam, uitleg, None)
-        rij.setToolTip(self.schijf_uitleg(x))
+        rij.setToolTip(platte_tip(self.schijf_uitleg(x)))
         rij.geklikt.connect(lambda g=x: self.open_schijf(g))
         rij.meer.clicked.connect(lambda _c=False, g=x, k=rij.meer: self.schijf_menu(g).exec(
             k.mapToGlobal(k.rect().bottomLeft())))

@@ -11,7 +11,7 @@ import getpass
 
 from pathlib import Path
 
-from bugos_ui import lijn_icoon, px, t
+from bugos_ui import lijn_icoon, platte_tip, px, t
 from bugos_drives import Schijf, schijven
 from bugos_files_plekken import HERKOMST_ROL, INFO_ROL, PAD_ROL, plekken, schijf_van, thuis, zit_in
 from bugos_files_acties import prullenbak_inhoud
@@ -47,7 +47,7 @@ class Navigeren:
         self.zijbalk.voeg_toe("lijn:laptop", t("Deze computer", "This computer"), "computer")
         for x in lijst:
             item = self.zijbalk.voeg_toe(f"lijn:{'slot' if x.op_slot else x.icoon}", x.naam, f"schijf:{x.apparaat}")
-            item.setToolTip(self.schijf_uitleg(x))
+            item.setToolTip(platte_tip(self.schijf_uitleg(x)))
         self.markeer_zijbalk()
         if self.in_computer:
             self.vul_computer()
@@ -157,7 +157,8 @@ class Navigeren:
             it.setData(str(bestand), PAD_ROL)
             it.setData(str(info), INFO_ROL)
             it.setData(str(herkomst or ""), HERKOMST_ROL)
-            it.setToolTip(t(f"Kwam uit: {herkomst.parent if herkomst else '?'}", f"Came from: {herkomst.parent if herkomst else '?'}"))
+            it.setToolTip(platte_tip(t(f"Kwam uit: {herkomst.parent if herkomst else '?'}",
+                                       f"Came from: {herkomst.parent if herkomst else '?'}")))
             it.setEditable(False)
             self.bak_model.appendRow(it)
         self.lijst.setModel(self.bak_model)
@@ -293,11 +294,11 @@ class Navigeren:
             zichtbaar = fm.elidedText(naam, Qt.TextElideMode.ElideMiddle, maxw)
             k = QPushButton(zichtbaar.replace("&", "&&"))   # een & in een mapnaam is geen sneltoets (U210)
             if zichtbaar != naam:
-                k.setToolTip(naam)
+                k.setToolTip(platte_tip(naam))
             # Een schermlezer hoort de hele naam, ook als hij ingekort is; '…' zegt welke map hij opent (U281).
             k.setAccessibleName(doel.name if naam == "…" else naam)
             if naam == "…":
-                k.setToolTip(str(doel))
+                k.setToolTip(platte_tip(str(doel)))
             k.setObjectName("kruimel")
             k.setProperty("laatste", "true" if i == len(delen) - 1 else "false")
             k.setCursor(Qt.CursorShape.PointingHandCursor)

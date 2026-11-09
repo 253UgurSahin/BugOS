@@ -12,7 +12,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from bugos_ui import K, Knop, label, lijn, lijn_icoon, sectie, t
+from bugos_ui import K, Knop, label, lijn, lijn_icoon, platte_tip, sectie, t
 from bugos_drives import mooie_maat
 from bugos_files_plekken import RUIMTE_SOORTEN, Teller, eigen_ruimte, plekken, voorbeeld_ruimte
 from bugos_files_acties import prullenbak, prullenbak_inhoud
@@ -172,7 +172,7 @@ class Computer:
             k.setIconSize(QSize(12, 12))
             if isinstance(pad, Path):
                 k.setCursor(Qt.CursorShape.PointingHandCursor)
-                k.setToolTip(t(f"Open {pad.name}", f"Open {pad.name}"))
+                k.setToolTip(platte_tip(t(f"Open {pad.name}", f"Open {pad.name}")))
                 k.clicked.connect(lambda _c=False, d=pad: self.ga_naar(d))
             else:
                 k.setEnabled(False)

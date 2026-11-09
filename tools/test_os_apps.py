@@ -1359,6 +1359,15 @@ _open = _wk.isVisible()
 _wk.paginas[0].bezig = False
 wacht(lambda: not _wk.isVisible(), 3000)
 klopt(_open and not _wk.isVisible(), "U212: Welkom sluiten tijdens de wachtwoordvraag: eerst afwachten, dan dicht")
+# U436: een tooltip met een vreemde bestandsnaam ('<h1>GRATIS</h1>') toont die letterlijk, niet als opmaak.
+from bugos_ui import platte_tip as _pt
+from PySide6.QtGui import QTextDocument as _QTD
+_doc436 = _QTD()
+_doc436.setHtml(_pt("<h1>GRATIS</h1> & meer"))
+_bron436 = (ROOT / "system_files/usr/lib/bugos/python/bugos_files_navigeren.py").read_text()
+klopt(_doc436.toPlainText() == "<h1>GRATIS</h1> & meer" and _pt("Foto's") == "Foto's"
+      and "k.setToolTip(platte_tip(naam))" in _bron436,
+      f"U436: namen in tooltips worden geen opmaak ({_doc436.toPlainText()!r})")
 # U401: op een laag scherm (1366x768 met 150%) vallen de knoppen niet buiten het venster: de pagina's kunnen schuiven.
 from PySide6.QtWidgets import QScrollArea as _QSA
 _wk401 = welkom.Welkom()

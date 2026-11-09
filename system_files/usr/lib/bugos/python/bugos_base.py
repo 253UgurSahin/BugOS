@@ -108,6 +108,15 @@ def kde_instelling(module: str) -> None:
         start("kcmshell6", module)
 
 
+def platte_tip(tekst: str) -> str:
+    """Een tooltip die precies de tekst toont. Qt maakt van '<h1>…' in een tooltip opmaak: een bestands- of
+    schijfnaam van een andermans stick wordt dan vet of groot (U436)."""
+    if "<" not in tekst and "&" not in tekst:
+        return tekst
+    import html
+    return "<qt>" + html.escape(tekst).replace("\n", "<br>") + "</qt>"
+
+
 def zoeksleutel(tekst: str) -> str:
     """Tekst om in te zoeken: kleine letters zonder accenten, zodat 'izleyici' 'İzleyici' vindt (Turks), 'istanbul'
     'İstanbul tatil.jpg' en 'cafe' 'café' (ook als de é uit twee tekens bestaat, zoals op een Mac) (U268).
