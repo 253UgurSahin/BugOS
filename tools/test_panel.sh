@@ -28,5 +28,23 @@ draai
 klopt '[ -e "$MERK/paneel-standaard-1" ] && [ -e "$MERK/paneel-systeemvak-1" ] && [ -e "$MERK/paneel-taakbalkruimte-1" ]' \
     "bureaublad antwoordt: alle stappen klaar en onthouden"
 
+# U073: geen KDE-startknop of systeemvak (Plasma geeft 0): niet "staat aan" melden.
+nep notify-send 'echo "$*" >>"'"$TMP"'/meldingen"'
+nep qdbus6 'echo 0'
+HOME="$TMP/thuis" XDG_CONFIG_HOME="$TMP/thuis/.config" PATH="$TMP/bin:$PATH" bash "$TMP/paneel" startmenu aan >/dev/null 2>&1
+code=$?
+klopt '[ $code -ne 0 ] && ! grep -q "staat aan\|is on" "$TMP/meldingen" && grep -q "start button\|startknop" "$TMP/meldingen"' \
+    "U073: startmenu aan zonder KDE-startknop: zegt dat het niet lukte (code $code)"
+: >"$TMP/meldingen"
+printf '#!/usr/bin/bash\nprintf "0\\n3\\n"\n' >"$TMP/bin/qdbus6"
+HOME="$TMP/thuis" XDG_CONFIG_HOME="$TMP/thuis/.config" PATH="$TMP/bin:$PATH" bash "$TMP/paneel" snelmenu aan >/dev/null 2>&1
+code=$?
+klopt '[ $code -ne 0 ] && grep -q "system tray\|systeemvak" "$TMP/meldingen"' "U073: snelmenu aan zonder systeemvak: zegt dat het niet lukte"
+nep qdbus6 'echo 1'
+: >"$TMP/meldingen"
+HOME="$TMP/thuis" XDG_CONFIG_HOME="$TMP/thuis/.config" PATH="$TMP/bin:$PATH" bash "$TMP/paneel" startmenu aan >/dev/null 2>&1
+code=$?
+klopt '[ $code -eq 0 ] && grep -q "staat aan\|is on" "$TMP/meldingen"' "U073: startmenu aan met een startknop: staat aan"
+
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
