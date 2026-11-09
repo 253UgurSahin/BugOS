@@ -386,6 +386,16 @@ draai bugos-theme donker
 for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$TMP/thuis/.local/share/bugos/windows/.bugos-kleuren" ] && break; sleep 0.2; done
 klopt 'grep -q "regedit /S Z:.*donker.reg" "$TMP/wine-log" && grep -q "^donker " "$TMP/thuis/.local/share/bugos/windows/.bugos-kleuren"' \
     "U132: donker: ook de Windows-programma's krijgen de donkere kleuren ($(cat "$TMP/wine-log" "$TMP/uit" 2>&1 | head -3 | tr "\n" " "))"
+# U148: na een nieuwe Wine-versie (de map is nog niet bijgewerkt) niet bij licht/donker Wine starten (dat toont een venster).
+echo 1 >"$TMP/thuis/.local/share/bugos/windows/.update-timestamp"
+: >"$TMP/wine-log"
+rm -f "$TMP/thuis/.local/share/bugos/windows/.bugos-kleuren"
+if [ -f /usr/share/wine/wine.inf ]; then
+    draai bugos-theme licht
+    sleep 1
+    klopt '[ ! -s "$TMP/wine-log" ]' "U148: nieuwe Wine-versie: niet bij licht/donker bijwerken (dat doet het openen van een programma)"
+fi
+rm -f "$TMP/thuis/.local/share/bugos/windows/.update-timestamp"
 nep wine 'exit 0'
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

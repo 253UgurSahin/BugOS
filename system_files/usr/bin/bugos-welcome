@@ -358,9 +358,12 @@ def steam_opdracht() -> tuple:
     """Steam starten: het programma, of de Flatpak-versie (als Steam zo in BugOS kwam) (U130)."""
     if shutil.which("steam"):
         return ("steam",)
-    if shutil.which("flatpak") and subprocess.run(["flatpak", "info", "com.valvesoftware.Steam"], capture_output=True,
-                                                  timeout=10).returncode == 0:
-        return ("flatpak", "run", "com.valvesoftware.Steam")
+    try:
+        if shutil.which("flatpak") and subprocess.run(["flatpak", "info", "com.valvesoftware.Steam"],
+                                                      capture_output=True, timeout=10).returncode == 0:
+            return ("flatpak", "run", "com.valvesoftware.Steam")
+    except (OSError, subprocess.SubprocessError):
+        pass
     return ()
 
 

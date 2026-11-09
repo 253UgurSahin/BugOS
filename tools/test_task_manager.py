@@ -231,6 +231,8 @@ _which = bugos_base.shutil.which
 bugos_base.shutil.which = lambda n, *a, **k: "/usr/bin/" + n
 _cmd = bugos_base.eigen_plek(("bugos-settings", "tijd"))
 _niet = bugos_base.eigen_plek(("pkexec", "bugos-updates", "nu"))
+(_apps / "rare naam+x.desktop").write_text("[Desktop Entry]\nName=X\nExec=x\n")
+_raar = bugos_base.eigen_plek(("rare naam+x",))
 bugos_base.shutil.which = _which
 for _k, _v in _oud_env.items():
     if _v is None:
@@ -242,6 +244,7 @@ klopt(_cmd[:3] == ["systemd-run", "--user", "--scope"] and _cmd[-2:] == ["bugos-
       and bt.soort_van(f"/user.slice/user-1000.slice/user@1000.service/app.slice/{_eenheid}")[:2] == ("app", "bugos-settings")
       and _niet == ["pkexec", "bugos-updates", "nu"],
       f"U125: Instellingen starten in een eigen scope, die Taakbeheer als 'Instellingen' ziet ({_eenheid})")
+klopt(_raar == ["rare naam+x"], "U146: een naam die systemd niet toestaat (spatie, +): gewoon starten, niet via systemd-run")
 
 # 8. het venster (zonder scherm)
 lader = importlib.machinery.SourceFileLoader("taakbeheer", str(ROOT / "system_files" / "usr" / "bin" /

@@ -114,7 +114,10 @@ uit() {
     [ -n "$vorig" ] || vorig=balanced
     stroomprofiel_zet "$vorig"
     # Niet storen alleen uitzetten als het door de game-modus aan is gegaan.
-    if [ "$(cat "$STOREN_MARKER" 2>/dev/null)" != aan ]; then
+    # Veranderde je 'niet storen' zelf tijdens de game-modus (uit, of een andere tijd)? Dan blijft dat zo (U143).
+    if [ "$(kreadconfig6 --file plasmanotifyrc --group DoNotDisturb --key Until 2>/dev/null)" != "$NIET_STOREN_TOT" ]; then
+        :
+    elif [ "$(cat "$STOREN_MARKER" 2>/dev/null)" != aan ]; then
         niet_storen_uit
     else
         # Het stond al aan: terug naar de eindtijd van toen (die van de game-modus was 'voor altijd') (U124).

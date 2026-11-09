@@ -66,6 +66,11 @@ _echt_copyfile, _echt_chmod, _echt_rename = shutil.copyfile, os.chmod, os.rename
 STICK = stick_map("stick")
 
 
+import builtins  # noqa: E402
+
+_echt_open = builtins.open
+
+
 def nep_stick(aan: bool) -> None:
     def copyfile(s, d, *a, **k):
         if str(d).startswith(str(STICK)) and ":" in os.path.basename(d):
@@ -77,8 +82,14 @@ def nep_stick(aan: bool) -> None:
             raise PermissionError(errno.EPERM, "Operation not permitted", str(p))
         return _echt_chmod(p, mode, *a, **k)
 
+    def open_(f, mode="r", *a, **k):   # ook het kopiëren in stukken (U115) schrijft met open()
+        if "w" in str(mode) and str(f).startswith(str(STICK)) and ":" in os.path.basename(str(f)):
+            raise OSError(errno.EINVAL, "Invalid argument", str(f))
+        return _echt_open(f, mode, *a, **k)
+
     shutil.copyfile = copyfile if aan else _echt_copyfile
     os.chmod = chmod if aan else _echt_chmod
+    builtins.open = open_ if aan else _echt_open
 
 
 # U040: een map MET submappen naar een stick die de rechten van mappen weigert: de rest komt er toch op.
@@ -1039,6 +1050,40 @@ acties.os.rename = _echt_rename
 klopt(_uitkomst == "gestopt" and _film.exists() and not (_naar / "film.mkv").exists()
       and not list(_naar.glob(".*bugos-bezig")),
       f"U115: stoppen tijdens één groot bestand (verplaatsen): het origineel blijft, niets half ({_uitkomst})")
+# U144: een 'pijp' (FIFO) kopiëren blijft niet eeuwig hangen; Stoppen werkt ook midden in een groot bestand in een map.
+import threading as _thr  # noqa: E402
+
+_pijp = TMP / "steam.pipe"
+os.mkfifo(_pijp)
+_klaar_pijp: list = []
+_t = _thr.Thread(target=lambda: _klaar_pijp.append(
+    (lambda: (acties.kopieer_een(_pijp, _naar, False, [], stop=lambda: False), "klaar"))() if False else None), daemon=True)
+
+
+def _probeer_pijp():
+    try:
+        acties.kopieer_een(_pijp, _naar, False, [], stop=lambda: False)
+        _klaar_pijp.append("klaar")
+    except (OSError, shutil.Error) as e:
+        _klaar_pijp.append(type(e).__name__)
+
+
+_t = _thr.Thread(target=_probeer_pijp, daemon=True)
+_t.start()
+_t.join(3)
+klopt(bool(_klaar_pijp), f"U144: een pijp (FIFO) kopiëren hangt niet, maar geeft meteen een fout ({_klaar_pijp})")
+_filmmap = TMP / "filmmap"
+_filmmap.mkdir()
+(_filmmap / "film.mkv").write_bytes(b"z" * (17 * 1024 * 1024))
+_tel = []
+try:
+    acties.kopieer_een(_filmmap, _naar, False, [], stop=lambda: (_tel.append(1), len(_tel) > 2)[1])
+    _st = "klaar"
+except acties.Gestopt:
+    _st = "gestopt"
+klopt(_st == "gestopt" and not (_naar / "filmmap").exists() and not list(_naar.glob(".*bugos-bezig")),
+      f"U144: Stoppen midden in één groot bestand in een map: meteen gestopt, niets half ({_st}, {len(_tel)} keer gekeken)")
+
 # U122: Stoppen als het al klaar is, telt niet als 'gestopt'.
 _k = b.Klus([], _naar, False)
 _k.stop()

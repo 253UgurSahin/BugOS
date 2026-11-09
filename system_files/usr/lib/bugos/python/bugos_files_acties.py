@@ -12,6 +12,7 @@ import errno
 import os
 import re
 import shutil
+import stat
 import urllib.parse
 from datetime import datetime
 from pathlib import Path
@@ -209,7 +210,9 @@ def leesbare_fout(nummer: int | None, wat: str) -> str:
 def _kopieer_bestand(bron: Path, doel: Path, stop=None) -> None:
     """Eén bestand kopiëren met inhoud en datum. Kan de schijf de rechten niet bewaren, dan is dat goed zo.
     stop: dan in stukken, zodat 'Stoppen' ook midden in een grote film werkt (U115)."""
-    if stop is None or bron.is_symlink():
+    # Alleen gewone bestanden in stukken: een 'pijp' (FIFO) zou anders blijven wachten; copyfile geeft dan een
+    # nette fout (U144).
+    if stop is None or bron.is_symlink() or not stat.S_ISREG(os.lstat(bron).st_mode):
         shutil.copyfile(bron, doel, follow_symlinks=False)
     else:
         with open(bron, "rb") as van, open(doel, "wb") as naar:
@@ -304,10 +307,16 @@ class Gestopt(BaseException):  # noqa: N818  geen fout: de gebruiker koos 'Stopp
 
 
 def _met_stop(stop):
+    """Voor copytree: elk bestand in stukken, zodat 'Stoppen' ook midden in een grote film in een map werkt (U144)."""
     def kopieer(bron, doel, **kw):
         if stop():
             raise Gestopt()
-        return shutil.copy2(bron, doel, **kw)
+        if os.path.isdir(doel):
+            doel = os.path.join(doel, os.path.basename(bron))
+        if os.path.islink(bron) or not stat.S_ISREG(os.lstat(bron).st_mode):
+            return shutil.copy2(bron, doel, **kw)
+        _kopieer_bestand(Path(bron), Path(doel), stop)
+        return doel
     return kopieer
 
 

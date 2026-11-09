@@ -111,18 +111,18 @@ class Bewerken:
         self.klus = Klus(bronnen, doelmap, knip)
         klus = self.klus
         # Met een knop 'Stoppen': wat al klaar is blijft, wat half was wordt weggehaald (U104).
+        # Alleen over 'de stick' praten als er een stick bij is (U121): tussen twee interne schijven gewoon 'opslaan'.
+        met_stick = op_losse_schijf(doelmap) or any(op_losse_schijf(b) for b in bronnen)
         def stoppen() -> None:
             # Het bestand dat bezig is, moet nog even worden afgemaakt of weggehaald: zeg dat, anders trek je de stick eruit (U116).
             klus.stop()
             if klus.gestopt:
-                self.melding.toon(t("Stoppen… Haal de stick er nog niet uit.", "Stopping… Do not unplug the stick yet."),
-                                  seconden=0)
+                self.melding.toon(t("Stoppen… Haal de stick er nog niet uit.", "Stopping… Do not unplug the stick yet.")
+                                  if met_stick else t("Stoppen…", "Stopping…"), seconden=0)   # (U145)
 
         self.klus.voortgang.connect(lambda i, n: None if klus.gestopt else self.melding.toon(
             t(f"Bezig met {'verplaatsen' if knip else 'kopiëren'}: {i + 1} van {n}…", f"{'Moving' if knip else 'Copying'}: {i + 1} of {n}…"),
             knop=t("Stoppen", "Stop"), actie=stoppen, seconden=0))
-        # Alleen over 'de stick' praten als er een stick bij is (U121): tussen twee interne schijven gewoon 'opslaan'.
-        met_stick = op_losse_schijf(doelmap) or any(op_losse_schijf(b) for b in bronnen)
         self.klus.wegschrijven.connect(lambda: self.melding.toon(
             t("Bezig met wegschrijven… Haal de stick er nog niet uit.", "Writing to the stick… Do not unplug it yet.")
             if met_stick else t("Bezig met opslaan…", "Saving…"), seconden=0))

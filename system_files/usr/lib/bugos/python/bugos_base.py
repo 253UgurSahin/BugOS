@@ -70,8 +70,9 @@ def eigen_plek(cmd: tuple | list) -> list[str]:
     Zonder systemd voor de gebruiker (of een opdracht zonder .desktop): gewoon zoals het was."""
     naam = os.path.basename(cmd[0]) if cmd else ""
     runtime = os.environ.get("XDG_RUNTIME_DIR", "")
+    # Alleen namen die systemd in een eenheid toestaat; anders zou systemd-run weigeren en start er niets (U146).
     if not naam or not runtime or not os.path.exists(os.path.join(runtime, "systemd", "private")) or \
-            not shutil.which("systemd-run"):
+            not shutil.which("systemd-run") or not all(c.isascii() and (c.isalnum() or c in "-_.:") for c in naam):
         return list(cmd)
     mappen = [os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))] + \
         os.environ.get("XDG_DATA_DIRS", "/usr/local/share:/usr/share").split(":")

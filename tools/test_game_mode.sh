@@ -51,6 +51,12 @@ draai aan
 klopt '[ "$(cat "$TMP/until")" = "2999,12,31,0,0,0" ]' "U124: tijdens game-modus: niet storen 'voor altijd'"
 draai uit
 klopt '[ "$(cat "$TMP/until")" = "$straks" ]' "U124: na game-modus: weer 'niet storen tot over een uur' ($(cat "$TMP/until"))"
+# U143: tijdens de game-modus zette je 'niet storen' zelf uit: dan komt het na de game-modus niet terug.
+echo "$straks" >"$TMP/until"
+draai aan
+rm -f "$TMP/until"
+draai uit
+klopt '[ ! -e "$TMP/until" ]' "U143: 'niet storen' tijdens de game-modus zelf uitgezet: blijft uit na de game-modus"
 echo power-saver >"$TMP/profiel"
 echo "$straks" >"$TMP/until"
 draai uit
