@@ -514,7 +514,60 @@ passed (here). The image build was blocked again by the network proxy (Fedora mi
 ### U138 [low] Language leftovers: the Help report title, "idle sent", Uitloggen/Afmelden and Herstarten/Opnieuw opstarten
   commit: 04a2513   test: tools/test_os_apps.py
 
+## Round 12 (2026-11-09)
+Three reviewers: the round-11 fixes (7 found: U143-U148), the Settings pages in depth (11: U153-U163), and the
+taskbar, start menu, Backup/Switch windows and drives (8: U139-U142, U149-U152). 26 found; 23 fixed, each with a
+test that failed first; 3 not done (see Skipped). Tests after: 20 test files passed (here).
+
+### U139 [high] Backup and Switch never saw a USB stick that was just plugged in (KDE does not mount it by itself)
+  commit: 20a239f   test: tools/test_files.py
+### U140 [medium] Backup and Switch said "Done! Your files are back" when nothing was restored (stick pulled during the question)
+  commit: 4c5e854   test: tools/test_os_apps.py
+### U141 [medium] A failed rename or repair left the drive closed; a failed repair advised erasing a healthy drive
+  commit: 3de8662   test: tools/test_files.py
+### U142 [medium] Laptops with eMMC showed two fake "SD card (4.2 MB)" drives; internal eMMC was called an SD card
+  commit: 20a239f   test: tools/test_files.py
+### U143 [medium] (from U124) Game mode off turned "do not disturb" back on after you had switched it off yourself
+  commit: 71cb369   test: tools/test_game_mode.sh
+### U144 [low] (from U115) Copying a FIFO hung forever; Stop inside a folder still waited for the current big file
+  commit: 71cb369   test: tools/test_os_apps.py
+### U145 [low] (from U116) "Stopping… do not unplug the stick" also for copies between internal disks
+  commit: 71cb369   (message only)
+### U146 [low] (from U125) A program name systemd does not allow made the launch fail silently
+  commit: 71cb369   test: tools/test_task_manager.py
+### U148 [low] (from U132) Light/dark could pop up Wine's "updating" window after a Wine update; parallel Wine runs
+  commit: 71cb369   test: tools/test_os_system.sh (runs where wine.inf exists, e.g. the image test)
+### U149 [low] Start menu: the highlighted row was not the one Enter opened (Tab through All apps or search results)
+  commit: a976129   test: tools/test_menus.py
+### U150 [low] Switch used Windows folder names in Dutch sentences; a partial restore blamed stick problems
+  commit: d2eeaef   test: tools/test_os_apps.py
+### U151 [low] Erasing an SD card named it "USB stick"
+  commit: d2eeaef
+### U152 [low] The Backup progress bar jumped back to 0 for every folder
+  commit: d2eeaef   test: tools/test_os_apps.py
+### U153 [medium] "Tap to click" never appeared on a real touchpad (KWin has no supportsTapToClick)
+  commit: e3cb465   test: tools/test_settings.py
+### U155 [low] Power: "on battery" while plugged in at a charge limit; batteries not named BAT* were not seen
+  commit: 29eb356   test: tools/test_os_settings.py
+### U156 [low] A failed power-profile change left the wrong card highlighted
+  commit: 29eb356   test: tools/test_os_settings.py
+### U157 [low] A PC without Bluetooth showed a Bluetooth tile and switch that waited 8 s and did nothing
+  commit: 29eb356   test: tools/test_os_settings.py
+### U158 [low] "Clear the queue" silently did nothing for a non-administrator (cancel -a); it counted other users' jobs
+  commit: bb72666   test: tools/test_os_settings.py
+### U159 [low] Skanpage installed from the Store (Flatpak) was not found: "No scanning program" and a loop to the Store
+  commit: bb72666   test: tools/test_os_settings.py
+### U160 [low] The touchpad text for natural scrolling described the switch backwards
+  commit: bb72666
+### U162 [low] Searching "microphone" led to the Sound page, which has nothing for microphones
+  commit: bb72666
+### U163 [low] (open) The Default programs menu and "Test notification" do short work on the window's thread (see Skipped)
+
 ## Skipped
+- U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
+- U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
+- U161: a printer queue stopped by CUPS has no "Start again" button (needs admin rights); the advanced page can.
+- U163: two small blocking calls in Settings (usually well under a second).
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
