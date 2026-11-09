@@ -1030,6 +1030,34 @@ reading the script). Tests after: 20 test files passed (here).
 ### U374 [low] "Big letters" off always wrote 10 pt in one font, not your own sizes and menu font
   commit: 1115c32   test: tools/test_os_settings.py
 
+## Round 29 (2026-11-09)
+Two reviewers: the round-28 fixes (5 found plus 4 unsure: U379-U383), and a fresh sweep of "two things at once":
+two apps on the same thing, two people (fast user switching), locks and markers (5 found plus 3 unsure:
+U384-U389). 11 fixed, each with a test that failed first. Tests after: 20 test files passed (here).
+
+### U379 [medium-low] (from U367) After picking the old version in the startup menu, Settings said "no older version" instead of making it stay
+  commit: 53820cd   test: tools/test_os_system.sh
+### U380 [low] (from U368) In the "Go back?" question, Enter chose "Go back" (now Cancel is the default)
+  commit: 53820cd   test: tools/test_os_settings.py
+### U381 [low] (from U371) A second restore on the same day could overwrite a file kept by the first
+  commit: 53820cd   test: tools/test_backup.py
+### U382 [low] (from U371) Nobody was told where replaced files went
+  commit: 53820cd
+### U383 [low] (from U374) "Big letters" could restore an old snapshot of your fonts
+  commit: 53820cd   test: tools/test_os_settings.py
+### U384 [medium, data loss] Two Files windows (or a download) creating the same name during a long copy: one file overwrote the other, and a move then deleted both originals
+  commit: ddd2e09   test: tools/test_files.py (renameat2 RENAME_NOREPLACE, with a re-check on drives that cannot)
+### U385 [low-medium] Game mode used by two people left the PC on "Full power" for good
+  commit: 5d9b594   test: tools/test_game_mode.sh
+### U386 [low] "Safely remove" worked in the middle of a copy in the same Files window
+  commit: a910a2d   test: tools/test_files.py (another window can still do it: unsure, M)
+### U387 [medium, partly] A drive opened by another account showed as open but could not be used, without explanation
+  commit: a910a2d   test: tools/test_files.py (now says who opened it; sharing internal drives for all accounts is a privacy choice, see For you)
+### U388 [low] Starting an app twice quickly (double-click) opened two windows (U208)
+  commit: fece381   test: tools/test_os_apps.py
+### U389 [low] "Update now" while another update ran said "Are you online?"
+  commit: fece381   test: tools/test_os_settings.py
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -1096,6 +1124,10 @@ reading the script). Tests after: 20 test files passed (here).
 - U377 (round 28, unsure): every BugOS PC is called "bugos", so two PCs with the same login name share one backup
   folder on a stick.
 - U378 (round 28, unsure): on vfat/exFAT "notes." and "notes" collide like case pairs; dubbele_namen only checks case.
+- U390 (round 29, unsure): the daily `flatpak uninstall --unused` could remove a runtime that a Store install
+  running at the same moment has just deployed (depends on flatpak's own locking).
+- U391 (round 29, unsure): Settings left open on Wi-Fi/Bluetooth shows a stale switch after the quick menu (or
+  another account) changes it. Cosmetic.
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
@@ -1122,6 +1154,9 @@ reading the script). Tests after: 20 test files passed (here).
   add a `cosign verify` of Universal Blue's signature before building (S-M).
 - U292/U294 (round 21): on a real PC, run the Windows tool once as a normal (not administrator) user, and do one
   real install with a non-US keyboard.
+- U387 (round 29): internal drives (a second disk, the Windows disk) are mounted for the first person who logs in;
+  other accounts cannot open them. Making them shared for every account (a udev rule UDISKS_FILESYSTEM_SHARED=1,
+  mounted under /media) is a privacy choice: decide whether family members may see each other's internal drives.
 - U196: before you add the signing key (A032), bugos-ondertekend should change the origin in place
   (bootc switch --mutate-in-place) instead of rpm-ostree rebase; a rebase to the same image removes the older
   version, so "Back to the previous version" has nothing to go back to on that first signed boot.
