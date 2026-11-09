@@ -1209,6 +1209,18 @@ if shutil.which("pdftoppm"):
     _pv = _tg.maak_voorbeeld(str(_pdf))
     klopt(not _pv.isNull() and max(_pv.width(), _pv.height()) <= 256, f"U172: een PDF krijgt een eigen voorbeeldje ({_pv.width()}x{_pv.height()})")
 
+# ========================== U173, U175-U177: Winkel en Windows-installaties ===
+_alt = (ROOT / "system_files/usr/share/bugos/alternatives.txt").read_text()
+_store = json.loads((ROOT / "system_files/usr/share/bugos/store.json").read_text())
+klopt("eneshecan" not in _alt and "com.rtosta.zapzap" in _alt and any(a["id"] == "com.rtosta.zapzap" for a in _store["apps"]),
+      "U173: WhatsApp verwijst naar ZapZap (de oude app is van Flathub gehaald), en ZapZap staat in de Winkel")
+klopt(all(w in _alt for w in ("tsetup|", "epicinstaller|", "gog_galaxy|")),
+      "U176: de echte bestandsnamen van Telegram, Epic en GOG Galaxy worden herkend")
+klopt(next(a for a in _store["apps"] if a["id"] == "org.kde.kcalc").get("naam_en") == "Calculator",
+      "U175: de rekenmachine heet in het Engels 'Calculator'")
+klopt('draai("pkexec", "systemctl", "restart", "cups", timeout=120)' in (ROOT / "system_files/usr/bin/bugos-help").read_text(),
+      "U177: Hulp wacht op het wachtwoord voor de printerdienst voor hij opnieuw kijkt")
+
 # ========================== U067: 'Grote letters' maakt ook de letters van de BugOS-apps groter ===
 from PySide6.QtGui import QFont  # noqa: E402
 

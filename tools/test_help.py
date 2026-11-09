@@ -55,12 +55,18 @@ antwoorden.update({("-p",): (0, "printer HP is idle.  enabled since Mon\n"), ("-
 u = bh.controle_printer()
 klopt(u.stand == bh.OK and u.repareer is None, "printer: met een printer die klaarstaat 'Printer is klaar'")
 # U090: "unknown" met een verbinding is geen "Geen verbinding".
-antwoorden.update({("-t", "-f", "CONNECTIVITY", "general"): (0, "unknown\n"),
+antwoorden.update({("-t", "-f", "TYPE", "device"): (0, "wifi\nethernet\n"),
+                   ("-t", "-f", "CONNECTIVITY", "general"): (0, "unknown\n"),
                    ("-t", "-f", "STATE", "general"): (0, "connected\n")})
 u = bh.controle_internet()
 klopt(u.stand == bh.OK, f"U090: internet 'unknown' maar wel verbonden: geen 'Geen verbinding' ({u.tekst})")
 antwoorden[("-t", "-f", "STATE", "general")] = (0, "disconnected\n")
 klopt(bh.controle_internet().stand == bh.PROBLEEM, "U090: internet 'unknown' en niet verbonden: wel 'Geen verbinding'")
+# U174: een pc zonder wifi (aan een kabel): niet 'kies je wifi', wel 'zit de kabel erin?'.
+antwoorden[("-t", "-f", "TYPE", "device")] = (0, "ethernet\nloopback\n")
+u = bh.controle_internet()
+klopt("kabel" in u.tekst or "cable" in u.tekst, f"U174: geen wifi in de computer: vraag naar de netwerkkabel ({u.tekst})")
+antwoorden[("-t", "-f", "TYPE", "device")] = (0, "wifi\nethernet\n")
 # U091: na 'Opnieuw verbinden' wachten tot er weer internet is, voor Hulp opnieuw kijkt.
 _gedaan: list = []
 bh.draai = lambda *cmd, **kw: (_gedaan.append(cmd), (0, ""))[1]

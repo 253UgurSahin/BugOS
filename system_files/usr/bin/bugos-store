@@ -89,7 +89,7 @@ def tekst(app: dict) -> str:
 
 
 def past(app: dict, zoek: str) -> bool:
-    hooi = f"{app['naam']} {app.get('nl', '')} {app.get('en', '')} {app['id']}".lower()
+    hooi = f"{app['naam']} {app.get('naam_en', '')} {app.get('nl', '')} {app.get('en', '')} {app['id']}".lower()
     return all(w in hooi for w in zoek.lower().split())
 
 
@@ -107,7 +107,7 @@ class AppKaart(Kaart):
         blok.setSpacing(4)
         kop_rij = QHBoxLayout()
         kop_rij.setSpacing(8)
-        kop_rij.addWidget(label(app["naam"], "kop3", wrap=False))
+        kop_rij.addWidget(label(app.get("naam_en", app["naam"]) if TAAL != "nl" else app["naam"], "kop3", wrap=False))   # (U175)
         self.chip = Chip(t("Geïnstalleerd", "Installed"), "goed")
         kop_rij.addWidget(self.chip)
         kop_rij.addStretch(1)

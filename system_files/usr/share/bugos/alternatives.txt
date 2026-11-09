@@ -15,10 +15,13 @@ excel|LibreOffice|org.libreoffice.LibreOffice
 gimp|GIMP|org.gimp.GIMP
 obs-studio|OBS Studio|com.obsproject.Studio
 telegram|Telegram|org.telegram.desktop
-whatsapp|WhatsApp (web)|com.github.eneshecan.WhatsAppForLinux
+tsetup|Telegram|org.telegram.desktop
+whatsapp|ZapZap (WhatsApp)|com.rtosta.zapzap
 vscode|Visual Studio Code|com.visualstudio.code
 thunderbird|Thunderbird|org.mozilla.Thunderbird
 7z|Ark|org.kde.ark
 winrar|Ark|org.kde.ark
 epicgames|Heroic Games Launcher|com.heroicgameslauncher.hgl
+epicinstaller|Heroic Games Launcher|com.heroicgameslauncher.hgl
 goggalaxy|Heroic Games Launcher|com.heroicgameslauncher.hgl
+gog_galaxy|Heroic Games Launcher|com.heroicgameslauncher.hgl

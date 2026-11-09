@@ -64,6 +64,12 @@ def controle_internet() -> Uitslag:
     # Is er wel een verbinding, dan niet "geen verbinding" zeggen (U090).
     if stand in ("unknown", "") and draai("nmcli", "-t", "-f", "STATE", "general")[1].strip().startswith("connected"):
         return Uitslag(naam, OK, t("Je bent verbonden met een netwerk.", "You are connected to a network."))
+    # Een pc zonder wifi (aan een kabel): niet 'kies je wifi' zeggen (U174).
+    _, apparaten = draai("nmcli", "-t", "-f", "TYPE", "device")
+    if apparaten.strip() and "wifi" not in apparaten.split():
+        return Uitslag(naam, PROBLEEM, t("Geen verbinding. Zit de netwerkkabel er goed in?",
+                                         "Not connected. Is the network cable plugged in?"),
+                       lambda: kde_instelling("kcm_networkmanagement"), t("Netwerk", "Network"))
     return Uitslag(naam, PROBLEEM, t("Geen verbinding. Kies hieronder je wifi.", "Not connected. Choose your Wi-Fi."),
                    lambda: kde_instelling("kcm_networkmanagement"), t("Wifi kiezen", "Choose Wi-Fi"))
 
@@ -153,7 +159,9 @@ def controle_printer() -> Uitslag:
     code, uit = draai("lpstat", "-r", timeout=5)
     if code != 0 or "not running" in uit:
         return Uitslag(naam, LET_OP, t("De printerdienst draait niet.", "The printing service is not running."),
-                       lambda: start("pkexec", "systemctl", "restart", "cups"), t("Printerdienst starten", "Start printing service"))
+                       # Wachten tot het wachtwoord is ingevuld en de dienst draait, dan pas opnieuw kijken (U177).
+                       lambda: draai("pkexec", "systemctl", "restart", "cups", timeout=120),
+                       t("Printerdienst starten", "Start printing service"))
     # Zijn er printers? lpstat -e geeft alleen hun namen (leeg als er geen is). lpstat -p zegt zonder
     # printer "No destinations added." (in de taal van de computer), en dat is geen printer.
     _, namen = draai("lpstat", "-e", timeout=5)
