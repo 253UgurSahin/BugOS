@@ -878,6 +878,29 @@ apps gone, dark mode showing as light (BugOSDonker), FPS counter stuck on
 ### U303 [low] After switching to signed updates and going back, the PC stayed on unverified updates for good
   commit: 9b932d6   test: tools/test_signed.sh
 
+## Round 23 (2026-11-09)
+Two reviewers: the round-22 fixes (2 found plus 5 unsure: U307, U308; R2 = U304, now documented), and a fresh sweep of
+resource use and the login sequence (4 found plus 6 unsure: U309-U314). An idle laptop costs nothing extra under
+BugOS: polling only runs while a popup or app is open. 8 fixed, each with a test that failed first. Tests after: 20
+test files passed (here).
+
+### U307 [low-medium] (from U303) After a deliberate "back", the switch to signed updates staged the newer version again
+  commit: beabe3c   test: tools/test_signed.sh
+### U308 [low] (from U239) With "update myself", the new default apps were still installed (and retried every 5 minutes offline)
+  commit: beabe3c   test: tools/test_os_system.sh
+### U309 [low] Welcome loaded PySide6 on every login, only to exit (a quarter second and 50 MB)
+  commit: 1174d71   test: tools/test_files.py
+### U310 [low] bugos-open-drives (every login) loaded Qt because bugos_drives imported bugos_ui
+  commit: 1174d71   test: tools/test_files.py
+### U311 [low] Task Manager kept measuring every 2 s (and waking 10×/s) while minimised or hidden
+  commit: ff678e3   test: tools/test_task_manager.py
+### U312 [low] Every boot waited for the network for the first-boot and signed-switch services (Wants=network-online)
+  commit: 75ddd88   test: tools/test_os_system.sh (check `systemd-analyze critical-chain` on a real PC)
+### U313 [low] BugOS's Python modules were never byte-compiled (read-only /usr), so every app start recompiled them
+  commit: 12d072c   test: tools/test_os_system.sh
+### U314 [low] A local build could copy stale __pycache__ folders into the image
+  commit: 12d072c   test: tools/test_os_system.sh
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -918,6 +941,10 @@ apps gone, dark mode showing as light (BugOSDonker), FPS counter stuck on
   whose plugin is missing (U302 relies on it); check once on a real PC that had the old image.
 - U306 (round 22, unsure): light mode switched on automatically by a pre-rename image below 6,000,000 kB is not
   re-checked against U023's newer threshold.
+- U315 (round 23, unsure): Plasma 6 probably ignores X-KDE-autostart-phase, so all BugOS autostart entries start
+  together; nothing harmful found (each one-time step has its own marker).
+- U316 (round 23, unsure): the Store runs `flatpak list --app` before its window shows (usually under half a second).
+- U317 (round 23, unsure): the daily app update has no "on AC power" condition (on purpose: it would skip whole days).
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
