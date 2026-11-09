@@ -302,7 +302,10 @@ def onthoud(schijf: Path) -> None:
 def laatste_backup() -> str:
     try:
         d = json.loads(LOG.read_text())
-        dagen = int((time.time() - d["tijd"]) // 86400)
+        # Kalenderdagen, niet blokken van 24 uur (maandag 22:00 is dinsdagochtend 'gisteren'); en na een klok die
+        # terugsprong (dubbel opstarten met Windows) niet '-1 dagen geleden' (U444).
+        import datetime as _dt
+        dagen = max((_dt.date.today() - _dt.date.fromtimestamp(int(d["tijd"]))).days, 0)
         if dagen == 0:
             return t("Laatste back-up: vandaag", "Last backup: today")
         if dagen == 1:

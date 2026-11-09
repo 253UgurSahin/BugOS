@@ -184,6 +184,19 @@ klopt("<h1>papa@bugos" in _d442.toPlainText() and 't("De bestanden van de back-u
       (ROOT / "system_files/usr/bin/bugos-backup").read_text(),
       f"U442: de naam van de back-up wordt letterlijk getoond, en de vraag is te vertalen ({_d442.toPlainText()[:60]!r})")
 
+# U444: 'laatste back-up' telt kalenderdagen (gisteren 23:59 is 'gisteren'), en een tijd in de toekomst is 'vandaag'.
+import datetime as _dt444
+_log444 = bb.LOG
+bb.LOG = TMP / "backup444.json"
+_gister = _dt444.datetime.combine(_dt444.date.today() - _dt444.timedelta(days=1), _dt444.time(23, 59))
+bb.LOG.write_text(json.dumps({"schijf": "/x", "tijd": int(_gister.timestamp())}))
+_a444 = bb.laatste_backup()
+bb.LOG.write_text(json.dumps({"schijf": "/x", "tijd": int(__import__("time").time()) + 7200}))
+_b444 = bb.laatste_backup()
+bb.LOG = _log444
+klopt(("gisteren" in _a444 or "yesterday" in _a444) and ("vandaag" in _b444 or "today" in _b444),
+      f"U444: 'laatste back-up' in kalenderdagen, nooit negatief ({_a444!r}, {_b444!r})")
+
 # U097: het lijstje op de stick bepaalt niet welke opdracht er draait: alleen de vaste soorten tellen.
 _gevraagd: list = []
 _echt_run = bb.subprocess.run
