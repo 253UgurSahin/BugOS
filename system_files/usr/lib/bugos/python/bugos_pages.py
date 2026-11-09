@@ -35,7 +35,7 @@ class SchijfKiezer(QWidget):
         self.kaarten: dict[str, KeuzeKaart] = {}
         from PySide6.QtWidgets import QButtonGroup
         self.groep = QButtonGroup(self)
-        self.groep.buttonClicked.connect(lambda _: self.gewijzigd.emit())
+        self.groep.buttonClicked.connect(lambda _: (setattr(self, "_kwijt", False), self.gewijzigd.emit()))
         self.leeg = Kaart(marge=22, ruimte=16, richting="h")
         self.leeg.lay.addWidget(IcoonChip("drive-removable-media-usb", "grijs", 48))
         blok = QVBoxLayout()
@@ -88,7 +88,14 @@ class SchijfKiezer(QWidget):
             self.kaarten[sleutel] = k
         self.leeg.setVisible(not items)
         if items:
-            (self.kaarten.get(huidig) or next(iter(self.kaarten.values()))).setChecked(True)
+            if huidig in self.kaarten:
+                self.kaarten[huidig].setChecked(True)
+            elif (huidig is None and not getattr(self, "_kwijt", False)) or len(self.kaarten) == 1:
+                next(iter(self.kaarten.values())).setChecked(True)
+            else:
+                self._kwijt = True   # ook bij de volgende verversing niet vanzelf een andere kiezen
+            # De gekozen schijf is eruit en er zijn er nog meer: niet stil een andere kiezen (dan ging de back-up naar
+            # een schijf die je niet koos); je kiest zelf opnieuw (U533).
         self.gewijzigd.emit()
 
     def gekozen(self) -> str | None:

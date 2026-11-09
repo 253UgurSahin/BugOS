@@ -145,7 +145,9 @@ class Rij(QFrame):
 
     def keyPressEvent(self, e) -> None:  # noqa: N802
         if self.property("klikbaar") == "true" and e.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
-            self.geklikt.emit()
+            if not e.isAutoRepeat():   # Enter vasthouden is één keer (geen stapel wachtwoordvragen) (U531)
+                self.geklikt.emit()
+            e.accept()
             return
         super().keyPressEvent(e)
 

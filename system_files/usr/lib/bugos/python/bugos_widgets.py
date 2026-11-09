@@ -68,7 +68,15 @@ def wit_icoon(ic: QIcon, maat: int) -> QIcon:
     return uit if not uit.isNull() else ic
 
 
-class Knop(QPushButton):
+class GeenDubbel:
+    """Een dubbelklik is één klik: de tweede klik doet niets. Anders sloeg 'Volgende' in Welkom een pagina over, ging
+    een schakelaar aan én uit, of startte 'Openen' een app twee keer (U530). (Zoals Rij, U332.)"""
+
+    def mouseDoubleClickEvent(self, e) -> None:  # noqa: N802
+        e.accept()   # niet opnieuw indrukken: dan volgt er bij loslaten ook geen tweede 'clicked'
+
+
+class Knop(GeenDubbel, QPushButton):
     """Knop in de BugOS-stijl. soort: "hoofd" (rood), "gewoon", "stil" of "rand"."""
 
     def __init__(self, tekst: str, soort: str = "gewoon", icoon: str | None = None, groot: bool = False):
@@ -260,7 +268,7 @@ class Banner(QFrame):
                 pass
 
 
-class Schuif(QAbstractButton):
+class Schuif(GeenDubbel, QAbstractButton):
     """Een echte aan/uit-schuifschakelaar (met een vloeiende beweging)."""
 
     def __init__(self, aan: bool = False, parent: QWidget | None = None):
@@ -387,7 +395,7 @@ class Groep(Kaart):
         return w
 
 
-class Tegel(QPushButton):
+class Tegel(GeenDubbel, QPushButton):
     """Een grote klikbare tegel: pictogram (op een gekleurd tegeltje), naam en uitleg."""
 
     def __init__(self, icoon: str, naam: str, tekst: str, actie: Callable[[], None],
@@ -422,7 +430,7 @@ class Tegel(QPushButton):
         return all(woord in self.zoektekst for woord in zoeksleutel(zoek).split())
 
 
-class KeuzeKaart(QPushButton):
+class KeuzeKaart(GeenDubbel, QPushButton):
     """Een grote kaart die je kunt aanklikken om iets te kiezen."""
 
     def __init__(self, inhoud: QWidget):

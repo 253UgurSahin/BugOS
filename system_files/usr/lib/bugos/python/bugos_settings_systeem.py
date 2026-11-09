@@ -254,6 +254,8 @@ class UpdatesPagina(Blad):
             self.bezig = True   # Instellingen gaat pas dicht als dit klaar is (zie Instellingen.closeEvent)
         else:
             self.bezig_keuze = True   # ook 'vanzelf'/'zelf': sluiten zou de wachtwoordvraag afbreken (U212)
+            if self.auto is not None:
+                self.auto.setEnabled(False)   # niet nog een keer tijdens de wachtwoordvraag (twee vragen, de laatste wint) (U532)
 
         def af(code: int = 1, status=QProcess.ExitStatus.CrashExit) -> None:
             if gedaan:
@@ -275,6 +277,8 @@ class UpdatesPagina(Blad):
                 self.bezig = False   # alleen de update zelf; een schakelaar die tussendoor klaar is, telt niet
             else:
                 self.bezig_keuze = False
+                if self.auto is not None:
+                    self.auto.setEnabled(True)
             try:
                 if uit is None:
                     uit = bytes(proces.readAll()).decode(errors="ignore")

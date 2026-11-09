@@ -512,7 +512,7 @@ class Welkom(QWidget):
         # met de focus doet bij Enter gewoon zichzelf (U481).
         self.volgende.setFocus()
         for toets in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            QShortcut(QKeySequence(toets), self, activated=self.enter)
+            QShortcut(QKeySequence(toets), self, activated=self.enter, autoRepeat=False)   # Enter vasthouden: één pagina (U530)
 
     def enter(self) -> None:
         nu = QApplication.focusWidget()
