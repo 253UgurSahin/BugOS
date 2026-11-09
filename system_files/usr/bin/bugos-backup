@@ -272,8 +272,15 @@ def wegschrijven(doel: Path) -> list[str]:
 
 
 def onthoud(schijf: Path) -> None:
-    CONFIG.mkdir(parents=True, exist_ok=True)
-    LOG.write_text(json.dumps({"schijf": str(schijf), "tijd": int(time.time())}))
+    """De datum van de back-up bewaren. Lukt dat niet (je computer is vol), dan is de back-up zelf toch klaar:
+    geen fout naar boven, anders bleef het venster op 'Niet uittrekken' hangen (U410)."""
+    try:
+        CONFIG.mkdir(parents=True, exist_ok=True)
+        tijdelijk = LOG.with_name(LOG.name + ".nieuw")
+        tijdelijk.write_text(json.dumps({"schijf": str(schijf), "tijd": int(time.time())}))
+        os.replace(tijdelijk, LOG)
+    except OSError:
+        pass
 
 
 def laatste_backup() -> str:
@@ -296,10 +303,13 @@ GOED, DEELS = (0, 24), (23,)
 
 
 def uitslag(code: int, cmd: list[str], uitvoer: str = "") -> str:
-    """'goed', 'deels', 'vol' of 'weg' (de schijf of map waar het vandaan komt is er niet meer) of 'fout'.
-    rsync geeft ook 23 als de bronmap verdwenen is (stick eruit): dat is niet 'een paar bestanden' (U078)."""
+    """'goed', 'deels', 'vol', 'alleen-lezen' of 'weg' (de schijf of map waar het vandaan komt is er niet meer) of 'fout'.
+    rsync geeft ook 23 als de bronmap verdwenen is (stick eruit): dat is niet 'een paar bestanden' (U078).
+    Een schijf die alleen gelezen kan worden (schuifje, of na een schijffout) geeft ook 23: dan ging er niets mee (U409)."""
     if code not in GOED and "No space left on device" in uitvoer:
         return "vol"
+    if code not in GOED and "Read-only file system" in uitvoer:
+        return "alleen-lezen"
     if code in GOED:
         return "goed"
     try:
@@ -309,6 +319,11 @@ def uitslag(code: int, cmd: list[str], uitvoer: str = "") -> str:
     if weg:
         return "weg"
     return "deels" if code in DEELS else "fout"
+
+ALLEEN_LEZEN = t("Op deze schijf kan niets geschreven worden (hij is beveiligd tegen schrijven, of er zit een fout op). "
+                 "Kies een andere schijf, of kijk hem na op een andere computer.",
+                 "Nothing can be written to this drive (it is write-protected, or it has an error). "
+                 "Choose another drive, or check it on another computer.")
 
 DEELS_UITLEG = t("Een paar bestanden konden niet mee: {mappen}. Dat komt meestal door een naam met : ? * of \", "
                  "een bestand groter dan 4 GB op een FAT32-schijf, of twee namen die alleen in hoofdletters "
@@ -339,6 +354,8 @@ def zonder_venster(schijf: Path) -> int:
         elif soort != "goed":
             if soort == "vol":
                 print(t("De schijf is vol.", "The drive is full."), file=sys.stderr)
+            elif soort == "alleen-lezen":
+                print(ALLEEN_LEZEN, file=sys.stderr)
             return 1
     if subprocess.call(wegschrijven(doel)) != 0:
         return 1
@@ -537,6 +554,7 @@ def venster() -> int:
                                     "Bestanden) en probeer het dan opnieuw.",
                                     "Your computer is full. Make room first (for example empty the trash in Files) "
                                     "and try again.")) if soort == "vol" else
+                                 ALLEEN_LEZEN if soort == "alleen-lezen" and maak else
                                  t("Het lukte niet helemaal. Zit de schijf er nog in? Probeer het opnieuw.",
                                    "It did not fully work. Is the drive still plugged in? Try again."), "fout")
                 self.wachtrij.clear()

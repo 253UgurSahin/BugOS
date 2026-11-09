@@ -152,6 +152,23 @@ for _mod, _naam in ((bb, "Back-up"), (bo, "Overstap")):
           and _mod.uitslag(12, ["rsync", f"{_bron}/", f"{_naar}/"]) == "fout",
           f"U079: {_naam}: een volle schijf heet 'vol', 23 met de bron er nog is 'deels'")
 
+# U409: een stick die alleen gelezen kan worden: rsync geeft 23, maar er ging niets mee (geen 'een paar bestanden').
+klopt(bb.uitslag(23, ["rsync", f"{THUIS}/", f"{_naar}/"],
+                 'rsync: [receiver] mkstemp "/run/media/x/BugOS-backup/Documents/.a.txt.Xy" failed: Read-only file system (30)')
+      == "alleen-lezen" and "ALLEEN_LEZEN if soort" in (ROOT / "system_files/usr/bin/bugos-backup").read_text(),
+      "U409: een schijf die alleen gelezen kan worden is geen 'deels', en krijgt een eigen melding")
+# U410: de datum bewaren lukt niet (computer vol): geen fout naar boven (het venster bleef dan op 'Niet uittrekken').
+_log_oud = bb.LOG
+bb.LOG = TMP / "log-is-een-map"
+bb.LOG.mkdir()
+try:
+    bb.onthoud(TMP)
+    _u410 = True
+except OSError:
+    _u410 = False
+bb.LOG = _log_oud
+klopt(_u410, "U410: lukt het bewaren van de back-updatum niet, dan gaat de back-up toch netjes verder")
+
 # U097: het lijstje op de stick bepaalt niet welke opdracht er draait: alleen de vaste soorten tellen.
 _gevraagd: list = []
 _echt_run = bb.subprocess.run
