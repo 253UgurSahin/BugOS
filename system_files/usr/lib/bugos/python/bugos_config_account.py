@@ -93,17 +93,27 @@ def taal() -> str:
     return code if any(code == c for c, _l, _n in TALEN) else "en"
 
 
-def formaten_voor(code: str, land: str) -> str:
-    """Datum, getallen en papier bij de gekozen taal. Engels in Europa (je kwam van Nederlands, Duits…) is geen
-    Amerikaans: dan dag/maand, A4 en de euro (en_IE), in plaats van Letter-papier en maand/dag (U229)."""
+# Landen met de euro: daar past Iers-Engels (dag/maand, A4, de euro) (U229).
+EURO_LANDEN = {"NL", "BE", "DE", "AT", "FR", "LU", "ES", "PT", "IT", "IE", "FI", "GR", "SK", "SI", "EE", "LV", "LT",
+               "HR", "MT", "CY"}
+LC_STREEK = ("LC_PAPER", "LC_MEASUREMENT", "LC_MONETARY")
+HOUDEN = ""   # formaten_voor: de LC_-instellingen laten zoals ze zijn
+
+
+def formaten_voor(code: str, land: str) -> tuple[str, str | None]:
+    """(LANG, streek voor papier/maten/geld) bij de gekozen taal. Engels buiten Engeland of Amerika is geen
+    Amerikaans: in een euroland Iers-Engels (dag/maand, A4, de euro); elders (Polen, Turkije…) Engels met het
+    papier, de maten en het geld van je eigen land (U229, U232). streek None haalt die weg, HOUDEN laat ze."""
     if code != "en":
-        return land
+        return land, None
     nu = (_c.kde_lees("plasma-localerc", "Formats", "LANG", "") or os.environ.get("LANG", "")).split(".")[0]
     if nu.startswith("en_"):
-        return nu   # al een Engelse streek (Brits, Iers, Amerikaans…): die houden
-    if nu and nu not in ("C", "POSIX") and "_" in nu:
-        return "en_IE"
-    return land
+        return nu, HOUDEN   # al een Engelse streek (Brits, Iers, Amerikaans…): die houden
+    if "_" not in nu or nu.startswith(("C", "POSIX")):
+        return land, None
+    if nu.split("_")[1][:2] in EURO_LANDEN:
+        return "en_IE", None
+    return "en_US", nu
 
 
 def zet_taal(code: str) -> bool:
@@ -115,7 +125,11 @@ def zet_taal(code: str) -> bool:
     if land is None:
         return False
     goed = _c.kde_schrijf("plasma-localerc", "Translations", "LANGUAGE", code if code == "en" else f"{code}:en_US")
-    goed = _c.kde_schrijf("plasma-localerc", "Formats", "LANG", f"{formaten_voor(code, land)}.UTF-8") and goed
+    lang, streek = formaten_voor(code, land)
+    goed = _c.kde_schrijf("plasma-localerc", "Formats", "LANG", f"{lang}.UTF-8") and goed
+    if streek != HOUDEN:
+        for sleutel in LC_STREEK:
+            goed = _c.kde_schrijf("plasma-localerc", "Formats", sleutel, f"{streek}.UTF-8" if streek else None) and goed
     return goed
 
 
