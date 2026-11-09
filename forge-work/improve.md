@@ -901,6 +901,30 @@ test files passed (here).
 ### U314 [low] A local build could copy stale __pycache__ folders into the image
   commit: 12d072c   test: tools/test_os_system.sh
 
+## Round 24 (2026-11-09)
+Two reviewers: the round-23 fixes (1 found plus 4 unsure: U318-U320), and a fresh sweep of how BugOS fits into KDE
+Plasma as a whole, checked against the real base image kinoite-main:44 (Plasma 6.8.2) (5 found plus 4 unsure:
+U321-U326). 9 fixed, each with a test that failed first. Tests after: 20 test files passed (here).
+
+### U318 [medium] (from U312) The hotspot check of the signed-updates switch ran before any network, so it downloaded over a hotspot anyway
+  commit: 6c8357c   test: tools/test_signed.sh
+### U319 [low] (from U313) Pre-compiled Python used unchecked-hash: a changed .py (usr-overlay while debugging) ran old code
+  commit: 6c8357c   test: tools/test_os_system.sh
+### U320 [low] (from U308) Default apps skipped under "update myself" never came when you switched back to automatic
+  commit: 2b38a5d   test: tools/test_os_system.sh
+### U321 [medium] KDE's own update notifier updated Flatpak apps silently (also with "I choose when")
+  commit: 4a49ea4   test: tools/test_os_system.sh (removes plasma-discover-notifier; UseUnattendedUpdates=false)
+### U322 [medium] Windows+E opened Dolphin and Windows+I KDE System Settings, not BugOS Files and Settings
+  commit: 4a49ea4   test: tools/test_os_system.sh (check once that an existing user's kglobalshortcutsrc picks it up)
+### U323 [medium] BugOS notifications never stayed in KDE's notification history (no desktop-entry hint)
+  commit: 4a49ea4   test: tools/test_os_system.sh
+### U324 [low] The quick-menu gear said "All settings" (the name of the KDE app in the start menu)
+  commit: 4a49ea4   test: tools/test_os_system.sh
+### U325 [low] A dark scheme chosen in KDE (Breeze Dark) left BugOS's dark switches on "off" and Konsole/Kvantum light
+  commit: 4a49ea4   test: tools/test_os_system.sh
+### U326 [low] Flathub "Install" links (appstream://) opened Discover instead of the BugOS Store
+  commit: 4a49ea4   test: tools/test_os_system.sh
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -945,6 +969,11 @@ test files passed (here).
   together; nothing harmful found (each one-time step has its own marker).
 - U316 (round 23, unsure): the Store runs `flatpak list --app` before its window shows (usually under half a second).
 - U317 (round 23, unsure): the daily app update has no "on AC power" condition (on purpose: it would skip whole days).
+- U327 (round 24, unsure): the keyboard-layout tray item is hidden (RUSTIG); someone with two layouts sees no
+  indicator (KWin shows an on-screen hint when switching).
+- U328 (round 24, unsure): Fedora's global themes ("Fedora", "Fedora Dark") show in KDE's Global Theme page; they
+  cannot be removed (plasma-workspace needs the package). Cosmetic.
+- U329 (round 24, unsure): KDE's Help Center and Info Center show next to BugOS Help and About (search duplicates).
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
