@@ -831,6 +831,9 @@ ovLUnl0L5eQZEbTp/9k=
 # Onschuldig als Windows later alleen draait (Windows 10/11 kunnen dit gewoon).
 function Set-KlokUtc {
     try { Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\TimeZoneInformation' -Name 'RealTimeIsUniversal' -Value 1 -Type DWord -ErrorAction Stop } catch { Write-Verbose 'Klok niet op UTC gezet.' }
+    # Windows 'Snel opstarten' uit: dan laat 'Afsluiten' de Windows-schijf half in slaap achter. BugOS opent die schijf, en
+    # wat je daar neerzet, kan bij de volgende Windows-start verdwijnen of de schijf beschadigen (U535).
+    try { Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power' -Name 'HiberbootEnabled' -Value 0 -Type DWord -ErrorAction Stop } catch { Write-Verbose 'Snel opstarten niet uitgezet.' }
 }
 
 if ($Taak -eq 'Krimp') {

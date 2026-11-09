@@ -82,8 +82,15 @@ jobs:
         env:
           VARIANT: ${{ inputs.variant }}
           TAG: ${{ inputs.tag }}
+          PUBLICEREN: ${{ inputs.publiceren }}
         run: |
           [[ "$TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || { echo "::error::Geen geldige bouw: $TAG"; exit 1; }
+          # Een gepubliceerde ISO is wat de Windows-tool aan iedereen geeft, en de installatie volgt die tag voor altijd.
+          # Alleen 'latest' mag dus gepubliceerd worden, geen testbranch (U536).
+          if [ "$PUBLICEREN" = true ] && [ "$TAG" != latest ]; then
+            echo "::error::Publiceren kan alleen met de bouw 'latest' (nu: $TAG). Een ISO van een testbranch zou pc's voor altijd op die branch zetten."
+            exit 1
+          fi
           REGISTRY="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
           echo "image=${REGISTRY}/${VARIANT}:${TAG}" >> "$GITHUB_OUTPUT"
           echo "datum=$(date -u +%Y.%m.%d)" >> "$GITHUB_OUTPUT"

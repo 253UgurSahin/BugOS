@@ -61,5 +61,11 @@ controle '[ "$NV" = ok ] && grep -q "if (Test-NieuweNvidia \$gpu) { .nvidia. }" 
 # U446: ruimte maken voor BugOS naast Windows zet de klok van Windows op UTC (anders 1-2 uur verschil na elke wissel).
 controle 'grep -A2 "Invoke-Krimp \$KrimpGB\s*$" <<<"$PS" | grep -q "Set-KlokUtc" && grep -A2 "Write-IsoNaarSchijf \$IsoPad" <<<"$PS" | grep -q "Set-KlokUtc" && grep -A2 "function Set-KlokUtc" <<<"$PS" | grep -q "RealTimeIsUniversal.*-Value 1 -Type DWord"' \
     "U446/U453: naast Windows loopt de klok niet verkeerd (Windows op UTC, bij ruimte maken en bij de USB-stick)"
+# U535: naast BugOS gaat Windows 'Snel opstarten' uit (anders blijft de Windows-schijf half in slaap: bestanden kwijt).
+controle 'grep -A6 "function Set-KlokUtc" <<<"$PS" | grep -q "HiberbootEnabled.*-Value 0"' \
+    "U535: de Windows-tool zet 'Snel opstarten' uit (de Windows-schijf blijft niet half in slaap)"
+# U536: publiceren kan alleen met de bouw 'latest' (geen ISO die pc's voor altijd op een testbranch zet).
+controle 'grep -q "\[ \"\$PUBLICEREN\" = true \] && \[ \"\$TAG\" != latest \]" "$ROOT/.github/workflows/iso.yml"' \
+    "U536: een ISO publiceren kan alleen van 'latest'"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
