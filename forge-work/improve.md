@@ -1058,6 +1058,31 @@ U384-U389). 11 fixed, each with a test that failed first. Tests after: 20 test f
 ### U389 [low] "Update now" while another update ran said "Are you online?"
   commit: fece381   test: tools/test_os_settings.py
 
+## Round 30 (2026-11-09)
+Two reviewers: the round-29 fixes (U392-U395), and a fresh sweep of "real hardware": small screens, laptops,
+sensors, graphics cards (U396-U401). 10 fixed, each with a test that failed first. Tests after: 20 test files passed (here).
+
+### U392 [medium-low] (from U379) "Back" after picking the old version did not stick if an update was already staged
+  commit: a9a6f39   test: tools/test_os_system.sh
+### U393 [low] (from U379) Settings asked to restart when you were already running the version you picked
+  commit: a9a6f39   test: tools/test_os_settings.py
+### U394 [low] (from U385) Game mode forgot your own "Full power" choice, and switched it off while another account was still gaming
+  commit: 03b9fe2, 7e046cf   test: tools/test_game_mode.sh, tools/test_os_system.sh (the first commit broke "FPS counter ready at once"; the second repairs it)
+### U395 [low] (from U388) A second start that arrived before the first window listened could be lost
+  commit: 03b9fe2   test: tools/test_os_apps.py
+### U396 [medium] The Windows tool picked the Nvidia version for every Nvidia card, also old ones the new driver no longer supports
+  commit: 108e7ca   test: tools/test_windows_start.sh
+### U397 [low-medium] On a small screen Settings offered a size at which nothing fitted any more
+  commit: 9271fc8   test: tools/test_os_settings.py
+### U398 [low] In a narrow Files window the path went under the search bar
+  commit: cb6863d   test: tools/test_os_apps.py
+### U399 [medium-low] A laptop with two batteries (many ThinkPads) showed one battery and could think it was on the charger while running on battery
+  commit: f2ba3fb   test: tools/test_os_settings.py
+### U400 [low] Task Manager could show the motherboard temperature instead of the processor's
+  commit: 8ead46d   test: tools/test_task_manager.py
+### U401 [low-medium] On a low screen (1366x768 at 150%) Welcome, Backup and Switch had their buttons outside the window
+  commit: 03b5c0c   test: tools/test_os_apps.py
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -1128,6 +1153,8 @@ U384-U389). 11 fixed, each with a test that failed first. Tests after: 20 test f
   running at the same moment has just deployed (depends on flatpak's own locking).
 - U391 (round 29, unsure): Settings left open on Wi-Fi/Bluetooth shows a stale switch after the quick menu (or
   another account) changes it. Cosmetic.
+- U402 (round 30, S-M): one-finger touch scrolling (QScroller) in the BugOS apps; on a touch screen you now scroll
+  with the scroll bar or two fingers. Needs a real touch screen to tune.
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
@@ -1160,6 +1187,8 @@ U384-U389). 11 fixed, each with a test that failed first. Tests after: 20 test f
 - U196: before you add the signing key (A032), bugos-ondertekend should change the origin in place
   (bootc switch --mutate-in-place) instead of rpm-ostree rebase; a rebase to the same image removes the older
   version, so "Back to the previous version" has nothing to go back to on that first signed boot.
+- U403 (round 30): the website's RAM claim (minimum memory) does not match what BugOS needs with Plasma 6.8
+  and Steam; the website is outside this work, so check the number there yourself.
 - From the first round, still open (improve-2026-11-07.md "For you"): A032 signing key, default branch main,
   private vulnerability reporting, merge and build once.
 
