@@ -26,6 +26,7 @@ from bugos_ui import (  # noqa: E402
 )
 from bugos_welcome_panel import Zijpaneel  # noqa: E402
 from PySide6.QtCore import QLocale, QProcess, QRectF, QSize, Qt, QThread, QTimer, Signal  # noqa: E402
+from PySide6.QtWidgets import QApplication  # noqa: E402
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
     QButtonGroup, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
@@ -321,8 +322,9 @@ class Jij(Pagina):
                          t("Zet aan wat bij jou past. Niks aanzetten mag ook.", "Turn on what fits you. Turning on nothing is fine too."))
         g = Groep()
         self.gamer = SchakelRij(t("Ik ga gamen", "I'm going to play games"),
-                                t("Steam staat klaar. Met de Game-modus speel je op volle kracht.",
-                                  "Steam is ready. Game mode gives you full power."), False, "lijn:spel", "neutraal")
+                                t("Steam staat in het startmenu (of komt er zo bij). Met de Game-modus speel je op volle kracht.",
+                                  "Steam is in the start menu (or will be soon). Game mode gives you full power."),
+                                False, "lijn:spel", "neutraal")
         self.dev = SchakelRij(t("Ik ga programmeren", "I'm going to code"),
                               t("BugOS zet VS Code, containers en programmeertalen voor je klaar.",
                                 "BugOS sets up VS Code, containers and programming languages."), False, "lijn:code", "neutraal")
@@ -339,6 +341,20 @@ class Jij(Pagina):
                               "klein")
         self.al_bezig.hide()
         self.lay.addWidget(self.al_bezig)
+        self.steam_nog = label(t("Steam wordt nog gedownload (of komt zodra je internet hebt). Hij staat straks in het "
+                                 "startmenu.", "Steam is still being downloaded (or will be once you are online). It will "
+                                 "be in the start menu soon."), "klein")
+        self.steam_nog.hide()
+        self.lay.addWidget(self.steam_nog)
+        # Wat al aan staat (de lichte stand zet zichzelf aan op een oudere pc), staat hier ook aan (U179).
+        for naam, rij, script in (("oud", self.oud, "bugos-light-mode"), ("dev", self.dev, "bugos-developer")):
+            try:
+                if subprocess.run([script, "status"], capture_output=True, text=True,
+                                  timeout=5).stdout.strip() == "aan":
+                    rij.schuif.setChecked(True)
+                    self.gestart.add(naam)
+            except (OSError, subprocess.SubprocessError):
+                pass
         self.klaar_met_vullen()
 
     def bij_volgende(self) -> None:
@@ -346,6 +362,8 @@ class Jij(Pagina):
                                     ("oud", self.oud, ("bugos-light-mode", "aan")),
                                     ("gamer", self.gamer, steam_opdracht()
                                      if self.gamer.schuif.isChecked() and "gamer" not in self.gestart else ())):
+            if naam == "gamer" and rij.schuif.isChecked() and not opdracht and naam not in self.gestart:
+                self.steam_nog.show()   # (U181)
             if naam in self.gestart or not rij.schuif.isChecked() or not opdracht:
                 continue
             start(*opdracht)
@@ -436,6 +454,14 @@ class Welkom(QWidget):
         if richting > 0:
             self.paginas[nu].bij_volgende()
             if nu == len(self.paginas) - 1:
+                # Staat de vraag om het wachtwoord (updatekeuze) nog open? Eerst afwachten: sluiten zou hem
+                # afbreken, en dan is je keuze nooit gezet (U182).
+                from PySide6.QtCore import QElapsedTimer
+                klok = QElapsedTimer()
+                klok.start()
+                while any(getattr(p, "bezig", False) for p in self.paginas) and klok.elapsed() < 180000:
+                    QApplication.processEvents()
+                    QThread.msleep(50)
                 CONFIG.mkdir(parents=True, exist_ok=True)
                 KLAAR.touch()
                 self.close()

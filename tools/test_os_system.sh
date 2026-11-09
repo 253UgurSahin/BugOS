@@ -413,5 +413,14 @@ if [ -f /usr/share/wine/wine.inf ]; then
 fi
 rm -f "$TMP/thuis/.local/share/bugos/windows/.update-timestamp"
 nep wine 'exit 0'
+# U180: de eerste start downloadt de apps niet over een telefoon-hotspot (later opnieuw).
+kopie bugos-first-boot
+sed -i "s|/var/lib/bugos|$TMP/var-bugos|g" "$TMP/bugos-first-boot"
+nep busctl 'echo "u 1"'
+nep flatpak 'echo "$*" >>"'"$TMP"'/flatpak-log"'
+: >"$TMP/flatpak-log"
+draai bugos-first-boot
+klopt '[ "$code" -ne 0 ] && ! grep -q install "$TMP/flatpak-log"' "U180: eerste start over een hotspot: nog niets downloaden, later opnieuw"
+nep busctl 'exit 0'
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

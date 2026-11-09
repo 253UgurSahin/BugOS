@@ -660,6 +660,17 @@ jij2.gamer.schuif.setChecked(True)
 jij2.bij_volgende()
 welkom.start, welkom.steam_opdracht = _oud_start, _oud_steam
 klopt(not _gestart and jij2.gamer.schuif.isEnabled(), "U130: zonder Steam: niets 'klaargezet' en het schuifje blijft vrij")
+klopt(not jij2.steam_nog.isHidden(), "U181: zonder Steam (nog): de pagina zegt dat Steam nog komt")
+# U179: de lichte stand stond al aan (vanzelf op een oudere pc): dan staat het schuifje ook aan.
+_ls = TMP / "nep-ls-u179"
+_ls.mkdir()
+(_ls / "bugos-light-mode").write_text("#!/usr/bin/bash\n[ \"$1\" = status ] && echo aan\n")
+(_ls / "bugos-light-mode").chmod(0o755)
+_op = os.environ["PATH"]
+os.environ["PATH"] = f"{_ls}:{_op}"
+jij3 = welkom.Jij()
+os.environ["PATH"] = _op
+klopt(jij3.oud.schuif.isChecked() and "oud" in jij3.gestart, "U179: Welkom toont de lichte stand die al aan staat als aan")
 # U129: de updatekeuze wordt pas onthouden als het lukte (Annuleren bij het wachtwoord: Volgende probeert opnieuw).
 _upd = welkom.Updates()
 _pk = TMP / "pk-nep"

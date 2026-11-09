@@ -17,6 +17,15 @@ APPS=(
 # Steam als Flatpak alleen als de systeemversie ontbreekt.
 command -v steam >/dev/null 2>&1 || APPS+=(com.valvesoftware.Steam)
 
+# Niet over een verbinding met een databundel (telefoon-hotspot): dat is al gauw een paar gigabyte. Dan over
+# vijf minuten opnieuw kijken (Restart=on-failure), zoals de dagelijkse app-updates (U180).
+gemeten="$(busctl get-property org.freedesktop.NetworkManager /org/freedesktop/NetworkManager \
+    org.freedesktop.NetworkManager Metered 2>/dev/null | cut -c 3-)"
+if [ "$gemeten" = 1 ] || [ "$gemeten" = 3 ]; then
+    echo "BugOS: verbinding met een databundel, de apps komen later." >&2
+    exit 1
+fi
+
 flatpak remote-add --if-not-exists --system flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
 if flatpak install --system --noninteractive --or-update flathub "${APPS[@]}"; then
