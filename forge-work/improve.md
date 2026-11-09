@@ -1005,6 +1005,31 @@ files passed (here).
 ### U364 [low, user] The logout screen said "Your files are saved" (unsaved work in open programs is not; programs ask)
   commit: dd45d19   test: tools/test_logout.py
 
+## Round 28 (2026-11-09)
+Two reviewers: the round-27 fixes (1 found plus 3 unsure: U366, U367), and a fresh sweep for DATA LOSS across Files,
+Backup/Switch, settings rewrites, the system tools, the installer and the Windows tool (no high; 5 found plus 2
+overwritten settings and 4 unsure: U368-U374). 9 fixed, each with a test that failed first (the Windows tool by
+reading the script). Tests after: 20 test files passed (here).
+
+### U366 [low] (from U357) "Forget" never matched an SSID with ':' or '\' (nmcli -g escapes them)
+  commit: 437f554   test: tools/test_os_settings.py
+### U367 [low] (from U360) The texts made the startup menu sound like a lasting way back; it is for one start, Settings is for good
+  commit: 437f554
+### U368 [medium] "Back to the previous version" quietly undid password changes, new users and Wi-Fi networks since the update
+  commit: eb3c732   test: tools/test_os_settings.py (now asks first and says so; copying them over is M, see U304)
+### U369 [medium-low] "Set up…" on a new drive could format another stick that took the same device name meanwhile
+  commit: 71f0238   test: tools/test_files.py
+### U370 [low-medium] Windows tool step 4 could wipe another USB disk that got the same disk number
+  commit: c726927   test: tools/test_windows_start.sh (UniqueId checked in the elevated task)
+### U371 [low] Restoring a backup deleted a newer file when the backup had a folder or link with that name
+  commit: cea632e   test: tools/test_backup.py (replaced files now go to "Replaced when restoring <date>")
+### U372 [low] On a full disk, logging in replaced your own gtk.css with an empty file
+  commit: 165b8d1   test: tools/test_os_system.sh
+### U373 [low] Light/dark in BugOS deleted an accent colour you chose in KDE yourself
+  commit: 165b8d1   test: tools/test_os_system.sh
+### U374 [low] "Big letters" off always wrote 10 pt in one font, not your own sizes and menu font
+  commit: 1115c32   test: tools/test_os_settings.py
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -1064,6 +1089,13 @@ files passed (here).
   end state was reproduced.
 - U365 (round 27, unsure): the magnifier hint "Windows key and + or −" depends on KWin binding Meta+Plus; check
   on a real PC.
+- U375 (round 28, unsure): bugos-theme replaces ~/.config/Kvantum/BugOS{,Dark} at every login when they differ
+  from /usr; edits made in Kvantum Manager to the BugOS theme would be lost. Not verified.
+- U376 (round 28, unsure): toggling the BugOS start menu off and on recreates Kickoff, which may drop its own
+  favourites (per applet in Plasma 6). Needs a real Plasma.
+- U377 (round 28, unsure): every BugOS PC is called "bugos", so two PCs with the same login name share one backup
+  folder on a stick.
+- U378 (round 28, unsure): on vfat/exFAT "notes." and "notes" collide like case pairs; dubbele_namen only checks case.
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
