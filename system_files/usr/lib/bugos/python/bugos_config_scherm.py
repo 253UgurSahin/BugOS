@@ -32,8 +32,14 @@ def lees_uitgangen(json_tekst: str, standaard: str) -> list[Uitgang]:
         data = json.loads(json_tekst or "[]")
     except ValueError:
         return []
+    def aangesloten(s: dict) -> bool:
+        # Een HDMI-uitgang zonder scherm eraan staat er bij bijna elke laptop; kies je hem, dan is alles stil.
+        # Zoals KDE: alleen tonen als er iets aan hangt (of als hij nu gekozen is) (U496).
+        poorten = [p for p in s.get("ports") or [] if isinstance(p, dict)]
+        return s.get("name") == standaard or not poorten or any(p.get("availability") != "not available"
+                                                               for p in poorten)
     return [Uitgang(s.get("name", ""), s.get("description") or s.get("name", ""), s.get("name") == standaard)
-            for s in data if isinstance(s, dict) and s.get("name")]
+            for s in data if isinstance(s, dict) and s.get("name") and aangesloten(s)]
 
 
 def lees_volume(json_tekst: str, naam: str) -> tuple[int, bool]:
