@@ -19,6 +19,9 @@ fi
 NAAM="$(basename "$BESTAND")"
 # De meldingen lezen \n als nieuwe regel (printf %b): een \ in de bestandsnaam moet dus dubbel.
 TOON="${NAAM//\\/\\\\}"
+# Een naam als "<b>…</b>" mag de tekst van de vraag niet opmaken of verbergen (kdialog leest < > als opmaak) (U251).
+TOON="${TOON//</‹}"
+TOON="${TOON//>/›}"
 ALTERNATIEVEN=/usr/share/bugos/alternatives.txt
 
 # Is er een beter, echt Linux-alternatief? Dan dat eerst aanbieden.

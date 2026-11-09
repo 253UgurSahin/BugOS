@@ -180,6 +180,13 @@ for eenheid in uupd.timer ublue-update.timer flatpak-system-update.timer; do
         systemctl mask "$eenheid"
     fi
 done
+# Fedora's wekelijkse 'countme'-tel (een anoniem verzoek naar de Fedora-servers met je IP en versie): BugOS
+# verzamelt niets, dus ook dit niet (U250).
+for eenheid in rpm-ostree-countme.timer dnf-countme.timer; do
+    if [ -e "/usr/lib/systemd/system/$eenheid" ]; then
+        systemctl mask "$eenheid"
+    fi
+done
 # De versie per gebruiker (flatpak-user-update.timer, een user-timer) blijft: BugOS werkt alleen de apps van het
 # hele systeem bij, en zonder die timer kregen apps die per gebruiker staan (VS Code van bugos-developer) nooit
 # updates. bugos-updates zet hem aan of uit met 'Updates vanzelf' (U101, U117).

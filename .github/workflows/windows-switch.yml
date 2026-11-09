@@ -81,7 +81,7 @@ jobs:
           git diff --cached --quiet
           if ($LASTEXITCODE -ne 0) {
             git commit -m "Plaatjes van BugOS Overstap (gemaakt op Windows)"
-            git push origin "HEAD:${{ github.ref_name }}"
+            git push origin "HEAD:$env:GITHUB_REF_NAME"   # via env, niet in de opdracht geplakt (U249)
           } else { Write-Output 'Geen veranderingen.' }
 
       - name: Plaatjes bewaren

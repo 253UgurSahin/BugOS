@@ -6,6 +6,8 @@
 #           bugos-login aan <gebruiker>
 #           bugos-login uit <gebruiker>
 set -euo pipefail
+# Het inlogscherm moet het bestand kunnen lezen, ook als de beheerder umask 077 heeft (U247).
+umask 022
 
 # Fedora 44 heeft Plasma Login (plasmalogin) in plaats van SDDM. Schrijf in de map van het inlogscherm
 # dat er echt is; alleen als Plasma Login er niet is, in die van SDDM.
@@ -21,6 +23,11 @@ GEBRUIKER="${2:-}"
 # Een inlognaam zoals jan.jansen mag ook (punt erin), maar niet met een punt of streepje beginnen.
 if ! [[ "$GEBRUIKER" =~ ^[a-z_][a-z0-9_.-]{0,31}$ ]] || ! id "$GEBRUIKER" >/dev/null 2>&1; then
     echo "Geen geldige gebruiker: '$GEBRUIKER'" >&2
+    exit 2
+fi
+# Alleen echte mensen (geen root of systeemaccount) mogen vanzelf inloggen (U247).
+if [ "$WAT" = aan ] && [ "$(id -u "$GEBRUIKER")" -lt 1000 ]; then
+    echo "Geen gewone gebruiker: '$GEBRUIKER'" >&2
     exit 2
 fi
 

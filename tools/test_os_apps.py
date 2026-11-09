@@ -1255,8 +1255,16 @@ klopt(all(w in _alt for w in ("^tsetup|", "epicinstaller|", "gog_galaxy|")),
       "U176: de echte bestandsnamen van Telegram, Epic en GOG Galaxy worden herkend")
 klopt(next(a for a in _store["apps"] if a["id"] == "org.kde.kcalc").get("naam_en") == "Calculator",
       "U175: de rekenmachine heet in het Engels 'Calculator'")
-klopt('draai("pkexec", "systemctl", "restart", "cups", timeout=120)' in (ROOT / "system_files/usr/bin/bugos-help").read_text(),
+klopt('draai("pkexec", "/usr/bin/systemctl", "restart", "cups", timeout=120)' in (ROOT / "system_files/usr/bin/bugos-help").read_text(),
       "U177: Hulp wacht op het wachtwoord voor de printerdienst voor hij opnieuw kijkt")
+# U246: met het beheerderswachtwoord draait altijd het echte programma, niet een gelijknamig bestand op je PATH.
+_pk_fout = []
+for _bin in sorted((ROOT / "system_files/usr/bin").iterdir()):
+    if _bin.is_file():
+        for _r in _bin.read_text(errors="ignore").splitlines():
+            if "pkexec" in _r and not _r.lstrip().startswith("#") and ("pkexec \"$0\"" in _r or 'pkexec", "systemctl"' in _r):
+                _pk_fout.append(f"{_bin.name}: {_r.strip()}")
+klopt(not _pk_fout, f"U246: pkexec start alleen programma's met een vast pad ({_pk_fout})")
 
 # ========================== U184-U186: schuifje, vrije ruimte, Opstarten ===
 from bugos_widgets import Schuif as _Schuif  # noqa: E402

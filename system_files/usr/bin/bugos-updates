@@ -14,6 +14,8 @@
 . /usr/share/bugos/lib.sh
 
 CONF=/etc/bugos/updates.conf
+# Iedereen moet de keuze kunnen lezen (bugos-updatecheck, Instellingen), ook als de beheerder umask 077 heeft (U247).
+umask 022
 
 # BugOS regelt updates zelf, met twee diensten (zie build_files/build.sh):
 #   rpm-ostreed-automatic.timer  -> het systeem (BugOS zelf)
@@ -28,7 +30,8 @@ gebruiker_timer() {
 
 als_beheerder() {
     if [ "$(id -u)" -ne 0 ]; then
-        exec pkexec "$0" "$@"
+        # Altijd het echte programma: niet een gelijknamig bestand ergens anders op je PATH (U246).
+        exec pkexec /usr/bin/bugos-updates "$@"
     fi
 }
 

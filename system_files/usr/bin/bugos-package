@@ -6,7 +6,8 @@
 #   1. BugOS kijkt eerst of het programma in de BugOS Winkel staat.
 #   2. Zo niet, dan zet BugOS het in een eigen "doosje" (container), zodat het
 #      werkt zonder het systeem te kunnen breken. Het verschijnt gewoon in je
-#      startmenu.
+#      startmenu. Let op: het doosje beschermt het systeem, niet je eigen bestanden.
+#      Het programma kan bij je bestanden zoals elk programma (U245).
 
 # shellcheck source=system_files/usr/share/bugos/lib.sh
 . /usr/share/bugos/lib.sh
@@ -40,6 +41,9 @@ esac
 [ -z "$NAAM" ] && NAAM="$(basename "$BESTAND")"
 # De meldingen lezen \n als nieuwe regel (printf %b): een \ in de naam moet dus dubbel.
 TOON="${NAAM//\\/\\\\}"
+# Een naam als "<b>…</b>" mag de tekst van de vraag niet opmaken of verbergen (kdialog leest < > als opmaak) (U251).
+TOON="${TOON//</‹}"
+TOON="${TOON//>/›}"
 
 # Stap 1: staat het in de Winkel?
 # LC_ALL=C: anders zegt flatpak "Geen overeenkomsten gevonden" (in je eigen taal) en zouden we dat voor een app aanzien.
@@ -55,8 +59,8 @@ fi
 
 # Stap 2: in een doosje installeren.
 vraag "$(t \
-    "Wil je \"$TOON\" installeren?\n\nBugOS zet het in een veilig doosje. Daarna staat het gewoon in je startmenu." \
-    "Do you want to install \"$TOON\"?\n\nBugOS puts it in a safe box. Afterwards it is in your start menu.")" || exit 0
+    "Wil je \"$TOON\" installeren?\n\nBugOS zet het in een apart doosje, zodat het BugOS zelf niet kapot kan maken. Het kan wel bij je eigen bestanden, zoals elk programma: installeer het alleen als je de website vertrouwt.\n\nDaarna staat het gewoon in je startmenu." \
+    "Do you want to install \"$TOON\"?\n\nBugOS puts it in a separate box, so it cannot break BugOS itself. It can still use your own files, like any program: only install it if you trust the website.\n\nAfterwards it is in your start menu.")" || exit 0
 
 melding "$(t "Bezig met installeren..." "Installing...")" \
     "$(t "Dit kan een paar minuten duren. Je mag gewoon doorwerken." "This can take a few minutes. You can keep working.")"

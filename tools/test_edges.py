@@ -254,5 +254,18 @@ for wf in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
             los.append(f"{wf.name}:{nr} {m.group(1)}@{m.group(2)}")
 klopt(not los, "workflows: elke actie van buiten GitHub staat op een vaste commit" + (f"; los: {los}" if los else ""))
 
+# U248/U249: geen invoer rechtstreeks in een opdracht (alleen via env), en build.yml leest standaard alleen.
+_geplakt = []
+for wf in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+    for nr, regel in enumerate(wf.read_text(encoding="utf-8").splitlines(), 1):
+        r = regel.strip().removeprefix("- ")
+        if re.match(r"(if|name|description|default|[A-Z_][A-Z0-9_]*):", r) or r.startswith("#"):
+            continue   # een voorwaarde, een naam of een env-regel: daar mag het
+        if re.search(r"\$\{\{\s*(inputs\.|github\.(ref_name|head_ref|event\.))", r):
+            _geplakt.append(f"{wf.name}:{nr}")
+klopt(not _geplakt, "workflows: invoer gaat via env, niet rechtstreeks in een opdracht" + (f"; los: {_geplakt}" if _geplakt else ""))
+klopt(re.search(r"^permissions:\n  contents: read$", bouw, re.M) is not None,
+      "build.yml: standaard alleen leesrechten voor elke job")
+
 print(f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)

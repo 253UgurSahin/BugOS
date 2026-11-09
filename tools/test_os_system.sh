@@ -449,5 +449,19 @@ klopt 'grep -q "^image/jpeg=org.kde.gwenview.desktop" "$ROOT/system_files/etc/xd
     "U224: een foto opent standaard in Gwenview en een PDF in Okular"
 klopt 'grep -qx "kio-fuse" "$ROOT/build_files/packages.txt"' \
     "U225: een telefoon of camera opent in Bestanden (kio-fuse geeft KDE-adressen als gewone map)"
+# U247: inloggen zonder wachtwoord: niet voor root, en het bestand is leesbaar ook met umask 077.
+kopie bugos-login
+sed -i "s|/etc/plasmalogin.conf.d|$TMP/plasmalogin.conf.d|; s|/etc/sddm.conf.d|$TMP/plasmalogin.conf.d|" "$TMP/bugos-login"
+draai bugos-login aan root
+klopt '[ "$code" -eq 2 ] && [ ! -e "$TMP/plasmalogin.conf.d/50-bugos-login.conf" ]' "U247: root kan niet vanzelf inloggen"
+if [ "$(id -u)" -eq 0 ]; then
+    nep id 'case "$*" in "-u") echo 0 ;; "-u nobody") echo 1000 ;; *) /usr/bin/id "$@" ;; esac'
+    rm -f "$TMP/plasmalogin.conf.d/50-bugos-login.conf"
+    (umask 077; draai bugos-login aan nobody)
+    klopt '[ "$(stat -c %a "$TMP/plasmalogin.conf.d/50-bugos-login.conf" 2>/dev/null)" = 644 ]' \
+        "U247: het inlogbestand is leesbaar voor het inlogscherm, ook met umask 077"
+fi
+klopt 'grep -qx "umask 022" "$BIN/bugos-updates"' "U247: de updatekeuze is voor iedereen leesbaar, ook met umask 077"
+klopt 'grep -q "rpm-ostree-countme.timer" "$ROOT/build_files/system.sh"' "U250: de bouw zet de wekelijkse countme-tel van Fedora uit (BugOS verzamelt niets)"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

@@ -43,7 +43,7 @@ done
 klopt '[ ! -e /usr/lib/systemd/user/flatpak-user-update.timer ] || [ "$(systemctl --global is-enabled flatpak-user-update.timer 2>/dev/null)" != masked ]' \
     "dienst: flatpak-user-update.timer (apps per gebruiker) staat standaard aan, zoals 'Updates vanzelf' (U117)"
 # U087: alleen BugOS werkt de apps bij (anders gaat het door, ook als je 'Updates zelf doen' kiest).
-for u in flatpak-system-update.timer uupd.timer; do
+for u in flatpak-system-update.timer uupd.timer rpm-ostree-countme.timer; do
     [ -e "/usr/lib/systemd/system/$u" ] || continue
     klopt '[ "$(systemctl is-enabled "$u" 2>/dev/null)" = masked ]' "dienst: $u van de basis staat uit (masked)"
 done

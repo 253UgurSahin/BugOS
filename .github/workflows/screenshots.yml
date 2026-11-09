@@ -15,6 +15,10 @@ on:
         type: boolean
         default: true
 
+# De invoer via env, niet rechtstreeks in de opdracht (zoals iso.yml) (U249).
+env:
+  TAG: ${{ inputs.tag }}
+
 jobs:
   verkenner:
     runs-on: ubuntu-24.04
@@ -32,12 +36,12 @@ jobs:
         run: |
           # podman, net als bij het bouwen (docker kan niet zoveel lagen aan)
           echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login ghcr.io -u "${{ github.actor }}" --password-stdin
-          sudo podman pull "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${{ inputs.tag }}"
+          sudo podman pull "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${TAG}"
 
       - name: Hulpmiddelen voor schijven in BugOS
         run: |
           # Bestanden gebruikt deze om schijven te openen, te ontgrendelen en veilig te verwijderen.
-          sudo podman run --rm --entrypoint /usr/bin/bash "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${{ inputs.tag }}" \
+          sudo podman run --rm --entrypoint /usr/bin/bash "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${TAG}" \
             -c 'mis=0; for p in lsblk udisksctl gdbus mkfs.exfat; do command -v "$p" >/dev/null || { echo "::error::$p ontbreekt in BugOS"; mis=1; }; done
                 for p in solid-hardware6 eject fsck.exfat mkfs.vfat partitionmanager nmcli bluetoothctl pactl kscreen-doctor powerprofilesctl; do
                   command -v "$p" >/dev/null || echo "::warning::$p ontbreekt in BugOS"; done; echo "Hulpmiddelen gecontroleerd."; exit $mis'
@@ -48,7 +52,7 @@ jobs:
           sudo apt-get install -y -qq xvfb imagemagick >/dev/null
           Xvfb :99 -screen 0 2560x1600x24 -ac -nolisten tcp &
           sleep 3
-          BEELD="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${{ inputs.tag }}"
+          BEELD="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${TAG}"
           mkdir -p docs/images/explorer
           # NEP=<lijstje.json> ervoor: nep-schijven (anders geen; de schijven van de bouwcomputer horen er niet bij)
           # RUIMTE=... ervoor: voorbeeldgetallen voor 'Deze computer'
@@ -114,13 +118,13 @@ jobs:
       - name: BugOS ophalen
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login ghcr.io -u "${{ github.actor }}" --password-stdin
-          sudo podman pull "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${{ inputs.tag }}"
+          sudo podman pull "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${TAG}"
 
       - name: Hulpmiddelen voor het bureaublad in BugOS
         run: |
           # Zonder plasmashell (het bureaublad), plasmawindowed (toont een menu als los venster) of gdbus kan het niet.
           # De rest geeft alleen een waarschuwing: dan mist er hoogstens een foto, en het logboek zegt dan waarom.
-          sudo podman run --rm --entrypoint /usr/bin/bash "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${{ inputs.tag }}" \
+          sudo podman run --rm --entrypoint /usr/bin/bash "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${TAG}" \
             -c 'mis=0; for p in plasmashell plasmawindowed gdbus; do command -v "$p" >/dev/null || { echo "::error::$p ontbreekt in BugOS"; mis=1; }; done
                 command -v qdbus6 >/dev/null || echo "::warning::qdbus6 ontbreekt in BugOS"
                 command -v kwin_wayland >/dev/null || echo "::warning::kwin_wayland ontbreekt in BugOS (nodig voor een echte bureaubladfoto)"
@@ -139,7 +143,7 @@ jobs:
           sudo apt-get install -y -qq xvfb imagemagick >/dev/null
           Xvfb :99 -screen 0 2560x1600x24 -ac -nolisten tcp &
           sleep 3
-          BEELD="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${{ inputs.tag }}"
+          BEELD="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${TAG}"
           mkdir -p docs/images/bureaublad
           maak_bureaublad() {  # naam thema scene
             # Het script start plasmashell (met de BugOS-taakbalk) en daarbij het gevraagde menu of scherm,

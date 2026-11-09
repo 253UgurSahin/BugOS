@@ -34,6 +34,13 @@ nep wineboot 'mkdir -p "$WINEPREFIX"; exit 0'
 draai "$RAAR" >/dev/null
 klopt 'grep -qF "spel\\nieuw.exe" "$TMP/dialogen"' "rare naam (met \\n erin): staat precies zo in de melding, geen nieuwe regel"
 
+# U251: een naam met opmaak (<b>, <img>) wordt niet als opmaak gelezen.
+OPMAAK="$TMP/<h1>Gratis.exe"
+touch "$OPMAAK"
+: >"$TMP/dialogen"
+draai "$OPMAAK" >/dev/null
+klopt '! grep -q "<h1>" "$TMP/dialogen" && grep -q "‹h1›Gratis.exe" "$TMP/dialogen"' "U251: een naam met <opmaak> staat er als gewone tekst"
+
 # U082: Annuleren in een installatie is geen "werkt niet op BugOS".
 touch "$TMP/setup.msi" "$TMP/MijnSpel-setup.exe" "$TMP/spel.exe"
 nep wine 'exit 1602'

@@ -160,7 +160,7 @@ def controle_printer() -> Uitslag:
     if code != 0 or "not running" in uit:
         return Uitslag(naam, LET_OP, t("De printerdienst draait niet.", "The printing service is not running."),
                        # Wachten tot het wachtwoord is ingevuld en de dienst draait, dan pas opnieuw kijken (U177).
-                       lambda: draai("pkexec", "systemctl", "restart", "cups", timeout=120),
+                       lambda: draai("pkexec", "/usr/bin/systemctl", "restart", "cups", timeout=120),
                        t("Printerdienst starten", "Start printing service"))
     # Zijn er printers? lpstat -e geeft alleen hun namen (leeg als er geen is). lpstat -p zegt zonder
     # printer "No destinations added." (in de taal van de computer), en dat is geen printer.
