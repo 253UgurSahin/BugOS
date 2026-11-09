@@ -8,19 +8,20 @@ en de prullenbak (terugzetten, leegmaken). Dit is een stukje van het venster
 
 from __future__ import annotations
 
+import errno
 import os
 import shutil
 import subprocess
 from pathlib import Path
 
 from bugos_ui import lijn_icoon, t
-from bugos_files_plekken import INFO_ROL, PAD_ROL, thuis
-from bugos_files_acties import (
-    Klus, Weggooien, achter_uitleg, naar_prullenbak, op_losse_schijf, prullenbak_legen, terugzetten, vrije_naam,
+from bugos_files_plekken import INFO_ROL, PAD_ROL, thuis, toon_naam
+from bugos_files_acties import (  # noqa: I001
+    NAAM_FOUTEN, RECHTEN_FOUTEN, Klus, Weggooien, achter_uitleg, naar_prullenbak, op_losse_schijf, prullenbak_legen, terugzetten, vrije_naam,
     zelfde_schijf,
 )
 from PySide6.QtCore import QEvent, QMimeData, Qt, QTimer, QUrl
-from PySide6.QtWidgets import QApplication, QInputDialog, QLabel, QMenu, QMessageBox
+from PySide6.QtWidgets import QApplication, QInputDialog, QLabel, QLineEdit, QMenu, QMessageBox
 
 
 class Bewerken:
@@ -189,7 +190,8 @@ class Bewerken:
                 QTimer.singleShot(0, self.close)
 
     # ------------------------------------------------------------ vragen
-    def vraag_tekst(self, titel: str, vraag: str, tekst: str, ok: str = "") -> str | None:
+    def vraag_tekst(self, titel: str, vraag: str, tekst: str, ok: str = "", kies_tot: int | None = None) -> str | None:
+        """kies_tot: alleen het begin kiezen (de naam zonder .odt), zoals in Windows (U507)."""
         d = QInputDialog(self)
         d.setWindowTitle(titel)
         d.setLabelText(vraag)
@@ -199,7 +201,26 @@ class Bewerken:
         for uitleg in d.findChildren(QLabel):
             uitleg.setWordWrap(True)  # lange uitleg netjes over een paar regels
         d.resize(460, d.sizeHint().height())
+        if kies_tot is not None:
+            def kies() -> None:
+                veld = d.findChild(QLineEdit)
+                if veld is not None:
+                    veld.setSelection(0, kies_tot)
+            QTimer.singleShot(0, kies)
         return d.textValue().strip() if d.exec() else None
+
+    def naam_fout(self, e: OSError) -> str:
+        """Waarom een naam niet kon, in gewone woorden (niet 'Invalid argument') (U508)."""
+        if e.errno in NAAM_FOUTEN:
+            if e.errno == errno.ENAMETOOLONG:
+                return t("de naam is te lang", "the name is too long")
+            return t("de naam heeft een teken dat deze schijf niet kent (zoals : ? * of \")",
+                     "the name has a character this drive does not allow (like : ? * or \")")
+        if e.errno in RECHTEN_FOUTEN:
+            return t("je mag hier niets veranderen", "you may not change anything here")
+        if e.errno == errno.ENOSPC:
+            return t("de schijf is vol", "the drive is full")
+        return e.strerror or t("er ging iets mis", "something went wrong")
 
     def vraag_ja(self, titel: str, tekst: str, ja: str) -> bool:
         box = QMessageBox(self)
@@ -218,9 +239,17 @@ class Bewerken:
         if len(paden) != 1 or self.in_prullenbak:
             return
         oud = paden[0]
-        nieuw = self.vraag_tekst(t("Naam wijzigen", "Rename"), t("Nieuwe naam:", "New name:"), oud.name)
+        verborgen_ext = not oud.is_dir() and toon_naam(oud.name, False) != oud.name
+        nieuw = self.vraag_tekst(t("Naam wijzigen", "Rename"), t("Nieuwe naam:", "New name:"), oud.name,
+                                 kies_tot=len(oud.stem) if oud.suffix and not oud.is_dir() else None)
         if not nieuw or nieuw == oud.name:
             return
+        # De tegel laat 'Recept' zien zonder '.odt': typ je 'Taart', dan wordt het 'Taart.odt', niet een bestand
+        # zonder soort (U507).
+        if verborgen_ext and not Path(nieuw).suffix:
+            nieuw += oud.suffix
+            if nieuw == oud.name:
+                return
         if "/" in nieuw or nieuw in (".", ".."):
             self.melding.toon(t("Een naam mag geen / bevatten.", "A name cannot contain /."), "fout")
             return
@@ -237,7 +266,8 @@ class Bewerken:
         try:
             oud.rename(doel)
         except OSError as e:
-            self.melding.toon(t(f"Naam wijzigen lukte niet: {e.strerror}", f"Rename failed: {e.strerror}"), "fout")
+            reden = self.naam_fout(e)
+            self.melding.toon(t(f"Naam wijzigen lukte niet: {reden}.", f"Rename failed: {reden}."), "fout")
 
     def nieuwe_map(self) -> None:
         if self.in_prullenbak or self.in_computer:
@@ -246,15 +276,17 @@ class Bewerken:
                                 t("Nieuwe map", "New folder"))
         if not naam:
             return
-        if "/" in naam:
-            self.melding.toon(t("Een naam mag geen / bevatten.", "A name cannot contain /."), "fout")
+        if "/" in naam or naam in (".", ".."):   # '.' maakte een map naast deze, '..' een verborgen map (U509)
+            self.melding.toon(t("Een naam mag geen / bevatten en niet alleen uit punten bestaan.",
+                                "A name cannot contain / or be only dots."), "fout")
             return
         doel = vrije_naam(self.huidig / naam)
         try:
             doel.mkdir()
             QTimer.singleShot(300, lambda: self.selecteer(doel))
         except OSError as e:
-            self.melding.toon(t(f"De map maken lukte niet: {e.strerror}", f"Could not make the folder: {e.strerror}"), "fout")
+            reden = self.naam_fout(e)
+            self.melding.toon(t(f"De map maken lukte niet: {reden}.", f"Could not make the folder: {reden}."), "fout")
 
     def weggooien(self) -> None:
         if self.in_prullenbak:
