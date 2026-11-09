@@ -183,7 +183,7 @@ class Instellingen(Venster):
         # Nooit midden in een update of het teruggaan stoppen (dan stopt rpm-ostree ook): wacht tot het
         # klaar is en ga dan vanzelf dicht, zoals Bestanden doet bij het kopiëren.
         updates = self.paginas.get("updates")
-        if updates is not None and getattr(updates, "bezig", False):
+        if updates is not None and (getattr(updates, "bezig", False) or getattr(updates, "bezig_keuze", False)):
             self.sluit_na_update = True
             updates.melding.toon(t("Even wachten: de update is nog bezig. Daarna gaat Instellingen vanzelf dicht.",
                                    "One moment: the update is still busy. Settings closes by itself afterwards."),

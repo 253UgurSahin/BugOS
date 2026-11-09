@@ -1268,6 +1268,28 @@ _r.schuif.setChecked(False)
 klopt(_r.schuif.isChecked() and "Start mee" in _r.stand.text() or "Starts" in _r.stand.text(),
       "U186: Opstarten: lukt het omzetten niet, dan springt het schuifje terug")
 
+# ========================== U209-U213 ===
+from bugos_widgets import label as _label  # noqa: E402
+
+_w = _label("<h1>GRATIS WIFI</h1>")
+klopt(_w.textFormat() == Qt.TextFormat.PlainText, "U210: een naam van buiten (wifi, bestand) wordt geen opmaak")
+_nav = (ROOT / "system_files/usr/lib/bugos/python/bugos_files_navigeren.py").read_text()
+klopt('QPushButton(naam.replace("&", "&&"))' in _nav, "U210: een & in een mapnaam (R&D) wordt geen sneltoets")
+klopt(winkel.app_naam({"naam": "Rekenmachine", "naam_en": "Calculator"}) in ("Rekenmachine", "Calculator")
+      and "app_naam(app)" in (ROOT / "system_files/usr/bin/bugos-store").read_text().split("def installeer")[1][:400],
+      "U209: de Winkel gebruikt overal de naam in jouw taal (ook bij installeren)")
+klopt('t("Nederlands", "English")' in (ROOT / "system_files/usr/bin/bugos-welcome").read_text(),
+      "U213: Welkom met LANG=C noemt de taal 'English', niet 'Nederlands'")
+# U212: Welkom sluiten terwijl de wachtwoordvraag openstaat: het venster blijft tot het klaar is.
+_wk = welkom.Welkom()
+_wk.show()
+_wk.paginas[0].bezig = True
+_wk.close()
+_open = _wk.isVisible()
+_wk.paginas[0].bezig = False
+wacht(lambda: not _wk.isVisible(), 3000)
+klopt(_open and not _wk.isVisible(), "U212: Welkom sluiten tijdens de wachtwoordvraag: eerst afwachten, dan dicht")
+
 # ========================== U067: 'Grote letters' maakt ook de letters van de BugOS-apps groter ===
 from PySide6.QtGui import QFont  # noqa: E402
 

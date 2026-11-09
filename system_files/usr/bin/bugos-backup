@@ -276,7 +276,10 @@ DEELS_UITLEG = t("Een paar bestanden konden niet mee: {mappen}. Dat komt meestal
 
 def zonder_venster(schijf: Path) -> int:
     doel = backup_doel(schijf)
-    doel.mkdir(parents=True, exist_ok=True)
+    try:
+        doel.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return 1
     schrijf_lijstje(doel)
     mappen = bron_mappen()
     dubbel = dubbel_op_schijf(schijf, mappen, doel)
@@ -607,7 +610,16 @@ def venster() -> int:
                 self.stop(False)
                 return
             doel = backup_doel(schijf)
-            doel.mkdir(parents=True, exist_ok=True)
+            try:
+                doel.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                # Stick eruit, alleen-lezen geworden, of de map is van een ander account: niet eeuwig 'controleren' (U211).
+                self.melding.zet(t("De schijf reageert niet (of je mag er niet op schrijven). Zit hij er nog in?",
+                                   "The drive does not respond (or you may not write to it). Is it still plugged in?"),
+                                 "fout")
+                self.balk.hide()
+                self.stop(False)
+                return
             schrijf_lijstje(doel)
             self.stand.update(klus="maak", schijf=schijf)
             dubbel = self.teller.dubbel if self.teller is not None else {}

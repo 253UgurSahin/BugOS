@@ -230,6 +230,8 @@ class UpdatesPagina(Blad):
         gedaan: list[bool] = []
         if wat in ("nu", "terug"):
             self.bezig = True   # Instellingen gaat pas dicht als dit klaar is (zie Instellingen.closeEvent)
+        else:
+            self.bezig_keuze = True   # ook 'vanzelf'/'zelf': sluiten zou de wachtwoordvraag afbreken (U212)
 
         def af(code: int = 1, status=QProcess.ExitStatus.CrashExit) -> None:
             if gedaan:
@@ -237,12 +239,16 @@ class UpdatesPagina(Blad):
             gedaan.append(True)
             if wat in ("nu", "terug"):
                 self.bezig = False   # alleen de update zelf; een schakelaar die tussendoor klaar is, telt niet
+            else:
+                self.bezig_keuze = False
             try:
                 uit = bytes(proces.readAll()).decode(errors="ignore")
                 proces.deleteLater()
                 echt = code if status == QProcess.ExitStatus.NormalExit else 1
                 self.klaar_met(wat, echt, uit)
                 venster = self.window()
+                if wat in ("auto", "hand") and getattr(venster, "sluit_na_update", False) and not self.bezig:
+                    venster.close()
                 if wat in ("nu", "terug") and getattr(venster, "sluit_na_update", False):
                     if echt == 0:
                         # Je wilde al sluiten: de uitkomst (opnieuw opstarten, updates uit) als melding, dan dicht.

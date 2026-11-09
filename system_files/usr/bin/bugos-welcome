@@ -72,7 +72,7 @@ class Hallo(Pagina):
         blok = QVBoxLayout()
         blok.setSpacing(2)
         blok.addWidget(label(t("Taal", "Language"), "klein"))
-        naam = QLocale().nativeLanguageName() or "Nederlands"
+        naam = QLocale().nativeLanguageName() or t("Nederlands", "English")   # (U213: met LANG=C is dat Engels)
         blok.addWidget(label(naam[:1].upper() + naam[1:], "kop2"))
         taal.lay.addLayout(blok, 1)
         knop = Knop(t("Andere taal", "Other language"), "rand")
@@ -413,6 +413,15 @@ class Klaar(Pagina):
 # ================================================================ venster ===
 
 class Welkom(QWidget):
+    def closeEvent(self, e) -> None:  # noqa: N802
+        # Staat de wachtwoordvraag voor de updatekeuze nog open? Dan eerst afwachten: sluiten zou hem afbreken (U212).
+        if any(getattr(p, "bezig", False) for p in getattr(self, "paginas", [])):
+            self.setEnabled(False)
+            e.ignore()
+            QTimer.singleShot(500, self.close)
+            return
+        super().closeEvent(e)
+
     def __init__(self):
         super().__init__()
         self.setObjectName("venster")

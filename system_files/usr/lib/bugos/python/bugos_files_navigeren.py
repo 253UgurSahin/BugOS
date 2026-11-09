@@ -240,7 +240,7 @@ class Navigeren:
                 pijl = QLabel()
                 pijl.setPixmap(lijn_icoon("rechts", "tekst3", 14, gekozen=None).pixmap(14, 14))
                 self.pad_lay.addWidget(pijl)
-            k = QPushButton(naam)
+            k = QPushButton(naam.replace("&", "&&"))   # een & in een mapnaam is geen sneltoets (U210)
             k.setObjectName("kruimel")
             k.setProperty("laatste", "true" if i == len(delen) - 1 else "false")
             k.setCursor(Qt.CursorShape.PointingHandCursor)

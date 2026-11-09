@@ -169,5 +169,17 @@ klopt(all(c[1] in {x for x, _s in bb.MAPPEN} for c in _gevraagd) and _lijst_ok
       and not any(".config" in " ".join(o) for o in _opdr),
       f"U097: terugzetten vraagt xdg-user-dir alleen naar vaste soorten, slaat verborgen mappen over ({_gevraagd})")
 
+# U211: de back-upmap kan niet gemaakt worden (stick eruit, alleen-lezen): een fout, niet eeuwig 'controleren'.
+_bestand = TMP / "geen-map"
+_bestand.write_text("x")
+_oud_doel = bb.backup_doel
+bb.backup_doel = lambda schijf: _bestand / "BugOS-Backup" / "x"
+try:
+    _code = bb.zonder_venster(TMP)
+except OSError:
+    _code = "uitzondering"
+bb.backup_doel = _oud_doel
+klopt(_code == 1, f"U211: de back-upmap kan niet gemaakt worden: een nette fout ({_code})")
+
 print(f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)

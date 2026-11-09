@@ -403,7 +403,7 @@ def venster() -> int:
                     knop.clicked.connect(lambda _=False, k=knop, f=u.repareer: self.repareer(k, f))
                     r.addWidget(knop)
                 elif u.stand == OK:
-                    goed = label(f'<span style="color:{K["goed"]}">\u25CF</span>&nbsp; ' + t("In orde", "OK"), "klein", wrap=False)
+                    goed = label(f'<span style="color:{K["goed"]}">\u25CF</span>&nbsp; ' + t("In orde", "OK"), "klein", wrap=False, rijk=True)
                     r.addWidget(goed)
                 else:
                     r.addWidget(Chip({OK: t("In orde", "OK"), LET_OP: t("Let op", "Note"),

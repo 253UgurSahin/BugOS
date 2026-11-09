@@ -37,6 +37,11 @@ if os.environ.get("BUGOS_APPICONEN"):
     ICOON_MAPPEN.insert(0, Path(os.environ["BUGOS_APPICONEN"]))
 
 
+def app_naam(app: dict) -> str:
+    """De naam van een app in jouw taal (de meeste zijn merknamen; 'Rekenmachine' heet in het Engels 'Calculator') (U209)."""
+    return app.get("naam_en", app["naam"]) if TAAL != "nl" else app["naam"]
+
+
 def lees_catalogus(pad: Path = CATALOGUS) -> dict:
     return json.loads(pad.read_text(encoding="utf-8"))
 
@@ -107,7 +112,7 @@ class AppKaart(Kaart):
         blok.setSpacing(4)
         kop_rij = QHBoxLayout()
         kop_rij.setSpacing(8)
-        kop_rij.addWidget(label(app.get("naam_en", app["naam"]) if TAAL != "nl" else app["naam"], "kop3", wrap=False))   # (U175)
+        kop_rij.addWidget(label(app_naam(app), "kop3", wrap=False))   # (U175)
         self.chip = Chip(t("Geïnstalleerd", "Installed"), "goed")
         kop_rij.addWidget(self.chip)
         kop_rij.addStretch(1)
@@ -227,7 +232,7 @@ class Winkel(Venster):
         if begin_app:
             gevonden = next((a for a in self.cat["apps"] if a["id"] == begin_app), None)
             if gevonden:
-                self.zoek.setText(gevonden["naam"])
+                self.zoek.setText(app_naam(gevonden))
         self.lijst.setFocus()
 
     # ------------------------------------------------------------------
@@ -274,7 +279,7 @@ class Winkel(Venster):
         # Nooit midden in het installeren stoppen (dan breekt flatpak af): wachten, en daarna vanzelf dicht.
         if self.proces.state() != QProcess.ProcessState.NotRunning:
             self.sluit_na = True
-            naam = next((a["naam"] for a in self.cat["apps"] if a["id"] == self.bezig_met), self.bezig_met)
+            naam = next((app_naam(a) for a in self.cat["apps"] if a["id"] == self.bezig_met), self.bezig_met)
             self.melding.zet(t(f"Even wachten: {naam} wordt nog geïnstalleerd. Daarna gaat de Winkel vanzelf dicht.",
                                f"One moment: {naam} is still being installed. The Store closes by itself afterwards."),
                              "bezig")
@@ -284,8 +289,8 @@ class Winkel(Venster):
 
     def installeer(self, app: dict) -> None:
         self.bezig_met = app["id"]
-        self.melding.zet(t(f"{app['naam']} wordt geïnstalleerd. Dit kan een paar minuten duren…",
-                           f"Installing {app['naam']}. This can take a few minutes…"), "bezig")
+        self.melding.zet(t(f"{app_naam(app)} wordt geïnstalleerd. Dit kan een paar minuten duren…",
+                           f"Installing {app_naam(app)}. This can take a few minutes…"), "bezig")
         for k in self.kaarten:
             k.ververs()
         # Zonder --noninteractive: dan mag KDE om een wachtwoord vragen (een gezinslid dat geen beheerder is,
@@ -303,7 +308,7 @@ class Winkel(Venster):
     def klaar(self, code: int, _status) -> None:
         uit = bytes(self.proces.readAll()).decode(errors="ignore")
         app_id = self.bezig_met
-        naam = next((a["naam"] for a in self.cat["apps"] if a["id"] == app_id), app_id)
+        naam = next((app_naam(a) for a in self.cat["apps"] if a["id"] == app_id), app_id)
         self.bezig_met = None
         self.flatpaks = geinstalleerd() | ({app_id} if code == 0 else set())
         self.installed = self.flatpaks | set(self.systeem)

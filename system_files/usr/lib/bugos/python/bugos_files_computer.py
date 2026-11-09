@@ -166,7 +166,7 @@ class Computer:
         self.ruimte_balk.zet(delen)
         kolommen = 3 if len(items) > 4 else max(len(items), 1)
         for i, (kleur_, tekst, pad) in enumerate(items):
-            k = QPushButton(tekst)
+            k = QPushButton(tekst.replace("&", "&&"))   # (U210)
             k.setObjectName("legenda")
             k.setIcon(stip_icoon(kleur_, hol=pad == "vrij"))
             k.setIconSize(QSize(12, 12))

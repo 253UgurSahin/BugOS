@@ -26,8 +26,11 @@ def lettertype(punten: int, vet: bool = False) -> QFont:
     return f
 
 
-def label(tekst: str, rol: str = "", wrap: bool = True, kopieerbaar: bool = False) -> QLabel:
+def label(tekst: str, rol: str = "", wrap: bool = True, kopieerbaar: bool = False, rijk: bool = False) -> QLabel:
     lab = QLabel(tekst)
+    # Gewone tekst: een naam van buiten (een wifi-netwerk '<h1>GRATIS</h1>', een bestandsnaam) wordt geen opmaak
+    # (U210). Alleen waar BugOS zelf opmaak gebruikt: rijk=True.
+    lab.setTextFormat(Qt.TextFormat.RichText if rijk else Qt.TextFormat.PlainText)
     if rol:
         lab.setProperty("rol", rol)
     lab.setWordWrap(wrap)
