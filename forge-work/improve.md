@@ -607,6 +607,41 @@ Tests after: 20 test files passed (here).
 ### U182 [low] Finishing Welcome while the password window was open threw the update choice away
   commit: 7a0df2f
 
+## Round 14 (2026-11-09)
+Three reviewers: the round-13 fixes (9 found), a top-to-bottom sweep of every shell script (4), and of the shared
+Python building blocks (4). Two were found twice. 15 fixed, each with a test that failed first; 1 left for you
+(U196). Tests after: 20 test files passed (here).
+
+### U183 [medium] (from U164) A stick pulled out and plugged in again was never opened while Backup/Switch stayed open
+  commit: 82098cc   test: tools/test_files.py
+### U184 [low] A switch set back within its 170 ms slide stayed drawn in the old position
+  commit: 82098cc   test: tools/test_os_apps.py
+### U185 [low] Backup showed "0 GB free" on a small stick with 450 MB free, and GiB instead of GB like Files
+  commit: 82098cc   test: tools/test_os_apps.py
+### U186 [low] Task Manager > Startup: a failed change kept the switch in the new position
+  commit: 82098cc   test: tools/test_os_apps.py
+### U187 [high] (from U178) The update check's 20-minute limit also covered "Update now": a slow update was cut off and asked again
+  commit: d1d1792   test: tools/test_os_system.sh
+### U188 [low] (from U165) A Bluetooth rfkill entry without a real adapter brought back a dead Bluetooth tile
+  commit: e9d4f30   test: tools/test_os_settings.py
+### U189 [low] (from U179) In Welcome a switch that was already on could be turned off, but nothing happened
+  commit: e9d4f30   test: tools/test_os_apps.py
+### U190 [low] (from U176) "tsetup" matched ChatGPTSetup.exe and MinecraftSetup.exe as Telegram
+  commit: e9d4f30   test: tools/test_exe.sh
+### U191 [low] (from U177) Closing Help with the password prompt open froze for 25 s and could abort
+  commit: e9d4f30
+### U192 [low] (from U178) The update check retried every 30 minutes forever when only the registry failed
+  commit: d1d1792   test: tools/test_os_system.sh
+### U193 [low] (from U182) Next and Back stayed clickable while Welcome waited for the password
+  commit: e9d4f30
+### U194 [low] Cancelling the password after "Update now" in the notification said "The update did not work"
+  commit: d1d1792   test: tools/test_os_system.sh
+### U195 [low] A .rpm/.deb without a start-menu entry still said "is now in your start menu"
+  commit: e9d4f30   test: tools/test_package.sh
+### U197 [low] (from U172) PDF and video previews were made again on every visit; stale previews were not detected
+  commit: ecf799a   test: tools/test_os_apps.py
+### U196 [low] (open, see For you) Switching to signed updates (bugos-ondertekend) removes the previous version
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -631,6 +666,9 @@ Tests after: 20 test files passed (here).
   finished, it needs a new session or another model (it only got as far as U097).
 - U125: on a real PC, open Settings from the quick menu and check Task Manager lists it as "Settings" (closable).
 - U133-U137: try Settings with only the keyboard (Tab, Enter, Escape) and with "Big letters" on.
+- U196: before you add the signing key (A032), bugos-ondertekend should change the origin in place
+  (bootc switch --mutate-in-place) instead of rpm-ostree rebase; a rebase to the same image removes the older
+  version, so "Back to the previous version" has nothing to go back to on that first signed boot.
 - From the first round, still open (improve-2026-11-07.md "For you"): A032 signing key, default branch main,
   private vulnerability reporting, merge and build once.
 
