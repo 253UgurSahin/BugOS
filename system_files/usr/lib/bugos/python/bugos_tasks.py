@@ -154,18 +154,28 @@ def temperatuur() -> float | None:
 
 def videokaart() -> float | None:
     """Hoe druk de videokaart is (0-100), als we dat kunnen zien (AMD via /sys, Nvidia via nvidia-smi)."""
+    # Alle kaarten bekijken en de drukste tonen: een laptop met AMD-processor en een Nvidia-kaart toonde anders altijd
+    # de ingebouwde AMD, ook tijdens een game op de Nvidia (U406).
+    waarden: list[float] = []
+    nvidia_wakker = None   # None: geen Nvidia-kaart in /sys gezien
     for kaart in sorted((sys_map() / "class" / "drm").glob("card[0-9]*")):
+        if "-" in kaart.name:
+            continue   # card0-HDMI-A-1 enz.: een aansluiting, geen kaart
         waarde = lees(kaart / "device" / "gpu_busy_percent").strip()
         if waarde.isdigit():
-            return float(waarde)
-    if os.environ.get("BUGOS_PROC") is None and Path("/usr/bin/nvidia-smi").exists():
+            waarden.append(float(waarde))
+        elif lees(kaart / "device" / "vendor").strip() == "0x10de":
+            # Een slapende Nvidia-kaart niet wakker maken met nvidia-smi (kost accu); slaapt hij, dan doet hij niets.
+            wakker = lees(kaart / "device" / "power" / "runtime_status").strip() != "suspended"
+            nvidia_wakker = wakker or bool(nvidia_wakker)
+    if (not waarden or nvidia_wakker) and os.environ.get("BUGOS_PROC") is None and Path("/usr/bin/nvidia-smi").exists():
         try:
             uit = subprocess.run(["nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
                                  capture_output=True, text=True, timeout=3).stdout.split()
-            return float(uit[0]) if uit else None
+            waarden += [float(w) for w in uit if w.replace(".", "", 1).isdigit()]
         except (OSError, subprocess.SubprocessError, ValueError):
-            return None
-    return None
+            pass
+    return max(waarden) if waarden else None
 
 
 # ============================================================= processen ===

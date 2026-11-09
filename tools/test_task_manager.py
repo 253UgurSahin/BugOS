@@ -100,6 +100,11 @@ schrijf(TMP / "sys" / "class" / "hwmon" / "hwmon0" / "name", "k10temp\n")
 schrijf(TMP / "sys" / "class" / "hwmon" / "hwmon0" / "temp1_input", "52000\n")
 schrijf(TMP / "sys" / "class" / "drm" / "card0" / "device" / "gpu_busy_percent", "37\n")
 klopt(bt.temperatuur() == 52.0 and bt.videokaart() == 37.0, "temperatuur (52 °C) en videokaart (37%) als ze er zijn")
+# U406: twee AMD-kaarten (ingebouwd en los): de drukste telt, niet de eerste.
+schrijf(TMP / "sys" / "class" / "drm" / "card1" / "device" / "gpu_busy_percent", "88\n")
+klopt(bt.videokaart() == 88.0, f"U406: met twee videokaarten telt de drukste ({bt.videokaart()})")
+import shutil as _sh406
+_sh406.rmtree(TMP / "sys" / "class" / "drm" / "card1")
 
 # 2. processen
 lijst = bt.processen()
