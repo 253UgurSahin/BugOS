@@ -358,25 +358,31 @@ def _profiel() -> str:
     return "Battery"
 
 
-def _aan_stroom_kaal() -> bool:
-    """Zit de lader erin (Mains online)? Zonder Mains-melding (sommige laptops): ja, zoals vroeger."""
+def _laders() -> list[bool]:
+    """Elke lader die de computer kent (stekker 'Mains', of USB-C 'USB'), met: zit hij erin? (U405)"""
     basis = Path(os.environ.get("BUGOS_SYS", "/sys")) / "class" / "power_supply"
-    netten = [p for p in basis.glob("*") if (p / "type").exists() and (p / "type").read_text().strip() == "Mains"]
-    if not netten:
-        return True
-    return any((p / "online").exists() and (p / "online").read_text().strip() == "1" for p in netten)
+    uit: list[bool] = []
+    for pad in basis.glob("*"):
+        try:
+            if (pad / "type").read_text().strip() not in ("Mains", "USB"):
+                continue
+            if (pad / "scope").exists() and (pad / "scope").read_text().strip() == "Device":
+                continue
+            uit.append((pad / "online").read_text().strip() == "1")
+        except OSError:
+            continue
+    return uit
+
+
+def _aan_stroom_kaal() -> bool:
+    """Zit de lader erin? Zonder melding van een lader (sommige laptops): ja, zoals vroeger."""
+    laders = _laders()
+    return not laders or any(laders)
 
 
 def _aan_stroom() -> bool:
     """Zit de lader erin? Sommige laptops met een laadgrens zeggen bij de accu 'Unknown' (U243)."""
-    basis = Path(os.environ.get("BUGOS_SYS", "/sys")) / "class" / "power_supply"
-    for pad in basis.glob("*"):
-        try:
-            if (pad / "type").read_text().strip() == "Mains" and (pad / "online").read_text().strip() == "1":
-                return True
-        except OSError:
-            continue
-    return False
+    return any(_laders())
 
 
 def _energie_getal(groep: str, sleutel: str, standaard: int) -> int:

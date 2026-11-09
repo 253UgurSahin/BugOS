@@ -179,6 +179,24 @@ else:
     os.environ["BUGOS_SYS"] = _oud399
 klopt(_b399 is not None and _b399.procent == 65 and not _b399.aan_lader and _p399 == "Battery",
       f"U399: twee batterijen zonder lader: 65% samen, 'op de accu', accu-tijden ({_b399}, {_p399})")
+# U405: alleen via USB-C geladen (type USB online), de oude AC-ingang offline, laadgrens 80% ('Not charging'): aan de lader.
+_sys404 = Path(tempfile.mkdtemp(prefix="bugos-sys-"))
+for _n, _w in (("AC", {"type": "Mains", "online": "0"}), ("ucsi-source-psy-USBC000:001", {"type": "USB", "online": "1"}),
+               ("BAT0", {"type": "Battery", "capacity": "80", "status": "Not charging"})):
+    (_sys404 / "class" / "power_supply" / _n).mkdir(parents=True)
+    for _k, _v in _w.items():
+        (_sys404 / "class" / "power_supply" / _n / _k).write_text(_v + "\n")
+_oud404 = os.environ.get("BUGOS_SYS")
+os.environ["BUGOS_SYS"] = str(_sys404)
+_vb, bi.VOORBEELD = bi.VOORBEELD, False
+_b404, _p404 = bi.batterij(), __import__("bugos_config_scherm")._profiel()
+bi.VOORBEELD = _vb
+if _oud404 is None:
+    os.environ.pop("BUGOS_SYS", None)
+else:
+    os.environ["BUGOS_SYS"] = _oud404
+klopt(_b404 is not None and _b404.aan_lader and _p404 == "AC",
+      f"U405: laden via USB-C telt als 'aan de lader' ({_b404}, {_p404})")
 # U243: met de lader erin (de accu zegt 'Unknown' door een laadgrens) gelden de tijden van de lader; en 10 min slapen
 # (KDE op de accu) staat als keuze in Instellingen.
 (_sys235 / "class" / "power_supply" / "BAT0" / "status").write_text("Unknown\n")
