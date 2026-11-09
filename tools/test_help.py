@@ -65,7 +65,7 @@ klopt(bh.controle_internet().stand == bh.PROBLEEM, "U090: internet 'unknown' en 
 _gedaan: list = []
 bh.draai = lambda *cmd, **kw: (_gedaan.append(cmd), (0, ""))[1]
 bh.herstart_netwerk()
-klopt(_gedaan and _gedaan[-1][0] == "nm-online", f"U091: na opnieuw verbinden wachten op het netwerk ({_gedaan[-1:]})")
+klopt(_gedaan and _gedaan[-1][0] == "nm-online" and int(_gedaan[-1][-1]) <= 10, f"U091: na opnieuw verbinden wachten op het netwerk ({_gedaan[-1:]})")
 # U092: Hulp kijkt niet online, dus zegt niet 'alles is bijgewerkt'.
 import json as _json  # noqa: E402
 for _modus in ("auto", "hand"):
@@ -75,6 +75,9 @@ for _modus in ("auto", "hand"):
     klopt(u.stand == bh.OK and "bijgewerkt" not in u.tekst and "up to date" not in u.tekst
           and ("herstart" in u.tekst or "restart" in u.tekst),
           f"U092: updates ({_modus}): zegt wat Hulp weet, niet 'alles is bijgewerkt' ({u.tekst})")
+    if _modus == "hand":
+        klopt("Winkel" not in u.tekst and "Store" not in u.tekst and u.repareer is not None,
+              f"U100: zelf updaten: Hulp wijst naar 'Nu updaten' in Instellingen, niet naar de Winkel ({u.tekst})")
 bh.draai, bh.bestaat = _echt
 
 bh.CONTROLES = [trage_controle]

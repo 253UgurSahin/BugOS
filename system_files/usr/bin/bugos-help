@@ -68,7 +68,7 @@ def controle_internet() -> Uitslag:
                    lambda: kde_instelling("kcm_networkmanagement"), t("Wifi kiezen", "Choose Wi-Fi"))
 
 
-def wacht_op_netwerk(seconden: int = 20) -> None:
+def wacht_op_netwerk(seconden: int = 10) -> None:
     """nmcli zet het netwerk aan en is meteen klaar; de verbinding komt pas een paar tellen later. Wacht daarop,
     anders kijkt Hulp te vroeg en zegt hij 'geen verbinding' (U091)."""
     if bestaat("nm-online"):
@@ -210,8 +210,9 @@ def controle_updates() -> Uitslag:
     # Hulp kijkt niet online: zeg alleen wat we weten (U092). Bij 'zelf doen' kan er online wel iets nieuws zijn.
     modus = draai("bugos-updates", "status", timeout=5)[1].strip() if bestaat("bugos-updates") else "auto"
     if modus == "hand":
-        return Uitslag(naam, OK, t("Er wacht geen update op een herstart. Nieuwe updates zoek je in de BugOS Winkel.",
-                                   "No update is waiting for a restart. Look for new updates in the BugOS Store."))
+        return Uitslag(naam, OK, t("Er wacht geen update op een herstart. Je updatet zelf, met 'Nu updaten'.",
+                                   "No update is waiting for a restart. You update yourself, with 'Update now'."),
+                       lambda: start("bugos-settings", "updates"), t("Naar Updates", "Go to Updates"))
     return Uitslag(naam, OK, t("Updates gaan vanzelf. Er wacht er nu geen op een herstart.",
                                "Updates are automatic. None is waiting for a restart right now."))
 
