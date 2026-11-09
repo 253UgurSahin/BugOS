@@ -1014,6 +1014,64 @@ _knop483 = next(iter(_ep483.scherm_uit.knoppen.values()))
 klopt(("accu" in _knop483.accessibleDescription() or "battery" in _knop483.accessibleDescription())
       and ("accu" in _ep483.slaap_rij.uitleg.text() or "battery" in _ep483.slaap_rij.uitleg.text()),
       f"U483: de uitleg over lader/accu hoort ook de schermlezer, en staat ook bij slapen ({_knop483.accessibleDescription()!r})")
+# U495: school/werk-wifi (eduroam) en Enhanced Open herkennen.
+_n495 = bi.lees_netwerken("  :eduroam:70:WPA2 802.1X\n  :Station:60:OWE\n  :Thuis:50:WPA2\n")
+_z495 = {n.naam: (n.beveiligd, n.zakelijk) for n in _n495}
+klopt(_z495 == {"eduroam": (True, True), "Station": (False, False), "Thuis": (True, False)},
+      f"U495: eduroam is school/werk-wifi, OWE is open ({_z495})")
+_sn = sys.modules["bugos_settings_netwerk"]
+_open495 = []
+_oud495, _sn.kde_instelling = _sn.kde_instelling, (lambda m: _open495.append(m))
+venster.paginas["wifi"].verbind_met(_n495[0] if _n495[0].naam == "eduroam" else next(n for n in _n495 if n.zakelijk), False)
+_sn.kde_instelling = _oud495
+klopt(_open495 == ["kcm_networkmanagement"], f"U495: eduroam opent KDE's netwerkscherm in plaats van 'wachtwoord fout' ({_open495})")
+# U496: een HDMI-uitgang zonder scherm eraan staat niet in de lijst (dan is alles stil); de gekozen wel.
+_j496 = __import__("json").dumps([{"name": "speakers", "description": "Speakers", "ports": [{"availability": "available"}]},
+                    {"name": "hdmi1", "description": "HDMI 1", "ports": [{"availability": "not available"}]},
+                    {"name": "hdmi2", "description": "HDMI 2", "ports": [{"availability": "not available"}]}])
+_u496 = [u.naam for u in bi.lees_uitgangen(_j496, "hdmi2")]
+klopt(_u496 == ["speakers", "hdmi2"], f"U496: HDMI zonder scherm staat niet tussen de uitgangen ({_u496})")
+# U497: verbreken op het profiel dat echt verbonden is ('Thuis 1' voor het netwerk 'Thuis').
+def _antw497(cmd):
+    if cmd[:2] == ("nmcli", "-t") and "--active" in cmd:
+        return 0, "uuid-1:802-11-wireless\n"
+    if "802-11-wireless.ssid" in cmd:
+        return 0, "Thuis\n"
+    return 0, ""
+_o497, _ok497 = vang(bi.verbreek, "Thuis", antwoord=_antw497)
+klopt(_ok497 and ("nmcli", "connection", "down", "uuid", "uuid-1") in _o497, f"U497: verbreken op UUID ({_o497[-1]})")
+# U498: een nieuw netwerk met een verkeerd wachtwoord: het profiel dat nmcli maakte, wordt weer weggegooid.
+_vergeten498 = []
+_oud498 = (bi.verbind, bi.vergeet_netwerk)
+bi.verbind = lambda naam, ww="", bekend=False, verborgen=False: (False, "Secrets were required")
+bi.vergeet_netwerk = lambda naam: (_vergeten498.append(naam), True)[1]
+_wp498 = venster.paginas["wifi"]
+_vraag498 = _wp498.vraag_wachtwoord
+_wp498.vraag_wachtwoord = lambda n, veranderd=False: "verkeerd"
+_wp498.verbind_met(bi.Netwerk("Buren", 40, True, False), False)
+wacht()
+bi.verbind, bi.vergeet_netwerk = _oud498
+_wp498.vraag_wachtwoord = _vraag498
+klopt(_vergeten498 == ["Buren"], f"U498: na een verkeerd wachtwoord blijft er geen kapot profiel staan ({_vergeten498})")
+# U499: bluetooth aan na de vliegtuigstand: eerst wachten tot de kaart er is, dan pas 'power on'.
+_sys499 = Path(tempfile.mkdtemp(prefix="bugos-sys-"))
+(_sys499 / "class" / "bluetooth" / "hci0").mkdir(parents=True)
+_oudsys499 = os.environ.get("BUGOS_SYS")
+os.environ["BUGOS_SYS"] = str(_sys499)
+_n499 = []
+def _antw499(cmd):
+    if cmd[:2] == ("bluetoothctl", "show"):
+        _n499.append(1)
+        return 0, "Controller AA:BB\n" if len(_n499) >= 2 else ""
+    return 0, ""
+_o499, _ = vang(bi.zet_bt, True, antwoord=_antw499)
+if _oudsys499 is None:
+    os.environ.pop("BUGOS_SYS", None)
+else:
+    os.environ["BUGOS_SYS"] = _oudsys499
+_volg499 = [c[:2] for c in _o499 if c[0] in ("rfkill", "bluetoothctl")]
+klopt(_volg499[:1] == [("rfkill", "unblock")] and _volg499[-1] == ("bluetoothctl", "power") and len(_n499) >= 2,
+      f"U499: bluetooth aan wacht tot de kaart terug is ({_volg499})")
 # U474: klok niet vanzelf: een knop naar KDE's Datum en tijd (niet naar 'Meer instellingen', dat is Regio en taal).
 _tp474 = venster.paginas["tijd"]
 _tp474.toon((sys.modules["bugos_config_account"].Tijd("Europe/Amsterdam", False, False), "nl_NL"))

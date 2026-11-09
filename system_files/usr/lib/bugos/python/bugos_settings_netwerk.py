@@ -113,11 +113,21 @@ class WifiPagina(Blad):
         return d.textValue()
 
     def verbind_met(self, n: bi.Netwerk, bekend: bool, wachtwoord: str = "") -> None:
+        if getattr(n, "zakelijk", False) and not bekend:
+            # School- of werkwifi (eduroam): daar hoort ook een gebruikersnaam bij, en dat kan alleen KDE's eigen
+            # netwerkscherm (U495).
+            self.melding.toon(t(f"'{n.naam}' is een netwerk van school of werk: daar hoort ook een gebruikersnaam bij. "
+                                "Dat stel je in bij 'Meer instellingen' (we openen het voor je).",
+                                f"'{n.naam}' is a school or work network: it also needs a user name. You set that up "
+                                "under 'More settings' (we open it for you)."), "let_op", seconden=0)
+            kde_instelling("kcm_networkmanagement")
+            return
         if n.beveiligd and not bekend:
             wachtwoord = self.vraag_wachtwoord(n)
             if not wachtwoord:
                 return
-        self.melding.toon(t(f"Verbinden met {n.naam}…", f"Connecting to {n.naam}…"), seconden=30)
+        # Zo lang als nmcli mag wachten (45-60 s), niet 30 s (U499).
+        self.melding.toon(t(f"Verbinden met {n.naam}…", f"Connecting to {n.naam}…"), seconden=65)
 
         def klaar(uitkomst) -> None:
             gelukt = bool(uitkomst and uitkomst[0])
@@ -137,7 +147,15 @@ class WifiPagina(Blad):
                               "goed" if gelukt else "fout")
             self.ververs()
 
-        op_achtergrond(self, lambda: bi.verbind(n.naam, wachtwoord, bekend), klaar)
+        def probeer():
+            uitkomst = bi.verbind(n.naam, wachtwoord, bekend)
+            if not uitkomst[0] and not bekend:
+                # nmcli laat het nieuwe profiel staan (met het verkeerde wachtwoord): weg ermee, anders vroeg de
+                # volgende klik niets en zei hij 'misschien is het wachtwoord veranderd' (U498).
+                bi.vergeet_netwerk(n.naam)
+            return uitkomst
+
+        op_achtergrond(self, probeer, klaar)
 
     def verbind_verborgen(self) -> None:
         d = QInputDialog(self)
@@ -171,7 +189,11 @@ class WifiPagina(Blad):
         op_achtergrond(self, lambda: bi.verbind(naam, wachtwoord, verborgen=True), klaar)
 
     def verbreek(self, n: bi.Netwerk) -> None:
-        op_achtergrond(self, lambda: bi.verbreek(n.naam), lambda _u: self.ververs())
+        def klaar(ok) -> None:
+            if not ok:   # niet stil laten mislukken (U497)
+                self.melding.toon(t("Verbreken lukte niet.", "Disconnecting did not work."), "fout")
+            self.ververs()
+        op_achtergrond(self, lambda: bi.verbreek(n.naam), klaar)
 
     def vergeet_wifi(self, n: bi.Netwerk) -> None:
         """Vergeten: verbreken en het wachtwoord weggooien (U338)."""

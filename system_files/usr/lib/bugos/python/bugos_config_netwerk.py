@@ -23,6 +23,7 @@ class Netwerk:
     sterkte: int        # 0-100
     beveiligd: bool
     verbonden: bool
+    zakelijk: bool = False   # school/werk (WPA2-Enterprise, 802.1X): ook een gebruikersnaam nodig (U495)
 
 
 def splits_nmcli(regel: str) -> list[str]:
@@ -51,7 +52,10 @@ def lees_netwerken(uitvoer: str) -> list[Netwerk]:
         d = splits_nmcli(regel)
         if len(d) < 4 or not d[1]:
             continue
-        n = Netwerk(d[1], int(d[2]) if d[2].isdigit() else 0, d[3] not in ("", "--"), d[0].strip() == "*")
+        # 'OWE' (Enhanced Open) is een open netwerk: geen wachtwoord vragen (U495).
+        beveiliging = [w for w in d[3].split() if w not in ("--", "OWE", "OWE-TM")]
+        n = Netwerk(d[1], int(d[2]) if d[2].isdigit() else 0, bool(beveiliging), d[0].strip() == "*",
+                    "802.1X" in d[3])
         oud = beste.get(n.naam)
         if oud is None or n.verbonden or (n.sterkte > oud.sterkte and not oud.verbonden):
             beste[n.naam] = n
@@ -153,6 +157,14 @@ def verbreek(naam: str) -> bool:
     if _c.VOORBEELD:
         _c._VB["verbonden"] = ""
         return True
+    # Het profiel dat nu verbonden is, op zijn UUID: het kan 'Thuis 1' heten terwijl het netwerk 'Thuis' heet (U497).
+    _, uit = _c.draai("nmcli", "-t", "-f", "UUID,TYPE", "connection", "show", "--active")
+    for regel in uit.splitlines():
+        delen = splits_nmcli(regel)
+        if len(delen) >= 2 and delen[1] == "802-11-wireless":
+            ruw = _c.draai("nmcli", "-g", "802-11-wireless.ssid", "connection", "show", "uuid", delen[0])[1]
+            if (splits_nmcli(ruw.rstrip("\n")) or [""])[0] == naam:
+                return _c.draai("nmcli", "connection", "down", "uuid", delen[0])[0] == 0
     return _c.draai("nmcli", "connection", "down", "id", naam)[0] == 0
 
 
@@ -239,6 +251,13 @@ def zet_bt(aan: bool) -> bool:
         return False   # geen bluetooth in deze computer: niet 8 seconden op bluetoothctl wachten (U157)
     if aan and shutil.which("rfkill"):
         _c.draai("rfkill", "unblock", "bluetooth")
+        # Na de vliegtuigstand komt de bluetooth-kaart pas even later terug: wachten tot hij er is (zoals Help, U290)
+        # (U499).
+        import time as _tijd
+        for _ in range(10):
+            if "Controller" in _c.draai("bluetoothctl", "show", timeout=3)[1]:
+                break
+            _tijd.sleep(0.5)
     return _c.draai("bluetoothctl", "power", "on" if aan else "off", timeout=8)[0] == 0
 
 
