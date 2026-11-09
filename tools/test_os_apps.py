@@ -1299,7 +1299,7 @@ from bugos_widgets import label as _label  # noqa: E402
 _w = _label("<h1>GRATIS WIFI</h1>")
 klopt(_w.textFormat() == Qt.TextFormat.PlainText, "U210: een naam van buiten (wifi, bestand) wordt geen opmaak")
 _nav = (ROOT / "system_files/usr/lib/bugos/python/bugos_files_navigeren.py").read_text()
-klopt('QPushButton(naam.replace("&", "&&"))' in _nav, "U210: een & in een mapnaam (R&D) wordt geen sneltoets")
+klopt('QPushButton(zichtbaar.replace("&", "&&"))' in _nav, "U210: een & in een mapnaam (R&D) wordt geen sneltoets")
 klopt(winkel.app_naam({"naam": "Rekenmachine", "naam_en": "Calculator"}) in ("Rekenmachine", "Calculator")
       and "app_naam(app)" in (ROOT / "system_files/usr/bin/bugos-store").read_text().split("def installeer")[1][:400],
       "U209: de Winkel gebruikt overal de naam in jouw taal (ook bij installeren)")
@@ -1445,6 +1445,22 @@ import bugos_settings_onderdelen as _so  # noqa: E402
 _css = _fo.stijl() + _so.stijl()
 _zonder = [n for n in ("keus", "plaatje", "kruimel", "legenda") if f"QPushButton#{n}:focus" not in _css]
 klopt(not _zonder, f"U271: elke eigen knop laat zien dat hij de toetsenbordfocus heeft (niet: {_zonder})")
+# U272: een diep pad past in de balk: lange namen ingekort (de hele naam als tip), de laatste zo heel mogelijk.
+from PySide6.QtWidgets import QPushButton as _QPB  # noqa: E402
+
+_diep = THUIS / "Documents" / "Schoolwerk 2024" / "Geschiedenis werkstuk" / "Bronnen en afbeeldingen"
+_diep.mkdir(parents=True, exist_ok=True)
+_pv = b.Bestanden(_diep)
+_pv.resize(1120, 740)
+_pv.show()
+for _ in range(6):
+    wacht(lambda: False, 60)
+_kr = [_pv.pad_lay.itemAt(i).widget() for i in range(_pv.pad_lay.count())]
+_kr = [k for k in _kr if isinstance(k, _QPB)]
+_som = sum(k.sizeHint().width() for k in _kr) + 16 * (len(_kr) - 1)
+klopt(_kr and _som <= _pv.pad_vak.width() and "Bronnen" in _kr[-1].text(),
+      f"U272: een diep pad past in de balk in Bestanden ({[k.text() for k in _kr]}, {_som} van {_pv.pad_vak.width()} px)")
+_pv.close()
 _stukken = [(n, (ROOT / "system_files/usr/bin" / n).read_text()) for n in
             ("bugos-settings", "bugos-task-manager", "bugos-store", "bugos-welcome", "bugos-backup", "bugos-switch", "bugos-help")]
 klopt(all("een_keer=True" in tekst for _n, tekst in _stukken), "U208: Instellingen, Taakbeheer, Winkel, Welkom, Back-up, Overstap en Hulp openen maar één keer")

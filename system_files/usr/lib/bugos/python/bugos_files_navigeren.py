@@ -9,12 +9,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bugos_ui import lijn_icoon, t
+from bugos_ui import lijn_icoon, px, t
 from bugos_drives import Schijf, schijven
 from bugos_files_plekken import HERKOMST_ROL, INFO_ROL, PAD_ROL, plekken, schijf_van, thuis, zit_in
 from bugos_files_acties import prullenbak_inhoud
 from PySide6.QtCore import QModelIndex, Qt
-from PySide6.QtGui import QStandardItem
+from PySide6.QtGui import QFontMetrics, QStandardItem
 from PySide6.QtWidgets import QLabel, QPushButton
 
 
@@ -193,6 +193,11 @@ class Navigeren:
             return ""
         return self.titel.text()
 
+    def pad_passend(self) -> None:
+        """Na een andere breedte: het pad opnieuw passend maken (U272)."""
+        if self.pad_vak.isVisible() and self.pad_vak.width() != getattr(self, "_pad_breedte", -1):
+            self.bouw_pad()
+
     def bouw_pad(self) -> None:
         while self.pad_lay.count():
             w = self.pad_lay.takeAt(0).widget()
@@ -235,12 +240,46 @@ class Navigeren:
             delen.append((deel, p))
         if len(delen) > 5:
             delen = delen[:1] + [("…", delen[-4][1])] + delen[-3:]
+        # Past het niet in de balk? Lange namen in het midden inkorten ('Geschie…stuk', de hele naam als tip), en
+        # zo nodig meer mappen achter '…' zetten. De laatste (waar je nu bent) blijft zo lang mogelijk heel (U272).
+        # Meten met een echte knop in de stijl van het pad: de letter en wat een knop om zijn tekst heen nodig heeft.
+        proef = QPushButton("x", self.pad_vak)
+        proef.setObjectName("kruimel")
+        proef.setProperty("laatste", "true")   # vet: reken ruim
+        proef.ensurePolished()
+        fm = QFontMetrics(proef.font())
+        rand = proef.sizeHint().width() - fm.horizontalAdvance("x") + 16   # plus het pijltje ervoor
+        proef.deleteLater()
+        self._pad_breedte = self.pad_vak.width()
+        ruimte = max(self.pad_vak.width() - 20, px(200))
+        kort, lang = px(110), max(ruimte // 2, px(140))
+
+        def breedte(lijst) -> int:
+            return sum(min(fm.horizontalAdvance(n), lang if j == len(lijst) - 1 else kort) + rand
+                       for j, (n, _d) in enumerate(lijst))
+
+        while breedte(delen) > ruimte and len(delen) > 2:
+            if delen[1][0] == "…":
+                if len(delen) <= 3:
+                    break
+                delen = delen[:2] + delen[3:]
+                delen[1] = ("…", delen[2][1].parent)
+            else:
+                delen = delen[:1] + [("…", delen[1][1])] + delen[2:]
         for i, (naam, doel) in enumerate(delen):
             if i:
                 pijl = QLabel()
                 pijl.setPixmap(lijn_icoon("rechts", "tekst3", 14, gekozen=None).pixmap(14, 14))
                 self.pad_lay.addWidget(pijl)
-            k = QPushButton(naam.replace("&", "&&"))   # een & in een mapnaam is geen sneltoets (U210)
+            if i == len(delen) - 1:   # de laatste krijgt wat er over is
+                maxw = max(ruimte - sum(min(fm.horizontalAdvance(n), kort) + rand for n, _d in delen[:-1]) - rand,
+                           px(60))
+            else:
+                maxw = kort
+            zichtbaar = fm.elidedText(naam, Qt.TextElideMode.ElideMiddle, maxw)
+            k = QPushButton(zichtbaar.replace("&", "&&"))   # een & in een mapnaam is geen sneltoets (U210)
+            if zichtbaar != naam:
+                k.setToolTip(naam)
             k.setObjectName("kruimel")
             k.setProperty("laatste", "true" if i == len(delen) - 1 else "false")
             k.setCursor(Qt.CursorShape.PointingHandCursor)

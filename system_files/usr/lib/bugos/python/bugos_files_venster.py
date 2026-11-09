@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bugos_ui import ActieBalk, Knop, Melding, Venster, Zijbalk, label, lijn_icoon, ronde_knop, t
+from bugos_ui import ActieBalk, Knop, Melding, Venster, Zijbalk, label, lijn_icoon, px, ronde_knop, t
 from bugos_drives import Schijf, mooie_maat
 from bugos_files_plekken import PAD_ROL, STOP, Telsein, bijzondere_mappen, schijf_van, thuis, vrije_ruimte
 from bugos_files_acties import Klus
@@ -23,7 +23,7 @@ from bugos_files_schijven import Schijven
 from PySide6.QtCore import QDir, QEvent, QPoint, QRect, Qt, QThreadPool, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QKeySequence, QShortcut, QStandardItemModel
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QFileSystemModel, QFrame, QHBoxLayout, QLabel, QListView, QScrollArea,
+    QAbstractItemView, QApplication, QFileSystemModel, QFrame, QHBoxLayout, QLabel, QListView, QScrollArea, QSizePolicy,
     QStackedWidget, QVBoxLayout, QWidget,
 )
 
@@ -81,6 +81,10 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
         self.pad_vak = QFrame()
         self.pad_vak.setObjectName("pad")
         self.pad_vak.setFixedHeight(HOOGTE)
+        # De balk krijgt de ruimte die over is (niet wat het pad zou willen): bouw_pad maakt het pad passend (U272).
+        self.pad_vak.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self.pad_vak.setMinimumWidth(px(220))   # genoeg voor 'Thuis › … › map'
+        self.pad_vak.installEventFilter(self)   # andere breedte: het pad opnieuw passend maken (U272)
         self.pad_lay = QHBoxLayout(self.pad_vak)
         self.pad_lay.setContentsMargins(8, 0, 8, 0)
         self.pad_lay.setSpacing(0)
@@ -314,6 +318,9 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
         return super().event(e)
 
     def eventFilter(self, ding, e) -> bool:  # noqa: N802
+        if ding is getattr(self, "pad_vak", None) and e.type() == QEvent.Type.Resize and hasattr(self, "huidig"):
+            QTimer.singleShot(0, self.pad_passend)
+            return False
         if e.type() in (QEvent.Type.DragEnter, QEvent.Type.DragMove, QEvent.Type.Drop) and \
                 ding in (self.lijst.viewport(), self.leeg):
             if self.slepen(e, ding):
