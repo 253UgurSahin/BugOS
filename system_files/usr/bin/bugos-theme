@@ -117,7 +117,9 @@ windows_kleuren() {
     (
         # Eén tegelijk: snel licht-donker-licht, dan wint de laatste (U148).
         exec 8>"$prefix/.bugos-kleuren.slot"
-        flock 8 2>/dev/null || true
+        flock -w 120 8 2>/dev/null || exit 0
+        # Intussen weer omgezet (snel licht-donker-licht)? Dan is deze niet meer de goede: niets doen (U169).
+        [ "$(huidig)" = "$1" ] || exit 0
         export WINEPREFIX="$prefix" WINEDEBUG=-all
         wine regedit /S "$(winepath -w "$kleuren")" >/dev/null 2>&1 &&
             echo "$1 $(cksum <"$kleuren")" >"$prefix/.bugos-kleuren"

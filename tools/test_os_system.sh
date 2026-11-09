@@ -377,7 +377,10 @@ klopt 'grep -q -- "--global unmask flatpak-user-update.timer" "$TMP/systemctl-lo
 nep systemctl 'exit 0'
 # U132: licht/donker wisselen geeft ook geïnstalleerde Windows-programma's de nieuwe kleuren.
 kopie bugos-theme
-for p in plasma-apply-colorscheme plasma-apply-desktoptheme kreadconfig6 kwriteconfig6; do nep "$p" 'exit 0'; done
+for p in plasma-apply-desktoptheme kwriteconfig6; do nep "$p" 'exit 0'; done
+# Het kleurenschema onthouden, zodat bugos-theme kan zien wat er nu aan staat (U169).
+nep plasma-apply-colorscheme 'echo "$1" >"'"$TMP"'/schema"'
+nep kreadconfig6 'case "$*" in *ColorScheme*) cat "'"$TMP"'/schema" 2>/dev/null ;; esac'
 nep wine 'echo "$*" >>"'"$TMP"'/wine-log"'
 nep winepath 'echo "Z:$2"'
 mkdir -p "$TMP/thuis/.local/share/bugos/windows"
@@ -386,6 +389,13 @@ draai bugos-theme donker
 for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$TMP/thuis/.local/share/bugos/windows/.bugos-kleuren" ] && break; sleep 0.2; done
 klopt 'grep -q "regedit /S Z:.*donker.reg" "$TMP/wine-log" && grep -q "^donker " "$TMP/thuis/.local/share/bugos/windows/.bugos-kleuren"' \
     "U132: donker: ook de Windows-programma's krijgen de donkere kleuren ($(cat "$TMP/wine-log" "$TMP/uit" 2>&1 | head -3 | tr "\n" " "))"
+# U169: intussen alweer teruggezet (snel licht-donker-licht): de oude keuze zet de Windows-kleuren niet meer.
+nep plasma-apply-colorscheme 'echo BugOSLight >"'"$TMP"'/schema"'
+: >"$TMP/wine-log"
+draai bugos-theme donker
+sleep 1
+klopt '[ ! -s "$TMP/wine-log" ]' "U169: een oudere licht/donker-keuze zet de Windows-kleuren niet meer"
+nep plasma-apply-colorscheme 'echo "$1" >"'"$TMP"'/schema"'
 # U148: na een nieuwe Wine-versie (de map is nog niet bijgewerkt) niet bij licht/donker Wine starten (dat toont een venster).
 echo 1 >"$TMP/thuis/.local/share/bugos/windows/.update-timestamp"
 : >"$TMP/wine-log"

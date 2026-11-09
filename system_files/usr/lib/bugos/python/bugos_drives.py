@@ -303,6 +303,9 @@ def klaarmaak_stappen(s: Schijf, naam: str) -> list[list[str]]:
     ]
 
 
+_al_geprobeerd: set = set()
+
+
 def losse_openen(lijst: list[Schijf] | None = None) -> int:
     """Zet USB-sticks, externe schijven en SD-kaarten die er net in zitten open (zonder te vragen), zodat Back-up
     en Overstap ze zien. KDE doet dat standaard niet (automount staat uit) (U139). Geeft hoeveel er opengingen."""
@@ -310,6 +313,12 @@ def losse_openen(lijst: list[Schijf] | None = None) -> int:
     gedaan = 0
     for s in lijst:
         if s.soort in ("stick", "extern", "kaart") and not s.wortel and not s.op_slot and not s.nieuw and s.fs:
+            # Elke schijf maar één keer proberen: zette je hem zelf dicht ('Veilig verwijderen'), of lukt openen
+            # niet (een kapotte stick), dan niet elke 3 seconden opnieuw (U164).
+            sleutel = (s.fs_apparaat or s.apparaat, s.grootte)
+            if sleutel in _al_geprobeerd:
+                continue
+            _al_geprobeerd.add(sleutel)
             try:
                 if subprocess.run(["udisksctl", "mount", "-b", s.fs_apparaat or s.apparaat, "--no-user-interaction"],
                                   capture_output=True, timeout=20).returncode == 0:

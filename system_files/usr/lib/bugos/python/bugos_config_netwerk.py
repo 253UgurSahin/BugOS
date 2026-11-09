@@ -181,9 +181,16 @@ def lees_bt_info(adres: str, naam: str, uitvoer: str) -> Apparaat:
 def bt_hardware() -> bool:
     """Heeft deze computer bluetooth? Zonder (veel pc's) start bluetoothd niet, en wacht 'bluetoothctl'
     tot zijn tijd op is: dan vragen we het niet eens."""
-    basis = Path(os.environ.get("BUGOS_SYS", "/sys")) / "class" / "bluetooth"
+    sys_ = Path(os.environ.get("BUGOS_SYS", "/sys"))
     try:
-        return any(basis.iterdir())
+        if any((sys_ / "class" / "bluetooth").iterdir()):
+            return True
+    except OSError:
+        pass
+    # Uitgezet met de vliegtuigstand of een Fn-toets: dan verdwijnt hci0, maar de bluetooth-schakelaar (rfkill)
+    # is er nog. Dan heeft de computer wel bluetooth, en moet je hem weer aan kunnen zetten (U165).
+    try:
+        return any((r / "type").read_text().strip() == "bluetooth" for r in (sys_ / "class" / "rfkill").iterdir())
     except OSError:
         return False
 

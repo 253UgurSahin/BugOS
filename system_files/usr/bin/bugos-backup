@@ -445,11 +445,13 @@ def venster() -> int:
                 return
             # Eén balk voor alle mappen samen (niet zes keer van 0 tot 100%) (U152).
             if not getattr(self, "stap_nr", 0):
-                self.stappen_totaal = len(self.wachtrij)
+                # Alleen de rsync-stappen tellen: het wegschrijven (sync) aan het eind heeft geen procenten (U167).
+                self.stappen_totaal = max(sum(1 for c in self.wachtrij if c and c[0] != "sync"), 1)
             self.stap_nr = getattr(self, "stap_nr", 0) + 1
             cmd = self.nu = self.wachtrij.pop(0)
             self.uitvoer = ""
             if cmd[0] == "sync":
+                self.balk.setValue(100)   # alles is gekopieerd; nu alleen nog wegschrijven
                 self.melding.zet(t("Bezig met wegschrijven… Haal de schijf er nog niet uit.",
                                    "Writing to the drive… Do not unplug it yet."), "bezig")
             self.proces.start(cmd[0], cmd[1:])

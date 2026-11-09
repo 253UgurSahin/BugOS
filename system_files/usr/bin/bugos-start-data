@@ -74,7 +74,7 @@ INSTELLINGEN = [
     ("wifi", "Wifi en internet", "Wi-Fi and internet", "network-wireless", "wifi wlan internet netwerk wachtwoord network wifi wi-fi wlan internet network wireless password cable ethernet connection"),
     ("bluetooth", "Bluetooth", "Bluetooth", "network-bluetooth", "bluetooth koptelefoon muis toetsenbord headphones bluetooth headphones earbuds mouse keyboard phone pair pairing wireless"),
     ("printers", "Printers en scannen", "Printers and scanning", "printer", "printer printen afdrukken scanner scannen print scan printers printing print scanner scanning scan queue test page ink paper"),
-    ("geluid", "Geluid", "Sound", "audio-volume-high", "geluid volume luidspreker speaker koptelefoon sound audio sound audio volume speaker speakers headphones hdmi tv mute silent"),
+    ("geluid", "Geluid", "Sound", "audio-volume-high", "geluid volume luidspreker speaker koptelefoon sound audio sound audio volume speaker speakers headphones hdmi tv mute silent microphone mic microfoon"),
     ("scherm", "Scherm", "Display", "video-display", "scherm beeldscherm helderheid nachtlicht groot grootte display brightness display screen monitor brightness night light night color blue light size bigger smaller scale scaling text"),
     ("energie", "Energie", "Power", "battery", "energie batterij accu slaapstand zuinig snel power battery sleep power battery energy saver performance sleep suspend charging lid screen off"),
     ("uiterlijk", "Uiterlijk", "Appearance", "preferences-desktop-color", "uiterlijk licht donker thema achtergrond wallpaper dark light appearance light dark theme dark mode color colour background desktop wallpaper picture"),
@@ -386,6 +386,15 @@ def snel_status() -> dict:
     heeft_bt = bt_map.is_dir() and any(bt_map.iterdir())
     bt = draai("bluetoothctl", "show") if heeft_bt and shutil.which("bluetoothctl") else ""
     s["bluetooth"] = None if "Controller" not in bt else ("Powered: yes" in bt)
+    if s["bluetooth"] is None and not heeft_bt:
+        # Uit met de vliegtuigstand (hci0 is dan weg, de rfkill-schakelaar niet): tegel 'uit', zodat je hem weer
+        # aan kunt zetten (U165).
+        rfkill = Path(os.environ.get("BUGOS_SYS", "/sys")) / "class" / "rfkill"
+        try:
+            if any((r / "type").read_text().strip() == "bluetooth" for r in rfkill.iterdir()):
+                s["bluetooth"] = False
+        except OSError:
+            pass
     s["spel"] = draai("bugos-game-mode", "status").strip() == "aan" if shutil.which("bugos-game-mode") else None
     s["donker"] = kde_lees("kdeglobals", "General", "ColorScheme") == "BugOSDark"
     s["volume"], s["stil"] = volume_status()

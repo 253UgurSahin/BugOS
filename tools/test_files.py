@@ -189,9 +189,12 @@ _n = sch.losse_openen([sch.Schijf(apparaat="/dev/sdb1", naam="Stick", soort="sti
                         sch.Schijf(apparaat="/dev/sdc1", naam="Al open", soort="stick", station="/dev/sdc", fs="vfat",
                                    wortel="/run/media/x/A"),
                         sch.Schijf(apparaat="/dev/sda2", naam="D", soort="intern", station="/dev/sda", fs="ntfs")])
+_n2 = sch.losse_openen([sch.Schijf(apparaat="/dev/sdb1", naam="Stick", soort="stick", station="/dev/sdb", fs="vfat")])
 os.environ["PATH"] = _oud_pad
 klopt(_n == 1 and (_ub / "log").read_text().split() == ["mount", "-b", "/dev/sdb1", "--no-user-interaction"],
       "U139: een dichte USB-stick gaat vanzelf open (zonder te vragen); open en interne schijven niet")
+klopt(_n2 == 0 and (_ub / "log").read_text().count("mount") == 1,
+      "U164: weer dicht ('Veilig verwijderen') of lukte openen niet: niet elke 3 seconden opnieuw openzetten")
 _sys = TMP / "sys-mmc"
 for _d, _t in (("mmcblk0", "MMC"), ("mmcblk1", "SD")):
     (_sys / "block" / _d / "device").mkdir(parents=True)

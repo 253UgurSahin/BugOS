@@ -19,8 +19,8 @@ class GeluidPagina(Blad):
     titel_nl, titel_en = "Geluid", "Sound"
     uitleg_nl = "Hoe hard, en waar het geluid uit komt."
     uitleg_en = "How loud, and where the sound comes from."
-    zoekwoorden = ("geluid volume luidspreker speaker koptelefoon hdmi tv stil dempen sound audio volume "
-                   "speaker speakers headphones hdmi tv mute silent")
+    zoekwoorden = ("geluid volume luidspreker speaker koptelefoon hdmi tv stil dempen microfoon sound audio volume "
+                   "speaker speakers headphones hdmi tv mute silent microphone mic")
     kde = "kcm_pulseaudio"
 
     def bouw(self) -> None:
@@ -33,6 +33,10 @@ class GeluidPagina(Blad):
                    self.stil))
         self.lijst = self.kaart(t("Waar komt het geluid uit? Klik om te kiezen.",
                                   "Where does the sound come from? Click to choose."))
+        # De microfoon kies je (nog) bij KDE: zeg waar, zodat zoeken op 'microfoon' ergens heen leidt (U166).
+        self.lay.addWidget(label(t("De microfoon kies en zet je bij 'Meer instellingen (voor gevorderden)' hieronder.",
+                                   "You choose and set the microphone under 'More settings (advanced)' below."),
+                                 "klein"))
 
     def ververs(self) -> None:
         op_achtergrond(self, bi.geluid, self.toon)

@@ -537,6 +537,17 @@ _btp = venster.paginas["bluetooth"]
 _btp.toon((False, [], False))
 klopt(_btp.schakel.isHidden() and _btp.nieuw.isHidden(), "U157: Bluetooth-pagina zonder bluetooth: 'heeft geen bluetooth', geen knoppen")
 _btp.toon((False, [], True))
+# U165: met de vliegtuigstand uit (hci0 weg, de rfkill-schakelaar niet): wel bluetooth, en weer aan te zetten.
+_rf = TMP / "sys-u165"
+(_rf / "class" / "rfkill" / "rfkill0").mkdir(parents=True)
+(_rf / "class" / "rfkill" / "rfkill0" / "type").write_text("bluetooth\n")
+(_rf / "class" / "bluetooth").mkdir(parents=True)
+os.environ["BUGOS_SYS"] = str(_rf)
+_heeft = bi.bt_hardware()
+_opd, _ = vang(bi.zet_bt, True)
+del os.environ["BUGOS_SYS"]
+klopt(_heeft and any(c[:2] == ("rfkill", "unblock") for c in _opd),
+      "U165: bluetooth uit met de vliegtuigstand: Instellingen ziet bluetooth en zet hem weer aan (rfkill unblock)")
 # U156: een energieprofiel dat niet lukt: de pagina leest opnieuw wat echt aan staat.
 venster.ga_naar("energie")
 wacht()

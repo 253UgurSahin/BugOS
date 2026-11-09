@@ -216,9 +216,26 @@ def _kopieer_bestand(bron: Path, doel: Path, stop=None) -> None:
         shutil.copyfile(bron, doel, follow_symlinks=False)
     else:
         with open(bron, "rb") as van, open(doel, "wb") as naar:
-            while blok := van.read(8 * 1024 * 1024):
+            # Snel in de kernel (copy_file_range: op dezelfde btrfs-schijf zonder extra ruimte), in stukken,
+            # zodat Stoppen tussendoor kan; lukt dat niet (oude kernel, andere schijf), dan gewoon lezen en
+            # schrijven (U168).
+            snel = hasattr(os, "copy_file_range")
+            while True:
                 if stop():
                     raise Gestopt()
+                if snel:
+                    try:
+                        n = os.copy_file_range(van.fileno(), naar.fileno(), 64 * 1024 * 1024)
+                    except OSError:
+                        snel = False
+                        van.seek(naar.tell())
+                        continue
+                    if n == 0:
+                        break
+                    continue
+                blok = van.read(8 * 1024 * 1024)
+                if not blok:
+                    break
                 naar.write(blok)
     try:
         shutil.copystat(bron, doel, follow_symlinks=False)
