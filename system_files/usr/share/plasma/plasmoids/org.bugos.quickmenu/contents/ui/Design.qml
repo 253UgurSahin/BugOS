@@ -13,7 +13,7 @@ QtObject {
     readonly property color randSterk: donker ? "#3A3E48" : "#D5D0D0"
     readonly property color tekst: donker ? "#EDEEF1" : "#16171C"
     readonly property color tekst2: donker ? "#A3A8B4" : "#5D6270"
-    readonly property color tekst3: donker ? "#7C828E" : "#8A8F9A"
+    readonly property color tekst3: donker ? "#7C828E" : "#6B7080"   // 4,5:1 op licht (U137)
     readonly property color accent: donker ? "#EA3B4B" : "#DE2F3E"
     readonly property color accentHover: donker ? "#F25262" : "#C82434"
     readonly property color accentTekst: donker ? "#FFFFFF" : "#FFFFFF"

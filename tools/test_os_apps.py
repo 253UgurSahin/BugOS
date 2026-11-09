@@ -1074,6 +1074,23 @@ for _naam, _w in (("ronde knop", _rond), ("rand-knop", _rand), ("schuif", _schui
 _houder.close()
 klopt(not _anders, f"U134: de toetsenbordfocus is te zien op elke knop en schuif (niet bij: {_anders})")
 
+# ========================== U137: kleine tekst haalt 4,5:1 contrast (WCAG AA) in het lichte thema ===
+def _lum(h):
+    c = [int(h.lstrip("#")[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+    c = [x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4 for x in c]
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+
+
+def _contrast(a, b_):
+    x, y = sorted((_lum(a), _lum(b_)), reverse=True)
+    return (x + 0.05) / (y + 0.05)
+
+
+_L = bugos_ui.KLEUREN["licht"]
+_laag = [(v, a, round(_contrast(_L[v], _L[a]), 2)) for v in ("tekst2", "tekst3", "goed", "let_op", "fout")
+         for a in ("achter", "vlak") if _contrast(_L[v], _L[a]) < 4.5]
+klopt(not _laag, f"U137: kleine tekst in het lichte thema haalt 4,5:1 ({_laag})")
+
 # ========================== U067: 'Grote letters' maakt ook de letters van de BugOS-apps groter ===
 from PySide6.QtGui import QFont  # noqa: E402
 

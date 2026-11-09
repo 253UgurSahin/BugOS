@@ -45,11 +45,12 @@ ROOD = "#DE2F3E"
 
 KLEUREN = {
     "licht": {
+        # Kleine tekst haalt overal minstens 4,5:1 contrast (WCAG AA): tekst3, goed en let_op iets donkerder (U137).
         "achter": "#F6F5F5", "zijbalk": "#F6F5F5", "vlak": "#FFFFFF", "vlak_hover": "#FBF9F9",
         "rand": "#E6E2E2", "rand_sterk": "#D5D0D0", "tekst": "#16171C", "tekst2": "#5D6270",
-        "tekst3": "#8A8F9A", "accent": "#DE2F3E", "accent_hover": "#C82434", "accent_tekst": "#FFFFFF",
-        "accent_zacht": "#FDE9E9", "accent_lijn": "#F3B7BB", "goed": "#14965A", "goed_zacht": "#E3F5EC",
-        "let_op": "#B86E00", "let_op_zacht": "#FFF3DC", "fout": "#D3263A", "fout_zacht": "#FDE8EA",
+        "tekst3": "#6B7080", "accent": "#DE2F3E", "accent_hover": "#C82434", "accent_tekst": "#FFFFFF",
+        "accent_zacht": "#FDE9E9", "accent_lijn": "#F3B7BB", "goed": "#0E7A48", "goed_zacht": "#E3F5EC",
+        "let_op": "#8F5600", "let_op_zacht": "#FFF3DC", "fout": "#D3263A", "fout_zacht": "#FDE8EA",
         "schaduw": "rgba(22,23,28,0.06)", "knop": "#F1EEEE", "knop_hover": "#E8E4E4", "schuif_uit": "#D9D4D4",
         "map_voor": "#EFC3C7", "map_achter": "#DDA2A8", "map_teken": "#8C3A43",
     },
