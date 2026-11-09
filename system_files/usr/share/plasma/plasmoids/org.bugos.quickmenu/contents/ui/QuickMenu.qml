@@ -185,11 +185,17 @@ Rectangle {
                 from: rij.minimum
                 to: 100
                 stepSize: 5
+                implicitHeight: 28   // anders 0 hoog in sommige stijlen, en dan kun je er niet op klikken
                 Accessible.name: rij.naam
-                onMoved: verzend.restart()
-                // Nieuwe status pas overnemen als je niet aan het schuiven bent
-                Binding { target: schuif; property: "value"; value: snel.status[rij.wat] || 0; when: !schuif.pressed }
-                Timer { id: verzend; interval: 150; onTriggered: snel.zet(rij.wat, String(Math.round(schuif.value))) }
+                // Wat je koos, onthouden: bij loslaten zet de status-koppeling de oude waarde even terug,
+                // dus daar mogen we niet uit lezen. En de status pas weer overnemen als hij is bijgewerkt.
+                property real teSturen: 0
+                property bool vasthouden: false
+                onMoved: { teSturen = value; vasthouden = true; verzend.restart(); loslaten.restart() }
+                Binding { target: schuif; property: "value"; value: snel.status[rij.wat] || 0
+                          when: !schuif.pressed && !schuif.vasthouden }
+                Timer { id: verzend; interval: 150; onTriggered: snel.zet(rij.wat, String(Math.round(schuif.teSturen))) }
+                Timer { id: loslaten; interval: 2500; onTriggered: schuif.vasthouden = false }
                 background: Rectangle {
                     x: schuif.leftPadding
                     y: schuif.topPadding + schuif.availableHeight / 2 - height / 2

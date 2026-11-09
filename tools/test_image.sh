@@ -98,7 +98,7 @@ done
 if [ -d "$REPO/tools" ]; then
     T="$(mktemp -d)"
     cp -a "$REPO/." "$T/"
-    for t in qml-test test_files test_task_manager test_settings test_start_data test_help test_backup test_logout test_edges test_os_settings test_os_apps; do
+    for t in qml-test test_files test_task_manager test_settings test_start_data test_help test_backup test_logout test_edges test_os_settings test_os_apps test_menus; do
         if (cd "$T" && timeout 300 python3 "tools/$t.py" >"$T/$t.log" 2>&1); then ok "repo-test: $t"; else fout "repo-test: $t ($(grep -E '^FOUT|Error' "$T/$t.log" | head -3 | tr '\n' ' '))"; fi
     done
     for t in test_package test_game_mode test_light_mode test_panel test_exe test_signed test_windows_start test_os_system; do
