@@ -25,19 +25,21 @@ aan() {
 
     # Lukt een stap niet, dan zeggen we dat eerlijk en blijft de modus uit (geen "AAN" zonder dat het werkt).
     local gelukt=ja
-    flatpak install --user --noninteractive flathub com.visualstudio.code >/dev/null 2>&1 ||
-        flatpak install --noninteractive flathub com.visualstudio.code >/dev/null 2>&1 ||
+    # 9>&-: het slot (U262) niet doorgeven aan wat blijft draaien (podman/conmon van het doosje), anders bleef
+    # het slot de hele sessie dicht en wachtte 'uit' eeuwig (U270).
+    flatpak install --user --noninteractive flathub com.visualstudio.code >/dev/null 2>&1 9>&- ||
+        flatpak install --noninteractive flathub com.visualstudio.code >/dev/null 2>&1 9>&- ||
         gelukt=nee
 
-    systemctl --user enable --now podman.socket >/dev/null 2>&1
+    systemctl --user enable --now podman.socket >/dev/null 2>&1 9>&-
 
-    if [ "$gelukt" = ja ] && ! distrobox list 2>/dev/null | grep -q " $DOOS "; then
+    if [ "$gelukt" = ja ] && ! distrobox list 2>/dev/null 9>&- | grep -q " $DOOS "; then
         distrobox create --yes --name "$DOOS" --image "$DOOS_BEELD" \
-            --additional-packages "$DEV_PAKKETTEN" >/dev/null 2>&1 || gelukt=nee
+            --additional-packages "$DEV_PAKKETTEN" >/dev/null 2>&1 9>&- || gelukt=nee
     fi
     # Eerste keer binnengaan maakt het doosje echt af.
     if [ "$gelukt" = ja ]; then
-        distrobox enter "$DOOS" -- true >/dev/null 2>&1 || gelukt=nee
+        distrobox enter "$DOOS" -- true >/dev/null 2>&1 9>&- || gelukt=nee
     fi
 
     if [ "$gelukt" != ja ]; then

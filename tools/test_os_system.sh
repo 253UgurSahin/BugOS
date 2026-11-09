@@ -226,6 +226,14 @@ draai bugos-developer aan
 wait
 klopt '! grep -qi "online" "$TMP/vensters" && [ -e "$TMP/thuis/.config/bugos/ontwikkelaar-aan" ]' \
     "U262: twee keer tegelijk ontwikkelaarsmodus aan: geen 'lukte niet', en daarna staat hij aan"
+# U270: het doosje blijft draaien (podman/conmon): dat mag het slot niet vasthouden, anders wacht 'uit' eeuwig.
+nep distrobox 'case "$1" in list) exit 0;; enter) (/usr/bin/sleep 20 &) ;; esac; exit 0'
+draai bugos-developer aan
+_t0=$(date +%s)
+HOME="$TMP/thuis" XDG_CONFIG_HOME="$TMP/thuis/.config" PATH="$TMP/bin:$PATH" timeout 8 bash "$TMP/bugos-developer" uit >/dev/null 2>&1
+_uit=$?
+klopt '[ "$_uit" -eq 0 ] && [ $(( $(date +%s) - _t0 )) -lt 5 ]' "U270: 'uit' wacht niet op het draaiende doosje (het slot gaat niet mee)"
+pkill -f "/usr/bin/sleep 20" 2>/dev/null || true
 klopt '! grep -q "fedora-toolbox:latest" "$BIN/bugos-developer"' "U263: het dev-doosje gebruikt een vaste Fedora-versie, niet 'latest'"
 nep kdialog 'exit 0'
 
