@@ -335,7 +335,7 @@ class Bewerken:
     def zet_terug(self) -> None:
         if not self.in_prullenbak:
             return
-        sel = self.lijst.selectionModel().selectedIndexes()
+        sel = [i for i in self.lijst.selectionModel().selectedIndexes() if i.column() == 0]   # (U506)
         n = mislukt = 0
         for i in sel:
             try:

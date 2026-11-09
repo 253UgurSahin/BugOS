@@ -370,7 +370,10 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
         sel = self.lijst.selectionModel()
         if sel is None or self.in_computer:
             return []
-        return [Path(i.data(PAD_ROL)) for i in sel.selectedIndexes() if i.data(PAD_ROL)]
+        # Alleen de eerste kolom, en elk pad één keer: Ctrl+A kiest ook naam/grootte/soort/datum, en dan kwam elk
+        # bestand er vier keer in (vier kopieën, 'niet gelukt' na weggooien) (U506).
+        paden = [i.data(PAD_ROL) for i in sel.selectedIndexes() if i.column() == 0 and i.data(PAD_ROL)]
+        return [Path(p) for p in dict.fromkeys(paden)]
 
     def selecteer(self, pad: Path) -> None:
         if self.in_prullenbak or self.in_computer:

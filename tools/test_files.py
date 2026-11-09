@@ -482,6 +482,15 @@ for _ in range(50):
     app.processEvents()
 venster.selecteer(docs / "map")
 klopt(venster.gekozen() == [docs / "map"], "kiezen: één map gekozen")
+# U506: Ctrl+A (alles kiezen) kiest elk bestand één keer, niet vier keer (één per kolom).
+venster.lijst.selectAll()
+for _ in range(20):
+    app.processEvents()
+_alles506 = venster.gekozen()
+_echt506 = sorted(p.name for p in docs.iterdir() if not p.name.startswith("."))
+klopt(len(_alles506) >= 2 and len(_alles506) == len(set(_alles506)) and set(p.name for p in _alles506) <= set(_echt506),
+      f"U506: Ctrl+A kiest elk bestand één keer ({len(_alles506)} gekozen, {len(set(_alles506))} verschillend)")
+venster.selecteer(docs / "map")
 klopt(not venster.keuzebalk.isHidden() and venster.keuzebalk.knoppen["naam"].isVisibleTo(venster.keuzebalk),
       "kiezen: de knoppenbalk verschijnt, met Naam wijzigen")
 klopt(venster.keuzebalk.knoppen["terugzetten"].isHidden(), "kiezen: geen Zet terug buiten de prullenbak")
