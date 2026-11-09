@@ -168,6 +168,23 @@ tray = json.loads(draai("--tray"))
 klopt(tray["internet"] == "wifi" and tray["volume"] == 75 and tray["stil"] is False and tray["batterij"] == 64
       and tray["laadt"] is True, f"tray: internet via wifi, volume 75%, batterij 64% aan het laden ({tray})")
 
+# U346: een batterij die niet BAT0 heet (CMB0) staat toch in het snelmenu; die van een muis (scope=Device) niet.
+import shutil as _sh  # noqa: E402
+
+_sh.rmtree(TMP / "sys" / "class" / "power_supply" / "BAT0")
+for _n, _w in (("CMB0", {"type": "Battery", "capacity": "55", "status": "Discharging"}),
+               ("hidpp_battery_0", {"type": "Battery", "scope": "Device", "capacity": "10", "status": "Discharging"})):
+    (TMP / "sys" / "class" / "power_supply" / _n).mkdir(parents=True)
+    for _k, _v in _w.items():
+        (TMP / "sys" / "class" / "power_supply" / _n / _k).write_text(_v + "\n")
+# U347: zonder geluid (geen standaard-luidspreker) is ook 'Geluid uit' grijs.
+nep("wpctl", "")
+_s = json.loads(draai("--snel"))
+klopt(_s["batterij"] == 55 and _s["volume"] is None and _s["stil"] is None,
+      f"U346/U347: batterij CMB0 telt (muisbatterij niet); zonder geluid is ook 'Geluid uit' grijs ({_s['batterij']}, {_s['stil']})")
+# U352: in recente bestanden wordt alleen het begin van het pad '~' (niet een map die ook zo heet).
+klopt('.replace(str(HOME), "~")' not in SCRIPT.read_text(), "U352: in recente bestanden wordt alleen het begin van het pad '~'")
+
 # 4. knoppen omzetten
 LOG.write_text("")
 nep("kwriteconfig6")

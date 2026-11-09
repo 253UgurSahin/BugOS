@@ -80,6 +80,9 @@ for stijl in ("Basic", "Fusion"):
     QTest.keyClick(v, Qt.Key.Key_Right)
     wacht(400)
     klopt(gestuurd and int(gestuurd[-1][1]) > voor, f"[{stijl}] U060: het pijltje stuurt de hogere waarde ({voor} -> {gestuurd[-1:]})")
+    # U348: het scrollwieltje op de volumeschuif verandert het volume.
+    gestuurd.clear()
+    klopt(schuif.property("wheelEnabled") is True, f"[{stijl}] U348: het scrollwieltje werkt op de schuiven van het snelmenu")
     # U084: de lettergrootte volgt 'schaal' meteen (main.qml koppelt hem aan Kirigami.Theme, dat meteen meeverandert).
     _kop = next((c for c in root.findChildren(QQuickItem) if c.property("text") in ("Snelmenu", "Quick menu")), None)
     _voor = _kop.property("font").pixelSize() if _kop else 0
@@ -164,6 +167,21 @@ QTest.keyClick(_sv, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
 wacht(50)
 klopt(_sm.findChild(QObject, "zoekveld").property("text") == "",
       f"U223: Ctrl+A in het startmenu typt niets in het zoekveld ({_sm.findChild(QObject, 'zoekveld').property('text')!r})")
+# U349: met de pijltjes naar rij 3, dan terug in het zoekveld klikken: Enter opent wat gemarkeerd is (de eerste).
+_veld2 = _sm.findChild(QObject, "zoekveld")
+_veld2.setProperty("text", "s")
+wacht(50)
+_zl = _sm.findChild(QObject, "zoekLijst")
+if _zl is not None:
+    _zl.setProperty("currentIndex", 2)
+    _zl.forceActiveFocus()
+    wacht(20)
+    _veld2.forceActiveFocus()
+    wacht(20)
+    klopt(_zl.property("currentIndex") == 0, f"U349: terug in het zoekveld staat de markering weer op wat Enter opent ({_zl.property('currentIndex')})")
+else:
+    klopt('onActiveFocusChanged: if (activeFocus && zoekLijst.count > 0) zoekLijst.currentIndex = 0' in _start,
+          "U349: terug in het zoekveld staat de markering weer op wat Enter opent")
 _sv.close()
 _smtekst = (QML.parent.parent.parent.parent / "org.bugos.startmenu" / "contents" / "ui" / "StartMenu.qml").read_text()
 klopt("alleLijst.forceActiveFocus()" in _smtekst and "stapel.currentIndex = 0; zoekveld.forceActiveFocus()" in _smtekst,

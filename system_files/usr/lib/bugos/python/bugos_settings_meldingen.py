@@ -59,7 +59,7 @@ class ProgrammasPagina(Blad):
     titel_nl, titel_en = "Standaardprogramma's", "Default programs"
     uitleg_nl = "Welk programma opent wat: internet, e-mail, foto's, muziek, video's en documenten."
     uitleg_en = "Which program opens what: internet, email, photos, music, videos and documents."
-    zoekwoorden = ("standaard programma app browser internet e-mail mail foto's muziek video pdf openen met "
+    zoekwoorden = ("standaardapps standaardprogramma standaard programma app browser internet e-mail mail foto's muziek video pdf openen met "
                    "bestandstype default programs apps applications browser web email mail photos music video pdf "
                    "open with file type")
     kde = "kcm_componentchooser"

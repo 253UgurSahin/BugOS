@@ -169,6 +169,8 @@ Rectangle {
             focus: true
             Accessible.name: placeholderText
             onAccepted: menu.openEerste()
+            // Terug in het zoekveld: de markering weer op de eerste, die Enter opent (U349)
+            onActiveFocusChanged: if (activeFocus && zoekLijst.count > 0) zoekLijst.currentIndex = 0
             Keys.onDownPressed: event => {
                 if (zoekLijst.visible && zoekLijst.count > 0) { zoekLijst.currentIndex = 0; zoekLijst.forceActiveFocus() }
                 else event.accepted = false

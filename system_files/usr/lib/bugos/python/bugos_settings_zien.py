@@ -15,7 +15,7 @@ class ZienPagina(Blad):
     titel_nl, titel_en = "Makkelijker zien", "Easier to see"
     uitleg_nl = "Grotere letters, een grotere muisaanwijzer en een vergrootglas."
     uitleg_en = "Bigger letters, a bigger mouse pointer and a magnifier."
-    zoekwoorden = ("zien ogen bril slecht groot grote letters tekst lettertype muisaanwijzer cursor vergrootglas "
+    zoekwoorden = ("lettergrootte tekstgrootte vergroten contrast zien ogen bril slecht groot grote letters tekst lettertype muisaanwijzer cursor vergrootglas "
                    "inzoomen zoom toegankelijkheid plaktoetsen langzame toetsen schermlezer voorlezen easier to see "
                    "accessibility eyes vision big large text letters font size mouse pointer cursor magnifier zoom "
                    "sticky keys slow keys screen reader read aloud orca")
@@ -90,7 +90,7 @@ class MuisPagina(Blad):
     titel_nl, titel_en = "Muis en touchpad", "Mouse and touchpad"
     uitleg_nl = "Hoe snel de aanwijzer beweegt, en wat klikken en scrollen doen."
     uitleg_en = "How fast the pointer moves, and what clicking and scrolling do."
-    zoekwoorden = ("muis touchpad aanwijzer cursor snelheid linkshandig scrollen scrollrichting tikken klikken "
+    zoekwoorden = ("dubbelklikken dubbelklik muis touchpad aanwijzer cursor snelheid linkshandig scrollen scrollrichting tikken klikken "
                    "dubbelklik mouse touchpad trackpad pointer cursor speed left-handed left handed scrolling "
                    "scroll direction natural scrolling tap click double click")
     kde = "kcm_mouse"
@@ -153,5 +153,8 @@ class MuisPagina(Blad):
             self.vak_lay.addWidget(g)
 
     def zet(self, a: bi.Aanwijzer, wat: str, waarde) -> None:
-        op_achtergrond(self, lambda: bi.zet_aanwijzer(a.sysnaam, wat, waarde), lambda ok: None if ok else
-                       self.melding.toon(t("Dat lukte niet.", "That did not work."), "fout"))
+        def klaar(ok) -> None:
+            if not ok:   # de schakelaar terug zoals het echt is (U350)
+                self.melding.toon(t("Dat lukte niet.", "That did not work."), "fout")
+                self.ververs()
+        op_achtergrond(self, lambda: bi.zet_aanwijzer(a.sysnaam, wat, waarde), klaar)

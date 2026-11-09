@@ -852,6 +852,29 @@ klopt(_tel == [1], f"U227: terug in Instellingen na een KDE-venster: de printers
 del _pr.ververs
 del venster.isActiveWindow
 
+# U353: zoeken in Instellingen vindt ook woorden die op de pagina's staan (taakbalk, fps, opslag, dubbelklikken…).
+_mist = []
+for _w in ("taakbalk", "dubbelklikken", "fps", "opslag", "schijfruimte", "computernaam", "lettergrootte", "tekstgrootte",
+           "vergroten", "contrast", "standaardapps"):
+    venster.paginas["start"].zoek(_w)
+    _lay = venster.paginas["start"].zoek_kaart.lay
+    _rijen = [_lay.itemAt(i).widget() for i in range(_lay.count())]
+    _rijen = [w for w in _rijen if isinstance(w, mod.Rij) and w.titel.text() not in ("Niks gevonden", "Nothing found")]
+    if not _rijen:
+        _mist.append(_w)
+venster.paginas["start"].zoek("")
+klopt(not _mist, f"U353: zoeken in Instellingen vindt ook woorden van de pagina's zelf (niet: {_mist})")
+# U350: muis/touchpad: lukt het omzetten niet, dan springt de schakelaar terug (Instellingen kijkt opnieuw).
+_mp = venster.paginas["muis"]
+_ververst = []
+_oud_v, _oud_z = _mp.ververs, bi.zet_aanwijzer
+_mp.ververs = lambda: _ververst.append(1)
+bi.zet_aanwijzer = lambda *a: False
+_mp.zet(bi.Aanwijzer("touchpad", "Touchpad", True, True, False, False, 50, True, {"tikken"}), "tikken", True)
+wacht()
+_mp.ververs, bi.zet_aanwijzer = _oud_v, _oud_z
+klopt(_ververst == [1], f"U350: lukt een muis- of touchpadinstelling niet, dan staat de schakelaar weer zoals het echt is ({_ververst})")
+
 shutil.rmtree(TMP, ignore_errors=True)
 print()
 print("Alles goed." if not fouten else f"{fouten} fout(en).")

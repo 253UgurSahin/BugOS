@@ -23,7 +23,14 @@ BESTAND="$(realpath "$BESTAND")"
 case "$BESTAND" in
 *.rpm)
     SOORT=rpm
-    NAAM="$(rpm -qp --qf '%{NAME}' "$BESTAND" 2>/dev/null)"
+    # Geen echt .rpm-bestand (kapot of half gedownload)? Dan meteen zeggen, niet eerst minuten een doosje maken (U351).
+    if ! NAAM="$(rpm -qp --qf '%{NAME}' "$BESTAND" 2>/dev/null)" || [ -z "$NAAM" ]; then
+        if command -v rpm >/dev/null 2>&1; then
+            fout "$(t "Dit .rpm-bestand is kapot of niet helemaal gedownload. Download het nog eens." \
+                "This .rpm file is broken or not fully downloaded. Download it again.")"
+            exit 1
+        fi
+    fi
     DOOS=bugos-fedora
     DOOS_BEELD=registry.fedoraproject.org/fedora-toolbox:latest
     ;;

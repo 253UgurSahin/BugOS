@@ -239,7 +239,11 @@ def recente_bestanden(max_aantal: int = 8) -> list[dict]:
         if pad in gezien:
             continue
         gezien.add(pad)
-        uit.append({"naam": pad.name, "pad": str(pad), "map": str(pad.parent).replace(str(HOME), "~")})
+        # Alleen het begin van het pad wordt '~' (niet ook een map die toevallig zo heet) (U352).
+        ouder = str(pad.parent)
+        if ouder == str(HOME) or ouder.startswith(str(HOME) + os.sep):
+            ouder = "~" + ouder[len(str(HOME)):]
+        uit.append({"naam": pad.name, "pad": str(pad), "map": ouder})
         if len(uit) >= max_aantal:
             break
     return uit
@@ -340,12 +344,14 @@ def kde_lees(bestand: str, groep: str, sleutel: str) -> str:
     return draai("kreadconfig6", "--file", bestand, "--group", groep, "--key", sleutel).strip()
 
 
-def volume_status() -> tuple[int | None, bool]:
+def volume_status() -> tuple[int | None, bool | None]:
     vol = draai("wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@") if shutil.which("wpctl") else ""
     try:
         procent = round(float(vol.split()[1]) * 100)
     except (IndexError, ValueError):
         procent = None
+    if procent is None:
+        return None, None   # geen geluid (geen wpctl of geen luidspreker): ook de knop 'Geluid uit' grijs (U347)
     return procent, "MUTED" in vol
 
 
@@ -371,8 +377,16 @@ def helderheid() -> int | None:
 def batterij() -> tuple[int | None, bool]:
     """(procent, laadt) van de eerste batterij; (None, False) op een computer zonder batterij."""
     basis = Path(os.environ.get("BUGOS_SYS", "/sys")) / "class" / "power_supply"
-    for pad in sorted(basis.glob("BAT*")):
+    # Zoals Instellingen (U155): een batterij herken je aan type=Battery (niet alleen 'BAT0'), maar niet die van een
+    # muis of toetsenbord (scope=Device) (U346).
+    for pad in sorted(basis.glob("*")):
         try:
+            soort = (pad / "type").read_text().strip() if (pad / "type").exists() else \
+                ("Battery" if pad.name.startswith("BAT") else "")
+            if soort != "Battery":
+                continue
+            if (pad / "scope").exists() and (pad / "scope").read_text().strip() == "Device":
+                continue
             return int((pad / "capacity").read_text().strip()), (pad / "status").read_text().strip() == "Charging"
         except (OSError, ValueError):
             continue

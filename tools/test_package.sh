@@ -62,6 +62,13 @@ rm -f "$TMP/meldingen" "$TMP/fouten"
 installeer "$TMP/kapot.rpm"
 klopt '! grep -q "Klaar\|Done" "$TMP/meldingen" 2>/dev/null && grep -q "niet gelukt\|did not work" "$TMP/fouten" 2>/dev/null' \
     "U198: een mislukte installatie zegt dat het niet lukte (niet 'Klaar')"
+# U351: een kapot .rpm-bestand: meteen zeggen, niet eerst een doosje maken.
+nep rpm 'exit 1'
+nep distrobox 'echo "$*" >>"'"$TMP"'/doos-log"; exit 0'
+rm -f "$TMP/fouten" "$TMP/doos-log"
+installeer "$TMP/half.rpm"
+klopt 'grep -q "kapot\|broken" "$TMP/fouten" 2>/dev/null && [ ! -s "$TMP/doos-log" ]' "U351: een kapot .rpm-bestand: meteen een uitleg, geen doosje maken"
+nep rpm '[ "$1" = -qp ] && echo voorbeeld; exit 0'
 klopt 'grep -q "Het kan wel bij je eigen bestanden" "$ROOT/system_files/usr/bin/bugos-package" && ! grep -q "veilig doosje" "$ROOT/system_files/usr/bin/bugos-package"' \
     "U245: installeren zegt eerlijk dat het programma bij je bestanden kan (geen 'veilig doosje')"
 echo "$fouten fout(en)."

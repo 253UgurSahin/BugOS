@@ -197,6 +197,7 @@ Rectangle {
                 from: rij.minimum
                 to: 100
                 stepSize: 5
+                wheelEnabled: true   // ook met het scrollwieltje, zoals het volume van KDE (U348)
                 implicitHeight: 28   // anders 0 hoog in sommige stijlen, en dan kun je er niet op klikken
                 Accessible.name: rij.naam
                 // Wat je koos, onthouden: bij loslaten zet de status-koppeling de oude waarde even terug,
