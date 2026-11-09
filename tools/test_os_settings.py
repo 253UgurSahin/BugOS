@@ -436,6 +436,43 @@ klopt(aanroepen == [("dialoog", True), ("passwd", "oud-geheim", "nieuw-geheim"),
       "U010: geen beheerder: via passwd; beheerder: zoals eerst via AccountsService")
 
 
+# U070: lukt "tijd vanzelf" of de schermgrootte niet (bijv. Annuleren bij het wachtwoord), dan opnieuw lezen,
+# zodat het schuifje en de keuze terugspringen naar wat echt is ingesteld.
+# U068: na een andere tijdzone time.tzset(), anders toont Instellingen de klok nog in de oude tijdzone.
+for naam in ("tijd", "scherm"):
+    venster.ga_naar(naam)
+    wacht()
+tp, sp = venster.paginas["tijd"], venster.paginas["scherm"]
+gelezen: list = []
+oud_auto, oud_schaal, oud_zone = bi.zet_tijd_auto, bi.zet_schaal, bi.zet_tijdzone
+oud_kies, oud_tzset = sa.KiesDialoog, time.tzset
+tp.ververs, sp.ververs = (lambda: gelezen.append("tijd")), (lambda: gelezen.append("scherm"))
+bi.zet_tijd_auto, bi.zet_schaal = (lambda aan: False), (lambda w: False)
+tp.zet_auto(True)
+sp.zet_grootte(1.5)
+wacht()
+wacht()
+klopt("tijd" in gelezen and "scherm" in gelezen, f"U070: mislukt: tijd en schermgrootte worden opnieuw gelezen ({gelezen})")
+
+
+class NepKies:
+    def __init__(self, *a, **k):
+        self.gekozen = "Europe/London"
+
+
+setattr(NepKies, "exec", lambda self: 1)
+tz: list = []
+sa.KiesDialoog, time.tzset = NepKies, (lambda: tz.append(1))
+bi.zet_tijdzone = lambda z: True
+tp.kies_zone_uit(("Europe/Amsterdam", ["Europe/Amsterdam", "Europe/London"]))
+wacht()
+wacht()
+klopt(tz == [1], "U068: na een gelukte nieuwe tijdzone leest Instellingen de tijdzone opnieuw (time.tzset)")
+bi.zet_tijd_auto, bi.zet_schaal, bi.zet_tijdzone = oud_auto, oud_schaal, oud_zone
+sa.KiesDialoog, time.tzset = oud_kies, oud_tzset
+del tp.ververs, sp.ververs
+
+
 # U025: het snelmenu start Instellingen via bugos-start-data --start instelling:<pagina> (los van Plasma).
 qml = (ROOT / "system_files/usr/share/plasma/plasmoids/org.bugos.quickmenu/contents/ui/main.qml").read_text()
 open_regels = qml[qml.index("onOpen:"):]

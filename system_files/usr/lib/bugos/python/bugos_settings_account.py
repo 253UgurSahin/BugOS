@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from datetime import datetime
 
 import bugos_config as bi
@@ -78,8 +79,9 @@ class TijdPagina(Blad):
         self.taal_rij.zet_uitleg(next((n for c, _l, n in bi.TALEN if c == code), code))
 
     def zet_auto(self, aan: bool) -> None:
-        op_achtergrond(self, lambda: bi.zet_tijd_auto(aan), lambda ok: self.ververs() if ok else self.melding.toon(
-            t("Dat lukte niet.", "That did not work."), "fout"))
+        # Ook als het niet lukte (bijv. Annuleren bij het wachtwoord) opnieuw lezen: dan springt het schuifje terug.
+        op_achtergrond(self, lambda: bi.zet_tijd_auto(aan), lambda ok: (self.ververs(), None if ok else self.melding.toon(
+            t("Dat lukte niet.", "That did not work."), "fout")))
 
     def kies_zone(self) -> None:
         # timedatectl kan even duren: eerst op de achtergrond ophalen, dan pas de keuzelijst.
@@ -101,6 +103,8 @@ class TijdPagina(Blad):
                             "Setting the time zone… BugOS may ask for your password."), seconden=60)
 
         def klaar(ok) -> None:
+            if ok:
+                time.tzset()   # anders blijft dit programma de oude tijdzone gebruiken (en de klok bovenaan de oude tijd)
             self.melding.toon(t(f"De klok staat nu op {bi.mooie_zone(zone, nl)}.",
                                 f"The clock is now set to {bi.mooie_zone(zone, nl)}.") if ok else
                               t("Dat lukte niet.", "That did not work."), "goed" if ok else "fout")
