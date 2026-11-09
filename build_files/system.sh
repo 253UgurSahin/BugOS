@@ -229,8 +229,10 @@ install -Dm0644 "$MERK/mark-dark-256.png" /usr/share/pixmaps/system-logo-white.p
 rm -f /usr/share/pixmaps/fedora-logo.svg /usr/share/pixmaps/fedora_whitelogo.svg
 install -Dm0644 "$MERK/logo.svg" /usr/share/pixmaps/fedora-logo.svg
 install -Dm0644 "$MERK/logo-white.svg" /usr/share/pixmaps/fedora_whitelogo.svg
-# Het algemene "logo van de distributie" (ook voor het pictogram start-here).
-install -Dm0644 "$MERK/mark.svg" /usr/share/icons/hicolor/scalable/distributor-logo.svg
+# Het algemene "logo van de distributie" (ook voor het pictogram start-here). In places/: een map die hicolor
+# echt doorzoekt (niet scalable/ zelf), en ook in het BugOS-thema, dat Breeze (met zijn eigen logo) voor hicolor zet (U425).
+install -Dm0644 "$MERK/mark.svg" /usr/share/icons/hicolor/scalable/places/distributor-logo.svg
+install -Dm0644 "$MERK/mark.svg" /usr/share/icons/BugOS/places/scalable/distributor-logo.svg
 install -Dm0644 "$MERK/mark-ink.svg" /usr/share/icons/hicolor/scalable/places/distributor-logo-symbolic.svg
 
 # "Over dit systeem" (KDE Info-centrum): onze naam, versie, logo en website.

@@ -47,6 +47,8 @@ for kv in /etc/skel/.config/Kvantum /etc/xdg/Kvantum; do
 done
 # GTK-programma's (zoals Firefox) zoeken pictogrammen via deze index.
 gtk-update-icon-cache -f -t /usr/share/icons/BugOS || true
+# Ook hicolor: daar kwamen na de laatste dnf-stap het BugOS-logo en distributor-logo bij (U425).
+gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
 
 # GTK-programma's (Firefox, GNOME-apps, GTK-Flatpaks): het Breeze-GTK-thema. KDE
 # zet daar zelf de BugOS-kleuren in (colors.css); bugos-theme zet er bij het

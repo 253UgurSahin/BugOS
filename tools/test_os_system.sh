@@ -452,6 +452,7 @@ gemeten() { nep busctl "$1"; PATH="$TMP/bin:$PATH" eval "$voorwaarde"; }
 klopt '! gemeten "echo \"u 1\"" && ! gemeten "echo \"u 3\""' "U089: app-updates slaan een hotspot (Metered ja/vermoedelijk ja) over"
 klopt 'gemeten "echo \"u 2\"" && gemeten "echo \"u 4\"" && gemeten "echo \"u 0\"" && gemeten "exit 1"' \
     "U089: app-updates gaan door bij wifi/kabel, onbekend, of zonder NetworkManager"
+klopt 'grep -q "hicolor/scalable/places/distributor-logo.svg" "$ROOT/build_files/system.sh" && ! grep -q "hicolor/scalable/distributor-logo.svg" "$ROOT/build_files/system.sh" && grep -q "BugOS/places/scalable/distributor-logo.svg" "$ROOT/build_files/system.sh"' "U425: het BugOS-logo als distributor-logo staat in een map die echt doorzocht wordt"
 klopt 'grep -q "flatpak-system-update.timer" "$ROOT/build_files/system.sh"' "U087: de bouw zet Universal Blue's eigen app-updates uit"
 klopt '! grep -q "^ *systemctl --global mask flatpak-user-update" "$ROOT/build_files/system.sh"' \
     "U117: de bouw zet de app-updates per gebruiker niet voor altijd uit"
