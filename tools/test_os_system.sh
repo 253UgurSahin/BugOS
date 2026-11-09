@@ -353,6 +353,8 @@ sd_goed() {  # geen klachten behalve "programma bestaat hier niet" (dat komt pas
         grep -v -E "is not executable|IPv6|Failed to (lookup|initialize|connect|open)|not running" | grep -q .
 }
 # U020: zonder internet mag de eerste start de computer niet in "bezig met opstarten" houden.
+klopt '! grep -q "^Type=oneshot" "$SD/system/bugos-ondertekend.service" && grep -q "^ExecCondition=.*Metered" "$SD/system/bugos-ondertekend.service" && sd_goed "$SD/system/bugos-ondertekend.service"' \
+    "U236: overstappen op ondertekende updates laat het opstarten niet wachten en downloadt niet over een hotspot"
 klopt '! grep -q "^Type=oneshot" "$SD/system/bugos-first-boot.service"' \
     "eerste start: geen oneshot (het opstarten wacht dan op het downloaden en opnieuw proberen)"
 klopt 'grep -q "^Restart=on-failure" "$SD/system/bugos-first-boot.service"' "eerste start: probeert het later opnieuw"
