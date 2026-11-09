@@ -350,6 +350,11 @@ _KDE_STANDAARD = {("AC", "TurnOffDisplayIdleTimeoutSec"): 600, ("AC", "AutoSuspe
                   ("Battery", "TurnOffDisplayIdleTimeoutSec"): 300, ("Battery", "AutoSuspendIdleTimeoutSec"): 600}
 
 
+def tijden_profiel() -> str:
+    """Welke tijden de pagina nu toont en verandert: 'AC' of 'Battery' (U462)."""
+    return _profiel()
+
+
 def _profiel() -> str:
     """Welke tijden gelden nu: een laptop die op de accu loopt, gebruikt die van 'Battery' (U235)."""
     accu = batterij()
@@ -394,15 +399,16 @@ def _energie_getal(groep: str, sleutel: str, standaard: int) -> int:
         return standaard
 
 
-def _zet_energie(groep: str, sleutel: str, waarde: int) -> None:
+def _zet_energie(groep: str, sleutel: str, waarde: int, alle: bool = False) -> None:
     """Alleen voor de stand die nu geldt (aan de lader of op de accu), zoals de pagina hem toont. Eerst schreven we alle
     drie, en dan waren KDE's kortere accutijden voor altijd weg, en sliep een bijna lege laptop niet meer (U454).
-    Is de keuze KDE's eigen tijd, dan de sleutel weghalen: dan geldt KDE's standaard weer."""
-    profiel = _profiel()
-    if _KDE_STANDAARD.get((profiel, sleutel)) == waarde:
-        _c.kde_schrijf("powerdevilrc", [profiel, groep], sleutel, None)
-    else:
-        _c.kde_schrijf("powerdevilrc", [profiel, groep], sleutel, str(waarde))
+    Is de keuze KDE's eigen tijd, dan de sleutel weghalen: dan geldt KDE's standaard weer.
+    alle: voor de deksel en de aan/uit-knop, die geen 'tijden van nu' zijn: overal hetzelfde (U461)."""
+    for profiel in (PROFIELGROEPEN if alle else (_profiel(),)):
+        if _KDE_STANDAARD.get((profiel, sleutel)) == waarde:
+            _c.kde_schrijf("powerdevilrc", [profiel, groep], sleutel, None)
+        else:
+            _c.kde_schrijf("powerdevilrc", [profiel, groep], sleutel, str(waarde))
 
 
 def scherm_uit_na() -> int:
@@ -464,7 +470,7 @@ def zet_aanuit_knop(waarde: int) -> None:
     if _c.VOORBEELD:
         _c._VB["aanuit"] = waarde
         return
-    _zet_energie("SuspendAndShutdown", "PowerButtonAction", waarde)
+    _zet_energie("SuspendAndShutdown", "PowerButtonAction", waarde, alle=True)
     energie_herlees()
 
 
@@ -479,5 +485,5 @@ def zet_deksel(waarde: int) -> None:
     if _c.VOORBEELD:
         _c._VB["deksel"] = waarde
         return
-    _zet_energie("SuspendAndShutdown", "LidAction", waarde)
+    _zet_energie("SuspendAndShutdown", "LidAction", waarde, alle=True)
     energie_herlees()

@@ -74,6 +74,11 @@ opdr, _ = vang(bi.zet_scherm_uit_na, 0)
 s = kde_sleutels(opdr)
 klopt(s.get(("AC/Display", "TurnOffDisplayWhenIdle")) == "false" and s.get(("AC/Display", "DimDisplayWhenIdle")) == "false",
       "U001: scherm uit 'nooit' zet uitzetten en dimmen echt uit")
+# U461: de deksel en de aan/uit-knop gelden aan de lader én op de accu (geen 'tijden van nu').
+opdr461, _ = vang(bi.zet_deksel, bi.KNOP_NIETS)
+s461 = kde_sleutels(opdr461)
+klopt(all(s461.get((f"{p}/SuspendAndShutdown", "LidAction")) == str(bi.KNOP_NIETS) for p in bi.PROFIELGROEPEN),
+      f"U461: 'als je de laptop dichtklapt' geldt ook op de accu ({s461})")
 # U454: alleen de stand die nu geldt (hier: aan de lader); de accutijden van KDE blijven.
 klopt(not any(k[0].startswith(("Battery/", "LowBattery/")) for k in s),
       f"U454: scherm uit kiezen aan de lader laat de accutijden staan ({sorted(k for k in s if not k[0].startswith('AC/'))})")

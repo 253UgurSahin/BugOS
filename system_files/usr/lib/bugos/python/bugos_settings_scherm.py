@@ -217,12 +217,13 @@ class EnergiePagina(Blad):
 
     def ververs(self) -> None:
         op_achtergrond(self, lambda: (bi.batterij(), bi.energieprofiel(), bi.scherm_uit_na(), bi.slaap_na(),
-                                      bi.aanuit_knop(), bi.deksel()), self.toon)
+                                      bi.aanuit_knop(), bi.deksel(), bi.tijden_profiel()), self.toon)
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:
             return
-        bat, profiel, scherm_uit, slaap, aanuit, deksel = uitkomst
+        bat, profiel, scherm_uit, slaap, aanuit, deksel, *rest = uitkomst
+        stand = rest[0] if rest else "AC"
         self.scherm_uit.zet(dichtstbij(bi.SCHERM_UIT_KEUZES, scherm_uit))
         self.slaap.zet(dichtstbij(bi.SLAAP_KEUZES, slaap))
         self.aanuit.zet(aanuit if aanuit in (bi.KNOP_VRAGEN, bi.KNOP_SLAPEN, bi.KNOP_UIT) else bi.KNOP_VRAGEN)
@@ -231,7 +232,7 @@ class EnergiePagina(Blad):
         # Een laptop heeft aparte tijden aan de lader en op de accu; we veranderen alleen die van nu (U454).
         uitleg = t("Even met de muis bewegen en het is terug", "Move the mouse and it is back")
         if bat is not None:
-            op_accu = not (bat.laadt or bat.vol or bat.aan_lader)
+            op_accu = stand == "Battery"   # zoals de tijden echt geschreven worden (U462)
             uitleg += " · " + (t("deze tijden gelden nu op de accu", "these times apply on battery now") if op_accu else
                                t("deze tijden gelden nu aan de lader", "these times apply on the charger now"))
         self.scherm_rij.zet_uitleg(uitleg)
