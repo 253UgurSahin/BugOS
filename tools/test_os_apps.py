@@ -863,7 +863,7 @@ _late = vb.melding.tekst.text()
 wacht(lambda: not vb.klus.isRunning(), 10000)
 for _ in range(10):
     app.processEvents()
-klopt(("nog niet uit" in _na_stop or "Do not unplug" in _na_stop or "Gestopt" in _na_stop) and _late == _na_stop,
+klopt(("Stoppen" in _na_stop or "Stopping" in _na_stop or "Gestopt" in _na_stop) and _late == _na_stop,
       f"U116: na Stoppen: 'haal de stick er nog niet uit', en de knop komt niet terug ({_na_stop} / {_late})")
 
 # U106/U107: de melding noemt de (2)-namen, en knippen-plakken wist niet wat je intussen anders kopieerde.
