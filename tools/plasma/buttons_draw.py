@@ -34,7 +34,7 @@ A_VAK_RAND = 0.20     # rand van een leeg vinkvakje/keuzerondje (= rand_sterk, z
 VAK_RAND = 1.5        # dikte van die rand, zoals in Kvantum
 A_SPOOR = 0.12        # ring van het bezig-rondje
 A_SPOOR_KNOP = 0.08   # spoor van schuif en voortgang: ButtonBackground + 8%, warmgrijs zoals het snelmenu
-A_SCHAKELAAR = 0.12   # schakelaar uit: ButtonBackground + 12% = schuif_uit (#D9D4D4 / #3A3E48)
+A_SCHAKELAAR = 0.45   # schakelaar uit: ButtonBackground + 45% haalt 3:1 tegen het vlak, zoals schuif_uit (U283)
 A_VELD_RAND = 0.13
 A_VELD_RAND_ZWEEF = 0.26
 A_SCHUIF = 0.24       # schuifbalk (BugOS: rand_sterk, bij aanwijzen tekst3)

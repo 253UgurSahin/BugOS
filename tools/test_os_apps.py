@@ -1468,6 +1468,16 @@ _kr = [k for k in _kr if isinstance(k, _QPB)]
 _som = sum(k.sizeHint().width() for k in _kr) + 16 * (len(_kr) - 1)
 klopt(_kr and _som <= _pv.pad_vak.width() and "Bronnen" in _kr[-1].text(),
       f"U272: een diep pad past in de balk in Bestanden ({[k.text() for k in _kr]}, {_som} van {_pv.pad_vak.width()} px)")
+# U281: een ingekorte map heet voor een schermlezer toch voluit, en '…' zegt welke map hij opent.
+_kort = [k for k in _kr if k.text() != k.accessibleName()]
+klopt(all(k.accessibleName() and "…" not in k.accessibleName() for k in _kr) and _pv.plek_naam() == "Bronnen en afbeeldingen",
+      f"U281: elk stukje van het pad heeft voor een schermlezer de hele naam ({[k.accessibleName() for k in _kr]})")
+# U282/U283: 'bezig'-meldingen halen 4,5:1, en de Plasma-schakelaar 'uit' 3:1 (staat in het gemaakte switch.svg).
+_bk = bugos_ui.KLEUREN
+klopt(all(_contrast(_bk[t]["accent_gekozen"], _bk[t]["accent_zacht"]) >= 4.5 for t in _bk)
+      and 'K["accent_gekozen"], K["accent_zacht"], "view-refresh"' in (ROOT / "system_files/usr/lib/bugos/python/bugos_widgets.py").read_text()
+      and "A_SCHAKELAAR = 0.45" in (ROOT / "tools/plasma/buttons_draw.py").read_text(),
+      "U282/U283: de 'bezig'-melding en de schakelaar 'uit' van Plasma halen genoeg contrast")
 _pv.close()
 # U274: een schijf in Bestanden > Deze computer is voor een schermlezer een knop (niet 'paneel').
 from PySide6.QtGui import QAccessible as _QA  # noqa: E402

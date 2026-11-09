@@ -215,10 +215,10 @@ class Chip(QLabel):
     def __init__(self, tekst: str, soort: str = "accent"):
         super().__init__(tekst)
         voor, achter = {
-            "accent": (K["accent"], K["accent_zacht"]), "goed": (K["goed"], K["goed_zacht"]),
+            "accent": (K["accent_gekozen"], K["accent_zacht"]), "goed": (K["goed"], K["goed_zacht"]),
             "let_op": (K["let_op"], K["let_op_zacht"]), "fout": (K["fout"], K["fout_zacht"]),
             "grijs": (K["tekst2"], K["knop"]),
-        }.get(soort, (K["accent"], K["accent_zacht"]))
+        }.get(soort, (K["accent_gekozen"], K["accent_zacht"]))
         self.setStyleSheet(f"background:{achter};color:{voor};border-radius:10px;padding:3px 10px;"
                            f"font-size:{bugos_ui.px(12)}px;font-weight:600;")
         self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
@@ -244,7 +244,7 @@ class Banner(QFrame):
             "goed": (K["goed"], K["goed_zacht"], "emblem-success"),
             "let_op": (K["let_op"], K["let_op_zacht"], "dialog-warning"),
             "fout": (K["fout"], K["fout_zacht"], "dialog-error"),
-            "bezig": (K["accent"], K["accent_zacht"], "view-refresh"),
+            "bezig": (K["accent_gekozen"], K["accent_zacht"], "view-refresh"),   # 4,5:1 (U282)
         }.get(soort, (K["tekst"], K["knop"], "dialog-information"))
         self.setStyleSheet(f"QFrame{{background:{achter};border-radius:12px;}} QLabel{{color:{voor};font-size:{bugos_ui.px(14)}px;}}")
         self.teken.setPixmap(QIcon.fromTheme(icoon).pixmap(20, 20))

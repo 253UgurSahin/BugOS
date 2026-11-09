@@ -189,7 +189,7 @@ class Navigeren:
             for i in range(self.pad_lay.count() - 1, -1, -1):
                 w = self.pad_lay.itemAt(i).widget()
                 if isinstance(w, QPushButton):
-                    return w.text()
+                    return w.accessibleName() or w.text()   # de hele naam, ook als hij ingekort is (U281)
             return ""
         return self.titel.text()
 
@@ -280,6 +280,10 @@ class Navigeren:
             k = QPushButton(zichtbaar.replace("&", "&&"))   # een & in een mapnaam is geen sneltoets (U210)
             if zichtbaar != naam:
                 k.setToolTip(naam)
+            # Een schermlezer hoort de hele naam, ook als hij ingekort is; '…' zegt welke map hij opent (U281).
+            k.setAccessibleName(doel.name if naam == "…" else naam)
+            if naam == "…":
+                k.setToolTip(str(doel))
             k.setObjectName("kruimel")
             k.setProperty("laatste", "true" if i == len(delen) - 1 else "false")
             k.setCursor(Qt.CursorShape.PointingHandCursor)
