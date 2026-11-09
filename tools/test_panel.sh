@@ -36,7 +36,9 @@ code=$?
 klopt '[ $code -ne 0 ] && ! grep -q "staat aan\|is on" "$TMP/meldingen" && grep -q "start button\|startknop" "$TMP/meldingen"' \
     "U073: startmenu aan zonder KDE-startknop: zegt dat het niet lukte (code $code)"
 : >"$TMP/meldingen"
-printf '#!/usr/bin/bash\nprintf "0\\n3\\n"\n' >"$TMP/bin/qdbus6"
+# Zoals Plasma echt antwoordt: alle print()s achter elkaar, zonder scheiding. Geef "0" voor vervang, "3" voor de rest.
+# (Het scriptje begint met de functies zelf; alleen het eind zegt wat er gebeurt.)
+nep qdbus6 'eind="${!#}"; eind="${eind: -120}"; case "$eind" in *"vervang("*systeemvak\(*) echo 03 ;; *"vervang("*) echo 0 ;; *) echo 3 ;; esac'
 HOME="$TMP/thuis" XDG_CONFIG_HOME="$TMP/thuis/.config" PATH="$TMP/bin:$PATH" bash "$TMP/paneel" snelmenu aan >/dev/null 2>&1
 code=$?
 klopt '[ $code -ne 0 ] && grep -q "system tray\|systeemvak" "$TMP/meldingen"' "U073: snelmenu aan zonder systeemvak: zegt dat het niet lukte"

@@ -180,7 +180,7 @@ startmenu:aan)
     bureaublad_er || niet_bereikbaar
     uit="$(plasma_script "$JS vervang(\"org.kde.plasma.kickoff\", \"org.bugos.startmenu\", \"\");")" || niet_bereikbaar
     # 0: er stond geen KDE-startknop (Kickoff) op een taakbalk, bijv. een ander KDE-menu. Dan niet "staat aan" zeggen (U073).
-    if [ "${uit%%$'\n'*}" = 0 ]; then
+    if [ "$uit" = 0 ]; then
         melding "$(t "BugOS-startmenu kon niet aan" "BugOS start menu could not be turned on")" \
             "$(t "Er staat geen KDE-startknop op de taakbalk om te vervangen." "There is no KDE start button on the taskbar to replace.")"
         exit 4
@@ -197,12 +197,14 @@ startmenu:status)
     ;;
 snelmenu:aan)
     bureaublad_er || niet_bereikbaar
-    uit="$(plasma_script "$JS vervang(\"\", \"org.bugos.quickmenu\", \"org.kde.plasma.systemtray\"); systeemvak(true);")" || niet_bereikbaar
-    if [ "${uit%%$'\n'*}" = 0 ]; then   # geen systeemvak op een taakbalk: het snelmenu kan nergens naast (U073)
+    # Twee aparte keren: Plasma plakt de print()-uitvoer zonder scheiding aan elkaar ("00"), dan zie je de 0 niet (U083).
+    uit="$(plasma_script "$JS vervang(\"\", \"org.bugos.quickmenu\", \"org.kde.plasma.systemtray\");")" || niet_bereikbaar
+    if [ "$uit" = 0 ]; then   # geen systeemvak op een taakbalk: het snelmenu kan nergens naast (U073)
         melding "$(t "Snelmenu kon niet aan" "Quick menu could not be turned on")" \
             "$(t "Er staat geen systeemvak op de taakbalk." "There is no system tray on the taskbar.")"
         exit 4
     fi
+    plasma_script "$JS systeemvak(true);" >/dev/null || niet_bereikbaar
     ;;
 snelmenu:uit)
     bureaublad_er || niet_bereikbaar
