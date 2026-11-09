@@ -25,7 +25,8 @@ command -v steam >/dev/null 2>&1 || APPS+=(com.valvesoftware.Steam)
 # Al eens klaargezet: alleen wat er later bij kwam. Doe je updates zelf, dan ook dit niet vanzelf (U308).
 if [ -f "$KLAAR" ]; then
     if ! /usr/bin/bugos-updates mag-vanzelf 2>/dev/null; then
-        touch "$KLAAR2"
+        # Onthouden dat het is overgeslagen: zet je updates later weer op 'vanzelf', dan komen ze alsnog (U320).
+        touch "$KLAAR2" /var/lib/bugos/standaard-apps-overgeslagen
         exit 0
     fi
     APPS=(org.kde.gwenview org.kde.okular)

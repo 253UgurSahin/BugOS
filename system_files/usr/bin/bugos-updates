@@ -56,6 +56,10 @@ case "${1:-status}" in
 auto)
     als_beheerder "$@"
     zet_keuze auto
+    # Waren de nieuwe standaard-apps overgeslagen omdat je updates zelf deed? Dan bij de volgende start alsnog (U320).
+    if [ -f /var/lib/bugos/standaard-apps-overgeslagen ]; then
+        rm -f /var/lib/bugos/standaard-apps-overgeslagen /var/lib/bugos/standaard-apps-2
+    fi
     systemctl enable --now "${TIMERS[@]}"
     gebruiker_timer unmask
     t "Updates gaan nu vanzelf." "Updates are now automatic."

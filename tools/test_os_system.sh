@@ -503,6 +503,8 @@ nep bugos-updates 'exit 1'
 draai bugos-first-boot
 klopt '[ "$code" -eq 0 ] && ! grep -q install "$TMP/flatpak-log" && [ -e "$TMP/var-bugos/standaard-apps-2" ]' \
     "U308: 'zelf updaten': de nieuwe standaard-apps komen niet vanzelf"
+klopt '[ -e "$TMP/var-bugos/standaard-apps-overgeslagen" ] && grep -q "rm -f /var/lib/bugos/standaard-apps-overgeslagen /var/lib/bugos/standaard-apps-2" "$BIN/bugos-updates"' \
+    "U320: zet je updates later op 'vanzelf', dan komen de overgeslagen standaard-apps alsnog"
 nep bugos-updates 'exit 0'
 klopt 'grep -q "^image/jpeg=org.kde.gwenview.desktop" "$ROOT/system_files/etc/xdg/kde-mimeapps.list" && grep -q "^application/pdf=org.kde.okular.desktop" "$ROOT/system_files/etc/xdg/kde-mimeapps.list"' \
     "U224: een foto opent standaard in Gwenview en een PDF in Okular"
