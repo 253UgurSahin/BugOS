@@ -23,6 +23,8 @@ param(
     [int] $KrimpGB = 0,
     [string] $IsoPad = '',
     [int] $SchijfNummer = -1,
+    # Welke schijf het precies moet zijn (gekozen in stap 4): na eruit halen/insteken kan een andere hetzelfde nummer krijgen (U370).
+    [string] $SchijfId = '',
     # Taal kiezen (nl of en). Leeg = de taal van Windows.
     [ValidateSet('', 'nl', 'en')] [string] $Taal = '',
     # Alleen voor de bouwstraat: plaatjes van elke pagina maken.
@@ -246,10 +248,13 @@ function Test-SwitchBestanden([int] $nummer) {
     return $false
 }
 
-function Write-IsoNaarSchijf([string] $iso, [int] $nummer, [scriptblock] $Voortgang) {
+function Write-IsoNaarSchijf([string] $iso, [int] $nummer, [scriptblock] $Voortgang, [string] $id = '') {
     $schijf = Get-Disk -Number $nummer
     if ($schijf.BusType -ne 'USB' -or $schijf.IsBoot -or $schijf.IsSystem) {
         throw (T 'Veiligheidsstop: dit is geen USB-stick.' 'Safety stop: this is not a USB stick.')
+    }
+    if ($id -and "$($schijf.UniqueId)" -ne $id) {
+        throw (T 'Veiligheidsstop: dit is niet meer de USB-stick die je koos. Kies hem opnieuw.' 'Safety stop: this is no longer the USB stick you chose. Choose it again.')
     }
     $grootte = (Get-Item -LiteralPath $iso).Length
     if ($grootte -gt $schijf.Size) { throw (T 'De USB-stick is te klein.' 'The USB stick is too small.') }
@@ -832,7 +837,7 @@ if ($Taak -eq 'Usb') {
     $bar = Nieuw-Balk 32 108 476 $form
     $form.Show(); [System.Windows.Forms.Application]::DoEvents()
     try {
-        Write-IsoNaarSchijf $IsoPad $SchijfNummer { param($p, $t) Zet-Balk $bar $p; $lbl.Text = $t; [System.Windows.Forms.Application]::DoEvents() }
+        Write-IsoNaarSchijf $IsoPad $SchijfNummer { param($p, $t) Zet-Balk $bar $p; $lbl.Text = $t; [System.Windows.Forms.Application]::DoEvents() } $SchijfId
         $form.Close(); exit 0
     } catch {
         $form.Close(); Toon ((T 'De USB-stick maken lukte niet: ' 'Making the USB stick failed: ') + $_.Exception.Message) 'Error'; exit 1
@@ -1194,7 +1199,7 @@ $Paginas += {
             return
         }
         if (-not (Vraag (T "ALLES op '$($stick.FriendlyName)' ($([math]::Round($stick.Size / 1GB)) GB) wordt gewist. Weet je het zeker?" "EVERYTHING on '$($stick.FriendlyName)' ($([math]::Round($stick.Size / 1GB)) GB) will be erased. Are you sure?"))) { return }
-        $code = Start-AlsBeheerder @('-Taak', 'Usb', '-IsoPad', "`"$($script:IsoGekozen)`"", '-SchijfNummer', [string]$stick.Number)
+        $code = Start-AlsBeheerder @('-Taak', 'Usb', '-IsoPad', "`"$($script:IsoGekozen)`"", '-SchijfNummer', [string]$stick.Number, '-SchijfId', "`"$($stick.UniqueId)`"")
         if ($code -eq 0) {
             Toon (T "De USB-stick is klaar!`n`nZo ga je verder:`n1. Laat de stick erin zitten en start de computer opnieuw op.`n2. Druk tijdens het opstarten op F12, F11, F9 of Esc (verschilt per computer) en kies de USB-stick.`n3. Volg de stappen op het scherm." "The USB stick is ready!`n`nNext:`n1. Leave the stick in and restart the computer.`n2. While starting, press F12, F11, F9 or Esc (differs per computer) and choose the USB stick.`n3. Follow the steps on screen.")
         }

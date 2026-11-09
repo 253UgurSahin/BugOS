@@ -40,5 +40,7 @@ controle 'grep -q "Get-Disk -ErrorAction Stop).BusType" <<<"$PS" && grep -q "Med
     "U296: een snelle USB-SSD (meldt zich als SCSI) staat toch in de lijst van stap 2"
 controle 'grep -q "InnerException.Message" <<<"$PS"' "U298: een mislukte download zegt de echte reden erbij"
 controle 'grep -q "De schijf is vol geraakt" <<<"$PS"' "U288: een stick die vol raakt, wordt zo genoemd"
+controle 'grep -q "\$(\$schijf.UniqueId)\" -ne \$id" <<<"$PS" && grep -q "SchijfId., \"" <<<"$PS"' \
+    "U370: stap 4 wist alleen de USB-stick die je koos (niet een andere die intussen hetzelfde nummer kreeg)"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
