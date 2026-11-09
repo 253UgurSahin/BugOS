@@ -12,6 +12,9 @@ import QtQuick.Layouts
 
 Rectangle {
     id: snel
+    // 'Grote letters' (KDE: 10 punten gewoon, 12 groot): de letters hier groeien mee (U067).
+    readonly property real schaal: Qt.application.font.pointSize > 0
+        ? Math.min(2, Math.max(1, Qt.application.font.pointSize / 10)) : 1
 
     // Status van "bugos-start-data --snel".
     property var status: ({})
@@ -57,7 +60,7 @@ Rectangle {
             Label {
                 text: snel.tr("Snelmenu", "Quick menu")
                 font.family: snel.o.kopLetter
-                font.pixelSize: snel.o.letterKop
+                font.pixelSize: Math.round(snel.o.letterKop * snel.schaal)
                 font.weight: Font.DemiBold
                 color: snel.tekst
                 Layout.fillWidth: true
@@ -81,7 +84,7 @@ Rectangle {
             visible: snel.leeg
             text: snel.tr("Even kijken…", "One moment…")
             color: snel.tekst2
-            font.pixelSize: snel.o.letterKlein
+            font.pixelSize: Math.round(snel.o.letterKlein * snel.schaal)
             Layout.topMargin: -8
         }
 
@@ -142,7 +145,7 @@ Rectangle {
                           ? snel.tr("Batterij " + snel.status.batterij + "%, wordt opgeladen", "Battery " + snel.status.batterij + "%, charging")
                           : snel.tr("Batterij " + snel.status.batterij + "%", "Battery " + snel.status.batterij + "%")
                     color: snel.tekst
-                    font.pixelSize: snel.o.letterKlein
+                    font.pixelSize: Math.round(snel.o.letterKlein * snel.schaal)
                     font.weight: Font.Medium
                     elide: Text.ElideRight
                 }
@@ -226,7 +229,7 @@ Rectangle {
             Label {
                 text: Math.round(schuif.value) + "%"
                 color: snel.tekst2
-                font.pixelSize: snel.o.letterKlein
+                font.pixelSize: Math.round(snel.o.letterKlein * snel.schaal)
                 Layout.preferredWidth: 40
                 horizontalAlignment: Text.AlignRight
             }
@@ -253,7 +256,7 @@ Rectangle {
         contentItem: Label {
             text: "›"
             color: snel.tekst2
-            font.pixelSize: 20
+            font.pixelSize: Math.round(20 * snel.schaal)
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
         }
@@ -313,7 +316,7 @@ Rectangle {
                 contentItem: Label {
                     text: "›"
                     color: knop.aan ? "white" : snel.tekst2
-                    font.pixelSize: 20
+                    font.pixelSize: Math.round(20 * snel.schaal)
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                 }
@@ -342,7 +345,7 @@ Rectangle {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
                 elide: Text.ElideRight
-                font.pixelSize: snel.o.letterKlein
+                font.pixelSize: Math.round(snel.o.letterKlein * snel.schaal)
                 font.weight: Font.Medium
                 color: knop.aan ? "white" : snel.tekst
             }

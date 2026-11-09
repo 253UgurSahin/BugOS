@@ -740,6 +740,33 @@ echt = json.loads((ROOT / "system_files" / "usr" / "share" / "bugos" / "translat
 klopt("Writing to the stick… Do not unplug it yet." in echt and len(echt) > 400,
       f"U019: het sjabloon in BugOS is bijgewerkt ({len(echt)} teksten)")
 
+# ========================== U067: 'Grote letters' maakt ook de letters van de BugOS-apps groter ===
+from PySide6.QtGui import QFont  # noqa: E402
+
+_gewoon, _groot = QFont("Inter"), QFont("Inter")
+_gewoon.setPointSizeF(10)
+_groot.setPointSizeF(12)
+klopt(bugos_ui.letter_schaal(_gewoon) == 1.0 and abs(bugos_ui.letter_schaal(_groot) - 1.2) < 1e-9,
+      "U067: KDE-letter 10 punt is gewoon, 12 punt (Grote letters) is 1,2 keer zo groot")
+_oud_schaal = bugos_ui.SCHAAL
+bugos_ui.SCHAAL = 1.2
+_blad = bugos_ui._stijlblad(bugos_ui.K)
+import bugos_files_onderdelen as _fo  # noqa: E402
+import bugos_settings_onderdelen as _so  # noqa: E402
+import bugos_tasks_ui as _tu  # noqa: E402
+
+klopt('QLabel[rol="rij"] { font-size: 18px;' in _blad and "font-size: 14px" not in _blad
+      and all("font-size: 14px" not in m.stijl() for m in (_fo, _so, _tu)) and bugos_ui.px(13) == 16,
+      "U067: met grote letters worden de pixelmaten in de stijlbladen 1,2 keer zo groot")
+bugos_ui.SCHAAL = _oud_schaal
+klopt('QLabel[rol="rij"] { font-size: 15px;' in bugos_ui._stijlblad(bugos_ui.K), "U067: gewone letters: niets verandert")
+_qml = [ROOT / "system_files/usr/share/plasma/plasmoids/org.bugos.startmenu/contents/ui/StartMenu.qml",
+        ROOT / "system_files/usr/share/plasma/plasmoids/org.bugos.quickmenu/contents/ui/QuickMenu.qml",
+        ROOT / "system_files/usr/share/bugos/logout/Logout.qml"]
+_vast = [f"{q.name}:{n}" for q in _qml for n, r in enumerate(q.read_text().splitlines(), 1)
+         if "font.pixelSize:" in r and ".schaal" not in r]
+klopt(not _vast, f"U067: startmenu, snelmenu en uitzetscherm groeien mee met de letters van KDE ({_vast[:3]})")
+
 print()
 shutil.rmtree(TMP, ignore_errors=True)  # alleen onze eigen tijdelijke testmap
 print("Alles goed." if not fouten else f"{fouten} fout(en).")

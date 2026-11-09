@@ -20,11 +20,12 @@ bugos_pages (grotere onderdelen) en bugos_shell (de schil van een app).
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Sequence
 from pathlib import Path
 
 from PySide6.QtCore import QByteArray, Qt
-from PySide6.QtGui import QColor, QFontDatabase, QIcon, QPainter, QPalette, QPixmap
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QIcon, QPainter, QPalette, QPixmap
 from PySide6.QtWidgets import QApplication, QWidget
 
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "bugos"
@@ -84,6 +85,27 @@ TINTEN = {
 DISPLAY = "Funnel Display"
 K: dict[str, str] = dict(KLEUREN["licht"])  # actieve kleuren (wordt gezet door maak_app)
 DONKER = False
+# Hoeveel groter de letters zijn dan gewoon (KDE: 10 punten gewoon, 12 bij 'Grote letters'). maak_app zet hem,
+# en alle letters van de BugOS-apps (die in pixels staan) groeien mee (U067).
+SCHAAL = 1.0
+
+
+def px(n: float) -> int:
+    """Een lettergrootte in pixels, meegegroeid met 'Grote letters'."""
+    return max(1, round(n * SCHAAL))
+
+
+def letter_schaal(f: QFont) -> float:
+    """De lettergrootte van KDE (10 punten is gewoon, 12 bij 'Grote letters') als factor, tussen 1 en 2."""
+    punten = f.pointSizeF()
+    return min(2.0, max(1.0, punten / 10)) if punten > 0 else 1.0
+
+
+def schaal_css(css: str) -> str:
+    """Zet elke 'font-size: 14px' in een stijlblad om naar de grootte die bij SCHAAL hoort."""
+    if SCHAAL == 1.0:
+        return css
+    return re.sub(r"font-size:\s*(\d+(?:\.\d+)?)px", lambda m: f"font-size: {px(float(m.group(1)))}px", css)
 
 
 def _kies_thema(app: QApplication) -> bool:
@@ -113,7 +135,7 @@ def _laad_lettertypes() -> None:
 
 
 def _stijlblad(k: dict[str, str]) -> str:
-    return f"""
+    return schaal_css(f"""
 * {{ outline: 0; }}
 QWidget {{ color: {k['tekst']}; font-size: 14px; }}
 QWidget#venster, QWidget#pagina, QScrollArea, QScrollArea > QWidget > QWidget#pagina {{ background: {k['achter']}; }}
@@ -221,7 +243,7 @@ QSlider::sub-page:horizontal {{ height: 8px; border-radius: 4px;
 QSlider::handle:horizontal {{ width: 22px; height: 22px; margin: -7px 0; border-radius: 11px; background: #FFFFFF;
   border: 1px solid {k['rand_sterk']}; }}
 QSlider::groove:horizontal:disabled, QSlider::sub-page:horizontal:disabled {{ background: {k['knop']}; }}
-"""
+""")
 
 
 def _palet(k: dict[str, str]) -> QPalette:
@@ -245,7 +267,7 @@ def _palet(k: dict[str, str]) -> QPalette:
 
 def maak_app(naam: str, bureaublad_bestand: str, args: Sequence[str]) -> QApplication:
     """Maak de QApplication met de BugOS-stijl (licht of donker, vanzelf)."""
-    global DONKER
+    global DONKER, SCHAAL
     app = QApplication(list(args))
     app.setApplicationName(naam)
     app.setDesktopFileName(bureaublad_bestand)
@@ -261,10 +283,11 @@ def maak_app(naam: str, bureaublad_bestand: str, args: Sequence[str]) -> QApplic
     app.setPalette(_palet(K))
     # Inter is de BugOS-letter; gebruik hem als het systeem een algemene letter geeft.
     f = app.font()
+    SCHAAL = letter_schaal(f)
     if f.family() in ("Sans Serif", "DejaVu Sans", "Noto Sans", "Cantarell", "") and \
             "Inter" in QFontDatabase.families():
         f.setFamily("Inter")
-    f.setPixelSize(14)
+    f.setPixelSize(px(14))
     app.setFont(f)
     app.setStyleSheet(_stijlblad(K))
     return app

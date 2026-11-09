@@ -217,7 +217,7 @@ class Chip(QLabel):
             "grijs": (K["tekst2"], K["knop"]),
         }.get(soort, (K["accent"], K["accent_zacht"]))
         self.setStyleSheet(f"background:{achter};color:{voor};border-radius:10px;padding:3px 10px;"
-                           f"font-size:12px;font-weight:600;")
+                           f"font-size:{bugos_ui.px(12)}px;font-weight:600;")
         self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
 
 
@@ -243,7 +243,7 @@ class Banner(QFrame):
             "fout": (K["fout"], K["fout_zacht"], "dialog-error"),
             "bezig": (K["accent"], K["accent_zacht"], "view-refresh"),
         }.get(soort, (K["tekst"], K["knop"], "dialog-information"))
-        self.setStyleSheet(f"QFrame{{background:{achter};border-radius:12px;}} QLabel{{color:{voor};font-size:14px;}}")
+        self.setStyleSheet(f"QFrame{{background:{achter};border-radius:12px;}} QLabel{{color:{voor};font-size:{bugos_ui.px(14)}px;}}")
         self.teken.setPixmap(QIcon.fromTheme(icoon).pixmap(20, 20))
         self.tekst.setText(tekst)
         self.setVisible(bool(tekst))

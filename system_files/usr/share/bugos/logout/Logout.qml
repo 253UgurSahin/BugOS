@@ -22,6 +22,9 @@ import QtQuick.Window
 
 Item {
     id: root
+    // 'Grote letters' (KDE: 10 punten gewoon, 12 groot): de letters hier groeien mee (U067).
+    readonly property real schaal: Qt.application.font.pointSize > 0
+        ? Math.min(2, Math.max(1, Qt.application.font.pointSize / 10)) : 1
     // Zo groot als het scherm: met screenGeometry (oud) of zonder (nieuw).
     width: typeof screenGeometry !== "undefined" ? screenGeometry.width : Screen.width
     height: typeof screenGeometry !== "undefined" ? screenGeometry.height : Screen.height
@@ -123,7 +126,7 @@ Item {
                 : root.herstarten ? root.tr("Opnieuw opstarten?", "Restart?")
                 : root.tr("Afmelden?", "Log out?")
             font.family: "Funnel Display"
-            font.pixelSize: 36
+            font.pixelSize: Math.round(36 * root.schaal)
             font.weight: Font.DemiBold
             color: "white"
             horizontalAlignment: Text.AlignHCenter
@@ -137,7 +140,7 @@ Item {
                 : root.resterend === 1 ? root.tr("Over 1 seconde gebeurt het vanzelf.", "It happens by itself in 1 second.")
                 : root.tr("Over %1 seconden gebeurt het vanzelf.", "It happens by itself in %1 seconds.").arg(root.resterend)
             font.family: "Inter"
-            font.pixelSize: 17
+            font.pixelSize: Math.round(17 * root.schaal)
             color: Qt.rgba(1, 1, 1, 0.75)
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
@@ -222,7 +225,7 @@ Item {
             contentItem: Text {
                 text: knopAnnuleren.text
                 font.family: "Inter"
-                font.pixelSize: 15
+                font.pixelSize: Math.round(15 * root.schaal)
                 font.weight: Font.Medium
                 color: "white"
                 horizontalAlignment: Text.AlignHCenter
@@ -232,7 +235,7 @@ Item {
         Text {
             text: root.tr("Of druk op Esc", "Or press Esc")
             font.family: "Inter"
-            font.pixelSize: 13
+            font.pixelSize: Math.round(13 * root.schaal)
             color: Qt.rgba(1, 1, 1, 0.55)
             Layout.alignment: Qt.AlignHCenter
             Layout.topMargin: 10
@@ -285,7 +288,7 @@ Item {
                     width: parent.width
                     text: tegel.text
                     font.family: "Inter"
-                    font.pixelSize: 15
+                    font.pixelSize: Math.round(15 * root.schaal)
                     font.weight: Font.Medium
                     color: "white"
                     horizontalAlignment: Text.AlignHCenter

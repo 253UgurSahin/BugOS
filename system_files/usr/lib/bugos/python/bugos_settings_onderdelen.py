@@ -4,7 +4,8 @@ onderdelen (keuzes, schuifbalken, menu's), Blad (een pagina) en de dialogen om i
 
 from __future__ import annotations
 
-from bugos_ui import K, Knop, Pagina, Schuif, Venster, Zoekveld, kde_instelling, label, lijn_icoon, ronde_knop, t
+from bugos_ui import (K, Knop, Pagina, Schuif, Venster, Zoekveld, kde_instelling, label, lijn_icoon, ronde_knop,
+                      schaal_css, t)
 from PySide6.QtCore import QObject, QRunnable, QSize, Qt, QThreadPool, QTimer, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView, QButtonGroup, QDialog, QFrame, QHBoxLayout, QLineEdit, QListWidget, QListWidgetItem, QMenu,
@@ -44,7 +45,7 @@ def op_achtergrond(ouder: QObject, werk, klaar) -> None:
 # ============================================================ onderdelen ===
 
 def stijl() -> str:
-    return f"""
+    return schaal_css(f"""
 QFrame#snel {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-radius: 16px; }}
 QPushButton#keus {{ background: transparent; border: none; border-radius: 9px; padding: 8px 14px; font-size: 14px;
     font-weight: 600; color: {K['tekst2']}; }}
@@ -59,7 +60,7 @@ QListWidget#keuzelijst {{ background: {K['vlak']}; border: 1px solid {K['rand']}
 QListWidget#keuzelijst::item {{ padding: 6px 12px; border-radius: 10px; color: {K['tekst']}; }}
 QListWidget#keuzelijst::item:hover {{ background: {K['knop']}; }}
 QListWidget#keuzelijst::item:selected {{ background: {K['accent_zacht']}; color: {K['accent']}; font-weight: 600; }}
-"""
+""")
 
 
 class Keuzes(QFrame):

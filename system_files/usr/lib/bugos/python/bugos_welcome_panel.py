@@ -5,7 +5,7 @@ Hoort bij /usr/bin/bugos-welcome.
 
 from __future__ import annotations
 
-from bugos_ui import DISPLAY, K, achtergrond_pad, t
+from bugos_ui import DISPLAY, K, achtergrond_pad, px, t
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QIcon, QLinearGradient, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QWidget
@@ -50,7 +50,7 @@ class Zijpaneel(QWidget):
         self.logo.paint(p, 32, 34, 34, 34)
         f = p.font()
         f.setFamily(DISPLAY)
-        f.setPixelSize(26)
+        f.setPixelSize(px(26))
         f.setWeight(f.Weight.DemiBold)
         p.setFont(f)
         p.setPen(QColor("#FFFFFF"))
@@ -85,7 +85,7 @@ class Zijpaneel(QWidget):
                 p.setPen(QPen(QColor(255, 255, 255, 140 if klaar else 50), 1.6))
                 p.drawLine(QPointF(cx, cy + 14), QPointF(cx, cy + 34))
             f = QFont(self.font())
-            f.setPixelSize(15)
+            f.setPixelSize(px(15))
             f.setWeight(f.Weight.DemiBold if nu else f.Weight.Normal)
             p.setFont(f)
             p.setPen(QColor(255, 255, 255, 255 if nu else (200 if klaar else 130)))
@@ -93,7 +93,7 @@ class Zijpaneel(QWidget):
             y += 48
 
         f = p.font()
-        f.setPixelSize(13)
+        f.setPixelSize(px(13))
         f.setWeight(f.Weight.Normal)
         p.setFont(f)
         p.setPen(QColor(255, 255, 255, 150))

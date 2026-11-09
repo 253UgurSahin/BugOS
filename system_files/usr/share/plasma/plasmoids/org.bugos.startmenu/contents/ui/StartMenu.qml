@@ -13,6 +13,9 @@ import QtQuick.Layouts
 
 Rectangle {
     id: menu
+    // 'Grote letters' (KDE: 10 punten gewoon, 12 groot): de letters hier groeien mee (U067).
+    readonly property real schaal: Qt.application.font.pointSize > 0
+        ? Math.min(2, Math.max(1, Qt.application.font.pointSize / 10)) : 1
 
     // Gegevens van bugos-start-data (apps, favorieten, recent, gebruiker).
     property var gegevens: ({ apps: [], favorieten: [], recent: [], gebruiker: { naam: "" } })
@@ -114,7 +117,7 @@ Rectangle {
             Label {
                 text: menu.groet() + (menu.voornaam() ? ", " + menu.voornaam() : "")
                 font.family: menu.display
-                font.pixelSize: o.letterHeld
+                font.pixelSize: Math.round(o.letterHeld * menu.schaal)
                 font.weight: Font.DemiBold
                 color: menu.tekst
                 Layout.fillWidth: true
@@ -123,7 +126,7 @@ Rectangle {
             Label {
                 text: menu.datumTekst
                 color: menu.tekst2
-                font.pixelSize: 13
+                font.pixelSize: Math.round(13 * menu.schaal)
             }
         }
 
@@ -133,7 +136,7 @@ Rectangle {
             objectName: "zoekveld"
             Layout.fillWidth: true
             Layout.preferredHeight: 50
-            font.pixelSize: 16
+            font.pixelSize: Math.round(16 * menu.schaal)
             leftPadding: 48
             color: menu.tekst
             placeholderText: menu.tr("Zoek een app of instelling…", "Search for an app or setting…")
@@ -187,7 +190,7 @@ Rectangle {
                 visible: zoekLijst.count === 0
                 text: menu.tr("Niks gevonden. Probeer een ander woord.", "Nothing found. Try another word.")
                 color: menu.tekst2
-                font.pixelSize: 15
+                font.pixelSize: Math.round(15 * menu.schaal)
             }
         }
 
@@ -283,7 +286,7 @@ Rectangle {
                         required property string section
                         text: section.toUpperCase()
                         color: menu.tekst2
-                        font.pixelSize: 12
+                        font.pixelSize: Math.round(12 * menu.schaal)
                         font.weight: Font.DemiBold
                         font.letterSpacing: 0.8
                         topPadding: 12
@@ -320,7 +323,7 @@ Rectangle {
                     color: "white"
                     font.family: menu.display
                     font.weight: Font.DemiBold
-                    font.pixelSize: 17
+                    font.pixelSize: Math.round(17 * menu.schaal)
                 }
                 // Eigen foto (als die er is): in een rond venstertje
                 Item {
@@ -342,7 +345,7 @@ Rectangle {
             Label {
                 text: (menu.gegevens.gebruiker && menu.gegevens.gebruiker.naam) || ""
                 color: menu.tekst
-                font.pixelSize: 14
+                font.pixelSize: Math.round(14 * menu.schaal)
                 font.weight: Font.Medium
                 Layout.fillWidth: true
                 elide: Text.ElideRight
@@ -359,7 +362,7 @@ Rectangle {
 
     component Kopje: Label {
         color: menu.tekst
-        font.pixelSize: 15
+        font.pixelSize: Math.round(15 * menu.schaal)
         font.weight: Font.DemiBold
     }
 
@@ -384,9 +387,9 @@ Rectangle {
             id: rij
             spacing: 6
             leftPadding: 12
-            Label { visible: pil.pijlVoor; text: pil.pijl; color: menu.tekst; font.pixelSize: 15; anchors.verticalCenter: parent.verticalCenter }
-            Label { text: pil.tekst; color: menu.tekst; font.pixelSize: 13; font.weight: Font.Medium; anchors.verticalCenter: parent.verticalCenter }
-            Label { visible: !pil.pijlVoor; text: pil.pijl; color: menu.tekst; font.pixelSize: 15; anchors.verticalCenter: parent.verticalCenter }
+            Label { visible: pil.pijlVoor; text: pil.pijl; color: menu.tekst; font.pixelSize: Math.round(15 * menu.schaal); anchors.verticalCenter: parent.verticalCenter }
+            Label { text: pil.tekst; color: menu.tekst; font.pixelSize: Math.round(13 * menu.schaal); font.weight: Font.Medium; anchors.verticalCenter: parent.verticalCenter }
+            Label { visible: !pil.pijlVoor; text: pil.pijl; color: menu.tekst; font.pixelSize: Math.round(15 * menu.schaal); anchors.verticalCenter: parent.verticalCenter }
         }
     }
 
@@ -423,7 +426,7 @@ Rectangle {
                 maximumLineCount: 2
                 elide: Text.ElideRight
                 color: menu.tekst
-                font.pixelSize: 13
+                font.pixelSize: Math.round(13 * menu.schaal)
             }
         }
     }
@@ -454,12 +457,12 @@ Rectangle {
             ColumnLayout {
                 spacing: 0
                 Layout.fillWidth: true
-                Label { text: regel.app.naam; color: menu.tekst; font.pixelSize: 14; font.weight: Font.Medium; elide: Text.ElideRight; Layout.fillWidth: true }
+                Label { text: regel.app.naam; color: menu.tekst; font.pixelSize: Math.round(14 * menu.schaal); font.weight: Font.Medium; elide: Text.ElideRight; Layout.fillWidth: true }
                 Label {
                     text: regel.app.uitleg || ""
                     visible: text !== ""
                     color: menu.tekst2
-                    font.pixelSize: 12
+                    font.pixelSize: Math.round(12 * menu.schaal)
                     elide: Text.ElideRight
                     Layout.fillWidth: true
                 }
@@ -496,8 +499,8 @@ Rectangle {
             ColumnLayout {
                 spacing: 0
                 Layout.fillWidth: true
-                Label { text: bregel.bestand.naam; color: menu.tekst; font.pixelSize: 13; elide: Text.ElideMiddle; Layout.fillWidth: true }
-                Label { text: bregel.bestand.map; color: menu.tekst2; font.pixelSize: 12; elide: Text.ElideMiddle; Layout.fillWidth: true }
+                Label { text: bregel.bestand.naam; color: menu.tekst; font.pixelSize: Math.round(13 * menu.schaal); elide: Text.ElideMiddle; Layout.fillWidth: true }
+                Label { text: bregel.bestand.map; color: menu.tekst2; font.pixelSize: Math.round(12 * menu.schaal); elide: Text.ElideMiddle; Layout.fillWidth: true }
             }
         }
     }

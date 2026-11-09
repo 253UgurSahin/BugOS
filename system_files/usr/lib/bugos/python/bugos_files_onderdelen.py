@@ -6,14 +6,14 @@ USB-stick of schijf, en de gekleurde stipjes bij de ruimtebalk.
 
 from __future__ import annotations
 
-from bugos_ui import K, Knop, Zoekveld, label, lijn_icoon, ronde_knop, t
+from bugos_ui import K, Knop, Zoekveld, label, lijn_icoon, ronde_knop, schaal_css, t
 from PySide6.QtCore import QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QProgressBar, QWidget
 
 
 def stijl() -> str:
-    return f"""
+    return schaal_css(f"""
 QFrame#pad {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-radius: 12px; }}
 QPushButton#kruimel {{ background: transparent; border: none; border-radius: 8px; padding: 6px 8px;
     font-size: 14px; color: {K['tekst2']}; }}
@@ -30,7 +30,7 @@ QPushButton#legenda {{ background: transparent; border: none; border-radius: 10p
     text-align: left; font-size: 14px; font-weight: 400; color: {K['tekst']}; }}
 QPushButton#legenda:hover {{ background: {K['knop']}; }}
 QPushButton#legenda:disabled {{ color: {K['tekst2']}; }}
-"""
+""")
 
 
 class Zoekbalk(Zoekveld):

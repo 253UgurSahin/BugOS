@@ -11,7 +11,7 @@ import os
 import zipfile
 from pathlib import Path
 
-from bugos_ui import K, lijn_pixmap
+from bugos_ui import K, lijn_pixmap, px
 from bugos_files_plekken import AFBEELDING, ODF, PAD_ROL, SOORTEN, thuis, toon_naam
 from PySide6.QtCore import (
     QCollator, QModelIndex, QObject, QRectF, QRunnable, QSize, QSortFilterProxyModel, Qt, QThreadPool, QTimer, QUrl,
@@ -285,7 +285,7 @@ class TegelTekenaar(QStyledItemDelegate):
                 teken_papier(p, papier, Path(pad).suffix.lower().lstrip("."))
         naam = toon_naam(index.data(Qt.ItemDataRole.DisplayRole) or Path(pad).name, is_map)
         f = QFont(optie.font)
-        f.setPixelSize(13)
+        f.setPixelSize(px(13))
         if gekozen:
             f.setWeight(QFont.Weight.DemiBold)
         p.setFont(f)

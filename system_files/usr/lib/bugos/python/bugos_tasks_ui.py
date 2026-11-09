@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 import bugos_tasks as bt
-from bugos_ui import K, Kaart, Rij, Schuif, label, lijn_icoon, t
+from bugos_ui import K, Kaart, Rij, Schuif, label, lijn_icoon, schaal_css, t
 from PySide6.QtCore import QRectF, Qt, QThread, Signal
 from PySide6.QtGui import QColor, QIcon, QLinearGradient, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
@@ -110,12 +110,12 @@ def voorbeeld_meting(stap: int) -> dict:
 # ============================================================== onderdelen ===
 
 def stijl() -> str:
-    return f"""
+    return schaal_css(f"""
 QFrame#rij[gekozen="true"], QFrame#rij[gekozen="true"]:hover {{ background: {K['knop_hover']}; }}
 QLabel#stip {{ border-radius: 6px; min-width: 12px; max-width: 12px; min-height: 12px; max-height: 12px; }}
 QLabel#stip[soort="goed"] {{ background: {K['goed']}; }}
 QLabel#stip[soort="let_op"] {{ background: {K['let_op']}; }}
-"""
+""")
 
 
 def app_icoon(naam: str, soort: str) -> QIcon:
