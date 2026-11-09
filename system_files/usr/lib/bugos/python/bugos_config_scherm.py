@@ -285,9 +285,24 @@ def energie_herlees() -> None:
           "/org/kde/Solid/PowerManagement", "--method", "org.kde.Solid.PowerManagement.refreshStatus", timeout=5)
 
 
+# KDE's eigen tijden als je niets koos: op de accu korter dan aan het stopcontact.
+_KDE_STANDAARD = {("AC", "TurnOffDisplayIdleTimeoutSec"): 600, ("AC", "AutoSuspendIdleTimeoutSec"): 900,
+                  ("Battery", "TurnOffDisplayIdleTimeoutSec"): 300, ("Battery", "AutoSuspendIdleTimeoutSec"): 600}
+
+
+def _profiel() -> str:
+    """Welke tijden gelden nu: een laptop die op de accu loopt, gebruikt die van 'Battery' (U235)."""
+    accu = batterij()
+    if accu is not None and not (accu.laadt or accu.vol or accu.aan_lader):
+        return "Battery"
+    return "AC"
+
+
 def _energie_getal(groep: str, sleutel: str, standaard: int) -> int:
+    profiel = _profiel()
+    standaard = _KDE_STANDAARD.get((profiel, sleutel), standaard)
     try:
-        return int(_c.kde_lees_groepen("powerdevilrc", ["AC", groep], sleutel, str(standaard)))
+        return int(_c.kde_lees_groepen("powerdevilrc", [profiel, groep], sleutel, str(standaard)))
     except ValueError:
         return standaard
 
@@ -301,7 +316,7 @@ def scherm_uit_na() -> int:
     if _c.VOORBEELD:
         return _c._VB["scherm_uit"]
     # Staat 'scherm uitzetten' helemaal uit, dan is het 'nooit' (welke tijd er ook staat).
-    if _c.kde_lees_groepen("powerdevilrc", ["AC", "Display"], "TurnOffDisplayWhenIdle", "true") == "false":
+    if _c.kde_lees_groepen("powerdevilrc", [_profiel(), "Display"], "TurnOffDisplayWhenIdle", "true") == "false":
         return 0
     seconden = _energie_getal("Display", "TurnOffDisplayIdleTimeoutSec", 600)
     if seconden <= 0:

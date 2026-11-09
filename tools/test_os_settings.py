@@ -89,6 +89,21 @@ s = kde_sleutels(opdr)
 klopt(na == 0 and s.get(("AC/Display", "TurnOffDisplayWhenIdle")) == "false",
       "U001: 'nooit' van een oudere BugOS (tijd 0, uitzetten nog aan) wordt bij het lezen goed gezet")
 
+# U235: een laptop op de accu: Instellingen toont de accu-tijden (KDE: 5 min scherm uit), niet die van de lader.
+_sys235 = Path(tempfile.mkdtemp(prefix="bugos-sys-"))
+(_sys235 / "class" / "power_supply" / "BAT0").mkdir(parents=True)
+for _b, _w in (("type", "Battery"), ("capacity", "60"), ("status", "Discharging")):
+    (_sys235 / "class" / "power_supply" / "BAT0" / _b).write_text(_w + "\n")
+_oud_sys = os.environ.get("BUGOS_SYS")
+os.environ["BUGOS_SYS"] = str(_sys235)
+opdr, na = vang(bi.scherm_uit_na, antwoord=lambda c: (0, "true" if "WhenIdle" in c else c[-1]))
+if _oud_sys is None:
+    os.environ.pop("BUGOS_SYS", None)
+else:
+    os.environ["BUGOS_SYS"] = _oud_sys
+klopt(na == 300 and any("Battery" in c for c in opdr),
+      f"U235: op de accu toont Instellingen de accu-tijd (KDE: 5 minuten), niet die van de lader ({na})")
+
 
 # U061: Instellingen vraagt bluetoothctl niets op een computer zonder bluetooth (geen 5 s wachten per vraag).
 _sys = Path(tempfile.mkdtemp(prefix="bugos-sys-"))
