@@ -337,6 +337,38 @@ Tests after: 24 passed (here).
 ### U064 [low] Recent files in the start menu did not show the keyboard focus
   commit: b3edfcf   test: tools/test_menus.py
 
+## Round 8 (2026-11-09)
+Three reviewers (settings, system scripts, apps) read the parts that are used least, against the real KDE Plasma 6.8
+sources. They found 13; all fixed, each with a test that failed first. Tests after: 20 test files passed (here);
+the image test of round 7 (build11, Fedora 44 Kinoite) passed with 0 errors.
+
+### U065 [medium] "Big mouse pointer" did nothing, and the switch turned itself off again
+  commit: 72e84d4   test: tools/test_os_settings.py (plasma-apply-cursortheme ignores --size when the theme is already set)
+### U066 [medium] The "Screen reader" switch did nothing on Plasma 6.8 (Orca is started by the kded module now)
+  commit: 72e84d4   test: tools/test_os_settings.py
+### U067 [medium] "Big letters" did not make the text bigger in BugOS's own apps, the start menu, quick menu or logout screen
+  commit: d9029e0   test: tools/test_os_apps.py
+### U068 [low] After changing the time zone, the clock in Settings kept showing the old time
+  commit: e2c1142   test: tools/test_os_settings.py
+### U069 [low] Searching in English ("night light", "screen reader", "about") found nothing; no "About this computer" in the start menu
+  commit: f7a918b   test: tools/test_os_settings.py, tools/test_start_data.py
+### U070 [low] Cancelling the password for "Set the time automatically" (or a failing display size) left the switch wrong
+  commit: e2c1142   test: tools/test_os_settings.py
+### U071 [medium] After game mode, notifications could stay muted for good (an expired "do not disturb" counted all day)
+  commit: 43f357d   test: tools/test_os_system.sh
+### U072 [low] Settings and the quick menu misread KDE's "do not disturb until" (seconds like 7.913, a time zone at the end)
+  commit: 43f357d   test: tools/test_settings.py, tools/test_start_data.py
+### U073 [low] "BugOS start menu is on" was shown when there was no KDE start button (or system tray) to replace
+  commit: baeae9f   test: tools/test_panel.sh
+### U074 [low] Welcome: Next, Back, Next started developer mode, light mode and Steam again; switching off after did nothing
+  commit: ddf5d19   test: tools/test_os_apps.py
+### U075 [low] A startup app that is off for the whole computer (Hidden=true) could not be turned on, yet it said it would start
+  commit: b7b1f39   test: tools/test_task_manager.py
+### U076 [low] A file with a very long name (246-255 bytes) could not be deleted at all
+  commit: e9e0065   test: tools/test_os_apps.py
+### U077 [low] "Free up space > Empty the trash" on This computer jumped to the Trash page, and Back skipped This computer
+  commit: 808ddfa   test: tools/test_files.py
+
 ## Skipped
 
 ## For you
@@ -346,10 +378,16 @@ Tests after: 24 passed (here).
   (tested here with real PAM in the Fedora 44 image, not on hardware).
 - U002, U004, U012: test once on a real PC: log in without a password after a restart; move files to a USB stick and
   check them on another computer.
+- U065, U066, U067: on a real PC with Plasma 6.8, turn on Big mouse pointer, Screen reader (Orca speaks) and Big
+  letters, and look at Settings, Files and the start menu (checked here against the KDE sources, not on a screen).
 - From the first round, still open (improve-2026-11-07.md "For you"): A032 signing key, default branch main,
   private vulnerability reporting, merge and build once.
 
 ## Found on the way
+- Round 8, not fixed (unsure or a missing feature, not a bug): pinning apps in the start menu has no button; choosing
+  a language also sets the date format (en_US for English); a new folder named "." or ".." gets an odd name; the trash
+  shows the name inside the trash, not the original; emptying a huge trash runs in the window's thread; NTFS repair
+  needs ntfsprogs (not in packages.txt); bugos-developer has no lock against two runs at once (Welcome no longer does it).
 - "Log in without a password" still asks through pkexec (org.bugos.login.policy, auth_admin_keep): a family member
   who is not an administrator cannot switch it; that is on purpose (it changes how the whole PC logs in).
 - The 117 texts built with f-strings cannot be translated to other languages yet (docs/TRANSLATING.md explains how).
