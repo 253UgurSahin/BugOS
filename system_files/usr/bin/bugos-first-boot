@@ -45,6 +45,9 @@ if [ "$gemeten" = 1 ] || [ "$gemeten" = 3 ]; then
 fi
 
 flatpak remote-add --if-not-exists --system flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+# Bestaat flathub al maar staat hij uit (zo kan een basis hem leveren)? Dan doet remote-add niets, en zou dit elke vijf
+# minuten opnieuw mislukken en de Winkel "ben je online?" zeggen (U466).
+flatpak remote-modify --system --enable flathub 2>/dev/null || true
 
 if flatpak install --system --noninteractive --or-update flathub "${APPS[@]}"; then
     # De BugOS-stijl ook voor deze apps (Kvantum en Breeze-GTK in de Flatpak-doos).

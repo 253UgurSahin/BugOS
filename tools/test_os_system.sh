@@ -549,6 +549,7 @@ nep busctl 'exit 0'
 draai bugos-first-boot
 klopt 'grep -q "org.kde.gwenview" "$TMP/flatpak-log" && grep -q "org.kde.okular" "$TMP/flatpak-log"' \
     "U224: na de installatie is er een programma voor foto's (Gwenview) en PDF's (Okular)"
+klopt 'grep -q "remote-modify --system --enable flathub" "$TMP/flatpak-log"' "U466: een uitgeschakelde flathub wordt bij de eerste start weer aangezet"
 # U239: een computer die de eerste start al deed, krijgt alleen de nieuwe standaard-apps erbij (één keer).
 touch "$TMP/var-bugos/eerste-start-klaar"
 rm -f "$TMP/var-bugos/standaard-apps-2"
