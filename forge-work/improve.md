@@ -1314,6 +1314,14 @@ rest of the desktop" (2 medium plus 3 low: U519-U523). All fixed, each with a te
 ### U523 [low] Enter opened only one of several selected files
   commit: e60b260   test: tools/test_files.py (also: GTK clipboard URLs fully encoded; no dead Paste button after cut-paste)
 
+## Round 43 (2026-11-09, stopped by the user part-way)
+Reviewer of round 42: 3 fixed (U527 rename keeps a real new extension, U528 slow Ctrl+click, U529 Bluetooth "off"
+without adapter). Sweep "mouse, keyboard and selection in the other apps": U530-U533 fixed (double-click on buttons
+and switches counts once, held Enter does not repeat, the updates switch is locked during the password prompt, the
+chosen drive does not silently change). All 20 test files pass; U530-U533 have no new test yet.
+Still open from this sweep (not done): Help "Fix" button enabled again while its fix runs; Task Manager background
+rows re-sort every second under the mouse; Store category click ignored while the search field has text.
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
