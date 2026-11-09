@@ -737,6 +737,35 @@ failed first; 4 skipped or for you (below). Tests after: 20 test files passed (h
 ### U238 [low] "Updates yourself via the BugOS Store" (the Store cannot update; U100)
   commit: 2896c3f
 
+## Round 18 (2026-11-09)
+Two reviewers: the round-17 fixes (2 found, 1 incomplete, 4 unsure: U241-U243), and the robustness/privacy pass
+that stopped early in round 10 (polkit, root helpers, files BugOS creates, privacy, outside input, CI): nothing
+critical, high or medium; 6 low plus 4 unsure (U244-U251, U252-U254). 14 found; 11 fixed, each with a test that
+failed first; 3 skipped or for you (below). Tests after: 20 test files passed (here).
+
+### U241 [medium] (from U221/U233) Backup/Switch: "Stop now", then opened again: stuck on "Stopping…", and the next job stopped after one folder
+  commit: 407fa9e   test: tools/test_os_apps.py
+### U242 [low] (from U232) English outside the euro countries got US dates (now en_IE dates with your own paper and money)
+  commit: a061f5e   test: tools/test_settings.py
+### U243 [low] (from U235) On battery the sleep choice showed 15 min (KDE: 10 min); a charger with a charge limit counted as battery
+  commit: a061f5e   test: tools/test_os_settings.py
+### U244 [low, privacy] A deleted file left its preview (with its name) in ~/.cache/thumbnails
+  commit: 796e30a   test: tools/test_files.py
+### U245 [low] Installing a .rpm/.deb promised a "safe box"; the box protects BugOS, not your files
+  commit: 969c3fa   test: tools/test_package.sh
+### U246 [low, hardening] pkexec started a program found on the user's PATH (Help: systemctl; bugos-updates "$0")
+  commit: 969c3fa   test: tools/test_os_apps.py
+### U247 [low] With umask 077 the update choice and auto-login file were unreadable; auto-login accepted root
+  commit: 969c3fa, e144f6a   test: tools/test_os_system.sh, tools/test_os_settings.py
+### U248 [low, CI] build.yml had no default read-only permissions
+  commit: 969c3fa   test: tools/test_edges.py
+### U249 [low, CI] screenshots.yml and windows-switch.yml put inputs/ref names straight into commands
+  commit: 969c3fa   test: tools/test_edges.py
+### U250 [low, privacy] Fedora's weekly countme ping was still on ("BugOS collects nothing")
+  commit: 969c3fa   test: tools/test_os_system.sh, tools/test_image.sh (in the image)
+### U251 [low] A file name like "<h1>…" could format or hide the text of the .exe/.rpm question (kdialog)
+  commit: 969c3fa   test: tools/test_exe.sh
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -748,6 +777,10 @@ failed first; 4 skipped or for you (below). Tests after: 20 test files passed (h
   once). No BugOS image has been released yet, so no such PC exists; add a one-off step if that changes.
 - U240 (round 17, unsure): the daily `flatpak uninstall --unused` as root may remove a runtime that only another
   account's own (--user) app needs. BugOS installs apps system-wide; only Discover --user installs are exposed.
+- U252 (round 18, unsure): Language change removes paper/money/measurement choices you made yourself in KDE's
+  Region page (BugOS cannot tell them apart from the ones it set). Low.
+- U253 (round 18, unsure): `flatpak override --user` lets every Flatpak app read ~/.config/kdeglobals (for the BugOS
+  colours); that file can hold recent file-dialog places. Many KDE apps on Flathub already have this access.
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
@@ -770,6 +803,8 @@ failed first; 4 skipped or for you (below). Tests after: 20 test files passed (h
 - U218 (round 17): BugOS's own start/quick menus launch through Plasma's "executable" engine, which passes no
   activation token. On a real Plasma 6.8 PC, check that opening Settings from the quick menu while it is already
   open brings it to the front (not only a blinking taskbar button). If not, the menus must launch via Plasma (M).
+- U254 (round 18): the base image is pinned to the tag kinoite-main:44 (weekly updates by choice). If you want,
+  add a `cosign verify` of Universal Blue's signature before building (S-M).
 - U196: before you add the signing key (A032), bugos-ondertekend should change the origin in place
   (bootc switch --mutate-in-place) instead of rpm-ostree rebase; a rebase to the same image removes the older
   version, so "Back to the previous version" has nothing to go back to on that first signed boot.
