@@ -14,7 +14,8 @@ import QtQuick.Layouts
 Rectangle {
     id: menu
     // 'Grote letters' (KDE: 10 punten gewoon, 12 groot): de letters hier groeien mee (U067).
-    readonly property real schaal: Qt.application.font.pointSize > 0
+    // In Plasma zet main.qml dit via Kirigami.Theme (dat verandert meteen mee, Qt.application.font niet) (U084).
+    property real schaal: Qt.application.font.pointSize > 0
         ? Math.min(2, Math.max(1, Qt.application.font.pointSize / 10)) : 1
 
     // Gegevens van bugos-start-data (apps, favorieten, recent, gebruiker).

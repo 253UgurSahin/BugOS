@@ -80,11 +80,23 @@ for stijl in ("Basic", "Fusion"):
     QTest.keyClick(v, Qt.Key.Key_Right)
     wacht(400)
     klopt(gestuurd and int(gestuurd[-1][1]) > voor, f"[{stijl}] U060: het pijltje stuurt de hogere waarde ({voor} -> {gestuurd[-1:]})")
+    # U084: de lettergrootte volgt 'schaal' meteen (main.qml koppelt hem aan Kirigami.Theme, dat meteen meeverandert).
+    _kop = next((c for c in root.findChildren(QQuickItem) if c.property("text") in ("Snelmenu", "Quick menu")), None)
+    _voor = _kop.property("font").pixelSize() if _kop else 0
+    root.setProperty("schaal", 1.5)
+    wacht(50)
+    _na = _kop.property("font").pixelSize() if _kop else 0
+    root.setProperty("schaal", 1.0)
+    klopt(_kop is not None and _na == round(_voor * 1.5), f"[{stijl}] U084: de letters groeien meteen mee met schaal ({_voor} -> {_na})")
     v.close()
 
 # U064: in het startmenu lichten de recente bestanden ook op als je er met Tab op staat.
 _start = (QML.parent.parent.parent.parent / "org.bugos.startmenu" / "contents" / "ui" / "StartMenu.qml").read_text(encoding="utf-8")
 klopt("bregel.hovered || bregel.activeFocus" in _start, "U064: startmenu: een recent bestand met de toetsenbordfocus is te zien")
 
+_ui = QML.parent.parent.parent.parent
+for _m in ("org.bugos.startmenu", "org.bugos.quickmenu"):
+    _main = (_ui / _m / "contents" / "ui" / "main.qml").read_text(encoding="utf-8")
+    klopt("schaal: Kirigami.Theme.defaultFont.pointSize" in _main, f"U084: {_m}: main.qml koppelt de letters aan Kirigami.Theme")
 print(f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)
