@@ -183,6 +183,13 @@ beschermd = {x.pids[0]: x.beschermd for x in bt.groepeer(kern, {})}
 klopt(all(beschermd[p] for p in range(500, 507)),
       "beschermd: sessie-berichtenbus, gebruikersbeheer, toegankelijkheid, dconf en de Flatpak-portalen")
 klopt(not beschermd[507] and not beschermd[508], "niet beschermd: gewone achtergrondhulpjes (ssh-agent, KDE Connect)")
+# U433: Firefox van mama (ander account, snel wisselen) en die van jou: jouw Firefox blijft van jou (en te sluiten).
+_ff = "app.slice/app-flatpak-org.mozilla.firefox-1234.scope"
+_twee = [bt.Proces(600, "firefox", 1, 1, 1, True, f"/user.slice/user-1000.slice/user@1000.service/{_ff}"),
+         bt.Proces(601, "firefox", 1, 1, 1, False, f"/user.slice/user-1001.slice/user@1001.service/{_ff}")]
+_g433 = {x.pids[0]: x for x in bt.groepeer(_twee, {})}
+klopt(_g433[600].pids == [600] and _g433[600].eigen and _g433[601].soort == "systeem" and _g433[601].beschermd,
+      f"U433: een app van een ander account telt niet bij die van jou ({[(x.naam, x.pids, x.eigen) for x in _g433.values()]})")
 
 # 5. advies in gewone woorden
 klopt(bt.advies([10, 20, 30], 4, 16, m["taken"])[0] == "goed", "advies: rustig -> 'Alles loopt soepel'")

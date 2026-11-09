@@ -303,7 +303,12 @@ def groepeer(lijst: list[Proces], procent: dict[int, float]) -> list[Taak]:
     eigen_pid = os.getpid()
     for p in lijst:
         soort, sleutel, eenheid = soort_van(p.groep)
-        if soort == "app":
+        if soort != "systeem" and not p.eigen:
+            # Van een ander account (snel wisselen): niet bij jouw Firefox optellen (dan kon je die niet sluiten),
+            # maar samen onder 'Andere accounts', bij wat van de computer is (U433).
+            soort, sleutel, eenheid = "systeem", "systeem:andere-accounts", "andere-accounts"
+            naam, icoon = t("Andere accounts", "Other accounts"), ""
+        elif soort == "app":
             info = app_info(sleutel)
             naam, icoon = info if info else (mooie_naam(sleutel), "")
         else:
