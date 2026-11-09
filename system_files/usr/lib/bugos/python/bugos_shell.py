@@ -101,6 +101,7 @@ class Rij(QFrame):
                 if not knop.accessibleDescription():
                     knop.setAccessibleDescription(titel_tekst)
                 rechts.setAccessibleDescription(uitleg_tekst)
+        self.rechts = rechts
         self.pijl = None
         if pijl is None:
             pijl = klikbaar and rechts is None
@@ -120,6 +121,13 @@ class Rij(QFrame):
     def zet_uitleg(self, tekst: str) -> None:
         self.uitleg.setText(tekst)
         self.uitleg.setVisible(bool(tekst))
+        # Ook voor de schermlezer: de keuzeknoppen ('5 min', 'Nooit') horen de nieuwe uitleg (U483).
+        rechts = getattr(self, "rechts", None)
+        if rechts is not None and getattr(rechts, "knoppen", None):
+            rechts.setAccessibleDescription(tekst)
+            titel = self.titel.text()
+            for knop in rechts.knoppen.values():
+                knop.setAccessibleDescription(f"{titel}. {tekst}" if tekst else titel)
 
     def mouseDoubleClickEvent(self, e) -> None:  # noqa: N802
         # Een dubbelklik is één klik: de tweede keer loslaten doet niets (anders twee keer verbinden,

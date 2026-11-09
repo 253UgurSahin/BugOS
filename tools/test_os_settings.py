@@ -1001,6 +1001,13 @@ klopt("2:05" in _uit445["en_US.UTF-8"] and "PM" in _uit445["en_US.UTF-8"] and "9
       and "14:05" in _uit445["en_IE.UTF-8"], f"U445: de klok in het Engels volgt je regio ({_uit445})")
 klopt("November 2026" in _uit445["de_DE.UTF-8"] and "9." in _uit445["de_DE.UTF-8"],
       f"U452: in het Duits de datum zoals Duitsers hem schrijven ({_uit445['de_DE.UTF-8']!r})")
+# U483: de uitleg 'deze tijden gelden nu op de accu' hoort ook de schermlezer, en staat ook bij slapen.
+_ep483 = venster.paginas["energie"]
+_ep483.toon((bi.Batterij(50, False, False, False), None, 300, 600, bi.KNOP_VRAGEN, bi.KNOP_SLAPEN, "Battery"))
+_knop483 = next(iter(_ep483.scherm_uit.knoppen.values()))
+klopt(("accu" in _knop483.accessibleDescription() or "battery" in _knop483.accessibleDescription())
+      and ("accu" in _ep483.slaap_rij.uitleg.text() or "battery" in _ep483.slaap_rij.uitleg.text()),
+      f"U483: de uitleg over lader/accu hoort ook de schermlezer, en staat ook bij slapen ({_knop483.accessibleDescription()!r})")
 # U474: klok niet vanzelf: een knop naar KDE's Datum en tijd (niet naar 'Meer instellingen', dat is Regio en taal).
 _tp474 = venster.paginas["tijd"]
 _tp474.toon((sys.modules["bugos_config_account"].Tijd("Europe/Amsterdam", False, False), "nl_NL"))

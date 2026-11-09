@@ -639,6 +639,11 @@ _args464 = (TMP / "flatpak-args.weg").read_text() if (TMP / "flatpak-args.weg").
 klopt(_zichtbaar464 and "uninstall -y org.videolan.VLC" in _args464 and "--delete-data" not in _args464
       and "verwijderd" in ww.melding.tekst.text() + "removed",
       f"U464: een app verwijderen kan in de Winkel ({_args464.strip()!r}, {ww.melding.tekst.text()[:40]!r})")
+from PySide6.QtWidgets import QApplication as _QA482
+_bron482 = (ROOT / "system_files/usr/bin/bugos-store").read_text()
+klopt(_kv.weg.accessibleDescription() == "VLC" and ww.melding.accessibleName() == ww.melding.tekst.text()
+      and "ScrollBarAlwaysOff" not in _bron482 and "k.minimumSizeHint().width()" in _bron482,
+      f"U482: de knoppen op een kaart zeggen bij welke app ze horen ({_kv.weg.accessibleDescription()!r})")
 klopt(_ervoor472 and not any(k.app["id"] == vlc["id"] for k in ww.kaarten) and ("verwijderd" in _tekst472 or "Removing" in _tekst472),
       f"U472: na verwijderen staat de app niet meer in 'Mijn apps', en de melding zegt 'verwijderen' ({_tekst472[:40]!r})")
 ww.lijst.setCurrentRow(0)
@@ -1393,6 +1398,19 @@ _bron436 = (ROOT / "system_files/usr/lib/bugos/python/bugos_files_navigeren.py")
 klopt(_doc436.toPlainText() == "<h1>GRATIS</h1> & meer" and _pt("Foto's") == "Foto's"
       and "k.setToolTip(platte_tip(naam))" in _bron436,
       f"U436: namen in tooltips worden geen opmaak ({_doc436.toPlainText()!r})")
+# U481: Welkom begint met de focus op 'Volgende' (geen naamloos schuifvlak), en Enter op een keuze gaat verder.
+_wk481 = welkom.Welkom()
+_wk481.show()
+app.processEvents()
+_focus481 = QApplication.focusWidget() is _wk481.volgende
+_geen_stop481 = all(_wk481.stapels.widget(i).focusPolicy() == Qt.FocusPolicy.NoFocus for i in range(_wk481.stapels.count()))
+_wk481.enter()
+app.processEvents()
+_verder481 = _wk481.stapels.currentIndex() == 1
+_wk481.close()
+_wk481.deleteLater()
+klopt(_focus481 and _geen_stop481 and _verder481,
+      f"U481: Welkom: focus op Volgende, geen lege Tab-stop, Enter gaat verder ({_focus481}, {_geen_stop481}, {_verder481})")
 # U401: op een laag scherm (1366x768 met 150%) vallen de knoppen niet buiten het venster: de pagina's kunnen schuiven.
 from PySide6.QtWidgets import QScrollArea as _QSA
 _wk401 = welkom.Welkom()

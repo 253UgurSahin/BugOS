@@ -202,9 +202,10 @@ class EnergiePagina(Blad):
         self.slaap = Keuzes([(600, t("10 min", "10 min")), (900, t("15 min", "15 min")), (1800, t("30 min", "30 min")), (3600, t("1 uur", "1 hour")),
                              (0, t("Nooit", "Never"))])
         self.slaap.gekozen.connect(lambda s: op_achtergrond(self, lambda: bi.zet_slaap_na(s), lambda _u: None))
-        g.voeg(Rij("maan", t("Slaapstand als je niets doet", "Sleep when you do nothing"),
-                   t("Zuinig; alles staat er weer zodra je een toets indrukt",
-                     "Saves power; everything is back as soon as you press a key"), self.slaap))
+        self.slaap_rij = Rij("maan", t("Slaapstand als je niets doet", "Sleep when you do nothing"),
+                             t("Zuinig; alles staat er weer zodra je een toets indrukt",
+                               "Saves power; everything is back as soon as you press a key"), self.slaap)
+        g.voeg(self.slaap_rij)
         self.aanuit = Keuzes([(bi.KNOP_VRAGEN, t("Vragen", "Ask")), (bi.KNOP_SLAPEN, t("Slapen", "Sleep")),
                               (bi.KNOP_UIT, t("Uitzetten", "Shut down"))])
         self.aanuit.gekozen.connect(lambda w: op_achtergrond(self, lambda: bi.zet_aanuit_knop(w), lambda _u: None))
@@ -236,6 +237,11 @@ class EnergiePagina(Blad):
             uitleg += " · " + (t("deze tijden gelden nu op de accu", "these times apply on battery now") if op_accu else
                                t("deze tijden gelden nu aan de lader", "these times apply on the charger now"))
         self.scherm_rij.zet_uitleg(uitleg)
+        # Ook slapen verschilt per stand: daar dezelfde zin (U483).
+        slaap = t("Zuinig; alles staat er weer zodra je een toets indrukt",
+                  "Saves power; everything is back as soon as you press a key")
+        self.slaap_rij.zet_uitleg(slaap + uitleg[len(t("Even met de muis bewegen en het is terug",
+                                                       "Move the mouse and it is back")):])
         self.batterij_kaart.setVisible(bat is not None)
         if bat is not None:
             staat = t("vol", "full") if bat.vol else t("wordt opgeladen", "charging") if bat.laadt else \
