@@ -155,6 +155,19 @@ klopt(sorted(_d48[_thuis48 / "Pictures"]) == ["Vakantie/a[1]*.jpg", "img_1.jpg"]
 _d51 = _bb48.dubbel_op_schijf(TMP, [_thuis48 / "Pictures"], _doel48.parent / "y")
 klopt("IMG_1.JPG" in _d51[_thuis48 / "Pictures"] and "img_1.jpg" not in _d51[_thuis48 / "Pictures"],
       f"U051: wat al in de back-up staat, blijft; de nieuwe met andere hoofdletters gaat niet mee ({_d51})")
+# U053: ook als de map eromheen een naamgenoot krijgt: wat in de back-up staat, blijft.
+_t53 = TMP / "thuis-u053" / "Pictures"
+(_t53 / "photos").mkdir(parents=True)
+(_t53 / "photos" / "IMG_1.JPG").write_text("groot")
+(_t53 / "photos" / "img_1.jpg").write_text("klein")
+_b53 = TMP / "backup-u053"
+(_b53 / "Pictures" / "photos").mkdir(parents=True)
+(_b53 / "Pictures" / "photos" / "IMG_1.JPG").write_text("groot")   # zo staat het er na de eerste back-up
+(_t53 / "Photos").mkdir()
+(_t53 / "Photos" / "nieuw.jpg").write_text("n")
+_d53 = _bb48.dubbel_op_schijf(TMP, [_t53], _b53)[_t53]
+klopt("Photos" in _d53 and "photos/img_1.jpg" in _d53,
+      f"U053: map 'photos' blijft (staat in de back-up), en daarbinnen gaat de naamgenoot nog steeds niet mee ({_d53})")
 klopt("hoofdletters" in _bb48.DEELS_UITLEG or "capitals" in _bb48.DEELS_UITLEG,
       "U048: de melding 'konden niet mee' noemt ook namen die alleen in hoofdletters verschillen")
 

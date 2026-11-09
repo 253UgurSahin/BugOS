@@ -143,20 +143,29 @@ def dubbel_op_schijf(schijf: Path, mappen: list[Path], doel: Path | None = None)
         return {}
     uit = {}
     for m in mappen:
-        dubbel = []
-        for p in (dubbele_namen(m) if m.is_dir() else []):
-            overslaan = p
-            if doel is not None:
-                try:
-                    al_daar = set(os.listdir(doel / m.name / os.path.relpath(p.parent, m)))
-                except OSError:
-                    al_daar = set()
-                broers = [n for n in os.listdir(p.parent) if n != p.name and n.casefold() == p.name.casefold()]
-                if p.name in al_daar and broers and not any(b in al_daar for b in broers):
-                    overslaan = p.parent / broers[0]   # deze staat al in de back-up: de andere gaat niet mee
-            dubbel.append(os.path.relpath(overslaan, m))
+        dubbel = [os.path.relpath(p, m) for p in _dubbel_in(m, m, doel)] if m.is_dir() else []
         if dubbel:
             uit[m] = dubbel
+    return uit
+
+
+def _dubbel_in(basis: Path, m: Path, doel: Path | None) -> list[Path]:
+    """Wat er in 'basis' (ook dieper) niet mee kan. Blijft een map staan omdat hij al in de back-up staat,
+    dan kijken we ook daarbinnen (anders kan daar weer een naamgenoot de oude in de back-up vervangen)."""
+    uit = []
+    for p in dubbele_namen(basis):
+        overslaan, behouden = p, None
+        if doel is not None:
+            try:
+                al_daar = set(os.listdir(doel / m.name / os.path.relpath(p.parent, m)))
+            except OSError:
+                al_daar = set()
+            broers = [n for n in os.listdir(p.parent) if n != p.name and n.casefold() == p.name.casefold()]
+            if p.name in al_daar and broers and not any(b in al_daar for b in broers):
+                overslaan, behouden = p.parent / broers[0], p   # deze staat al in de back-up: de andere gaat niet mee
+        uit.append(overslaan)
+        if behouden is not None and behouden.is_dir() and not behouden.is_symlink():
+            uit += _dubbel_in(behouden, m, doel)
     return uit
 
 
