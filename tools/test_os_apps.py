@@ -1220,6 +1220,8 @@ if shutil.which("pdftoppm"):
     _pt.end()
     _pv = _tg.maak_voorbeeld(str(_pdf))
     klopt(not _pv.isNull() and max(_pv.width(), _pv.height()) <= 256, f"U172: een PDF krijgt een eigen voorbeeldje ({_pv.width()}x{_pv.height()})")
+    _uri, _naam, _cache = _tg._thumb_plek(str(_pdf))
+    klopt((_cache / "large" / _naam).exists(), "U197: het voorbeeldje van een PDF wordt bewaard (de volgende keer niet opnieuw maken)")
 
 # ========================== U173, U175-U177: Winkel en Windows-installaties ===
 _alt = (ROOT / "system_files/usr/share/bugos/alternatives.txt").read_text()

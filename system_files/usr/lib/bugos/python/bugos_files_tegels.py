@@ -26,16 +26,44 @@ from PySide6.QtWidgets import QStyle, QStyledItemDelegate
 
 # ============================================================ voorbeelden ===
 
-def freedesktop_voorbeeld(pad: str) -> QImage:
-    """Heeft KDE of een ander programma al een voorbeeldje gemaakt? Gebruik dat."""
+def _thumb_plek(pad: str) -> tuple[str, str, Path]:
     uri = QUrl.fromLocalFile(pad).toString(QUrl.ComponentFormattingOption.FullyEncoded)
     naam = hashlib.md5(uri.encode()).hexdigest() + ".png"
-    cache = Path(os.environ.get("XDG_CACHE_HOME", thuis() / ".cache")) / "thumbnails"
+    return uri, naam, Path(os.environ.get("XDG_CACHE_HOME", thuis() / ".cache")) / "thumbnails"
+
+
+def freedesktop_voorbeeld(pad: str) -> QImage:
+    """Heeft KDE of een ander programma al een voorbeeldje gemaakt? Gebruik dat (als het bij deze versie
+    van het bestand hoort: Thumb::MTime)."""
+    _uri, naam, cache = _thumb_plek(pad)
+    try:
+        mtime = str(int(os.stat(pad).st_mtime))
+    except OSError:
+        mtime = ""
     for maat in ("xx-large", "x-large", "large", "normal"):
         p = cache / maat / naam
         if p.exists():
-            return QImage(str(p))
+            beeld = QImage(str(p))
+            oud = beeld.text("Thumb::MTime")
+            if not oud or not mtime or oud == mtime:
+                return beeld
     return QImage()
+
+
+def bewaar_voorbeeld(pad: str, beeld: QImage) -> None:
+    """Het gemaakte voorbeeldje bewaren zoals freedesktop dat doet, zodat het de volgende keer niet opnieuw
+    hoeft (ook Dolphin gebruikt het dan) (U197)."""
+    uri, naam, cache = _thumb_plek(pad)
+    try:
+        map_ = cache / "large"
+        map_.mkdir(parents=True, exist_ok=True)
+        beeld.setText("Thumb::URI", uri)
+        beeld.setText("Thumb::MTime", str(int(os.stat(pad).st_mtime)))
+        tijdelijk = map_ / f".{naam}.bugos"
+        if beeld.save(str(tijdelijk), "PNG"):
+            os.replace(tijdelijk, map_ / naam)
+    except OSError:
+        pass
 
 
 # Een tegel tekent een voorbeeldje van zo'n 120 px breed: 256 px is ruim genoeg (ook op 200%), en een map met
@@ -93,6 +121,8 @@ def maak_voorbeeld(pad: str) -> QImage:
     beeld = freedesktop_voorbeeld(pad)
     if beeld.isNull():
         beeld = pdf_of_video_voorbeeld(pad)
+        if not beeld.isNull():
+            bewaar_voorbeeld(pad, beeld)
     if not beeld.isNull() and (beeld.width() > VOORBEELD_MAAT or beeld.height() > VOORBEELD_MAAT):
         beeld = beeld.scaled(VOORBEELD_MAAT, VOORBEELD_MAAT, Qt.AspectRatioMode.KeepAspectRatio,
                              Qt.TransformationMode.SmoothTransformation)
