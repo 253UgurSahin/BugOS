@@ -109,6 +109,15 @@ printf '{"deployments":[{"booted":true,"timestamp":2000},{"booted":false,"timest
 rm -f "$TMP/rollback"
 draai bugos-updates nu
 klopt '[ ! -f "$TMP/rollback" ]' "U050: gewoon Nu updaten: geen rollback"
+# U055: zonder internet (de update lukt niet) blijft het wachtende 'terug' staan.
+nep rpm-ostree 'case "$1" in status) cat "'"$TMP"'/status.json";; rollback) echo rollback >>"'"$TMP"'/rollback";;
+upgrade) echo "error: no network" >&2; exit 1;; esac'
+printf '{"deployments":[{"booted":false,"timestamp":1000},{"booted":true,"timestamp":2000}]}' >"$TMP/status.json"
+rm -f "$TMP/rollback"
+draai bugos-updates nu
+klopt '[ $code -ne 0 ] && [ ! -f "$TMP/rollback" ]' "U055: Nu updaten mislukt (geen internet): het wachtende 'terug' blijft staan"
+nep rpm-ostree 'case "$1" in status) cat "'"$TMP"'/status.json";; rollback) echo rollback >>"'"$TMP"'/rollback";;
+upgrade) echo "No upgrade available.";; esac'
 # Een gewone update die nu pas binnenkomt, is geen "stond al klaar".
 nep rpm-ostree 'case "$1" in status) cat "'"$TMP"'/status.json";; upgrade)
 printf "{\"deployments\":[{\"booted\":false,\"staged\":true,\"timestamp\":3000},{\"booted\":true,\"timestamp\":2000}]}" >"'"$TMP"'/status.json";; esac'

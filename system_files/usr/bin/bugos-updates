@@ -50,13 +50,14 @@ nu)
     # Stond er vóór deze update al een nieuwere versie klaar? (Dan is "No upgrade available" geen "al bij".)
     klaar_voor="$(rpm-ostree status --json 2>/dev/null | jq -r '(.deployments[] | select(.booted) | .timestamp) as $nu
         | .deployments[0] | (.booted == false and (.timestamp // 0) > ($nu // 0))' 2>/dev/null)"
-    # Koos je eerder 'terug' en heb je nog niet opnieuw opgestart (er staat een oudere versie bovenaan)?
-    # Met 'Nu updaten' kies je weer voor nieuw: dat 'terug' eerst ongedaan maken, anders ga je na de herstart toch terug.
-    if rpm-ostree status --json 2>/dev/null | jq -e '(.deployments[] | select(.booted) | .timestamp) as $nu
-        | .deployments[0] | (.booted == false and (.timestamp // 0) < ($nu // 0))' >/dev/null 2>&1; then
+    rpm-ostree upgrade || mislukt=1
+    # Koos je eerder 'terug' en heb je nog niet opnieuw opgestart (er staat nog een oudere versie bovenaan)?
+    # Met 'Nu updaten' kies je weer voor nieuw: dat 'terug' ongedaan maken, anders ga je na de herstart toch terug.
+    # (Pas ná een gelukte update: lukt de update niet, bijv. zonder internet, dan blijft je 'terug' gewoon staan.)
+    if [ "$mislukt" = 0 ] && rpm-ostree status --json 2>/dev/null | jq -e '(.deployments[] | select(.booted)
+        | .timestamp) as $nu | .deployments[0] | (.booted == false and (.timestamp // 0) < ($nu // 0))' >/dev/null 2>&1; then
         rpm-ostree rollback || mislukt=1
     fi
-    rpm-ostree upgrade || mislukt=1
     flatpak update --system --noninteractive --assumeyes || true
     # Stond er al een nieuwere versie klaar (bijv. vannacht vanzelf opgehaald)? Dan zegt rpm-ostree
     # "No upgrade available", maar moet je wel opnieuw opstarten. Dat geven we door aan Instellingen.
