@@ -71,5 +71,10 @@ klopt 'grep -q "kapot\|broken" "$TMP/fouten" 2>/dev/null && [ ! -s "$TMP/doos-lo
 nep rpm '[ "$1" = -qp ] && echo voorbeeld; exit 0'
 klopt 'grep -q "Het kan wel bij je eigen bestanden" "$ROOT/system_files/usr/bin/bugos-package" && ! grep -q "veilig doosje" "$ROOT/system_files/usr/bin/bugos-package"' \
     "U245: installeren zegt eerlijk dat het programma bij je bestanden kan (geen 'veilig doosje')"
+# U424: het doosje maken mislukt omdat de computer vol is: dat zeggen, niet 'heb je internet?'.
+nep distrobox 'case "$1" in list) exit 0;; create) echo "Error: writing blob: No space left on device" >&2; exit 1;; esac; exit 0'
+rm -f "$TMP/fouten"
+installeer "$TMP/half.rpm"
+klopt 'grep -qi "vol\|full" "$TMP/fouten" 2>/dev/null && ! grep -qi "internet\|online" "$TMP/fouten"' "U424: doosje maken met een volle computer: dat wordt gezegd"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

@@ -114,7 +114,7 @@ class SchermPagina(Blad):
             self.ververs()
             return
         self.melding.toon(t(f"Grootte {waarde:.0%} wordt ingesteld…", f"Setting size to {waarde:.0%}…"))
-        op_achtergrond(self, lambda: bi.zet_schaal(waarde), lambda ok: (None if ok else self.ververs(), self.melding.toon(
+        op_achtergrond(self, lambda: bi.zet_schaal(waarde), lambda ok: (setattr(self, "_schaal", waarde) if ok else self.ververs(), self.melding.toon(
             t("Klaar. Sommige programma's worden pas groter als je ze opnieuw opent.",
               "Done. Some programs only change after you open them again.") if ok else
             t("Dat lukte niet. Probeer het bij 'Meer instellingen'.", "That did not work. Try 'More settings'."),

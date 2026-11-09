@@ -73,10 +73,19 @@ melding "$(t "Bezig met installeren..." "Installing...")" \
     "$(t "Dit kan een paar minuten duren. Je mag gewoon doorwerken." "This can take a few minutes. You can keep working.")"
 
 if ! distrobox list 2>/dev/null | grep -q " $DOOS "; then
-    distrobox create --yes --name "$DOOS" --image "$DOOS_BEELD" >/dev/null 2>&1 || {
-        fout "$(t "Het doosje kon niet gemaakt worden. Heb je internet?" "The box could not be created. Are you online?")"
+    LOG="$(mktemp)"
+    distrobox create --yes --name "$DOOS" --image "$DOOS_BEELD" >"$LOG" 2>&1 || {
+        # Een volle computer is geen 'heb je internet?' (U424).
+        if grep -qiE "no space left on device|not enough (disk |free )?space" "$LOG"; then
+            fout "$(t "Het doosje kon niet gemaakt worden: je computer is vol. Maak eerst ruimte (bijv. de prullenbak leegmaken in Bestanden)." \
+                "The box could not be created: your computer is full. Make room first (for example empty the trash in Files).")"
+        else
+            fout "$(t "Het doosje kon niet gemaakt worden. Heb je internet?" "The box could not be created. Are you online?")"
+        fi
+        rm -f "$LOG"
         exit 1
     }
+    rm -f "$LOG"
 fi
 
 # De bestandsnaam gaat als los argument ($1) mee, nooit in de opdrachttekst zelf: een naam als
