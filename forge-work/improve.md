@@ -1290,6 +1290,30 @@ Tests after: 20 test files passed (here).
 ### U512 [low-medium] In a big photo folder the visible previews waited behind every tile scrolled past
   commit: 74376b6   (newest request first in the thread pool)
 
+## Round 42 (2026-11-09)
+Two reviewers: the round-41 fixes (5 found, low and low-medium: U515-U518), and a second pass over Files "with the
+rest of the desktop" (2 medium plus 3 low: U519-U523). All fixed, each with a test that failed first. Tests after:
+20 test files passed (here).
+
+### U515 [low-medium] (from U507) Renaming to "Taart v1.2" still dropped .odt; renaming to ".." made a hidden "...odt"
+  commit: c629c56   test: tools/test_files.py
+### U516 [low] (from U505) Cancelling the update could make the check fail and ask again 30 min later
+  commit: c629c56   test: tools/test_os_system.sh
+### U517 [low] (from U504) Bluetooth in the quick menu: "off" clicked during the adapter wait was undone by the earlier "on"
+  commit: c629c56   test: tools/test_start_data.py
+### U518 [low] (sibling of U498/U503) A hidden Wi-Fi network got neither --wait nor the wrong-password cleanup
+  commit: c629c56   test: tools/test_os_settings.py
+### U519 [medium] A file could not be dragged onto a folder tile in the same window (DragEnter over the dragged tile was refused, so Qt sent no drop)
+  commit: e60b260   test: tools/test_files.py (first test of drag and drop)
+### U520 [medium-low] With KDE single-click, Ctrl/Shift+click opened every file instead of selecting
+  commit: e60b260   test: tools/test_files.py
+### U521 [low] Paste or drop during a running copy did nothing, silently
+  commit: e60b260   test: tools/test_files.py
+### U522 [low] Dropping an image from Firefox or a mail attachment was refused without explanation
+  commit: e60b260   test: tools/test_files.py
+### U523 [low] Enter opened only one of several selected files
+  commit: e60b260   test: tools/test_files.py (also: GTK clipboard URLs fully encoded; no dead Paste button after cut-paste)
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -1437,6 +1461,11 @@ Tests after: 20 test files passed (here).
 - U514 (round 41, design): dragging within your own files always copies (moving needs Shift); Windows and Dolphin
   move on the same drive. Also missing: "Open with another program", deleting one item from the trash for good,
   sort/view options, a remembered window size.
+- U524 (round 42, M): the trash in Files shows only ~/.local/share/Trash; items Dolphin threw away on another drive or
+  a stick (.Trash-1000) are missing, and "Empty trash" does not free that drive.
+- U525 (round 42, very rare): a folder name that is not valid UTF-8 shows the parent's contents.
+- U526 (round 42, check on a real PC): opening a file from Files may not add it to KDE's recent documents (start
+  menu "Recent"); Shift+Delete cuts (Qt's KDE standard) instead of deleting for good.
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
