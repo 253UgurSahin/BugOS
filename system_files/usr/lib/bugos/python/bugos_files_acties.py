@@ -135,25 +135,39 @@ def prullenbak_inhoud() -> list[tuple[Path, Path, Path | None]]:
 def vergeet_voorbeelden(pad: Path, echt: Path | None = None) -> None:
     """Haal de bewaarde voorbeeldjes (~/.cache/thumbnails) weg van iets wat echt weg is: daarin staan een
     verkleinde foto én de naam van het bestand (U244). pad is waar het stond; echt is waar het nu nog is (in de
-    prullenbak), om een map door te lopen."""
+    prullenbak): ook van die plek kan een voorbeeldje zijn gemaakt (de prullenbak met tegels) (U255)."""
     import hashlib
     cache = Path(os.environ.get("XDG_CACHE_HOME", thuis() / ".cache")) / "thumbnails"
-    if not cache.is_dir():
+    # Elke map één keer lezen, en alleen weghalen wat er echt is: een grote map duizenden keren 'bestaat niet'
+    # vragen maakte het legen van de prullenbak vele malen trager (U256).
+    bestaand = {}
+    for maat in ("normal", "large", "x-large", "xx-large"):
+        try:
+            namen = set(os.listdir(cache / maat))
+        except OSError:
+            continue
+        if namen:
+            bestaand[maat] = namen
+    if not bestaand:
         return
-    plekken = [pad]
+    plekken = [pad] + ([echt] if echt is not None else [])
     bron = echt or pad
     if bron.is_dir() and not bron.is_symlink():
         for wortel, _mappen, bestanden in os.walk(bron):
+            deel = Path(wortel).relative_to(bron)
             for b in bestanden:
-                plekken.append(pad / Path(wortel).relative_to(bron) / b)
+                plekken.append(pad / deel / b)
+                if echt is not None:
+                    plekken.append(echt / deel / b)
     for p in plekken:
         uri = QUrl.fromLocalFile(str(p)).toString(QUrl.ComponentFormattingOption.FullyEncoded)
         naam = hashlib.md5(uri.encode()).hexdigest() + ".png"
-        for maat in ("normal", "large", "x-large", "xx-large"):
-            try:
-                (cache / maat / naam).unlink(missing_ok=True)
-            except OSError:
-                pass
+        for maat, namen in bestaand.items():
+            if naam in namen:
+                try:
+                    (cache / maat / naam).unlink(missing_ok=True)
+                except OSError:
+                    pass
 
 
 def prullenbak_legen() -> int:

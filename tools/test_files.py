@@ -186,15 +186,28 @@ def _maak_thumb(pad: Path, maat: str = "large") -> Path:
 (docs / "map met foto's" / "a.jpg").write_text("j")
 _t1 = _maak_thumb(docs / "geheim (1).pdf")
 _t2 = _maak_thumb(docs / "map met foto's" / "a.jpg", "normal")
-b.naar_prullenbak(docs / "geheim (1).pdf")
+_in_bak, _info = b.naar_prullenbak(docs / "geheim (1).pdf")
+_t4 = _maak_thumb(_in_bak)   # U255: een voorbeeldje gemaakt in de prullenbak (tegels)
 b.naar_prullenbak(docs / "map met foto's")
 b.prullenbak_legen()
 (docs / "op-stick.png").write_text("s")
 _t3 = _maak_thumb(docs / "op-stick.png", "x-large")
 _wg = _ac.Weggooien([docs / "op-stick.png"])
 _wg.run()
-klopt(not _t1.exists() and not _t2.exists() and not _t3.exists(),
+klopt(not _t1.exists() and not _t2.exists() and not _t3.exists() and not _t4.exists(),
       "U244: een gewist bestand (prullenbak geleegd, of echt weggegooid) laat geen voorbeeldje met zijn naam achter")
+
+# U256: een grote map in de prullenbak: niet voor elk bestand vier keer 'bestaat niet' weghalen (dat maakte legen traag).
+_groot = TMP / "groot-weg"
+_groot.mkdir()
+for _i in range(500):
+    (_groot / f"f{_i}.txt").write_text("x")
+_tel_weg = []
+_echt_unlink = Path.unlink
+Path.unlink = lambda self, *a, **k: (_tel_weg.append(self), _echt_unlink(self, *a, **k))[1]
+_ac.vergeet_voorbeelden(TMP / "ergens" / "groot-weg", _groot)
+Path.unlink = _echt_unlink
+klopt(len(_tel_weg) <= 1, f"U256: vergeten van voorbeeldjes van een grote map haalt alleen weg wat er is ({len(_tel_weg)} keer)")
 
 # 7c. snelkoppelingen: telt waar de koppeling zelf staat (kapot of naar een andere schijf)
 (docs / "kapot").symlink_to(TMP / "bestaat-niet")
