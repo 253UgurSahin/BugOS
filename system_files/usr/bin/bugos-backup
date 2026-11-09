@@ -652,7 +652,7 @@ def venster() -> int:
                 self.stop(False)
                 return
             if not past:
-                self.melding.zet(t(f"Te weinig ruimte op de schijf: nodig {nodig / 1024**3:.1f} GB, vrij {vrij / 1024**3:.1f} GB.",
+                self.melding.zet(t(f"Te weinig ruimte op de schijf: nodig {nodig / 1024**3:.1f} GB, vrij {vrij / 1024**3:.1f} GB".replace(".", ",") + ".",
                                    f"Not enough space on the drive: need {nodig / 1024**3:.1f} GB, free {vrij / 1024**3:.1f} GB."),
                                  "fout")
                 self.balk.hide()

@@ -526,6 +526,8 @@ w = open_venster(bb)
 w.maak_backup()
 klopt(wacht(lambda: "Te weinig ruimte" in w.melding.tekst.text()) and wacht(lambda: w.maak.isEnabled()),
       "U014: past het niet, dan zegt hij dat en kun je het opnieuw proberen")
+klopt("5,0 GB" in w.melding.tekst.text() and "1,0 GB" in w.melding.tekst.text(),
+      f"U237: Back-up schrijft in het Nederlands een komma: 5,0 GB ({w.melding.tekst.text()!r})")
 w.close()
 bb.ruimte_genoeg = _echt_ruimte
 

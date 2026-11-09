@@ -184,7 +184,7 @@ def controle_opslag() -> Uitslag:
     vrij_gb = gebruik.free / 1024**3
     if vrij_gb < 2 or gebruik.free / gebruik.total < 0.03:
         return Uitslag(naam, PROBLEEM,
-                       t(f"Je schijf is bijna vol (nog {vrij_gb:.1f} GB). Ruim oude downloads op.",
+                       t(f"Je schijf is bijna vol (nog {vrij_gb:.1f} GB). Ruim oude downloads op.".replace(".", ",", 1),
                          f"Your disk is almost full ({vrij_gb:.1f} GB left). Clean up old downloads."),
                        lambda: start("filelight", str(Path.home())) if bestaat("filelight") else start("dolphin", str(Path.home() / "Downloads")),
                        t("Laat zien wat ruimte inneemt", "Show what takes up space"))

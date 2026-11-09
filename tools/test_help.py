@@ -116,5 +116,16 @@ klopt(time.monotonic() - begin < 0.5 and not knop.isEnabled(), "repareren: op de
 klopt(wacht(lambda: gerepareerd == [1] and not w.klusjes and not w.bezig, 15), "repareren: daarna opnieuw nagekeken")
 w.close()
 
+# U237: 'schijf bijna vol' schrijft in het Nederlands een komma (1,5 GB), zoals de rest van BugOS.
+from collections import namedtuple as _nt  # noqa: E402
+
+_oud_du, _oud_t = bh.shutil.disk_usage, bh.t
+bh.shutil.disk_usage = lambda p: _nt("du", "total used free")(500 * 1024**3, 0, int(1.5 * 1024**3))
+bh.t = lambda nl, en: nl
+_u = bh.controle_opslag()
+bh.shutil.disk_usage, bh.t = _oud_du, _oud_t
+klopt("1,5 GB" in _u.tekst if hasattr(_u, "tekst") else "1,5 GB" in str(_u),
+      f"U237: 'schijf bijna vol' schrijft 1,5 GB met een komma ({_u})")
+
 print(f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)
