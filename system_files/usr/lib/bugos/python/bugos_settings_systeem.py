@@ -34,6 +34,14 @@ def zet_script(script: str, aan: bool, aan_woord: str = "aan", uit_woord: str = 
         start(script, aan_woord if aan else uit_woord)
 
 
+def op_live_stick() -> bool:
+    """Draait BugOS vanaf de USB-stick om te proberen (niet geïnstalleerd)? Dan kun je niet updaten (U093)."""
+    try:
+        return "rd.live.image" in Path(os.environ.get("BUGOS_CMDLINE", "/proc/cmdline")).read_text().split()
+    except OSError:
+        return False
+
+
 def versie() -> str:
     try:
         return json.loads(Path("/usr/share/bugos/image-info.json").read_text())["versie"]
@@ -93,6 +101,13 @@ class UpdatesPagina(Blad):
 
     def bouw(self) -> None:
         g = self.kaart(t("Updates", "Updates"))
+        if op_live_stick():
+            g.voeg(Rij("verversen", t("Updates", "Updates"),
+                       t("Op de USB-stick om te proberen kun je niet updaten. Na het installeren gaat het vanzelf.",
+                         "You cannot update on the try-out USB stick. Once installed, it happens automatically.")))
+            self.auto = self.nu = self.terug = None
+            self.bouw_rest()
+            return
         auto = status_van("bugos-updates") or not bestaat("bugos-updates")
         self.auto = schuifje(auto, lambda aan: None if bi.VOORBEELD else self.updates("auto" if aan else "hand"))
         g.voeg(Rij("verversen", t("Updates vanzelf", "Automatic updates"),
@@ -109,6 +124,10 @@ class UpdatesPagina(Blad):
         kr.addWidget(self.terug)
         kr.addStretch(1)
         g.lay.addWidget(knoppen)
+        self.bouw_rest()
+
+    def bouw_rest(self) -> None:
+        """Alles onder de kaart Updates (spelen en werken, taakbalk, hulp)."""
         g = self.kaart(t("Spelen en werken", "Play and work"))
         for script, ic, (nl, en), (unl, uen) in (
                 ("bugos-game-mode", "spel", ("Game-modus", "Game mode"),

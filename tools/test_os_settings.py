@@ -263,6 +263,20 @@ nep_pk.mkdir()
 (nep_pk / "bugos-updates").write_text("#!/usr/bin/bash\necho auto\n")
 for f in ("pkexec", "bugos-updates"):
     (nep_pk / f).chmod(0o755)
+# U093: op de USB-stick om te proberen geen updateknoppen (die werken daar niet), wel de rest van de pagina.
+import bugos_settings_systeem as _sys  # noqa: E402
+from PySide6.QtWidgets import QLabel, QPushButton  # noqa: E402
+
+(TMP / "cmdline").write_text("BOOT_IMAGE=/images/pxeboot/vmlinuz root=live:CDLABEL=BugOS rd.live.image quiet\n")
+os.environ["BUGOS_CMDLINE"] = str(TMP / "cmdline")
+_live = _sys.UpdatesPagina(venster)
+del os.environ["BUGOS_CMDLINE"]
+_knoppen = [k.text() for k in _live.findChildren(QPushButton)]
+klopt(_live.auto is None and "Nu updaten" not in _knoppen and "Update now" not in _knoppen
+      and any(r for r in _live.findChildren(QLabel) if "USB-stick" in r.text() or "USB stick" in r.text())
+      and len(_live.findChildren(_sys.QWidget)) > 20,
+      "U093: live-USB: Updates zegt dat het daar niet kan, zonder knoppen; de rest van de pagina staat er wel")
+_live.deleteLater()
 venster.ga_naar("updates")
 wacht()
 upd = venster.paginas["updates"]
