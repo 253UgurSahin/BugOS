@@ -24,6 +24,37 @@ from PySide6.QtCore import QThread, QUrl, Signal
 
 # ========================================================= veilige acties ===
 
+_RENAME_NOREPLACE = 1
+
+
+def hernoem_veilig(van: Path, naar: Path) -> Path:
+    """Hernoem zonder ooit iets te overschrijven, ook als er intussen iets met die naam kwam (een tweede venster dat
+    een bestand met dezelfde naam verplaatst, een download): dan een vrije naam (U384). Geeft de echte nieuwe plek."""
+    for _ in range(50):
+        try:
+            libc = ctypes.CDLL(None, use_errno=True)
+            fn = libc.renameat2
+        except (OSError, AttributeError):
+            fn = None
+        if fn is not None:
+            AT = -100   # AT_FDCWD
+            if fn(AT, os.fsencode(str(van)), AT, os.fsencode(str(naar)), _RENAME_NOREPLACE) == 0:
+                return naar
+            fout = ctypes.get_errno()
+            if fout == errno.EEXIST:
+                naar = vrije_naam(naar)
+                continue
+            if fout not in (errno.EINVAL, errno.ENOSYS, errno.ENOTSUP):
+                raise OSError(fout, os.strerror(fout), str(van))
+        # Kan deze schijf het niet in één keer (sommige FAT-sticks): dan vlak ervoor nog eens kijken.
+        if os.path.lexists(naar):
+            naar = vrije_naam(naar)
+            continue
+        os.rename(van, naar)
+        return naar
+    raise OSError(errno.EEXIST, os.strerror(errno.EEXIST), str(naar))
+
+
 def vrije_naam(doel: Path) -> Path:
     """Bestaat 'doel' al? Dan 'Naam (2).jpg', 'Naam (3).jpg', ... Nooit iets overschrijven."""
     if not doel.exists() and not doel.is_symlink():
@@ -429,8 +460,7 @@ def kopieer_een(bron: Path, doelmap: Path, verplaats: bool, achter: list | None 
     doel = vrije_naam(doelmap / bron.name)
     if verplaats:
         try:
-            os.rename(bron, doel)  # op dezelfde schijf: in één keer, niets half
-            return doel
+            return hernoem_veilig(bron, doel)  # op dezelfde schijf: in één keer, niets half, nooit overschrijven
         except OSError as e:
             if e.errno != errno.EXDEV:
                 raise
@@ -461,7 +491,7 @@ def kopieer_een(bron: Path, doelmap: Path, verplaats: bool, achter: list | None 
             _kopieer_bestand(bron, tijdelijk, stop) if stop else _kopieer_bestand(bron, tijdelijk)
         if stop and stop():
             raise Gestopt()   # Stoppen tijdens het laatste bestand: dan ook niets afmaken (en bij verplaatsen niets weg) (U115)
-        os.rename(tijdelijk, doel)
+        doel = hernoem_veilig(tijdelijk, doel)   # nooit over iets heen dat intussen die naam kreeg (U384)
     except OSError as e:
         ruim_op(tijdelijk)
         reden = _reden(e.errno, str(bron))

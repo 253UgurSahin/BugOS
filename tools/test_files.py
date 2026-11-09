@@ -238,6 +238,30 @@ _w = _sp2.run([sys.executable, str(ROOT / "system_files/usr/bin/bugos-welcome"),
 klopt(_r.stdout.strip() == "False" and _w.returncode == 0,
       f"U309/U310: bij elk inloggen geen Qt laden: bugos_drives zonder PySide6 ({_r.stdout.strip()}), Welkom stopt meteen ({_w.returncode})")
 
+# U384: komt er tijdens het kopiëren een ander bestand met dezelfde naam (een tweede venster, een download), dan wordt
+# dat niet overschreven: de kopie krijgt een vrije naam.
+import bugos_files_acties as _ac2  # noqa: E402
+
+_race_bron = TMP / "race-bron"
+_race_bron.mkdir()
+(_race_bron / "IMG_0001.JPG").write_bytes(b"A" * 300_000)
+_race_doel = TMP / "race-doel"
+_race_doel.mkdir()
+_gemaakt = []
+
+
+def _stop():
+    if not _gemaakt:
+        (_race_doel / "IMG_0001.JPG").write_bytes(b"van telefoon B")
+        _gemaakt.append(1)
+    return False
+
+
+_klaar = _ac2.kopieer_een(_race_bron / "IMG_0001.JPG", _race_doel, verplaats=False, stop=_stop)
+klopt((_race_doel / "IMG_0001.JPG").read_bytes() == b"van telefoon B" and _klaar is not None and _klaar.name != "IMG_0001.JPG"
+      and _klaar.read_bytes() == b"A" * 300_000,
+      f"U384: een bestand dat tijdens het kopiëren dezelfde naam kreeg, wordt niet overschreven ({_klaar and _klaar.name})")
+
 # 7c. snelkoppelingen: telt waar de koppeling zelf staat (kapot of naar een andere schijf)
 (docs / "kapot").symlink_to(TMP / "bestaat-niet")
 klopt(b.zelfde_schijf(docs / "kapot", thuis), "snelkoppeling: een kapotte koppeling in Documenten mag naar de prullenbak")
