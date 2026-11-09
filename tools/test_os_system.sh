@@ -483,5 +483,17 @@ klopt '[ "$code" -eq 2 ]' "U258: 'nobody' (65534) en systeemgebruikers boven UID
 nep id 'echo 0'
 klopt 'grep -qx "umask 022" "$BIN/bugos-updates"' "U247: de updatekeuze is voor iedereen leesbaar, ook met umask 077"
 klopt 'grep -q "rpm-ostree-countme.timer" "$ROOT/build_files/system.sh"' "U250: de bouw zet de wekelijkse countme-tel van Fedora uit (BugOS verzamelt niets)"
+# U264: de FPS-teller ook in games uit de Winkel (Flatpak): MangoHud voor elke freedesktop-fundering.
+kopie bugos-flatpak-style
+nep flatpak 'case "$1" in
+remotes) echo flathub;;
+list) printf "org.freedesktop.Platform\t24.08\norg.kde.Platform\t6.9\n";;
+info) exit 1;;
+install) echo "$*" >>"'"$TMP"'/fp-install";;
+esac; exit 0'
+: >"$TMP/fp-install"
+draai bugos-flatpak-style
+klopt 'grep -q "org.freedesktop.Platform.VulkanLayer.MangoHud//24.08" "$TMP/fp-install" && grep -q "org.kde.KStyle.Kvantum//6.9" "$TMP/fp-install"' \
+    "U264: de FPS-teller werkt ook in games uit de Winkel (MangoHud voor Flatpak)"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
