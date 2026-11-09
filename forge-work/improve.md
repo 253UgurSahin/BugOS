@@ -1264,6 +1264,32 @@ test files passed (here).
 ### U499 [low] Bluetooth on after airplane mode often showed "Off" again (the adapter comes back a moment later)
   commit: 0660bac   test: tools/test_os_settings.py
 
+## Round 41 (2026-11-09)
+Two reviewers: the round-40 fixes (3 found: U503-U505), and a fresh sweep of "the Files app in daily use" (1 high
+plus 6 low/medium-low: U506-U512). All fixed, each with a test that failed first (U512 checked in the source).
+Tests after: 20 test files passed (here).
+
+### U503 [low-medium] (from U498) After a failed connect, Wi-Fi deleted all profiles for the SSID, also on a timeout or out of range, and also an older working "Home 1"
+  commit: b48ddb1   test: tools/test_os_settings.py (only the profile that is new, only on a password error; nmcli --wait)
+### U504 [low] (sibling of U499) Bluetooth on from the quick menu after airplane mode did not wait for the adapter
+  commit: b48ddb1   test: tools/test_start_data.py
+### U505 [low] (from U494) The "Updating…" notification stayed after Cancel and stacked with the result
+  commit: b48ddb1   test: tools/test_os_system.sh
+### U506 [high] Ctrl+A in Files selected every item four times (one per column): copy made four copies, cut/delete reported errors and lost Undo
+  commit: 77c44ff   test: tools/test_files.py
+### U507 [medium-low] Renaming "Recept" (shown without .odt) to "Taart" made a file without extension
+  commit: 6bc30c5   test: tools/test_files.py (only the name part is selected; the hidden extension is kept)
+### U508 [low] Rename/new-folder errors were raw English system text ("Invalid argument")
+  commit: 6bc30c5   test: tools/test_files.py
+### U509 [low] A new folder named "." was made next to the current folder, ".." became hidden
+  commit: 6bc30c5   test: tools/test_files.py
+### U510 [low] A folder you may not read (another account's home) opened as "This folder is empty"
+  commit: 74376b6   test: tools/test_files.py
+### U511 [low] The places on the left (and the trash) did not open with Enter
+  commit: 74376b6   test: tools/test_files.py
+### U512 [low-medium] In a big photo folder the visible previews waited behind every tile scrolled past
+  commit: 74376b6   (newest request first in the thread pool)
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -1407,6 +1433,10 @@ test files passed (here).
   (the quick menu and Help use `wpctl`). Also check `bluedevil-wizard` still exists in Plasma 6.8.
 - U502 (round 40, unsure): if `distrobox upgrade` is killed by the time limit, dnf may keep running inside the box;
   the next run then fails on dnf's lock and retries later.
+- U513 (round 41, M): emptying a big trash runs on the window's thread and can freeze Files for seconds.
+- U514 (round 41, design): dragging within your own files always copies (moving needs Shift); Windows and Dolphin
+  move on the same drive. Also missing: "Open with another program", deleting one item from the trash for good,
+  sort/view options, a remembered window size.
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
