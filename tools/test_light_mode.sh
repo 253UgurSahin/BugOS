@@ -19,8 +19,12 @@ K="$TMP/kde"
 nep kreadconfig6 'f="'"$K"'/$2.$4.$6"; [ -f "$f" ] && cat "$f"; exit 0'
 nep kwriteconfig6 'f="'"$K"'/$2.$4.$6"; if [ "$7" = --delete ]; then rm -f "$f"; else printf "%s" "$7" >"$f"; fi'
 # Nep-zoeker: de gebruiker had hem zelf uitgezet.
-echo disabled >"$TMP/baloo"
-nep balooctl6 'case "$1" in status) echo "Baloo is currently $(cat "'"$TMP"'/baloo")";; enable) echo enabled >"'"$TMP"'/baloo";; disable) echo disabled >"'"$TMP"'/baloo";; esac'
+# Zoals de echte balooctl6: 'status' zegt "uit" op stderr (vertaald) met code 1; de keuze staat in baloofilerc.
+mkdir -p "$K"
+printf false >"$K/baloofilerc.Basic Settings.Indexing-Enabled"
+nep balooctl6 'f="'"$K"'/baloofilerc.Basic Settings.Indexing-Enabled"; case "$1" in
+status) if [ "$(cat "$f" 2>/dev/null)" = false ]; then echo "Baloo is momenteel uitgeschakeld." >&2; exit 1; fi; echo "Baloo File Indexer is running";;
+enable) printf true >"$f";; disable) printf false >"$f";; esac'
 for p in qdbus6 notify-send kdialog; do nep "$p" 'exit 0'; done
 
 printf true >"$K/kwinrc.Plugins.blurEnabled"   # zelf ingesteld: wazige effecten aan
@@ -32,7 +36,12 @@ draai aan   # nog een keer aan mag niets kapot maken
 draai uit
 klopt '[ "$(cat "$K/kwinrc.Plugins.blurEnabled" 2>/dev/null)" = true ]' "uit: je eigen instelling (wazig aan) komt terug"
 klopt '[ ! -e "$K/kdeglobals.KDE.AnimationDurationFactor" ]' "uit: wat niet ingesteld was, is weer niet ingesteld"
-klopt '[ "$(cat "$TMP/baloo")" = disabled ]' "uit: de zoeker blijft uit, want die had je zelf uitgezet"
+klopt '[ "$(cat "$K/baloofilerc.Basic Settings.Indexing-Enabled")" = false ]' "uit: de zoeker blijft uit, want die had je zelf uitgezet (U056)"
+# En stond hij aan, dan komt hij na 'uit' weer aan.
+printf true >"$K/baloofilerc.Basic Settings.Indexing-Enabled"
+draai aan
+draai uit
+klopt '[ "$(cat "$K/baloofilerc.Basic Settings.Indexing-Enabled")" = true ]' "uit: stond de zoeker aan, dan komt hij weer aan"
 
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

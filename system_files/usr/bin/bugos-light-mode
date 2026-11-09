@@ -49,7 +49,9 @@ aan() {
         waarde="$(kreadconfig6 --file "$bestand" --group "$groep" --key "$sleutel" 2>/dev/null)"
         printf '%s\t%s\n' "$regel" "${waarde:--}" >>"$VOOR"
     done
-    if baloo status | grep -qi disabled; then
+    # Stond het zoeken in bestanden al uit? Dat staat in de instelling zelf ('baloo status' meldt "uit"
+    # in de taal van de gebruiker en op stderr, dus daar lezen we het niet uit).
+    if [ "$(kreadconfig6 --file baloofilerc --group "Basic Settings" --key Indexing-Enabled 2>/dev/null)" = false ]; then
         printf 'baloo\tuit\n' >>"$VOOR"
     else
         printf 'baloo\taan\n' >>"$VOOR"
