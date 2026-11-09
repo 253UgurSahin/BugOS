@@ -101,7 +101,7 @@ class StartPagina(Blad):
     def ververs(self) -> None:
         def lees():
             return {"wifi": bi.wifi_aan(), "netwerken": bi.netwerken(), "bt": bi.bt_aan(), "nacht": bi.nachtlicht(),
-                    "donker": bi.donker(), "geluid": bi.geluid()}
+                    "donker": bi.donker(), "geluid": bi.geluid(), "heeft_wifi": bi.heeft_wifi()}
         op_achtergrond(self, lees, self.toon)
 
     def toon(self, s) -> None:
@@ -116,6 +116,8 @@ class StartPagina(Blad):
                 ("donker", s["donker"], t("Aan", "On") if s["donker"] else t("Uit", "Off"))):
             self.snel[sleutel].zet_stil(bool(aan))
             self.snel_uitleg[sleutel].setText(uitleg)
+        # Een pc zonder wifi (aan een kabel): geen wifi-tegel die niets doet (U111).
+        self.snel["wifi"].parentWidget().setVisible(s.get("heeft_wifi", True))
         volume, _stil, uitgangen = s["geluid"]
         self.volume.zet(volume)
         if nu:

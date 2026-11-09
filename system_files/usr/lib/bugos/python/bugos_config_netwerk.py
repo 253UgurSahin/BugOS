@@ -58,6 +58,14 @@ def lees_netwerken(uitvoer: str) -> list[Netwerk]:
     return sorted(beste.values(), key=lambda x: (not x.verbonden, -x.sterkte, x.naam.lower()))
 
 
+def heeft_wifi() -> bool:
+    """Heeft deze computer wifi? (nmcli zegt 'enabled' ook als er geen wifi-kaart is) (U111)."""
+    if _c.VOORBEELD:
+        return True
+    code, uit = _c.draai("nmcli", "-t", "-f", "TYPE", "device")
+    return code != 0 or any(r.strip() == "wifi" for r in uit.splitlines())
+
+
 def wifi_aan() -> bool:
     if _c.VOORBEELD:
         return _c._VB["wifi"]
@@ -86,13 +94,20 @@ def netwerken(opnieuw_zoeken: bool = False) -> list[Netwerk]:
     return lees_netwerken(uit)
 
 
-def verbind(naam: str, wachtwoord: str = "", bekend: bool = False) -> tuple[bool, str]:
+def verbind(naam: str, wachtwoord: str = "", bekend: bool = False, verborgen: bool = False) -> tuple[bool, str]:
     """Verbind met een wifi-netwerk. Het wachtwoord gaat via de invoer, niet op de opdrachtregel.
     bekend: het netwerk is al opgeslagen, maar het wachtwoord is veranderd. Dan het opgeslagen netwerk
     starten met --ask: werkt het oude wachtwoord niet, dan vraagt nmcli het nieuwe (en dat lezen we uit de invoer)."""
     if _c.VOORBEELD:
         _c._VB["verbonden"] = naam
         return True, ""
+    if verborgen:   # een netwerk dat zijn naam niet uitzendt: zelf de naam opgeven (U109)
+        if wachtwoord:
+            code, uit = _c.draai("nmcli", "--ask", "device", "wifi", "connect", naam, "hidden", "yes",
+                                 invoer=wachtwoord + "\n", timeout=45)
+        else:
+            code, uit = _c.draai("nmcli", "device", "wifi", "connect", naam, "hidden", "yes", timeout=45)
+        return code == 0, uit
     if wachtwoord and bekend:
         code, uit = _c.draai("nmcli", "--ask", "connection", "up", "id", naam, invoer=wachtwoord + "\n", timeout=60)
     elif wachtwoord:

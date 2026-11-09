@@ -116,9 +116,15 @@ klopt(all(a["soort"] == "app" for a in data["favorieten"]), "favorieten: geen in
 
 # 2. snelmenu-status
 # U061: zonder bluetooth-hardware vragen we bluetoothctl niets (die zou 5 s blijven wachten).
-nep("nmcli", "enabled")
+# Zonder wifi in de computer (een pc aan een kabel): geen wifi-tegel, ook al zegt nmcli 'enabled' (U111).
+(NEP / "nmcli").write_text("#!/usr/bin/bash\ncase \"$*\" in *TYPE*device*) printf 'ethernet\\nloopback\\n' ;; *) echo enabled ;; esac\n")
+(NEP / "nmcli").chmod(0o755)
 nep("bluetoothctl", "Waiting to connect to bluetoothd...")
 LOG.write_text("")
+s = json.loads(draai("--snel"))
+klopt(s["wifi"] is None, f"U111: snelmenu: geen wifi in de computer: geen wifi-tegel ({s['wifi']})")
+(NEP / "nmcli").write_text("#!/usr/bin/bash\ncase \"$*\" in *TYPE*device*) printf 'wifi\\nethernet\\n' ;; *) echo enabled ;; esac\n")
+(NEP / "nmcli").chmod(0o755)
 s = json.loads(draai("--snel"))
 klopt(s["bluetooth"] is None and "bluetoothctl" not in LOG.read_text(),
       "U061: geen bluetooth in de computer: geen tegel, en bluetoothctl wordt niet gevraagd")

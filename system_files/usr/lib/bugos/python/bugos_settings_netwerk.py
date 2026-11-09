@@ -5,7 +5,7 @@ from __future__ import annotations
 import bugos_config as bi
 from bugos_ui import Knop, Rij, bestaat, kde_instelling, leeg_groep, sectie, start, t
 from bugos_settings_onderdelen import Blad, meer_knop, op_achtergrond, schuifje
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QHBoxLayout, QInputDialog, QLineEdit
 
 
@@ -39,17 +39,28 @@ class WifiPagina(Blad):
         kop.addWidget(self.zoek_knop)
         self.lay.addLayout(kop)
         self.lijst = self.kaart()
+        # Een netwerk dat zijn naam niet laat zien (een 'verborgen' netwerk) (U109).
+        self.ander = Knop(t("Ander netwerk…", "Other network…"), "stil", "lijn:plus")
+        self.ander.clicked.connect(lambda _c=False: self.verbind_verborgen())
+        self.lay.addWidget(self.ander, 0, Qt.AlignmentFlag.AlignLeft)
 
     def ververs(self, opnieuw: bool = False) -> None:
         self.hoofd.zet_uitleg(t("Even zoeken…", "Searching…"))
-        op_achtergrond(self, lambda: (bi.wifi_aan(), bi.netwerken(opnieuw), bi.kabel_verbonden()), self.toon)
+        op_achtergrond(self, lambda: (bi.wifi_aan(), bi.netwerken(opnieuw), bi.kabel_verbonden(), bi.heeft_wifi()),
+                       self.toon)
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:
             return
-        aan, netwerken, kabel = uitkomst
+        aan, netwerken, kabel, wifi = uitkomst
         self.schakel.zet_stil(aan)
         self.kabel.setVisible(kabel)
+        # Zonder wifi in de computer: dat zeggen, en geen schakelaar of lijst die niets doen (U111).
+        for w in (self.schakel, self.zoek_knop, self.lijst, self.ander):
+            w.setVisible(wifi)
+        if not wifi:
+            self.hoofd.zet_uitleg(t("Deze computer heeft geen wifi", "This computer has no Wi-Fi"))
+            return
         nu = next((n for n in netwerken if n.verbonden), None)
         self.hoofd.zet_uitleg(t(f"Verbonden met {nu.naam}", f"Connected to {nu.naam}") if nu else
                               (t("Niet verbonden", "Not connected") if aan else t("Uit", "Off")))
@@ -116,13 +127,47 @@ class WifiPagina(Blad):
                 if nieuw:
                     self.verbind_met(n, True, nieuw)
                     return
-            self.melding.toon(t(f"Verbonden met {n.naam}.", f"Connected to {n.naam}.") if gelukt else
-                              t("Verbinden lukte niet. Klopt het wachtwoord? Probeer het nog eens.",
-                                "Connecting did not work. Is the password right? Try again."),
+            # Een open netwerk heeft geen wachtwoord: dan niet daarnaar vragen (U110).
+            mislukt = t("Verbinden lukte niet. Klopt het wachtwoord? Probeer het nog eens.",
+                        "Connecting did not work. Is the password right? Try again.") if n.beveiligd else \
+                t("Verbinden lukte niet. Ben je dichtbij genoeg? Probeer het nog eens.",
+                  "Connecting did not work. Are you close enough? Try again.")
+            self.melding.toon(t(f"Verbonden met {n.naam}.", f"Connected to {n.naam}.") if gelukt else mislukt,
                               "goed" if gelukt else "fout")
             self.ververs()
 
         op_achtergrond(self, lambda: bi.verbind(n.naam, wachtwoord, bekend), klaar)
+
+    def verbind_verborgen(self) -> None:
+        d = QInputDialog(self)
+        d.setWindowTitle(t("Ander netwerk", "Other network"))
+        d.setLabelText(t("Wat is de naam van het netwerk?", "What is the name of the network?"))
+        d.setOkButtonText(t("Verder", "Next"))
+        d.setCancelButtonText(t("Annuleren", "Cancel"))
+        if not d.exec() or not d.textValue().strip():
+            return
+        naam = d.textValue().strip()
+        w = QInputDialog(self)
+        w.setWindowTitle(t("Wachtwoord", "Password"))
+        w.setLabelText(t(f"Wat is het wachtwoord van '{naam}'?\n(Geen wachtwoord? Laat het leeg.)",
+                         f"What is the password of '{naam}'?\n(No password? Leave it empty.)"))
+        w.setTextEchoMode(QLineEdit.EchoMode.Password)
+        w.setOkButtonText(t("Verbinden", "Connect"))
+        w.setCancelButtonText(t("Annuleren", "Cancel"))
+        if not w.exec():
+            return
+        wachtwoord = w.textValue()
+        self.melding.toon(t(f"Verbinden met {naam}…", f"Connecting to {naam}…"), seconden=30)
+
+        def klaar(uitkomst) -> None:
+            gelukt = bool(uitkomst and uitkomst[0])
+            self.melding.toon(t(f"Verbonden met {naam}.", f"Connected to {naam}.") if gelukt else
+                              t("Verbinden lukte niet. Klopt de naam (let op hoofdletters) en het wachtwoord?",
+                                "Connecting did not work. Are the name (mind capitals) and password right?"),
+                              "goed" if gelukt else "fout")
+            self.ververs()
+
+        op_achtergrond(self, lambda: bi.verbind(naam, wachtwoord, verborgen=True), klaar)
 
     def verbreek(self, n: bi.Netwerk) -> None:
         op_achtergrond(self, lambda: bi.verbreek(n.naam), lambda _u: self.ververs())

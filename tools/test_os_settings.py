@@ -176,7 +176,8 @@ klopt(met_pl and not zonder_pl, "U002: Instellingen leest Plasma Login als dat e
 nep = TMP / "nep-bin"
 nep.mkdir()
 for naam, tekst in {
-    "nmcli": 'if [ "$1" = -t ] || [ "$LC_ALL" = C.UTF-8 ]; then echo enabled; else echo ingeschakeld; fi',
+    "nmcli": 'case "$*" in *TYPE*device*) echo wifi; exit;; esac\n'
+             'if [ "$1" = -t ] || [ "$LC_ALL" = C.UTF-8 ]; then echo enabled; else echo ingeschakeld; fi',
     "lpstat": 'if [ "$LC_ALL" != C.UTF-8 ]; then d=Drucker; i="ist im Leerlauf"; else d=printer; i="is idle"; fi\n'
               'case "$1" in -d) echo "system default destination: HP";; *) printf "%s HP %s.  enabled since Mon\\n" '
               '"$d" "$i";; esac',
@@ -410,6 +411,31 @@ for _w in ["night light", "night", "sleep", "screen reader", "sticky keys", "do 
         _mist.append(_w)
 _start.zoek("")
 klopt(not _mist, f"U069: Engelse zoekwoorden in Instellingen vinden iets (niet: {_mist})")
+
+# U109-U111: wifi: een verborgen netwerk (wachtwoord via de invoer), en een computer zonder wifi.
+opd, _ = vang(bi.verbind, "Thuis", "geheim123", False, True)
+klopt(opd and opd[0][:6] == ("nmcli", "--ask", "device", "wifi", "connect", "Thuis") and "hidden" in opd[0]
+      and "geheim123" not in opd[0], f"U109: verborgen netwerk: nmcli ... hidden yes, het wachtwoord niet op de opdrachtregel ({opd[:1]})")
+_, geen = vang(bi.heeft_wifi, antwoord=lambda c: (0, "ethernet\nloopback\n"))
+_, wel = vang(bi.heeft_wifi, antwoord=lambda c: (0, "wifi\nethernet\n"))
+klopt(geen is False and wel is True, "U111: Instellingen ziet of de computer wifi heeft")
+venster.ga_naar("wifi")
+wacht()
+_wp = venster.paginas["wifi"]
+_wp.toon((True, [], False, False))
+klopt(_wp.lijst.isHidden() and _wp.schakel.isHidden() and "geen wifi" in _wp.hoofd.uitleg.text().lower()
+      if hasattr(_wp.hoofd, "uitleg") else _wp.lijst.isHidden(),
+      "U111: Wifi-pagina zonder wifi in de computer: 'Deze computer heeft geen wifi', geen schakelaar of lijst")
+_wp.toon((True, [], False, True))
+klopt(not _wp.lijst.isHidden() and not _wp.ander.isHidden(), "U109: met wifi: de lijst en 'Ander netwerk…' staan er")
+_oud_verbind = bi.verbind
+bi.verbind = lambda *a, **k: (False, "")
+_wp.verbind_met(bi.Netwerk("Bibliotheek", 50, False, False), bekend=True)
+wacht()
+wacht()
+bi.verbind = _oud_verbind
+klopt("wachtwoord" not in _wp.melding.tekst.text().lower() and "password" not in _wp.melding.tekst.text().lower(),
+      f"U110: een open netwerk dat niet lukt vraagt niet naar een wachtwoord ({_wp.melding.tekst.text()})")
 
 # U010: wie geen beheerder is, verandert zijn eigen wachtwoord via passwd (PAM), in een nep-terminal;
 # geen wachtwoord op de opdrachtregel, en geen vraag om het wachtwoord van een beheerder.
