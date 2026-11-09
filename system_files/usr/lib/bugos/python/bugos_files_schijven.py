@@ -319,6 +319,12 @@ class Schijven:
             return
         delen = [x for x in self.lijst_schijven if x.station == station]
         naam = delen[0].naam if delen else t("De schijf", "The drive")
+        # Loopt er in dit venster nog een kopie (naar of van deze schijf)? Dan niet: tussen twee bestanden is de stick
+        # even 'vrij', en dan zei BugOS 'je mag hem eruit halen' terwijl het kopiëren nog bezig was (U386).
+        if self.klus is not None and self.klus.isRunning():
+            self.melding.toon(t("Even wachten: er loopt nog iets (kopiëren of weggooien).",
+                                "One moment: something is still busy (copying or deleting)."), "let_op")
+            return
         stappen, laatste = uitwerp_stappen(self.lijst_schijven, station)
         if not shutil.which("udisksctl"):
             self.melding.toon(t("Veilig verwijderen kan hier niet.", "Safe removal is not available here."), "fout")

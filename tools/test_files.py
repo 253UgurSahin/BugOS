@@ -567,6 +567,23 @@ venster.leegmaak_schijf(windows)                    # intern: nooit
 venster.leegmaak_schijf(venster.lijst_schijven[0])  # de stick die er echt in zit
 venster.vraag_ja, venster.beheer = _oud_vraag, _oud_beheer
 klopt(_gewist == ["/dev/sdx1"], "leegmaken: alleen de stick die er nu echt in zit (geen andere, geen interne)")
+# U386: 'Veilig verwijderen' terwijl dit venster nog kopieert: wachten. U387: een schijf die een ander account opende.
+class _BezigeKlus:
+    def isRunning(self):  # noqa: N802
+        return True
+
+
+_oud_klus = venster.klus
+venster.klus = _BezigeKlus()
+_bezig_voor = set(venster.bezig)
+venster.uitwerpen("/dev/sdx")
+_uit_bezig = "/dev/sdx" in venster.bezig
+venster.klus = _oud_klus
+klopt(not _uit_bezig and "Even wachten" in venster.melding.tekst.text(),
+      f"U386: 'Veilig verwijderen' tijdens het kopiëren wacht ({venster.melding.tekst.text()!r})")
+venster.ga_naar(Path("/run/media/iemand-anders/FOTOS"))
+klopt("iemand-anders" in venster.melding.tekst.text(),
+      f"U387: een stick die een ander account opende: dat wordt gezegd ({venster.melding.tekst.text()!r})")
 # U369: 'In gebruik nemen': terwijl je een naam kiest, zit er een andere stick op dezelfde plek (sdx, met bestanden):
 # niets wissen.
 _leeg = sch.Schijf("/dev/sdx", "USB-stick (16 GB)", "stick", "/dev/sdx", "/dev/sdx", grootte=16000000000, nieuw=True)

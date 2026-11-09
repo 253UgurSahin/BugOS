@@ -7,6 +7,8 @@ en de knoppen Terug, Vooruit en Omhoog. Dit is een stukje van het venster
 
 from __future__ import annotations
 
+import getpass
+
 from pathlib import Path
 
 from bugos_ui import lijn_icoon, px, t
@@ -99,7 +101,19 @@ class Navigeren:
     # -------------------------------------------------------- navigeren
     def ga_naar(self, pad: Path, geschiedenis: bool = True) -> None:
         pad = Path(pad)
-        if not pad.is_dir():
+        try:
+            is_map = pad.is_dir()
+        except PermissionError:
+            is_map = False
+        if not is_map:
+            # Open voor een ander account (snel wisselen: de schijf hangt onder /run/media/<die naam>) (U387).
+            delen = pad.parts
+            if len(delen) > 3 and delen[1:3] in (("run", "media"),) and delen[3] != getpass.getuser():
+                self.melding.toon(t(f"'{pad.name}' is geopend door {delen[3]}. Vraag die om hem veilig te verwijderen, "
+                                    "en steek hem er dan opnieuw in.",
+                                    f"'{pad.name}' was opened by {delen[3]}. Ask them to remove it safely, then plug it "
+                                    "in again."), "let_op")
+                return
             self.melding.toon(t(f"De map '{pad.name}' bestaat niet (meer).", f"The folder '{pad.name}' does not exist."), "fout")
             return
         if geschiedenis and (self.in_prullenbak or self.in_computer or pad != self.huidig):
