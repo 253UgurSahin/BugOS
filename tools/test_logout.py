@@ -280,6 +280,51 @@ def main() -> int:
         klopt(g.zichtbaar() == ["knop_slaap", "knop_afmelden", "knop_annuleren"], "zonder uitzetrechten: geen 'Uitzetten' en 'Opnieuw opstarten'")
         klopt(g.focus() == "knop_afmelden", "zonder uitzetrechten: 'Afmelden' heeft de focus")
 
+    # U088: twee beeldschermen (de greeter maakt per scherm een venster, met één gedeelde QML-motor): doe je iets op
+    # het ene scherm, dan stopt het aftellen ook op het andere, en er wordt niets vanzelf uitgezet.
+    from PySide6.QtQml import QQmlEngine
+    motor = QQmlEngine()
+    twee, signalen = [], []
+    for i in range(2):
+        v = QQuickView(motor, None)
+        ctx = v.rootContext()
+        for k, w in (("sdtype", SHUTDOWN_TYPE["ShutdownTypeHalt"]), ("ShutdownType", SHUTDOWN_TYPE), ("maysd", True),
+                     ("canLogout", True), ("spdMethods", SPD), ("screenGeometry", SCHERM)):
+            ctx.setContextProperty(k, w)
+        v.setInitialProperties({"logo": QUrl.fromLocalFile(str(LOGO)), "wachttijd": 2})
+        v.setSource(QUrl.fromLocalFile(str(QML)))
+        v.rootObject().haltRequested.connect(lambda i=i: signalen.append(i))
+        v.show()
+        twee.append(v)
+    twee[0].requestActivate()
+    QTest.qWaitForWindowActive(twee[0])
+    QTest.qWait(300)
+    k = twee[0].rootObject().findChild(QQuickItem, "knop_uit")
+    QTest.mouseMove(twee[0], QPoint(10, 10))   # eerst ernaast, dan erop: zoals de greeter-test hierboven
+    QTest.qWait(50)
+    QTest.mouseMove(twee[0], k.mapToScene(QPointF(k.width() / 2, k.height() / 2)).toPoint())
+    QTest.qWait(3000)
+    klopt(twee[1].rootObject().property("gestopt") and not signalen,
+          f"U088: twee schermen: iets doen op het ene stopt het aftellen ook op het andere (vanzelf: {signalen})")
+    for v in twee:
+        v.close()
+    motor2 = QQmlEngine()
+    twee, signalen = [], []
+    for i in range(2):
+        v = QQuickView(motor2, None)
+        ctx = v.rootContext()
+        for k, w in (("sdtype", SHUTDOWN_TYPE["ShutdownTypeHalt"]), ("ShutdownType", SHUTDOWN_TYPE), ("maysd", True),
+                     ("canLogout", True), ("spdMethods", SPD), ("screenGeometry", SCHERM)):
+            ctx.setContextProperty(k, w)
+        v.setInitialProperties({"logo": QUrl.fromLocalFile(str(LOGO)), "wachttijd": 1})
+        v.setSource(QUrl.fromLocalFile(str(QML)))
+        v.rootObject().haltRequested.connect(lambda i=i: signalen.append(i))
+        twee.append(v)
+    QTest.qWait(2500)
+    klopt(len(signalen) == 1, f"U088: twee schermen, niemand doet iets: er wordt één keer uitgezet ({signalen})")
+    for v in twee:
+        v.close()
+
     klopt(not qt_meldingen, "geen QML-waarschuwingen tijdens de hele test")
 
     if uit:

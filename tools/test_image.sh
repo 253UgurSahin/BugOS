@@ -61,6 +61,7 @@ klopt 'grep -A3 "^\[Icons\]" /etc/xdg/kdeglobals | grep -q "Theme=BugOS"' "stijl
 klopt 'grep -q "widgetStyle=kvantum" /etc/xdg/kdeglobals && [ -d /usr/share/Kvantum/BugOS ] && [ -d /usr/share/Kvantum/BugOSDark ] && grep -q "^theme=BugOS$" /etc/xdg/Kvantum/kvantum.kvconfig' "stijl: Kvantum met BugOS licht en donker"
 klopt '[ -f /usr/share/color-schemes/BugOSLight.colors ] && [ -f /usr/share/color-schemes/BugOSDark.colors ]' "stijl: kleurschema's licht en donker"
 klopt '[ -f /usr/share/bugos/wine/licht.reg ] && [ -f /usr/share/bugos/wine/donker.reg ]' "Windows-programma's: licht.reg en donker.reg"
+klopt '[ -f /usr/share/plasma/shells/org.kde.plasma.desktop/contents/logout/bugos-aftellen.js ] && [ -f /usr/share/plasma/look-and-feel/org.bugos.desktop/contents/logout/bugos-aftellen.js ]' "uitzetscherm: bugos-aftellen.js staat naast Logout.qml (U088)"
 klopt 'fc-list | grep -q "Inter" && fc-list | grep -q "JetBrains Mono"' "letters: Inter en JetBrains Mono geïnstalleerd"
 
 # 6. Alles laadt met de Qt, KDE en Python van het beeld zelf

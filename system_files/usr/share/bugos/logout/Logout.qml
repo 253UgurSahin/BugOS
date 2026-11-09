@@ -19,6 +19,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
+import "bugos-aftellen.js" as Aftellen
 
 Item {
     id: root
@@ -65,13 +66,13 @@ Item {
     property int resterend: wachttijd
     property bool gestopt: false
     property bool klaar: false   // pas als alles staat, telt een aanraking als "iets doen"
-    function stopAftellen() { if (klaar) gestopt = true }
+    function stopAftellen() { if (klaar) Aftellen.stopOveral() }   // op elk scherm (U088)
     function doeHetVanzelf() {
         if (uitzetten) { if (updateKlaar) haltUpdateRequested(); else haltRequested() }
         else if (herstarten) { if (updateKlaar) rebootUpdateRequested(); else rebootRequested() }
         else logoutRequested()
     }
-    Component.onCompleted: klaar = true
+    Component.onCompleted: { Aftellen.meld(function () { root.gestopt = true }); klaar = true }
 
     // Een BugOS-lijnicoon (24 x 24, lijn van 2, ronde uiteinden) als plaatje, zonder los bestand.
     function icoon(paden) {
@@ -97,7 +98,7 @@ Item {
         interval: 1000
         onTriggered: {
             root.resterend--
-            if (root.resterend <= 0) { root.gestopt = true; root.doeHetVanzelf() }
+            if (root.resterend <= 0) { root.gestopt = true; if (Aftellen.eenKeer()) root.doeHetVanzelf() }
         }
     }
 

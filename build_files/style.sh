@@ -171,9 +171,11 @@ if [ -d "$UITZET_SHELL" ]; then
         cp -a "$UITZET_SHELL/Logout.qml" "$UITZET_SHELL/Logout.qml.kde"
     fi
     install -m0644 "$UITZET" "$UITZET_SHELL/Logout.qml"
+    install -m0644 "${UITZET%/*}/bugos-aftellen.js" "$UITZET_SHELL/bugos-aftellen.js"
 fi
 mkdir -p /usr/share/plasma/look-and-feel/org.bugos.desktop/contents/logout
 install -m0644 "$UITZET" /usr/share/plasma/look-and-feel/org.bugos.desktop/contents/logout/Logout.qml
+install -m0644 "${UITZET%/*}/bugos-aftellen.js" /usr/share/plasma/look-and-feel/org.bugos.desktop/contents/logout/bugos-aftellen.js
 
 # Opstartlogo (Plymouth): het BugOS-logo onderaan het opstartscherm.
 if [ -d /usr/share/plymouth/themes/spinner ]; then
