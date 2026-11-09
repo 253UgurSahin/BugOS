@@ -850,8 +850,8 @@ checked by reading the script only (no PowerShell here); the Windows CI runs it.
 
 ## Round 22 (2026-11-09)
 Two reviewers: the round-21 fixes (3 found plus 3 unsure: U296-U299), and a fresh sweep of upgrading a machine that
-has been in use for months, including /etc merges and rollback (4 found plus 3 unsure: U300-U303). 8 fixed, each
-with a test that failed first. Tests after: 20 test files passed (here).
+has been in use for months, including /etc merges and rollback (4 found plus 3 unsure: U300-U303). 9 fixed (including U239
+from the Skipped list), each with a test that failed first. Tests after: 20 test files passed (here).
 
 Note: `main` (the tree before the English rename) was built and pushed as an image on 2026-11-03, so "main image
 → this branch" is a real upgrade path (U302). Earlier rounds said no image had been released; that was not right.
@@ -873,6 +873,8 @@ version still said "automatic" and staged the newer one again within an hour (U0
 ### U302 [medium, machines on a pre-rename image] Renamed ids were not migrated: broken quick-menu widget, pinned taskbar
 apps gone, dark mode showing as light (BugOSDonker), FPS counter stuck on
   commit: b87b83f   test: tools/test_panel.sh (simulated panel), tools/test_os_system.sh
+### U239 [low] (was skipped in round 17) PCs whose first boot had already finished never got Gwenview and Okular
+  commit: 4c764a2   test: tools/test_os_system.sh (main's image exists, so such PCs can exist)
 ### U303 [low] After switching to signed updates and going back, the PC stayed on unverified updates for good
   commit: 9b932d6   test: tools/test_signed.sh
 
@@ -883,8 +885,6 @@ apps gone, dark mode showing as light (BugOSDonker), FPS counter stuck on
 - U163: two small blocking calls in Settings (usually well under a second).
 - U230 (round 16): "Show in folder" in Firefox and notifications opens Dolphin, not Files. Files would have to
   provide org.freedesktop.FileManager1 on D-Bus next to Dolphin's own service (M; needs a real Plasma session to test).
-- U239 (round 17, from U224): PCs whose first boot already finished do not get Gwenview and Okular (first boot runs
-  once). No BugOS image has been released yet, so no such PC exists; add a one-off step if that changes.
 - U240 (round 17, unsure): the daily `flatpak uninstall --unused` as root may remove a runtime that only another
   account's own (--user) app needs. BugOS installs apps system-wide; only Discover --user installs are exposed.
 - U252 (round 18, unsure): Language change removes paper/money/measurement choices you made yourself in KDE's
