@@ -42,8 +42,10 @@ esac
 TOON="${NAAM//\\/\\\\}"
 
 # Stap 1: staat het in de Winkel?
-GEVONDEN="$(flatpak search --columns=application "$NAAM" 2>/dev/null | head -n1)"
-if [ -n "$GEVONDEN" ] && [ "$GEVONDEN" != "No matches found" ]; then
+# LC_ALL=C: anders zegt flatpak "Geen overeenkomsten gevonden" (in je eigen taal) en zouden we dat voor een app aanzien.
+# En alleen iets dat op een app-naam lijkt (org.voorbeeld.App) telt.
+GEVONDEN="$(LC_ALL=C flatpak search --columns=application "$NAAM" 2>/dev/null | head -n1)"
+if [[ "$GEVONDEN" =~ ^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+$ ]]; then
     if vraag "$(t \
         "\"$TOON\" staat ook in de BugOS Winkel. Dat is veiliger en krijgt vanzelf updates.\n\nWil je het uit de Winkel halen?" \
         "\"$TOON\" is also in the BugOS Store. That is safer and updates automatically.\n\nDo you want to get it from the Store?")"; then

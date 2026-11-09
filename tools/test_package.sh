@@ -35,5 +35,18 @@ RAAR2="$TMP/app \"2\" \$HOME.rpm"
 installeer "$RAAR2"
 klopt 'grep -qxF -- "$RAAR2" "$TMP/dnf-args" 2>/dev/null' "naam met spaties, \" en \$: dnf krijgt precies het bestand"
 
+# U057: in het Nederlands zegt flatpak "Geen overeenkomsten gevonden": dat is geen app, dus niet "staat in de Winkel".
+nep flatpak 'if [ "$1" = search ]; then if [ "${LC_ALL:-}" = C ]; then echo "No matches found"; else echo "Geen overeenkomsten gevonden"; fi; fi; exit 0'
+nep kdialog 'echo "$*" >>"'"$TMP"'/gevraagd"; exit 0'
+nep bugos-store 'echo "$*" >"'"$TMP"'/winkel"; exit 0'
+rm -f "$TMP/gevraagd" "$TMP/winkel"
+LANG=nl_NL.UTF-8 installeer "$TMP/eigen-app.rpm"
+klopt '! grep -qi "winkel\|store" "$TMP/gevraagd" 2>/dev/null && [ ! -f "$TMP/winkel" ]' \
+    "U057: geen app in de Winkel (Nederlandse flatpak): niet vragen of het 'ook in de Winkel' staat"
+nep flatpak 'if [ "$1" = search ]; then echo "org.voorbeeld.App"; fi; exit 0'
+rm -f "$TMP/gevraagd" "$TMP/winkel"
+installeer "$TMP/voorbeeld.rpm"
+klopt 'grep -q "appstream://org.voorbeeld.App" "$TMP/winkel" 2>/dev/null' "U057: staat het wel in de Winkel, dan gaat het daarheen"
+
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
