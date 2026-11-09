@@ -196,7 +196,12 @@ def favorieten(apps: list[dict]) -> list[dict]:
     eigen = HOME / ".config/bugos/favorieten.json"
     try:
         ids = json.loads(eigen.read_text())
+        # Geen lijst (null, een getal, met de hand bewerkt)? Dan niet het hele startmenu leeg, maar de standaard (U414).
+        if not isinstance(ids, list):
+            raise ValueError("geen lijst")
+        ids = [i for i in ids if isinstance(i, str)]
     except (OSError, ValueError):
+        ids = list(STANDAARD_FAVORIETEN)
         cfg = configparser.RawConfigParser(strict=False)
         try:
             cfg.read("/etc/xdg/kicker-extra-favoritesrc")

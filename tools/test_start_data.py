@@ -119,6 +119,15 @@ fav = [a["id"] for a in data["favorieten"]]
 klopt(fav == ["firefox.desktop", "bugos-files.desktop", "steam.desktop"],
       f"favorieten: Firefox en Steam ook onder hun rpm-naam, zonder dubbelen ({fav})")
 klopt(all(a["soort"] == "app" for a in data["favorieten"]), "favorieten: geen instellingenpagina's")
+# U414: een favorietenbestand dat geen lijst is (null), maakt het startmenu niet leeg.
+(TMP / "thuis" / ".config" / "bugos").mkdir(parents=True, exist_ok=True)
+(TMP / "thuis" / ".config" / "bugos" / "favorieten.json").write_text("null")
+try:
+    _d414 = json.loads(draai())
+except ValueError:
+    _d414 = {}
+(TMP / "thuis" / ".config" / "bugos" / "favorieten.json").unlink()
+klopt(bool(_d414.get("apps")) and bool(_d414.get("favorieten")), "U414: favorieten.json met 'null': het startmenu blijft gevuld")
 
 # 2. snelmenu-status
 # U061: zonder bluetooth-hardware vragen we bluetoothctl niets (die zou 5 s blijven wachten).
