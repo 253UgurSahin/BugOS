@@ -919,6 +919,10 @@ else:
     os.environ["XDG_CONFIG_HOME"] = _oud_cfg2
 klopt("Oud" not in _snap and "Nieuw" in _snap, f"U383: 'Grote letters' aan maakt een nieuwe momentopname (geen oude) ({_snap[:60]})")
 
+# U389: 'Nu updaten' terwijl er al een update loopt: zeg dat, niet 'ben je online?'.
+_up.klaar_met("nu", 1, "error: Transaction in progress: (null)\n")
+klopt("al een update" in _up.melding.tekst.text(), f"U389: er loopt al een update: dat wordt gezegd ({_up.melding.tekst.text()!r})")
+
 # U353: zoeken in Instellingen vindt ook woorden die op de pagina's staan (taakbalk, fps, opslag, dubbelklikken…).
 _mist = []
 for _w in ("taakbalk", "dubbelklikken", "fps", "opslag", "schijfruimte", "computernaam", "lettergrootte", "tekstgrootte",

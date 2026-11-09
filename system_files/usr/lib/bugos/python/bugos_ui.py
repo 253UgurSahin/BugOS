@@ -324,16 +324,26 @@ def _naar_voren(venster: QWidget, token: str) -> None:
     venster.activateWindow()
 
 
+_VROEG: dict = {}   # naam -> QLocalServer die al luistert terwijl het venster nog gebouwd wordt (U388)
+
+
+def _begin_luisteren(naam: str, ouder):
+    from PySide6.QtNetwork import QLocalServer
+    server = QLocalServer(ouder)
+    server.setSocketOptions(QLocalServer.SocketOption.UserAccessOption)
+    QLocalServer.removeServer(_een_naam(naam))   # een oude, achtergebleven naam (na een crash)
+    if not server.listen(_een_naam(naam)):
+        return None
+    return server
+
+
 def luister(naam: str, venster: QWidget) -> None:
     """Een tweede start van dit programma brengt dit venster naar voren (en geeft de opdracht door aan
     venster.tweede_start(args), als het venster dat kent) (U208)."""
     if os.environ.get("BUGOS_MEERDERE"):
         return
-    from PySide6.QtNetwork import QLocalServer
-    server = QLocalServer(venster)
-    server.setSocketOptions(QLocalServer.SocketOption.UserAccessOption)
-    QLocalServer.removeServer(_een_naam(naam))   # een oude, achtergebleven naam (na een crash)
-    if not server.listen(_een_naam(naam)):
+    server = _VROEG.pop(naam, None) or _begin_luisteren(naam, venster)
+    if server is None:
         return
 
     def nieuw() -> None:
@@ -385,6 +395,13 @@ def maak_app(naam: str, bureaublad_bestand: str, args: Sequence[str], een_keer: 
         app.setProperty("bugos_een_keer", naam)
         if al_open(naam, list(args)[1:]):
             raise SystemExit(0)
+        # Meteen luisteren, nog vóór het venster gebouwd is: een tweede start in die tijd (dubbelklik op het
+        # snelmenu) opende anders een tweede venster (U388). Wat dan binnenkomt, wordt afgehandeld zodra het
+        # venster er is (de tweede start wacht tot 2 s op 'ok').
+        if not os.environ.get("BUGOS_MEERDERE"):
+            vroeg = _begin_luisteren(naam, app)
+            if vroeg is not None:
+                _VROEG[naam] = vroeg
     app.setApplicationName(naam)
     app.setDesktopFileName(bureaublad_bestand)
     # Het eigen pictogram van de app (zelfde naam als het .desktop-bestand), zodat Alt+Tab en de taakbalk

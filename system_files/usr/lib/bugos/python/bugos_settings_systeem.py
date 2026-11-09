@@ -303,6 +303,10 @@ class UpdatesPagina(Blad):
             regels = [r.strip() for r in uit.splitlines() if r.strip()]
             self.melding.toon(regels[-1] if regels else t("Er is nog geen vorige versie.",
                                                           "There is no previous version yet."))
+        elif code != 0 and "Transaction in progress" in uit:
+            # Er loopt al een update (vanzelf, of van een ander account): dat is geen 'ben je online?' (U389).
+            self.melding.toon(t("Er loopt al een update. Probeer het over een paar minuten nog eens.",
+                                "An update is already running. Try again in a few minutes."), "let_op", seconden=0)
         elif code != 0:
             self.melding.toon(t("Dat lukte niet. Ben je online? Probeer het later nog eens.",
                                 "That did not work. Are you online? Try again later."), "fout", seconden=0)

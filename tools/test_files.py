@@ -133,10 +133,15 @@ def _andere_schijf(a, c):
 
 
 os.rename = _andere_schijf
+import bugos_files_acties as _ac0  # noqa: E402
+
+_echt_hv0 = _ac0.hernoem_veilig
+_ac0.hernoem_veilig = lambda a, c: (_andere_schijf(a, c), c)[1] if not _keer else _echt_hv0(a, c)   # (U384: renameat2)
 (docs / "verhuis").mkdir()
 (docs / "verhuis" / "a.txt").write_text("a")
 v2 = b.kopieer_een(docs / "verhuis", doel, verplaats=True)
 os.rename = _echt_rename
+_ac0.hernoem_veilig = _echt_hv0
 klopt(v2 == doel / "verhuis" and (v2 / "a.txt").read_text() == "a" and not (docs / "verhuis").exists()
       and not any(p.name.endswith(".bugos-bezig") for p in doel.iterdir()),
       "verplaatsen naar een andere schijf: alles over, origineel weg, geen tijdelijke map over")

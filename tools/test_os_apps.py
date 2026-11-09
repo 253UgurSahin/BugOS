@@ -125,8 +125,14 @@ for _verplaats in (False, True):
         _keer: list = []
         os.rename = lambda a, c, k=_keer: (k.append(1), (_ for _ in ()).throw(OSError(errno.EXDEV, "cross-device")))[1] \
             if not k else _echt_rename(a, c)
+        # Sinds U384 hernoemt BugOS met renameat2 (nooit overschrijven): ook daar de eerste keer 'andere schijf'.
+        _echt_hv = acties.hernoem_veilig
+        acties.hernoem_veilig = lambda a, c, k=_keer, h=_echt_hv: (k.append(1), (_ for _ in ()).throw(
+            OSError(errno.EXDEV, "cross-device")))[1] if not k else h(a, c)
     _doel = acties.kopieer_een(_b, STICK, _verplaats, _achter)
     os.rename = _echt_rename
+    if _verplaats:
+        acties.hernoem_veilig = _echt_hv
     _op_stick = sorted(p.name for p in _doel.iterdir())
     klopt(_op_stick == ["IMG_1.JPG", "Sub"] and (_doel / "IMG_1.JPG").read_text() == "groot"
           and [n for _p, n, _r in _achter] == ["Camera/img_1.jpg"] and "hoofdletters" in _achter[0][2].lower()
@@ -194,6 +200,16 @@ def eerste_rename_andere_schijf() -> None:
         return _echt_rename(a, c)
 
     os.rename = rename
+    # Sinds U384 hernoemt BugOS met renameat2: ook daar de eerste keer 'andere schijf'.
+    acties.hernoem_veilig = lambda a, c: (rename(a, c), c)[1] if not keer else _echt_hernoem(a, c)
+
+
+_echt_hernoem = acties.hernoem_veilig
+
+
+def herstel_rename() -> None:
+    os.rename = _echt_rename
+    acties.hernoem_veilig = _echt_hernoem
 
 
 vakantie = THUIS / "Vakantie"
@@ -247,7 +263,7 @@ try:
 except Exception as e:  # noqa: BLE001
     weg = None
     print("   ", type(e).__name__, e)
-os.rename = _echt_rename
+herstel_rename()
 klopt(weg is not None and (weg / "a.txt").exists() and (weg / "binnen" / "b.txt").exists()
       and not (weg / "binnen" / "c:d.txt").exists(),
       "U003: verplaatsen met één naam die niet mag: de rest staat op de stick")
@@ -313,7 +329,7 @@ klus.wegschrijven.connect(lambda: seinen.append("wegschrijven"))
 klus.klaar.connect(lambda g, f: seinen.append(("klaar", g, f)))
 eerste_rename_andere_schijf()
 klus.run()
-os.rename = _echt_rename
+herstel_rename()
 acties.schrijf_weg = _echt_schrijf_weg
 klopt(gezien == [(STICK / "Naar stick", True)] and not (THUIS / "Naar stick").exists()
       and (STICK / "Naar stick" / "a.txt").read_text() == "a",
@@ -336,7 +352,7 @@ try:
     gemeld = False
 except OSError:
     gemeld = True
-os.rename = _echt_rename
+herstel_rename()
 acties.schrijf_weg = _echt_schrijf_weg
 klopt(gemeld and (THUIS / "Blijft" / "b.txt").read_text() == "b",
       "U004: lukt het wegschrijven niet (stick eruit), dan blijft het origineel staan")
@@ -1080,12 +1096,14 @@ def _ander_schijf_rename(a, b_):
 
 
 acties.os.rename = _ander_schijf_rename
+acties.hernoem_veilig = lambda a, c: (_ander_schijf_rename(a, c), c)[1] if not _eerste_rename else _echt_hernoem(a, c)   # (U384)
 try:
     acties.kopieer_een(_film, _naar, True, [], stop=lambda: True)
     _uitkomst = "klaar"
 except acties.Gestopt:
     _uitkomst = "gestopt"
 acties.os.rename = _echt_rename
+acties.hernoem_veilig = _echt_hernoem
 klopt(_uitkomst == "gestopt" and _film.exists() and not (_naar / "film.mkv").exists()
       and not list(_naar.glob(".*bugos-bezig")),
       f"U115: stoppen tijdens één groot bestand (verplaatsen): het origineel blijft, niets half ({_uitkomst})")
@@ -1354,6 +1372,25 @@ def _tweede(naam, args, token=""):
     wacht(lambda: p.poll() is not None, 15000)
     return p.communicate()[0].strip() == "True"
 
+
+# U388: een tweede start terwijl het eerste venster nog gebouwd wordt: die geeft door (geen tweede venster).
+import json as _js388  # noqa: E402
+import time as _t388  # noqa: E402
+
+_vroeg = bugos_ui._begin_luisteren("test-u388", app)
+bugos_ui._VROEG["test-u388"] = _vroeg
+_code388 = ("import sys, os, json; sys.path.insert(0, sys.argv[1]); os.environ['QT_QPA_PLATFORM']='offscreen'\n"
+            "from PySide6.QtCore import QCoreApplication; a = QCoreApplication([])\n"
+            "import bugos_ui; print(bugos_ui.al_open(sys.argv[2], json.loads(sys.argv[3])))")
+_p388 = _sp.Popen([sys.executable, "-c", _code388, str(ROOT / "system_files/usr/lib/bugos/python"), "test-u388", _js388.dumps(["wifi"])],
+                  stdout=_sp.PIPE, text=True)
+_t388.sleep(0.8)   # het eerste venster wordt nog gebouwd (geen event-loop)
+_vak388 = _Vak()
+bugos_ui.luister("test-u388", _vak388)
+wacht(lambda: _p388.poll() is not None, 15000)
+klopt(_p388.communicate()[0].strip() == "True" and _vak388.gekregen == [["wifi"]],
+      f"U388: een tweede start terwijl het venster nog gebouwd wordt, opent geen tweede venster ({_vak388.gekregen})")
+_vak388.deleteLater()
 
 _vak = _Vak()
 bugos_ui.luister("test-u208", _vak)
