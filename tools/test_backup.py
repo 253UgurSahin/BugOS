@@ -169,6 +169,13 @@ except OSError:
 bb.LOG = _log_oud
 klopt(_u410, "U410: lukt het bewaren van de back-updatum niet, dan gaat de back-up toch netjes verder")
 
+# U434: een back-up van een ander account (gedeelde familiestick): de vraag noemt hem en waarschuwt.
+_ik = __import__("getpass").getuser()
+_v434 = bb.terug_vraag(Path(f"/stick/BugOS-Backup/papa@bugos"))
+_eigen434 = bb.terug_vraag(Path(f"/stick/BugOS-Backup/{_ik}@bugos"))
+klopt("papa@bugos" in _v434 and "'papa'" in _v434 and "\n\n" not in _eigen434 and "if lijst[0] != backup_doel(schijf):" in (ROOT / "system_files/usr/bin/bugos-backup").read_text(),
+      "U434: terugzetten van andermans back-up: altijd kiezen, met naam en een waarschuwing")
+
 # U097: het lijstje op de stick bepaalt niet welke opdracht er draait: alleen de vaste soorten tellen.
 _gevraagd: list = []
 _echt_run = bb.subprocess.run

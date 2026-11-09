@@ -163,6 +163,21 @@ def backup_doel(schijf: Path) -> Path:
     return schijf / "BugOS-Backup" / f"{getpass.getuser()}@{computernaam()}"
 
 
+def terug_vraag(bron: Path) -> str:
+    """De vraag voor het terugzetten, met de naam van de back-up. Is hij van een ander account (een gedeelde
+    familiestick), dan zeggen we dat erbij: anders kwamen papa's bestanden stil in jouw map (U434)."""
+    tekst = t(f"De bestanden van de back-up '{bron.name}' komen terug op je computer. Een bestand dat op je computer "
+              "ouder is dan in de back-up, wordt vervangen. Nieuwere bestanden op je computer blijven staan.",
+              f"The files from the backup '{bron.name}' come back to your computer. A file that is older on your "
+              "computer than in the backup is replaced. Newer files on your computer are kept.")
+    wie = bron.name.split("@", 1)[0]
+    if wie != getpass.getuser():
+        tekst += "\n\n" + t(f"Let op: deze back-up is van '{wie}', niet van jou. Zijn of haar bestanden komen dan in "
+                             "jouw map.", f"Note: this backup is from '{wie}', not from you. Their files will then "
+                             "end up in your folder.")
+    return tekst
+
+
 def backups_op(schijf: Path) -> list[Path]:
     """Alle back-ups op deze schijf, die van deze computer eerst. Na opnieuw installeren of op een
     nieuwe pc heet de computer (of de gebruiker) vaak anders: die back-ups moet je ook terug kunnen zetten."""
@@ -717,7 +732,7 @@ def venster() -> int:
             if not lijst:
                 return
             bron = lijst[0]
-            if len(lijst) > 1 and lijst[0] != backup_doel(schijf):
+            if lijst[0] != backup_doel(schijf):   # ook als er maar één is: dan zie je van wie hij is (U434)
                 # Geen back-up van deze computer, wel van andere: laat kiezen (bijv. "bugie@oude-laptop").
                 keuze, ok = QInputDialog.getItem(
                     self, t("Welke back-up?", "Which backup?"),
@@ -729,10 +744,7 @@ def venster() -> int:
                 bron = next(p for p in lijst if p.name == keuze)
             vraag = QMessageBox.question(
                 self, t("Terugzetten?", "Restore?"),
-                t("Je bestanden van de back-up komen terug op je computer. Een bestand dat op je computer ouder is "
-                  "dan in de back-up, wordt vervangen. Nieuwere bestanden op je computer blijven staan.",
-                  "Your files from the backup come back to your computer. A file that is older on your computer "
-                  "than in the backup is replaced. Newer files on your computer are kept."),
+                terug_vraag(bron),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Cancel)
             if vraag != QMessageBox.StandardButton.Yes:
                 return
