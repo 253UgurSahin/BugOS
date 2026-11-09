@@ -670,7 +670,8 @@ _op = os.environ["PATH"]
 os.environ["PATH"] = f"{_ls}:{_op}"
 jij3 = welkom.Jij()
 os.environ["PATH"] = _op
-klopt(jij3.oud.schuif.isChecked() and "oud" in jij3.gestart, "U179: Welkom toont de lichte stand die al aan staat als aan")
+klopt(jij3.oud.schuif.isChecked() and "oud" in jij3.gestart and not jij3.oud.schuif.isEnabled(),
+      "U179/U189: Welkom toont de lichte stand die al aan staat als aan (op slot: uitzetten doe je in Instellingen)")
 # U129: de updatekeuze wordt pas onthouden als het lukte (Annuleren bij het wachtwoord: Volgende probeert opnieuw).
 _upd = welkom.Updates()
 _pk = TMP / "pk-nep"
@@ -1225,7 +1226,7 @@ _alt = (ROOT / "system_files/usr/share/bugos/alternatives.txt").read_text()
 _store = json.loads((ROOT / "system_files/usr/share/bugos/store.json").read_text())
 klopt("eneshecan" not in _alt and "com.rtosta.zapzap" in _alt and any(a["id"] == "com.rtosta.zapzap" for a in _store["apps"]),
       "U173: WhatsApp verwijst naar ZapZap (de oude app is van Flathub gehaald), en ZapZap staat in de Winkel")
-klopt(all(w in _alt for w in ("tsetup|", "epicinstaller|", "gog_galaxy|")),
+klopt(all(w in _alt for w in ("^tsetup|", "epicinstaller|", "gog_galaxy|")),
       "U176: de echte bestandsnamen van Telegram, Epic en GOG Galaxy worden herkend")
 klopt(next(a for a in _store["apps"] if a["id"] == "org.kde.kcalc").get("naam_en") == "Calculator",
       "U175: de rekenmachine heet in het Engels 'Calculator'")

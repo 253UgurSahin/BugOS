@@ -48,5 +48,12 @@ rm -f "$TMP/gevraagd" "$TMP/winkel"
 installeer "$TMP/voorbeeld.rpm"
 klopt 'grep -q "appstream://org.voorbeeld.App" "$TMP/winkel" 2>/dev/null' "U057: staat het wel in de Winkel, dan gaat het daarheen"
 
+# U195: een pakket zonder programma met een venster: niet 'staat in je startmenu' zeggen.
+nep flatpak 'exit 0'
+nep notify-send 'echo "$*" >>"'"$TMP"'/meldingen"'
+rm -f "$TMP/meldingen"
+installeer "$TMP/alleen-terminal.rpm"
+klopt 'grep -q "Terminal" "$TMP/meldingen" 2>/dev/null && ! grep -q "staat nu in je startmenu\|is now in your start menu" "$TMP/meldingen"' \
+    "U195: zonder plek in het startmenu: zeggen dat je het in de Terminal gebruikt"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

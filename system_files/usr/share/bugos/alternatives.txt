@@ -1,6 +1,6 @@
 # Als iemand een Windows-installatie opent waarvan de naam dit woord bevat,
 # biedt BugOS eerst de echte BugOS-versie (uit de Winkel) aan.
-# Opmaak: woord-in-bestandsnaam|Naam voor de gebruiker|Flathub-ID
+# Opmaak: woord-in-bestandsnaam|Naam voor de gebruiker|Flathub-ID  (^woord: de naam moet ermee beginnen)
 steam|Steam|com.valvesoftware.Steam
 discord|Discord|com.discordapp.Discord
 spotify|Spotify|com.spotify.Client
@@ -15,7 +15,7 @@ excel|LibreOffice|org.libreoffice.LibreOffice
 gimp|GIMP|org.gimp.GIMP
 obs-studio|OBS Studio|com.obsproject.Studio
 telegram|Telegram|org.telegram.desktop
-tsetup|Telegram|org.telegram.desktop
+^tsetup|Telegram|org.telegram.desktop
 whatsapp|ZapZap (WhatsApp)|com.rtosta.zapzap
 vscode|Visual Studio Code|com.visualstudio.code
 thunderbird|Thunderbird|org.mozilla.Thunderbird

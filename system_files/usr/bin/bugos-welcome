@@ -352,7 +352,9 @@ class Jij(Pagina):
                 if subprocess.run([script, "status"], capture_output=True, text=True,
                                   timeout=5).stdout.strip() == "aan":
                     rij.schuif.setChecked(True)
+                    rij.schuif.setEnabled(False)   # staat al aan: uitzetten kan in Instellingen (U189)
                     self.gestart.add(naam)
+                    self.al_bezig.show()
             except (OSError, subprocess.SubprocessError):
                 pass
         self.klaar_met_vullen()
@@ -459,6 +461,9 @@ class Welkom(QWidget):
                 from PySide6.QtCore import QElapsedTimer
                 klok = QElapsedTimer()
                 klok.start()
+                wacht = any(getattr(p, "bezig", False) for p in self.paginas)
+                if wacht:   # niet nog eens klikken (of Terug) terwijl we wachten (U193)
+                    self.setEnabled(False)
                 while any(getattr(p, "bezig", False) for p in self.paginas) and klok.elapsed() < 180000:
                     QApplication.processEvents()
                     QThread.msleep(50)

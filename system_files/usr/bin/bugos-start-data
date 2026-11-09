@@ -391,7 +391,9 @@ def snel_status() -> dict:
         # aan kunt zetten (U165).
         rfkill = Path(os.environ.get("BUGOS_SYS", "/sys")) / "class" / "rfkill"
         try:
-            if any((r / "type").read_text().strip() == "bluetooth" for r in rfkill.iterdir()):
+            if any((r / "type").read_text().strip() == "bluetooth" and any(
+                    (r / k).exists() and (r / k).read_text().strip() == "1" for k in ("soft", "hard"))
+                    for r in rfkill.iterdir()):   # alleen een schakelaar die echt uit staat (U188)
                 s["bluetooth"] = False
         except OSError:
             pass

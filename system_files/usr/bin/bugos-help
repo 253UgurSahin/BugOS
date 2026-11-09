@@ -341,8 +341,15 @@ def venster() -> int:
             self.op_achtergrond(f, lambda _: QTimer.singleShot(1500, self.vul))
 
         def closeEvent(self, e) -> None:  # noqa: N802
-            for k in list(self.klusjes):  # een lopende reparatie eerst laten afmaken
-                k.wait(25000)
+            # Loopt er nog een reparatie (bijv. de wachtwoordvraag voor de printerdienst staat open)? Dan het
+            # venster verbergen en pas stoppen als die klaar is, in plaats van vast te lopen of af te breken (U191).
+            bezig = [k for k in self.klusjes if k.isRunning()]
+            if bezig:
+                e.ignore()
+                self.hide()
+                for k in bezig:
+                    k.finished.connect(lambda: None if any(x.isRunning() for x in self.klusjes) else self.close())
+                return
             super().closeEvent(e)
 
         def toon(self, uitslagen) -> None:

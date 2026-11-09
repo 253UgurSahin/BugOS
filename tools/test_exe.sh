@@ -49,5 +49,11 @@ klopt 'grep -q "Annuleren" "$TMP/dialogen" && ! grep -q "werkt niet op BugOS" "$
 draai "$TMP/spel.exe" >/dev/null
 klopt 'grep -q "werkt niet op BugOS" "$TMP/dialogen"' "U082: een gewoon programma dat meteen stopt: zoals eerst"
 
+# U190: 'ChatGPTSetup.exe' is geen Telegram; 'tsetup-x64.5.1.exe' wel.
+sed -n '/^zoek_alternatief()/,/^}/p' "$ROOT/system_files/usr/bin/bugos-exe" >"$TMP/zoek.sh"
+zoek() { NAAM="$1" ALTERNATIEVEN="$ROOT/system_files/usr/share/bugos/alternatives.txt" bash -c '. "$1"; zoek_alternatief' _ "$TMP/zoek.sh"; }
+klopt '[ "$(zoek tsetup-x64.5.1.exe)" = "Telegram|org.telegram.desktop" ] && [ -z "$(zoek ChatGPTSetup.exe)" ] && [ -z "$(zoek MinecraftSetup.exe)" ]' \
+    "U190: Telegram herkennen aan het begin van de naam, niet in ChatGPTSetup of MinecraftSetup"
+
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

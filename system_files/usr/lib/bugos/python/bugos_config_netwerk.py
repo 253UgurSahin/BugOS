@@ -190,7 +190,11 @@ def bt_hardware() -> bool:
     # Uitgezet met de vliegtuigstand of een Fn-toets: dan verdwijnt hci0, maar de bluetooth-schakelaar (rfkill)
     # is er nog. Dan heeft de computer wel bluetooth, en moet je hem weer aan kunnen zetten (U165).
     try:
-        return any((r / "type").read_text().strip() == "bluetooth" for r in (sys_ / "class" / "rfkill").iterdir())
+        # Alleen een schakelaar die echt uit staat (soft of hard = 1): sommige laptops melden er ook een zonder
+        # bluetooth-kaart, en die staat niet 'uit' (U188).
+        def uit(r: Path) -> bool:
+            return any((r / k).exists() and (r / k).read_text().strip() == "1" for k in ("soft", "hard"))
+        return any((r / "type").read_text().strip() == "bluetooth" and uit(r) for r in (sys_ / "class" / "rfkill").iterdir())
     except OSError:
         return False
 

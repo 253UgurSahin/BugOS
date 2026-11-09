@@ -541,6 +541,7 @@ _btp.toon((False, [], True))
 _rf = TMP / "sys-u165"
 (_rf / "class" / "rfkill" / "rfkill0").mkdir(parents=True)
 (_rf / "class" / "rfkill" / "rfkill0" / "type").write_text("bluetooth\n")
+(_rf / "class" / "rfkill" / "rfkill0" / "soft").write_text("1\n")
 (_rf / "class" / "bluetooth").mkdir(parents=True)
 os.environ["BUGOS_SYS"] = str(_rf)
 _heeft = bi.bt_hardware()
@@ -548,6 +549,11 @@ _opd, _ = vang(bi.zet_bt, True)
 del os.environ["BUGOS_SYS"]
 klopt(_heeft and any(c[:2] == ("rfkill", "unblock") for c in _opd),
       "U165: bluetooth uit met de vliegtuigstand: Instellingen ziet bluetooth en zet hem weer aan (rfkill unblock)")
+(_rf / "class" / "rfkill" / "rfkill0" / "soft").write_text("0\n")
+os.environ["BUGOS_SYS"] = str(_rf)
+_spook = bi.bt_hardware()
+del os.environ["BUGOS_SYS"]
+klopt(not _spook, "U188: een bluetooth-schakelaar die niet uit staat en geen kaart: geen bluetooth (geen nep-tegel)")
 # U156: een energieprofiel dat niet lukt: de pagina leest opnieuw wat echt aan staat.
 venster.ga_naar("energie")
 wacht()

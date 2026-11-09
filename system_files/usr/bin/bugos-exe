@@ -27,6 +27,13 @@ zoek_alternatief() {
     klein="$(echo "$NAAM" | tr '[:upper:]' '[:lower:]')"
     while IFS='|' read -r woord app id; do
         case "$woord" in '#'* | '') continue ;; esac
+        # Een woord dat met ^ begint, moet aan het begin van de naam staan ('^tsetup' is Telegram, maar
+        # 'ChatGPTSetup.exe' niet) (U190).
+        if [[ "$woord" == ^* ]]; then
+            [[ "$klein" == "${woord#^}"* ]] || continue
+            echo "$app|$id"
+            return 0
+        fi
         if [[ "$klein" == *"$woord"* ]]; then
             echo "$app|$id"
             return 0

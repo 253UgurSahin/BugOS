@@ -80,10 +80,16 @@ fi
 
 # Programma's van dit pakket naar het startmenu brengen.
 # shellcheck disable=SC2016
-EXPORT='for d in $( (rpm -qlp "$1" 2>/dev/null || dpkg-deb -c "$1" 2>/dev/null | awk '\''{print $6}'\'') | grep -E '\''share/applications/.*\.desktop$'\''); do distrobox-export --app "$(basename "$d" .desktop)"; done'
+# Tellen hoeveel er naar het startmenu gingen: een pakket zonder programma met een venster heeft er geen (U195).
+EXPORT='n=0; f=0; for d in $( (rpm -qlp "$1" 2>/dev/null || dpkg-deb -c "$1" 2>/dev/null | awk '\''{print $6}'\'') | grep -E '\''share/applications/.*\.desktop$'\''); do if distrobox-export --app "$(basename "$d" .desktop)" >/dev/null 2>&1; then n=$((n+1)); else f=1; fi; done; echo "bugos-startmenu=$n"; exit $f'
 
-if distrobox enter "$DOOS" -- bash -c "$INSTALL && $EXPORT" bugos-package "$BESTAND" >/dev/null 2>&1; then
-    melding "$(t "Klaar!" "Done!")" "$(t "\"$TOON\" staat nu in je startmenu." "\"$TOON\" is now in your start menu.")"
+if uit="$(distrobox enter "$DOOS" -- bash -c "$INSTALL && $EXPORT" bugos-package "$BESTAND" 2>/dev/null)"; then
+    if [ "$(echo "$uit" | sed -n 's/^bugos-startmenu=//p' | tail -1)" = 0 ]; then
+        melding "$(t "Klaar!" "Done!")" "$(t "\"$TOON\" is geïnstalleerd. Het heeft geen plek in het startmenu; je gebruikt het in de Terminal met: distrobox enter $DOOS" \
+            "\"$TOON\" is installed. It has no place in the start menu; you use it in the Terminal with: distrobox enter $DOOS")"
+    else
+        melding "$(t "Klaar!" "Done!")" "$(t "\"$TOON\" staat nu in je startmenu." "\"$TOON\" is now in your start menu.")"
+    fi
 else
     fout "$(t "Het installeren van \"$TOON\" is niet gelukt. Je computer is niet veranderd." \
         "Installing \"$TOON\" did not work. Your computer has not changed.")"
