@@ -239,6 +239,7 @@ class UpdatesPagina(Blad):
     def updates(self, wat: str) -> None:
         """bugos-updates nu/terug/auto/hand als beheerder, zonder dat het venster vastloopt; daarna zeggen hoe
         het ging. (Een update kan lang duren: daarom QProcess en geen draai.)"""
+        self.niet_sluiten = False   # (U490)
         if wat in ("nu", "terug"):
             self.nu.setEnabled(False)
             self.terug.setEnabled(False)
@@ -283,7 +284,7 @@ class UpdatesPagina(Blad):
                 if wat in ("auto", "hand") and getattr(venster, "sluit_na_update", False) and not self.bezig:
                     venster.close()
                 if wat in ("nu", "terug") and getattr(venster, "sluit_na_update", False):
-                    if echt == 0:
+                    if echt == 0 and not getattr(self, "niet_sluiten", False):
                         # Je wilde al sluiten: de uitkomst (opnieuw opstarten, updates uit) als melding, dan dicht.
                         start("notify-send", "--app-name=BugOS", "--icon=system-software-update",
                               "--hint=string:desktop-entry:bugos-settings",   # (U323)
@@ -364,9 +365,20 @@ class UpdatesPagina(Blad):
             if wat == "terug":
                 # bugos-updates zegt zelf wat er gebeurde (al klaar, of: updates gaan nu niet meer vanzelf),
                 # en zet misschien 'Updates vanzelf' uit: de schakelaar opnieuw lezen.
-                regels = [r.strip() for r in uit.splitlines() if r.strip() and r.strip() != "bugos-blijft"]
+                regels = [r.strip() for r in uit.splitlines()
+                          if r.strip() and r.strip() not in ("bugos-blijft", "bugos-niet-bewaard")]
                 if regels:
                     tekst = regels[-1]
+                if "bugos-niet-bewaard" in uit:
+                    # Teruggezet, maar 'zelf updaten' kon niet bewaard worden: een waarschuwing, en Instellingen niet
+                    # vanzelf dichtdoen (U490).
+                    self.niet_sluiten = True
+                    if "bugos-blijft" in uit:
+                        self.melding.toon(tekst, "let_op", seconden=0)
+                    else:
+                        self.melding.toon(tekst, "let_op", t("Nu opnieuw opstarten", "Restart now"), herstart, seconden=0)
+                    op_achtergrond(self, lambda: status_van("bugos-updates"), lambda aan: self.auto.zet_stil(aan is True))
+                    return
                 op_achtergrond(self, lambda: status_van("bugos-updates"), lambda aan: self.auto.zet_stil(aan is True))
                 if "bugos-blijft" in uit:
                     # Je draait de oude versie al: geen 'Nu opnieuw opstarten' nodig (U393).

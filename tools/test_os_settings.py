@@ -972,6 +972,12 @@ else:
     os.environ["XDG_CONFIG_HOME"] = _oud_cfg2
 klopt("Oud" not in _snap and "Nieuw" in _snap, f"U383: 'Grote letters' aan maakt een nieuwe momentopname (geen oude) ({_snap[:60]})")
 
+# U490: teruggezet maar 'zelf updaten' niet bewaard: een waarschuwing (geen groen 'gelukt'), en niet vanzelf dicht.
+_up.niet_sluiten = False
+_up.klaar_met("terug", 0, "bugos-niet-bewaard\nTeruggezet, maar let op: kon niet bewaard worden.\n")
+klopt(_up.melding.property("soort") == "let_op" and _up.niet_sluiten and "bugos-niet-bewaard" not in _up.melding.tekst.text(),
+      f"U490: 'terug' zonder bewaarde keuze is een waarschuwing ({_up.melding.property('soort')}, {_up.melding.tekst.text()!r})")
+_up.niet_sluiten = False
 # U393: 'terug' terwijl je de oude versie al draait: de melding zegt dat hij blijft (en niet de merktekst).
 _up.klaar_met("terug", 0, "Klaar. Deze versie blijft nu ook na opnieuw opstarten.\nbugos-blijft\n")
 klopt(_up.melding.tekst.text() == "Klaar. Deze versie blijft nu ook na opnieuw opstarten.",
