@@ -544,5 +544,20 @@ klopt '! grep -q "^[A-Za-z]*=.*network-online" "$ROOT/system_files/usr/lib/syste
     "U312: elke keer opstarten wacht niet op het netwerk voor de eerste-start- en ondertekend-dienst (ze wachten zelf)"
 klopt 'grep -q "compileall -q --invalidation-mode checked-hash /usr/lib/bugos/python" "$ROOT/build_files/build.sh" && grep -qx "\*\*/__pycache__" "$ROOT/.dockerignore"' \
     "U313/U314: de Python-onderdelen staan vooraf vertaald in BugOS (en geen oude lokale __pycache__)"
+# U321-U326: BugOS binnen KDE.
+klopt 'grep -q "plasma-discover-notifier" "$ROOT/build_files/build.sh" && grep -qx "UseUnattendedUpdates=false" "$ROOT/system_files/etc/xdg/PlasmaDiscoverUpdates"' \
+    "U321: KDE's updatemelder werkt de apps niet stilletjes bij (ook niet bij 'Ik kies zelf wanneer')"
+klopt 'grep -qx "X-KDE-Shortcuts=Meta+E" "$ROOT/system_files/usr/share/applications/bugos-files.desktop" && grep -qx "X-KDE-Shortcuts=Meta+I" "$ROOT/system_files/usr/share/applications/bugos-settings.desktop" && grep -q "X-KDE-Shortcuts=Meta+E\$//. /usr/share/applications/org.kde.dolphin.desktop" "$ROOT/build_files/style.sh"' \
+    "U322: Windows+E opent BugOS Bestanden en Windows+I BugOS Instellingen (niet Dolphin en de KDE-instellingen)"
+klopt 'grep -q "desktop-entry:bugos-settings" "$ROOT/system_files/usr/share/bugos/lib.sh" && grep -q "desktop-entry:bugos-settings" "$BIN/bugos-updatecheck" && grep -q "expire-time=0" "$BIN/bugos-updatecheck"' \
+    "U323: BugOS-meldingen blijven in de meldingengeschiedenis, en 'Nu updaten' verdwijnt niet vanzelf"
+klopt 'grep -q "snel.tr(\"Instellingen\", \"Settings\")" "$ROOT/system_files/usr/share/plasma/plasmoids/org.bugos.quickmenu/contents/ui/QuickMenu.qml"' \
+    "U324: het tandwiel in het snelmenu heet 'Instellingen' (niet 'Alle instellingen', zo heet de KDE-app)"
+klopt 'grep -q "^x-scheme-handler/appstream=bugos-store.desktop" "$ROOT/system_files/etc/xdg/kde-mimeapps.list"' \
+    "U326: een 'Installeren'-link van Flathub opent de BugOS Winkel"
+kopie bugos-theme
+nep kreadconfig6 'case "$*" in *ColorScheme*) echo BreezeDark ;; *BackgroundNormal*) echo 32,35,38 ;; esac'
+klopt '[ "$(HOME="$TMP/thuis" PATH="$TMP/bin:$PATH" bash "$TMP/bugos-theme" status 2>/dev/null)" = donker ]' \
+    "U325: Breeze Dark (gekozen in de KDE-instellingen) telt als donker"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

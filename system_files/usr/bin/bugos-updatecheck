@@ -44,7 +44,9 @@ if ! NIEUW="$(timeout 180 skopeo inspect --format '{{.Digest}}' "$BRON" 2>/dev/n
 fi
 [ -n "$NIEUW" ] && [ "$NIEUW" != "$NU" ] || exit 0
 
-KEUZE="$(notify-send --app-name=BugOS --icon=system-software-update --wait \
+# desktop-entry: dan blijft hij in de geschiedenis; --expire-time=0: de vraag verdwijnt niet vanzelf (U323).
+KEUZE="$(notify-send --app-name=BugOS --icon=system-software-update --hint=string:desktop-entry:bugos-settings \
+    --expire-time=0 --wait \
     --action=nu="$(t "Nu updaten" "Update now")" --action=later="$(t "Later" "Later")" \
     "$(t "Er is een nieuwe BugOS" "A new BugOS is available")" \
     "$(t "Wil je nu updaten? Je kunt gewoon doorwerken." "Do you want to update now? You can keep working.")" 2>/dev/null)"

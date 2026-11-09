@@ -39,7 +39,8 @@ t() {
 
 # Kleine melding rechtsonder in beeld.
 melding() {
-    notify-send --app-name=BugOS --icon=bugos-logo "$1" "${2:-}" 2>/dev/null ||
+    # Met een desktop-entry: anders zet KDE het onder 'overig', en dat komt niet in de meldingengeschiedenis (U323).
+    notify-send --app-name=BugOS --icon=bugos-logo --hint=string:desktop-entry:bugos-settings "$1" "${2:-}" 2>/dev/null ||
         echo "$1: ${2:-}"
 }
 

@@ -37,8 +37,9 @@ dnf5 install -y --setopt=install_weak_deps=False plasma-discover plasma-discover
 # Weg met wat Discover laat zien over het systeem zelf: Fedora-pakketten
 # (PackageKit) en systeemupdates (rpm-ostree, dat zit in Kinoite). Updates doet
 # BugOS zelf (stap 6). In één keer, omdat ze van elkaar afhangen.
+# Ook de updatemelder van KDE: die werkte Flatpak-apps stilletjes bij, ook bij 'Ik kies zelf wanneer' (U321).
 mapfile -t TEVEEL < <(rpm -q --qf '%{NAME}
-' plasma-discover-packagekit plasma-discover-offline-updates     plasma-discover-rpm-ostree 2>/dev/null | grep -v 'not installed' || true)
+' plasma-discover-packagekit plasma-discover-offline-updates     plasma-discover-rpm-ostree plasma-discover-notifier 2>/dev/null | grep -v 'not installed' || true)
 if [ "${#TEVEEL[@]}" -gt 0 ]; then
     rpm -e "${TEVEEL[@]}"
 fi

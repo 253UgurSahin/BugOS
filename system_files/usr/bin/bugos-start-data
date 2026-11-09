@@ -382,7 +382,7 @@ def batterij() -> tuple[int | None, bool]:
 def snel_status() -> dict:
     if os.environ.get("BUGOS_SNEL_VOORBEELD"):  # voor foto's en tests: niets aan de computer vragen
         return {"wifi": True, "bluetooth": False, "spel": False,
-                "donker": kde_lees("kdeglobals", "General", "ColorScheme") == "BugOSDark",
+                "donker": is_donker(),
                 "volume": 60, "stil": False, "niet_storen": False,
                 "helderheid": 70, "batterij": 76, "laadt": False}
     s: dict = {}
@@ -408,7 +408,7 @@ def snel_status() -> dict:
         except OSError:
             pass
     s["spel"] = draai("bugos-game-mode", "status").strip() == "aan" if shutil.which("bugos-game-mode") else None
-    s["donker"] = kde_lees("kdeglobals", "General", "ColorScheme") == "BugOSDark"
+    s["donker"] = is_donker()
     s["volume"], s["stil"] = volume_status()
     s["niet_storen"] = niet_storen_tot_in_toekomst(kde_lees("plasmanotifyrc", "DoNotDisturb", "Until"))
     s["helderheid"] = helderheid()
@@ -430,6 +430,18 @@ def tray_status() -> dict:
     s["volume"], s["stil"] = volume_status()
     s["batterij"], s["laadt"] = batterij()
     return s
+
+
+def is_donker() -> bool:
+    """Donker: het BugOS-schema, of een ander donker schema uit de KDE-instellingen (Breeze Dark) (U325)."""
+    schema = kde_lees("kdeglobals", "General", "ColorScheme")
+    if schema in ("BugOSDark", "BugOSLight", ""):
+        return schema == "BugOSDark"
+    try:
+        r, g, b = (int(x) for x in kde_lees("kdeglobals", "Colors:Window", "BackgroundNormal").split(",")[:3])
+    except ValueError:
+        return False
+    return r * 299 + g * 587 + b * 114 < 128000
 
 
 def snel_zet(wat: str, waarde: str) -> None:

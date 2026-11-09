@@ -253,6 +253,7 @@ class UpdatesPagina(Blad):
                     if echt == 0:
                         # Je wilde al sluiten: de uitkomst (opnieuw opstarten, updates uit) als melding, dan dicht.
                         start("notify-send", "--app-name=BugOS", "--icon=system-software-update",
+                              "--hint=string:desktop-entry:bugos-settings",   # (U323)
                               t("Instellingen", "Settings"), self.melding.tekst.text())
                         venster.close()
                     else:

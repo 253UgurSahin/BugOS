@@ -13,3 +13,4 @@ MimeType=inode/directory;
 Keywords=verkenner;bestanden;mappen;map;explorer;files;folder;documenten;foto;
 StartupWMClass=bugos-files
 Terminal=false
+X-KDE-Shortcuts=Meta+E

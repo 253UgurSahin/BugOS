@@ -205,6 +205,10 @@ hernoem systemsettings.desktop "Alle instellingen" "All settings"
 hernoem org.kde.partitionmanager.desktop "Schijfbeheer (voor gevorderden)" "Disk management (advanced)"
 hernoem org.kde.plasma-systemmonitor.desktop "Systeemmonitor (voor gevorderden)" "System Monitor (advanced)"
 hernoem org.kde.konsole.desktop "Terminal" "Terminal"
+# Windows+E en Windows+I openen BugOS Bestanden en Instellingen (zoals in Windows), niet Dolphin en de
+# KDE-instellingen: hun eigen sneltoetsen eraf (U322).
+sed -i 's/^X-KDE-Shortcuts=Meta+E$//' /usr/share/applications/org.kde.dolphin.desktop
+sed -i 's/^X-KDE-Shortcuts=Tools,Meta+I$/X-KDE-Shortcuts=Tools/; s/^X-KDE-Shortcuts=Meta+I$//' /usr/share/applications/systemsettings.desktop
 
 # 4c. Het startmenu rustig houden (de Bugie-test): hulpjes voor gevorderden en
 #     losse onderdelen van Wine (Kladblok, Regedit, Mijnenveger...) verbergen.

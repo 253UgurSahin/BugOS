@@ -1,0 +1,3 @@
+# BugOS werkt updates zelf bij (bugos-updates); KDE's eigen 'vanzelf bijwerken' staat uit (U321).
+[Global]
+UseUnattendedUpdates=false

@@ -32,7 +32,16 @@ kvantum_zet() {
 }
 
 huidig() {
-    if [ "$(kreadconfig6 --file kdeglobals --group General --key ColorScheme 2>/dev/null)" = BugOSDark ]; then
+    local schema achter r g b
+    schema="$(kreadconfig6 --file kdeglobals --group General --key ColorScheme 2>/dev/null)"
+    case "$schema" in
+    BugOSDark) echo donker; return ;;
+    BugOSLight | "") echo licht; return ;;
+    esac
+    # Een ander kleurenschema (bijv. Breeze Dark in de KDE-instellingen): donker als de vensters donker zijn (U325).
+    achter="$(kreadconfig6 --file kdeglobals --group Colors:Window --key BackgroundNormal 2>/dev/null)"
+    IFS=, read -r r g b <<<"$achter"
+    if [[ "$r$g$b" =~ ^[0-9]+$ ]] && [ $((r * 299 + g * 587 + b * 114)) -lt 128000 ]; then
         echo donker
     else
         echo licht

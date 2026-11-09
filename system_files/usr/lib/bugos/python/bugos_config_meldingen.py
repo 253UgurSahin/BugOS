@@ -91,7 +91,8 @@ def zet_meldingsgeluid(aan: bool) -> None:
 def proefmelding(titel: str, tekst: str) -> bool:
     if _c.VOORBEELD:
         return True
-    return _c.draai("notify-send", "-a", "BugOS", "-i", "bugos-logo", titel, tekst, timeout=5)[0] == 0
+    return _c.draai("notify-send", "-a", "BugOS", "-i", "bugos-logo", "--hint=string:desktop-entry:bugos-settings",
+                    titel, tekst, timeout=5)[0] == 0   # (U323)
 
 
 # ====================================================== standaardprogramma's ===

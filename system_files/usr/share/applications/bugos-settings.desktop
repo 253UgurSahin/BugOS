@@ -9,3 +9,4 @@ Icon=bugos-settings
 Categories=Settings;System;
 Keywords=instellingen;settings;wifi;bluetooth;geluid;scherm;printer;updates;
 Terminal=false
+X-KDE-Shortcuts=Meta+I

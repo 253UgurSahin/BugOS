@@ -241,7 +241,15 @@ def batterij() -> Batterij | None:
 def donker() -> bool:
     if _c.VOORBEELD:
         return _c._VB["donker"]
-    return _c.kde_lees("kdeglobals", "General", "ColorScheme", "BugOSLight") == "BugOSDark"
+    schema = _c.kde_lees("kdeglobals", "General", "ColorScheme", "BugOSLight")
+    if schema in ("BugOSDark", "BugOSLight", ""):
+        return schema == "BugOSDark"
+    # Een ander kleurenschema (Breeze Dark in de KDE-instellingen): donker als de vensters donker zijn (U325).
+    try:
+        r, g, b = (int(x) for x in _c.kde_lees("kdeglobals", "Colors:Window", "BackgroundNormal", "").split(",")[:3])
+    except ValueError:
+        return False
+    return r * 299 + g * 587 + b * 114 < 128000
 
 
 def zet_donker(aan: bool) -> None:

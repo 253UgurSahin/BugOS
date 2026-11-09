@@ -70,7 +70,8 @@ Rectangle {
                 id: tandwiel
                 implicitWidth: 36; implicitHeight: 36
                 hoverEnabled: true
-                Accessible.name: snel.tr("Alle instellingen", "All settings")
+                // 'Alle instellingen' heet in het startmenu de KDE-app; dit is BugOS Instellingen (U324)
+                Accessible.name: snel.tr("Instellingen", "Settings")
                 ToolTip.visible: hovered
                 ToolTip.text: Accessible.name
                 onClicked: snel.open("instellingen")
