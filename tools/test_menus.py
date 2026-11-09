@@ -98,7 +98,8 @@ klopt("bregel.hovered || bregel.activeFocus" in _start, "U064: startmenu: een re
 _sv = QQuickView()
 _sv.setSource(QUrl.fromLocalFile(str(QML.parent.parent.parent.parent / "org.bugos.startmenu" / "contents" / "ui" / "StartMenu.qml")))
 _sm = _sv.rootObject()
-_app = lambda i, n, z: {"id": i, "pad": i, "naam": n, "soort": "app", "groep": "x", "zoek": f"{n} {z}".lower()}  # noqa: E731
+_app = lambda i, n, z: {"id": i, "pad": i, "naam": n, "soort": "app", "groep": "x", "uitleg": "", "icoon": "",  # noqa: E731
+                        "zoek": f"{n} {z}".lower()}
 _sm.setProperty("gegevens", {"apps": [
     _app("systemsettings.desktop", "All settings", "settings system kde"),
     _app("bugos-backup.desktop", "Backup", "files backup usb"),
@@ -106,7 +107,7 @@ _sm.setProperty("gegevens", {"apps": [
     _app("bugos-files.desktop", "Files", "files explorer folders"),
     _app("bugos-settings.desktop", "Settings", "settings wifi bluetooth"),
     {"id": "instelling-wifi", "pad": "instelling:wifi", "naam": "Wi-Fi and internet", "soort": "instelling",
-     "groep": "Settings", "zoek": "wi-fi and internet wifi wlan"}], "favorieten": [], "recent": [], "gebruiker": {"naam": ""}})
+     "groep": "Settings", "uitleg": "", "icoon": "", "zoek": "wi-fi and internet wifi wlan"}], "favorieten": [], "recent": [], "gebruiker": {"naam": ""}})
 _open: list = []
 _sm.start.connect(lambda pad: _open.append(pad))
 _veld = _sm.findChild(QObject, "zoekveld")
@@ -139,6 +140,13 @@ for _qmlbestand in sorted((QML.parent.parent.parent.parent).glob("org.bugos.*/co
         if _type not in _qt_types and _type not in _eigen and _type not in _plasma:
             _mist.append(f"{_qmlbestand.parent.parent.parent.name}/{_qmlbestand.name}: {_type}")
 klopt(len(_qt_types) > 100 and not _mist, f"U099: alle QML-types in de plasmoids bestaan ({_mist})")
+
+# U135: in het start- en snelmenu is de toetsenbordfocus goed te zien (een rode rand), en Enter werkt op het tandwiel.
+_sm_tekst = (QML.parent.parent.parent.parent / "org.bugos.startmenu" / "contents" / "ui" / "StartMenu.qml").read_text()
+_qm_tekst = QML.read_text()
+klopt(_sm_tekst.count("activeFocus ? 2 : 0") >= 4 and "pijl.activeFocus ? 2 : 0" in _qm_tekst
+      and "tandwiel.activeFocus ? 2 : 0" in _qm_tekst and _qm_tekst.count("Keys.onReturnPressed") >= 3,
+      "U135: startmenu-tegels, -regels, -knoppen en de pijltjes en het tandwiel van het snelmenu tonen de focus")
 
 _ui = QML.parent.parent.parent.parent
 for _m in ("org.bugos.startmenu", "org.bugos.quickmenu"):

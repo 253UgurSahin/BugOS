@@ -169,6 +169,7 @@ QPushButton[soort="stil"] {{ background: transparent; color: {k['tekst2']}; }}
 QPushButton[soort="stil"]:hover {{ background: {k['knop']}; color: {k['tekst']}; }}
 QPushButton[soort="rand"] {{ background: transparent; border: 1px solid {k['rand_sterk']}; }}
 QPushButton[soort="rand"]:hover {{ background: {k['knop']}; }}
+QPushButton[soort="rand"]:focus {{ border: 2px solid {k['accent']}; padding: 9px 17px; }}
 QPushButton[groot="true"] {{ padding: 13px 24px; font-size: 15px; border-radius: 12px; }}
 QPushButton[groot="true"]:focus {{ padding: 12px 23px; }}
 
@@ -177,7 +178,7 @@ QPushButton#tegel:hover {{ background: {k['vlak_hover']}; border: 1px solid {k['
 QPushButton#tegel:focus {{ border: 2px solid {k['accent']}; }}
 QPushButton#keuze {{ background: {k['vlak']}; border: 2px solid {k['rand']}; border-radius: 16px; padding: 0; text-align: left; }}
 QPushButton#keuze:hover {{ border: 2px solid {k['rand_sterk']}; }}
-QPushButton#keuze:focus {{ border: 2px dashed {k['accent_lijn']}; }}
+QPushButton#keuze:focus {{ border: 2px dashed {k['accent']}; }}
 QPushButton#keuze:checked {{ border: 2px solid {k['accent']}; background: {k['vlak']}; }}
 
 QLineEdit {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 12px; padding: 11px 14px;
@@ -205,14 +206,16 @@ QProgressBar#dun[vol="true"]::chunk {{ background: {k['let_op']}; }}
 
 QFrame#rij {{ background: transparent; border-radius: 12px; }}
 QFrame#rij[klikbaar="true"]:hover {{ background: {k['knop']}; }}
-QFrame#rij[klikbaar="true"]:focus {{ background: {k['knop']}; }}
+QFrame#rij[klikbaar="true"]:focus {{ background: {k['knop']}; border: 2px solid {k['accent']}; }}
 QPushButton#rond {{ min-width: 42px; max-width: 42px; min-height: 42px; max-height: 42px; border-radius: 21px;
   background: {k['knop']}; border: none; padding: 0; }}
 QPushButton#rond:hover {{ background: {k['knop_hover']}; }}
+QPushButton#rond:focus {{ border: 2px solid {k['accent']}; }}
 QPushButton#rond:disabled {{ background: transparent; }}
 QPushButton#rond_klein {{ min-width: 36px; max-width: 36px; min-height: 36px; max-height: 36px; border-radius: 18px;
   background: transparent; border: none; padding: 0; }}
 QPushButton#rond_klein:hover {{ background: {k['knop_hover']}; }}
+QPushButton#rond_klein:focus {{ border: 2px solid {k['accent']}; }}
 QFrame#melding {{ background: {k['knop']}; border-radius: 12px; }}
 QFrame#melding[soort="goed"] {{ background: {k['goed_zacht']}; }}
 QFrame#melding[soort="fout"] {{ background: {k['fout_zacht']}; }}
@@ -220,7 +223,8 @@ QFrame#melding[soort="let_op"] {{ background: {k['let_op_zacht']}; }}
 QFrame#actiebalk {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 22px; }}
 QPushButton#balkknop {{ background: transparent; border: none; border-radius: 12px; padding: 9px 14px;
   font-size: 14px; font-weight: 600; color: {k['tekst']}; }}
-QPushButton#balkknop:hover, QPushButton#balkknop:focus {{ background: {k['knop']}; }}
+QPushButton#balkknop:hover {{ background: {k['knop']}; }}
+QPushButton#balkknop:focus {{ background: {k['knop']}; border: 2px solid {k['accent']}; padding: 7px 12px; }}
 QFrame#streep {{ background: {k['rand']}; min-width: 1px; max-width: 1px; border: none; }}
 
 QScrollBar:vertical {{ background: transparent; width: 10px; margin: 4px 2px; }}
@@ -246,6 +250,7 @@ QSlider::sub-page:horizontal {{ height: 8px; border-radius: 4px;
 QSlider::handle:horizontal {{ width: 22px; height: 22px; margin: -7px 0; border-radius: 11px; background: #FFFFFF;
   border: 1px solid {k['rand_sterk']}; }}
 QSlider::groove:horizontal:disabled, QSlider::sub-page:horizontal:disabled {{ background: {k['knop']}; }}
+QSlider::handle:horizontal:focus {{ border: 3px solid {k['accent']}; }}
 """)
 
 

@@ -74,7 +74,14 @@ Rectangle {
                 ToolTip.visible: hovered
                 ToolTip.text: Accessible.name
                 onClicked: snel.open("instellingen")
-                background: Rectangle { radius: 18; color: tandwiel.hovered ? snel.o.knop : "transparent" }
+                Keys.onReturnPressed: clicked()   // ook met Enter, zoals de andere knoppen (U135)
+                Keys.onEnterPressed: clicked()
+                background: Rectangle {
+                    radius: 18
+                    color: tandwiel.hovered || tandwiel.activeFocus ? snel.o.knop : "transparent"
+                    border.width: tandwiel.activeFocus ? 2 : 0
+                    border.color: snel.rood
+                }
                 contentItem: Item {
                     Loader { anchors.centerIn: parent; width: 20; height: 20; sourceComponent: snel.icoonTekenaar; onLoaded: item.naam = "configure" }
                 }
@@ -253,6 +260,8 @@ Rectangle {
         background: Rectangle {
             radius: 14
             color: pijl.hovered || pijl.activeFocus ? snel.o.knopHover : "transparent"
+            border.width: pijl.activeFocus ? 2 : 0   // (U135)
+            border.color: snel.rood
         }
         contentItem: Label {
             text: "›"

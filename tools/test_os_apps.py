@@ -1045,6 +1045,35 @@ _k2 = b.Klus([_src / "IMG_0.JPG", _src / "IMG_1.JPG"], TMP / "tweede-keer", Fals
 _k2.run()
 klopt(_k.hernoemd == 0 and _k2.hernoemd == 2, f"U106: de tweede keer kregen 2 bestanden (2) achter de naam ({_k2.hernoemd})")
 
+# ========================== U134: elke knop, schuif en regel laat zien dat hij de toetsenbordfocus heeft ===
+from PySide6.QtWidgets import QSlider, QVBoxLayout, QWidget  # noqa: E402
+
+_houder = QWidget()
+_lay = QVBoxLayout(_houder)
+_rond = bugos_ui.ronde_knop("terug", "Terug")
+_rand = bugos_ui.Knop("Opnieuw kijken", "rand")
+_schuif = QSlider(Qt.Orientation.Horizontal)
+_schuif.setFixedWidth(200)
+for _w in (_rond, _rand, _schuif):
+    _lay.addWidget(_w)
+_houder.show()
+_houder.activateWindow()
+wacht(lambda: _houder.isActiveWindow(), 2000)
+_zonder_focus = {}
+_anders = []
+for _naam, _w in (("ronde knop", _rond), ("rand-knop", _rand), ("schuif", _schuif)):
+    _houder.setFocus()
+    app.processEvents()
+    _voor = _w.grab().toImage()
+    _w.setFocus()
+    for _ in range(5):
+        app.processEvents()
+    _na = _w.grab().toImage()
+    if _voor == _na:
+        _anders.append(_naam)
+_houder.close()
+klopt(not _anders, f"U134: de toetsenbordfocus is te zien op elke knop en schuif (niet bij: {_anders})")
+
 # ========================== U067: 'Grote letters' maakt ook de letters van de BugOS-apps groter ===
 from PySide6.QtGui import QFont  # noqa: E402
 

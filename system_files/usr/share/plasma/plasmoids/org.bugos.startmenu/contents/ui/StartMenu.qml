@@ -399,6 +399,8 @@ Rectangle {
         background: Rectangle {
             radius: menu.o.rKnop
             color: pil.hovered || pil.activeFocus ? menu.zweef : menu.vlak
+            border.width: pil.activeFocus ? 2 : 0   // ook met het toetsenbord goed te zien (U135)
+            border.color: menu.rood
         }
         contentItem: Row {
             id: rij
@@ -422,6 +424,8 @@ Rectangle {
         background: Rectangle {
             radius: menu.o.rKnop
             color: tegel.hovered || tegel.activeFocus ? menu.zweef : "transparent"
+            border.width: tegel.activeFocus ? 2 : 0   // ook met het toetsenbord goed te zien (U135)
+            border.color: menu.rood
         }
         contentItem: ColumnLayout {
             spacing: 8
@@ -499,6 +503,8 @@ Rectangle {
         background: Rectangle {
             radius: menu.o.rKnop
             color: bregel.hovered || bregel.activeFocus ? menu.zweef : "transparent"   // ook zichtbaar met het toetsenbord
+            border.width: bregel.activeFocus ? 2 : 0   // ook met het toetsenbord goed te zien (U135)
+            border.color: menu.rood
         }
         contentItem: RowLayout {
             spacing: 10
@@ -540,6 +546,8 @@ Rectangle {
         background: Rectangle {
             radius: 20
             color: knop.hovered || knop.activeFocus ? (knop.rood ? menu.rood : menu.zweef) : menu.vlak
+            border.width: knop.activeFocus ? 2 : 0   // ook met het toetsenbord goed te zien (U135)
+            border.color: menu.rood
         }
         contentItem: Item {
             Loader {
