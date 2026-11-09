@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import getpass
 
+import os
 from pathlib import Path
 
 from bugos_ui import lijn_icoon, platte_tip, px, t
@@ -115,6 +116,11 @@ class Navigeren:
                                     "in again."), "let_op")
                 return
             self.melding.toon(t(f"De map '{pad.name}' bestaat niet (meer).", f"The folder '{pad.name}' does not exist."), "fout")
+            return
+        if not os.access(pad, os.R_OK | os.X_OK):
+            # Bijv. de thuismap van een ander account: niet 'deze map is leeg' laten zien (U510).
+            self.melding.toon(t(f"In '{pad.name or pad}' mag je niet kijken.", f"You may not look in '{pad.name or pad}'."),
+                              "let_op")
             return
         if geschiedenis and (self.in_prullenbak or self.in_computer or pad != self.huidig):
             self.terug_lijst.append(self.plek_nu())

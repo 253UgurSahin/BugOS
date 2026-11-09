@@ -183,7 +183,9 @@ class Voorbeelden(QObject):
             return self.cache[pad]
         if pad not in self.bezig and self.heeft_voorbeeld(pad):
             self.bezig.add(pad)
-            self.pool.start(VoorbeeldTaak(pad, self.seinen, self.generatie))
+            # Nieuwste vraag eerst: wat je nu ziet (na snel schuiven) wacht niet achter alles wat je voorbij schoof (U512).
+            self.volgnummer = getattr(self, "volgnummer", 0) + 1
+            self.pool.start(VoorbeeldTaak(pad, self.seinen, self.generatie), self.volgnummer)
         return None
 
     def _klaar(self, pad: str, beeld: QImage, generatie: int = 0) -> None:

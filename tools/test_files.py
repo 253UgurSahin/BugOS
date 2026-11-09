@@ -490,6 +490,49 @@ _alles506 = venster.gekozen()
 _echt506 = sorted(p.name for p in docs.iterdir() if not p.name.startswith("."))
 klopt(len(_alles506) >= 2 and len(_alles506) == len(set(_alles506)) and set(p.name for p in _alles506) <= set(_echt506),
       f"U506: Ctrl+A kiest elk bestand één keer ({len(_alles506)} gekozen, {len(set(_alles506))} verschillend)")
+# U507-U509: hernoemen houdt de verborgen extensie, foutmeldingen in gewone woorden, geen map '.' of '..'.
+_d507 = Path(tempfile.mkdtemp(prefix="bugos-hernoem-"))
+(_d507 / "Recept.odt").write_text("x")
+venster.ga_naar(_d507)
+for _ in range(50):
+    app.processEvents()
+venster.selecteer(_d507 / "Recept.odt")
+for _ in range(20):
+    app.processEvents()
+_oud507 = venster.vraag_tekst
+_gevraagd507 = []
+venster.vraag_tekst = lambda *a, **kw: (_gevraagd507.append(kw.get("kies_tot")), "Taart")[1]
+venster.hernoem()
+venster.vraag_tekst = lambda *a, **kw: "."
+venster.nieuwe_map()
+_punt509 = venster.melding.tekst.text()
+venster.vraag_tekst = _oud507
+klopt((_d507 / "Taart.odt").exists() and not (_d507 / "Taart").exists() and _gevraagd507 == [len("Recept")],
+      f"U507: 'Recept' hernoemen naar 'Taart' wordt 'Taart.odt' ({sorted(p.name for p in _d507.iterdir())}, {_gevraagd507})")
+klopt(not (_d507.parent / f"{_d507.name} (2)").exists() and ("punten" in _punt509 or "dots" in _punt509),
+      f"U509: een map '.' maakt geen map naast deze ({_punt509!r})")
+import errno as _errno508
+klopt("teken" in venster.naam_fout(OSError(_errno508.EINVAL, "Invalid argument")) or
+      "character" in venster.naam_fout(OSError(_errno508.EINVAL, "Invalid argument")),
+      "U508: een naam die de stick niet kent, in gewone woorden (niet 'Invalid argument')")
+# U510: een map waar je niet in mag kijken (thuismap van een ander account) is geen 'lege map'.
+_nav510 = sys.modules["bugos_files_navigeren"]
+_oud510 = _nav510.os.access
+_nav510.os.access = lambda p, m: False if str(p) == str(_d507) else _oud510(p, m)
+venster.ga_naar(docs)
+venster.ga_naar(_d507)
+_nav510.os.access = _oud510
+klopt(venster.huidig == docs and ("mag je niet" in venster.melding.tekst.text() or "may not" in venster.melding.tekst.text()),
+      f"U510: een map zonder leesrechten opent niet als 'lege map' ({venster.melding.tekst.text()!r})")
+from PySide6.QtCore import Qt  # noqa: E402
+# U511: de plekken links openen ook met Enter (itemActivated), en een klik opent maar één keer.
+_it511 = next(venster.zijbalk.item(i) for i in range(venster.zijbalk.count())
+              if (venster.zijbalk.item(i).data(Qt.ItemDataRole.UserRole) or "").startswith("plek:"))
+venster.zijbalk.itemActivated.emit(_it511)
+klopt(venster.huidig != docs, f"U511: Enter op een plek links opent die plek ({venster.huidig})")
+klopt("self.volgnummer" in (ROOT / "system_files/usr/lib/bugos/python/bugos_files_tegels.py").read_text(),
+      "U512: voorbeelden: de nieuwste vraag eerst (wat je nu ziet)")
+venster.ga_naar(docs)
 venster.selecteer(docs / "map")
 klopt(not venster.keuzebalk.isHidden() and venster.keuzebalk.knoppen["naam"].isVisibleTo(venster.keuzebalk),
       "kiezen: de knoppenbalk verschijnt, met Naam wijzigen")

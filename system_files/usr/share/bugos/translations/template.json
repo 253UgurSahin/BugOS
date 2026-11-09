@@ -13,6 +13,7 @@
   "5 min": "",
   "A few files could not be copied: {mappen}. Usually a name with : ? * or \", a file larger than 4 GB on a FAT32 drive, or two names that differ only in capitals (such a drive sees them as the same). Everything else is there.": "",
   "A key only counts when you hold it a moment, against accidental presses": "",
+  "A name cannot contain / or be only dots.": "",
   "A name cannot contain /.": "",
   "A new BugOS is already waiting. Restart the computer to use it.": "",
   "A new BugOS is available": "",
@@ -632,7 +633,9 @@
   "the drive stopped responding (was it unplugged?)": "",
   "the file cannot be read": "",
   "the name has a character this drive does not allow (like : ? * or \")": "",
+  "the name is too long": "",
   "these times apply on battery now": "",
   "these times apply on the charger now": "",
+  "you may not change anything here": "",
   "↑ nothing sent": ""
 }

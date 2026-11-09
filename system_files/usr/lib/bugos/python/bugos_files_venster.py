@@ -54,12 +54,17 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
         # --- links: plekken, USB-sticks en de prullenbak (de zijbalk komt van de schil)
         self.zijbalk = self.nav
         self.zijbalk.itemClicked.connect(self.zijbalk_klik)
+        # Ook met Enter (toetsenbord) (U511). KDE's 'enkele klik opent' geeft bij een klik óók itemActivated: dan maar één keer.
+        self.zijbalk.itemActivated.connect(lambda it: None if self._net_geklikt(it) else self.zijbalk_klik(it))
         self.zijbalk.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.zijbalk.customContextMenuRequested.connect(self.zijbalk_menu)
         self.bak_lijst = Zijbalk()
         self.bak_lijst.voeg_toe("lijn:prullenbak", t("Prullenbak", "Trash"), "prullenbak")
         self.bak_lijst.setFixedHeight(48)
         self.bak_lijst.itemClicked.connect(lambda _it: self.open_prullenbak())
+        self.bak_lijst.itemActivated.connect(lambda it: None if self._net_geklikt(it) else self.open_prullenbak())   # (U511)
+        self.bak_lijst.itemClicked.connect(self._geklikt)
+        self.zijbalk.itemClicked.connect(self._geklikt)
         self.onder.addWidget(self.bak_lijst)
 
         # --- rechts: één compacte balk bovenin, een korte regel info, de tegels.
@@ -365,6 +370,16 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
         if self.verborgen:
             filter_ |= QDir.Filter.Hidden
         self.model.setFilter(filter_)
+
+    def _geklikt(self, item) -> None:
+        import time as _tijd
+        self._klik = (id(item), _tijd.monotonic())
+
+    def _net_geklikt(self, item) -> bool:
+        """Kwam deze 'activated' van dezelfde muisklik (dan niet nog eens openen)?"""
+        import time as _tijd
+        vorige = getattr(self, "_klik", (None, 0.0))
+        return vorige[0] == id(item) and _tijd.monotonic() - vorige[1] < 0.5
 
     def gekozen(self) -> list[Path]:
         sel = self.lijst.selectionModel()
