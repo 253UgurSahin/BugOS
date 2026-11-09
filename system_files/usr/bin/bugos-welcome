@@ -19,6 +19,22 @@ from pathlib import Path
 
 sys.path.insert(0, "/usr/lib/bugos/python")
 
+
+def _al_klaar() -> bool:
+    """Bij elk inloggen (--eerste-keer): al klaar, of op de live-USB? Dan meteen stoppen, vóór PySide6 en bugos_ui
+    geladen zijn: dat kostte bij elk inloggen een kwart seconde en 50 MB, alleen om te stoppen (U309)."""
+    import os
+    if (Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "bugos" / "welkom-klaar").exists():
+        return True
+    try:
+        return "rd.live.image" in Path("/proc/cmdline").read_text()
+    except OSError:
+        return False
+
+
+if __name__ == "__main__" and "--eerste-keer" in sys.argv and _al_klaar():
+    sys.exit(0)
+
 import bugos_ui  # noqa: E402
 from bugos_ui import (  # noqa: E402
     CONFIG, Chip, Groep, IcoonChip, Kaart, KeuzeKaart, Knop, SchakelRij, Tegel, achtergrond_pad, bestaat, draai,

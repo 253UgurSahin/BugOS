@@ -14,7 +14,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from bugos_ui import TAAL, t
+from bugos_base import TAAL, t   # zonder Qt: bugos-open-drives draait bij elk inloggen (U310)
 
 
 def mooie_maat(n: int | float) -> str:

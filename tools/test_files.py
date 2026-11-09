@@ -221,6 +221,23 @@ os.listdir = _echt_listdir
 klopt(len(_lees) <= 4 and b.prullenbak_inhoud() == [],
       f"U269: prullenbak met 30 dingen legen leest de voorbeeldjes-mappen één keer ({len(_lees)} keer)")
 
+# U309/U310: wat bij elk inloggen draait, laadt geen Qt: bugos_drives (bugos-open-drives) en 'Welkom' als hij al klaar is.
+import subprocess as _sp2  # noqa: E402
+
+_lib = str(ROOT / "system_files" / "usr" / "lib" / "bugos" / "python")
+_r = _sp2.run([sys.executable, "-c", f"import sys; sys.path.insert(0, {_lib!r}); import bugos_drives; print('PySide6' in sys.modules)"],
+              capture_output=True, text=True)
+_nep_qt = TMP / "geen-qt"
+(_nep_qt / "PySide6").mkdir(parents=True)
+(_nep_qt / "PySide6" / "__init__.py").write_text("raise ImportError('Qt geladen')\n")
+_thuis2 = TMP / "welkom-thuis"
+(_thuis2 / ".config" / "bugos").mkdir(parents=True)
+(_thuis2 / ".config" / "bugos" / "welkom-klaar").write_text("")
+_w = _sp2.run([sys.executable, str(ROOT / "system_files/usr/bin/bugos-welcome"), "--eerste-keer"], capture_output=True, text=True,
+              env=dict(os.environ, PYTHONPATH=str(_nep_qt), HOME=str(_thuis2), XDG_CONFIG_HOME=str(_thuis2 / ".config")))
+klopt(_r.stdout.strip() == "False" and _w.returncode == 0,
+      f"U309/U310: bij elk inloggen geen Qt laden: bugos_drives zonder PySide6 ({_r.stdout.strip()}), Welkom stopt meteen ({_w.returncode})")
+
 # 7c. snelkoppelingen: telt waar de koppeling zelf staat (kapot of naar een andere schijf)
 (docs / "kapot").symlink_to(TMP / "bestaat-niet")
 klopt(b.zelfde_schijf(docs / "kapot", thuis), "snelkoppeling: een kapotte koppeling in Documenten mag naar de prullenbak")
