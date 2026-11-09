@@ -1438,6 +1438,13 @@ _mac = _ud.normalize("NFD", "café")
 klopt(bugos_ui.zoeksleutel("İstanbul tatil.jpg").startswith("istanbul") and bugos_ui.zoeksleutel(_mac) == "cafe"
       and winkel.past({"naam": "Sistem İzleyicisi", "id": "x"}, "izleyici"),
       "U268: 'istanbul' vindt 'İstanbul', 'cafe' vindt 'café' (ook van een Mac), ook in de Winkel")
+# U271: zichtbare toetsenbordfocus ook op de keuzeknoppen, achtergronden, het pad in Bestanden en de legenda.
+import bugos_files_onderdelen as _fo  # noqa: E402
+import bugos_settings_onderdelen as _so  # noqa: E402
+
+_css = _fo.stijl() + _so.stijl()
+_zonder = [n for n in ("keus", "plaatje", "kruimel", "legenda") if f"QPushButton#{n}:focus" not in _css]
+klopt(not _zonder, f"U271: elke eigen knop laat zien dat hij de toetsenbordfocus heeft (niet: {_zonder})")
 _stukken = [(n, (ROOT / "system_files/usr/bin" / n).read_text()) for n in
             ("bugos-settings", "bugos-task-manager", "bugos-store", "bugos-welcome", "bugos-backup", "bugos-switch", "bugos-help")]
 klopt(all("een_keer=True" in tekst for _n, tekst in _stukken), "U208: Instellingen, Taakbeheer, Winkel, Welkom, Back-up, Overstap en Hulp openen maar één keer")

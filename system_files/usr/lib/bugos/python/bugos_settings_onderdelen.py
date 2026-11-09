@@ -51,10 +51,12 @@ QPushButton#keus {{ background: transparent; border: none; border-radius: 9px; p
     font-weight: 600; color: {K['tekst2']}; }}
 QPushButton#keus:hover {{ color: {K['tekst']}; }}
 QPushButton#keus:checked {{ background: {K['vlak']}; color: {K['tekst']}; }}
+QPushButton#keus:focus {{ border: 2px solid {K['accent']}; padding: 6px 12px; }}
 QFrame#keuzes {{ background: {K['knop']}; border-radius: 12px; }}
 QPushButton#plaatje {{ background: transparent; border: 2px solid transparent; border-radius: 16px; padding: 3px; }}
 QPushButton#plaatje:hover {{ border: 2px solid {K['rand_sterk']}; }}
 QPushButton#plaatje:checked {{ border: 2px solid {K['accent']}; }}
+QPushButton#plaatje:focus {{ border: 2px dashed {K['accent']}; }}
 QListWidget#keuzelijst {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-radius: 16px; padding: 6px;
     outline: 0; font-size: 14px; }}
 QListWidget#keuzelijst::item {{ padding: 6px 12px; border-radius: 10px; color: {K['tekst']}; }}

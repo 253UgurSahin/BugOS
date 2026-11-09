@@ -19,6 +19,7 @@ QPushButton#kruimel {{ background: transparent; border: none; border-radius: 8px
     font-size: 14px; color: {K['tekst2']}; }}
 QPushButton#kruimel:hover {{ background: {K['knop']}; color: {K['tekst']}; }}
 QPushButton#kruimel[laatste="true"] {{ color: {K['tekst']}; font-weight: 600; }}
+QPushButton#kruimel:focus {{ border: 2px solid {K['accent']}; padding: 4px 6px; }}
 QListView#tegels {{ background: transparent; border: none; outline: 0; }}
 QWidget#computer_binnen {{ background: transparent; }}
 QFrame#kaart {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-radius: 16px; }}
@@ -30,6 +31,7 @@ QPushButton#legenda {{ background: transparent; border: none; border-radius: 10p
     text-align: left; font-size: 14px; font-weight: 400; color: {K['tekst']}; }}
 QPushButton#legenda:hover {{ background: {K['knop']}; }}
 QPushButton#legenda:disabled {{ color: {K['tekst2']}; }}
+QPushButton#legenda:focus {{ border: 2px solid {K['accent']}; padding: 3px 8px 3px 4px; }}
 """)
 
 
