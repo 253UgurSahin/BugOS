@@ -95,19 +95,32 @@ _, _ok = vang(bi.zet_donker, True, antwoord=lambda c: (1, ""))
 opdr, _ = vang(bi.vergeet_netwerk, "Thuis wifi")
 klopt(_ok is False and ("nmcli", "connection", "delete", "id", "Thuis wifi") in opdr,
       f"U336/U338: mislukt licht/donker zegt 'mislukt'; 'Vergeten' gooit het opgeslagen netwerk weg ({opdr})")
+opdr, _ = vang(bi.vergeet_netwerk, "Thuis", antwoord=lambda c: (0, "Thuis 1:1234-abcd:802-11-wireless\n") if "--active" in c else (0, ""))
+klopt(("nmcli", "connection", "delete", "uuid", "1234-abcd") in opdr,
+      f"U345: 'Vergeten' gooit het profiel weg dat echt verbonden is (op UUID), ook als het 'Thuis 1' heet ({opdr})")
 _stick = Path(tempfile.mkdtemp(prefix="bugos-stick-"))
 (_stick / "vakantie.jpg").write_bytes(b"jpg")
 _oud_data = os.environ.get("XDG_DATA_HOME")
 _data = Path(tempfile.mkdtemp(prefix="bugos-data-"))
 os.environ["XDG_DATA_HOME"] = str(_data)
 opdr, _ = vang(bi.zet_achtergrond, str(_stick / "vakantie.jpg"))
+_eigen = _data / "wallpapers" / "bugos-eigen"
+_kopie = next(iter(sorted(_eigen.glob("vakantie*.jpg"))), None)
+klopt(_kopie is not None and any(c[0] == "plasma-apply-wallpaperimage" and c[1] == str(_kopie) for c in opdr),
+      f"U335: een eigen foto (van een stick) wordt eerst gekopieerd, zodat de achtergrond blijft ({opdr})")
+# U343: een andere foto met dezelfde naam krijgt een nieuwe plek (anders ziet Plasma geen verandering); de oude gaat weg.
+(_stick / "ander").mkdir()
+(_stick / "ander" / "vakantie.jpg").write_bytes(b"andere foto")
+import time as _tm  # noqa: E402
+_tm.sleep(1.1)
+opdr2, _ = vang(bi.zet_achtergrond, str(_stick / "ander" / "vakantie.jpg"))
+_nu = sorted(_eigen.iterdir())
+klopt(len(_nu) == 1 and opdr2 and opdr2[-1][1] == str(_nu[0]) and str(_nu[0]) != str(_kopie),
+      f"U343: een andere foto met dezelfde naam wordt echt de nieuwe achtergrond ({[p.name for p in _nu]})")
 if _oud_data is None:
     os.environ.pop("XDG_DATA_HOME", None)
 else:
     os.environ["XDG_DATA_HOME"] = _oud_data
-_kopie = _data / "wallpapers" / "bugos-eigen" / "vakantie.jpg"
-klopt(_kopie.exists() and any(c[0] == "plasma-apply-wallpaperimage" and c[1] == str(_kopie) for c in opdr),
-      f"U335: een eigen foto (van een stick) wordt eerst gekopieerd, zodat de achtergrond blijft ({opdr})")
 
 # U235: een laptop op de accu: Instellingen toont de accu-tijden (KDE: 5 min scherm uit), niet die van de lader.
 _sys235 = Path(tempfile.mkdtemp(prefix="bugos-sys-"))

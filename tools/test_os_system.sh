@@ -455,6 +455,12 @@ draai bugos-theme donker
 sleep 1
 klopt '[ ! -s "$TMP/wine-log" ]' "U169: een oudere licht/donker-keuze zet de Windows-kleuren niet meer"
 nep plasma-apply-colorscheme 'echo "$1" >"'"$TMP"'/schema"'
+# U342: lukt het omzetten niet, dan zegt bugos-theme dat (Instellingen toont dan 'Dat lukte niet', niet 'Klaar').
+echo BugOSLight >"$TMP/schema"
+nep plasma-apply-colorscheme 'exit 1'
+draai bugos-theme donker
+klopt '[ "$code" -ne 0 ]' "U342: licht/donker dat niet lukt, geeft een fout terug (niet 'Klaar')"
+nep plasma-apply-colorscheme 'echo "$1" >"'"$TMP"'/schema"'
 # U302: van vóór de Engelse namen: 'BugOSDonker' wordt 'BugOSDark', en het oude game-modusbestand gaat weg.
 echo BugOSDonker >"$TMP/schema"
 mkdir -p "$TMP/thuis/.config/environment.d"

@@ -130,6 +130,13 @@ def vergeet_netwerk(naam: str) -> bool:
     if _c.VOORBEELD:
         _c._VB["verbonden"] = ""
         return True
+    # Het profiel dat nu echt verbonden is (op naam kan het 'Thuis 1' heten, en 'Thuis' een ouder profiel zijn): op
+    # zijn UUID weggooien (U345).
+    _, uit = _c.draai("nmcli", "-t", "-f", "NAME,UUID,TYPE", "connection", "show", "--active")
+    for regel in uit.splitlines():
+        delen = splits_nmcli(regel)
+        if len(delen) >= 3 and delen[2] == "802-11-wireless" and (delen[0] == naam or delen[0].startswith(naam + " ")):
+            return _c.draai("nmcli", "connection", "delete", "uuid", delen[1])[0] == 0
     return _c.draai("nmcli", "connection", "delete", "id", naam)[0] == 0
 
 

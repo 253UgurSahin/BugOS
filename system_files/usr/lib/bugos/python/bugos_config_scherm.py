@@ -287,16 +287,26 @@ def zet_achtergrond(pad: str) -> bool:
         try:
             eigen = eigen_achtergrond_map()
             eigen.mkdir(parents=True, exist_ok=True)
-            doel = eigen / Path(pad).name
-            if Path(pad).resolve() != doel.resolve():
-                for oud in eigen.iterdir():   # alleen de laatste eigen foto bewaren
-                    if oud.is_file() and oud.name != doel.name:
-                        oud.unlink(missing_ok=True)
-                shutil.copy2(pad, doel)
-            pad = str(doel)
+            if Path(pad).resolve().parent != eigen.resolve():
+                # Elke keer een nieuwe naam: anders ziet Plasma bij een andere foto met dezelfde naam (IMG_0001.jpg)
+                # geen verandering en blijft de oude staan (U343).
+                import time
+                bron = Path(pad)
+                doel = eigen / f"{bron.stem}-{int(time.time())}{bron.suffix}"
+                shutil.copy2(bron, doel)
+                pad = str(doel)
         except OSError:
             pass   # kopiëren lukt niet (vol?): dan het origineel gebruiken
-    return _c.draai("plasma-apply-wallpaperimage", pad, timeout=15)[0] == 0
+    gelukt = _c.draai("plasma-apply-wallpaperimage", pad, timeout=15)[0] == 0
+    if gelukt:
+        # Pas na het instellen de oude eigen foto's weg (lukte het niet, dan blijft de vorige gewoon staan) (U343).
+        try:
+            for oud in eigen_achtergrond_map().iterdir():
+                if oud.is_file() and str(oud) != pad:
+                    oud.unlink(missing_ok=True)
+        except OSError:
+            pass
+    return gelukt
 
 
 # ======================================================= scherm uit, slapen ===

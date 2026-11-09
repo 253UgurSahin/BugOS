@@ -175,7 +175,11 @@ class WifiPagina(Blad):
 
     def vergeet_wifi(self, n: bi.Netwerk) -> None:
         """Vergeten: verbreken en het wachtwoord weggooien (U338)."""
-        op_achtergrond(self, lambda: bi.vergeet_netwerk(n.naam), lambda _u: self.ververs())
+        def klaar(ok) -> None:
+            if not ok:   # niet stil laten mislukken (bijv. geen beheerder) (U345)
+                self.melding.toon(t("Vergeten lukte niet.", "Forgetting did not work."), "fout")
+            self.ververs()
+        op_achtergrond(self, lambda: bi.vergeet_netwerk(n.naam), klaar)
 
 
 # ============================================================= bluetooth ===

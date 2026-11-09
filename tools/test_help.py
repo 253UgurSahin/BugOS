@@ -141,7 +141,7 @@ klopt(_u.stand == bh.LET_OP and _u.repareer is not None,
       f"U290: bluetooth uit door de vliegtuigstand: 'staat uit' met een knop om hem aan te zetten ({_u.stand})")
 klopt('start("bugos-settings", "wifi")' in (ROOT / "system_files/usr/bin/bugos-help").read_text()
       and 'start("bugos-settings", "wifi")' in (ROOT / "system_files/usr/bin/bugos-welcome").read_text()
-      and "kcm_networkmanagement" not in (ROOT / "system_files/usr/bin/bugos-help").read_text(),
+      and 'Kies je wifi' in (ROOT / "system_files/usr/bin/bugos-help").read_text(),
       "U334: 'Wifi kiezen' in Hulp en Welkom opent de eenvoudige wifi-pagina van BugOS")
 klopt("from bugos_config import bt_hardware" in (ROOT / "system_files/usr/bin/bugos-help").read_text(),
       "U297: Hulp haalt bt_hardware via bugos_config (anders mist bugos_config daarna de netwerkfuncties)")

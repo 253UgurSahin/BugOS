@@ -69,7 +69,7 @@ def controle_internet() -> Uitslag:
     if apparaten.strip() and "wifi" not in apparaten.split():
         return Uitslag(naam, PROBLEEM, t("Geen verbinding. Zit de netwerkkabel er goed in?",
                                          "Not connected. Is the network cable plugged in?"),
-                       lambda: start("bugos-settings", "wifi"), t("Netwerk", "Network"))
+                       lambda: kde_instelling("kcm_networkmanagement"), t("Netwerk", "Network"))   # geen wifi: kabel
     # Naar de eenvoudige wifi-pagina van BugOS, niet de netwerk-editor van KDE (U334).
     return Uitslag(naam, PROBLEEM, t("Geen verbinding. Kies je wifi.", "Not connected. Choose your Wi-Fi."),
                    lambda: start("bugos-settings", "wifi"), t("Wifi kiezen", "Choose Wi-Fi"))

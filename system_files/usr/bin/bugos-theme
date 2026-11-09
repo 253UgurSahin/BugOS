@@ -172,6 +172,8 @@ licht | donker)
     "" | default | breeze-dark | breeze-light) plasma-apply-desktoptheme bugos >/dev/null 2>&1 ;;
     esac
     windows_kleuren "$1"
+    # Zeg eerlijk of het lukte: Instellingen toont dan 'Dat lukte niet' in plaats van 'Klaar' (U342).
+    [ "$(huidig)" = "$1" ] || exit 1
     ;;
 status)
     huidig
