@@ -439,6 +439,14 @@ for _ in range(20):
     app.processEvents()
 leeg = [x for x in venster.computer.widget().findChildren(b.SchijfRij) if x.property("leeg") == "true"]
 klopt(len(leeg) == 1, "Deze computer zonder stick: 'Steek een USB-stick in' (en verder niets)")
+# U077: 'Ruimte maken > Prullenbak leegmaken' op Deze computer: je blijft op Deze computer, en Terug klopt.
+(thuis / "weg-ermee.txt").write_text("x")
+b.naar_prullenbak(thuis / "weg-ermee.txt")
+_terug_voor = list(venster.terug_lijst)
+venster.vraag_ja = lambda *a, **kw: True
+venster.leegmaken()
+klopt(venster.in_computer and not venster.in_prullenbak and venster.terug_lijst == _terug_voor
+      and not b.prullenbak_inhoud(), "U077: prullenbak leegmaken vanaf Deze computer: je blijft daar, Terug klopt")
 
 # 12. opdrachten op de achtergrond (openen, veilig verwijderen): het venster loopt niet vast
 from PySide6.QtCore import QElapsedTimer  # noqa: E402

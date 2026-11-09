@@ -304,7 +304,11 @@ class Bewerken:
                            "Everything in the trash will be deleted for good. This cannot be undone."),
                          t("Leegmaken", "Empty")):
             mislukt = prullenbak_legen()
-            self.open_prullenbak(geschiedenis=False)
+            # Blijf waar je was (U077): ook vanaf 'Deze computer' > Ruimte maken, waar Terug anders verkeerd ging.
+            if self.in_prullenbak:
+                self.open_prullenbak(geschiedenis=False)
+            elif self.in_computer:
+                self.vul_computer()
             if mislukt:
                 self.melding.toon(t(f"{mislukt} {'ding kon' if mislukt == 1 else 'dingen konden'} niet weg. "
                                     "Ze staan nog in de prullenbak.",
