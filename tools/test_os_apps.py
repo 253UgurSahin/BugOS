@@ -587,6 +587,14 @@ knoppen = [k for k in vi.findChildren(QAbstractButton) if not isinstance(k, Schu
            and isinstance(k.parent(), Rij)]
 verkeerd = [(k.text(), lezer(k)[1]) for k in knoppen if lezer(k)[1] not in ("", k.text())]
 klopt(knoppen and not verkeerd, f"U039: knoppen met tekst in een regel heten zoals hun tekst ({len(knoppen)} knoppen, mis: {verkeerd[:3]})")
+# U062: schuifbalken (volume, helderheid) heten zoals hun regel; keuzeknoppen ("30 min") weten bij welke regel ze horen.
+from PySide6.QtWidgets import QSlider  # noqa: E402
+balken = [b_ for b_ in vi.findChildren(QSlider)]
+klopt(balken and all(lezer(b_)[1] for b_ in balken), f"U062: elke schuifbalk in Instellingen heeft een naam ({[lezer(b_)[1] for b_ in balken]})")
+from bugos_settings_onderdelen import Keuzes  # noqa: E402
+keuzeknoppen = [k for kz in vi.findChildren(Keuzes) for k in kz.knoppen.values()]
+klopt(keuzeknoppen and all(k.accessibleDescription() for k in keuzeknoppen),
+      f"U062: keuzeknoppen ('30 min', 'Nooit') zeggen bij welke regel ze horen ({len(keuzeknoppen)} knoppen)")
 vi.close()
 del os.environ["BUGOS_INSTELLINGEN_VOORBEELD"]
 

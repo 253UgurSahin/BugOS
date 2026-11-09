@@ -92,6 +92,14 @@ class Rij(QFrame):
             # Een schuifje heet zoals de regel; een knop met tekst ("Nu vergrendelen") houdt zijn eigen tekst.
             if isinstance(rechts, QAbstractButton) and not rechts.accessibleName() and not rechts.text().strip():
                 rechts.setAccessibleName(titel_tekst)
+            # Een schuifbalk (volume, helderheid) heet zoals de regel; keuzeknoppen ("30 min", "Nooit")
+            # krijgen de regel als uitleg, zodat je hoort bij welke regel ze horen.
+            balk = getattr(rechts, "balk", None)
+            if balk is not None and not balk.accessibleName():
+                balk.setAccessibleName(titel_tekst)
+            for knop in getattr(rechts, "knoppen", {}).values():
+                if not knop.accessibleDescription():
+                    knop.setAccessibleDescription(titel_tekst)
                 rechts.setAccessibleDescription(uitleg_tekst)
         self.pijl = None
         if pijl is None:
