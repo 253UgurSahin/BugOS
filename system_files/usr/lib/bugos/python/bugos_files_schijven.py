@@ -208,6 +208,15 @@ class Schijven:
             self.melding.toon(t(f"Die naam is te lang of heeft een /. Hoogstens {maximum} tekens.",
                                 f"That name is too long or has a /. At most {maximum} characters."), "fout")
             return
+        # Zit precies dezelfde lege schijf er nog in? Terwijl je een naam koos, kan er een andere stick op dezelfde
+        # plek zijn gekomen: die mag niet gewist worden (zoals bij 'Leegmaken') (U369).
+        nu = next((s for s in schijven() if s.station == x.station), None)
+        if nu is None or not nu.nieuw or (nu.grootte, nu.udisks_deel) != (x.grootte, x.udisks_deel):
+            self.melding.toon(t(f"'{x.naam}' zit er niet meer in. Er is niets veranderd.",
+                                f"'{x.naam}' is no longer there. Nothing was changed."), "fout")
+            self._zijbalk_sleutels = None
+            self.vul_zijbalk()
+            return
         self.beheer(x, klaarmaak_stappen(x, naam),
                     t(f"'{naam}' klaarmaken… Dit duurt even.", f"Getting '{naam}' ready… This takes a moment."),
                     t(f"Klaar: '{naam}' staat nu links bij Schijven en is er voortaan altijd.",

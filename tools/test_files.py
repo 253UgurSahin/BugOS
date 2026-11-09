@@ -543,6 +543,16 @@ venster.leegmaak_schijf(windows)                    # intern: nooit
 venster.leegmaak_schijf(venster.lijst_schijven[0])  # de stick die er echt in zit
 venster.vraag_ja, venster.beheer = _oud_vraag, _oud_beheer
 klopt(_gewist == ["/dev/sdx1"], "leegmaken: alleen de stick die er nu echt in zit (geen andere, geen interne)")
+# U369: 'In gebruik nemen': terwijl je een naam kiest, zit er een andere stick op dezelfde plek (sdx, met bestanden):
+# niets wissen.
+_leeg = sch.Schijf("/dev/sdx", "USB-stick (16 GB)", "stick", "/dev/sdx", "/dev/sdx", grootte=16000000000, nieuw=True)
+_oud_vt, _oud_beheer2 = venster.vraag_tekst, venster.beheer
+venster.vraag_tekst = lambda *a, **kw: "Nieuw"
+_klaar: list = []
+venster.beheer = lambda x, *a, **kw: _klaar.append(x.station)
+venster.neem_in_gebruik(_leeg)
+venster.vraag_tekst, venster.beheer = _oud_vt, _oud_beheer2
+klopt(_klaar == [], f"U369: 'In gebruik nemen' wist geen andere stick die intussen op dezelfde plek zit ({_klaar})")
 # U058: exFAT kent hoogstens 11 tekens; "Stick van Bugie" (15) zou het wissen laten mislukken, dus een kortere naam.
 klopt(_stappen and "Stick van Bugie" not in _stappen[0] and "USB-stick" in _stappen[0],
       "U058: leegmaken van een stick met een lange naam (15 tekens) gebruikt een naam die exFAT kent")
