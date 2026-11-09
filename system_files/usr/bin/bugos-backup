@@ -225,9 +225,12 @@ def _dubbel_in(basis: Path, m: Path, doel: Path | None) -> list[Path]:
 
 
 def rsync_terug(doel: Path, thuis: Path) -> list[str]:
-    # --update: een nieuwer bestand op de computer wordt nooit overschreven.
-    return ["rsync", "-rtl", "--update", "--modify-window=2", "--info=progress2", "--no-inc-recursive",
-            f"{doel}/", f"{thuis}/"]
+    # --update: een nieuwer bestand op de computer wordt nooit overschreven. Maar rsync vervangt een bestand altijd als
+    # de back-up op die plek een map of snelkoppeling heeft (ander soort): dan het oude bewaren met een naam erachter
+    # (--backup), in één map in je thuismap, zodat terugzetten nooit iets van je computer laat verdwijnen (U371).
+    bewaar = thuis / t(f"Vervangen bij terugzetten {time.strftime('%Y-%m-%d')}", f"Replaced when restoring {time.strftime('%Y-%m-%d')}")
+    return ["rsync", "-rtl", "--update", "--backup", f"--backup-dir={bewaar}", "--modify-window=2",
+            "--info=progress2", "--no-inc-recursive", f"{doel}/", f"{thuis}/"]
 
 
 def ruimte_genoeg(schijf: Path, mappen: list[Path], doel: Path | None = None,

@@ -218,5 +218,20 @@ bb.HOSTNAAM, _so.gethostname = _oud_h, _oud_gh
 klopt(_d1.endswith("@thuis-pc") and _d2.endswith("@bugos"),
       f"U228: de back-upmap wisselt niet van naam op een ander netwerk ({_d1}, {_d2})")
 
+# U371: terugzetten: heeft de back-up een map met dezelfde naam als een (nieuwer) bestand op de computer, dan blijft dat
+# bestand bewaard (met een naam erachter) in plaats van te verdwijnen.
+import subprocess as _sp3  # noqa: E402
+
+_bk, _th = TMP / "terug-bk", TMP / "terug-thuis"
+(_bk / "Belasting").mkdir(parents=True)
+(_bk / "Belasting" / "a.txt").write_text("oud")
+_th.mkdir()
+(_th / "Belasting").write_text("mijn nieuwe bestand")
+_r = _sp3.run(bb.rsync_terug(_bk, _th), capture_output=True, text=True)
+_bewaard = [str(p.relative_to(_th)) for p in _th.rglob("*")]
+_kopie = [p for p in _th.rglob("Belasting") if p.is_file()]
+klopt(_r.returncode == 0 and _kopie and _kopie[0].read_text() == "mijn nieuwe bestand",
+      f"U371: terugzetten laat geen bestand van je computer verdwijnen (een map met dezelfde naam) ({_bewaard})")
+
 print(f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)
