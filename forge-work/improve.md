@@ -817,6 +817,37 @@ accessibility (6 found plus 3 unsure: U268, U271-U276). 8 fixed, each with a tes
 ### U276 [low, latent] The menus, taskbar and .desktop names cannot use the translation dictionaries yet
   commit: e5c547c   documented in docs/TRANSLATING.md (making them translatable is M)
 
+## Round 21 (2026-11-09)
+Two reviewers: the round-20 fixes (4 found plus 5 unsure: U280-U283), and a fresh sweep of the live USB/installer,
+the Windows switch tool, and Help/Task Manager (8 found plus 8 unsure: U284-U291). 12 fixed, each with a test that
+failed first; the rest skipped or for you (below). Tests after: 20 test files passed (here). The Windows tool is
+checked by reading the script only (no PowerShell here); the Windows CI runs it.
+
+### U280 [medium-low] (from U268) Start menu: ß, Greek ς and kana no longer matched (QML and Python built the key differently)
+  commit: dcc5715   test: tools/test_menus.py, tools/test_start_data.py
+### U281 [low] (from U272) An elided crumb gave screen readers the shortened name; "…" had no name
+  commit: fc2f403   test: tools/test_os_apps.py
+### U282 [low] (from U273) The "busy" banner (Backup) kept accent on accent_zacht (3.9:1)
+  commit: fc2f403   test: tools/test_os_apps.py
+### U283 [low] (from U273) The Plasma theme's off-switch kept the old 1.5:1 track
+  commit: fc2f403   test: tools/test_os_apps.py (switch.svg regenerated)
+### U284 [medium] Windows step 2 offered a D: inside the laptop as backup place, and selected it first
+  commit: 184b3cd   test: tools/test_windows_start.sh (script check; try once on a real Windows PC)
+### U285 [low] After "Make space" it said to choose "Automatic"; the installer says "Share disk with other operating systems"
+  commit: 184b3cd   test: tools/test_windows_start.sh
+### U286 [low-medium] "Click again" after a partial copy said "not enough space" (what was already copied did not count)
+  commit: 184b3cd   test: tools/test_windows_start.sh
+### U287 [low] A failed ISO download left a broken file, a raw .NET error, and blocked a retry on a tight disk
+  commit: 184b3cd   test: tools/test_windows_start.sh
+### U288 [low] A stick that got full during step 2 was explained as "files open in a program"
+  commit: 184b3cd   test: tools/test_windows_start.sh
+### U289 [medium] Nvidia + Secure Boot: the MOK screen timed out after 10 s, and the text never said "press a key"
+  commit: fea0ea4, 953bf17   test: tools/test_os_settings.py (the U027 test caught double quotes that broke the yad command)
+### U290 [low] Help said "No Bluetooth found" when Bluetooth was off by airplane mode; the repair did not wait for the adapter
+  commit: 05eb8c2   test: tools/test_help.py
+### U291 [low] Help's "Show what takes up space" opened Dolphin instead of BugOS Files
+  commit: 05eb8c2   test: tools/test_help.py
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -844,6 +875,13 @@ accessibility (6 found plus 3 unsure: U268, U271-U276). 8 fixed, each with a tes
   Cyrillic names in odd places). Cosmetic.
 - U279 (round 20, unsure): game mode from the quick menu can briefly flip back to "off" while the script still runs
   (the same accepted pattern as dark mode, U128).
+- U292 (round 21, unsure): the Windows tool's Get-PartitionSupportedSize / Get-Disk may refuse a non-elevated user;
+  try steps 3 and 4 once from the .bat as a normal user (see For you).
+- U293 (round 21, unsure): the Windows tool counts sizes on the window's thread (big photo libraries freeze it for a
+  while), and robocopy downloads OneDrive cloud-only files first.
+- U294 (round 21, unsure): the kickstart sets `keyboard us`; check on a real install that AZERTY/QWERTZ users can
+  pick their layout in the live installer.
+- U295 (round 21, unsure): Task Manager runs nvidia-smi on every refresh while open (may keep an Optimus GPU awake).
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
@@ -868,6 +906,8 @@ accessibility (6 found plus 3 unsure: U268, U271-U276). 8 fixed, each with a tes
   open brings it to the front (not only a blinking taskbar button). If not, the menus must launch via Plasma (M).
 - U254 (round 18): the base image is pinned to the tag kinoite-main:44 (weekly updates by choice). If you want,
   add a `cosign verify` of Universal Blue's signature before building (S-M).
+- U292/U294 (round 21): on a real PC, run the Windows tool once as a normal (not administrator) user, and do one
+  real install with a non-US keyboard.
 - U196: before you add the signing key (A032), bugos-ondertekend should change the origin in place
   (bootc switch --mutate-in-place) instead of rpm-ostree rebase; a rebase to the same image removes the older
   version, so "Back to the previous version" has nothing to go back to on that first signed boot.
