@@ -554,6 +554,18 @@ kiezer = bugos_ui.SchijfKiezer("Steek een USB-schijf in…")
 kiezer.zet([("/run/media/u/STICK", "STICK", "29 GB vrij van 29 GB")])
 klopt(lezer(next(iter(kiezer.kaarten.values())))[1:] == ("STICK", "29 GB vrij van 29 GB"),
       f"U016: de schijfkaart in Back-up/Overstap heeft de naam van de stick: {lezer(next(iter(kiezer.kaarten.values())))}")
+_wijzig: list = []
+kiezer.gewijzigd.connect(lambda: _wijzig.append(1))
+kiezer.zet([("/run/media/u/STICK", "STICK", "29 GB vrij van 29 GB")])
+_zelfde = len(_wijzig)
+kiezer.zet([("/run/media/u/STICK", "STICK", "Heeft al een back-up · 20 GB vrij van 29 GB")])
+klopt(_zelfde == 0 and lezer(next(iter(kiezer.kaarten.values())))[2] == "Heeft al een back-up · 20 GB vrij van 29 GB"
+      and kiezer.gekozen() == "/run/media/u/STICK",
+      f"U080: de schijfkaart toont de nieuwe tekst na een back-up (en blijft gekozen): {lezer(next(iter(kiezer.kaarten.values())))}")
+kiezer.setEnabled(False)
+kiezer.zet([("/run/media/u/STICK", "STICK", "19 GB vrij van 29 GB")])
+klopt(not next(iter(kiezer.kaarten.values())).isEnabled(), "U080: tijdens een klus blijft een vernieuwde kaart op slot")
+kiezer.setEnabled(True)
 
 welkom = laad("bugos_welkom", "bugos-welcome")
 for pagina in (welkom.Uiterlijk(), welkom.Updates()):

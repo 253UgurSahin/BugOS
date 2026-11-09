@@ -48,9 +48,10 @@ class SchijfKiezer(QWidget):
     def zet(self, items: list[tuple[str, str, str]]) -> None:
         """items: (sleutel, naam, extra uitleg)"""
         huidig = self.gekozen()
-        sleutels = [i[0] for i in items]
-        if sleutels == list(self.kaarten):
+        # Niet alleen de sleutels vergelijken: ook de tekst (bijv. 'heeft al een back-up', de vrije ruimte) (U080).
+        if [tuple(i) for i in items] == getattr(self, "_items", None):
             return
+        self._items = [tuple(i) for i in items]
         for k in self.kaarten.values():
             self.groep.removeButton(k)
             self.lay.removeWidget(k)
@@ -68,6 +69,7 @@ class SchijfKiezer(QWidget):
             b.addWidget(label(extra, "klein"))
             r.addLayout(b, 1)
             k = KeuzeKaart(binnen)
+            k.setEnabled(getattr(self, "_aan", True))   # tijdens een klus blijven nieuwe kaarten ook op slot
             self.groep.addButton(k)
             self.lay.addWidget(k)
             self.kaarten[sleutel] = k
@@ -83,6 +85,7 @@ class SchijfKiezer(QWidget):
         return None
 
     def setEnabled(self, aan: bool) -> None:  # noqa: N802
+        self._aan = aan
         for k in self.kaarten.values():
             k.setEnabled(aan)
 
