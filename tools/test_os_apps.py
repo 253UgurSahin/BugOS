@@ -1582,6 +1582,18 @@ _ww3.bezig_met = None
 _ww3.deleteLater()
 klopt("os.path.lexists(p)" in (ROOT / "system_files/usr/lib/bugos/python/bugos_files_bewerken.py").read_text(),
       "U337: twee keer snel Delete op hetzelfde bestand vraagt niet 'echt weggooien van een andere schijf?'")
+# U398: een smal venster: de knoppen bovenin zonder tekst (pictogram + tip), zodat het pad niet onder de zoekbalk valt.
+_fv = b.Bestanden(THUIS)
+_fv.resize(1000, 700)
+_fv.show()
+wacht(lambda: False, 100)
+_smal = (_fv.nieuw_knop.text(), _fv.nieuw_knop.accessibleName())
+_fv.resize(1500, 800)
+wacht(lambda: False, 100)
+_breed = _fv.nieuw_knop.text()
+_fv.close()
+klopt(_smal[0] == "" and _smal[1] == "Nieuwe map" and _breed == "Nieuwe map",
+      f"U398: smal venster: knoppen zonder tekst (met een naam voor de schermlezer), breed: met tekst ({_smal}, {_breed!r})")
 _stukken = [(n, (ROOT / "system_files/usr/bin" / n).read_text()) for n in
             ("bugos-settings", "bugos-task-manager", "bugos-store", "bugos-welcome", "bugos-backup", "bugos-switch", "bugos-help")]
 klopt(all("een_keer=True" in tekst for _n, tekst in _stukken), "U208: Instellingen, Taakbeheer, Winkel, Welkom, Back-up, Overstap en Hulp openen maar één keer")

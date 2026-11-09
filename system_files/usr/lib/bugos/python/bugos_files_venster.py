@@ -92,7 +92,7 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
         balk.addWidget(self.pad_vak, 1)
         balk.addWidget(self.titel, 1)
         self.zoek = Zoekbalk(t("Zoek in deze map", "Search this folder"))
-        self.zoek.setMinimumWidth(170)
+        self.zoek.setMinimumWidth(px(120))
         self.zoek.setMaximumWidth(240)
         self.zoek.setMinimumHeight(HOOGTE)
         self.zoek.setMaximumHeight(HOOGTE)
@@ -110,6 +110,9 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
         for k in (self.plak_knop, self.nieuw_knop, self.uitwerp_knop, self.leeg_knop):
             k.setMinimumHeight(HOOGTE)
             k.setMaximumHeight(HOOGTE)
+            k.setProperty("volle_tekst", k.text())
+            k.setAccessibleName(k.text())   # ook zonder tekst (smal venster) een naam voor de schermlezer
+            k.setToolTip(k.toolTip() or k.text())
             balk.addWidget(k)
         self.plak_knop.hide()
         rechts.addLayout(balk)
@@ -309,6 +312,12 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
 
     def resizeEvent(self, e) -> None:  # noqa: N802
         super().resizeEvent(e)
+        # Smal venster (of grote letters): de knoppen bovenin alleen met hun pictogram (de naam als tip), anders
+        # schoof de zoekbalk over het pad en viel 'Veilig verwijderen' half weg (U398).
+        if hasattr(self, "leeg_knop"):
+            smal = self.width() < px(1260)
+            for k in (self.plak_knop, self.nieuw_knop, self.uitwerp_knop, self.leeg_knop):
+                k.setText("" if smal else k.property("volle_tekst"))
         if hasattr(self, "keuzebalk"):
             self.plaats_keuzebalk()
 
