@@ -766,6 +766,32 @@ failed first; 3 skipped or for you (below). Tests after: 20 test files passed (h
 ### U251 [low] A file name like "<h1>…" could format or hide the text of the .exe/.rpm question (kdialog)
   commit: 969c3fa   test: tools/test_exe.sh
 
+## Round 19 (2026-11-09)
+Two reviewers: the round-18 fixes (2 found plus 5 unsure: U255-U258), and a fresh sweep of look and feel, gaming and
+developer tools (1 medium, 4 low, 3 unsure: U259-U264). 10 fixed, each with a test that failed first; 3 skipped
+(below). Tests after: 20 test files passed (here).
+
+### U255 [low, privacy] (from U244) Emptying the trash left previews made of the file inside the trash
+  commit: 0e0b3d1   test: tools/test_files.py
+### U256 [low] (from U244) Emptying a big trash froze the window much longer (thousands of needless deletes)
+  commit: 0e0b3d1   test: tools/test_files.py
+### U257 [low] (from U242) English in the US or Canada gave en_IE (now en_US / en_CA)
+  commit: 627f506   test: tools/test_settings.py
+### U258 [low] (from U247) Auto-login accepted uid 65534 (nobody) and system users above UID_MAX
+  commit: 627f506   test: tools/test_os_system.sh
+### U259 [medium] Swapping a taskbar widget (start menu, quick menu, taskbar space) put it at the far right end
+  commit: 82a3472   test: tools/test_panel.sh (simulated panel, tools/panel-sim.js; check on a real Plasma 6.8 PC)
+### U260 [low] Game mode from the quick menu was killed after 5 s, leaving "Full power" half on
+  commit: 80b63ac   test: tools/test_start_data.py
+### U261 [low] Light mode off did not bring animations back until the next login (no --notify)
+  commit: feead40   test: tools/test_light_mode.sh
+### U262 [low] Developer mode could run twice at once (Welcome and Settings): "did not work"
+  commit: feead40   test: tools/test_os_system.sh
+### U263 [low] The dev box used fedora-toolbox:latest (now the same Fedora version as BugOS)
+  commit: feead40   test: tools/test_os_system.sh
+### U264 [low] No FPS counter in games from the Store (Flatpak): MangoHud for Flatpak was not installed
+  commit: 5fbec4e   test: tools/test_os_system.sh
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -781,6 +807,12 @@ failed first; 3 skipped or for you (below). Tests after: 20 test files passed (h
   Region page (BugOS cannot tell them apart from the ones it set). Low.
 - U253 (round 18, unsure): `flatpak override --user` lets every Flatpak app read ~/.config/kdeglobals (for the BugOS
   colours); that file can hold recent file-dialog places. Many KDE apps on Flathub already have this access.
+- U265 (round 19, unsure): VS Code is the Flatpak, so its built-in terminal does not see the "dev" box; a
+  terminal profile with `flatpak-spawn --host distrobox enter dev` would help beginners (M, needs a real PC).
+- U266 (round 19, unsure): with "I choose when" for updates, bugos-flatpak-style only runs at first boot, so a new
+  KDE runtime branch falls back to the stock style (cosmetic).
+- U267 (round 19, unsure): with "FPS counter ready at once", MANGOHUD_CONFIGFILE points into ~/.config/bugos, which
+  the Steam Flatpak cannot read; MangoHud may then show its default overlay.
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
