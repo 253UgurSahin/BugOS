@@ -302,6 +302,17 @@ Found 4, all small and all in code added in rounds 3-4. All fixed with a test th
 ### U052 [medium] Closing the Store during an install broke the install off without a message
   commit: f73aa93   test: tools/test_os_apps.py
 
+## Round 6 (2026-11-09)
+Settings, menus and installer: nothing found. System and apps: 2 small ones, plus 1 from a reviewer's "unsure" list that
+was easy to make right. All fixed with a test that failed first. Tests after: 23 passed.
+
+### U053 [low] A backed-up photo could still be replaced by a capitals twin when its folder also got a capitals twin (gap in U051)
+  commit: 9a084e2   test: tools/test_os_apps.py
+### U054 [low] Game mode off said nothing about the FPS counter staying until a new login, in one rare order of switches
+  commit: ac2eadd   test: tools/test_os_system.sh
+### U055 [low] "Update now" without internet undid a waiting "Back" before the update failed
+  commit: 89ba7ef   test: tools/test_os_system.sh
+
 ## Skipped
 
 ## For you
