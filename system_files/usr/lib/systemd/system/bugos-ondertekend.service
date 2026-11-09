@@ -4,7 +4,6 @@ Documentation=https://github.com/253UgurSahin/BugOS/blob/main/docs/ONDERTEKENEN.
 Wants=network-online.target
 After=network-online.target rpm-ostreed.service
 ConditionPathExists=/etc/pki/containers/bugos.pub
-ConditionPathExists=!/var/lib/bugos/ondertekend
 ConditionKernelCommandLine=!rd.live.image
 
 [Service]

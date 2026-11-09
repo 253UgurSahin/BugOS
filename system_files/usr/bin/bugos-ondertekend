@@ -14,11 +14,15 @@ KLAAR=/var/lib/bugos/ondertekend
 SLEUTEL=/etc/pki/containers/bugos.pub
 
 [ -s "$SLEUTEL" ] || exit 0
-[ -f "$KLAAR" ] && exit 0
+# Niet op het merkteken in /var vertrouwen: dat delen alle versies. Ging je na het overstappen 'terug naar de
+# vorige versie', dan draait die nog zonder controle, en moet hij opnieuw overstappen (U303).
 mkdir -p /var/lib/bugos
 
 STATUS="$(rpm-ostree status --json 2>/dev/null)" || exit 1
 REF="$(echo "$STATUS" | jq -r '.deployments[] | select(.booted) | ."container-image-reference" // empty')"
+# Staat de overstap al klaar voor de volgende keer opstarten? Dan niet nog een keer.
+VOLGENDE="$(echo "$STATUS" | jq -r '.deployments[0] | select(.booted | not) | ."container-image-reference" // empty')"
+case "$VOLGENDE" in ostree-image-signed:*) exit 0 ;; esac
 
 case "$REF" in
 ostree-image-signed:*)

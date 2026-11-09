@@ -34,5 +34,16 @@ echo "nep-sleutel" >"$TMP/bugos.pub"
 draai "ostree-unverified-registry:ghcr.io/253ugursahin/bugos:latest"
 klopt '[ ! -e "$TMP/var/ondertekend" ]' "overstappen mislukt (geen internet): niet onthouden, volgende keer opnieuw"
 
+# U303: al eens overgestapt (merkteken in /var), maar 'terug' naar een versie zonder controle: opnieuw overstappen.
+nep rpm-ostree 'case "$1" in status) cat "'"$TMP"'/status.json";; rebase) echo "$2" >>"'"$TMP"'/rebase";; esac'
+printf '{"deployments":[{"booted":true,"container-image-reference":"ostree-unverified-registry:ghcr.io/253ugursahin/bugos:latest"}]}' >"$TMP/status.json"
+rm -f "$TMP/rebase"; touch "$TMP/var/ondertekend"
+PATH="$TMP/bin:$PATH" bash "$TMP/ondertekend" >/dev/null 2>&1
+klopt '[ -e "$TMP/rebase" ]' "U303: na 'terug' naar een versie zonder controle stapt hij opnieuw over"
+# ... maar niet als de overstap al klaarstaat voor de volgende keer opstarten.
+printf '{"deployments":[{"booted":false,"container-image-reference":"ostree-image-signed:docker://ghcr.io/253ugursahin/bugos:latest"},{"booted":true,"container-image-reference":"ostree-unverified-registry:ghcr.io/253ugursahin/bugos:latest"}]}' >"$TMP/status.json"
+rm -f "$TMP/rebase"
+PATH="$TMP/bin:$PATH" bash "$TMP/ondertekend" >/dev/null 2>&1
+klopt '[ ! -e "$TMP/rebase" ]' "U303: staat de overstap al klaar, dan niet nog een keer"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
