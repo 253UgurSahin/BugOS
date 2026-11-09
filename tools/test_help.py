@@ -139,6 +139,8 @@ else:
     os.environ["BUGOS_SYS"] = _oud_sys
 klopt(_u.stand == bh.LET_OP and _u.repareer is not None,
       f"U290: bluetooth uit door de vliegtuigstand: 'staat uit' met een knop om hem aan te zetten ({_u.stand})")
+klopt("from bugos_config import bt_hardware" in (ROOT / "system_files/usr/bin/bugos-help").read_text(),
+      "U297: Hulp haalt bt_hardware via bugos_config (anders mist bugos_config daarna de netwerkfuncties)")
 klopt('start("bugos-files"' in (ROOT / "system_files/usr/bin/bugos-help").read_text(),
       "U291: 'Laat zien wat ruimte inneemt' opent BugOS Bestanden (niet Dolphin)")
 

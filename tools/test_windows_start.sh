@@ -36,6 +36,9 @@ controle 'grep -q "\$vrij + \$al -lt (Get-MeeneemGrootte)" <<<"$PS"' "U286: nog 
 controle '! grep -q "choose \"Automatic\"" <<<"$PS" && grep -q "Share disk with other operating systems" <<<"$PS"' \
     "U285: na 'Ruimte maken' noemt hij de keuze die het installatieprogramma echt heeft"
 controle 'grep -q "if (-not \$gelukt) { Remove-Item -LiteralPath \$doel" <<<"$PS"' "U287: een halve download wordt opgeruimd"
+controle 'grep -q "Get-Disk -ErrorAction Stop).BusType" <<<"$PS" && grep -q "MediaType)\" -like .External\*" <<<"$PS"' \
+    "U296: een snelle USB-SSD (meldt zich als SCSI) staat toch in de lijst van stap 2"
+controle 'grep -q "InnerException.Message" <<<"$PS"' "U298: een mislukte download zegt de echte reden erbij"
 controle 'grep -q "De schijf is vol geraakt" <<<"$PS"' "U288: een stick die vol raakt, wordt zo genoemd"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

@@ -167,7 +167,7 @@ def switch() -> Blad:
         rechts_x = x0 + kap + mid
         rechts = f"M{f(rechts_x)},{f(y0)}A{kap},{kap} 0 0 1 {f(rechts_x)},{f(y0 + h)}Z"
         if prefix == "inactive":
-            # Warmgrijs zoals de BugOS-schakelaar (schuif_uit): knopkleur met 12% tekst erover.
+            # Warmgrijs zoals de BugOS-schakelaar (schuif_uit): knopkleur met 45% tekst erover (3:1, U283).
             onder, grijs = klasse("ButtonBackground"), klasse("Text", A_SCHAKELAAR)
             delen = {"left": f'<path d="{links}" {onder}/><path d="{links}" {grijs}/>',
                      "center": rechthoek(x0 + kap, y0, mid, h, onder) + rechthoek(x0 + kap, y0, mid, h, grijs),

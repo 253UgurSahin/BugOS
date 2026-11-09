@@ -23,7 +23,7 @@ QtObject {
     readonly property color goedZacht: donker ? "#13291D" : "#E3F5EC"
     readonly property color letOp: donker ? "#F2B544" : "#8F5600"
     readonly property color letOpZacht: donker ? "#2F2612" : "#FFF3DC"
-    readonly property color fout: donker ? "#FF6B70" : "#D3263A"
+    readonly property color fout: donker ? "#FF6B70" : "#C8213A"
     readonly property color foutZacht: donker ? "#36181C" : "#FDE8EA"
     readonly property color knop: donker ? "#262930" : "#F1EEEE"
     readonly property color knopHover: donker ? "#2F333B" : "#E8E4E4"

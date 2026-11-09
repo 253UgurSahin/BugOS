@@ -1204,7 +1204,7 @@ _laag = []
 for _th, _k in bugos_ui.KLEUREN.items():
     _paren = [("accent_tekst", "knop_hoofd", 4.5), ("accent_tekst", "knop_hoofd_hover", 4.5),
               ("accent_gekozen", "accent_zacht", 4.5), ("tekst3", "vlak", 4.5), ("tekst2", "vlak", 4.5),
-              ("schuif_uit", "vlak", 3.0)]
+              ("schuif_uit", "vlak", 3.0), ("fout", "fout_zacht", 4.5)]   # (U299)
     _laag += [(_th, v, a, round(_contrast(_k[v], _k[a]), 2)) for v, a, m in _paren if _contrast(_k[v], _k[a]) < m]
 klopt(not _laag, f"U273: hoofdknoppen, gekozen items en het schuifje halen genoeg contrast, licht en donker ({_laag})")
 

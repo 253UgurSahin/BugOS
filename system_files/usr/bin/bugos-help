@@ -118,7 +118,7 @@ def controle_bluetooth() -> Uitslag:
     code, uit = draai("bluetoothctl", "show", timeout=5)
     if code != 0 or "Controller" not in uit:
         # Uitgezet met de vliegtuigstand of een Fn-toets: dan is er geen 'Controller', maar wel bluetooth (U290).
-        from bugos_config_netwerk import bt_hardware
+        from bugos_config import bt_hardware   # via bugos_config, zoals zijn uitleg vraagt (U297)
         if not bt_hardware():
             return Uitslag(naam, OK, t("Geen bluetooth gevonden op deze computer.", "No Bluetooth found on this computer."))
     elif "Powered: yes" in uit:

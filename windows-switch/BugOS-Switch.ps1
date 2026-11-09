@@ -217,11 +217,17 @@ function Invoke-Krimp([int] $gb) {
 # ========================================================== 4. USB-STICK ==
 
 function Test-UsbLetter([object] $logisch) {
-    # Hangt deze schijfletter aan een USB-schijf? Via WMI (werkt ook zonder beheerdersrechten) (U284).
+    # Hangt deze schijfletter aan een USB-schijf? Eerst zoals stap 4 (Get-Disk: BusType USB, ook voor snelle
+    # USB-SSD's die zich als SCSI melden) (U296); lukt dat niet (geen beheerdersrechten), dan via WMI (U284).
+    try {
+        $bus = (Get-Partition -DriveLetter $logisch.DeviceID.Substring(0, 1) -ErrorAction Stop | Get-Disk -ErrorAction Stop).BusType
+        if ("$bus" -eq 'USB') { return $true }
+        if ($bus) { return $false }
+    } catch { }
     try {
         foreach ($deel in @(Get-CimAssociatedInstance -InputObject $logisch -ResultClassName Win32_DiskPartition -ErrorAction Stop)) {
             foreach ($schijf in @(Get-CimAssociatedInstance -InputObject $deel -ResultClassName Win32_DiskDrive -ErrorAction Stop)) {
-                if ($schijf.InterfaceType -eq 'USB' -or "$($schijf.PNPDeviceID)" -like 'USBSTOR*') { return $true }
+                if ($schijf.InterfaceType -eq 'USB' -or "$($schijf.PNPDeviceID)" -like 'USBSTOR*' -or "$($schijf.MediaType)" -like 'External*') { return $true }
             }
         }
     } catch { }
@@ -339,7 +345,9 @@ function Save-BugOSIso([object] $gevonden, [string] $map, [scriptblock] $Voortga
         $gelukt = $true
     } catch {
         # Een halve download is niets waard: weg ermee, en een gewone uitleg in plaats van een .NET-fout (U287).
-        throw (T 'Het downloaden is halverwege gestopt (is de verbinding weggevallen?). Probeer het opnieuw.' 'The download stopped halfway (did the connection drop?). Please try again.')
+        # Met de echte reden erachter (bijv. 'schijf vol', of GitHub weigert even): 'opnieuw proberen' helpt niet altijd (U298).
+        $reden = if ($_.Exception.InnerException) { $_.Exception.InnerException.Message } else { $_.Exception.Message }
+        throw ((T 'Het downloaden is gestopt. Is de verbinding weggevallen, of is de schijf vol? Probeer het opnieuw.' 'The download stopped. Did the connection drop, or is the disk full? Please try again.') + "`n`n($reden)")
     } finally {
         $uit.Dispose()
         $client.Dispose()
