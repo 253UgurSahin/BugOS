@@ -9,8 +9,9 @@ const lijst = [];
 function maak(type) {
     const cfg = {};
     if (type === "org.kde.plasma.icontasks" && process.env.LAUNCHERS) cfg.launchers = process.env.LAUNCHERS.split(",");
+    if (type === "org.kde.plasma.systemtray" && process.env.HIDDEN !== undefined) cfg.hiddenItems = process.env.HIDDEN.split(",");
     const w = { id: id++, type, cfg, currentConfigGroup: [], writeConfig(k, v) { cfg[k] = v; },
-        readConfig(k, s) { return k in cfg ? cfg[k] : s; }, remove() { lijst.splice(lijst.indexOf(w), 1); } };
+        readConfig(k, s) { return k in cfg ? cfg[k] : s; }, reloadConfig() {}, remove() { lijst.splice(lijst.indexOf(w), 1); } };
     Object.defineProperty(w, "index", {
         get() { return lijst.indexOf(w); },
         set(n) { lijst.splice(lijst.indexOf(w), 1); lijst.splice(n, 0, w); },
@@ -26,3 +27,5 @@ new Function(js + "\n" + process.argv[4])();
 console.log(lijst.map((w) => w.type).join(","));
 const taken = lijst.find((w) => w.type === "org.kde.plasma.icontasks");
 if (taken && taken.cfg.launchers) console.log(taken.cfg.launchers.join(","));
+const vak = lijst.find((w) => w.type === "org.kde.plasma.systemtray");
+if (vak && process.env.HIDDEN !== undefined) console.log("verborgen:" + (vak.cfg.hiddenItems || []).join(","));

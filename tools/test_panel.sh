@@ -62,6 +62,17 @@ if command -v node >/dev/null 2>&1; then
         node "$ROOT/tools/panel-sim.js" "$TMP/paneel.js" "org.bugos.startmenu,org.kde.plasma.icontasks,org.bugos.snelmenu,org.kde.plasma.systemtray" 'hernoemd();')"
     klopt '[ "$(head -1 <<<"$UIT")" = "org.bugos.startmenu,org.kde.plasma.icontasks,org.bugos.quickmenu,org.kde.plasma.systemtray" ] && [ "$(tail -1 <<<"$UIT")" = "applications:bugos-files.desktop,applications:org.mozilla.firefox.desktop,applications:bugos-store.desktop" ]' \
         "U302: na de update van vóór de Engelse namen: het snelmenu en de vastgezette apps werken weer ($UIT)"
+    # U456: wat je zelf in het systeemvak verborg (KDE Connect, je eigen app), blijft verborgen als het snelmenu uit gaat.
+    UIT="$(HIDDEN="org.kde.kdeconnect,mijn.app" node "$ROOT/tools/panel-sim.js" "$TMP/paneel.js" "org.kde.plasma.systemtray" \
+        'systeemvak(true); systeemvak(true); systeemvak(false);')"
+    klopt '[ "$(tail -1 <<<"$UIT")" = "verborgen:org.kde.kdeconnect,mijn.app" ]' \
+        "U456: snelmenu aan en uit: wat je zelf verborg in het systeemvak, blijft verborgen ($(tail -1 <<<"$UIT"))"
+    # Van een oudere BugOS (de hele lijst verborgen, nog niets bewaard): snelmenu uit laat ze weer zien.
+    ALLES="org.kde.plasma.volume,org.kde.plasma.networkmanagement,org.kde.plasma.bluetooth,org.kde.plasma.battery,org.kde.plasma.brightness,org.kde.kscreen,org.kde.plasma.clipboard,org.kde.plasma.keyboardlayout,org.kde.plasma.keyboardindicator,org.kde.plasma.manage-inputmethod,org.kde.plasma.printmanager,org.kde.kdeconnect,org.kde.plasma.weather"
+    UIT="$(HIDDEN="mijn.app,$ALLES" node "$ROOT/tools/panel-sim.js" "$TMP/paneel.js" "org.kde.plasma.systemtray" 'systeemvak(false);')"
+    klopt '[ "$(tail -1 <<<"$UIT")" = "verborgen:mijn.app" ]' "U456: na een oudere BugOS: snelmenu uit laat de BugOS-lijst weer zien ($(tail -1 <<<"$UIT"))"
+    UIT="$(HIDDEN="mijn.app" node "$ROOT/tools/panel-sim.js" "$TMP/paneel.js" "org.kde.plasma.systemtray" 'systeemvak(true);')"
+    klopt 'grep -q "verborgen:mijn.app,org.kde.plasma.volume" <<<"$UIT"' "U456: snelmenu aan verbergt de BugOS-lijst erbij ($(tail -1 <<<"$UIT"))"
 fi
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

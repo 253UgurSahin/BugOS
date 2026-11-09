@@ -147,11 +147,25 @@ function systeemvak(rustig) {
             vak.currentConfigGroup = ["General"];
             var oud = vak.readConfig("hiddenItems", []);
             if (typeof oud == "string") oud = oud.split(",");
-            var nieuw = [];
+            // Wat BugOS zelf verborg, onthouden we apart (bugosHidden): wat jij zelf verborg (bijv. KDE Connect),
+            // blijft verborgen als je het snelmenu weer uitzet (U456). Nog nooit bewaard? Staat de hele lijst er al
+            // (een oudere BugOS zette hem), dan was die van ons; anders is wat er staat van jou.
+            var vorig = vak.readConfig("bugosHidden", ["-"]);
+            if (typeof vorig == "string") vorig = vorig.split(",");
+            var vanOns = vorig;
+            if (vorig.length == 1 && vorig[0] == "-") {
+                var alles = true;
+                for (var a = 0; a < RUSTIG.length; a++) if (oud.indexOf(RUSTIG[a]) < 0) alles = false;
+                vanOns = alles ? RUSTIG : [];
+            }
+            var nieuw = [], erbij = [];
             for (var k = 0; k < oud.length; k++)
-                if (oud[k] !== "" && RUSTIG.indexOf(oud[k]) < 0) nieuw.push(oud[k]);
-            if (rustig) nieuw = nieuw.concat(RUSTIG);
+                if (oud[k] !== "" && vanOns.indexOf(oud[k]) < 0 && nieuw.indexOf(oud[k]) < 0) nieuw.push(oud[k]);
+            if (rustig)
+                for (var r = 0; r < RUSTIG.length; r++)
+                    if (nieuw.indexOf(RUSTIG[r]) < 0) { nieuw.push(RUSTIG[r]); erbij.push(RUSTIG[r]); }
             vak.writeConfig("hiddenItems", nieuw);
+            vak.writeConfig("bugosHidden", erbij.length ? erbij : [""]);
             vak.reloadConfig();
             n++;
         }
