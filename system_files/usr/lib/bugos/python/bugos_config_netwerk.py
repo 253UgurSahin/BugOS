@@ -6,9 +6,11 @@ bugos_config (_c.draai), zodat een test die bi.draai of bi.VOORBEELD vervangt da
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 from dataclasses import dataclass
+from pathlib import Path
 
 import bugos_config as _c
 
@@ -161,9 +163,21 @@ def lees_bt_info(adres: str, naam: str, uitvoer: str) -> Apparaat:
     return Apparaat(adres, naam, soort, verbonden, batterij)
 
 
+def bt_hardware() -> bool:
+    """Heeft deze computer bluetooth? Zonder (veel pc's) start bluetoothd niet, en wacht 'bluetoothctl'
+    tot zijn tijd op is: dan vragen we het niet eens."""
+    basis = Path(os.environ.get("BUGOS_SYS", "/sys")) / "class" / "bluetooth"
+    try:
+        return any(basis.iterdir())
+    except OSError:
+        return False
+
+
 def bt_aan() -> bool:
     if _c.VOORBEELD:
         return _c._VB["bt"]
+    if not bt_hardware():
+        return False
     return lees_bt_aan(_c.draai("bluetoothctl", "show", timeout=5)[1])
 
 
@@ -184,6 +198,8 @@ def bt_apparaten() -> list[Apparaat]:
         for a in lijst:
             a.verbonden = a.adres in _c._VB["bt_verbonden"]
         return lijst
+    if not bt_hardware():
+        return []
     code, uit = _c.draai("bluetoothctl", "devices", "Paired", timeout=5)
     paren = lees_bt_apparaten(uit)
     if code != 0 or not paren:

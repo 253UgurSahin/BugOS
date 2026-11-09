@@ -90,6 +90,19 @@ klopt(na == 0 and s.get(("AC/Display", "TurnOffDisplayWhenIdle")) == "false",
       "U001: 'nooit' van een oudere BugOS (tijd 0, uitzetten nog aan) wordt bij het lezen goed gezet")
 
 
+# U061: Instellingen vraagt bluetoothctl niets op een computer zonder bluetooth (geen 5 s wachten per vraag).
+_sys = Path(tempfile.mkdtemp(prefix="bugos-sys-"))
+os.environ["BUGOS_SYS"] = str(_sys)
+opdr, aan = vang(bi.bt_aan)
+opdr2, lijst = vang(bi.bt_apparaten)
+klopt(aan is False and lijst == [] and not any("bluetoothctl" in c[0] for c in opdr + opdr2),
+      "U061: geen bluetooth-hardware: bluetooth 'uit', geen apparaten, en bluetoothctl niet gevraagd")
+(_sys / "class" / "bluetooth" / "hci0").mkdir(parents=True)
+opdr, _ = vang(bi.bt_aan, antwoord=lambda c: (0, "Controller 00:11 X\n\tPowered: yes\n"))
+klopt(any(c[0] == "bluetoothctl" for c in opdr), "U061: met bluetooth-hardware wordt bluetoothctl wel gevraagd")
+del os.environ["BUGOS_SYS"]
+
+
 # U002: inloggen zonder wachtwoord op Fedora 44 (Plasma Login); SDDM alleen als Plasma Login er niet is.
 def login_hulpje(wortel: Path) -> Path:
     """bugos-login, maar met /etc en /usr/lib/plasmalogin in een tijdelijke map, en 'id -u' zegt 0 (beheerder)."""

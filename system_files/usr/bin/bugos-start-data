@@ -339,7 +339,10 @@ def snel_status() -> dict:
                 "helderheid": 70, "batterij": 76, "laadt": False}
     s: dict = {}
     s["wifi"] = draai("nmcli", "-t", "-f", "WIFI", "radio").strip() == "enabled" if shutil.which("nmcli") else None
-    bt = draai("bluetoothctl", "show") if shutil.which("bluetoothctl") else ""
+    # Zonder bluetooth-hardware wacht 'bluetoothctl' tot zijn tijd op is: dan niet vragen (geen tegel).
+    bt_map = Path(os.environ.get("BUGOS_SYS", "/sys")) / "class" / "bluetooth"
+    heeft_bt = bt_map.is_dir() and any(bt_map.iterdir())
+    bt = draai("bluetoothctl", "show") if heeft_bt and shutil.which("bluetoothctl") else ""
     s["bluetooth"] = None if "Controller" not in bt else ("Powered: yes" in bt)
     s["spel"] = draai("bugos-game-mode", "status").strip() == "aan" if shutil.which("bugos-game-mode") else None
     s["donker"] = kde_lees("kdeglobals", "General", "ColorScheme") == "BugOSDark"

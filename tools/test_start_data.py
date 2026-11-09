@@ -111,7 +111,14 @@ klopt(fav == ["firefox.desktop", "bugos-files.desktop", "steam.desktop"],
 klopt(all(a["soort"] == "app" for a in data["favorieten"]), "favorieten: geen instellingenpagina's")
 
 # 2. snelmenu-status
+# U061: zonder bluetooth-hardware vragen we bluetoothctl niets (die zou 5 s blijven wachten).
 nep("nmcli", "enabled")
+nep("bluetoothctl", "Waiting to connect to bluetoothd...")
+LOG.write_text("")
+s = json.loads(draai("--snel"))
+klopt(s["bluetooth"] is None and "bluetoothctl" not in LOG.read_text(),
+      "U061: geen bluetooth in de computer: geen tegel, en bluetoothctl wordt niet gevraagd")
+(TMP / "sys" / "class" / "bluetooth" / "hci0").mkdir(parents=True, exist_ok=True)
 nep("bluetoothctl", "Controller 00:11:22:33:44:55 BugOS [default]\n\tPowered: yes")
 nep("wpctl", "Volume: 0.40 [MUTED]")
 (NEP / "kreadconfig6").write_text("#!/usr/bin/bash\n"
