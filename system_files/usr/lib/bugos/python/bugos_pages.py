@@ -293,6 +293,9 @@ def schuifbaar(w: QWidget) -> QScrollArea:
     vlak.setFrameShape(QFrame.Shape.NoFrame)
     vlak.setWidgetResizable(True)
     vlak.viewport().setAutoFillBackground(False)
+    # Geen eigen Tab-stop (een naamloos 'schuifvlak' voor de schermlezer); naar een knop onderaan tabben schuift
+    # hem toch in beeld (U481).
+    vlak.setFocusPolicy(Qt.FocusPolicy.NoFocus)
     vlak.setWidget(w)
     return vlak
 

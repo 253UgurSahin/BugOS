@@ -43,9 +43,9 @@ from bugos_ui import (  # noqa: E402
 from bugos_welcome_panel import Zijpaneel  # noqa: E402
 from PySide6.QtCore import QLocale, QProcess, QRectF, QSize, Qt, QThread, QTimer, Signal  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
-from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap  # noqa: E402
+from PySide6.QtGui import QColor, QIcon, QKeySequence, QPainter, QPixmap, QShortcut  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QButtonGroup, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
+    QAbstractButton, QButtonGroup, QHBoxLayout, QLabel, QLineEdit, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 KLAAR = CONFIG / "welkom-klaar"
@@ -508,6 +508,20 @@ class Welkom(QWidget):
         rechts.addLayout(onder)
         hoofd.addLayout(rechts, 1)
         self.ververs()
+        # Enter = Volgende, ook als de focus op een keuze staat (setDefault werkt alleen in een dialoog); een knop
+        # met de focus doet bij Enter gewoon zichzelf (U481).
+        self.volgende.setFocus()
+        for toets in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            QShortcut(QKeySequence(toets), self, activated=self.enter)
+
+    def enter(self) -> None:
+        nu = QApplication.focusWidget()
+        if isinstance(nu, QLineEdit):
+            nu.returnPressed.emit()   # bijv. het wifi-wachtwoord: Enter is daar 'verbinden'
+        elif isinstance(nu, QAbstractButton) and nu is not self.volgende and not nu.isCheckable():
+            nu.click()                # een gewone knop ('Opnieuw kijken') doet zichzelf
+        elif self.volgende.isEnabled():
+            self.volgende.click()     # op een keuze (spatie kiest): Enter gaat verder
 
     def ga(self, richting: int) -> None:
         nu = self.stapels.currentIndex()
