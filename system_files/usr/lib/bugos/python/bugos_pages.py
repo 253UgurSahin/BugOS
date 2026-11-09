@@ -51,6 +51,17 @@ class SchijfKiezer(QWidget):
         # Niet alleen de sleutels vergelijken: ook de tekst (bijv. 'heeft al een back-up', de vrije ruimte) (U080).
         if [tuple(i) for i in items] == getattr(self, "_items", None):
             return
+        # Zelfde schijven, alleen een andere tekst (bijv. de vrije ruimte): de tekst bijwerken, niet alles opnieuw
+        # bouwen, anders raakt wie met het toetsenbord of een schermlezer op een kaart staat de focus kwijt (U102).
+        if [i[0] for i in items] == list(self.kaarten) and all(hasattr(k, "_teksten") for k in self.kaarten.values()):
+            for sleutel, naam, extra in items:
+                k = self.kaarten[sleutel]
+                k._teksten[0].setText(naam)
+                k._teksten[1].setText(extra)
+                k.setAccessibleName(naam)
+                k.setAccessibleDescription(extra)
+            self._items = [tuple(i) for i in items]
+            return
         self._items = [tuple(i) for i in items]
         for k in self.kaarten.values():
             self.groep.removeButton(k)
@@ -65,10 +76,12 @@ class SchijfKiezer(QWidget):
             r.addWidget(IcoonChip("drive-removable-media-usb", "turkoois", 44))
             b = QVBoxLayout()
             b.setSpacing(2)
-            b.addWidget(label(naam, "kop3"))
-            b.addWidget(label(extra, "klein"))
+            naam_l, extra_l = label(naam, "kop3"), label(extra, "klein")
+            b.addWidget(naam_l)
+            b.addWidget(extra_l)
             r.addLayout(b, 1)
             k = KeuzeKaart(binnen)
+            k._teksten = (naam_l, extra_l)
             k.setEnabled(getattr(self, "_aan", True))   # tijdens een klus blijven nieuwe kaarten ook op slot
             self.groep.addButton(k)
             self.lay.addWidget(k)

@@ -571,6 +571,10 @@ kiezer.zet([("/run/media/u/STICK", "STICK", "Heeft al een back-up · 20 GB vrij 
 klopt(_zelfde == 0 and lezer(next(iter(kiezer.kaarten.values())))[2] == "Heeft al een back-up · 20 GB vrij van 29 GB"
       and kiezer.gekozen() == "/run/media/u/STICK",
       f"U080: de schijfkaart toont de nieuwe tekst na een back-up (en blijft gekozen): {lezer(next(iter(kiezer.kaarten.values())))}")
+_kaart = next(iter(kiezer.kaarten.values()))
+kiezer.zet([("/run/media/u/STICK", "STICK", "21 GB vrij van 29 GB")])
+klopt(next(iter(kiezer.kaarten.values())) is _kaart and lezer(_kaart)[2] == "21 GB vrij van 29 GB",
+      "U102: alleen een andere tekst: dezelfde kaart (de focus blijft), met de nieuwe tekst")
 kiezer.setEnabled(False)
 kiezer.zet([("/run/media/u/STICK", "STICK", "19 GB vrij van 29 GB")])
 klopt(not next(iter(kiezer.kaarten.values())).isEnabled(), "U080: tijdens een klus blijft een vernieuwde kaart op slot")
