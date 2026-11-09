@@ -49,7 +49,13 @@ aan)
         [ -n "$EERSTE" ] && SESSIE="$(basename -s .desktop "$EERSTE")"
     fi
     mkdir -p "$MAP"
-    printf '[Autologin]\nUser=%s\nSession=%s\nRelogin=false\n' "$GEBRUIKER" "$SESSIE" >"$BESTAND"
+    # Lukt het schrijven niet (schijf vol), dan niet 'aan' zeggen (U413).
+    if ! { printf '[Autologin]\nUser=%s\nSession=%s\nRelogin=false\n' "$GEBRUIKER" "$SESSIE" >"$BESTAND.nieuw" &&
+        mv -f "$BESTAND.nieuw" "$BESTAND"; } 2>/dev/null; then
+        rm -f "$BESTAND.nieuw"
+        echo "Kon het bestand niet schrijven." >&2
+        exit 1
+    fi
     echo aan
     ;;
 uit)

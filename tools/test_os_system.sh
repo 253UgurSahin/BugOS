@@ -62,6 +62,12 @@ draai bugos-updates terug
 klopt '[ $code -eq 0 ] && [ -f "$TMP/rollback" ] && grep -qx UPDATES=hand "$TMP/etc-bugos/updates.conf" && grep -q "disable --now rpm-ostreed-automatic.timer" "$TMP/systemctl"' \
     "updates terug (vanzelf): teruggezet, en updates gaan niet meer vanzelf"
 klopt 'grep -q "no longer automatic" "$TMP/uit"' "updates terug (vanzelf): zegt dat updates nu uit staan"
+# U413: kan de keuze niet bewaard worden (schijf vol), dan geen 'gelukt' en blijft de oude keuze staan.
+mkdir -p "$TMP/var-bugos/updates.conf.nieuw"   # schrijven mislukt (ook als beheerder, zoals bij een volle schijf)
+draai bugos-updates auto
+rmdir "$TMP/var-bugos/updates.conf.nieuw"
+klopt '[ $code -ne 0 ] && grep -qx UPDATES=hand "$TMP/var-bugos/updates.conf" && grep -q "could not be saved" "$TMP/uit"' \
+    "U413: updatekeuze niet te bewaren: zegt dat, en de oude keuze blijft ($code)"
 # U300: elke versie heeft een eigen /etc; de keuze moet ook in /var staan, dat alle versies delen. Na het
 # opnieuw opstarten in de oudere versie (die /etc zegt nog 'auto') werkt hij dan niet vanzelf bij.
 klopt 'grep -qx UPDATES=hand "$TMP/var-bugos/updates.conf"' "U300: 'terug' zet 'zelf updaten' ook in /var (gedeeld door alle versies)"
@@ -562,6 +568,12 @@ if [ "$(id -u)" -eq 0 ]; then
     (umask 077; draai bugos-login aan nobody)
     klopt '[ "$(stat -c %a "$TMP/plasmalogin.conf.d/50-bugos-login.conf" 2>/dev/null)" = 644 ]' \
         "U247: het inlogbestand is leesbaar voor het inlogscherm, ook met umask 077"
+    # U413: schrijven mislukt (schijf vol): niet 'aan' zeggen.
+    rm -f "$TMP/plasmalogin.conf.d/50-bugos-login.conf"
+    mkdir -p "$TMP/plasmalogin.conf.d/50-bugos-login.conf.nieuw"
+    draai bugos-login aan nobody
+    rmdir "$TMP/plasmalogin.conf.d/50-bugos-login.conf.nieuw"
+    klopt '[ "$code" -ne 0 ] && ! grep -qx aan "$TMP/uit"' "U413: inloggen zonder wachtwoord: lukt het schrijven niet, dan niet 'aan'"
 fi
 nep id 'case "$*" in "-u") echo 0 ;; "-u nobody") echo 65534 ;; *) /usr/bin/id "$@" ;; esac'
 draai bugos-login aan nobody

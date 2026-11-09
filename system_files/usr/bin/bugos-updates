@@ -32,9 +32,18 @@ gebruiker_timer() {
 }
 
 zet_keuze() {
+    # Eerst een nieuw bestand, dan op zijn plek: bij een volle schijf blijft de oude keuze staan (geen leeg bestand,
+    # dat als 'auto' gelezen werd), en we zeggen dat het niet lukte (U413).
     mkdir -p /etc/bugos /var/lib/bugos
-    echo "UPDATES=$1" >"$CONF"
-    echo "UPDATES=$1" >"$KEUZE"
+    { echo "UPDATES=$1" >"$KEUZE.nieuw" && mv -f "$KEUZE.nieuw" "$KEUZE"; } 2>/dev/null || { rm -f "$KEUZE.nieuw"; return 1; }
+    { echo "UPDATES=$1" >"$CONF.nieuw" && mv -f "$CONF.nieuw" "$CONF"; } 2>/dev/null || rm -f "$CONF.nieuw"
+    return 0
+}
+
+niet_bewaard() {
+    t "Dat lukte niet: de keuze kon niet bewaard worden (is je computer vol?)." \
+        "That did not work: the choice could not be saved (is your computer full?)." >&2
+    exit 1
 }
 
 lees_keuze() {
@@ -55,7 +64,7 @@ als_beheerder() {
 case "${1:-status}" in
 auto)
     als_beheerder "$@"
-    zet_keuze auto
+    zet_keuze auto || niet_bewaard
     # Waren de nieuwe standaard-apps overgeslagen omdat je updates zelf deed? Dan bij de volgende start alsnog (U320).
     if [ -f /var/lib/bugos/standaard-apps-overgeslagen ]; then
         rm -f /var/lib/bugos/standaard-apps-overgeslagen /var/lib/bugos/standaard-apps-2
@@ -66,7 +75,7 @@ auto)
     ;;
 hand)
     als_beheerder "$@"
-    zet_keuze hand
+    zet_keuze hand || niet_bewaard
     systemctl disable --now "${TIMERS[@]}"
     gebruiker_timer mask   # (gaat in bij de volgende keer inloggen)
     # bugos-updatecheck meldt een nieuwe versie; bijwerken gaat via die melding of Instellingen > Updates en meer (U238).
