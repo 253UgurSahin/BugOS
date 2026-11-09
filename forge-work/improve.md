@@ -1185,6 +1185,24 @@ passed (here). Both sweeps found nothing high or medium.
 ### U456 [low] Turning the quick menu off un-hid tray icons you had hidden yourself
   commit: 8ec545d   test: tools/test_panel.sh
 
+## Round 36 (2026-11-09)
+Two reviewers: the round-35 fixes (3 found plus 5 unsure: U461-U463), and a fresh sweep of "the Store and the life of
+an app" (2 found plus 7 unsure: U464-U466). 6 fixed, each with a test that failed first. Tests after: 20 test files
+passed (here).
+
+### U461 [medium] (from U454) Lid and power-button choices applied only to the current charger state (closing the lid on battery still slept)
+  commit: b56d07d   test: tools/test_os_settings.py
+### U462 [low] (from U454) The power page hint could name the wrong state (charge limit reporting "Unknown")
+  commit: b56d07d
+### U463 [low] (from U451) A mixed task whose root process came first in /proc stayed unclosable
+  commit: 34c9ec1   test: tools/test_task_manager.py (plus: empty XDG_CONFIG_HOME, -ErrorAction Stop in the Windows tool)
+### U464 [medium] There was no way to uninstall an app in BugOS itself; app data was never mentioned
+  commit: 3daff54   test: tools/test_os_apps.py ("Remove" in the Store for Flatpak apps, with an opt-in "also delete its files")
+### U465 [medium] Programs from a .rpm/.deb (in their distrobox) never got updates
+  commit: 8426599   test: tools/test_package.sh (daily user timer bugos-update-doosjes, only with "Updates automatically")
+### U466 [low] A flathub remote that exists but is disabled was never enabled (first boot retried forever, the Store said "Are you online?")
+  commit: 26ec68a   test: tools/test_os_system.sh
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -1294,6 +1312,16 @@ passed (here). Both sweeps found nothing high or medium.
   the Kvantum theme (a theme picked in Kvantum Manager is replaced).
 - U460 (round 35, unsure): if the RTC still holds local time right after U446, Windows can be off once until BugOS
   has synced and written UTC.
+- U467 (round 36, M): removing a program installed from a .rpm/.deb still needs the Terminal (distrobox-export
+  --delete plus dnf/apt remove in the box); with "I choose when" the boxes are not updated by "Update now" either.
+- U468 (round 36, unsure): com.jetbrains.IntelliJ-IDEA-Community may be end-of-life on Flathub since JetBrains merged
+  the editions (2025.3); check the Flathub page and update store.json.
+- U469 (round 36, unsure): bugos-package takes the first fuzzy `flatpak search` hit; a generic package name can get
+  "is also in the BugOS Store" for an unrelated app.
+- U470 (round 36, wording): an administrator who cancels the password prompt in the Store is told to "ask the person
+  who looks after this computer".
+- U471 (round 35, unsure): with BugOS in English and LANG set to another region by hand in KDE, the date in Settings
+  is in that region's language (as on the taskbar clock).
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
