@@ -173,7 +173,9 @@ EOF
 # Universal Blue's eigen update-dienst (uupd) en Fedora's rpm-ostree-
 # updatemeldingen: BugOS regelt updates zelf (stap 6). Twee dingen die
 # tegelijk updaten, zitten elkaar in de weg.
-for eenheid in uupd.timer ublue-update.timer; do
+# Ook flatpak-system-update.timer van Universal Blue: BugOS werkt de apps bij met bugos-update-apps.timer, en
+# 'Updates zelf doen' zet alleen die uit; anders liepen de app-updates toch elke dag door (U087).
+for eenheid in uupd.timer ublue-update.timer flatpak-system-update.timer flatpak-user-update.timer; do
     if [ -e "/usr/lib/systemd/system/$eenheid" ]; then
         systemctl mask "$eenheid"
     fi

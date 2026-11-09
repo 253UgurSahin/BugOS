@@ -352,5 +352,14 @@ klopt '[ "$(dnd "$(date -u -d "+2 hour" +%Y,%-m,%-d,%-H,%-M,12),UTC")" = aan ] &
     "U071: met een tijdzone erachter (zoals KDE dat soms schrijft)"
 klopt '[ "$(dnd 2999,12,31,0,0,0)" = aan ] && [ "$(dnd "")" = uit ] && [ "$(dnd onzin)" = uit ] && [ "$(dnd 2999-01-01T00:00:00)" = aan ]' \
     "U071: spelmodus (2999), leeg, onzin en ISO-tijd"
+# U089: app-updates niet over een verbinding met een databundel (Metered 1 of 3); anders wel, ook zonder NetworkManager.
+# Zoals systemd hem draait: $$ wordt $.
+voorwaarde="$(sed -n 's/^ExecCondition=//p' "$ROOT/system_files/usr/lib/systemd/system/bugos-update-apps.service")"
+voorwaarde="${voorwaarde//\$\$/\$}"
+gemeten() { nep busctl "$1"; PATH="$TMP/bin:$PATH" eval "$voorwaarde"; }
+klopt '! gemeten "echo \"u 1\"" && ! gemeten "echo \"u 3\""' "U089: app-updates slaan een hotspot (Metered ja/vermoedelijk ja) over"
+klopt 'gemeten "echo \"u 2\"" && gemeten "echo \"u 4\"" && gemeten "echo \"u 0\"" && gemeten "exit 1"' \
+    "U089: app-updates gaan door bij wifi/kabel, onbekend, of zonder NetworkManager"
+klopt 'grep -q "flatpak-system-update.timer" "$ROOT/build_files/system.sh"' "U087: de bouw zet Universal Blue's eigen app-updates uit"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

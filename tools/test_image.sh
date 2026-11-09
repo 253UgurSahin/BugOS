@@ -40,6 +40,11 @@ done
 for u in bugos-first-boot.service rpm-ostreed-automatic.timer bugos-update-apps.timer; do
     klopt '[ "$(systemctl is-enabled "$u" 2>/dev/null)" = enabled ]' "dienst: $u staat aan"
 done
+# U087: alleen BugOS werkt de apps bij (anders gaat het door, ook als je 'Updates zelf doen' kiest).
+for u in flatpak-system-update.timer uupd.timer; do
+    [ -e "/usr/lib/systemd/system/$u" ] || continue
+    klopt '[ "$(systemctl is-enabled "$u" 2>/dev/null)" = masked ]' "dienst: $u van de basis staat uit (masked)"
+done
 klopt '[ "$(systemctl --global is-enabled bugos-updatecheck.timer 2>/dev/null)" = enabled ]' "dienst: bugos-updatecheck.timer staat aan voor elke gebruiker"
 klopt 'grep -qx "UPDATES=auto" /etc/bugos/updates.conf' "updates: standaard automatisch"
 klopt 'grep -q "^AutomaticUpdatePolicy=stage" /etc/rpm-ostreed.conf' "updates: rpm-ostree zet updates klaar (stage)"
