@@ -95,9 +95,18 @@ _, _ok = vang(bi.zet_donker, True, antwoord=lambda c: (1, ""))
 opdr, _ = vang(bi.vergeet_netwerk, "Thuis wifi")
 klopt(_ok is False and ("nmcli", "connection", "delete", "id", "Thuis wifi") in opdr,
       f"U336/U338: mislukt licht/donker zegt 'mislukt'; 'Vergeten' gooit het opgeslagen netwerk weg ({opdr})")
-opdr, _ = vang(bi.vergeet_netwerk, "Thuis", antwoord=lambda c: (0, "Thuis 1:1234-abcd:802-11-wireless\n") if "--active" in c else (0, ""))
-klopt(("nmcli", "connection", "delete", "uuid", "1234-abcd") in opdr,
-      f"U345: 'Vergeten' gooit het profiel weg dat echt verbonden is (op UUID), ook als het 'Thuis 1' heet ({opdr})")
+def _nm(c):
+    if c[-1] == "show" and "UUID,TYPE" in c:
+        return 0, "1234-abcd:802-11-wireless\n5678-ef01:802-11-wireless\n9999-0000:802-11-wireless\nkabel-1:802-3-ethernet\n"
+    if "802-11-wireless.ssid" in c:
+        return 0, {"1234-abcd": "Thuis", "5678-ef01": "Thuis", "9999-0000": "Thuis Ouders"}[c[-1]] + "\n"
+    return 0, ""
+
+
+opdr, _ = vang(bi.vergeet_netwerk, "Thuis", antwoord=_nm)
+_weg = [c[-1] for c in opdr if c[:3] == ("nmcli", "connection", "delete")]
+klopt(_weg == ["1234-abcd", "5678-ef01"],
+      f"U345/U357: 'Vergeten' gooit elk profiel van dit netwerk weg ('Thuis' en 'Thuis 1'), niet 'Thuis Ouders' ({_weg})")
 _stick = Path(tempfile.mkdtemp(prefix="bugos-stick-"))
 (_stick / "vakantie.jpg").write_bytes(b"jpg")
 _oud_data = os.environ.get("XDG_DATA_HOME")
@@ -117,6 +126,16 @@ opdr2, _ = vang(bi.zet_achtergrond, str(_stick / "ander" / "vakantie.jpg"))
 _nu = sorted(_eigen.iterdir())
 klopt(len(_nu) == 1 and opdr2 and opdr2[-1][1] == str(_nu[0]) and str(_nu[0]) != str(_kopie),
       f"U343: een andere foto met dezelfde naam wordt echt de nieuwe achtergrond ({[p.name for p in _nu]})")
+# U356: de huidige eigen foto via een andere weg (een symlink, zoals /home -> /var/home) nog eens kiezen: hij blijft.
+_echt = Path(tempfile.mkdtemp(prefix="bugos-echt-"))
+(_echt / "wallpapers" / "bugos-eigen").mkdir(parents=True)
+(_echt / "wallpapers" / "bugos-eigen" / "nu-1.jpg").write_bytes(b"jpg")
+_link = Path(tempfile.mkdtemp(prefix="bugos-link-")) / "data"
+_link.symlink_to(_echt)
+os.environ["XDG_DATA_HOME"] = str(_echt)
+vang(bi.zet_achtergrond, str(_link / "wallpapers" / "bugos-eigen" / "nu-1.jpg"))
+klopt((_echt / "wallpapers" / "bugos-eigen" / "nu-1.jpg").exists(),
+      "U356: de huidige eigen foto via een andere weg nog eens kiezen gooit hem niet weg")
 if _oud_data is None:
     os.environ.pop("XDG_DATA_HOME", None)
 else:
@@ -855,7 +874,7 @@ del venster.isActiveWindow
 # U353: zoeken in Instellingen vindt ook woorden die op de pagina's staan (taakbalk, fps, opslag, dubbelklikken…).
 _mist = []
 for _w in ("taakbalk", "dubbelklikken", "fps", "opslag", "schijfruimte", "computernaam", "lettergrootte", "tekstgrootte",
-           "vergroten", "contrast", "standaardapps"):
+           "vergroten", "standaardapps"):
     venster.paginas["start"].zoek(_w)
     _lay = venster.paginas["start"].zoek_kaart.lay
     _rijen = [_lay.itemAt(i).widget() for i in range(_lay.count())]

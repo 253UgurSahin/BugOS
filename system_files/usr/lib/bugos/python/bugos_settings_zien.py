@@ -15,7 +15,7 @@ class ZienPagina(Blad):
     titel_nl, titel_en = "Makkelijker zien", "Easier to see"
     uitleg_nl = "Grotere letters, een grotere muisaanwijzer en een vergrootglas."
     uitleg_en = "Bigger letters, a bigger mouse pointer and a magnifier."
-    zoekwoorden = ("lettergrootte tekstgrootte vergroten contrast zien ogen bril slecht groot grote letters tekst lettertype muisaanwijzer cursor vergrootglas "
+    zoekwoorden = ("lettergrootte tekstgrootte vergroten zien ogen bril slecht groot grote letters tekst lettertype muisaanwijzer cursor vergrootglas "
                    "inzoomen zoom toegankelijkheid plaktoetsen langzame toetsen schermlezer voorlezen easier to see "
                    "accessibility eyes vision big large text letters font size mouse pointer cursor magnifier zoom "
                    "sticky keys slow keys screen reader read aloud orca")

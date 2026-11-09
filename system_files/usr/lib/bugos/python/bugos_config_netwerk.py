@@ -132,12 +132,19 @@ def vergeet_netwerk(naam: str) -> bool:
         return True
     # Het profiel dat nu echt verbonden is (op naam kan het 'Thuis 1' heten, en 'Thuis' een ouder profiel zijn): op
     # zijn UUID weggooien (U345).
-    _, uit = _c.draai("nmcli", "-t", "-f", "NAME,UUID,TYPE", "connection", "show", "--active")
+    # Alle opgeslagen profielen voor dit netwerk (SSID), ook een ouder 'Thuis' naast 'Thuis 1': anders verbond
+    # NetworkManager er meteen weer mee (U357).
+    _, uit = _c.draai("nmcli", "-t", "-f", "UUID,TYPE", "connection", "show")
+    weg = []
     for regel in uit.splitlines():
         delen = splits_nmcli(regel)
-        if len(delen) >= 3 and delen[2] == "802-11-wireless" and (delen[0] == naam or delen[0].startswith(naam + " ")):
-            return _c.draai("nmcli", "connection", "delete", "uuid", delen[1])[0] == 0
-    return _c.draai("nmcli", "connection", "delete", "id", naam)[0] == 0
+        if len(delen) >= 2 and delen[1] == "802-11-wireless":
+            ssid = _c.draai("nmcli", "-g", "802-11-wireless.ssid", "connection", "show", "uuid", delen[0])[1].strip()
+            if ssid == naam:
+                weg.append(delen[0])
+    if not weg:
+        return _c.draai("nmcli", "connection", "delete", "id", naam)[0] == 0
+    return all(_c.draai("nmcli", "connection", "delete", "uuid", u)[0] == 0 for u in weg)
 
 
 def verbreek(naam: str) -> bool:

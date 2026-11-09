@@ -106,6 +106,8 @@ klopt(wifi is not None and wifi["naam"] == "Wifi en internet" and wifi["uitleg"]
       and "wlan" in wifi["zoek"], "gegevens: de pagina 'Wifi en internet' is te vinden met 'wlan'")
 _mist = [w for w in ["night light", "night", "sleep", "screen reader", "sticky keys", "do not disturb", "version", "mute", "font", "scale", "game mode", "left-handed", "lid", "screen off", "about", "magnifier", "lock screen"]
          if not any(all(d in a["zoek"] for d in w.split()) for a in data["apps"] if a["soort"] == "instelling")]
+_mist2 = [w for w in ("opslag", "fps", "dubbelklik", "lettergrootte", "taakbalk") if not any(w in a["zoek"] for a in data["apps"] if a["soort"] == "instelling")]
+klopt(not _mist2, f"U358: het startmenu vindt ook 'opslag', 'fps', 'dubbelklik', 'lettergrootte' en 'taakbalk' (niet: {_mist2})")
 klopt(not _mist and any(a["pad"] == "instelling:over" for a in data["apps"]),
       f"U069: startmenu vindt instellingen ook in het Engels, en 'Over deze computer' (niet: {_mist})")
 _tr = next((a for a in data["apps"] if a["naam"] == "Sistem İzleyicisi"), None)

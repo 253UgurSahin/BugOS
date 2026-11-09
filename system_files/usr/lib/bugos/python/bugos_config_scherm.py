@@ -302,7 +302,7 @@ def zet_achtergrond(pad: str) -> bool:
         # Pas na het instellen de oude eigen foto's weg (lukte het niet, dan blijft de vorige gewoon staan) (U343).
         try:
             for oud in eigen_achtergrond_map().iterdir():
-                if oud.is_file() and str(oud) != pad:
+                if oud.is_file() and oud.resolve() != Path(pad).resolve():   # ook via /home -> /var/home (U356)
                     oud.unlink(missing_ok=True)
         except OSError:
             pass
