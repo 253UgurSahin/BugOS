@@ -51,17 +51,22 @@ KLEUREN = {
         "tekst3": "#6B7080", "accent": "#DE2F3E", "accent_hover": "#C82434", "accent_tekst": "#FFFFFF",
         "accent_zacht": "#FDE9E9", "accent_lijn": "#F3B7BB", "goed": "#0E7A48", "goed_zacht": "#E3F5EC",
         "let_op": "#8F5600", "let_op_zacht": "#FFF3DC", "fout": "#D3263A", "fout_zacht": "#FDE8EA",
-        "schaduw": "rgba(22,23,28,0.06)", "knop": "#F1EEEE", "knop_hover": "#E8E4E4", "schuif_uit": "#D9D4D4",
+        "schaduw": "rgba(22,23,28,0.06)", "knop": "#F1EEEE", "knop_hover": "#E8E4E4", "schuif_uit": "#8E8888",
         "map_voor": "#EFC3C7", "map_achter": "#DDA2A8", "map_teken": "#8C3A43",
+        # Hoofdknoppen: wit op rood haalt 4,5:1; gekozen tekst op accent_zacht ook (U273).
+        "knop_hoofd": "#DE2F3E", "knop_hoofd_hover": "#C82434", "accent_gekozen": "#C82434",
     },
     "donker": {
         "achter": "#111216", "zijbalk": "#111216", "vlak": "#1C1E24", "vlak_hover": "#22252C",
         "rand": "#2B2E36", "rand_sterk": "#3A3E48", "tekst": "#EDEEF1", "tekst2": "#A3A8B4",
-        "tekst3": "#7C828E", "accent": "#EA3B4B", "accent_hover": "#F25262", "accent_tekst": "#FFFFFF",
+        "tekst3": "#868C98", "accent": "#EA3B4B", "accent_hover": "#F25262", "accent_tekst": "#FFFFFF",
         "accent_zacht": "#3A1C22", "accent_lijn": "#6A2A33", "goed": "#3FD17F", "goed_zacht": "#13291D",
         "let_op": "#F2B544", "let_op_zacht": "#2F2612", "fout": "#FF6B70", "fout_zacht": "#36181C",
-        "schaduw": "rgba(0,0,0,0.35)", "knop": "#262930", "knop_hover": "#2F333B", "schuif_uit": "#3A3E48",
+        "schaduw": "rgba(0,0,0,0.35)", "knop": "#262930", "knop_hover": "#2F333B", "schuif_uit": "#70757F",
         "map_voor": "#67404A", "map_achter": "#7C4F59", "map_teken": "#F5DCE0",
+        # In het donker is het accent lichter (voor rode tekst); de hoofdknop is donkerder, zodat wit erop 4,5:1
+        # haalt, en wordt bij aanwijzen nog donkerder (U273).
+        "knop_hoofd": "#D02C3C", "knop_hoofd_hover": "#BC2434", "accent_gekozen": "#F5606E",
     },
 }
 
@@ -162,8 +167,8 @@ QPushButton {{ background: {k['knop']}; color: {k['tekst']}; border: 1px solid t
 QPushButton:hover {{ background: {k['knop_hover']}; }}
 QPushButton:focus {{ border: 2px solid {k['accent']}; padding: 9px 17px; }}
 QPushButton:disabled {{ color: {k['tekst3']}; }}
-QPushButton[soort="hoofd"] {{ background: {k['accent']}; color: {k['accent_tekst']}; }}
-QPushButton[soort="hoofd"]:hover {{ background: {k['accent_hover']}; }}
+QPushButton[soort="hoofd"] {{ background: {k['knop_hoofd']}; color: {k['accent_tekst']}; }}
+QPushButton[soort="hoofd"]:hover {{ background: {k['knop_hoofd_hover']}; }}
 QPushButton[soort="hoofd"]:focus {{ border: 2px solid {k['tekst']}; }}
 QPushButton[soort="hoofd"]:disabled {{ background: {k['knop']}; color: {k['tekst3']}; }}
 QPushButton[soort="stil"] {{ background: transparent; color: {k['tekst2']}; }}
@@ -195,7 +200,7 @@ QComboBox QAbstractItemView {{ background: {k['vlak']}; border: 1px solid {k['ra
 QListWidget#zijbalk {{ background: transparent; border: none; outline: 0; font-size: 14px; }}
 QListWidget#zijbalk::item {{ padding: 10px 12px; border-radius: 12px; margin: 1px 0; color: {k['tekst']}; }}
 QListWidget#zijbalk::item:hover {{ background: {k['knop']}; }}
-QListWidget#zijbalk::item:selected {{ background: {k['accent_zacht']}; color: {k['accent']}; font-weight: 600; }}
+QListWidget#zijbalk::item:selected {{ background: {k['accent_zacht']}; color: {k['accent_gekozen']}; font-weight: 600; }}
 QWidget#zijkant {{ background: {k['zijbalk']}; border: none; }}
 
 QProgressBar {{ background: {k['knop']}; border: none; border-radius: 6px; min-height: 12px; max-height: 12px;

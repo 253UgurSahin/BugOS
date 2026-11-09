@@ -61,7 +61,7 @@ QListWidget#keuzelijst {{ background: {K['vlak']}; border: 1px solid {K['rand']}
     outline: 0; font-size: 14px; }}
 QListWidget#keuzelijst::item {{ padding: 6px 12px; border-radius: 10px; color: {K['tekst']}; }}
 QListWidget#keuzelijst::item:hover {{ background: {K['knop']}; }}
-QListWidget#keuzelijst::item:selected {{ background: {K['accent_zacht']}; color: {K['accent']}; font-weight: 600; }}
+QListWidget#keuzelijst::item:selected {{ background: {K['accent_zacht']}; color: {K['accent_gekozen']}; font-weight: 600; }}
 """)
 
 

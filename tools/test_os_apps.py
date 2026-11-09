@@ -1199,6 +1199,14 @@ _L = bugos_ui.KLEUREN["licht"]
 _laag = [(v, a, round(_contrast(_L[v], _L[a]), 2)) for v in ("tekst2", "tekst3", "goed", "let_op", "fout")
          for a in ("achter", "vlak") if _contrast(_L[v], _L[a]) < 4.5]
 klopt(not _laag, f"U137: kleine tekst in het lichte thema haalt 4,5:1 ({_laag})")
+# U273: ook in het donker, op de hoofdknoppen en bij wat je koos (zijbalk); het schuifje 'uit' haalt 3:1.
+_laag = []
+for _th, _k in bugos_ui.KLEUREN.items():
+    _paren = [("accent_tekst", "knop_hoofd", 4.5), ("accent_tekst", "knop_hoofd_hover", 4.5),
+              ("accent_gekozen", "accent_zacht", 4.5), ("tekst3", "vlak", 4.5), ("tekst2", "vlak", 4.5),
+              ("schuif_uit", "vlak", 3.0)]
+    _laag += [(_th, v, a, round(_contrast(_k[v], _k[a]), 2)) for v, a, m in _paren if _contrast(_k[v], _k[a]) < m]
+klopt(not _laag, f"U273: hoofdknoppen, gekozen items en het schuifje halen genoeg contrast, licht en donker ({_laag})")
 
 # ========================== U138: taalrestjes: de Hulp-uitslag, 'rustig verstuurd', dezelfde woorden voor afmelden ===
 _help = (ROOT / "system_files/usr/bin/bugos-help").read_text()
