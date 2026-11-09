@@ -25,6 +25,9 @@ xdg-user-dirs
 python3-pyside6
 kdialog
 libnotify
+# Voorbeeldjes van PDF's en video's in Bestanden (U172)
+poppler-utils
+ffmpegthumbnailer
 
 # --- Internet en apps ---
 # Firefox als gewoon programma: de fundering heeft geen browser in het systeem, en

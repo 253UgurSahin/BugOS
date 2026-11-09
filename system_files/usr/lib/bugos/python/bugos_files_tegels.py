@@ -7,6 +7,7 @@ het tekenen van mappen en papiertjes, en de volgorde (mappen eerst, 'Foto 2' voo
 from __future__ import annotations
 
 import hashlib
+from collections import OrderedDict
 import os
 import zipfile
 from pathlib import Path
@@ -37,14 +38,49 @@ def freedesktop_voorbeeld(pad: str) -> QImage:
     return QImage()
 
 
+# Een tegel tekent een voorbeeldje van zo'n 120 px breed: 256 px is ruim genoeg (ook op 200%), en een map met
+# duizenden foto's past zo in het geheugen (U170).
+VOORBEELD_MAAT = 256
+CACHE_MAX = 400   # zoveel voorbeeldjes onthouden we, de oudste gaan eruit (U170)
+
+
+def _met_programma(cmd: list[str], uit: Path) -> QImage:
+    """Een voorbeeld laten maken door een ander programma (pdftoppm, ffmpegthumbnailer) als het er is."""
+    import shutil
+    import subprocess
+    if not shutil.which(cmd[0]):
+        return QImage()
+    try:
+        subprocess.run(cmd, capture_output=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return QImage()
+    beeld = QImage(str(uit))
+    uit.unlink(missing_ok=True)
+    return beeld
+
+
+def pdf_of_video_voorbeeld(pad: str) -> QImage:
+    """PDF's en video's: zelf een voorbeeld maken (Bestanden vulde ~/.cache/thumbnails niet zelf) (U172)."""
+    import tempfile
+    ext = Path(pad).suffix.lower()
+    with tempfile.TemporaryDirectory(prefix="bugos-voorbeeld-") as map_:
+        if ext == ".pdf":
+            return _met_programma(["pdftoppm", "-png", "-singlefile", "-f", "1", "-l", "1", "-scale-to",
+                                   str(VOORBEELD_MAAT), pad, str(Path(map_) / "v")], Path(map_) / "v.png")
+        if ext in (".mp4", ".mkv", ".webm", ".mov", ".avi"):
+            return _met_programma(["ffmpegthumbnailer", "-i", pad, "-o", str(Path(map_) / "v.png"), "-s",
+                                   str(VOORBEELD_MAAT)], Path(map_) / "v.png")
+    return QImage()
+
+
 def maak_voorbeeld(pad: str) -> QImage:
     ext = Path(pad).suffix.lower()
     if ext in AFBEELDING:
         lezer = QImageReader(pad)
         lezer.setAutoTransform(True)
         maat = lezer.size()
-        if maat.isValid() and (maat.width() > 512 or maat.height() > 512):
-            lezer.setScaledSize(maat.scaled(QSize(512, 512), Qt.AspectRatioMode.KeepAspectRatio))
+        if maat.isValid() and (maat.width() > VOORBEELD_MAAT or maat.height() > VOORBEELD_MAAT):
+            lezer.setScaledSize(maat.scaled(QSize(VOORBEELD_MAAT, VOORBEELD_MAAT), Qt.AspectRatioMode.KeepAspectRatio))
         beeld = lezer.read()
         if not beeld.isNull():
             return beeld
@@ -54,17 +90,23 @@ def maak_voorbeeld(pad: str) -> QImage:
                 return QImage.fromData(z.read("Thumbnails/thumbnail.png"))
         except (OSError, KeyError, zipfile.BadZipFile):
             pass
-    return freedesktop_voorbeeld(pad)
+    beeld = freedesktop_voorbeeld(pad)
+    if beeld.isNull():
+        beeld = pdf_of_video_voorbeeld(pad)
+    if not beeld.isNull() and (beeld.width() > VOORBEELD_MAAT or beeld.height() > VOORBEELD_MAAT):
+        beeld = beeld.scaled(VOORBEELD_MAAT, VOORBEELD_MAAT, Qt.AspectRatioMode.KeepAspectRatio,
+                             Qt.TransformationMode.SmoothTransformation)
+    return beeld
 
 
 class Seinen(QObject):
-    klaar = Signal(str, QImage)
+    klaar = Signal(str, QImage, int)
 
 
 class VoorbeeldTaak(QRunnable):
-    def __init__(self, pad: str, seinen: Seinen):
+    def __init__(self, pad: str, seinen: Seinen, generatie: int = 0):
         super().__init__()
-        self.pad, self.seinen = pad, seinen
+        self.pad, self.seinen, self.generatie = pad, seinen, generatie
 
     def run(self) -> None:
         try:
@@ -72,7 +114,7 @@ class VoorbeeldTaak(QRunnable):
         except Exception:  # een kapot bestand mag nooit de app laten vallen
             beeld = QImage()
         try:
-            self.seinen.klaar.emit(self.pad, beeld)
+            self.seinen.klaar.emit(self.pad, beeld, self.generatie)
         except RuntimeError:  # het venster is al dicht
             pass
 
@@ -84,7 +126,8 @@ class Voorbeelden(QObject):
 
     def __init__(self):
         super().__init__()
-        self.cache: dict[str, QPixmap | None] = {}
+        self.cache: OrderedDict[str, QPixmap | None] = OrderedDict()
+        self.generatie = 0   # na een andere map tellen de oude, nog lopende voorbeeldjes niet meer (U171)
         self.bezig: set[str] = set()
         self.pool = QThreadPool()
         self.pool.setMaxThreadCount(2)
@@ -101,19 +144,28 @@ class Voorbeelden(QObject):
 
     def pixmap(self, pad: str) -> QPixmap | None:
         if pad in self.cache:
+            self.cache.move_to_end(pad)
             return self.cache[pad]
         if pad not in self.bezig and self.heeft_voorbeeld(pad):
             self.bezig.add(pad)
-            self.pool.start(VoorbeeldTaak(pad, self.seinen))
+            self.pool.start(VoorbeeldTaak(pad, self.seinen, self.generatie))
         return None
 
-    def _klaar(self, pad: str, beeld: QImage) -> None:
+    def _klaar(self, pad: str, beeld: QImage, generatie: int = 0) -> None:
         self.bezig.discard(pad)
+        if generatie != self.generatie:
+            return   # van een map waar je al weg bent
         self.cache[pad] = QPixmap.fromImage(beeld) if not beeld.isNull() else None
+        while len(self.cache) > CACHE_MAX:
+            self.cache.popitem(last=False)
         self.tik.start()
 
     def vergeet(self) -> None:
+        """Naar een andere map: de wachtrij van de oude map weg, zodat de nieuwe meteen voorbeeldjes krijgt (U171)."""
         self.cache.clear()
+        self.pool.clear()
+        self.bezig.clear()
+        self.generatie += 1
 
     def stop(self) -> None:
         self.pool.clear()

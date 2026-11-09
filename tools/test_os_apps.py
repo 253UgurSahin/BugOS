@@ -1179,6 +1179,36 @@ klopt('t("BugOS hulp-uitslag", "BugOS help report")' in _help and "niets verstuu
       and 'menu.tr("Afmelden", "Log out")' in _sm and 'menu.tr("Opnieuw opstarten", "Restart")' in _sm,
       "U138: Hulp-uitslag ook in het Engels, geen 'rustig verstuurd', startmenu zegt Afmelden/Opnieuw opstarten zoals het uitzetscherm")
 
+# ========================== U170-U172: voorbeeldjes in Bestanden: klein genoeg, een vaste grens, en PDF's ===
+import bugos_files_tegels as _tg  # noqa: E402
+from PySide6.QtGui import QColor, QImage  # noqa: E402
+
+_groot = QImage(4000, 3000, QImage.Format.Format_RGB32)
+_groot.fill(QColor("#336699"))
+_fp = TMP / "grote-foto.jpg"
+_groot.save(str(_fp), "JPG")
+_vb = _tg.maak_voorbeeld(str(_fp))
+klopt(max(_vb.width(), _vb.height()) <= 256, f"U170: een grote foto krijgt een voorbeeldje van hoogstens 256 px ({_vb.width()}x{_vb.height()})")
+_v = _tg.Voorbeelden()
+for _i in range(_tg.CACHE_MAX + 50):
+    _v._klaar(f"/x/{_i}.jpg", _vb, _v.generatie)
+klopt(len(_v.cache) == _tg.CACHE_MAX, f"U170: de voorbeeldjes-cache heeft een grens ({len(_v.cache)})")
+_oud = _v.generatie
+_v.vergeet()
+_v._klaar("/oude-map/a.jpg", _vb, _oud)
+klopt("/oude-map/a.jpg" not in _v.cache and _v.generatie == _oud + 1,
+      "U171: na een andere map tellen de nog lopende voorbeeldjes van de oude map niet meer")
+if shutil.which("pdftoppm"):
+    _pdf = TMP / "brief.pdf"
+    from PySide6.QtGui import QPageSize, QPdfWriter, QPainter as _QP  # noqa: E402
+    _w = QPdfWriter(str(_pdf))
+    _w.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
+    _pt = _QP(_w)
+    _pt.drawText(100, 100, "Hallo")
+    _pt.end()
+    _pv = _tg.maak_voorbeeld(str(_pdf))
+    klopt(not _pv.isNull() and max(_pv.width(), _pv.height()) <= 256, f"U172: een PDF krijgt een eigen voorbeeldje ({_pv.width()}x{_pv.height()})")
+
 # ========================== U067: 'Grote letters' maakt ook de letters van de BugOS-apps groter ===
 from PySide6.QtGui import QFont  # noqa: E402
 
