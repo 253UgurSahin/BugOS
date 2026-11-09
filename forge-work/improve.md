@@ -1167,6 +1167,24 @@ with a test that failed first. Tests after: 20 test files passed (here).
 ### U446 [low-medium] With BugOS next to Windows the clock was 1-2 hours wrong after every switch
   commit: c5648db   test: tools/test_windows_start.sh (the Windows tool sets RealTimeIsUniversal when it makes space)
 
+## Round 35 (2026-11-09)
+Two reviewers: the round-34 fixes (3 found plus 2 unsure: U451-U453), and a fresh sweep of "reversibility of every
+switch" (3 found plus 4 unsure: U454-U460). 6 fixed, each with a test that failed first. Tests after: 20 test files
+passed (here). Both sweeps found nothing high or medium.
+
+### U451 [low-medium] (from U441) A sudo inside your own Konsole made Konsole impossible to close; your own ssh-agent was not stoppable
+  commit: 4d5780f   test: tools/test_task_manager.py ("yours" now from the real Uid in /proc/<pid>/status)
+### U452 [low] (from U445) German, French, Turkish users saw the date in US order
+  commit: b46ba31   test: tools/test_os_settings.py
+### U453 [low-medium] (from U446) The Windows clock fix ran only with "Make space", not for BugOS on a second disk
+  commit: 1a25588   test: tools/test_windows_start.sh (now also when the USB stick is made)
+### U454 [low-medium] Picking "Screen off" or "Sleep" overwrote the battery and low-battery times too (and "Never" stopped a nearly empty laptop from sleeping)
+  commit: 4e21f07   test: tools/test_os_settings.py (only the current profile; KDE's own time removes the key; the page says which times apply)
+### U455 [low] "Big mouse pointer" off always wrote 24, losing your own size
+  commit: aed2f9c   test: tools/test_os_settings.py
+### U456 [low] Turning the quick menu off un-hid tray icons you had hidden yourself
+  commit: 8ec545d   test: tools/test_panel.sh
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -1268,6 +1286,14 @@ with a test that failed first. Tests after: 20 test files passed (here).
 - U449 (round 34, cosmetic): Settings > Notifications shows a timed do-not-disturb as on until the page refreshes.
 - U450 (round 34, unsure): with only foreign UIDs, a user can pre-create another account's game-mode marker in the
   shared folder, which then cannot touch its own; small impact (anyone can change the power profile anyway).
+- U457 (round 35, unsure): autologin turned on in KDE's own login page (another conf file) is shown as on in BugOS,
+  but BugOS's "off" only removes its own file. Check what Fedora 44's Plasma Login page writes.
+- U458 (round 35, unsure): game mode on, then do-not-disturb off and on again in Settings: both write the same
+  "forever" end time, so game mode off switches the user's own do-not-disturb off.
+- U459 (round 35, by design): the magnifier turns KWin's zoom plugin on for good; the light/dark switch always sets
+  the Kvantum theme (a theme picked in Kvantum Manager is replaced).
+- U460 (round 35, unsure): if the RTC still holds local time right after U446, Windows can be off once until BugOS
+  has synced and written UTC.
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
