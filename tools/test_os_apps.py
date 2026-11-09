@@ -1290,6 +1290,34 @@ _wk.paginas[0].bezig = False
 wacht(lambda: not _wk.isVisible(), 3000)
 klopt(_open and not _wk.isVisible(), "U212: Welkom sluiten tijdens de wachtwoordvraag: eerst afwachten, dan dicht")
 
+# ========================== U208: een tweede start brengt het open venster naar voren (geen tweede venster) ===
+_meer = os.environ.pop("BUGOS_MEERDERE", None)
+from PySide6.QtWidgets import QWidget as _QW  # noqa: E402
+
+
+class _Vak(_QW):
+    def __init__(self):
+        super().__init__()
+        self.gekregen = []
+
+    def tweede_start(self, args):
+        self.gekregen.append(args)
+
+
+_vak = _Vak()
+bugos_ui.luister("test-u208", _vak)
+_al = bugos_ui.al_open("test-u208", ["wifi"])
+wacht(lambda: bool(_vak.gekregen), 2000)
+_niet = bugos_ui.al_open("test-u208-niet-open", ["x"])
+klopt(_al and _vak.gekregen == [["wifi"]] and not _niet,
+      f"U208: een tweede start geeft de opdracht aan het open venster en stopt zelf ({_vak.gekregen})")
+if _meer is not None:
+    os.environ["BUGOS_MEERDERE"] = _meer
+_vak.deleteLater()
+_stukken = [(n, (ROOT / "system_files/usr/bin" / n).read_text()) for n in
+            ("bugos-settings", "bugos-task-manager", "bugos-store", "bugos-welcome", "bugos-backup", "bugos-switch", "bugos-help")]
+klopt(all("een_keer=True" in tekst for _n, tekst in _stukken), "U208: Instellingen, Taakbeheer, Winkel, Welkom, Back-up, Overstap en Hulp openen maar één keer")
+
 # ========================== U067: 'Grote letters' maakt ook de letters van de BugOS-apps groter ===
 from PySide6.QtGui import QFont  # noqa: E402
 

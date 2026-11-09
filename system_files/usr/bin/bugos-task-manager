@@ -430,7 +430,7 @@ class Taakbeheer(Venster):
 
 
 def main() -> int:
-    app = maak_app("bugos-task-manager", "bugos-task-manager", sys.argv)
+    app = maak_app("bugos-task-manager", "bugos-task-manager", sys.argv, een_keer=True)   # (U208)
     venster = Taakbeheer()
     if "--prestaties" in sys.argv:
         venster.ga_naar("prestaties")

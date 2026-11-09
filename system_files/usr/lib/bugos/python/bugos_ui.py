@@ -274,10 +274,75 @@ def _palet(k: dict[str, str]) -> QPalette:
     return p
 
 
-def maak_app(naam: str, bureaublad_bestand: str, args: Sequence[str]) -> QApplication:
-    """Maak de QApplication met de BugOS-stijl (licht of donker, vanzelf)."""
+def _een_naam(naam: str) -> str:
+    return f"bugos-{naam}-{os.getuid()}"
+
+
+def al_open(naam: str, args: Sequence[str]) -> bool:
+    """Is dit programma al open (voor deze gebruiker)? Dan krijgt dat venster de opdracht (bijv. de pagina) en
+    komt het naar voren; geef True terug, dan stopt deze tweede start (U208)."""
+    if os.environ.get("BUGOS_MEERDERE"):   # voor tests: elke start een eigen venster
+        return False
+    from PySide6.QtNetwork import QLocalSocket
+    sok = QLocalSocket()
+    sok.connectToServer(_een_naam(naam))
+    if not sok.waitForConnected(300):
+        return False
+    import json as _json
+    sok.write(_json.dumps(list(args)).encode())
+    sok.flush()
+    sok.waitForBytesWritten(500)
+    sok.disconnectFromServer()
+    return True
+
+
+def luister(naam: str, venster: QWidget) -> None:
+    """Een tweede start van dit programma brengt dit venster naar voren (en geeft de opdracht door aan
+    venster.tweede_start(args), als het venster dat kent) (U208)."""
+    if os.environ.get("BUGOS_MEERDERE"):
+        return
+    from PySide6.QtNetwork import QLocalServer
+    server = QLocalServer(venster)
+    QLocalServer.removeServer(_een_naam(naam))   # een oude, achtergebleven naam (na een crash)
+    if not server.listen(_een_naam(naam)):
+        return
+
+    def nieuw() -> None:
+        sok = server.nextPendingConnection()
+        if sok is None:
+            return
+
+        def lees() -> None:
+            import json as _json
+            try:
+                args = _json.loads(bytes(sok.readAll()).decode() or "[]")
+            except ValueError:
+                args = []
+            if hasattr(venster, "tweede_start"):
+                try:
+                    venster.tweede_start(args)
+                except Exception:  # noqa: BLE001  een rare opdracht mag het open venster niet laten vallen
+                    pass
+            venster.showNormal()
+            venster.raise_()
+            venster.activateWindow()
+
+        sok.readyRead.connect(lees)
+        sok.disconnected.connect(sok.deleteLater)
+
+    server.newConnection.connect(nieuw)
+    venster._een_server = server
+
+
+def maak_app(naam: str, bureaublad_bestand: str, args: Sequence[str], een_keer: bool = False) -> QApplication:
+    """Maak de QApplication met de BugOS-stijl (licht of donker, vanzelf).
+    een_keer: is het programma al open, dan komt dat venster naar voren en stopt deze start (U208)."""
     global DONKER, SCHAAL
     app = QApplication(list(args))
+    if een_keer:
+        app.setProperty("bugos_een_keer", naam)
+        if al_open(naam, list(args)[1:]):
+            raise SystemExit(0)
     app.setApplicationName(naam)
     app.setDesktopFileName(bureaublad_bestand)
     # Het eigen pictogram van de app (zelfde naam als het .desktop-bestand), zodat Alt+Tab en de taakbalk
@@ -307,6 +372,8 @@ def uitvoeren(app: QApplication, venster: QWidget) -> int:
 
     Het venster moet weg zijn vóórdat de app verdwijnt, anders crasht Qt bij
     het afsluiten. Geef daarom het venster direct mee: uitvoeren(app, Venster())."""
+    if app.property("bugos_een_keer"):
+        luister(str(app.property("bugos_een_keer")), venster)
     venster.show()
     code = app.exec()
     venster.hide()

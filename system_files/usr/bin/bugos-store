@@ -353,7 +353,7 @@ def main() -> int:
         # Niet in onze selectie: open de grote winkel op die app.
         start("plasma-discover", args[0])
         return 0
-    app = maak_app("bugos-store", "bugos-store", sys.argv)
+    app = maak_app("bugos-store", "bugos-store", sys.argv, een_keer=True)   # (U208)
     return uitvoeren(app, Winkel(catalogus, begin_zoek, begin_app))
 
 

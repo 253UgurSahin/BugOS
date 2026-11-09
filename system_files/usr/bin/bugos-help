@@ -416,7 +416,7 @@ def venster() -> int:
             QApplication.clipboard().setText(als_tekst(self.laatste))
             self.kopieer_knop.setText(t("Gekopieerd ✓", "Copied ✓"))
 
-    app = maak_app("bugos-help", "bugos-help", sys.argv)
+    app = maak_app("bugos-help", "bugos-help", sys.argv, een_keer=True)   # (U208)
     return uitvoeren(app, Hulp())
 
 

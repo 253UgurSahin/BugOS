@@ -667,7 +667,7 @@ def venster() -> int:
                          "Restoring… Newer files on your computer are kept."))
             self.volgende()
 
-    app = maak_app("bugos-backup", "bugos-backup", sys.argv)
+    app = maak_app("bugos-backup", "bugos-backup", sys.argv, een_keer=True)   # (U208)
     return uitvoeren(app, Backup())
 
 

@@ -469,7 +469,7 @@ def venster() -> int:
             self.balk.show()
             self.volgende()
 
-    app = maak_app("bugos-switch", "bugos-switch", sys.argv)
+    app = maak_app("bugos-switch", "bugos-switch", sys.argv, een_keer=True)   # (U208)
     return uitvoeren(app, Overstap())
 
 

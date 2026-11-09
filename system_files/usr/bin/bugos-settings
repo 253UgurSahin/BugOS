@@ -179,6 +179,12 @@ class Instellingen(Venster):
         self.ga_naar(begin if begin in self.paginas else "start")
         self.nav.setFocus()  # niet meteen in het zoekveld
 
+    def tweede_start(self, args: list[str]) -> None:
+        """Instellingen was al open en wordt opnieuw gestart (bijv. vanuit het snelmenu): naar die pagina (U208)."""
+        if any(a in self.paginas or a in OUDE_NAMEN for a in args):
+            begin = OUDE_NAMEN.get(begin_pagina(args), begin_pagina(args))
+            self.ga_naar(begin if begin in self.paginas else "start")
+
     def closeEvent(self, e) -> None:  # noqa: N802
         # Nooit midden in een update of het teruggaan stoppen (dan stopt rpm-ostree ook): wacht tot het
         # klaar is en ga dan vanzelf dicht, zoals Bestanden doet bij het kopiëren.
@@ -206,7 +212,7 @@ def begin_pagina(args: list[str]) -> str:
 
 
 def main() -> int:
-    app = maak_app("bugos-settings", "bugos-settings", sys.argv)
+    app = maak_app("bugos-settings", "bugos-settings", sys.argv, een_keer=True)   # (U208)
     return uitvoeren(app, Instellingen(begin_pagina(sys.argv[1:])))
 
 

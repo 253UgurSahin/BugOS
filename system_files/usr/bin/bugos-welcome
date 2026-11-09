@@ -500,7 +500,7 @@ def main() -> int:
                 return 0  # op de live-USB toont bugos-live het welkomstscherm
         except OSError:
             pass
-    app = maak_app("bugos-welcome", "bugos-welcome", sys.argv)
+    app = maak_app("bugos-welcome", "bugos-welcome", sys.argv, een_keer=True)   # (U208)
     return uitvoeren(app, Welkom())
 
 
