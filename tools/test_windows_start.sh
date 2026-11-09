@@ -42,5 +42,19 @@ controle 'grep -q "InnerException.Message" <<<"$PS"' "U298: een mislukte downloa
 controle 'grep -q "De schijf is vol geraakt" <<<"$PS"' "U288: een stick die vol raakt, wordt zo genoemd"
 controle 'grep -q "\$(\$schijf.UniqueId)\" -ne \$id" <<<"$PS" && grep -q "SchijfId., \"" <<<"$PS"' \
     "U370: stap 4 wist alleen de USB-stick die je koos (niet een andere die intussen hetzelfde nummer kreeg)"
+# U396: alleen GTX 16 / RTX / MX 450+ krijgen de Nvidia-versie; een GTX 1060 of GT 1030 de gewone.
+NV="$(python3 - "$ROOT/windows-switch/BugOS-Switch.ps1" <<'PY'
+import re, sys
+s = open(sys.argv[1], encoding="utf-8-sig").read()
+f = s[s.index("function Test-NieuweNvidia"):s.index("function Get-IsoSoort")]
+pat = re.findall(r"-match '([^']+)'", f)   # (-notmatch 'NVIDIA' telt niet mee)
+def nieuw(g): return "NVIDIA" in g.upper() and any(re.search(p, g, re.I) for p in pat)
+uit = {g: nieuw(g) for g in ("NVIDIA GeForce GTX 1060 6GB", "NVIDIA GeForce GT 1030", "NVIDIA GeForce MX350",
+                              "NVIDIA GeForce RTX 3060", "NVIDIA GeForce GTX 1650", "NVIDIA GeForce MX450")}
+print("ok" if list(uit.values()) == [False, False, False, True, True, True] else uit)
+PY
+)"
+controle '[ "$NV" = ok ] && grep -q "if (Test-NieuweNvidia \$gpu) { .nvidia. }" <<<"$PS"' \
+    "U396: alleen GTX 16, RTX en MX 450+ krijgen de Nvidia-versie; oudere kaarten de gewone ($NV)"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

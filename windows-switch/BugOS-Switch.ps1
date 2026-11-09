@@ -102,8 +102,11 @@ function Get-Controle {
     } catch { }
 
     $gpu = (Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name) -join ', '
-    if ($gpu -match 'NVIDIA') {
+    if (Test-NieuweNvidia $gpu) {
         Voeg (T 'Videokaart' 'Graphics') $true (T "Nvidia gevonden ($gpu). Kies de versie 'bugos-nvidia'." "Nvidia found ($gpu). Choose the 'bugos-nvidia' version.") $true
+    } elseif ($gpu -match 'NVIDIA') {
+        # Ouder dan GTX 16 / RTX: het Nvidia-stuurprogramma van BugOS kent die niet; de gewone versie werkt wel (U396).
+        Voeg (T 'Videokaart' 'Graphics') $true (T "Een oudere Nvidia-kaart ($gpu). Kies de gewone versie 'bugos': de Nvidia-versie werkt alleen met GTX 16 en RTX." "An older Nvidia card ($gpu). Choose the normal 'bugos' version: the Nvidia version only works with GTX 16 and RTX.")
     } else {
         Voeg (T 'Videokaart' 'Graphics') $true (T "$gpu. Kies de gewone versie 'bugos'." "$gpu. Choose the normal 'bugos' version.")
     }
@@ -293,9 +296,17 @@ function Write-IsoNaarSchijf([string] $iso, [int] $nummer, [scriptblock] $Voortg
 
 $script:Repo = '253UgurSahin/BugOS'
 
+function Test-NieuweNvidia([string] $gpu) {
+    # Het Nvidia-stuurprogramma van BugOS (de 'open' versie) werkt alleen met GTX 16, RTX, MX 450 en nieuwer, en de
+    # zakelijke T- en A-kaarten van die tijd. Oudere GeForce-kaarten (GTX 10, 9, 7, GT 710/1030, MX 110-350) niet (U396).
+    if ($gpu -notmatch 'NVIDIA') { return $false }
+    return ($gpu -match 'RTX' -or $gpu -match 'GTX\s*16\d\d' -or $gpu -match 'MX\s*(4[5-9]\d|[5-9]\d\d)' -or
+            $gpu -match '\bT(4|6|10|12)00\b' -or $gpu -match '\bA\d{3,4}\b')
+}
+
 function Get-IsoSoort {
     $gpu = (Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name) -join ' '
-    if ($gpu -match 'NVIDIA') { 'nvidia' } else { 'main' }
+    if (Test-NieuweNvidia $gpu) { 'nvidia' } else { 'main' }
 }
 
 function Get-IsoInfo([string] $soort) {
