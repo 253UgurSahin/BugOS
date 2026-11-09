@@ -151,6 +151,23 @@ nep skopeo 'exit 1'
 draai bugos-updatecheck
 klopt '[ "$code" -ne 0 ] && grep -q "^Restart=on-failure" "$ROOT/system_files/usr/lib/systemd/user/bugos-updatecheck.service"' \
     "U178: updatecheck zonder internet: later opnieuw proberen (code $code), niet pas morgen"
+klopt '! grep -qE "^TimeoutStartSec=[0-9]" "$ROOT/system_files/usr/lib/systemd/user/bugos-updatecheck.service"' \
+    "U187: geen tijdslimiet op de updatecheck (die zou 'Nu updaten' afbreken)"
+# U192: wel internet, maar de bron is er niet: niet elk half uur opnieuw.
+nep nmcli 'echo full'
+draai bugos-updatecheck
+klopt '[ "$code" -eq 0 ]' "U192: met internet maar kijken lukt niet: morgen weer, niet elk half uur (code $code)"
+# U194: Annuleren bij het wachtwoord na 'Nu updaten' is geen 'De update is niet gelukt'.
+nep skopeo 'echo sha256:bb'
+nep notify-send 'echo nu'
+nep pkexec 'exit 126'
+nep kdialog 'echo "$*" >>"'"$TMP"'/kdialog-log"'
+: >"$TMP/kdialog-log"
+draai bugos-updatecheck
+klopt '! grep -q "niet gelukt\|did not work" "$TMP/kdialog-log"' "U194: Annuleren bij het wachtwoord: geen 'De update is niet gelukt'"
+for p in notify-send kdialog pkexec; do nep "$p" 'exit 0'; done
+rm -f "$TMP/bin/nmcli"
+nep skopeo 'exit 1'
 
 # Hulp (bugos-help, Python): één controle draaien met de nep-programma's; print stand en tekst.
 # hulp <controle> repareer  -> druk daarna ook op de knop.

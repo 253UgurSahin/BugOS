@@ -35,8 +35,12 @@ for _ in $(seq 24); do
     command -v nmcli >/dev/null 2>&1 || break
     sleep 5
 done
-# Lukt kijken niet (geen internet)? Dan code 75: systemd probeert het een half uur later opnieuw.
-NIEUW="$(skopeo inspect --format '{{.Digest}}' "$BRON" 2>/dev/null)" || exit 75
+# Lukt kijken niet? Zonder internet code 75: systemd probeert het een half uur later opnieuw. Met internet
+# (de bron is er niet, of de registry weigert) heeft opnieuw proberen geen zin: dan morgen weer (U192).
+if ! NIEUW="$(skopeo inspect --format '{{.Digest}}' "$BRON" 2>/dev/null)"; then
+    [ "$(LC_ALL=C nmcli -t networking connectivity 2>/dev/null)" = full ] && exit 0
+    exit 75
+fi
 [ -n "$NIEUW" ] && [ "$NIEUW" != "$NU" ] || exit 0
 
 KEUZE="$(notify-send --app-name=BugOS --icon=system-software-update --wait \
@@ -45,9 +49,13 @@ KEUZE="$(notify-send --app-name=BugOS --icon=system-software-update --wait \
     "$(t "Wil je nu updaten? Je kunt gewoon doorwerken." "Do you want to update now? You can keep working.")" 2>/dev/null)"
 
 if [ "$KEUZE" = nu ]; then
-    if pkexec /usr/bin/bugos-updates nu; then
+    pkexec /usr/bin/bugos-updates nu
+    uitkomst=$?
+    if [ "$uitkomst" -eq 0 ]; then
         melding "$(t "Update klaar ✅" "Update done ✅")" \
             "$(t "Start de computer opnieuw op wanneer het jou uitkomt." "Restart the computer whenever it suits you.")"
+    elif [ "$uitkomst" -eq 126 ] || [ "$uitkomst" -eq 127 ]; then
+        :   # Annuleren bij het wachtwoord: niets gedaan, en dat is geen fout (zoals in Instellingen) (U194)
     else
         fout "$(t "De update is niet gelukt. Er is niks veranderd; probeer het later opnieuw." \
             "The update did not work. Nothing has changed; try again later.")"

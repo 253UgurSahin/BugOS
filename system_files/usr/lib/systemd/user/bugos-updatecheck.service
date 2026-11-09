@@ -7,7 +7,9 @@ ConditionKernelCommandLine=!rd.live.image
 Type=oneshot
 # Pas als Plasma er is (dan klopt ook je taal, LANGUAGE): bij 'inhalen' net na het inloggen anders te vroeg (U178).
 ExecStartPre=/bin/sh -c 'for i in $(seq 90); do systemctl --user -q is-active graphical-session.target && exit 0; sleep 10; done; exit 0'
-TimeoutStartSec=20min
+# Geen tijdslimiet: de melding wacht op jou, en 'Nu updaten' kan lang duren; een limiet zou de update
+# afbreken en de vraag daarna opnieuw stellen (U187). Het wachten hierboven stopt vanzelf.
+TimeoutStartSec=infinity
 ExecStart=/usr/bin/bugos-updatecheck
 # Nog geen internet (wifi verbindt pas na het inloggen)? Dan een half uur later opnieuw, niet pas morgen.
 Restart=on-failure
