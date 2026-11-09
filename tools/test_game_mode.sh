@@ -69,6 +69,8 @@ if [ -e "$TMP/bin/powerprofilesctl" ] || nep powerprofilesctl 'case "$1" in get)
     echo balanced >"$TMP/profiel"
     nep id 'if [ "$1" = -u ]; then echo "${NEP_UID:-1000}"; else /usr/bin/id "$@"; fi'
     nep getent 'case "$2" in 1999) exit 2;; *) exit 0;; esac'   # 1999: een account dat niet meer bestaat
+    # In de test is alles van root: stat zegt het nummer uit de naam, behalve voor het merkje 'nep' (U435).
+    nep stat 'f="${@: -1}"; case "$f" in *bugos-spelmodus-1888) echo 1001;; *bugos-spelmodus-*) echo "${f##*-}";; *) /usr/bin/stat "$@";; esac'
     # shellcheck disable=SC2086  # $2 kan "fps status" zijn (twee woorden)
     gebruiker() { NEP_UID="$3" HOME="$TMP/$1" XDG_CONFIG_HOME="$TMP/$1/.config" PATH="$TMP/bin:$PATH" bash "$TMP/spelmodus" $2 >/dev/null 2>&1; }
     gebruiker anna aan 1001
@@ -106,9 +108,12 @@ if [ -e "$TMP/bin/powerprofilesctl" ] || nep powerprofilesctl 'case "$1" in get)
     gebruiker gijs status 1007
     klopt '[ -e "$BUGOS_GAMER_MAP/bugos-spelmodus-1007" ]' "U432: 'status' laat het merkje van een 'aan' in uitvoering staan"
     rm -f "$BUGOS_GAMER_MAP/bugos-spelmodus-1007"
+    # U435: een nep-merkje (nummer 0, of een bestand dat niet van dat account is) telt niet.
+    touch "$BUGOS_GAMER_MAP/bugos-spelmodus-0" "$BUGOS_GAMER_MAP/bugos-spelmodus-1888"
     gebruiker frits aan 1006
     gebruiker frits uit 1006
-    klopt '[ "$(cat "$TMP/profiel")" = balanced ]' "U420: merkjes van gewiste accounts houden de pc niet op volle kracht ($(cat "$TMP/profiel"))"
+    klopt '[ "$(cat "$TMP/profiel")" = balanced ]' "U420/U435: merkjes van gewiste accounts, van root of nagemaakt houden de pc niet op volle kracht ($(cat "$TMP/profiel"))"
+    rm -f "$BUGOS_GAMER_MAP/bugos-spelmodus-0" "$BUGOS_GAMER_MAP/bugos-spelmodus-1888"
 fi
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

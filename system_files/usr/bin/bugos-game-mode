@@ -51,8 +51,15 @@ GAMER_MAP="${BUGOS_GAMER_MAP:-/var/tmp/bugos-spel}"
 GAMER_MERK="$GAMER_MAP/bugos-spelmodus-$(id -u)"
 andere_gamers() {
     local f
+    local nr
     for f in "$GAMER_MAP"/bugos-spelmodus-*; do
-        [ -e "$f" ] && [ "$f" != "$GAMER_MERK" ] || continue
+        [ -f "$f" ] && [ ! -L "$f" ] && [ "$f" != "$GAMER_MERK" ] || continue
+        # Alleen een echt merkje telt: een gewoon account (1000 of hoger), en het bestand is van dat account zelf.
+        # Anders kon iemand met 'touch .../bugos-spelmodus-0' (of het nummer van een ander) de pc op volle kracht houden (U435).
+        nr="${f##*-}"
+        case "$nr" in '' | *[!0-9]*) continue ;; esac
+        [ "$nr" -ge 1000 ] || continue
+        [ "$(stat -c %u -- "$f" 2>/dev/null)" = "$nr" ] || continue
         # Een account dat er niet meer is, gamet niet: anders bleef de pc voor altijd op volle kracht (U420).
         if command -v getent >/dev/null && ! getent passwd "${f##*-}" >/dev/null 2>&1; then
             continue
