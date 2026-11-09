@@ -666,7 +666,7 @@ Tests after: 20 test files passed (here).
 ### U206 [low] The quick menu said "Wifi" in English
   commit: b98d9c6   test: tools/test_menus.py
 ### U207 [medium] Closing Files during "Set up", "Erase", "Rename" or "Repair" of a drive stopped the job halfway
-  commit: 4e6c4a3   test: tools/test_files.py
+  commit: 92ecd28   test: tools/test_files.py
 ### U208 [low] A second start of an app opened a second window (two "Update now", two installs at once)
   commit: c5dc16b   test: tools/test_os_apps.py
 ### U209 [low] (from U175) The Store still said "Rekenmachine" in English while installing and searching
