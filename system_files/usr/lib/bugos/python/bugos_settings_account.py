@@ -31,10 +31,12 @@ def nu_tekst() -> str:
 
 def _engels_nu(d: datetime) -> str:
     """In het Engels zoals je regio het schrijft: 9 November 2026 (Ierland, VK) of November 9, 2026, en 14:05 of
-    2:05 PM zoals de klok op de taakbalk (U445). Zonder Engelse regio: de Amerikaanse volgorde, 24 uur."""
+    2:05 PM zoals de klok op de taakbalk (U445). Ook voor Duits, Frans, Turks…: die krijgen de Engelse tekst van
+    BugOS, maar de datum zoals hun eigen taal hem schrijft (Montag, 9. November 2026) (U452).
+    Alleen zonder regio (C/POSIX): de Amerikaanse volgorde, 24 uur."""
     from PySide6.QtCore import QDate, QLocale, QTime
     loc = QLocale.system()
-    if loc.language() != QLocale.Language.English:
+    if loc.language() in (QLocale.Language.C, QLocale.Language.Dutch):
         dag, maand = DAGEN[d.weekday()], MAANDEN[d.month - 1]
         return f"{dag[1]} {maand[1]} {d.day}, {d.year} · {d:%H:%M}"
     datum = loc.toString(QDate(d.year, d.month, d.day), QLocale.FormatType.LongFormat)

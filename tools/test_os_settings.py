@@ -979,7 +979,7 @@ klopt("vol" in _up.melding.tekst.text() and "online" not in _up.melding.tekst.te
 
 # U445: de klok in het Engels volgt je regio: 2:05 PM in de VS, 9 November met 24 uur in Ierland.
 _uit445 = {}
-for _l445 in ("en_US.UTF-8", "en_IE.UTF-8"):
+for _l445 in ("en_US.UTF-8", "en_IE.UTF-8", "de_DE.UTF-8"):
     _uit445[_l445] = __import__("subprocess").run(
         [sys.executable, "-c", "import sys; sys.path.insert(0, sys.argv[1]); from datetime import datetime; "
          "import bugos_settings_account as a; print(a._engels_nu(datetime(2026, 11, 9, 14, 5)))",
@@ -987,6 +987,8 @@ for _l445 in ("en_US.UTF-8", "en_IE.UTF-8"):
         capture_output=True, text=True, env=dict(os.environ, LANG=_l445, LC_ALL=_l445), timeout=60).stdout.strip()
 klopt("2:05" in _uit445["en_US.UTF-8"] and "PM" in _uit445["en_US.UTF-8"] and "9 November" in _uit445["en_IE.UTF-8"]
       and "14:05" in _uit445["en_IE.UTF-8"], f"U445: de klok in het Engels volgt je regio ({_uit445})")
+klopt("November 2026" in _uit445["de_DE.UTF-8"] and "9." in _uit445["de_DE.UTF-8"],
+      f"U452: in het Duits de datum zoals Duitsers hem schrijven ({_uit445['de_DE.UTF-8']!r})")
 # U397: op een klein scherm (hier 800×600) worden groottes waarbij niets meer past, niet aangeboden.
 _sp2 = venster.paginas["scherm"]
 _sp2.toon((None, False, 1.0))
