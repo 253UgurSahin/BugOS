@@ -1504,6 +1504,33 @@ if _ar.load("qtbase_ar", _QLI.path(_QLI.LibraryPath.TranslationsPath)):
     app.removeTranslator(_ar)
     klopt(_richting == Qt.LayoutDirection.LeftToRight,
           f"U275: met een Arabische Qt-vertaling blijven de BugOS-vensters van links naar rechts ({_richting})")
+# U332: dubbelklikken op een regel (bijv. een wifi-netwerk) is één klik, niet twee keer verbinden.
+from PySide6.QtTest import QTest as _QT  # noqa: E402
+import bugos_shell as _bs  # noqa: E402
+
+_rij = _bs.Rij("wifi", "Buren", "", klikbaar=True)
+_rij.resize(300, 60)
+_rij.show()
+_kl = []
+_rij.geklikt.connect(lambda: _kl.append(1))
+from PySide6.QtCore import QEvent as _QEv, QPointF as _QPF  # noqa: E402
+from PySide6.QtGui import QMouseEvent as _QME  # noqa: E402
+
+
+def _muis(soort):
+    _p = _QPF(20, 20)
+    ev = _QME(soort, _p, _rij.mapToGlobal(_p), Qt.MouseButton.LeftButton,
+              Qt.MouseButton.NoButton if soort == _QEv.Type.MouseButtonRelease else Qt.MouseButton.LeftButton,
+              Qt.KeyboardModifier.NoModifier)
+    app.sendEvent(_rij, ev)
+
+
+# Zoals een echte dubbelklik binnenkomt: indrukken, loslaten, dubbelklik, loslaten. Daarna een losse klik.
+for _s in (_QEv.Type.MouseButtonPress, _QEv.Type.MouseButtonRelease, _QEv.Type.MouseButtonDblClick,
+           _QEv.Type.MouseButtonRelease, _QEv.Type.MouseButtonPress, _QEv.Type.MouseButtonRelease):
+    _muis(_s)
+klopt(len(_kl) == 2, f"U332: een dubbelklik op een regel telt als één klik (en een losse klik daarna gewoon) ({len(_kl)})")
+_rij.close()
 _stukken = [(n, (ROOT / "system_files/usr/bin" / n).read_text()) for n in
             ("bugos-settings", "bugos-task-manager", "bugos-store", "bugos-welcome", "bugos-backup", "bugos-switch", "bugos-help")]
 klopt(all("een_keer=True" in tekst for _n, tekst in _stukken), "U208: Instellingen, Taakbeheer, Winkel, Welkom, Back-up, Overstap en Hulp openen maar één keer")

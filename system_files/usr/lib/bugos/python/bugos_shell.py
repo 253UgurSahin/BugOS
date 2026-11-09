@@ -121,8 +121,16 @@ class Rij(QFrame):
         self.uitleg.setText(tekst)
         self.uitleg.setVisible(bool(tekst))
 
+    def mouseDoubleClickEvent(self, e) -> None:  # noqa: N802
+        # Een dubbelklik is één klik: de tweede keer loslaten doet niets (anders twee keer verbinden,
+        # twee wachtwoordvragen) (U332).
+        self._dubbel = True
+        super().mouseDoubleClickEvent(e)
+
     def mouseReleaseEvent(self, e) -> None:  # noqa: N802
-        if self.property("klikbaar") == "true" and e.button() == Qt.MouseButton.LeftButton \
+        if getattr(self, "_dubbel", False):
+            self._dubbel = False
+        elif self.property("klikbaar") == "true" and e.button() == Qt.MouseButton.LeftButton \
                 and self.rect().contains(e.position().toPoint()):
             self.geklikt.emit()
         super().mouseReleaseEvent(e)
