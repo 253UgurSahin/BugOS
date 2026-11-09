@@ -247,7 +247,7 @@ class Winkel(Venster):
         if getattr(self, "sluit_na", False) and self.proces.state() != QProcess.ProcessState.NotRunning:
             # Weer geopend tijdens het installeren: de Winkel gaat daarna niet meer vanzelf dicht (U233).
             naam = next((app_naam(a) for a in self.cat["apps"] if a["id"] == self.bezig_met), self.bezig_met)
-            self.melding.zet(t(f"{naam} wordt geïnstalleerd…", f"Installing {naam}…"), "bezig")
+            self.melding.zet(self.bezig_tekst(naam), "bezig")
         zoek, app_id = begin_uit(args)
         if app_id:
             app_id = echte_id(self.cat, app_id)
@@ -292,7 +292,7 @@ class Winkel(Venster):
         elif self.bezig_met is not None and not getattr(self, "sluit_na", False):   # 'gaat vanzelf dicht' laten staan (U344)
             # Wordt er iets geïnstalleerd? Dan die melding terug (een zoekopdracht zonder uitkomst verving hem) (U333).
             naam = next((app_naam(a) for a in self.cat["apps"] if a["id"] == self.bezig_met), self.bezig_met)
-            self.melding.zet(t(f"{naam} wordt geïnstalleerd…", f"Installing {naam}…"), "bezig")
+            self.melding.zet(self.bezig_tekst(naam), "bezig")
         elif not self.melding.tekst.text().startswith("✅"):
             self.melding.zet("")
 
@@ -309,12 +309,21 @@ class Winkel(Venster):
         if self.proces.state() != QProcess.ProcessState.NotRunning:
             self.sluit_na = True
             naam = next((app_naam(a) for a in self.cat["apps"] if a["id"] == self.bezig_met), self.bezig_met)
-            self.melding.zet(t(f"Even wachten: {naam} wordt nog geïnstalleerd. Daarna gaat de Winkel vanzelf dicht.",
+            self.melding.zet(t(f"Even wachten: {naam} wordt nog verwijderd. Daarna gaat de Winkel vanzelf dicht.",
+                               f"One moment: {naam} is still being removed. The Store closes by itself afterwards.")
+                             if getattr(self, "klus", "") == "verwijder" else
+                             t(f"Even wachten: {naam} wordt nog geïnstalleerd. Daarna gaat de Winkel vanzelf dicht.",
                                f"One moment: {naam} is still being installed. The Store closes by itself afterwards."),
                              "bezig")
             e.ignore()
             return
         super().closeEvent(e)
+
+    def bezig_tekst(self, naam: str) -> str:
+        """Wat er nu gebeurt: installeren of verwijderen (U472)."""
+        if getattr(self, "klus", "") == "verwijder":
+            return t(f"{naam} wordt verwijderd…", f"Removing {naam}…")
+        return t(f"{naam} wordt geïnstalleerd…", f"Installing {naam}…")
 
     def vraag_verwijderen(self, app: dict) -> None:
         """Eerst vragen; je bestanden van de app (inloggen, instellingen) alleen weg als je dat aanvinkt (U464)."""
@@ -341,8 +350,12 @@ class Winkel(Venster):
     def klaar_verwijderen(self, code: int, uit: str, app_id: str, naam: str) -> None:
         self.flatpaks = geinstalleerd() - ({app_id} if code == 0 else set())
         self.installed = self.flatpaks | set(self.systeem)
+        # In 'Mijn apps': de lijst opnieuw, zonder de app die weg is (U472).
+        rij = self.lijst.currentRow()
+        if not self.zoek.text().strip() and rij >= 0 and self.lijst.sleutel(rij) == "_mijn":
+            self.toon()
         if code == 0:
-            self.melding.zet(t(f"{naam} is verwijderd.", f"{naam} has been removed."), "goed")
+            self.melding.zet(t(f"✅ {naam} is verwijderd.", f"✅ {naam} has been removed."), "goed")
         elif any(w in uit.lower() for w in ("not authorized", "not allowed", "authentication", "authoriz")):
             self.melding.zet(t(f"{naam} verwijderen mag alleen met het wachtwoord van een beheerder.",
                                f"Removing {naam} needs an administrator's password."), "fout")
@@ -380,7 +393,10 @@ class Winkel(Venster):
             self.klus = ""
             self.klaar_verwijderen(code, uit, app_id, naam)
             if getattr(self, "sluit_na", False):
-                QTimer.singleShot(0, self.close)
+                if code == 0:
+                    QTimer.singleShot(0, self.close)
+                else:
+                    self.sluit_na = False   # mislukt: open laten, zodat je de melding ziet (U472)
             return
         self.flatpaks = geinstalleerd() | ({app_id} if code == 0 else set())
         self.installed = self.flatpaks | set(self.systeem)

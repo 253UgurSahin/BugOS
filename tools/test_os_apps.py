@@ -626,12 +626,22 @@ for _k in ww.kaarten:
     _k.ververs()
 _kv = next(k for k in ww.kaarten if k.app["id"] == vlc["id"])
 _zichtbaar464 = not _kv.weg.isHidden()
+ww.zoek.clear()
+ww.mijn_apps_erbij()
+_rij472 = next(i for i in range(ww.lijst.count()) if ww.lijst.sleutel(i) == "_mijn")
+ww.lijst.setCurrentRow(_rij472)
+ww.toon()
+_ervoor472 = any(k.app["id"] == vlc["id"] for k in ww.kaarten)
 ww.verwijder(vlc, False)
+_tekst472 = ww.melding.tekst.text()
 wacht(lambda: ww.proces.state() == ww.proces.ProcessState.NotRunning and ww.bezig_met is None, 8000)
 _args464 = (TMP / "flatpak-args.weg").read_text() if (TMP / "flatpak-args.weg").exists() else ""
 klopt(_zichtbaar464 and "uninstall -y org.videolan.VLC" in _args464 and "--delete-data" not in _args464
       and "verwijderd" in ww.melding.tekst.text() + "removed",
       f"U464: een app verwijderen kan in de Winkel ({_args464.strip()!r}, {ww.melding.tekst.text()[:40]!r})")
+klopt(_ervoor472 and not any(k.app["id"] == vlc["id"] for k in ww.kaarten) and ("verwijderd" in _tekst472 or "Removing" in _tekst472),
+      f"U472: na verwijderen staat de app niet meer in 'Mijn apps', en de melding zegt 'verwijderen' ({_tekst472[:40]!r})")
+ww.lijst.setCurrentRow(0)
 os.environ["BUGOS_TEST_FLATPAK"] = "9"
 # U411: een volle computer is geen 'heb je internet?'.
 os.environ["BUGOS_TEST_FLATPAK"] = "8"
