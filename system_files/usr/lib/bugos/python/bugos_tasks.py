@@ -298,12 +298,19 @@ class Meter:
         return uitslag
 
 
+def _ander_account(groep: str) -> bool:
+    """Hoort dit proces bij de sessie van een ander account (user-<nummer>.slice)? Niet: 'niet van jou volgens /proc':
+    programma's met extra rechten (kwin_wayland) of ssh-agent zijn daar van root, maar wel van jou (U441)."""
+    m = re.search(r"/user-(\d+)\.slice(?:/|$)", groep)
+    return bool(m) and int(m.group(1)) != os.getuid()
+
+
 def groepeer(lijst: list[Proces], procent: dict[int, float]) -> list[Taak]:
     taken: dict[tuple[str, str], Taak] = {}
     eigen_pid = os.getpid()
     for p in lijst:
         soort, sleutel, eenheid = soort_van(p.groep)
-        if soort != "systeem" and not p.eigen:
+        if soort != "systeem" and _ander_account(p.groep):
             # Van een ander account (snel wisselen): niet bij jouw Firefox optellen (dan kon je die niet sluiten),
             # maar samen onder 'Andere accounts', bij wat van de computer is (U433).
             soort, sleutel, eenheid = "systeem", "systeem:andere-accounts", "andere-accounts"

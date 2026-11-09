@@ -39,7 +39,7 @@ def schrijf(pad: Path, tekst: str) -> None:
     pad.write_text(tekst, encoding="utf-8")
 
 
-GEBRUIKER = "/user.slice/user-1000.slice/user@1000.service"
+GEBRUIKER = f"/user.slice/user-{os.getuid()}.slice/user@{os.getuid()}.service"   # jijzelf (U441)
 
 
 def proces(pid: int, naam: str, groep: str, tijd: int = 10, rss: int = 1000, pss_kb: int = 0, kernel: bool = False,
@@ -162,13 +162,13 @@ SESSIE = f"{GEBRUIKER}/session.slice"
 lang = [bt.Proces(400, "xdg-desktop-por", 1, 1, 1, True, f"{SESSIE}/xdg-desktop-portal-kde.service"),
         bt.Proces(401, "polkit-kde-auth", 1, 1, 1, True, f"{SESSIE}/plasma-polkit-agent.service"),
         bt.Proces(402, "kwin_wayland_wr", 1, 1, 1, True, f"{SESSIE}/plasma-kwin_wayland.service"),
-        bt.Proces(403, "startplasma-way", 1, 1, 1, True, "/user.slice/user-1000.slice/session-2.scope"),
+        bt.Proces(403, "startplasma-way", 1, 1, 1, True, f"/user.slice/user-{os.getuid()}.slice/session-2.scope"),
         bt.Proces(404, "spotify", 1, 1, 1, True, f"{SESSIE}/spotify-helper.service")]
 beschermd = {x.pids[0]: x.beschermd for x in bt.groepeer(lang, {})}
 klopt(all(beschermd[p] for p in (400, 401, 402, 403)) and not beschermd[404],
       "beschermd: ook lange namen (xdg-desktop-portal-kde, kwin_wayland_wrapper, startplasma) en plasma-diensten")
 # B002: de rest van wat de sessie nodig heeft (gezien in de echte BugOS live-sessie, met hun eenheden).
-GEB = "/user.slice/user-1000.slice/user@1000.service"
+GEB = GEBRUIKER
 kern = [bt.Proces(500, "dbus-broker-lau", 1, 1, 1, True, f"{GEB}/session.slice/dbus-broker.service"),
         bt.Proces(501, "(sd-pam)", 1, 1, 1, True, f"{GEB}/init.scope"),
         bt.Proces(502, "at-spi-bus-laun", 1, 1, 1, True, f"{GEB}/session.slice/at-spi-dbus-bus.service"),
@@ -185,9 +185,16 @@ klopt(all(beschermd[p] for p in range(500, 507)),
 klopt(not beschermd[507] and not beschermd[508], "niet beschermd: gewone achtergrondhulpjes (ssh-agent, KDE Connect)")
 # U433: Firefox van mama (ander account, snel wisselen) en die van jou: jouw Firefox blijft van jou (en te sluiten).
 _ff = "app.slice/app-flatpak-org.mozilla.firefox-1234.scope"
-_twee = [bt.Proces(600, "firefox", 1, 1, 1, True, f"/user.slice/user-1000.slice/user@1000.service/{_ff}"),
-         bt.Proces(601, "firefox", 1, 1, 1, False, f"/user.slice/user-1001.slice/user@1001.service/{_ff}")]
+_ik = os.getuid()
+_ander = _ik + 1
+_twee = [bt.Proces(600, "firefox", 1, 1, 1, True, f"/user.slice/user-{_ik}.slice/user@{_ik}.service/{_ff}"),
+         bt.Proces(601, "firefox", 1, 1, 1, False, f"/user.slice/user-{_ander}.slice/user@{_ander}.service/{_ff}"),
+         # U441: kwin_wayland (extra rechten) staat in /proc op naam van root, maar is van jou.
+         bt.Proces(602, "kwin_wayland", 1, 1, 1, False,
+                   f"/user.slice/user-{_ik}.slice/user@{_ik}.service/session.slice/plasma-kwin_wayland.service")]
 _g433 = {x.pids[0]: x for x in bt.groepeer(_twee, {})}
+klopt(_g433[602].naam != "Andere accounts" and _g433[602].pids == [602],
+      f"U441: je eigen kwin_wayland (in /proc van root) staat niet onder 'Andere accounts' ({_g433[602].naam})")
 klopt(_g433[600].pids == [600] and _g433[600].eigen and _g433[601].soort == "systeem" and _g433[601].beschermd,
       f"U433: een app van een ander account telt niet bij die van jou ({[(x.naam, x.pids, x.eigen) for x in _g433.values()]})")
 
