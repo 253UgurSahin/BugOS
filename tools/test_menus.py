@@ -94,6 +94,31 @@ for stijl in ("Basic", "Fusion"):
 _start = (QML.parent.parent.parent.parent / "org.bugos.startmenu" / "contents" / "ui" / "StartMenu.qml").read_text(encoding="utf-8")
 klopt("bregel.hovered || bregel.activeFocus" in _start, "U064: startmenu: een recent bestand met de toetsenbordfocus is te zien")
 
+# U098: Enter in het startmenu opent de beste treffer, niet de eerste op het alfabet.
+_sv = QQuickView()
+_sv.setSource(QUrl.fromLocalFile(str(QML.parent.parent.parent.parent / "org.bugos.startmenu" / "contents" / "ui" / "StartMenu.qml")))
+_sm = _sv.rootObject()
+_app = lambda i, n, z: {"id": i, "pad": i, "naam": n, "soort": "app", "groep": "x", "zoek": f"{n} {z}".lower()}  # noqa: E731
+_sm.setProperty("gegevens", {"apps": [
+    _app("systemsettings.desktop", "All settings", "settings system kde"),
+    _app("bugos-backup.desktop", "Backup", "files backup usb"),
+    _app("org.kde.dolphin.desktop", "Dolphin (advanced)", "files explorer"),
+    _app("bugos-files.desktop", "Files", "files explorer folders"),
+    _app("bugos-settings.desktop", "Settings", "settings wifi bluetooth"),
+    {"id": "instelling-wifi", "pad": "instelling:wifi", "naam": "Wi-Fi and internet", "soort": "instelling",
+     "groep": "Settings", "zoek": "wi-fi and internet wifi wlan"}], "favorieten": [], "recent": [], "gebruiker": {"naam": ""}})
+_open: list = []
+_sm.start.connect(lambda pad: _open.append(pad))
+_veld = _sm.findChild(QObject, "zoekveld")
+_uit = {}
+for _w in ("settings", "files", "explorer", "wifi"):
+    _veld.setProperty("text", _w)
+    _sm.openEerste()
+    _uit[_w] = _open[-1] if _open else None
+klopt(_uit == {"settings": "bugos-settings.desktop", "files": "bugos-files.desktop", "explorer": "bugos-files.desktop",
+               "wifi": "instelling:wifi"}, f"U098: Enter opent de beste treffer ({_uit})")
+_sv.close()
+
 _ui = QML.parent.parent.parent.parent
 for _m in ("org.bugos.startmenu", "org.bugos.quickmenu"):
     _main = (_ui / _m / "contents" / "ui" / "main.qml").read_text(encoding="utf-8")

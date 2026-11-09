@@ -66,10 +66,24 @@ Rectangle {
         return new Date().toLocaleDateString(Qt.locale(nederlands ? "nl_NL" : Qt.locale().name), "dddd d MMMM")
     }
     // Zoeken vindt apps én de pagina's van Instellingen (soort "instelling").
+    // Beste eerst (Enter opent de eerste): de naam begint ermee, dan een woord in de naam, dan ergens in de naam,
+    // dan alleen in de zoekwoorden. Bij gelijke stand eerst BugOS zelf en de pagina's van Instellingen (U098).
+    function score(a, woorden) {
+        const naam = a.naam.toLowerCase().replace(/-/g, "")   // "Wi-Fi" telt als "wifi"
+        const eerste = woorden[0].replace(/-/g, "")
+        let s = naam.indexOf(zoekTekst.replace(/-/g, "")) === 0 ? 0
+            : naam.split(/[\s\-()]+/).some(d => d.indexOf(eerste) === 0) ? 1
+            : naam.indexOf(eerste) >= 0 ? 2 : 3
+        const eigen = a.soort === "instelling" || String(a.id || "").indexOf("bugos-") === 0
+        return s * 2 + (eigen ? 0 : 1)
+    }
     function gevonden() {
         if (zoekTekst === "") return []
         const woorden = zoekTekst.split(/\s+/)
         return gegevens.apps.filter(a => woorden.every(w => (a.zoek || a.naam.toLowerCase()).indexOf(w) >= 0))
+            .map((a, i) => ({ a: a, s: score(a, woorden), i: i }))
+            .sort((x, y) => x.s - y.s || x.i - y.i)
+            .map(x => x.a)
     }
     // "Alle apps" laat alleen echte programma's zien.
     function alleAppsLijst() {
