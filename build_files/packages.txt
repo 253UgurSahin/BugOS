@@ -39,6 +39,9 @@ firefox
 # --- Alle talen ---
 glibc-all-langpacks
 
+# Telefoon en camera (MTP/PTP) openen in Bestanden: KDE geeft dan een gewone map door (U225)
+kio-fuse
+
 # Schijven: USB-sticks leegmaken (exFAT, werkt overal), repareren, en Schijfbeheer voor gevorderden
 exfatprogs
 dosfstools

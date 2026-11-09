@@ -445,5 +445,7 @@ klopt 'grep -q "org.kde.gwenview" "$TMP/flatpak-log" && grep -q "org.kde.okular"
     "U224: na de installatie is er een programma voor foto's (Gwenview) en PDF's (Okular)"
 klopt 'grep -q "^image/jpeg=org.kde.gwenview.desktop" "$ROOT/system_files/etc/xdg/kde-mimeapps.list" && grep -q "^application/pdf=org.kde.okular.desktop" "$ROOT/system_files/etc/xdg/kde-mimeapps.list"' \
     "U224: een foto opent standaard in Gwenview en een PDF in Okular"
+klopt 'grep -qx "kio-fuse" "$ROOT/build_files/packages.txt"' \
+    "U225: een telefoon of camera opent in Bestanden (kio-fuse geeft KDE-adressen als gewone map)"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
