@@ -31,6 +31,9 @@ if [ -f "$KLAAR" ]; then
     APPS=(org.kde.gwenview org.kde.okular)
 fi
 
+# Even wachten op internet (de dienst wacht er niet meer op bij het opstarten) (U312).
+nm-online -q -t 120 >/dev/null 2>&1 || true
+
 # Niet over een verbinding met een databundel (telefoon-hotspot): dat is al gauw een paar gigabyte. Dan over
 # vijf minuten opnieuw kijken (Restart=on-failure), zoals de dagelijkse app-updates (U180).
 gemeten="$(busctl get-property org.freedesktop.NetworkManager /org/freedesktop/NetworkManager \

@@ -1,8 +1,9 @@
 [Unit]
 Description=BugOS: switch to signed updates (once)
 Documentation=https://github.com/253UgurSahin/BugOS/blob/main/docs/ONDERTEKENEN.md
-Wants=network-online.target
-After=network-online.target rpm-ostreed.service
+# Geen Wants/After network-online: dan wachtte elke keer opstarten (ook lang na de eerste keer) op het
+# netwerk. Het script wacht zelf even op internet (U312).
+After=rpm-ostreed.service
 ConditionPathExists=/etc/pki/containers/bugos.pub
 ConditionKernelCommandLine=!rd.live.image
 

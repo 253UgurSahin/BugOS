@@ -475,6 +475,7 @@ fi
 rm -f "$TMP/thuis/.local/share/bugos/windows/.update-timestamp"
 nep wine 'exit 0'
 # U180: de eerste start downloadt de apps niet over een telefoon-hotspot (later opnieuw).
+nep nm-online 'exit 0'
 kopie bugos-first-boot
 sed -i -e "s|/var/lib/bugos|$TMP/var-bugos|g" -e "s|/usr/bin/bugos-updates|$TMP/bin/bugos-updates|g" "$TMP/bugos-first-boot"
 nep bugos-updates 'exit 0'   # updates vanzelf
@@ -537,5 +538,7 @@ esac; exit 0'
 draai bugos-flatpak-style
 klopt 'grep -q "org.freedesktop.Platform.VulkanLayer.MangoHud//24.08" "$TMP/fp-install" && grep -q "org.kde.KStyle.Kvantum//6.9" "$TMP/fp-install"' \
     "U264: de FPS-teller werkt ook in games uit de Winkel (MangoHud voor Flatpak)"
+klopt '! grep -q "^[A-Za-z]*=.*network-online" "$ROOT/system_files/usr/lib/systemd/system/bugos-first-boot.service" && ! grep -q "^[A-Za-z]*=.*network-online" "$ROOT/system_files/usr/lib/systemd/system/bugos-ondertekend.service" && grep -q "nm-online" "$BIN/bugos-first-boot"' \
+    "U312: elke keer opstarten wacht niet op het netwerk voor de eerste-start- en ondertekend-dienst (ze wachten zelf)"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

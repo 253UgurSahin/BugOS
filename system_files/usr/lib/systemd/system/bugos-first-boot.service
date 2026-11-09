@@ -1,7 +1,7 @@
 [Unit]
 Description=BugOS: set up the default apps after installing
-Wants=network-online.target
-After=network-online.target
+# Geen Wants/After network-online: dan wachtte elke keer opstarten (ook lang na de eerste keer) op het
+# netwerk. Het script wacht zelf even op internet (U312).
 ConditionPathExists=!/var/lib/bugos/standaard-apps-2
 ConditionKernelCommandLine=!rd.live.image
 

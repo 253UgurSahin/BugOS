@@ -16,6 +16,7 @@ nep() { printf '#!/usr/bin/bash\n%s\n' "$2" >"$TMP/bin/$1"; chmod +x "$TMP/bin/$
 echo "nep-sleutel" >"$TMP/bugos.pub"
 sed -e "s|/etc/pki/containers/bugos.pub|$TMP/bugos.pub|" -e "s|/var/lib/bugos|$TMP/var|g" \
     "$ROOT/system_files/usr/bin/bugos-ondertekend" >"$TMP/ondertekend"
+nep nm-online 'exit 0'
 nep rpm-ostree 'case "$1" in status) cat "'"$TMP"'/status.json";; rebase) echo "$2" >>"'"$TMP"'/rebase";; esac'
 draai() { rm -f "$TMP/var/ondertekend" "$TMP/rebase"; printf '{"deployments":[{"booted":true,"container-image-reference":"%s"}]}' "$1" >"$TMP/status.json"; PATH="$TMP/bin:$PATH" bash "$TMP/ondertekend" >/dev/null 2>&1; }
 

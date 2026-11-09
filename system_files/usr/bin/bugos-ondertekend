@@ -18,6 +18,9 @@ SLEUTEL=/etc/pki/containers/bugos.pub
 # vorige versie', dan draait die nog zonder controle, en moet hij opnieuw overstappen (U303).
 mkdir -p /var/lib/bugos
 
+# Even wachten op internet (de dienst wacht er niet meer op bij het opstarten) (U312).
+nm-online -q -t 120 >/dev/null 2>&1 || true
+
 STATUS="$(rpm-ostree status --json 2>/dev/null)" || exit 1
 REF="$(echo "$STATUS" | jq -r '.deployments[] | select(.booted) | ."container-image-reference" // empty')"
 # Staat de overstap al klaar voor de volgende keer opstarten? Dan niet nog een keer.
