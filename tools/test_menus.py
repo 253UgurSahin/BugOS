@@ -119,6 +119,27 @@ klopt(_uit == {"settings": "bugos-settings.desktop", "files": "bugos-files.deskt
                "wifi": "instelling:wifi"}, f"U098: Enter opent de beste treffer ({_uit})")
 _sv.close()
 
+# U099: elk QML-type dat een plasmoid gebruikt, bestaat (een Qt-type, of een .qml-bestand ernaast). Na een hernoeming
+# verwees main.qml naar "Snelmenu" (bestaat niet): dan laadt Plasma het hele snelmenu niet, en de tests hierboven
+# (die QuickMenu.qml los laden) zagen dat niet.
+import re  # noqa: E402
+
+import PySide6  # noqa: E402
+
+_qt_types = set()
+for _f in (Path(PySide6.__file__).parent / "Qt" / "qml").rglob("*.qmltypes"):
+    _qt_types.update(re.findall(r'exports: \[[^\]]*?"[\w./]+/(\w+) ', _f.read_text(errors="replace")))
+    _qt_types.update(re.findall(r'"[\w./]+/(\w+) \d', _f.read_text(errors="replace")))
+_plasma = {"PlasmoidItem"}   # van org.kde.plasma.plasmoid (niet in Qt zelf)
+_mist = []
+for _qmlbestand in sorted((QML.parent.parent.parent.parent).glob("org.bugos.*/contents/ui/*.qml")):
+    _tekst = re.sub(r"//[^\n]*", "", _qmlbestand.read_text(encoding="utf-8"))
+    _eigen = {q.stem for q in _qmlbestand.parent.glob("*.qml")} | set(re.findall(r"\bcomponent\s+(\w+)\s*:", _tekst))
+    for _type in set(re.findall(r"(?<![\w.])([A-Z]\w*)\s*\{", _tekst)):
+        if _type not in _qt_types and _type not in _eigen and _type not in _plasma:
+            _mist.append(f"{_qmlbestand.parent.parent.parent.name}/{_qmlbestand.name}: {_type}")
+klopt(len(_qt_types) > 100 and not _mist, f"U099: alle QML-types in de plasmoids bestaan ({_mist})")
+
 _ui = QML.parent.parent.parent.parent
 for _m in ("org.bugos.startmenu", "org.bugos.quickmenu"):
     _main = (_ui / _m / "contents" / "ui" / "main.qml").read_text(encoding="utf-8")

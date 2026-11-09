@@ -66,7 +66,7 @@ PlasmoidItem {
         }
     }
 
-    fullRepresentation: Snelmenu {
+    fullRepresentation: QuickMenu {
         schaal: Kirigami.Theme.defaultFont.pointSize > 0
             ? Math.min(1.5, Math.max(1, Kirigami.Theme.defaultFont.pointSize / 10)) : 1
         Layout.preferredWidth: Kirigami.Units.gridUnit * 22
