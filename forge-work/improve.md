@@ -1246,6 +1246,24 @@ passed (here). No high or medium finding in this round.
 ### U490 [low] (U431 + U393) Settings showed the "could not be saved" rollback warning as a green success, and could close itself
   commit: d24477a   test: tools/test_os_settings.py
 
+## Round 40 (2026-11-09)
+Two reviewers: the round-39 fixes (no regressions; 2 low: U494), and a fresh sweep of "the device pages of Settings,
+end to end" (5 found, low-medium or low: U495-U499). All fixed, each with a test that failed first. Tests after: 20
+test files passed (here).
+
+### U494 [low] (from U487/U488) "Update now" from the notification was silent for up to 90 min; by hand it waited an hour on a running daily box update and then did nothing
+  commit: 8adc2aa   test: tools/test_package.sh
+### U495 [low-medium] School/work Wi-Fi (eduroam, 802.1X) asked only for a password and always said "Is the password right?"; Enhanced Open (OWE) asked for a password
+  commit: 0660bac   test: tools/test_os_settings.py (802.1X opens KDE's network editor; OWE counts as open)
+### U496 [low-medium] Sound listed HDMI outputs with nothing plugged in; choosing one made everything silent
+  commit: 4f4cf90   test: tools/test_os_settings.py
+### U497 [low] "Disconnect" did nothing (silently) when the profile was called "Home 1"
+  commit: 0660bac   test: tools/test_os_settings.py
+### U498 [low] A wrong password on a new network stayed saved; the next click said "Maybe the password changed"
+  commit: 0660bac   test: tools/test_os_settings.py (also: "Connecting…" stays as long as nmcli may wait)
+### U499 [low] Bluetooth on after airplane mode often showed "Off" again (the adapter comes back a moment later)
+  commit: 0660bac   test: tools/test_os_settings.py
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -1383,6 +1401,12 @@ passed (here). No high or medium finding in this round.
   click stages it again.
 - U493 (round 39, translations): Settings shows bugos-updates' own failure line only if it starts with the same words
   as t("Dat lukte niet"); translators must keep both the same.
+- U500 (round 40, check on the image): driverless network printers may be temporary CUPS queues that `lpstat -p`
+  does not list (`lpstat -e` does): the Printers page could say "No printer yet" while apps can print.
+- U501 (round 40, check on the image): the Sound page uses only `pactl`; check pulseaudio-utils is in the image
+  (the quick menu and Help use `wpctl`). Also check `bluedevil-wizard` still exists in Plasma 6.8.
+- U502 (round 40, unsure): if `distrobox upgrade` is killed by the time limit, dnf may keep running inside the box;
+  the next run then fails on dnf's lock and retries later.
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
