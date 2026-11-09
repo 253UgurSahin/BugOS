@@ -1149,6 +1149,24 @@ findings are wrong behaviour between family accounts.
 ### U436 [low] File and drive names in tooltips were rendered as rich text ("<h1>…" from a stick)
   commit: da6aaa3   test: tools/test_os_apps.py
 
+## Round 34 (2026-11-09)
+Two reviewers: the round-33 fixes (4 found plus 2 unsure: U441-U442), and a fresh sweep of "time, dates and long
+uptime": clock jumps, DST, suspend, dual boot, weeks-long sessions (4 found plus 3 unsure: U443-U446). 6 fixed, each
+with a test that failed first. Tests after: 20 test files passed (here).
+
+### U441 [low-medium] (from U433) Your own kwin_wayland or ssh-agent (root-owned in /proc) showed under "Other accounts"
+  commit: 1bad823   test: tools/test_task_manager.py (now decided by the user-<uid>.slice in the cgroup path)
+### U442 [low] (from U434) The restore question rendered a stick folder name as markup, said "several backups" for one, and was no longer translatable
+  commit: 03d7fc0   test: tools/test_backup.py (the "terug" warning in bugos-updates is translatable again too)
+### U443 [medium] Automatic system updates almost never ran on laptops that sleep, or PCs used less than an hour per boot
+  commit: bf17b7c   test: tools/test_os_system.sh (rpm-ostreed-automatic.timer drop-in: OnCalendar=daily, Persistent)
+### U444 [low] "Last backup" counted 24-hour blocks (Monday 22:00 was "today" on Tuesday) and could say "-1 days ago"
+  commit: 3a3f8ea   test: tools/test_backup.py
+### U445 [low] The clock in Settings ignored the English region (US order and 24 h for everyone)
+  commit: 6eb2a25   test: tools/test_os_settings.py
+### U446 [low-medium] With BugOS next to Windows the clock was 1-2 hours wrong after every switch
+  commit: c5648db   test: tools/test_windows_start.sh (the Windows tool sets RealTimeIsUniversal when it makes space)
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -1243,6 +1261,13 @@ findings are wrong behaviour between family accounts.
   accounts) depends on Fedora's NetworkManager polkit defaults; check on the image.
 - U439 (round 33, cosmetic): after picking a smaller size, larger size buttons stay enabled until Settings re-reads.
 - U440 (round 33, edge): a .deb whose name starts with "-" is passed to `flatpak search` without "--".
+- U447 (round 34, unsure): on FAT32 sticks file times may shift by an hour at a DST change (depends on the kernel
+  time zone at boot); a backup would then copy everything again twice a year. Test on hardware first.
+- U448 (round 34, unsure): bugos-updatecheck waits for the notification (TimeoutStartSec=infinity); if Plasma never
+  reports a notification as closed, later daily checks are skipped. Impact small.
+- U449 (round 34, cosmetic): Settings > Notifications shows a timed do-not-disturb as on until the page refreshes.
+- U450 (round 34, unsure): with only foreign UIDs, a user can pre-create another account's game-mode marker in the
+  shared folder, which then cannot touch its own; small impact (anyone can change the power profile anyway).
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
