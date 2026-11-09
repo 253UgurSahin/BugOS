@@ -980,6 +980,31 @@ files passed (here).
 ### U353 [low] Settings search missed words printed on its own pages (taakbalk, fps, opslag, dubbelklikken…)
   commit: 5f92c72   test: tools/test_os_settings.py
 
+## Round 27 (2026-11-09)
+Two reviewers: the round-26 fixes (2 found plus 5 unsure: U356-U358), and a fresh check of everything BugOS promises
+(user texts and maintainer docs) against what the code does (10 found plus 2 unsure: U359-U364). 9 fixed, each with
+a test that failed first where code changed; doc fixes are checked by tools/test_edges.py. Tests after: 20 test
+files passed (here).
+
+### U356 [low] (from U343) Choosing the current own photo again through another path (/home -> /var/home) deleted it
+  commit: da2e7db   test: tools/test_os_settings.py
+### U357 [low] (from U345) "Forget" left an older profile of the same network, so NetworkManager reconnected
+  commit: da2e7db   test: tools/test_os_settings.py
+### U358 [very low] (from U353) The start menu did not get the new Settings search words
+  commit: da2e7db   test: tools/test_start_data.py
+### U359 [medium, maintainer] The Windows-switch workflow's "put pictures in the repo" step failed and used the old folder
+  commit: dd45d19   test: tools/test_edges.py
+### U360 [medium, user] "Just pick the previous version" never said how to see the hidden startup menu (Shift / Esc)
+  commit: dd45d19   test: tools/test_edges.py (Welcome, README, TESTING.md, PLAN.md)
+### U361 [low, user] Store and .rpm texts promised automatic app updates, also with "I choose when"
+  commit: dd45d19
+### U362 [low, maintainer] TESTING.md: CI builds on every change, a tag makes a release, the website goes online by itself — none of these is true; "publiceren" only publishes the live stick
+  commit: dd45d19   test: tools/test_edges.py
+### U363 [low, maintainer] Stale names: tools/iso-lokaal.sh, vertalingen/, -wit/-rood, light.reg, 37 apps, "about 115" texts, first-start apps
+  commit: dd45d19   test: tools/test_edges.py
+### U364 [low, user] The logout screen said "Your files are saved" (unsaved work in open programs is not; programs ask)
+  commit: dd45d19   test: tools/test_logout.py
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -1037,6 +1062,8 @@ files passed (here).
   LibreOffice (only a question with "No").
 - U355 (round 26, unsure): pressing a Settings switch twice quickly starts two background writes at once; no mixed
   end state was reproduced.
+- U365 (round 27, unsure): the magnifier hint "Windows key and + or −" depends on KWin binding Meta+Plus; check
+  on a real PC.
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
