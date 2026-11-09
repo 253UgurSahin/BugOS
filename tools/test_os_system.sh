@@ -73,7 +73,8 @@ echo UPDATES=auto >"$TMP/var-bugos/updates.conf"
 mkdir -p "$TMP/var-bugos/updates.conf.nieuw"
 draai bugos-updates terug
 rmdir "$TMP/var-bugos/updates.conf.nieuw"
-klopt 'grep -q "could not be saved" "$TMP/uit"' "U423: 'terug' zegt het als 'zelf updaten' niet bewaard kon worden"
+klopt '[ $code -eq 0 ] && grep -v "^bugos-blijft$" "$TMP/uit" | grep -v "^\s*$" | tail -1 | grep -q "could not be saved"' \
+    "U423/U431: 'terug' zegt het als 'zelf updaten' niet bewaard kon worden, als laatste regel (die toont Instellingen)"
 echo UPDATES=hand >"$TMP/var-bugos/updates.conf"
 # U300: elke versie heeft een eigen /etc; de keuze moet ook in /var staan, dat alle versies delen. Na het
 # opnieuw opstarten in de oudere versie (die /etc zegt nog 'auto') werkt hij dan niet vanzelf bij.

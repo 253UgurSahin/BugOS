@@ -1,6 +1,7 @@
 {
   "  ·  already has a backup": "",
   "  ·  inside the computer: restore only": "",
+  " Restart the computer to go back.": "",
   " They are still in their old place.": "",
   " · administrator": "",
   " · open network": "",
@@ -300,7 +301,6 @@
   "Not in use yet": "",
   "Not in use yet. Click 'Set up' to get it ready.": "",
   "Note": "",
-  "Note: the choice 'update yourself' could not be saved (is your computer full?). Turn off 'Updates automatically' in Settings, or the new version may come back.": "",
   "Nothing": "",
   "Nothing can be written to this drive (it is write-protected, or it has an error). Choose another drive, or check it on another computer.": "",
   "Nothing chosen yet": "",
