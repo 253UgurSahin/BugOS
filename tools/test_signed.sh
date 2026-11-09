@@ -51,5 +51,13 @@ printf '{"deployments":[{"booted":true,"timestamp":1000,"container-image-referen
 rm -f "$TMP/rebase"
 PATH="$TMP/bin:$PATH" bash "$TMP/ondertekend" >/dev/null 2>&1
 klopt '[ ! -e "$TMP/rebase" ]' "U307: na een bewuste 'terug' zet hij de nieuwere versie niet stiekem terug"
+# U318: over een telefoon-hotspot (pas na het wachten op internet te zien) niet overstappen; later opnieuw.
+printf '{"deployments":[{"booted":true,"container-image-reference":"ostree-unverified-registry:ghcr.io/253ugursahin/bugos:latest"}]}' >"$TMP/status.json"
+rm -f "$TMP/rebase"
+nep busctl 'echo "u 1"'
+PATH="$TMP/bin:$PATH" bash "$TMP/ondertekend" >/dev/null 2>&1
+code=$?
+nep busctl 'echo "u 4"'
+klopt '[ ! -e "$TMP/rebase" ] && [ "$code" -ne 0 ]' "U318: over een telefoon-hotspot stapt hij niet over (later opnieuw)"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

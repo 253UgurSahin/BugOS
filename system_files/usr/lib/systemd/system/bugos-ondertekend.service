@@ -10,9 +10,8 @@ ConditionKernelCommandLine=!rd.live.image
 [Service]
 # exec, niet oneshot: het opstarten wacht niet op het downloaden (zoals bugos-first-boot) (U236).
 Type=exec
-# Niet over een verbinding met een databundel (telefoon-hotspot): dan de volgende keer opstarten (U236).
-# Lukt overstappen niet (geen internet), dan over een half uur opnieuw.
-ExecCondition=/bin/bash -c 'm="$(busctl get-property org.freedesktop.NetworkManager /org/freedesktop/NetworkManager org.freedesktop.NetworkManager Metered 2>/dev/null | cut -c 3-)"; [ "$$m" != 1 ] && [ "$$m" != 3 ]'
+# De hotspot-controle (U236) staat in het script, ná het wachten op internet: hier vroeg bij het opstarten
+# was er nog geen verbinding, en dan zei NetworkManager 'onbekend' (U318).
 ExecStart=/usr/bin/bugos-ondertekend
 Restart=on-failure
 RestartSec=30min

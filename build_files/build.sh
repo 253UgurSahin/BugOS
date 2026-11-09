@@ -19,9 +19,10 @@ cp -avf /ctx/system_files/. /
 (cd /ctx/system_files && find . -mindepth 1 -type d -print0) | while IFS= read -r -d '' d; do chmod 0755 "/${d#./}"; done
 chmod 0755 /usr/bin/bugos-*
 # De Python-onderdelen van BugOS vooraf vertalen: /usr is straks alleen-lezen, dus anders doet elke app dat bij
-# elke start opnieuw. Met een controlegetal (unchecked-hash): ostree zet de tijden van bestanden gelijk (U313).
+# elke start opnieuw. Met een controlegetal (checked-hash): ostree zet de tijden van bestanden gelijk, en een
+# veranderd bestand (usr-overlay bij het zoeken naar een fout) wordt dan toch opnieuw gelezen (U313, U319).
 find /usr/lib/bugos/python -name __pycache__ -prune -exec rm -rf {} +
-python3 -m compileall -q --invalidation-mode unchecked-hash /usr/lib/bugos/python
+python3 -m compileall -q --invalidation-mode checked-hash /usr/lib/bugos/python
 
 # 2. Extra programma's installeren.
 #    --skip-unavailable: als een pakket (even) niet bestaat, gaat de bouw

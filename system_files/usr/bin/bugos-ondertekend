@@ -20,6 +20,14 @@ mkdir -p /var/lib/bugos
 
 # Even wachten op internet (de dienst wacht er niet meer op bij het opstarten) (U312).
 nm-online -q -t 120 >/dev/null 2>&1 || true
+# Niet over een verbinding met een databundel (telefoon-hotspot): een heel BugOS is gauw een paar gigabyte. Dan
+# over een half uur opnieuw kijken (Restart=on-failure) (U236, U318).
+gemeten="$(busctl get-property org.freedesktop.NetworkManager /org/freedesktop/NetworkManager \
+    org.freedesktop.NetworkManager Metered 2>/dev/null | cut -c 3-)"
+if [ "$gemeten" = 1 ] || [ "$gemeten" = 3 ]; then
+    echo "BugOS: verbinding met een databundel, overstappen op ondertekende updates later." >&2
+    exit 1
+fi
 
 STATUS="$(rpm-ostree status --json 2>/dev/null)" || exit 1
 REF="$(echo "$STATUS" | jq -r '.deployments[] | select(.booted) | ."container-image-reference" // empty')"
