@@ -26,8 +26,20 @@ MAANDEN = (("januari", "January"), ("februari", "February"), ("maart", "March"),
 def nu_tekst() -> str:
     d = datetime.now().astimezone()
     dag, maand = DAGEN[d.weekday()], MAANDEN[d.month - 1]
-    return t(f"{dag[0].capitalize()} {d.day} {maand[0]} {d.year} · {d:%H:%M}",
-             f"{dag[1]} {maand[1]} {d.day}, {d.year} · {d:%H:%M}")
+    return t(f"{dag[0].capitalize()} {d.day} {maand[0]} {d.year} · {d:%H:%M}", _engels_nu(d))
+
+
+def _engels_nu(d: datetime) -> str:
+    """In het Engels zoals je regio het schrijft: 9 November 2026 (Ierland, VK) of November 9, 2026, en 14:05 of
+    2:05 PM zoals de klok op de taakbalk (U445). Zonder Engelse regio: de Amerikaanse volgorde, 24 uur."""
+    from PySide6.QtCore import QDate, QLocale, QTime
+    loc = QLocale.system()
+    if loc.language() != QLocale.Language.English:
+        dag, maand = DAGEN[d.weekday()], MAANDEN[d.month - 1]
+        return f"{dag[1]} {maand[1]} {d.day}, {d.year} · {d:%H:%M}"
+    datum = loc.toString(QDate(d.year, d.month, d.day), QLocale.FormatType.LongFormat)
+    tijd = loc.toString(QTime(d.hour, d.minute), QLocale.FormatType.ShortFormat)
+    return f"{datum} · {tijd}"
 
 
 class TijdPagina(Blad):
