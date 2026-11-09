@@ -92,6 +92,7 @@ apps.mkdir(parents=True)
                                       "GenericName[nl]=Webbrowser\nCategories=Network;\nIcon=firefox\n")
 (apps / "bugos-files.desktop").write_text("[Desktop Entry]\nType=Application\nName=Files\nName[nl]=Bestanden\n"
                                               "Categories=System;\nIcon=folder\n")
+(apps / "tr.desktop").write_text("[Desktop Entry]\nType=Application\nName=Sistem İzleyicisi\nCategories=System;\n")
 (apps / "geheim.desktop").write_text("[Desktop Entry]\nType=Application\nName=Geheim\nNoDisplay=true\n")
 (TMP / "thuis").mkdir()
 (TMP / "data").mkdir()
@@ -107,8 +108,11 @@ _mist = [w for w in ["night light", "night", "sleep", "screen reader", "sticky k
          if not any(all(d in a["zoek"] for d in w.split()) for a in data["apps"] if a["soort"] == "instelling")]
 klopt(not _mist and any(a["pad"] == "instelling:over" for a in data["apps"]),
       f"U069: startmenu vindt instellingen ook in het Engels, en 'Over deze computer' (niet: {_mist})")
+_tr = next((a for a in data["apps"] if a["naam"] == "Sistem İzleyicisi"), None)
+klopt(_tr is not None and "izleyici" in _tr["zoek"],
+      f"U268: de zoektekst van 'Sistem İzleyicisi' bevat 'izleyici' (Turkse İ), zodat het startmenu hem vindt ({_tr and _tr['zoek']!r})")
 namen = [a["naam"] for a in data["apps"] if a["soort"] == "app"]
-klopt(namen == ["Bestanden", "Firefox", "Steam"], f"gegevens: apps op naam, verborgen niet ({namen})")
+klopt(namen == ["Bestanden", "Firefox", "Sistem İzleyicisi", "Steam"], f"gegevens: apps op naam, verborgen niet ({namen})")
 fav = [a["id"] for a in data["favorieten"]]
 klopt(fav == ["firefox.desktop", "bugos-files.desktop", "steam.desktop"],
       f"favorieten: Firefox en Steam ook onder hun rpm-naam, zonder dubbelen ({fav})")

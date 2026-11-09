@@ -5,7 +5,7 @@ onderdelen (keuzes, schuifbalken, menu's), Blad (een pagina) en de dialogen om i
 from __future__ import annotations
 
 from bugos_ui import (K, Knop, Pagina, Schuif, Venster, Zoekveld, kde_instelling, label, lijn_icoon, ronde_knop,
-                      px, schaal_css, t)
+                      px, schaal_css, t, zoeksleutel)
 from PySide6.QtCore import QObject, QRunnable, QSize, Qt, QThreadPool, QTimer, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView, QButtonGroup, QDialog, QFrame, QHBoxLayout, QLineEdit, QListWidget, QListWidgetItem, QMenu,
@@ -221,10 +221,10 @@ class KiesDialoog(QDialog):
             self.lijst.scrollToItem(self.lijst.currentItem(), QAbstractItemView.ScrollHint.PositionAtCenter)
 
     def filter(self, tekst: str) -> None:
-        woorden = tekst.lower().split()
+        woorden = zoeksleutel(tekst).split()   # (U268)
         for i in range(self.lijst.count()):
             it = self.lijst.item(i)
-            it.setHidden(not all(w in it.text().lower() for w in woorden))
+            it.setHidden(not all(w in zoeksleutel(it.text()) for w in woorden))
 
     def accept(self) -> None:  # noqa: N802
         it = self.lijst.currentItem()

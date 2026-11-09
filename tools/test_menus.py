@@ -116,6 +116,20 @@ for _w in ("settings", "files", "explorer", "wifi"):
     _veld.setProperty("text", _w)
     _sm.openEerste()
     _uit[_w] = _open[-1] if _open else None
+# U268: Turkse İ en accenten: 'izleyici' vindt 'Sistem İzleyicisi', 'cafe' vindt 'Café'.
+_apps = list(_sm.property("gegevens").toVariant()["apps"]) if hasattr(_sm.property("gegevens"), "toVariant") else list(_sm.property("gegevens")["apps"])
+_apps += [_app("tr.desktop", "Sistem İzleyicisi", "sistem izleyicisi"), _app("cafe.desktop", "Café Bon", "cafe bon")]
+_g = dict(_sm.property("gegevens").toVariant()) if hasattr(_sm.property("gegevens"), "toVariant") else dict(_sm.property("gegevens"))
+_g["apps"] = _apps
+_sm.setProperty("gegevens", _g)
+_tr = {}
+for _w in ("izleyici", "IZLEYICI", "İzleyici", "cafe", "café"):
+    _veld.setProperty("text", _w)
+    _open.clear()
+    _sm.openEerste()
+    _tr[_w] = _open[-1] if _open else None
+klopt(_tr["izleyici"] == _tr["IZLEYICI"] == _tr["İzleyici"] == "tr.desktop" and _tr["cafe"] == _tr["café"] == "cafe.desktop",
+      f"U268: zoeken in het startmenu vindt 'İzleyici' met 'izleyici' en 'Café' met 'cafe' ({_tr})")
 klopt(_uit == {"settings": "bugos-settings.desktop", "files": "bugos-files.desktop", "explorer": "bugos-files.desktop",
                "wifi": "instelling:wifi"}, f"U098: Enter opent de beste treffer ({_uit})")
 # U205: typen zoekt ook als de focus niet in het zoekveld staat; U204: na 'Alle apps' staat de focus op de lijst.

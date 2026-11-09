@@ -22,7 +22,7 @@ sys.path.insert(0, "/usr/lib/bugos/python")
 
 import bugos_config as bi  # noqa: E402
 from bugos_ui import (  # noqa: E402
-    Groep, Rij, Schuif, Venster, label, leeg_groep, lijn_icoon, maak_app, sectie, start, t, uitvoeren,
+    Groep, Rij, Schuif, Venster, label, leeg_groep, lijn_icoon, maak_app, sectie, start, t, uitvoeren, zoeksleutel,
 )
 from bugos_settings_account import InloggenPagina, TijdPagina  # noqa: E402
 from bugos_settings_meldingen import MeldingenPagina, PrintersPagina, ProgrammasPagina  # noqa: E402
@@ -134,13 +134,13 @@ class StartPagina(Blad):
         op_achtergrond(self, werk, lambda _u: QTimer.singleShot(1200, self.ververs))
 
     def zoek(self, tekst: str) -> None:
-        woorden = tekst.lower().split()
+        woorden = zoeksleutel(tekst).split()   # (U268)
         leeg_groep(self.zoek_kaart)
         gevonden = 0
         if woorden:
             for klasse in PAGINAS[1:]:
-                bron = (f"{klasse.titel_nl} {klasse.titel_en} {klasse.uitleg_nl} {klasse.uitleg_en} "
-                        f"{klasse.zoekwoorden}").lower()
+                bron = zoeksleutel(f"{klasse.titel_nl} {klasse.titel_en} {klasse.uitleg_nl} {klasse.uitleg_en} "
+                                   f"{klasse.zoekwoorden}")
                 if all(w in bron for w in woorden):
                     rij = Rij(klasse.icoon, klasse.naam(), t(klasse.uitleg_nl, klasse.uitleg_en), klikbaar=True)
                     rij.geklikt.connect(lambda s=klasse.sleutel: self.venster.ga_naar(s))

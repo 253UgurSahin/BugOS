@@ -1431,6 +1431,13 @@ _bw.close()
 _teksten = {n: (ROOT / "system_files/usr/bin" / n).read_text() for n in ("bugos-backup", "bugos-switch", "bugos-store")}
 klopt(all("def tweede_start" in x and "(U233)" in x for x in _teksten.values()),
       "U233: Back-up, Overstap en Winkel vervangen 'gaat vanzelf dicht' als je ze weer opent")
+# U268: zoeken met Turkse İ en accenten (ook van een Mac: é als twee tekens) in de Winkel, Instellingen en Bestanden.
+import unicodedata as _ud  # noqa: E402
+
+_mac = _ud.normalize("NFD", "café")
+klopt(bugos_ui.zoeksleutel("İstanbul tatil.jpg").startswith("istanbul") and bugos_ui.zoeksleutel(_mac) == "cafe"
+      and winkel.past({"naam": "Sistem İzleyicisi", "id": "x"}, "izleyici"),
+      "U268: 'istanbul' vindt 'İstanbul', 'cafe' vindt 'café' (ook van een Mac), ook in de Winkel")
 _stukken = [(n, (ROOT / "system_files/usr/bin" / n).read_text()) for n in
             ("bugos-settings", "bugos-task-manager", "bugos-store", "bugos-welcome", "bugos-backup", "bugos-switch", "bugos-help")]
 klopt(all("een_keer=True" in tekst for _n, tekst in _stukken), "U208: Instellingen, Taakbeheer, Winkel, Welkom, Back-up, Overstap en Hulp openen maar één keer")

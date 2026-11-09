@@ -35,7 +35,7 @@ CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "bug
 # Taal en programma's starten staan in bugos_base (zonder Qt).
 
 from bugos_base import (  # noqa: E402, F401  (doorgeven: apps halen dit uit bugos_ui)
-    _CATALOGUS, TAAL, VERTALINGEN, _catalogus, _taal, bestaat, draai, kde_instelling, start, t,
+    _CATALOGUS, TAAL, VERTALINGEN, _catalogus, _taal, bestaat, draai, kde_instelling, start, t, zoeksleutel,
 )
 
 

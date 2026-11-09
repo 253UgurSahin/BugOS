@@ -12,7 +12,7 @@ import os
 import zipfile
 from pathlib import Path
 
-from bugos_ui import K, lijn_pixmap, px
+from bugos_ui import K, lijn_pixmap, px, zoeksleutel
 from bugos_files_plekken import AFBEELDING, ODF, PAD_ROL, SOORTEN, thuis, toon_naam
 from PySide6.QtCore import (
     QCollator, QModelIndex, QObject, QRectF, QRunnable, QSize, QSortFilterProxyModel, Qt, QThreadPool, QTimer, QUrl,
@@ -405,10 +405,10 @@ class Sorteerder(QSortFilterProxyModel):
     def zet_zoek(self, tekst: str) -> None:
         if hasattr(self, "beginFilterChange"):  # Qt 6.10 en nieuwer
             self.beginFilterChange()
-            self.zoek = tekst.strip().lower()
+            self.zoek = zoeksleutel(tekst.strip())
             self.endFilterChange()
         else:
-            self.zoek = tekst.strip().lower()
+            self.zoek = zoeksleutel(tekst.strip())
             self.invalidateFilter()
 
     def filterAcceptsRow(self, rij: int, ouder: QModelIndex) -> bool:  # noqa: N802
@@ -417,7 +417,7 @@ class Sorteerder(QSortFilterProxyModel):
         bron = self.sourceModel()
         if bron.filePath(ouder) != self.wortel:
             return True
-        return self.zoek in bron.fileName(bron.index(rij, 0, ouder)).lower()
+        return self.zoek in zoeksleutel(bron.fileName(bron.index(rij, 0, ouder)))
 
     def lessThan(self, a: QModelIndex, b: QModelIndex) -> bool:  # noqa: N802
         bron = self.sourceModel()

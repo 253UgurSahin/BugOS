@@ -47,10 +47,12 @@ Rectangle {
     readonly property string display: o.kopLetter
 
     readonly property bool alleApps: stapel.currentIndex === 1
-    property string zoekTekst: zoekveld.text.trim().toLowerCase()
+    property string zoekTekst: zoeksleutel(zoekveld.text.trim())
     property string datumTekst: datum()
 
     function tr(nl, en) { return nederlands ? nl : en }
+    // Kleine letters zonder accenten: 'izleyici' vindt 'İzleyici', 'cafe' vindt 'café' (zoals bugos-start-data) (U268)
+    function zoeksleutel(t) { return String(t).normalize("NFKD").toLowerCase().replace(/[\u0300-\u036f]/g, "") }
     function groet() {
         const uur = new Date().getHours()
         if (uur < 6) return tr("Goedenacht", "Good night")
@@ -69,7 +71,7 @@ Rectangle {
     // Beste eerst (Enter opent de eerste): de naam begint ermee, dan een woord in de naam, dan ergens in de naam,
     // dan alleen in de zoekwoorden. Bij gelijke stand eerst BugOS zelf en de pagina's van Instellingen (U098).
     function score(a, woorden) {
-        const naam = a.naam.toLowerCase().replace(/-/g, "")   // "Wi-Fi" telt als "wifi"
+        const naam = zoeksleutel(a.naam).replace(/-/g, "")   // "Wi-Fi" telt als "wifi"
         const eerste = woorden[0].replace(/-/g, "")
         let s = naam.indexOf(zoekTekst.replace(/-/g, "")) === 0 ? 0
             : naam.split(/[\s\-()]+/).some(d => d.indexOf(eerste) === 0) ? 1
@@ -80,7 +82,7 @@ Rectangle {
     function gevonden() {
         if (zoekTekst === "") return []
         const woorden = zoekTekst.split(/\s+/)
-        return gegevens.apps.filter(a => woorden.every(w => (a.zoek || a.naam.toLowerCase()).indexOf(w) >= 0))
+        return gegevens.apps.filter(a => woorden.every(w => (a.zoek || zoeksleutel(a.naam)).indexOf(w) >= 0))
             .map((a, i) => ({ a: a, s: score(a, woorden), i: i }))
             .sort((x, y) => x.s - y.s || x.i - y.i)
             .map(x => x.a)

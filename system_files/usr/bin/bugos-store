@@ -19,7 +19,7 @@ sys.path.insert(0, "/usr/lib/bugos/python")
 
 from bugos_ui import (  # noqa: E402
     TAAL, ZIJBALK_BREEDTE, Banner, Chip, Kaart, Knop, Venster, Zoekveld, bestaat, draai, label, maak_app,
-    raster, start, t, uitvoeren,
+    raster, start, t, uitvoeren, zoeksleutel,
 )
 from PySide6.QtCore import QProcess, QProcessEnvironment, QSize, Qt, QTimer  # noqa: E402
 from PySide6.QtGui import QIcon, QPixmap  # noqa: E402
@@ -94,8 +94,8 @@ def tekst(app: dict) -> str:
 
 
 def past(app: dict, zoek: str) -> bool:
-    hooi = f"{app['naam']} {app.get('naam_en', '')} {app.get('nl', '')} {app.get('en', '')} {app['id']}".lower()
-    return all(w in hooi for w in zoek.lower().split())
+    hooi = zoeksleutel(f"{app['naam']} {app.get('naam_en', '')} {app.get('nl', '')} {app.get('en', '')} {app['id']}")
+    return all(w in hooi for w in zoeksleutel(zoek).split())   # (U268)
 
 
 class AppKaart(Kaart):

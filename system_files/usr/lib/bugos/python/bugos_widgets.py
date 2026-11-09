@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 import bugos_ui  # DONKER via de module lezen: maak_app zet hem pas als de app start
-from bugos_ui import K, TINTEN, lijn_icoon, lijn_pixmap
+from bugos_ui import K, TINTEN, lijn_icoon, lijn_pixmap, zoeksleutel
 
 
 # ============================================================= bouwstenen ===
@@ -390,7 +390,7 @@ class Tegel(QPushButton):
         # Vaste hoogte: ruimte voor de naam en twee regels uitleg (niets wordt afgeknipt).
         self.setFixedHeight(bugos_ui.px(102))
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.zoektekst = f"{naam} {tekst} {zoekwoorden}".lower()
+        self.zoektekst = zoeksleutel(f"{naam} {tekst} {zoekwoorden}")
         self.setAccessibleName(naam)
         self.setAccessibleDescription(tekst)
         lay = QHBoxLayout(self)
@@ -411,7 +411,7 @@ class Tegel(QPushButton):
         self.clicked.connect(actie)
 
     def past_bij(self, zoek: str) -> bool:
-        return all(woord in self.zoektekst for woord in zoek.lower().split())
+        return all(woord in self.zoektekst for woord in zoeksleutel(zoek).split())
 
 
 class KeuzeKaart(QPushButton):

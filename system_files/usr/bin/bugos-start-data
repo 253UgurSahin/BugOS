@@ -20,6 +20,7 @@ import pwd
 import shutil
 import subprocess
 import sys
+import unicodedata
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
@@ -142,9 +143,15 @@ def lees_desktop(pad: Path) -> dict | None:
         "uitleg": lokaal("GenericName") or lokaal("Comment"),
         "icoon": d.get("Icon", "application-x-executable"),
         "groep": groep,
-        "zoek": " ".join([naam, lokaal("GenericName"), lokaal("Comment"), lokaal("Keywords"), d.get("Keywords", "")]).lower(),
+        "zoek": zoeksleutel(" ".join([naam, lokaal("GenericName"), lokaal("Comment"), lokaal("Keywords"), d.get("Keywords", "")])),
         "soort": "app",
     }
+
+
+def zoeksleutel(tekst: str) -> str:
+    """Tekst om in te zoeken: kleine letters zonder accenten, zodat 'izleyici' 'İzleyici' vindt (Turks) en 'cafe'
+    'café' (ook als de é uit twee tekens bestaat, zoals op een Mac) (U268). Dezelfde regel als StartMenu.qml."""
+    return "".join(c for c in unicodedata.normalize("NFKD", tekst.casefold()) if not unicodedata.combining(c))
 
 
 def alle_apps() -> list[dict]:
@@ -175,7 +182,7 @@ def instellingen_apps() -> list[dict]:
             "uitleg": t("Instellingen", "Settings"),
             "icoon": icoon,
             "groep": t("Instellingen", "Settings"),
-            "zoek": f"{naam} {nl} {en} {zoek}".lower(),
+            "zoek": zoeksleutel(f"{naam} {nl} {en} {zoek}"),
             "soort": "instelling",
         })
     return uit

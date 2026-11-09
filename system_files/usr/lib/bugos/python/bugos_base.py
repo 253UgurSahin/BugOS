@@ -106,3 +106,10 @@ def kde_instelling(module: str) -> None:
         start("systemsettings", module)
     else:
         start("kcmshell6", module)
+
+
+def zoeksleutel(tekst: str) -> str:
+    """Tekst om in te zoeken: kleine letters zonder accenten, zodat 'izleyici' 'İzleyici' vindt (Turks), 'istanbul'
+    'İstanbul tatil.jpg' en 'cafe' 'café' (ook als de é uit twee tekens bestaat, zoals op een Mac) (U268)."""
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFKD", str(tekst).casefold()) if not unicodedata.combining(c))
