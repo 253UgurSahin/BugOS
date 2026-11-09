@@ -1001,6 +1001,25 @@ klopt("2:05" in _uit445["en_US.UTF-8"] and "PM" in _uit445["en_US.UTF-8"] and "9
       and "14:05" in _uit445["en_IE.UTF-8"], f"U445: de klok in het Engels volgt je regio ({_uit445})")
 klopt("November 2026" in _uit445["de_DE.UTF-8"] and "9." in _uit445["de_DE.UTF-8"],
       f"U452: in het Duits de datum zoals Duitsers hem schrijven ({_uit445['de_DE.UTF-8']!r})")
+# U474: klok niet vanzelf: een knop naar KDE's Datum en tijd (niet naar 'Meer instellingen', dat is Regio en taal).
+_tp474 = venster.paginas["tijd"]
+_tp474.toon((sys.modules["bugos_config_account"].Tijd("Europe/Amsterdam", False, False), "nl_NL"))
+_sa474 = sys.modules["bugos_settings_account"]
+_open474 = []
+_oud474, _sa474.kde_instelling = _sa474.kde_instelling, (lambda m: _open474.append(m))
+_tp474.zelf_rij.geklikt.emit()
+_sa474.kde_instelling = _oud474
+klopt(not _tp474.zelf_rij.isHidden() and _open474 == ["kcm_clock"] and "Meer instellingen" not in _tp474.klok_rij.uitleg.text(),
+      f"U474: klok zelf instellen opent Datum en tijd ({_open474}, {_tp474.klok_rij.uitleg.text()!r})")
+# U475: 'Nu updaten' werkt ook je eigen apps en je .rpm/.deb-programma's bij.
+from PySide6.QtCore import QProcess as _QP475
+_gestart475 = []
+_oud475 = _QP475.startDetached
+sys.modules["bugos_settings_systeem"].QProcess.startDetached = staticmethod(lambda *a, **k: (_gestart475.append(a), True)[1])
+venster.paginas["updates"].klaar_met("nu", 0, "No upgrade available.\n")
+sys.modules["bugos_settings_systeem"].QProcess.startDetached = _oud475
+klopt(any(a[0] == "flatpak" and "--user" in a[1] for a in _gestart475) and any("bugos-package" in a[0] for a in _gestart475),
+      f"U475: 'Nu updaten' werkt ook je eigen apps bij ({_gestart475})")
 # U397: op een klein scherm (hier 800×600) worden groottes waarbij niets meer past, niet aangeboden.
 _sp2 = venster.paginas["scherm"]
 _sp2.toon((None, False, 1.0))

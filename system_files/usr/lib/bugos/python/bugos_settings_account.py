@@ -60,6 +60,11 @@ class TijdPagina(Blad):
         self.auto.setAccessibleName(t("Tijd vanzelf instellen", "Set the time automatically"))
         self.klok_rij = Rij("klok", nu_tekst(), "", self.auto)
         g.voeg(self.klok_rij)
+        # Zelf de klok gelijkzetten: KDE's pagina Datum en tijd (niet 'Meer instellingen': dat is Regio en taal) (U474).
+        self.zelf_rij = Rij("klok", t("Klok zelf instellen…", "Set the clock yourself…"),
+                            t("Datum en tijd met de hand", "Date and time by hand"), klikbaar=True)
+        self.zelf_rij.geklikt.connect(lambda: kde_instelling("kcm_clock"))
+        g.voeg(self.zelf_rij)
         self.tik = QTimer(self)
         self.tik.setInterval(20000)
         self.tik.timeout.connect(lambda: self.klok_rij.titel.setText(nu_tekst()))
@@ -88,8 +93,9 @@ class TijdPagina(Blad):
         self.auto.zet_stil(tijd.auto)
         self.klok_rij.titel.setText(nu_tekst())
         self.klok_rij.zet_uitleg(t("Wordt vanzelf gelijkgezet via internet", "Set automatically over the internet")
-                                 if tijd.auto else t("Zet je zelf gelijk (bij 'Meer instellingen')",
-                                                     "You set it yourself (under 'More settings')"))
+                                 if tijd.auto else t("Zet je zelf gelijk met 'Klok zelf instellen…'",
+                                                     "You set it yourself with 'Set the clock yourself…'"))
+        self.zelf_rij.setVisible(not tijd.auto)
         self.zone_rij.zet_uitleg(bi.mooie_zone(tijd.zone, TAAL == "nl"))
         self.taal_rij.zet_uitleg(next((n for c, _l, n in bi.TALEN if c == code), code))
 

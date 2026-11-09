@@ -288,7 +288,9 @@ class Updates(Pagina):
                                 t("BugOS houdt zichzelf bij. Jij merkt er niks van.",
                                   "BugOS keeps itself up to date. You won't notice a thing."), True)
         self.hand = self._optie("lijn:verversen", "neutraal", t("Ik kies zelf wanneer", "I choose when"),
-                                t("Je krijgt een melding als er een update is.", "You get a notification when there is an update."),
+                                t("Je krijgt een melding als er een nieuwe BugOS is. Je apps werk je bij met 'Nu updaten' in Instellingen.",
+                                  "You get a notification when a new BugOS is available. Update your apps with 'Update now' "
+                                  "in Settings."),
                                 False)
         huidig = "auto"
         if bestaat("bugos-updates"):

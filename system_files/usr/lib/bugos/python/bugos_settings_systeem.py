@@ -177,8 +177,8 @@ class UpdatesPagina(Blad):
                  ("Uit: het gewone KDE-menu. Alt+F1 of de Windows-toets opent het.",
                   "Off: the regular KDE menu. Alt+F1 or the Windows key opens it.")),
                 ("snelmenu", "schakelaar", ("Snelmenu op de taakbalk", "Quick menu on the taskbar"),
-                 ("Grote knoppen voor wifi, bluetooth, geluid, donker en niet storen.",
-                  "Big buttons for Wi-Fi, Bluetooth, sound, dark and do not disturb."))):
+                 ("Grote knoppen voor wifi, bluetooth, game-modus, donker, niet storen en geluid.",
+                  "Big buttons for Wi-Fi, Bluetooth, game mode, dark, do not disturb and sound."))):   # (U476)
             g.voeg(Rij(ic, t(nl, en), t(unl, uen), self.schakel("bugos-panel", onderdeel)))
         g = self.kaart(t("Hulp", "Help"))
         for programma, ic, (nl, en), (unl, uen) in (
@@ -299,6 +299,11 @@ class UpdatesPagina(Blad):
             return
         self.nu.setEnabled(True)
         self.terug.setEnabled(True)
+        if wat == "nu" and code == 0:
+            # 'Nu updaten' werkt als beheerder alleen de apps voor iedereen bij. Ook je eigen apps (VS Code uit de
+            # ontwikkelaarsmodus) en je .rpm/.deb-programma's: anders kregen die met 'Ik kies zelf' nooit een update (U475).
+            QProcess.startDetached("flatpak", ["update", "--user", "--noninteractive", "--assumeyes"])
+            QProcess.startDetached("/usr/bin/bugos-package", ["--bijwerken"])
         if code in (126, 127):
             # pkexec: 126 = je klikte Annuleren, 127 = geen toestemming.
             self.melding.toon(t("Niets gedaan: er was geen toestemming.", "Nothing done: permission was not given."))
