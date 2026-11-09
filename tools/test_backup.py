@@ -192,6 +192,17 @@ _bd.schijven = lambda *a: [_bd.Schijf(apparaat="/dev/sda2", naam="DATA", soort="
 _over = bb.zonder_interne([Path("/run/media/x/DATA"), Path("/run/media/x/Stick")], bb.interne_plekken())
 _bd.schijven = _oud_sch
 klopt(_over == [Path("/run/media/x/Stick")], f"U226: Back-up biedt alleen schijven aan die je eruit haalt ({_over})")
+# U231: een oude back-up op een schijf in de computer kun je nog wel terugzetten (maar daar geen nieuwe maken).
+_binnen = TMP / "binnen"
+(_binnen / "BugOS-Backup" / "x@oud").mkdir(parents=True)
+(_binnen / "BugOS-Backup" / "x@oud" / "Documents").mkdir()
+_over2 = bb.zonder_interne([_binnen, Path("/run/media/x/Stick")], {str(_binnen)})
+bb.LAATSTE_INTERNE.clear()
+bb.LAATSTE_INTERNE.add(str(_binnen))
+klopt(_over2 == [_binnen, Path("/run/media/x/Stick")] and bb.alleen_terugzetten(_binnen)
+      and not bb.alleen_terugzetten(Path("/run/media/x/Stick")),
+      f"U231: een oude back-up op een schijf in de computer kun je terugzetten, maar je maakt er geen nieuwe op ({_over2})")
+bb.LAATSTE_INTERNE.clear()
 
 # U228: de back-upmap heet naar de vaste computernaam, niet naar wat het netwerk de computer noemt.
 import socket as _so  # noqa: E402

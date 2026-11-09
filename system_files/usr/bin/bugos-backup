@@ -117,7 +117,13 @@ def schijven() -> list[Path]:
             for p in sorted(basis.iterdir()):
                 if p.is_dir() and os.access(p, os.W_OK) and p.is_mount():
                     gevonden.append(p)
-    return zonder_interne(gevonden, interne_plekken())
+    interne = interne_plekken()
+    LAATSTE_INTERNE.clear()
+    LAATSTE_INTERNE.update(interne)
+    return zonder_interne(gevonden, interne)
+
+
+LAATSTE_INTERNE: set[str] = set()   # de schijven in de computer, van de laatste keer kijken
 
 
 def interne_plekken() -> set[str]:
@@ -130,8 +136,14 @@ def interne_plekken() -> set[str]:
 
 
 def zonder_interne(paden: list[Path], interne: set[str]) -> list[Path]:
-    """Een back-up hoort op iets wat je eruit haalt: gaat de computer kapot, dan ook een schijf erin (U226)."""
-    return [p for p in paden if str(p) not in interne]
+    """Een back-up hoort op iets wat je eruit haalt: gaat de computer kapot, dan ook een schijf erin (U226).
+    Staat er al een back-up op een schijf in de computer (van vroeger)? Dan blijft hij, om terug te zetten (U231)."""
+    return [p for p in paden if str(p) not in interne or backups_op(p)]
+
+
+def alleen_terugzetten(schijf: Path) -> bool:
+    """Een schijf in de computer: daar kun je wel een oude back-up van terugzetten, maar geen nieuwe op maken."""
+    return str(schijf) in LAATSTE_INTERNE
 
 
 HOSTNAAM = Path("/etc/hostname")
@@ -452,7 +464,7 @@ def venster() -> int:
             if self.druk():
                 return
             s = self.gekozen()
-            self.maak.setEnabled(s is not None)
+            self.maak.setEnabled(s is not None and not alleen_terugzetten(s))
             self.terugzetten.setEnabled(s is not None and bool(backups_op(s)))
 
         def ververs_schijven(self) -> None:
@@ -461,7 +473,9 @@ def venster() -> int:
             items = []
             for s in schijven():
                 extra = schijf_info(s)
-                if backups_op(s):
+                if alleen_terugzetten(s):
+                    extra += t("  ·  zit in de computer: alleen terugzetten", "  ·  inside the computer: restore only")
+                elif backups_op(s):
                     extra += t("  ·  heeft al een back-up", "  ·  already has a backup")
                 items.append((str(s), s.name, extra))
             self.kiezer.zet(items)
