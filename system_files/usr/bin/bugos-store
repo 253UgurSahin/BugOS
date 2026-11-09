@@ -243,6 +243,7 @@ class Winkel(Venster):
             self.melding.zet(t(f"{naam} wordt geïnstalleerd…", f"Installing {naam}…"), "bezig")
         zoek, app_id = begin_uit(args)
         if app_id:
+            app_id = echte_id(self.cat, app_id)
             gevonden = next((a for a in self.cat["apps"] if a["id"] == app_id), None)
             if gevonden is None:
                 start("plasma-discover", args[0])   # niet in onze selectie: de grote winkel op die app
@@ -361,15 +362,23 @@ def begin_uit(args: list[str]) -> tuple[str, str]:
     """(zoektekst, app-id) uit de opdracht: '--zoek <tekst>' of 'appstream://<id>'."""
     if len(args) >= 2 and args[0] == "--zoek":
         return " ".join(args[1:]), ""
-    if args and args[0].startswith("appstream://"):
-        return "", args[0][len("appstream://"):].removesuffix(".desktop")
+    if args and args[0].lower().startswith("appstream:"):
+        # Ook 'appstream:id' zonder // (U330).
+        return "", args[0][len("appstream:"):].lstrip("/").removesuffix(".desktop")
     return "", ""
+
+
+def echte_id(catalogus: dict, app_id: str) -> str:
+    """Het id zoals het in onze catalogus staat. Via KDE komt een link soms in kleine letters binnen
+    ('org.videolan.vlc'): dan toch de goede app (U330)."""
+    return next((a["id"] for a in catalogus["apps"] if a["id"].lower() == app_id.lower()), app_id)
 
 
 def main() -> int:
     args = sys.argv[1:]
     begin_zoek, begin_app = begin_uit(args)
     catalogus = lees_catalogus()
+    begin_app = echte_id(catalogus, begin_app) if begin_app else ""
     if begin_app and not any(a["id"] == begin_app for a in catalogus["apps"]):
         # Niet in onze selectie: open de grote winkel op die app.
         start("plasma-discover", args[0])

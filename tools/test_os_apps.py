@@ -1404,6 +1404,10 @@ _ww2.tweede_start(["--zoek", "foto", "bewerken"])
 _z2 = _ww2.zoek.text()
 gestart.clear()
 _ww2.tweede_start(["appstream://org.example.NietBijOns"])
+# U330: 'appstream:id' zonder // en een id in kleine letters (zo geeft KDE het soms door) vinden toch de app.
+_ww2.tweede_start(["appstream:org.videolan.vlc"])
+klopt(_ww2.zoek.text() == "VLC" and winkel.begin_uit(["appstream:org.videolan.VLC"]) == ("", "org.videolan.VLC"),
+      f"U330: een Flathub-link zonder // of in kleine letters vindt toch de app in de Winkel ({_ww2.zoek.text()!r})")
 klopt(_z1 == "Firefox" and _z2 == "foto bewerken" and gestart == [("plasma-discover", "appstream://org.example.NietBijOns")],
       f"U222: een tweede start van de Winkel gaat naar de gevraagde app of zoekt ({_z1!r}, {_z2!r}, {gestart})")
 _ww2.deleteLater()

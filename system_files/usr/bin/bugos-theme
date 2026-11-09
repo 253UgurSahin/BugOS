@@ -40,7 +40,7 @@ huidig() {
     esac
     # Een ander kleurenschema (bijv. Breeze Dark in de KDE-instellingen): donker als de vensters donker zijn (U325).
     achter="$(kreadconfig6 --file kdeglobals --group Colors:Window --key BackgroundNormal 2>/dev/null)"
-    IFS=, read -r r g b <<<"$achter"
+    IFS=, read -r r g b _ <<<"$achter"   # ook met een doorzichtigheid erachter (r,g,b,a) (U331)
     if [[ "$r$g$b" =~ ^[0-9]+$ ]] && [ $((r * 299 + g * 587 + b * 114)) -lt 128000 ]; then
         echo donker
     else

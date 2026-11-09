@@ -559,5 +559,8 @@ kopie bugos-theme
 nep kreadconfig6 'case "$*" in *ColorScheme*) echo BreezeDark ;; *BackgroundNormal*) echo 32,35,38 ;; esac'
 klopt '[ "$(HOME="$TMP/thuis" PATH="$TMP/bin:$PATH" bash "$TMP/bugos-theme" status 2>/dev/null)" = donker ]' \
     "U325: Breeze Dark (gekozen in de KDE-instellingen) telt als donker"
+nep kreadconfig6 'case "$*" in *ColorScheme*) echo BreezeDark ;; *BackgroundNormal*) echo 32,35,38,255 ;; esac'
+klopt '[ "$(HOME="$TMP/thuis" PATH="$TMP/bin:$PATH" bash "$TMP/bugos-theme" status 2>/dev/null)" = donker ]' \
+    "U331: een donkere kleur met doorzichtigheid (r,g,b,a) telt ook als donker"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
