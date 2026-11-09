@@ -285,6 +285,15 @@ MANGOHUD=1 MANGOHUD_CONFIGFILE="$MHC" draai bugos-game-mode aan
 klopt '! grep -q no_display "$MHC"' "U049: keuze net uit, zelfde sessie, game-modus aan: de teller is echt zichtbaar"
 MANGOHUD=1 MANGOHUD_CONFIGFILE="$MHC" draai bugos-game-mode uit
 klopt 'grep -qx no_display "$MHC"' "U049: ... en game-modus uit: meteen weer verborgen"
+# U054: ingelogd met game-modus aan (MANGOHUD=1, maar niet ons bestand), dan de keuze aan, dan game-modus uit:
+# dat de teller pas na opnieuw inloggen weggaat, moet erbij staan.
+draai bugos-game-mode fps aan
+MANGOHUD=1 draai bugos-game-mode aan
+rm -f "$TMP/meldingen"
+MANGOHUD=1 draai bugos-game-mode uit
+klopt 'grep -q "goes away after you log in again" "$TMP/meldingen" && grep -qx no_display "$MHC"' \
+    "U054: game-modus uit in een sessie zonder ons bestand: zegt 'na opnieuw inloggen', bestand klaar voor de volgende keer"
+draai bugos-game-mode fps uit
 # U035: je eigen MangoHud.conf (indeling) gaat mee in ons bestand.
 mkdir -p "$CF/MangoHud"
 printf 'fps_only\nposition=top-right\n' >"$CF/MangoHud/MangoHud.conf"

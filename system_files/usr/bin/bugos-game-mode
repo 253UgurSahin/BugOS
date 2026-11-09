@@ -114,13 +114,17 @@ uit() {
         niet_storen_uit
     fi
     rm -f "$ENVFILE" "$MARKER" "$STOREN_MARKER"
-    if [ -f "$FPS_METEEN" ] || fps_meteen_actief; then
-        # MangoHud blijft klaarstaan, alleen verborgen: meteen weg, ook in een game die al draait.
+    if fps_meteen_actief; then
+        # Deze sessie leest ons MangoHud-bestand: verbergen, en de teller is meteen weg (ook in een game die draait).
         mangohud_bestand verborgen
         melding "$(t "Game-modus staat uit" "Game mode is off")" ""
         return 0
     fi
-    systemctl --user unset-environment MANGOHUD 2>/dev/null
+    if [ -f "$FPS_METEEN" ]; then
+        mangohud_bestand verborgen   # klaar voor de volgende keer inloggen (dan leest de sessie het wel)
+    else
+        systemctl --user unset-environment MANGOHUD 2>/dev/null
+    fi
     # Had deze sessie de FPS-teller, dan blijft hij in games tot je opnieuw inlogt.
     if [ "${MANGOHUD:-}" = 1 ]; then
         melding "$(t "Game-modus staat uit" "Game mode is off")" \
