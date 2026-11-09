@@ -163,7 +163,7 @@ class Schijven:
             self._zijbalk_sleutels = None
             self.vul_zijbalk()
             return
-        naam = x.naam if len(x.naam) <= 15 and "(" not in x.naam else t("USB-stick", "USB stick")
+        naam = x.naam if len(x.naam) <= MAX_NAAM["exfat"] and "(" not in x.naam else t("USB-stick", "USB stick")
         self.beheer(x, leegmaak_stappen(x, naam),
                     t(f"'{x.naam}' leegmaken… Haal hem er niet uit.", f"Erasing '{x.naam}'… Do not unplug it."),
                     t(f"Klaar: '{naam}' is leeg.", f"Done: '{naam}' is empty."),
@@ -173,7 +173,7 @@ class Schijven:
     def neem_in_gebruik(self, x: Schijf) -> None:
         """Een nieuwe, lege schijf klaarmaken (zoals Schijfbeheer in Windows), met één vraag: de naam."""
         standaard = t("USB-stick", "USB stick") if x.soort == "stick" else t("Opslag", "Storage")
-        maximum = 15 if x.los else 16
+        maximum = MAX_NAAM["exfat"] if x.los else 16   # een losse schijf wordt exFAT
         naam = self.vraag_tekst(
             t("In gebruik nemen", "Set up"),
             t(f"BugOS maakt '{x.naam}' klaar, zodat je er bestanden op kunt zetten. Er staat nog niets op.\n\n"

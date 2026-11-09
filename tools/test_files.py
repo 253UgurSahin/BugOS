@@ -399,13 +399,17 @@ klopt("Leegmaken (alles wissen)…" not in [a.text() for a in venster.schijf_men
 _gewist: list = []
 _oud_vraag, _oud_beheer = venster.vraag_ja, venster.beheer
 venster.vraag_ja = lambda *a, **kw: True
-venster.beheer = lambda x, *a, **kw: _gewist.append(x.apparaat)
+_stappen: list = []
+venster.beheer = lambda x, *a, **kw: (_gewist.append(x.apparaat), _stappen.append(str(a[0]) if a else ""))
 andere = sch.Schijf("/dev/sdq1", "Andere stick", "stick", "/dev/sdq", "/dev/sdq1", fs="vfat")
 venster.leegmaak_schijf(andere)                     # zit er niet (meer) in
 venster.leegmaak_schijf(windows)                    # intern: nooit
 venster.leegmaak_schijf(venster.lijst_schijven[0])  # de stick die er echt in zit
 venster.vraag_ja, venster.beheer = _oud_vraag, _oud_beheer
 klopt(_gewist == ["/dev/sdx1"], "leegmaken: alleen de stick die er nu echt in zit (geen andere, geen interne)")
+# U058: exFAT kent hoogstens 11 tekens; "Stick van Bugie" (15) zou het wissen laten mislukken, dus een kortere naam.
+klopt(_stappen and "Stick van Bugie" not in _stappen[0] and "USB-stick" in _stappen[0],
+      "U058: leegmaken van een stick met een lange naam (15 tekens) gebruikt een naam die exFAT kent")
 klopt(venster.ruimte_balk is not None and venster.status.text() == "1 aangesloten", "Deze computer: ruimte bovenaan, en 1 aangesloten")
 from PySide6.QtCore import QEvent, Qt  # noqa: E402
 from PySide6.QtGui import QKeyEvent  # noqa: E402

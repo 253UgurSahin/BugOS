@@ -222,7 +222,8 @@ def dicht_stappen(s: Schijf) -> list[list[str]]:
     return stappen
 
 
-MAX_NAAM = {"vfat": 11, "exfat": 15, "ntfs": 32, "ext4": 16, "ext3": 16, "ext2": 16, "btrfs": 255, "xfs": 12}
+# exFAT: 11 tekens (exfatprogs en udisks weigeren een langere naam, en dan mislukt wissen of instellen).
+MAX_NAAM = {"vfat": 11, "exfat": 11, "ntfs": 32, "ext4": 16, "ext3": 16, "ext2": 16, "btrfs": 255, "xfs": 12}
 
 
 def hernoem_stappen(s: Schijf, naam: str) -> list[list[str]]:
