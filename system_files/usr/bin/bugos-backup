@@ -17,7 +17,6 @@ import getpass
 import json
 import os
 import shutil
-import socket
 import subprocess
 import sys
 import time
@@ -135,8 +134,21 @@ def zonder_interne(paden: list[Path], interne: set[str]) -> list[Path]:
     return [p for p in paden if str(p) not in interne]
 
 
+HOSTNAAM = Path("/etc/hostname")
+
+
+def computernaam() -> str:
+    """De vaste naam van de computer. Niet de naam die het netwerk geeft (school, kantoor): die wisselt, en dan
+    begon elke back-up in een nieuwe map, helemaal opnieuw (U228)."""
+    try:
+        naam = HOSTNAAM.read_text(encoding="utf-8").strip()
+    except OSError:
+        naam = ""
+    return naam or "bugos"   # zonder eigen naam heet BugOS 'bugos' (DEFAULT_HOSTNAME)
+
+
 def backup_doel(schijf: Path) -> Path:
-    return schijf / "BugOS-Backup" / f"{getpass.getuser()}@{socket.gethostname()}"
+    return schijf / "BugOS-Backup" / f"{getpass.getuser()}@{computernaam()}"
 
 
 def backups_op(schijf: Path) -> list[Path]:

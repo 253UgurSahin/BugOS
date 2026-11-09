@@ -193,5 +193,19 @@ _over = bb.zonder_interne([Path("/run/media/x/DATA"), Path("/run/media/x/Stick")
 _bd.schijven = _oud_sch
 klopt(_over == [Path("/run/media/x/Stick")], f"U226: Back-up biedt alleen schijven aan die je eruit haalt ({_over})")
 
+# U228: de back-upmap heet naar de vaste computernaam, niet naar wat het netwerk de computer noemt.
+import socket as _so  # noqa: E402
+
+_oud_h, _oud_gh = bb.HOSTNAAM, _so.gethostname
+_so.gethostname = lambda: "dhcp-10-1-2-3.school.lan"
+bb.HOSTNAAM = TMP / "hostname"
+bb.HOSTNAAM.write_text("thuis-pc\n")
+_d1 = bb.backup_doel(SCHIJF).name
+bb.HOSTNAAM = TMP / "geen-hostname"
+_d2 = bb.backup_doel(SCHIJF).name
+bb.HOSTNAAM, _so.gethostname = _oud_h, _oud_gh
+klopt(_d1.endswith("@thuis-pc") and _d2.endswith("@bugos"),
+      f"U228: de back-upmap wisselt niet van naam op een ander netwerk ({_d1}, {_d2})")
+
 print(f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)
