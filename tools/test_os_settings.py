@@ -795,6 +795,9 @@ paren = (("Installing BugOS did not work", "is niet gelukt"), ("One more step", 
          ("could not be added", "kon niet worden toegevoegd"))
 klopt(len(teksten) == 3 and all(0 <= x.find(en) < x.find(nl) for x, (en, nl) in zip(teksten, paren)),
       "U027: de vensters bij het installeren: eerst Engels, dan Nederlands")
+klopt("mokutil --timeout -1" in iso_bouw and "Press a key" in iso_bouw and "Druk op een toets" in iso_bouw
+      and "'Something is not working' after the restart" not in iso_bouw,
+      "U289: Nvidia en Secure Boot: het blauwe scherm wacht op je, de uitleg zegt 'druk op een toets', geen dood spoor naar Hulp")
 
 
 venster.close()
