@@ -79,9 +79,17 @@ klopt 'grep -qi "vol\|full" "$TMP/fouten" 2>/dev/null && ! grep -qi "internet\|o
 # U465: programma's uit een .rpm/.deb worden bijgewerkt (elke dag, bij 'Updates vanzelf').
 nep distrobox 'case "$1" in list) echo " bugos-ubuntu ";; upgrade) echo "$2" >>"'"$TMP"'/bijgewerkt";; esac; exit 0'
 rm -f "$TMP/bijgewerkt"
+mkdir -p "$TMP/thuis/.local/share/containers"
 HOME="$TMP/thuis" PATH="$TMP/bin:$PATH" bash "$TMP/bugos-package" --bijwerken >/dev/null 2>&1
 SDU="$ROOT/system_files/usr/lib/systemd/user"
 klopt '[ "$(cat "$TMP/bijgewerkt" 2>/dev/null)" = bugos-ubuntu ] && grep -qx "ExecCondition=/usr/bin/bugos-updates mag-vanzelf" "$SDU/bugos-update-doosjes.service" && grep -qx "OnCalendar=daily" "$SDU/bugos-update-doosjes.timer" && grep -q "enable bugos-update-doosjes.timer" "$ROOT/build_files/build.sh"' \
     "U465: programma's uit een .rpm/.deb krijgen ook updates (hun doosje, elke dag bij 'Updates vanzelf')"
+# U473: niet via een hotspot, opnieuw proberen als het mislukte, en niets doen voor een account zonder doosjes.
+nep distrobox 'case "$1" in list) echo " bugos-ubuntu ";; upgrade) echo "$2" >>"'"$TMP"'/bijgewerkt"; exit 1;; esac; exit 0'
+HOME="$TMP/thuis" PATH="$TMP/bin:$PATH" bash "$TMP/bugos-package" --bijwerken >/dev/null 2>&1; c1=$?
+rm -f "$TMP/bijgewerkt"
+HOME="$TMP/leeg" PATH="$TMP/bin:$PATH" bash "$TMP/bugos-package" --bijwerken >/dev/null 2>&1; c2=$?
+klopt '[ "$c1" -ne 0 ] && [ "$c2" -eq 0 ] && [ ! -e "$TMP/bijgewerkt" ] && grep -q "Metered" "$SDU/bugos-update-doosjes.service" && grep -qx "Restart=on-failure" "$SDU/bugos-update-doosjes.service"' \
+    "U473: doosjes bijwerken: niet via een hotspot, later opnieuw als het mislukte, niets zonder doosjes ($c1, $c2)"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

@@ -15,13 +15,16 @@
 # bugos-package --bijwerken: de doosjes van BugOS bijwerken (elke dag, bij 'Updates vanzelf') (U465).
 if [ "${1:-}" = --bijwerken ]; then
     command -v distrobox >/dev/null 2>&1 || exit 0
+    # Nog nooit een doosje gemaakt (geen podman-opslag)? Dan podman niet eens starten (U473).
+    [ -d "${XDG_DATA_HOME:-$HOME/.local/share}/containers" ] || exit 0
     lijst="$(distrobox list 2>/dev/null)"
+    mislukt=0
     for doos in bugos-fedora bugos-ubuntu; do
         if grep -q " $doos " <<<"$lijst"; then
-            distrobox upgrade "$doos" >/dev/null 2>&1 || echo "bugos-package: $doos bijwerken lukte niet" >&2
+            distrobox upgrade "$doos" >/dev/null 2>&1 || { echo "bugos-package: $doos bijwerken lukte niet" >&2; mislukt=1; }
         fi
     done
-    exit 0
+    exit "$mislukt"   # mislukt: systemd probeert het later opnieuw (U473)
 fi
 
 BESTAND="${1:-}"
