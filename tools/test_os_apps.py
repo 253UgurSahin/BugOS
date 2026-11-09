@@ -561,6 +561,23 @@ for pagina in (welkom.Uiterlijk(), welkom.Updates()):
     namen = [lezer(k)[1] for k in kaarten]
     klopt(kaarten and all(namen), f"U016: Welkom ({type(pagina).__name__}): elke keuze heeft een naam: {namen}")
 
+# U074: Welkom > 'Wat ga je doen?': Volgende, Terug, Volgende start niets twee keer, en uitzetten na het starten kan
+# hier niet meer (het loopt al), dat zegt de pagina.
+_gestart: list = []
+_oud_start = welkom.start
+welkom.start = lambda *a: _gestart.append(a)
+jij = welkom.Jij()
+jij.dev.schuif.setChecked(True)
+jij.gamer.schuif.setChecked(True)
+jij.bij_volgende()
+jij.bij_volgende()
+jij.oud.schuif.setChecked(True)
+jij.bij_volgende()
+welkom.start = _oud_start
+klopt(_gestart == [("bugos-developer", "aan"), ("steam",), ("bugos-light-mode", "aan")]
+      and not jij.dev.schuif.isEnabled() and not jij.al_bezig.isHidden(),
+      f"U074: Welkom start elke keuze maar één keer, en zegt dat het al loopt ({_gestart})")
+
 os.environ["BUGOS_INSTELLINGEN_VOORBEELD"] = "1"
 inst = laad("bugos_instellingen", "bugos-settings")
 from bugos_shell import Rij  # noqa: E402
