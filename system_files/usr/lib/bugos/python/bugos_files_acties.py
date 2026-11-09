@@ -19,7 +19,7 @@ from pathlib import Path
 
 from bugos_ui import t
 from bugos_files_plekken import thuis, zit_in
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QThread, QUrl, Signal
 
 
 # ========================================================= veilige acties ===
@@ -132,6 +132,30 @@ def prullenbak_inhoud() -> list[tuple[Path, Path, Path | None]]:
     return uit
 
 
+def vergeet_voorbeelden(pad: Path, echt: Path | None = None) -> None:
+    """Haal de bewaarde voorbeeldjes (~/.cache/thumbnails) weg van iets wat echt weg is: daarin staan een
+    verkleinde foto én de naam van het bestand (U244). pad is waar het stond; echt is waar het nu nog is (in de
+    prullenbak), om een map door te lopen."""
+    import hashlib
+    cache = Path(os.environ.get("XDG_CACHE_HOME", thuis() / ".cache")) / "thumbnails"
+    if not cache.is_dir():
+        return
+    plekken = [pad]
+    bron = echt or pad
+    if bron.is_dir() and not bron.is_symlink():
+        for wortel, _mappen, bestanden in os.walk(bron):
+            for b in bestanden:
+                plekken.append(pad / Path(wortel).relative_to(bron) / b)
+    for p in plekken:
+        uri = QUrl.fromLocalFile(str(p)).toString(QUrl.ComponentFormattingOption.FullyEncoded)
+        naam = hashlib.md5(uri.encode()).hexdigest() + ".png"
+        for maat in ("normal", "large", "x-large", "xx-large"):
+            try:
+                (cache / maat / naam).unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
 def prullenbak_legen() -> int:
     """Gooi alles in de prullenbak echt weg. Geeft terug hoeveel dingen niet weg konden.
 
@@ -152,7 +176,11 @@ def prullenbak_legen() -> int:
 
     if (bak / "info").is_dir():
         for info in (bak / "info").glob("*.trashinfo"):
-            if weg(bak / "files" / info.name[: -len(".trashinfo")]):
+            ding = bak / "files" / info.name[: -len(".trashinfo")]
+            herkomst = lees_herkomst(info)
+            if herkomst is not None:
+                vergeet_voorbeelden(herkomst, ding)
+            if weg(ding):
                 info.unlink(missing_ok=True)
             else:
                 mislukt += 1
@@ -540,6 +568,7 @@ class Weggooien(QThread):
     def run(self) -> None:
         weg, fout = 0, ""
         for p in self.paden:
+            vergeet_voorbeelden(p)   # (U244)
             try:
                 if p.is_dir() and not p.is_symlink():
                     shutil.rmtree(p)

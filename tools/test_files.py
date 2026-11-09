@@ -167,6 +167,35 @@ klopt(mislukt == 1 and [x[0].name for x in b.prullenbak_inhoud()] == ["vast"],
       "prullenbak legen: wat niet weg kan, telt als mislukt en blijft zichtbaar; de rest is weg")
 b.prullenbak_legen()
 
+# U244: prullenbak legen en 'echt weggooien' halen ook de bewaarde voorbeeldjes weg (daar staat de naam in).
+import bugos_files_acties as _ac  # noqa: E402
+import bugos_files_tegels as _tg  # noqa: E402
+
+_cache = Path(os.environ.get("XDG_CACHE_HOME", TMP / "thuis" / ".cache")) / "thumbnails"
+
+
+def _maak_thumb(pad: Path, maat: str = "large") -> Path:
+    _u, _n, _c = _tg._thumb_plek(str(pad))
+    (_c / maat).mkdir(parents=True, exist_ok=True)
+    (_c / maat / _n).write_bytes(b"png")
+    return _c / maat / _n
+
+
+(docs / "geheim (1).pdf").write_text("p")
+(docs / "map met foto's").mkdir()
+(docs / "map met foto's" / "a.jpg").write_text("j")
+_t1 = _maak_thumb(docs / "geheim (1).pdf")
+_t2 = _maak_thumb(docs / "map met foto's" / "a.jpg", "normal")
+b.naar_prullenbak(docs / "geheim (1).pdf")
+b.naar_prullenbak(docs / "map met foto's")
+b.prullenbak_legen()
+(docs / "op-stick.png").write_text("s")
+_t3 = _maak_thumb(docs / "op-stick.png", "x-large")
+_wg = _ac.Weggooien([docs / "op-stick.png"])
+_wg.run()
+klopt(not _t1.exists() and not _t2.exists() and not _t3.exists(),
+      "U244: een gewist bestand (prullenbak geleegd, of echt weggegooid) laat geen voorbeeldje met zijn naam achter")
+
 # 7c. snelkoppelingen: telt waar de koppeling zelf staat (kapot of naar een andere schijf)
 (docs / "kapot").symlink_to(TMP / "bestaat-niet")
 klopt(b.zelfde_schijf(docs / "kapot", thuis), "snelkoppeling: een kapotte koppeling in Documenten mag naar de prullenbak")
