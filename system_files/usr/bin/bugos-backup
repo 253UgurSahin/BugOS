@@ -628,8 +628,14 @@ def venster() -> int:
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Cancel)
             if vraag != QMessageBox.StandardButton.Yes:
                 return
+            opdrachten = terug_opdrachten(bron, Path.home())
+            if not opdrachten:
+                # De schijf is weg (eruit getrokken tijdens de vraag), of er staat niets in: niet 'Klaar!' zeggen (U140).
+                self.melding.zet(t("Er is niets om terug te zetten. Zit de schijf er nog in?",
+                                   "There is nothing to restore. Is the drive still plugged in?"), "fout")
+                return
             self.stand.update(klus="terug", schijf=schijf)
-            self.wachtrij[:] = terug_opdrachten(bron, Path.home())
+            self.wachtrij[:] = opdrachten
             self.bezig(t("Bezig met terugzetten… Nieuwere bestanden op je computer blijven gewoon staan.",
                          "Restoring… Newer files on your computer are kept."))
             self.volgende()

@@ -391,6 +391,31 @@ klopt(bb.wegschrijven(SCHIJF) == ["sync", "-f", str(SCHIJF)],
       "U012: de laatste stap is sync -f op de schijf zelf (niet de hele computer)")
 w.close()
 
+# ============ U140: terugzetten met niets om terug te zetten (stick eruit tijdens de vraag): niet 'Klaar!' ===
+w = open_venster(bb)
+_echt_vraag = bb.QMessageBox.question if hasattr(bb, "QMessageBox") else None
+from PySide6.QtWidgets import QMessageBox as _QMB  # noqa: E402
+
+_oud_q = _QMB.question
+_doel = bb.backup_doel(SCHIJF)
+
+
+def _ja_en_weg(*a, **k):
+    for _m in list(_doel.iterdir()):   # de stick 'valt eruit' terwijl de vraag openstaat
+        if _m.is_dir():
+            shutil.rmtree(_m)
+    return _QMB.StandardButton.Yes
+
+
+_QMB.question = staticmethod(_ja_en_weg)
+w.zet_terug()
+wacht(lambda: "terug" in w.melding.tekst.text() or "niets" in w.melding.tekst.text() or "nothing" in w.melding.tekst.text(), 3000)
+_QMB.question = _oud_q
+klopt("Klaar" not in w.melding.tekst.text() and "Done" not in w.melding.tekst.text(),
+      f"U140: niets om terug te zetten: geen 'Klaar! Je bestanden staan terug' ({w.melding.tekst.text()[:50]})")
+w.close()
+bb.zonder_venster(SCHIJF)   # de back-up weer maken voor de tests hierna
+
 # ======================================== U015: Back-up of Overstap sluiten terwijl hij bezig is ===
 # Een nep-rsync die even wacht (zo zien we het venster 'bezig'), daarna doet hij het echt.
 nep_programma("rsync", 'if [ -n "$BUGOS_TEST_VAST" ]; then exec /usr/bin/sleep 60; fi\n'

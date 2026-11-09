@@ -447,6 +447,11 @@ def venster() -> int:
             self.bron = Path(gekozen)
             self.deels = []
             self.wachtrij[:] = stappen(self.bron)
+            if not self.wachtrij:
+                # Stick eruit, of alleen het lijstje zonder mappen: niet 'Klaar!' zeggen (U140).
+                self.melding.zet(t("Er is niets om terug te zetten. Zit de schijf er nog in?",
+                                   "There is nothing to restore. Is the drive still plugged in?"), "fout")
+                return
             self.knop.setEnabled(False)
             self.kiezer.setEnabled(False)
             self.balk.show()
