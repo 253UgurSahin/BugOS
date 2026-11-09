@@ -1232,6 +1232,20 @@ Tests after: 20 test files passed (here).
 ### U483 [low] (from U454) The "these times apply on battery/charger" hint was visual only and missing on the Sleep row
   commit: 625831a   test: tools/test_os_settings.py
 
+## Round 39 (2026-11-09)
+Two reviewers: the round-38 fixes (no regressions; 1 likely hang guarded: U487), and a fresh sweep of "interactions
+between fixes" from rounds 30-38 (3 found, all low or low-medium: U488-U490). All fixed; tests after: 20 test files
+passed (here). No high or medium finding in this round.
+
+### U487 [low-medium, preventive] (from U480) The box-update lock could be inherited by podman and stay held all session; "Update now" had no time limit for your own apps
+  commit: 9ffc14b   test: tools/test_package.sh, tools/test_os_settings.py
+### U488 [low-medium] (U475 + U238) "Update now" in the update notification did not update your own apps or .rpm/.deb programs
+  commit: 45a59a0   test: tools/test_os_system.sh
+### U489 [low] (U420 + U432) A game-mode marker from wiped settings was no longer cleaned up by the quick menu
+  commit: 991d8ea   test: tools/test_game_mode.sh (status cleans up only when the lock is free)
+### U490 [low] (U431 + U393) Settings showed the "could not be saved" rollback warning as a green success, and could close itself
+  commit: d24477a   test: tools/test_os_settings.py
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -1363,6 +1377,12 @@ Tests after: 20 test files passed (here).
   labels may be English on a Dutch desktop if KDE's platform theme does not translate them.
 - U486 (round 38, cosmetic): a hidden row (the clock row with automatic time on, the lid row on a desktop) leaves a
   double divider line.
+- U491 (round 39, unsure): the Task Manager advice line ignores other accounts (they are one protected entry), so
+  it can name your small app as "using the most" while another account's Firefox fills the memory.
+- U492 (round 39, by design?): after "Back", the daily notification offers the newer version you just left; one
+  click stages it again.
+- U493 (round 39, translations): Settings shows bugos-updates' own failure line only if it starts with the same words
+  as t("Dat lukte niet"); translators must keep both the same.
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
