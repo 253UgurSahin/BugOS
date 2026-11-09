@@ -510,7 +510,10 @@ kaart = next((k for k in ww.kaarten if k.app["id"] == "org.videolan.VLC"), None)
 klopt(kaart is not None and kaart.knop.text() == "Installeren", "U013: een app die er echt niet is: 'Installeren'")
 # U052: de Winkel sluiten tijdens het installeren: niet afbreken, wachten en daarna vanzelf dicht;
 # mislukt het, dan blijft de Winkel open met de melding.
-nep_programma("flatpak", 'if [ "$1" = install ]; then /usr/bin/sleep 1; exit "${BUGOS_TEST_FLATPAK:-0}"; fi\nexit 0\n')
+nep_programma("flatpak", 'if [ "$1" = install ]; then echo "$*" >"$BUGOS_TEST_FLATPAK_ARGS"; /usr/bin/sleep 1; '
+                          '[ "${BUGOS_TEST_FLATPAK:-0}" = 9 ] && echo "error: Not authorized" && exit 1; '
+                          'exit "${BUGOS_TEST_FLATPAK:-0}"; fi\nexit 0\n')
+os.environ["BUGOS_TEST_FLATPAK_ARGS"] = str(TMP / "flatpak-args")
 vlc = next(a for a in cat["apps"] if a["id"] == "org.videolan.VLC")
 for _code, _verwacht in (("0", "dicht"), ("1", "open")):
     os.environ["BUGOS_TEST_FLATPAK"] = _code
@@ -527,6 +530,14 @@ for _code, _verwacht in (("0", "dicht"), ("1", "open")):
     else:
         klopt(_bleef and ww.isVisible() and "lukte niet" in ww.melding.tekst.text(),
               "U052: ... en mislukt het installeren, dan blijft de Winkel open met de melding")
+# U059: zonder --noninteractive (dan kan KDE om een beheerderswachtwoord vragen), en "geen toestemming" zegt dat.
+klopt("--noninteractive" not in (TMP / "flatpak-args").read_text() and "install" in (TMP / "flatpak-args").read_text(),
+      "U059: de Winkel installeert zonder --noninteractive, zodat om een wachtwoord gevraagd kan worden")
+os.environ["BUGOS_TEST_FLATPAK"] = "9"
+ww.show()
+ww.installeer(vlc)
+wacht(lambda: ww.proces.state() == ww.proces.ProcessState.NotRunning and ww.bezig_met is None, 8000)
+klopt("beheerder" in ww.melding.tekst.text(), f"U059: geen toestemming: de Winkel zegt dat een beheerder nodig is ({ww.melding.tekst.text()[:60]})")
 del os.environ["BUGOS_TEST_FLATPAK"]
 ww.close()
 
