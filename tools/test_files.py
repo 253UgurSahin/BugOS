@@ -205,12 +205,27 @@ _ub2 = (_ub / "log").read_text().count("mount")
 os.environ["PATH"] = f"{_ub}:{_oud_pad}"
 sch.losse_openen([sch.Schijf(apparaat="/dev/sdb1", naam="Stick", soort="stick", station="/dev/sdb", fs="vfat",
                              wortel="/run/media/x/Stick", grootte=31_000)])   # nu open
-sch.losse_openen([])                                                           # lsblk gaf even niets
+_oud_lsblk = os.environ.get("BUGOS_LSBLK")
+os.environ["BUGOS_LSBLK"] = ""                                                 # lsblk gaf even niets
+sch.losse_openen()
+if _oud_lsblk is None:
+    del os.environ["BUGOS_LSBLK"]
+else:
+    os.environ["BUGOS_LSBLK"] = _oud_lsblk
 sch.losse_openen([sch.Schijf(apparaat="/dev/sdb1", naam="Stick", soort="stick", station="/dev/sdb", fs="vfat",
                              grootte=32_000)])                                 # zelf weer dichtgezet
 os.environ["PATH"] = _oud_pad
 klopt((_ub / "log").read_text().count("mount") == _ub2,
       "U200: een stick die je zelf weer dichtzette, gaat niet opnieuw open (ook niet na een lege lsblk)")
+# U214: alleen de BugOS-schijf (geen andere schijf meer in de lijst): stick eruit en weer erin gaat weer open.
+_ub3 = (_ub / "log").read_text().count("mount")
+os.environ["PATH"] = f"{_ub}:{_oud_pad}"
+sch.losse_openen([sch.Schijf(apparaat="/dev/sdd1", naam="S2", soort="stick", station="/dev/sdd", fs="vfat")])
+sch.losse_openen([])                                                           # eruit: geen losse schijf meer
+sch.losse_openen([sch.Schijf(apparaat="/dev/sdd1", naam="S2", soort="stick", station="/dev/sdd", fs="vfat")])
+os.environ["PATH"] = _oud_pad
+klopt((_ub / "log").read_text().count("mount") == _ub3 + 2,
+      "U214: op een laptop met alleen de BugOS-schijf gaat een stick die eruit en weer erin ging, weer open")
 _sys = TMP / "sys-mmc"
 for _d, _t in (("mmcblk0", "MMC"), ("mmcblk1", "SD")):
     (_sys / "block" / _d / "device").mkdir(parents=True)
