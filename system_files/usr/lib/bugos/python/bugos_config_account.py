@@ -112,7 +112,10 @@ def formaten_voor(code: str, land: str) -> tuple[str, str | None]:
         return nu, HOUDEN   # al een Engelse streek (Brits, Iers, Amerikaans…): die houden
     if "_" not in nu or nu.startswith(("C", "POSIX")):
         return land, None
-    if nu.split("_")[1][:2] in EURO_LANDEN:
+    land_code = nu.split("_")[1][:2]
+    if land_code in ("US", "CA"):
+        return f"en_{land_code}", None   # in Amerika of Canada: het Engels van daar (U257)
+    if land_code in EURO_LANDEN:
         return "en_IE", None
     return "en_IE", nu   # dag/maand en 24 uur, zoals bijna overal buiten Amerika (U242)
 

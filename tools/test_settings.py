@@ -261,7 +261,7 @@ _ca._c.VOORBEELD = False
 _ca._c.kde_schrijf = lambda bestand, groep, sleutel, waarde: _geschreven.__setitem__(sleutel, waarde) or True
 _uit = {}
 for _nu, _verwacht in (("nl_NL.UTF-8", "en_IE.UTF-8"), ("en_GB.UTF-8", "en_GB.UTF-8"), ("", "en_US.UTF-8"),
-                       ("pl_PL.UTF-8", "en_IE.UTF-8")):
+                       ("pl_PL.UTF-8", "en_IE.UTF-8"), ("es_US.UTF-8", "en_US.UTF-8"), ("fr_CA.UTF-8", "en_CA.UTF-8")):
     _geschreven.clear()
     _ca._c.kde_lees = lambda bestand, groep, sleutel, standaard="", _w=_nu: _w if sleutel == "LANG" else standaard
     _oud_env = os.environ.pop("LANG", None)

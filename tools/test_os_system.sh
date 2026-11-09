@@ -461,6 +461,10 @@ if [ "$(id -u)" -eq 0 ]; then
     klopt '[ "$(stat -c %a "$TMP/plasmalogin.conf.d/50-bugos-login.conf" 2>/dev/null)" = 644 ]' \
         "U247: het inlogbestand is leesbaar voor het inlogscherm, ook met umask 077"
 fi
+nep id 'case "$*" in "-u") echo 0 ;; "-u nobody") echo 65534 ;; *) /usr/bin/id "$@" ;; esac'
+draai bugos-login aan nobody
+klopt '[ "$code" -eq 2 ]' "U258: 'nobody' (65534) en systeemgebruikers boven UID_MAX loggen niet vanzelf in"
+nep id 'echo 0'
 klopt 'grep -qx "umask 022" "$BIN/bugos-updates"' "U247: de updatekeuze is voor iedereen leesbaar, ook met umask 077"
 klopt 'grep -q "rpm-ostree-countme.timer" "$ROOT/build_files/system.sh"' "U250: de bouw zet de wekelijkse countme-tel van Fedora uit (BugOS verzamelt niets)"
 echo "$fouten fout(en)."

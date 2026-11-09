@@ -26,7 +26,12 @@ if ! [[ "$GEBRUIKER" =~ ^[a-z_][a-z0-9_.-]{0,31}$ ]] || ! id "$GEBRUIKER" >/dev/
     exit 2
 fi
 # Alleen echte mensen (geen root of systeemaccount) mogen vanzelf inloggen (U247).
-if [ "$WAT" = aan ] && [ "$(id -u "$GEBRUIKER")" -lt 1000 ]; then
+# Gewone gebruikers zitten tussen UID_MIN en UID_MAX van /etc/login.defs (Fedora: 1000-60000); 'nobody' en
+# systemd's eigen gebruikers daarboven niet (U258).
+MIN="$(awk '$1 == "UID_MIN" {print $2}' /etc/login.defs 2>/dev/null || true)"
+MAX="$(awk '$1 == "UID_MAX" {print $2}' /etc/login.defs 2>/dev/null || true)"
+NR="$(id -u "$GEBRUIKER")"
+if [ "$WAT" = aan ] && { [ "$NR" -lt "${MIN:-1000}" ] || [ "$NR" -gt "${MAX:-60000}" ]; }; then
     echo "Geen gewone gebruiker: '$GEBRUIKER'" >&2
     exit 2
 fi
