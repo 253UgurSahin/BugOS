@@ -79,17 +79,18 @@ uit() {
                 continue
             fi
             read -r bestand groep sleutel <<<"$regel"
+            # --notify: dan krijgen ook het paneel en open programma's de animaties meteen terug (U261).
             if [ "$waarde" = - ]; then
-                kwriteconfig6 --file "$bestand" --group "$groep" --key "$sleutel" --delete
+                kwriteconfig6 --file "$bestand" --group "$groep" --key "$sleutel" --notify --delete
             else
-                kwriteconfig6 --file "$bestand" --group "$groep" --key "$sleutel" "$waarde"
+                kwriteconfig6 --file "$bestand" --group "$groep" --key "$sleutel" --notify "$waarde"
             fi
         done <"$VOOR"
     else
         # Lichte stand van vóór deze versie: terug naar de standaard van KDE.
         for regel in "${INSTELLINGEN[@]}"; do
             read -r bestand groep sleutel <<<"$regel"
-            kwriteconfig6 --file "$bestand" --group "$groep" --key "$sleutel" --delete
+            kwriteconfig6 --file "$bestand" --group "$groep" --key "$sleutel" --notify --delete
         done
     fi
     if [ "$baloo_was" = aan ]; then

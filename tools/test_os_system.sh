@@ -211,6 +211,22 @@ klopt '[ $code -ne 0 ] && [ ! -e "$TMP/thuis/.config/bugos/ontwikkelaar-aan" ]' 
 nep distrobox 'exit 0'
 draai bugos-developer aan
 klopt '[ $code -eq 0 ] && [ -e "$TMP/thuis/.config/bugos/ontwikkelaar-aan" ]' "ontwikkelaar: alles gelukt -> aan"
+# U262: twee keer tegelijk aan (Welkom en Instellingen): de tweede wacht en ziet het doosje, geen "lukte niet".
+rm -f "$TMP/thuis/.config/bugos/ontwikkelaar-aan" "$TMP/doos-er" "$TMP/doos-bezig"
+nep distrobox 'case "$1" in
+list) [ -e "'"$TMP"'/doos-er" ] && echo "x | dev | y"; exit 0;;
+create) { [ -e "'"$TMP"'/doos-er" ] || [ -e "'"$TMP"'/doos-bezig" ]; } && exit 1
+    touch "'"$TMP"'/doos-bezig"; /usr/bin/sleep 2; touch "'"$TMP"'/doos-er"; rm -f "'"$TMP"'/doos-bezig";;
+esac; exit 0'
+: >"$TMP/vensters"
+nep kdialog 'echo "$*" >>"'"$TMP"'/vensters"'
+draai bugos-developer aan &
+/usr/bin/sleep 0.5
+draai bugos-developer aan
+wait
+klopt '! grep -qi "online" "$TMP/vensters" && [ -e "$TMP/thuis/.config/bugos/ontwikkelaar-aan" ]' \
+    "U262: twee keer tegelijk ontwikkelaarsmodus aan: geen 'lukte niet', en daarna staat hij aan"
+klopt '! grep -q "fedora-toolbox:latest" "$BIN/bugos-developer"' "U263: het dev-doosje gebruikt een vaste Fedora-versie, niet 'latest'"
 nep kdialog 'exit 0'
 
 # U018: qdbus6 bestaat niet op Fedora 44. Herstarten (Hulp) en KWin herladen (lichte stand) gaan via gdbus.

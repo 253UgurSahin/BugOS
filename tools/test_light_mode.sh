@@ -17,7 +17,7 @@ sed "s|/usr/share/bugos|$ROOT/system_files/usr/share/bugos|g" "$ROOT/system_file
 # Nep-KDE-instellingen: één bestand per bestand/groep/sleutel.
 K="$TMP/kde"
 nep kreadconfig6 'f="'"$K"'/$2.$4.$6"; [ -f "$f" ] && cat "$f"; exit 0'
-nep kwriteconfig6 'f="'"$K"'/$2.$4.$6"; if [[ " $* " == *" --delete "* ]]; then rm -f "$f"; else printf "%s" "${!#}" >"$f"; fi'
+nep kwriteconfig6 'echo "$*" >>"'"$TMP"'/kw-log"; f="'"$K"'/$2.$4.$6"; if [[ " $* " == *" --delete "* ]]; then rm -f "$f"; else printf "%s" "${!#}" >"$f"; fi'
 # Nep-zoeker: de gebruiker had hem zelf uitgezet.
 # Zoals de echte balooctl6: 'status' zegt "uit" op stderr (vertaald) met code 1; de keuze staat in baloofilerc.
 mkdir -p "$K"
@@ -36,6 +36,8 @@ draai aan   # nog een keer aan mag niets kapot maken
 draai uit
 klopt '[ "$(cat "$K/kwinrc.Plugins.blurEnabled" 2>/dev/null)" = true ]' "uit: je eigen instelling (wazig aan) komt terug"
 klopt '[ ! -e "$K/kdeglobals.KDE.AnimationDurationFactor" ]' "uit: wat niet ingesteld was, is weer niet ingesteld"
+klopt 'grep "AnimationDurationFactor" "$TMP/kw-log" | tail -1 | grep -q -- "--notify"' \
+    "U261: uit: de animaties komen meteen terug (--notify), niet pas na opnieuw inloggen"
 klopt '[ "$(cat "$K/baloofilerc.Basic Settings.Indexing-Enabled")" = false ]' "uit: de zoeker blijft uit, want die had je zelf uitgezet (U056)"
 # En stond hij aan, dan komt hij na 'uit' weer aan.
 printf true >"$K/baloofilerc.Basic Settings.Indexing-Enabled"
