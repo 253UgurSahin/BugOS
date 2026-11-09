@@ -540,5 +540,7 @@ klopt 'grep -q "org.freedesktop.Platform.VulkanLayer.MangoHud//24.08" "$TMP/fp-i
     "U264: de FPS-teller werkt ook in games uit de Winkel (MangoHud voor Flatpak)"
 klopt '! grep -q "^[A-Za-z]*=.*network-online" "$ROOT/system_files/usr/lib/systemd/system/bugos-first-boot.service" && ! grep -q "^[A-Za-z]*=.*network-online" "$ROOT/system_files/usr/lib/systemd/system/bugos-ondertekend.service" && grep -q "nm-online" "$BIN/bugos-first-boot"' \
     "U312: elke keer opstarten wacht niet op het netwerk voor de eerste-start- en ondertekend-dienst (ze wachten zelf)"
+klopt 'grep -q "compileall -q --invalidation-mode unchecked-hash /usr/lib/bugos/python" "$ROOT/build_files/build.sh" && grep -qx "\*\*/__pycache__" "$ROOT/.dockerignore"' \
+    "U313/U314: de Python-onderdelen staan vooraf vertaald in BugOS (en geen oude lokale __pycache__)"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

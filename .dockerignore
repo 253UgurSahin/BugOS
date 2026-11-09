@@ -6,3 +6,5 @@
 !Containerfile
 !build_files/
 !system_files/
+# Geen oude, lokaal gemaakte Python-bestanden mee de bouw in (U314).
+**/__pycache__
