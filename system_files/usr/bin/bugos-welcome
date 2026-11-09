@@ -38,7 +38,7 @@ if __name__ == "__main__" and "--eerste-keer" in sys.argv and _al_klaar():
 import bugos_ui  # noqa: E402
 from bugos_ui import (  # noqa: E402
     CONFIG, Chip, Groep, IcoonChip, Kaart, KeuzeKaart, Knop, SchakelRij, Tegel, achtergrond_pad, bestaat, draai,
-    label, maak_app, ronde_pixmap, start, t, uitvoeren,
+    label, maak_app, ronde_pixmap, schuifbaar, start, t, uitvoeren,
 )
 from bugos_welcome_panel import Zijpaneel  # noqa: E402
 from PySide6.QtCore import QLocale, QProcess, QRectF, QSize, Qt, QThread, QTimer, Signal  # noqa: E402
@@ -462,7 +462,7 @@ class Welkom(QWidget):
         rechts.setSpacing(0)
         self.stapels = QStackedWidget()
         for p in self.paginas:
-            self.stapels.addWidget(p)
+            self.stapels.addWidget(schuifbaar(p))
         rechts.addWidget(self.stapels, 1)
 
         onder = QHBoxLayout()

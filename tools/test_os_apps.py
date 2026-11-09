@@ -1340,6 +1340,15 @@ _open = _wk.isVisible()
 _wk.paginas[0].bezig = False
 wacht(lambda: not _wk.isVisible(), 3000)
 klopt(_open and not _wk.isVisible(), "U212: Welkom sluiten tijdens de wachtwoordvraag: eerst afwachten, dan dicht")
+# U401: op een laag scherm (1366x768 met 150%) vallen de knoppen niet buiten het venster: de pagina's kunnen schuiven.
+from PySide6.QtWidgets import QScrollArea as _QSA
+_wk401 = welkom.Welkom()
+_hoog401 = _wk401.minimumSizeHint().height()
+_alle401 = all(isinstance(_wk401.stapels.widget(i), _QSA) for i in range(_wk401.stapels.count()))
+_wk401.deleteLater()
+_bron401 = [(ROOT / "system_files/usr/bin" / n).read_text() for n in ("bugos-backup", "bugos-switch")]
+klopt(_alle401 and _hoog401 <= 500 and all("buiten.addWidget(schuifbaar(w))" in b for b in _bron401),
+      f"U401: Welkom, Back-up en Overstap schuiven op een laag scherm (Welkom minimaal {_hoog401} hoog)")
 
 # ========================== U208: een tweede start brengt het open venster naar voren (geen tweede venster) ===
 _meer = os.environ.pop("BUGOS_MEERDERE", None)

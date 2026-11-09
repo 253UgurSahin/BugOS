@@ -354,7 +354,7 @@ def zonder_venster(schijf: Path) -> int:
 def venster() -> int:
     from bugos_ui import (
         Banner, Chip, IcoonChip, Knop, SchijfKiezer, Voortgang, kop_met_icoon, label, maak_app, pagina,
-        raster, schijf_info, sectie, uitvoeren,
+        raster, schijf_info, schuifbaar, sectie, uitvoeren,
     )
     import threading
 
@@ -410,7 +410,7 @@ def venster() -> int:
             w, lay = pagina()
             buiten = QVBoxLayout(self)
             buiten.setContentsMargins(0, 0, 0, 0)
-            buiten.addWidget(w)
+            buiten.addWidget(schuifbaar(w))
             lay.addWidget(kop_met_icoon("lijn:opslag", "neutraal", t("Back-up", "Backup"),
                                         t("Zet je documenten, foto's, muziek, video's, bureaublad en downloads veilig "
                                           "op een USB-schijf. Er wordt nooit iets weggegooid.",

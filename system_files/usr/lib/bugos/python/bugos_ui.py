@@ -573,7 +573,7 @@ from bugos_widgets import (  # noqa: E402, F401  (doorgeven: apps halen dit uit 
 )
 from bugos_pages import (  # noqa: E402, F401
     Held, SchijfKiezer, Voortgang, Zijbalk, Zoekveld, achtergrond_pad, kader, kop, kop_met_icoon, logo_icoon,
-    merk_label, pagina, raster, ronde_pixmap, schijf_info, sectie,
+    merk_label, pagina, raster, ronde_pixmap, schijf_info, schuifbaar, sectie,
 )
 from bugos_shell import (  # noqa: E402, F401
     LEESBREEDTE, ZIJBALK_BREEDTE, ActieBalk, Melding, Pagina, Rij, Venster, app_kop, leeg_groep, ronde_knop,

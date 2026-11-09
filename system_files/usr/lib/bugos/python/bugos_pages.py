@@ -12,8 +12,8 @@ from pathlib import Path
 from PySide6.QtCore import QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QIcon, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QProgressBar, QVBoxLayout,
-    QWidget,
+    QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QProgressBar, QScrollArea,
+    QVBoxLayout, QWidget,
 )
 
 import bugos_ui  # DONKER via de module lezen: maak_app zet hem pas als de app start
@@ -284,6 +284,17 @@ def pagina(marge: tuple[int, int, int, int] = (40, 34, 40, 30), ruimte: int = 18
     lay.setContentsMargins(*marge)
     lay.setSpacing(ruimte)
     return w, lay
+
+
+def schuifbaar(w: QWidget) -> QScrollArea:
+    """Zet een pagina in een schuifvlak: op een klein scherm (of met grote letters) kun je naar de knoppen onderaan
+    schuiven, in plaats van dat ze buiten het venster vallen (U401)."""
+    vlak = QScrollArea()
+    vlak.setFrameShape(QFrame.Shape.NoFrame)
+    vlak.setWidgetResizable(True)
+    vlak.viewport().setAutoFillBackground(False)
+    vlak.setWidget(w)
+    return vlak
 
 
 def raster(kolommen: int = 3, ruimte: int = 12) -> tuple[QWidget, QGridLayout]:

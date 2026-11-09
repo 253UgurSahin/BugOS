@@ -262,8 +262,8 @@ def zonder_venster(bron: Path) -> int:
 
 def venster() -> int:
     from bugos_ui import (
-        Banner, Groep, IcoonChip, Knop, SchijfKiezer, Voortgang, kop_met_icoon, label, maak_app, pagina, sectie,
-        uitvoeren,
+        Banner, Groep, IcoonChip, Knop, SchijfKiezer, Voortgang, kop_met_icoon, label, maak_app, pagina, schuifbaar,
+        sectie, uitvoeren,
     )
     from PySide6.QtCore import QProcess, QTimer
     from PySide6.QtWidgets import QHBoxLayout, QMessageBox, QVBoxLayout, QWidget
@@ -277,7 +277,7 @@ def venster() -> int:
             w, lay = pagina()
             buiten = QVBoxLayout(self)
             buiten.setContentsMargins(0, 0, 0, 0)
-            buiten.addWidget(w)
+            buiten.addWidget(schuifbaar(w))
             lay.addWidget(kop_met_icoon("lijn:download", "neutraal", t("Je bestanden van Windows", "Your files from Windows"),
                                         t("Heb je met \"BugOS Overstap\" je bestanden op een USB-schijf gezet? "
                                           "Steek die schijf in en druk op de knop.",
