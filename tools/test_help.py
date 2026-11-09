@@ -54,6 +54,27 @@ klopt(u.stand == bh.OK and u.repareer is not None and ("nog geen printer" in tek
 antwoorden.update({("-p",): (0, "printer HP is idle.  enabled since Mon\n"), ("-e",): (0, "HP\n")})
 u = bh.controle_printer()
 klopt(u.stand == bh.OK and u.repareer is None, "printer: met een printer die klaarstaat 'Printer is klaar'")
+# U090: "unknown" met een verbinding is geen "Geen verbinding".
+antwoorden.update({("-t", "-f", "CONNECTIVITY", "general"): (0, "unknown\n"),
+                   ("-t", "-f", "STATE", "general"): (0, "connected\n")})
+u = bh.controle_internet()
+klopt(u.stand == bh.OK, f"U090: internet 'unknown' maar wel verbonden: geen 'Geen verbinding' ({u.tekst})")
+antwoorden[("-t", "-f", "STATE", "general")] = (0, "disconnected\n")
+klopt(bh.controle_internet().stand == bh.PROBLEEM, "U090: internet 'unknown' en niet verbonden: wel 'Geen verbinding'")
+# U091: na 'Opnieuw verbinden' wachten tot er weer internet is, voor Hulp opnieuw kijkt.
+_gedaan: list = []
+bh.draai = lambda *cmd, **kw: (_gedaan.append(cmd), (0, ""))[1]
+bh.herstart_netwerk()
+klopt(_gedaan and _gedaan[-1][0] == "nm-online", f"U091: na opnieuw verbinden wachten op het netwerk ({_gedaan[-1:]})")
+# U092: Hulp kijkt niet online, dus zegt niet 'alles is bijgewerkt'.
+import json as _json  # noqa: E402
+for _modus in ("auto", "hand"):
+    bh.draai = lambda *cmd, m=_modus, **kw: (0, _json.dumps({"deployments": [{"booted": True, "timestamp": 5}]})) \
+        if cmd[0] == "rpm-ostree" else (0, m + "\n")
+    u = bh.controle_updates()
+    klopt(u.stand == bh.OK and "bijgewerkt" not in u.tekst and "up to date" not in u.tekst
+          and ("herstart" in u.tekst or "restart" in u.tekst),
+          f"U092: updates ({_modus}): zegt wat Hulp weet, niet 'alles is bijgewerkt' ({u.tekst})")
 bh.draai, bh.bestaat = _echt
 
 bh.CONTROLES = [trage_controle]

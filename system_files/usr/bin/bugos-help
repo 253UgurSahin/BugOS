@@ -60,13 +60,32 @@ def controle_internet() -> Uitslag:
                        t("Je hebt wel netwerk, maar geen internet. Vaak helpt het om opnieuw te verbinden.",
                          "You have a network but no internet. Reconnecting often helps."),
                        herstart_netwerk, t("Opnieuw verbinden", "Reconnect"))
+    # "unknown": NetworkManager heeft (nog) niet gekeken, bijv. net na verbinden of als die controle uit staat.
+    # Is er wel een verbinding, dan niet "geen verbinding" zeggen (U090).
+    if stand in ("unknown", "") and draai("nmcli", "-t", "-f", "STATE", "general")[1].strip().startswith("connected"):
+        return Uitslag(naam, OK, t("Je bent verbonden met een netwerk.", "You are connected to a network."))
     return Uitslag(naam, PROBLEEM, t("Geen verbinding. Kies hieronder je wifi.", "Not connected. Choose your Wi-Fi."),
                    lambda: kde_instelling("kcm_networkmanagement"), t("Wifi kiezen", "Choose Wi-Fi"))
+
+
+def wacht_op_netwerk(seconden: int = 20) -> None:
+    """nmcli zet het netwerk aan en is meteen klaar; de verbinding komt pas een paar tellen later. Wacht daarop,
+    anders kijkt Hulp te vroeg en zegt hij 'geen verbinding' (U091)."""
+    if bestaat("nm-online"):
+        draai("nm-online", "-q", "-t", str(seconden), timeout=seconden + 5)
+        return
+    import time
+    eind = time.monotonic() + seconden
+    while time.monotonic() < eind:
+        if draai("nmcli", "networking", "connectivity", "check", timeout=10)[1].strip() == "full":
+            return
+        time.sleep(1)
 
 
 def herstart_netwerk() -> None:
     draai("nmcli", "networking", "off", timeout=10)
     draai("nmcli", "networking", "on", timeout=10)
+    wacht_op_netwerk()
 
 
 def controle_wifi() -> Uitslag:
@@ -80,7 +99,8 @@ def controle_wifi() -> Uitslag:
     _, radio = draai("nmcli", "-t", "-f", "WIFI", "radio")
     if radio.strip() != "enabled":
         return Uitslag(naam, PROBLEEM, t("Wifi staat uit.", "Wi-Fi is turned off."),
-                       lambda: (draai("rfkill", "unblock", "wifi"), draai("nmcli", "radio", "wifi", "on")),
+                       lambda: (draai("rfkill", "unblock", "wifi"), draai("nmcli", "radio", "wifi", "on"),
+                                wacht_op_netwerk()),
                        t("Wifi aanzetten", "Turn Wi-Fi on"))
     return Uitslag(naam, OK, t("Wifi staat aan.", "Wi-Fi is on."))
 
@@ -187,7 +207,13 @@ def controle_updates() -> Uitslag:
                        lambda: start("gdbus", "call", "--session", "--dest", "org.kde.LogoutPrompt", "--object-path",
                                      "/LogoutPrompt", "--method", "org.kde.LogoutPrompt.promptReboot"),
                        t("Nu herstarten", "Restart now"))
-    return Uitslag(naam, OK, t("Alles is bijgewerkt.", "Everything is up to date."))
+    # Hulp kijkt niet online: zeg alleen wat we weten (U092). Bij 'zelf doen' kan er online wel iets nieuws zijn.
+    modus = draai("bugos-updates", "status", timeout=5)[1].strip() if bestaat("bugos-updates") else "auto"
+    if modus == "hand":
+        return Uitslag(naam, OK, t("Er wacht geen update op een herstart. Nieuwe updates zoek je in de BugOS Winkel.",
+                                   "No update is waiting for a restart. Look for new updates in the BugOS Store."))
+    return Uitslag(naam, OK, t("Updates gaan vanzelf. Er wacht er nu geen op een herstart.",
+                               "Updates are automatic. None is waiting for a restart right now."))
 
 
 CONTROLES = [controle_internet, controle_wifi, controle_bluetooth, controle_geluid,
