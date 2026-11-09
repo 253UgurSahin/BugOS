@@ -108,6 +108,11 @@ import bugos_config_scherm as _bcs  # noqa: E402
 _bron = (ROOT / "system_files" / "usr" / "lib" / "bugos" / "python" / "bugos_config_scherm.py").read_text(encoding="utf-8")
 klopt('t("Stip (licht)", "Dot (light)")' in _bron and 't("Stip (donker)", "Dot (dark)")' in _bron,
       "U063: de achtergrondnamen worden vertaald (Dot (light) / Dot (dark))")
+os.environ["BUGOS_ACHTERGRONDEN"] = str(ROOT / "system_files/usr/share/wallpapers/bugos/contents")
+_lijst = bi.bugos_achtergronden()
+del os.environ["BUGOS_ACHTERGRONDEN"]
+klopt(_lijst and Path(_lijst[0][1]).is_dir() and (Path(_lijst[0][1]) / "metadata.json").exists() and len(_lijst) == 3,
+      f"U131: eerst de BugOS-achtergrond die meewisselt met licht en donker (het hele pakket) ({[n for n, _p in _lijst]})")
 
 
 # U002: inloggen zonder wachtwoord op Fedora 44 (Plasma Login); SDDM alleen als Plasma Login er niet is.

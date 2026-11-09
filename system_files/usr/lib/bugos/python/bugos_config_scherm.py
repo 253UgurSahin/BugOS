@@ -247,6 +247,9 @@ def bugos_achtergronden() -> list[tuple[str, str]]:
     """[(naam, pad)] van de achtergronden van BugOS zelf."""
     basis = Path(os.environ.get("BUGOS_ACHTERGRONDEN", "/usr/share/wallpapers/bugos/contents"))
     lijst = []
+    # Eerst die van het begin: het hele pakket, dat zelf meewisselt met licht en donker (U131).
+    if (basis / "images").is_dir() and (basis / "images_dark").is_dir():
+        lijst.append((t("Stip (licht en donker)", "Dot (light and dark)"), str(basis.parent)))
     for naam, map_ in ((t("Stip (licht)", "Dot (light)"), "images"), (t("Stip (donker)", "Dot (dark)"), "images_dark")):
         beelden = sorted((basis / map_).glob("*.jpg"))
         if beelden:

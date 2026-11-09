@@ -253,7 +253,8 @@ class UiterlijkPagina(Blad):
             k.setCursor(Qt.CursorShape.PointingHandCursor)
             k.setToolTip(naam)
             k.setAccessibleName(naam)   # een schermlezer hoort welke achtergrond het is
-            beeld = QPixmap(pad)
+            # Het pakket (licht en donker): laat zijn eigen voorbeeldplaatje zien.
+            beeld = QPixmap(str(Path(pad) / "contents" / "screenshot.jpg") if Path(pad).is_dir() else pad)
             if not beeld.isNull():
                 k.setIcon(beeld.scaled(QSize(320, 180), Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                                        Qt.TransformationMode.SmoothTransformation))
