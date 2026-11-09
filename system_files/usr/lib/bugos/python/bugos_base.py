@@ -110,6 +110,10 @@ def kde_instelling(module: str) -> None:
 
 def zoeksleutel(tekst: str) -> str:
     """Tekst om in te zoeken: kleine letters zonder accenten, zodat 'izleyici' 'İzleyici' vindt (Turks), 'istanbul'
-    'İstanbul tatil.jpg' en 'cafe' 'café' (ook als de é uit twee tekens bestaat, zoals op een Mac) (U268)."""
+    'İstanbul tatil.jpg' en 'cafe' 'café' (ook als de é uit twee tekens bestaat, zoals op een Mac) (U268).
+    Precies dezelfde regel als zoeksleutel() in StartMenu.qml en bugos-start-data: NFKD, kleine letters, de
+    accenten U+0300-U+036F weg, ß wordt ss en ς wordt σ (U280)."""
+    import re
     import unicodedata
-    return "".join(c for c in unicodedata.normalize("NFKD", str(tekst).casefold()) if not unicodedata.combining(c))
+    t = re.sub("[\u0300-\u036f]", "", unicodedata.normalize("NFKD", str(tekst)).lower())
+    return t.replace("ß", "ss").replace("ς", "σ")

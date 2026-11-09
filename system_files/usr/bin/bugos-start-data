@@ -150,8 +150,11 @@ def lees_desktop(pad: Path) -> dict | None:
 
 def zoeksleutel(tekst: str) -> str:
     """Tekst om in te zoeken: kleine letters zonder accenten, zodat 'izleyici' 'İzleyici' vindt (Turks) en 'cafe'
-    'café' (ook als de é uit twee tekens bestaat, zoals op een Mac) (U268). Dezelfde regel als StartMenu.qml."""
-    return "".join(c for c in unicodedata.normalize("NFKD", tekst.casefold()) if not unicodedata.combining(c))
+    'café' (U268). Precies dezelfde regel als StartMenu.qml en bugos_base: NFKD, kleine letters, U+0300-U+036F weg,
+    ß wordt ss en ς wordt σ (U280)."""
+    import re
+    t = re.sub("[\u0300-\u036f]", "", unicodedata.normalize("NFKD", tekst).lower())
+    return t.replace("ß", "ss").replace("ς", "σ")
 
 
 def alle_apps() -> list[dict]:

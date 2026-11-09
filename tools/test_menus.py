@@ -130,6 +130,19 @@ for _w in ("izleyici", "IZLEYICI", "İzleyici", "cafe", "café"):
     _tr[_w] = _open[-1] if _open else None
 klopt(_tr["izleyici"] == _tr["IZLEYICI"] == _tr["İzleyici"] == "tr.desktop" and _tr["cafe"] == _tr["café"] == "cafe.desktop",
       f"U268: zoeken in het startmenu vindt 'İzleyici' met 'izleyici' en 'Café' met 'cafe' ({_tr})")
+# U280: de zoeksleutel van het startmenu (QML) is precies die van bugos-start-data (Python): ook ß, ς en kana.
+import sys as _sys  # noqa: E402
+from PySide6.QtCore import Q_ARG, Q_RETURN_ARG, QMetaObject  # noqa: E402
+
+_sys.path.insert(0, str(QML.parents[6] / "lib" / "bugos" / "python"))
+import bugos_base as _bb  # noqa: E402
+
+_anders = []
+for _w in ("größe", "Straße", "οδηγός", "İstanbul", "がぞう", "Café", "ﬁle", "Ǆ"):
+    _qml = QMetaObject.invokeMethod(_sm, "zoeksleutel", Q_RETURN_ARG("QVariant"), Q_ARG("QVariant", _w))
+    if _qml != _bb.zoeksleutel(_w):
+        _anders.append((_w, _qml, _bb.zoeksleutel(_w)))
+klopt(not _anders, f"U280: het startmenu en bugos-start-data maken dezelfde zoeksleutel (ß, ς, kana) ({_anders})")
 klopt(_uit == {"settings": "bugos-settings.desktop", "files": "bugos-files.desktop", "explorer": "bugos-files.desktop",
                "wifi": "instelling:wifi"}, f"U098: Enter opent de beste treffer ({_uit})")
 # U205: typen zoekt ook als de focus niet in het zoekveld staat; U204: na 'Alle apps' staat de focus op de lijst.

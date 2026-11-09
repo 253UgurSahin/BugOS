@@ -245,6 +245,11 @@ from datetime import datetime, timedelta, timezone  # noqa: E402
 _lader = importlib.machinery.SourceFileLoader("bugos_start_data_mod", str(SCRIPT))
 sd = importlib.util.module_from_spec(importlib.util.spec_from_loader(_lader.name, _lader))
 _lader.exec_module(sd)
+sys.path.insert(0, str(SCRIPT.parent.parent / "lib" / "bugos" / "python"))
+import bugos_base as _bb  # noqa: E402
+
+klopt(all(sd.zoeksleutel(w) == _bb.zoeksleutel(w) for w in ("größe", "οδηγός", "İstanbul", "がぞう", "Café")),
+      "U280: bugos-start-data en de apps maken dezelfde zoeksleutel")
 _kde = lambda d, sec="7.913": f"{d.year},{d.month},{d.day},{d.hour},{d.minute},{sec}"  # noqa: E731
 _u = datetime.now(timezone.utc)
 klopt(sd.niet_storen_tot_in_toekomst(_kde(datetime.now() + timedelta(hours=1)))

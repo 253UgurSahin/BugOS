@@ -52,7 +52,10 @@ Rectangle {
 
     function tr(nl, en) { return nederlands ? nl : en }
     // Kleine letters zonder accenten: 'izleyici' vindt 'İzleyici', 'cafe' vindt 'café' (zoals bugos-start-data) (U268)
-    function zoeksleutel(t) { return String(t).normalize("NFKD").toLowerCase().replace(/[\u0300-\u036f]/g, "") }
+    // Precies dezelfde regel als bugos-start-data (U280): NFKD, kleine letters, accenten weg, ß wordt ss, ς wordt σ
+    function zoeksleutel(t) {
+        return String(t).normalize("NFKD").toLowerCase().replace(/[\u0300-\u036f]/g, "").replace(/ß/g, "ss").replace(/ς/g, "σ")
+    }
     function groet() {
         const uur = new Date().getHours()
         if (uur < 6) return tr("Goedenacht", "Good night")
