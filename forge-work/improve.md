@@ -313,6 +313,30 @@ was easy to make right. All fixed with a test that failed first. Tests after: 23
 ### U055 [low] "Update now" without internet undid a waiting "Back" before the update failed
   commit: 89ba7ef   test: tools/test_os_system.sh
 
+## Round 7 (2026-11-09)
+The reviewers looked on purpose at parts that had been read less (light mode, packages, drives, the Store as a
+non-admin, the quick menu sliders, Bluetooth, screen readers). They found 9; all fixed with a test that failed first.
+Tests after: 24 passed (here).
+
+### U056 [low] Turning light mode off turned file search (Baloo) on even when you had it off
+  commit: e487175   test: tools/test_light_mode.sh (its fake balooctl6 now behaves like the real one)
+### U057 [medium] Opening a .rpm/.deb on a Dutch (German, Turkish...) system claimed it was "also in the BugOS Store"
+  commit: 64a6e11   test: tools/test_package.sh
+### U058 [medium] Erasing, setting up or renaming a USB stick with a name of 12-15 characters failed every time (exFAT allows 11)
+  commit: fe3d55f   test: tools/test_files.py
+### U059 [medium] A family member who is not an administrator could not install from the Store ("Are you online?")
+  commit: 3bbaa0e   test: tools/test_os_apps.py
+### U060 [medium] The volume and brightness sliders in the quick menu sent the old value back (a click, a quick drag, arrow keys)
+  commit: 707367d   test: tools/test_menus.py (new, also in CI and the image test)
+### U061 [low] On a PC without Bluetooth, the quick menu and Settings waited 5 seconds per question
+  commit: 3a8d0ac   test: tools/test_start_data.py, tools/test_os_settings.py
+### U062 [low] Screen readers did not say which row a slider or a choice button belongs to
+  commit: 0bd53c0   test: tools/test_os_apps.py
+### U063 [low] The background names in Appearance were always Dutch
+  commit: 395486a   test: tools/test_os_settings.py
+### U064 [low] Recent files in the start menu did not show the keyboard focus
+  commit: b3edfcf   test: tools/test_menus.py
+
 ## Skipped
 
 ## For you
