@@ -132,14 +132,9 @@ def prullenbak_inhoud() -> list[tuple[Path, Path, Path | None]]:
     return uit
 
 
-def vergeet_voorbeelden(pad: Path, echt: Path | None = None) -> None:
-    """Haal de bewaarde voorbeeldjes (~/.cache/thumbnails) weg van iets wat echt weg is: daarin staan een
-    verkleinde foto én de naam van het bestand (U244). pad is waar het stond; echt is waar het nu nog is (in de
-    prullenbak): ook van die plek kan een voorbeeldje zijn gemaakt (de prullenbak met tegels) (U255)."""
-    import hashlib
+def voorbeeld_namen() -> dict[str, set[str]]:
+    """Welke voorbeeldjes er zijn, per maat-map. Eén keer lezen voor een hele prullenbak, niet per ding (U269)."""
     cache = Path(os.environ.get("XDG_CACHE_HOME", thuis() / ".cache")) / "thumbnails"
-    # Elke map één keer lezen, en alleen weghalen wat er echt is: een grote map duizenden keren 'bestaat niet'
-    # vragen maakte het legen van de prullenbak vele malen trager (U256).
     bestaand = {}
     for maat in ("normal", "large", "x-large", "xx-large"):
         try:
@@ -148,7 +143,19 @@ def vergeet_voorbeelden(pad: Path, echt: Path | None = None) -> None:
             continue
         if namen:
             bestaand[maat] = namen
-    if not bestaand:
+    return bestaand
+
+
+def vergeet_voorbeelden(pad: Path, echt: Path | None = None, bestaand: dict[str, set[str]] | None = None) -> None:
+    """Haal de bewaarde voorbeeldjes (~/.cache/thumbnails) weg van iets wat echt weg is: daarin staan een
+    verkleinde foto én de naam van het bestand (U244). pad is waar het stond; echt is waar het nu nog is (in de
+    prullenbak): ook van die plek kan een voorbeeldje zijn gemaakt (de prullenbak met tegels) (U255).
+    Alleen weghalen wat er echt is (U256); bestaand: de lijst van voorbeeld_namen(), één keer gelezen (U269)."""
+    import hashlib
+    cache = Path(os.environ.get("XDG_CACHE_HOME", thuis() / ".cache")) / "thumbnails"
+    if bestaand is None:
+        bestaand = voorbeeld_namen()
+    if not any(bestaand.values()):
         return
     plekken = [pad] + ([echt] if echt is not None else [])
     bron = echt or pad
@@ -168,6 +175,7 @@ def vergeet_voorbeelden(pad: Path, echt: Path | None = None) -> None:
                     (cache / maat / naam).unlink(missing_ok=True)
                 except OSError:
                     pass
+                namen.discard(naam)
 
 
 def prullenbak_legen() -> int:
@@ -188,12 +196,15 @@ def prullenbak_legen() -> int:
         except OSError:
             return False
 
+    voorbeelden = None
     if (bak / "info").is_dir():
         for info in (bak / "info").glob("*.trashinfo"):
             ding = bak / "files" / info.name[: -len(".trashinfo")]
             herkomst = lees_herkomst(info)
             if herkomst is not None:
-                vergeet_voorbeelden(herkomst, ding)
+                if voorbeelden is None:
+                    voorbeelden = voorbeeld_namen()
+                vergeet_voorbeelden(herkomst, ding, voorbeelden)
             if weg(ding):
                 info.unlink(missing_ok=True)
             else:
@@ -581,8 +592,9 @@ class Weggooien(QThread):
 
     def run(self) -> None:
         weg, fout = 0, ""
+        voorbeelden = voorbeeld_namen()   # één keer lezen (U269)
         for p in self.paden:
-            vergeet_voorbeelden(p)   # (U244)
+            vergeet_voorbeelden(p, bestaand=voorbeelden)   # (U244)
             try:
                 if p.is_dir() and not p.is_symlink():
                     shutil.rmtree(p)

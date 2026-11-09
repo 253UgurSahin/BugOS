@@ -209,6 +209,18 @@ _ac.vergeet_voorbeelden(TMP / "ergens" / "groot-weg", _groot)
 Path.unlink = _echt_unlink
 klopt(len(_tel_weg) <= 1, f"U256: vergeten van voorbeeldjes van een grote map haalt alleen weg wat er is ({len(_tel_weg)} keer)")
 
+# U269: een prullenbak met veel losse dingen: de voorbeeldjes-mappen maar één keer lezen (niet per ding).
+for _i in range(30):
+    (docs / f"los{_i}.txt").write_text("x")
+    b.naar_prullenbak(docs / f"los{_i}.txt")
+_lees = []
+_echt_listdir = os.listdir
+os.listdir = lambda p=".": (_lees.append(str(p)) if "thumbnails" in str(p) else None, _echt_listdir(p))[1]
+b.prullenbak_legen()
+os.listdir = _echt_listdir
+klopt(len(_lees) <= 4 and b.prullenbak_inhoud() == [],
+      f"U269: prullenbak met 30 dingen legen leest de voorbeeldjes-mappen één keer ({len(_lees)} keer)")
+
 # 7c. snelkoppelingen: telt waar de koppeling zelf staat (kapot of naar een andere schijf)
 (docs / "kapot").symlink_to(TMP / "bestaat-niet")
 klopt(b.zelfde_schijf(docs / "kapot", thuis), "snelkoppeling: een kapotte koppeling in Documenten mag naar de prullenbak")
