@@ -517,6 +517,19 @@ for _ in range(10):
     app.processEvents()
 venster.vraag_tekst = lambda *a, **kw: ".."
 venster.hernoem()
+(_d507 / "notes.txt").write_text("x")
+venster.ververs()
+for _ in range(30):
+    app.processEvents()
+venster.selecteer(_d507 / "notes.txt")
+for _ in range(10):
+    app.processEvents()
+venster.vraag_tekst = lambda *a, **kw: "index.html"
+venster.hernoem()
+_html527 = (_d507 / "index.html").exists() and not (_d507 / "index.html.txt").exists()
+for _p in ("index.html", "index.html.txt", "notes.txt"):
+    (_d507 / _p).unlink(missing_ok=True)
+klopt(_html527, "U527: hernoemen naar 'index.html' houdt .html (geen 'index.html.txt')")
 klopt(sorted(p.name for p in _d507.iterdir()) == ["Taart v1.2.odt"],
       f"U515: 'Taart v1.2' wordt 'Taart v1.2.odt', en '..' maakt niets verborgens ({sorted(p.name for p in _d507.iterdir())})")
 (_d507 / "Taart v1.2.odt").rename(_d507 / "Taart.odt")

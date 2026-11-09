@@ -292,7 +292,11 @@ class Bewerken:
                                 "A name cannot contain / or be only dots."), "fout")
             return
         # 'Taart v1.2' of 'Brief Dr. Jansen' hebben ook een punt, maar geen echte extensie: dan ook .odt erbij (U515).
-        if verborgen_ext and Path(nieuw).suffix.lower() not in VERBERG_EXT:
+        # Maar een echte andere extensie die je zelf typt (.html, .sh, .json) laten we staan (U527).
+        nieuwe_ext = Path(nieuw).suffix
+        echte_ext = bool(nieuwe_ext) and nieuwe_ext.lower() in VERBERG_EXT or \
+            (1 < len(nieuwe_ext) <= 6 and nieuwe_ext[1:].isalnum() and not nieuwe_ext[1:].isdigit())
+        if verborgen_ext and not echte_ext:
             nieuw += oud.suffix
             if nieuw == oud.name:
                 return

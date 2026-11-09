@@ -164,6 +164,7 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
         self.lijst.customContextMenuRequested.connect(self.menu)
         self.lijst.activated.connect(self.geactiveerd)
         self.lijst.pressed.connect(self._muis_gedrukt)
+        self.lijst.clicked.connect(self._muis_gedrukt)   # ook bij loslaten: een trage Ctrl+klik (U528)
         self.voorbeelden.bijgewerkt.connect(self.lijst.viewport().update)
         self.model.directoryLoaded.connect(lambda _p: self.ververs_staat())
         self.sorteer.rowsInserted.connect(lambda *_: self.ververs_staat())

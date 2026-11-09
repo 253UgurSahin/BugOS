@@ -241,6 +241,11 @@ LOG.write_text("")
 (NEP / "bluetoothctl").chmod(0o755)
 draai("--zet", "bluetooth", "aan", env_extra={"XDG_RUNTIME_DIR": str(_run517)})
 klopt("bluetoothctl power on" not in logboek(), "U517: bluetooth: de laatste klik telt (geen 'aan' na een nieuwere klik)")
+# U529: 'uit' terwijl de kaart er nog niet is (vliegtuigstand): blokkeren, zodat BlueZ hem straks niet vanzelf aanzet.
+LOG.write_text("")
+nep("bluetoothctl", "")
+draai("--zet", "bluetooth", "uit", env_extra={"XDG_RUNTIME_DIR": str(_run517)})
+klopt("rfkill block bluetooth" in logboek(), f"U529: bluetooth uit zonder kaart: blokkeren ({logboek().splitlines()})")
 nep("bluetoothctl", "Controller 00:11:22:33:44:55 BugOS [default]\n\tPowered: yes")
 # U260: game-modus vanuit het snelmenu wordt niet na 5 s afgebroken (dan bleef 'volle kracht' half aan staan).
 LOG.write_text("")

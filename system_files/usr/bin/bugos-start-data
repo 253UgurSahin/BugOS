@@ -505,6 +505,11 @@ def snel_zet(wat: str, waarde: str) -> None:
                     return   # intussen een nieuwere klik
             except OSError:
                 pass
+        if not aan and "Controller" not in (draai("bluetoothctl", "show") or ""):
+            # De kaart is er (nog) niet, bijv. net na de vliegtuigstand: 'power off' doet dan niets, en BlueZ zet hem
+            # straks vanzelf aan. Dan blokkeren, zodat 'uit' ook echt uit blijft (U529).
+            draai("rfkill", "block", "bluetooth")
+            return
         draai("bluetoothctl", "power", "on" if aan else "off")
     elif wat == "spel":
         # Los starten: na 5 s afbreken (draai) liet 'volle kracht' en 'niet storen' half aan staan (U260).
