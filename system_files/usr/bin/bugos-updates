@@ -45,8 +45,8 @@ zet_keuze() {
 niet_bewaard_terug() {
     # Vaste zinnen (te vertalen); de waarschuwing als laatste (U442).
     [ "${1:-}" = herstart ] && t "Start de computer opnieuw op om terug te gaan." "Restart the computer to go back."
-    t "Teruggezet, maar let op: de keuze 'zelf updaten' kon niet bewaard worden (is je computer vol?). Zet 'Updates vanzelf' uit in Instellingen, anders kan de nieuwe versie terugkomen." \
-        "Rolled back, but note: the choice 'update yourself' could not be saved (is your computer full?). Turn off 'Updates automatically' in Settings, or the new version may come back."
+    t "Teruggezet, maar let op: de keuze 'zelf updaten' kon niet bewaard worden (is je computer vol?). Zet 'Updates vanzelf' uit in Instellingen > Updates en meer, anders kan de nieuwe versie terugkomen." \
+        "Rolled back, but note: the choice to update yourself could not be saved (is your computer full?). Turn off 'Automatic updates' in Settings > Updates and more, or the new version may come back."
 }
 
 niet_bewaard() {

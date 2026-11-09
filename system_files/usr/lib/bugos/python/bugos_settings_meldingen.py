@@ -36,7 +36,7 @@ class MeldingenPagina(Blad):
         proef = Knop(t("Proefmelding", "Test notification"), "gewoon", "lijn:bel")
         proef.clicked.connect(lambda _c=False: bi.proefmelding(
             t("Hallo van BugOS", "Hello from BugOS"),
-            t("Zo ziet een melding eruit. Klik erop, of veeg hem weg.", "This is what a notification looks like.")))
+            t("Zo ziet een melding eruit. Klik erop, of veeg hem weg.", "This is what a notification looks like. Click it, or swipe it away.")))
         g2.voeg(Rij("bel", t("Zo ziet een melding eruit", "See what a notification looks like"), "", proef))
 
     def ververs(self) -> None:

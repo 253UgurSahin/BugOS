@@ -289,7 +289,8 @@ def venster() -> int:
                  t("Komen op de goede plek. Wat al op BugOS staat, wordt nooit overschreven.",
                    "Go to the right place. What's already on BugOS is never overwritten.")),
                 ("lijn:ster", "neutraal", t("Bladwijzers", "Bookmarks"),
-                 t("Van Chrome, Edge en Brave, klaar om in Firefox te zetten.", "From Chrome, Edge and Brave, ready for Firefox.")),
+                 t("Van Chrome, Edge, Brave en Firefox, klaar om in Firefox te zetten.",
+                   "From Chrome, Edge, Brave and Firefox, ready for Firefox.")),   # (U476)
                 ("lijn:foto", "neutraal", t("Je achtergrond", "Your wallpaper"),
                  t("Je oude Windows-achtergrond wordt ook je BugOS-achtergrond.",
                    "Your old Windows wallpaper becomes your BugOS wallpaper too.")),
