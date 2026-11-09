@@ -1377,6 +1377,35 @@ _ww2.deleteLater()
 _tb_tekst = (ROOT / "system_files/usr/bin/bugos-task-manager").read_text()
 klopt("def tweede_start" in _tb_tekst and "venster.tweede_start(sys.argv[1:])" in _tb_tekst,
       "U222: Taakbeheer --prestaties gaat ook naar Prestaties als Taakbeheer al open was")
+# U234: Back-up gesloten tijdens het tellen en weer geopend: geen valse 'te weinig ruimte'.
+import threading as _thr  # noqa: E402
+
+
+class _NepTeller:
+    def __init__(self):
+        self.stop = _thr.Event()
+        self.stop.set()
+
+    def wait(self):
+        return True
+
+    def isRunning(self):  # noqa: N802
+        return False
+
+
+_bw = open_venster(bb)
+_bw.teller = _NepTeller()
+_bw.sluit_na = False   # weer geopend: luister() zette dit terug
+_bw.geteld(SCHIJF, [], False, 5 * 1024**3, 0)
+_tk = _bw.melding.tekst.text()
+klopt("ruimte" not in _tk and "Gestopt" in _tk and _bw.isVisible(),
+      f"U234: tellen gestopt en Back-up weer geopend: geen valse 'te weinig ruimte' ({_tk!r})")
+_bw.teller = None
+_bw.close()
+# U233: weer geopend tijdens het kopiëren: de melding belooft niet meer dat het venster vanzelf dichtgaat.
+_teksten = {n: (ROOT / "system_files/usr/bin" / n).read_text() for n in ("bugos-backup", "bugos-switch", "bugos-store")}
+klopt(all("def tweede_start" in x and "(U233)" in x for x in _teksten.values()),
+      "U233: Back-up, Overstap en Winkel vervangen 'gaat vanzelf dicht' als je ze weer opent")
 _stukken = [(n, (ROOT / "system_files/usr/bin" / n).read_text()) for n in
             ("bugos-settings", "bugos-task-manager", "bugos-store", "bugos-welcome", "bugos-backup", "bugos-switch", "bugos-help")]
 klopt(all("een_keer=True" in tekst for _n, tekst in _stukken), "U208: Instellingen, Taakbeheer, Winkel, Welkom, Back-up, Overstap en Hulp openen maar één keer")

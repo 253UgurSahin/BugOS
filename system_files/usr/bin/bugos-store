@@ -237,6 +237,10 @@ class Winkel(Venster):
 
     def tweede_start(self, args: list[str]) -> None:
         """De Winkel was al open en wordt opnieuw gestart, bijv. 'Uit de Winkel halen?' na een .exe (U222)."""
+        if getattr(self, "sluit_na", False) and self.proces.state() != QProcess.ProcessState.NotRunning:
+            # Weer geopend tijdens het installeren: de Winkel gaat daarna niet meer vanzelf dicht (U233).
+            naam = next((app_naam(a) for a in self.cat["apps"] if a["id"] == self.bezig_met), self.bezig_met)
+            self.melding.zet(t(f"{naam} wordt geïnstalleerd…", f"Installing {naam}…"), "bezig")
         zoek, app_id = begin_uit(args)
         if app_id:
             gevonden = next((a for a in self.cat["apps"] if a["id"] == app_id), None)

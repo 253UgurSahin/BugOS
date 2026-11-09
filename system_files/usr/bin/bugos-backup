@@ -585,6 +585,11 @@ def venster() -> int:
             box.exec()
             return box.clickedButton() is stop
 
+        def tweede_start(self, _args: list[str]) -> None:
+            """Weer geopend terwijl het venster wachtte om dicht te gaan: dat gaat niet meer door (U233)."""
+            if self.sluit_na and self.proces.state() != QProcess.ProcessState.NotRunning and not self.gestopt:
+                self.melding.zet(t("Nog even bezig…", "Still busy…"), "bezig")
+
         def closeEvent(self, e) -> None:  # noqa: N802
             if self.teller is not None and self.teller.isRunning():
                 # Nog aan het tellen (er is nog niets gekopieerd): stop het tellen, en sluit daarna.
@@ -633,7 +638,11 @@ def venster() -> int:
         def geteld(self, schijf: Path, mappen: list[Path], past: bool, nodig: int, vrij: int) -> None:
             if self.teller is not None:
                 self.teller.wait()  # de draad is net klaar; even netjes afsluiten
-            if self.sluit_na:  # het venster ging dicht tijdens het tellen
+            if self.sluit_na or (self.teller is not None and self.teller.stop.is_set()):
+                # Het venster ging dicht tijdens het tellen (en werd misschien weer geopend): niets doen, en zeker
+                # geen 'te weinig ruimte' van een tellen dat halverwege stopte (U234).
+                self.melding.zet(t("Gestopt. Er is niets gekopieerd.", "Stopped. Nothing was copied."), "info")
+                self.balk.hide()
                 self.stop(False)
                 return
             if vrij < 0:
