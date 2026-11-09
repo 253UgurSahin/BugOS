@@ -355,7 +355,7 @@ bi.VOORBEELD = False
 bi.draai = lambda *cmd, **kw: (opdr.append((cmd, kw.get("invoer"))), (0, ""))[1]
 bi.verbind("Thuis", "nieuw-geheim", True)
 bi.VOORBEELD, bi.draai = oud
-klopt(opdr and opdr[0][0][:6] == ("nmcli", "--ask", "connection", "up", "id", "Thuis")
+klopt(opdr and tuple(x for x in opdr[0][0] if x not in ("--wait", "55"))[:6] == ("nmcli", "--ask", "connection", "up", "id", "Thuis")
       and not any("nieuw-geheim" in x for x in opdr[0][0]) and opdr[0][1] == "nieuw-geheim\n",
       "U011: bekend netwerk met nieuw wachtwoord: nmcli --ask connection up, wachtwoord via de invoer")
 
@@ -1042,17 +1042,22 @@ _o497, _ok497 = vang(bi.verbreek, "Thuis", antwoord=_antw497)
 klopt(_ok497 and ("nmcli", "connection", "down", "uuid", "uuid-1") in _o497, f"U497: verbreken op UUID ({_o497[-1]})")
 # U498: een nieuw netwerk met een verkeerd wachtwoord: het profiel dat nmcli maakte, wordt weer weggegooid.
 _vergeten498 = []
-_oud498 = (bi.verbind, bi.vergeet_netwerk)
-bi.verbind = lambda naam, ww="", bekend=False, verborgen=False: (False, "Secrets were required")
-bi.vergeet_netwerk = lambda naam: (_vergeten498.append(naam), True)[1]
+_oud498 = (bi.verbind, bi.vergeet_uuids, bi.wifi_uuids)
+_uuids498 = [{"oud-1"}, {"oud-1", "nieuw-2"}]   # voor en na de poging: 'Thuis 1' bestond al (U503)
+bi.wifi_uuids = lambda naam: _uuids498.pop(0) if _uuids498 else set()
+bi.verbind = lambda naam, ww="", bekend=False, verborgen=False: (False, "Error: Connection activation failed: Secrets were required")
+bi.vergeet_uuids = lambda u: _vergeten498.extend(sorted(u))
 _wp498 = venster.paginas["wifi"]
 _vraag498 = _wp498.vraag_wachtwoord
 _wp498.vraag_wachtwoord = lambda n, veranderd=False: "verkeerd"
 _wp498.verbind_met(bi.Netwerk("Buren", 40, True, False), False)
 wacht()
-bi.verbind, bi.vergeet_netwerk = _oud498
+bi.verbind, bi.vergeet_uuids, bi.wifi_uuids = _oud498
 _wp498.vraag_wachtwoord = _vraag498
-klopt(_vergeten498 == ["Buren"], f"U498: na een verkeerd wachtwoord blijft er geen kapot profiel staan ({_vergeten498})")
+klopt(_vergeten498 == ["nieuw-2"], f"U498/U503: na een verkeerd wachtwoord gaat alleen het nieuwe profiel weg ({_vergeten498})")
+klopt(not bi.wachtwoord_fout("") and not bi.wachtwoord_fout("Error: No network with SSID 'x' found.")
+      and bi.wachtwoord_fout("Error: Connection activation failed: Secrets were required, but not provided."),
+      "U503: alleen bij een fout wachtwoord weggooien (niet buiten bereik of te traag)")
 # U499: bluetooth aan na de vliegtuigstand: eerst wachten tot de kaart er is, dan pas 'power on'.
 _sys499 = Path(tempfile.mkdtemp(prefix="bugos-sys-"))
 (_sys499 / "class" / "bluetooth" / "hci0").mkdir(parents=True)

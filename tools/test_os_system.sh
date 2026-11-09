@@ -195,6 +195,8 @@ klopt '! grep -qE "^TimeoutStartSec=[0-9]" "$ROOT/system_files/usr/lib/systemd/u
 # U488: 'Nu updaten' in de melding werkt ook je eigen apps en je .rpm/.deb-programma's bij (zoals in Instellingen).
 klopt 'grep -A4 "pkexec /usr/bin/bugos-updates nu" "$BIN/bugos-updatecheck" | grep -q "flatpak update --user" && grep -A6 "pkexec /usr/bin/bugos-updates nu" "$BIN/bugos-updatecheck" | grep -q "bugos-package --bijwerken"' \
     "U488: 'Nu updaten' in de melding werkt ook je eigen apps bij"
+klopt '[ "$(grep -c "bezig_weg" "$BIN/bugos-updatecheck")" -ge 4 ] && grep -q "notify-send -p" "$BIN/bugos-updatecheck"' \
+    "U505: de melding 'Bezig met updaten' gaat weg bij klaar, mislukt of Annuleren"
 # U192: wel internet, maar de bron is er niet: niet elk half uur opnieuw.
 nep nmcli 'echo full'
 draai bugos-updatecheck

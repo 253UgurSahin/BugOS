@@ -148,11 +148,13 @@ class WifiPagina(Blad):
             self.ververs()
 
         def probeer():
+            voor = bi.wifi_uuids(n.naam) if not bekend else set()
             uitkomst = bi.verbind(n.naam, wachtwoord, bekend)
-            if not uitkomst[0] and not bekend:
+            if not uitkomst[0] and not bekend and bi.wachtwoord_fout(uitkomst[1] or ""):
                 # nmcli laat het nieuwe profiel staan (met het verkeerde wachtwoord): weg ermee, anders vroeg de
-                # volgende klik niets en zei hij 'misschien is het wachtwoord veranderd' (U498).
-                bi.vergeet_netwerk(n.naam)
+                # volgende klik niets en zei hij 'misschien is het wachtwoord veranderd' (U498). Alleen het profiel dat
+                # nu nieuw is, en alleen bij een fout wachtwoord (niet buiten bereik of te traag) (U503).
+                bi.vergeet_uuids(bi.wifi_uuids(n.naam) - voor)
             return uitkomst
 
         op_achtergrond(self, probeer, klaar)

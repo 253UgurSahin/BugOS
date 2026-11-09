@@ -20,6 +20,7 @@ import pwd
 import shutil
 import subprocess
 import sys
+import time
 import unicodedata
 import xml.etree.ElementTree as ET
 from datetime import datetime
@@ -487,6 +488,11 @@ def snel_zet(wat: str, waarde: str) -> None:
     elif wat == "bluetooth":
         if aan:
             draai("rfkill", "unblock", "bluetooth")
+            # Na de vliegtuigstand komt de kaart pas even later terug: wachten, zoals Instellingen en Help (U499, U504).
+            for _ in range(10):
+                if "Controller" in (draai("bluetoothctl", "show") or ""):
+                    break
+                time.sleep(0.5)
         draai("bluetoothctl", "power", "on" if aan else "off")
     elif wat == "spel":
         # Los starten: na 5 s afbreken (draai) liet 'volle kracht' en 'niet storen' half aan staan (U260).

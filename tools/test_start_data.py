@@ -221,6 +221,18 @@ for _ in range(50):  # bugos-theme start los (op de achtergrond): even wachten t
 klopt("bugos-theme donker" in logboek(),
       "zet donker: via bugos-theme (kleuren, KDE-programma's en Plasma-stijl in één keer, net als Instellingen)")
 
+# U504: bluetooth aan in het snelmenu na de vliegtuigstand: eerst wachten tot de kaart er is, dan 'power on'.
+LOG.write_text("")
+(NEP / "bluetoothctl").write_text(f'#!/usr/bin/bash\necho "bluetoothctl $*" >>"{LOG}"\n'
+                                  f'[ "$1" = show ] && [ "$(grep -c "bluetoothctl show" "{LOG}")" -ge 2 ] && echo "Controller AA"\nexit 0\n')
+(NEP / "bluetoothctl").chmod(0o755)
+nep("rfkill")
+draai("--zet", "bluetooth", "aan")
+_volg504 = [r.split()[0] + " " + r.split()[1] for r in logboek().splitlines() if r.startswith(("rfkill", "bluetoothctl"))]
+klopt(_volg504[:1] == ["rfkill unblock"] and "bluetoothctl power" in _volg504
+      and _volg504[:_volg504.index("bluetoothctl power")].count("bluetoothctl show") >= 2,
+      f"U504: bluetooth aan in het snelmenu wacht op de kaart ({_volg504})")
+nep("bluetoothctl", "Controller 00:11:22:33:44:55 BugOS [default]\n\tPowered: yes")
 # U260: game-modus vanuit het snelmenu wordt niet na 5 s afgebroken (dan bleef 'volle kracht' half aan staan).
 LOG.write_text("")
 (NEP / "bugos-game-mode").write_text(f'#!/usr/bin/bash\n[ "$1" = aan ] && sleep 6\necho "bugos-game-mode $*" >>"{LOG}"\necho uit\n')

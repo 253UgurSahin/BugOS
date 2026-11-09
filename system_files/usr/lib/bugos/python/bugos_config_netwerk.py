@@ -113,11 +113,14 @@ def verbind(naam: str, wachtwoord: str = "", bekend: bool = False, verborgen: bo
             code, uit = _c.draai("nmcli", "device", "wifi", "connect", naam, "hidden", "yes", timeout=45)
         return code == 0, uit
     if wachtwoord and bekend:
-        code, uit = _c.draai("nmcli", "--ask", "connection", "up", "id", naam, invoer=wachtwoord + "\n", timeout=60)
+        code, uit = _c.draai("nmcli", "--wait", "55", "--ask", "connection", "up", "id", naam, invoer=wachtwoord + "\n",
+                             timeout=60)
     elif wachtwoord:
-        code, uit = _c.draai("nmcli", "--ask", "device", "wifi", "connect", naam, invoer=wachtwoord + "\n", timeout=45)
+        # --wait: nmcli stopt zelf voordat wij hem afbreken (dan weten we waarom het mislukte) (U503).
+        code, uit = _c.draai("nmcli", "--wait", "40", "--ask", "device", "wifi", "connect", naam, invoer=wachtwoord + "\n",
+                             timeout=45)
     else:
-        code, uit = _c.draai("nmcli", "device", "wifi", "connect", naam, timeout=45)
+        code, uit = _c.draai("nmcli", "--wait", "40", "device", "wifi", "connect", naam, timeout=45)
     return code == 0, uit
 
 
@@ -129,6 +132,33 @@ def bekend_netwerk(naam: str) -> bool:
     return any(splits_nmcli(r)[:2] == [naam, "802-11-wireless"] for r in uit.splitlines())
 
 
+def wifi_uuids(naam: str) -> set[str]:
+    """De UUID's van alle opgeslagen profielen voor dit netwerk (SSID), welke naam het profiel ook heeft."""
+    if _c.VOORBEELD:
+        return set()
+    _, uit = _c.draai("nmcli", "-t", "-f", "UUID,TYPE", "connection", "show")
+    uuids = set()
+    for regel in uit.splitlines():
+        delen = splits_nmcli(regel)
+        if len(delen) >= 2 and delen[1] == "802-11-wireless":
+            # -g ontsnapt ':' en '\' (zoals -t): terug naar de echte naam, en spaties aan de rand horen erbij (U366).
+            ruw = _c.draai("nmcli", "-g", "802-11-wireless.ssid", "connection", "show", "uuid", delen[0])[1]
+            if (splits_nmcli(ruw.rstrip("\n")) or [""])[0] == naam:
+                uuids.add(delen[0])
+    return uuids
+
+
+def vergeet_uuids(uuids) -> None:
+    for u in uuids:
+        _c.draai("nmcli", "connection", "delete", "uuid", u)
+
+
+def wachtwoord_fout(uitvoer: str) -> bool:
+    """Zei nmcli dat het wachtwoord (de 'secrets') niet klopte? Niet: buiten bereik of te traag (U503)."""
+    u = uitvoer.lower()
+    return "secrets were required" in u or "802-1x" in u or "psk" in u or "wrong password" in u
+
+
 def vergeet_netwerk(naam: str) -> bool:
     """Het opgeslagen wifi-netwerk (en zijn wachtwoord) weggooien: dan verbindt BugOS er niet meer vanzelf mee (U338)."""
     if _c.VOORBEELD:
@@ -138,16 +168,7 @@ def vergeet_netwerk(naam: str) -> bool:
     # zijn UUID weggooien (U345).
     # Alle opgeslagen profielen voor dit netwerk (SSID), ook een ouder 'Thuis' naast 'Thuis 1': anders verbond
     # NetworkManager er meteen weer mee (U357).
-    _, uit = _c.draai("nmcli", "-t", "-f", "UUID,TYPE", "connection", "show")
-    weg = []
-    for regel in uit.splitlines():
-        delen = splits_nmcli(regel)
-        if len(delen) >= 2 and delen[1] == "802-11-wireless":
-            # -g ontsnapt ':' en '\' (zoals -t): terug naar de echte naam, en spaties aan de rand horen erbij (U366).
-            ruw = _c.draai("nmcli", "-g", "802-11-wireless.ssid", "connection", "show", "uuid", delen[0])[1]
-            ssid = (splits_nmcli(ruw.rstrip("\n")) or [""])[0]
-            if ssid == naam:
-                weg.append(delen[0])
+    weg = sorted(wifi_uuids(naam))
     if not weg:
         return _c.draai("nmcli", "connection", "delete", "id", naam)[0] == 0
     return all(_c.draai("nmcli", "connection", "delete", "uuid", u)[0] == 0 for u in weg)
