@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import collections
 import os
+import threading
 from pathlib import Path
 
 import bugos_tasks as bt
@@ -52,9 +53,27 @@ class Meetdraad(QThread):
         self.stoppen = False
         self.voorbeeld = bool(os.environ.get("BUGOS_TAKEN_VOORBEELD"))
         self.stap = 0
+        self.zichtbaar = True
+        self._wek = threading.Event()
+
+    def stop(self) -> None:
+        self.stoppen = True
+        self._wek.set()
+
+    def zet_zichtbaar(self, ja: bool) -> None:
+        """Geminimaliseerd of verborgen: niet meten (dat kostte op een laptop steeds een paar procent van een kern).
+        Weer in beeld: meteen een nieuwe meting (U311)."""
+        self.zichtbaar = ja
+        if ja:
+            self._wek.set()
 
     def run(self) -> None:
         while not self.stoppen:
+            if not self.zichtbaar:
+                # Wachten tot het venster weer in beeld is (geen tikken van 10 keer per seconde meer) (U311).
+                self._wek.wait()
+                self._wek.clear()
+                continue
             try:
                 data = voorbeeld_meting(self.stap) if self.voorbeeld else self.meter.meet()
             except Exception:  # noqa: BLE001  een rare meting mag het venster nooit laten vallen
@@ -62,10 +81,8 @@ class Meetdraad(QThread):
             self.stap += 1
             if data is not None and not self.stoppen:
                 self.meting.emit(data)
-            for _ in range(TUSSENPOOS_MS // 100):
-                if self.stoppen:
-                    return
-                self.msleep(100)
+            self._wek.wait(TUSSENPOOS_MS / 1000)
+            self._wek.clear()
 
 
 def voorbeeld_meting(stap: int) -> dict:

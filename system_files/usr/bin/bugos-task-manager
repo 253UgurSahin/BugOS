@@ -29,7 +29,7 @@ from bugos_tasks_ui import (  # noqa: E402
 from bugos_ui import (  # noqa: E402
     ActieBalk, Kaart, Knop, Pagina, Venster, label, lijn, lijn_icoon, maak_app, px, sectie, t, uitvoeren,
 )
-from PySide6.QtCore import Qt, QTimer  # noqa: E402
+from PySide6.QtCore import QEvent, Qt, QTimer  # noqa: E402
 from PySide6.QtGui import QKeySequence, QShortcut  # noqa: E402
 from PySide6.QtWidgets import QApplication, QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout  # noqa: E402
 
@@ -74,8 +74,23 @@ class Taakbeheer(Venster):
         QApplication.instance().aboutToQuit.connect(self.stop_meten)
 
     def stop_meten(self) -> None:
-        self.draad.stoppen = True
+        self.draad.stop()
         self.draad.wait(3000)
+
+    def changeEvent(self, e) -> None:  # noqa: N802
+        super().changeEvent(e)
+        if e.type() == QEvent.Type.WindowStateChange and hasattr(self, "draad"):
+            self.draad.zet_zichtbaar(self.isVisible() and not self.isMinimized())   # (U311)
+
+    def hideEvent(self, e) -> None:  # noqa: N802
+        super().hideEvent(e)
+        if hasattr(self, "draad"):
+            self.draad.zet_zichtbaar(False)
+
+    def showEvent(self, e) -> None:  # noqa: N802
+        super().showEvent(e)
+        if hasattr(self, "draad"):
+            self.draad.zet_zichtbaar(not self.isMinimized())
 
     # ------------------------------------------------------------ pagina's
     def status_regel(self, pagina: Pagina) -> None:

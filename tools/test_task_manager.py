@@ -311,6 +311,26 @@ try:
 finally:
     venster.close()  # stopt ook het meten op de achtergrond
 
+# U311: geminimaliseerd of verborgen meet Taakbeheer niet; weer in beeld meteen wel; stoppen gaat meteen.
+import time as _tijd  # noqa: E402
+import bugos_tasks_ui as _tu  # noqa: E402
+
+_d = _tu.Meetdraad()
+_tel = []
+_d.meter.meet = lambda: _tel.append(1) or {}
+_d.zet_zichtbaar(False)
+_d.start()
+_tijd.sleep(0.6)
+_verborgen = len(_tel)
+_d.zet_zichtbaar(True)
+_tijd.sleep(0.4)
+_zichtbaar = len(_tel)
+_t0 = _tijd.time()
+_d.stop()
+_d.wait(3000)
+klopt(_verborgen == 0 and _zichtbaar >= 1 and _tijd.time() - _t0 < 1.0,
+      f"U311: Taakbeheer meet niet als het venster weg is, wel meteen weer in beeld, en stopt meteen ({_verborgen}, {_zichtbaar})")
+
 shutil.rmtree(TMP, ignore_errors=True)  # alleen onze eigen tijdelijke testmap
 print()
 print("Alles goed." if not fouten else f"{fouten} fout(en).")
