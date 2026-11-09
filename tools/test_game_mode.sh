@@ -68,6 +68,7 @@ klopt '[ "$(cat "$TMP/profiel")" = power-saver ] && [ "$(cat "$TMP/until")" = "$
 if [ -e "$TMP/bin/powerprofilesctl" ] || nep powerprofilesctl 'case "$1" in get) cat "'"$TMP"'/profiel";; set) echo "$2" >"'"$TMP"'/profiel";; esac'; then
     echo balanced >"$TMP/profiel"
     nep id 'if [ "$1" = -u ]; then echo "${NEP_UID:-1000}"; else /usr/bin/id "$@"; fi'
+    nep getent 'case "$2" in 1999) exit 2;; *) exit 0;; esac'   # 1999: een account dat niet meer bestaat
     gebruiker() { NEP_UID="$3" HOME="$TMP/$1" XDG_CONFIG_HOME="$TMP/$1/.config" PATH="$TMP/bin:$PATH" bash "$TMP/spelmodus" "$2" >/dev/null 2>&1; }
     gebruiker anna aan 1001
     gebruiker bram aan 1002
@@ -92,6 +93,16 @@ if [ -e "$TMP/bin/powerprofilesctl" ] || nep powerprofilesctl 'case "$1" in get)
     gebruiker dolf uit 1004
     gebruiker anna uit 1001
     klopt '[ "$(cat "$TMP/profiel")" = balanced ]' "U404: na anna en dolf staat de pc niet op volle kracht ($(cat "$TMP/profiel"))"
+    # U420: een merkje van een gewist account, of van iemand wiens instellingen weg zijn, houdt de pc niet op volle kracht.
+    touch "$BUGOS_GAMER_MAP/bugos-spelmodus-1999"
+    gebruiker emma aan 1005
+    rm -rf "$TMP/emma/.config/bugos"            # emma's instellingen gewist terwijl game-modus aan stond
+    gebruiker emma status 1005
+    klopt '[ ! -e "$BUGOS_GAMER_MAP/bugos-spelmodus-1005" ]' "U420: zonder 'game-modus aan' verdwijnt je merkje"
+    echo balanced >"$TMP/profiel"
+    gebruiker frits aan 1006
+    gebruiker frits uit 1006
+    klopt '[ "$(cat "$TMP/profiel")" = balanced ]' "U420: merkjes van gewiste accounts houden de pc niet op volle kracht ($(cat "$TMP/profiel"))"
 fi
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

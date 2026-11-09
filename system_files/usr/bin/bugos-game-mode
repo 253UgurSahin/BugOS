@@ -52,7 +52,12 @@ GAMER_MERK="$GAMER_MAP/bugos-spelmodus-$(id -u)"
 andere_gamers() {
     local f
     for f in "$GAMER_MAP"/bugos-spelmodus-*; do
-        [ -e "$f" ] && [ "$f" != "$GAMER_MERK" ] && return 0
+        [ -e "$f" ] && [ "$f" != "$GAMER_MERK" ] || continue
+        # Een account dat er niet meer is, gamet niet: anders bleef de pc voor altijd op volle kracht (U420).
+        if command -v getent >/dev/null && ! getent passwd "${f##*-}" >/dev/null 2>&1; then
+            continue
+        fi
+        return 0
     done
     return 1
 }
@@ -189,9 +194,12 @@ if [ "${1:-}" != status ]; then   # 'status' hoeft niet te wachten
 fi
 
 # Staat game-modus aan maar is je merkje weg (oude BugOS, opgeruimd)? Dan weer neerzetten (U404).
+# En andersom: staat hij uit (of zijn je instellingen gewist), dan weg met je merkje (U420).
 if [ -f "$MARKER" ] && [ ! -e "$GAMER_MERK" ]; then
     [ -d "$GAMER_MAP" ] || mkdir -m 1777 -p "$GAMER_MAP" 2>/dev/null
     touch "$GAMER_MERK" 2>/dev/null
+elif [ ! -f "$MARKER" ] && [ -e "$GAMER_MERK" ]; then
+    rm -f "$GAMER_MERK"
 fi
 
 case "${1:-wissel}" in
