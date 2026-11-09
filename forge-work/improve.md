@@ -369,7 +369,54 @@ the image test of round 7 (build11, Fedora 44 Kinoite) passed with 0 errors.
 ### U077 [low] "Free up space > Empty the trash" on This computer jumped to the Trash page, and Back skipped This computer
   commit: 808ddfa   test: tools/test_files.py
 
+## Round 9 (2026-11-09)
+Three reviewers: one checked the round-8 fixes for regressions (it found 4: U083-U086), one read Backup, Switch,
+Store and Windows programs, one read first boot, updates, the live USB, Help, the logout screen and the build
+(against the real Fedora 44 Kinoite base image). 19 found; all fixed, each with a test that failed first.
+Tests after: 20 test files passed (here); the image test of round 8 (build12) passed with 0 errors.
+
+### U078 [medium] A stick pulled out during Switch or a Backup restore said "a few files could not be copied, everything else is there"
+  commit: 2e1cc8c   test: tools/test_backup.py
+### U079 [medium] A full computer (or drive) during restore was reported as "Is the drive still plugged in?"
+  commit: 2e1cc8c   test: tools/test_backup.py (a check of free space before restoring is not added; see Skipped)
+### U080 [low] The drive card in Backup never showed "already has a backup" or the new free space
+  commit: 17df51b   test: tools/test_os_apps.py
+### U081 [low] Store: "My apps" only appeared after restarting the Store
+  commit: 7648cab   test: tools/test_os_apps.py
+### U082 [low] Cancelling a Windows installer said it "does not work on BugOS"
+  commit: 3ed4699   test: tools/test_exe.sh
+### U083 [medium] (regression of U073) "Quick menu on" without a system tray still did nothing: Plasma joins print() output ("00")
+  commit: 0a81f44   test: tools/test_panel.sh (the fake plasmashell now answers like the real one)
+### U084 [low] (from U067) The start menu and quick menu only grew with "Big letters" after logging in again
+  commit: ef2ac3b   test: tools/test_menus.py
+### U085 [low] (from U067) Fixed-size spots clipped text with big letters ("100%", the Processor column, file tiles, Welcome tiles)
+  commit: 2f0e2ba   test: tools/test_os_apps.py
+### U086 [low] (from U076) The trash in Files showed the name inside the trash, not the real name
+  commit: ecdc3e3   test: tools/test_os_apps.py
+### U087 [medium] Turning automatic updates off did not stop the daily app updates (Universal Blue's flatpak-system-update.timer)
+  commit: 6826a2e   test: tools/test_os_system.sh, tools/test_image.sh
+### U088 [medium] Logout screen with two monitors: after "stop" on one screen, the other still shut the PC down
+  commit: 9a63354   test: tools/test_logout.py
+### U089 [low] App updates also ran over a phone hotspot (metered connection)
+  commit: 6826a2e   test: tools/test_os_system.sh
+### U090 [low] Help said "Not connected" when NetworkManager had not checked yet ("unknown")
+  commit: 513d4fe   test: tools/test_help.py
+### U091 [low] Help checked again too soon after "Reconnect" or "Turn Wi-Fi on" and said "Not connected"
+  commit: 513d4fe   test: tools/test_help.py
+### U092 [low] Help said "Everything is up to date" without looking online
+  commit: 513d4fe   test: tools/test_help.py
+### U093 [low] On the live USB, Settings offered update buttons that cannot work there
+  commit: 970bca6   test: tools/test_os_settings.py
+### U094 [medium] Windows side of Switch: one locked or too-big file stopped the whole copy, and BugOS then did not see the stick
+  commit: 708e5ff   test: tools/test_os_apps.py (static; the Windows CI parses and runs the script)
+### U095 [medium] Windows side of Switch: step 4 could erase the stick that holds your files from step 2
+  commit: 708e5ff   test: tools/test_os_apps.py (static)
+### U096 [low] desktop.ini and Thumbs.db came along into every folder on BugOS
+  commit: 708e5ff   test: tools/test_os_apps.py (static)
+
 ## Skipped
+- U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
+  a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
 ## For you
 - The user said (2026-11-08): real-PC tests (below) come once an improve round finds nothing more; the GitHub
@@ -380,6 +427,8 @@ the image test of round 7 (build11, Fedora 44 Kinoite) passed with 0 errors.
   check them on another computer.
 - U065, U066, U067: on a real PC with Plasma 6.8, turn on Big mouse pointer, Screen reader (Orca speaks) and Big
   letters, and look at Settings, Files and the start menu (checked here against the KDE sources, not on a screen).
+- U088, U094, U095: on a real PC, try the logout screen with two monitors, and the Windows Switch tool (an open
+  Outlook file in Documents; one USB stick for both step 2 and step 4).
 - From the first round, still open (improve-2026-11-07.md "For you"): A032 signing key, default branch main,
   private vulnerability reporting, merge and build once.
 
