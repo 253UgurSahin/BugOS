@@ -490,6 +490,30 @@ class Klus(QThread):
         self.klaar.emit(gelukt, fout)
 
 
+class Weggooien(QThread):
+    """Echt weggooien op een stick of andere schijf (geen prullenbak) op de achtergrond: een map met duizenden
+    foto's op een trage stick kan even duren, en dan mag het venster niet vastlopen (U108)."""
+
+    klaar = Signal(int, str)
+
+    def __init__(self, paden: list[Path]):
+        super().__init__()
+        self.paden = paden
+
+    def run(self) -> None:
+        weg, fout = 0, ""
+        for p in self.paden:
+            try:
+                if p.is_dir() and not p.is_symlink():
+                    shutil.rmtree(p)
+                else:
+                    p.unlink()
+                weg += 1
+            except OSError as e:
+                fout = e.strerror or str(e)
+        self.klaar.emit(weg, fout)
+
+
 def achter_uitleg(achter: list[tuple[Path, str, str]], verplaats: bool) -> str:
     """'2 bestanden konden niet mee: ...' in gewone woorden (de eerste paar met de reden)."""
     n = len(achter)

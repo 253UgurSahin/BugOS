@@ -15,7 +15,7 @@ from pathlib import Path
 from bugos_ui import lijn_icoon, t
 from bugos_files_plekken import INFO_ROL, PAD_ROL, thuis
 from bugos_files_acties import (
-    Klus, achter_uitleg, naar_prullenbak, prullenbak_legen, terugzetten, vrije_naam, zelfde_schijf,
+    Klus, Weggooien, achter_uitleg, naar_prullenbak, prullenbak_legen, terugzetten, vrije_naam, zelfde_schijf,
 )
 from PySide6.QtCore import QEvent, QMimeData, Qt, QTimer, QUrl
 from PySide6.QtWidgets import QApplication, QInputDialog, QLabel, QMenu, QMessageBox
@@ -256,25 +256,40 @@ class Bewerken:
                                    "Really delete?"),
                                  t("Weggooien", "Delete")):
                 return
+        if ver and self.klus and self.klus.isRunning():
+            return   # er loopt al iets (kopiëren of weggooien)
         weg, fout = [], ""
         for p in paden:
+            if p in ver:
+                continue   # die gaan hieronder op de achtergrond
             try:
-                if p in ver:
-                    if p.is_dir() and not p.is_symlink():
-                        shutil.rmtree(p)
-                    else:
-                        p.unlink()
-                else:
-                    weg.append(naar_prullenbak(p))
+                weg.append(naar_prullenbak(p))
             except OSError as e:
                 fout = e.strerror or str(e)
         self.laatst_weg = weg
+        if ver:
+            self.klus = Weggooien(ver)
+            self.melding.toon(t("Bezig met weggooien…", "Deleting…"), seconden=0)
+            self.klus.klaar.connect(lambda n, f, eerder=fout: self._weg_klaar(n, f or eerder))
+            self.klus.start()
+            return
         if fout:
             self.melding.toon(t(f"Niet alles kon weg: {fout}", f"Not everything could be deleted: {fout}"), "fout")
         elif weg:
             n = len(weg)
             self.melding.toon(t(f"{n} {'ding' if n == 1 else 'dingen'} naar de prullenbak.", f"{n} {'item' if n == 1 else 'items'} moved to the trash."),
                               knop=t("Ongedaan maken", "Undo"), actie=self.ongedaan, seconden=10)
+
+    def _weg_klaar(self, n: int, fout: str) -> None:
+        self.ververs()
+        if fout:
+            self.melding.toon(t(f"Niet alles kon weg: {fout}", f"Not everything could be deleted: {fout}"), "fout",
+                              seconden=0 if self.sluit_na_klus else 12)
+            self.sluit_na_klus = False
+        else:
+            self.melding.toon(t(f"{n} {'ding' if n == 1 else 'dingen'} weggegooid.", f"{n} {'item' if n == 1 else 'items'} deleted."), "goed")
+            if self.sluit_na_klus:
+                QTimer.singleShot(0, self.close)
 
     def ongedaan(self) -> None:
         mislukt = 0

@@ -730,6 +730,25 @@ app.processEvents()
 klopt(vb.isVisible() and not vb.sluit_na_klus and "stick" in vb.melding.tekst.text(),
       "U038: Bestanden: mislukt het kopiëren nadat je het venster sloot, dan blijft het open met de foutmelding")
 klopt(not vb.melding.klok.isActive(), "U047: Bestanden: die foutmelding blijft staan (verdwijnt niet na 12 seconden)")
+# U108: echt weggooien op een stick gebeurt op de achtergrond (het venster loopt niet vast).
+import bugos_files_bewerken as _bw  # noqa: E402
+
+_grote = STICK / "Duizend fotos"
+_grote.mkdir()
+for _i in range(50):
+    (_grote / f"{_i}.jpg").write_text("x")
+_echt_zs, _echt_vraag, _echt_gekozen = _bw.zelfde_schijf, vb.vraag_ja, vb.gekozen
+_bw.zelfde_schijf = lambda a, b_: False
+vb.vraag_ja = lambda *a, **k: True
+vb.gekozen = lambda: [_grote]
+vb.weggooien()
+_op_achtergrond = vb.klus is not None and isinstance(vb.klus, acties.Weggooien)
+wacht(lambda: not _grote.exists() and not vb.klus.isRunning(), 5000)
+for _ in range(10):
+    app.processEvents()
+_bw.zelfde_schijf, vb.vraag_ja, vb.gekozen = _echt_zs, _echt_vraag, _echt_gekozen
+klopt(_op_achtergrond and not _grote.exists() and "weggegooid" in vb.melding.tekst.text(),
+      f"U108: weggooien op een stick op de achtergrond, met een melding ({vb.melding.tekst.text()[:40]})")
 # U106/U107: de melding noemt de (2)-namen, en knippen-plakken wist niet wat je intussen anders kopieerde.
 vb.sluit_na_klus = False
 
