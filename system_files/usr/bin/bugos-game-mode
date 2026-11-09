@@ -44,7 +44,7 @@ fps_meteen_actief() {
     [ "${MANGOHUD:-}" = 1 ] && [ "${MANGOHUD_CONFIGFILE:-}" = "$MH_CONF" ]
 }
 
-fps_# Volle kracht is voor de hele computer, maar game-modus is per account. Wie nu gamet, staat als een leeg bestand in
+# Volle kracht is voor de hele computer, maar game-modus is per account. Wie nu gamet, staat als een leeg bestand in
 # /dev/shm (voor iedereen te zien, weg na opnieuw opstarten) (U385, U394).
 GAMER_MAP="${BUGOS_GAMER_MAP:-/dev/shm}"
 GAMER_MERK="$GAMER_MAP/bugos-spelmodus-$(id -u)"
@@ -56,7 +56,7 @@ andere_gamers() {
     return 1
 }
 
-aan() {
+fps_aan() {
     mkdir -p "$BUGOS_CONFIG" "$(dirname "$MH_ENV")"
     touch "$FPS_METEEN"
     if [ -f "$MARKER" ]; then mangohud_bestand zichtbaar; else mangohud_bestand verborgen; fi
