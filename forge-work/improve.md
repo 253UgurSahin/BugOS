@@ -290,6 +290,18 @@ Tests after: 23 passed, 0 failed (here).
 ### U048 [medium] A backup to a FAT/exFAT drive lost one of two names that differ only in capitals, and said "safe"
   commit: 5d8da04   test: tools/test_os_apps.py (a stand-in for a case-insensitive drive; real FAT stick: for you)
 
+## Round 5 (2026-11-09)
+Found 4, all small and all in code added in rounds 3-4. All fixed with a test that failed first. Tests after: 23 passed.
+
+### U049 [low] After turning the FPS option off, game mode said "FPS counter in games" but left it hidden in that session
+  commit: 2d386ba   test: tools/test_os_system.sh
+### U050 [low] "Update now" after a not-yet-restarted "Back" said "up to date", yet the restart still went back
+  commit: c4427ea   test: tools/test_os_system.sh   note: Update now now undoes such a waiting Back first
+### U051 [low] On a FAT/exFAT backup drive, a photo already in the backup could be replaced by its capitals twin
+  commit: f6e67d8   test: tools/test_os_apps.py
+### U052 [medium] Closing the Store during an install broke the install off without a message
+  commit: f73aa93   test: tools/test_os_apps.py
+
 ## Skipped
 
 ## For you
