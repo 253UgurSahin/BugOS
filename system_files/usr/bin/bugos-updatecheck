@@ -29,7 +29,14 @@ NU="$(echo "$STATUS" | jq -r '.deployments[] | select(.booted) | ."container-ima
 BRON="docker://${REF##*docker://}"
 [[ "$REF" == *docker://* ]] || BRON="docker://${REF#*:}"
 
-NIEUW="$(skopeo inspect --format '{{.Digest}}' "$BRON" 2>/dev/null)" || exit 0
+# Even wachten op internet: net na het inloggen is de wifi vaak nog niet verbonden (U178).
+for _ in $(seq 24); do
+    [ "$(LC_ALL=C nmcli -t networking connectivity 2>/dev/null)" = full ] && break
+    command -v nmcli >/dev/null 2>&1 || break
+    sleep 5
+done
+# Lukt kijken niet (geen internet)? Dan code 75: systemd probeert het een half uur later opnieuw.
+NIEUW="$(skopeo inspect --format '{{.Digest}}' "$BRON" 2>/dev/null)" || exit 75
 [ -n "$NIEUW" ] && [ "$NIEUW" != "$NU" ] || exit 0
 
 KEUZE="$(notify-send --app-name=BugOS --icon=system-software-update --wait \

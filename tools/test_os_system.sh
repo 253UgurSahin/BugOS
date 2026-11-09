@@ -145,6 +145,12 @@ rm -f "$TMP/meldingen"
 draai bugos-updatecheck
 klopt 'grep -q "Update is ready" "$TMP/meldingen" 2>/dev/null' "updatecheck: nieuwere versie klaar -> 'Update is ready'"
 nep notify-send 'exit 0'
+# U178: nog geen internet: niet 'niets aan de hand' (0), maar een fout, zodat systemd het later opnieuw probeert.
+printf '{"deployments":[{"booted":true,"timestamp":2000,"container-image-reference":"ostree-image-signed:docker://ghcr.io/x/bugos:latest","container-image-reference-digest":"sha256:aa"}]}' >"$TMP/status.json"
+nep skopeo 'exit 1'
+draai bugos-updatecheck
+klopt '[ "$code" -ne 0 ] && grep -q "^Restart=on-failure" "$ROOT/system_files/usr/lib/systemd/user/bugos-updatecheck.service"' \
+    "U178: updatecheck zonder internet: later opnieuw proberen (code $code), niet pas morgen"
 
 # Hulp (bugos-help, Python): één controle draaien met de nep-programma's; print stand en tekst.
 # hulp <controle> repareer  -> druk daarna ook op de knop.
