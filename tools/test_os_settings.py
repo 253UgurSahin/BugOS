@@ -889,6 +889,21 @@ _QMB2.exec, _up.updates = _oud_exec, _oud_up
 klopt(_teksten and "wachtwoord" in _teksten[0] and "wifi" in _teksten[0] and not _gestart,
       f"U368: 'terug' waarschuwt eerst dat wachtwoord, gebruikers en wifi ook teruggaan; Annuleren doet niets ({_gestart})")
 
+# U374: 'Grote letters' uit zet terug wat er stond (eigen grootte en menulettertype), niet altijd 10 punten.
+_cfg = Path(tempfile.mkdtemp(prefix="bugos-cfg-"))
+_oud_cfg = os.environ.get("XDG_CONFIG_HOME")
+os.environ["XDG_CONFIG_HOME"] = str(_cfg)
+_eigen = {"font": "Inter,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1", "menuFont": "Noto Sans,12,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"}
+vang(bi.zet_grote_tekst, True, antwoord=lambda c: (0, next((v for k, v in _eigen.items() if c[c.index("--key") + 1] == k), "")) if "--key" in c else (0, ""))
+opdr, _ = vang(bi.zet_grote_tekst, False)
+if _oud_cfg is None:
+    os.environ.pop("XDG_CONFIG_HOME", None)
+else:
+    os.environ["XDG_CONFIG_HOME"] = _oud_cfg
+_terug = kde_sleutels(opdr)
+klopt(_terug.get(("General", "font")) == _eigen["font"] and _terug.get(("General", "menuFont")) == _eigen["menuFont"],
+      f"U374: 'Grote letters' uit zet je eigen lettertypes terug ({_terug.get(('General', 'menuFont'))})")
+
 # U353: zoeken in Instellingen vindt ook woorden die op de pagina's staan (taakbalk, fps, opslag, dubbelklikken…).
 _mist = []
 for _w in ("taakbalk", "dubbelklikken", "fps", "opslag", "schijfruimte", "computernaam", "lettergrootte", "tekstgrootte",

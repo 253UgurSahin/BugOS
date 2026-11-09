@@ -8,6 +8,7 @@ bugos_config (_c.draai), zodat een test die bi.draai of bi.VOORBEELD vervangt da
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -46,12 +47,36 @@ def zet_grote_tekst(aan: bool) -> None:
     if _c.VOORBEELD:
         _c._VB["grote_tekst"] = aan
         return
-    familie, _p = lees_letter(_c.kde_lees("kdeglobals", "General", "font", ""))
-    punten = GROTE_LETTERS if aan else GEWONE_LETTERS
-    for sleutel in ("font", "menuFont", "toolBarFont"):
-        _c.kde_schrijf("kdeglobals", "General", sleutel, letter(familie, punten))
-    _c.kde_schrijf("kdeglobals", "General", "smallestReadableFont", letter(familie, punten - 2))
-    _c.kde_schrijf("kdeglobals", "WM", "activeFont", letter(familie, punten, 600))
+    # Wat er stond vóór 'Grote letters', zodat 'uit' precies dat terugzet (een eigen grootte of menulettertype),
+    # niet altijd 10 punten in één lettersoort (U374).
+    sleutels = (("General", "font"), ("General", "menuFont"), ("General", "toolBarFont"),
+                ("General", "smallestReadableFont"), ("WM", "activeFont"))
+    import json
+    from pathlib import Path
+    voor = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "bugos" / "grote-letters-voor.json"
+    if not aan and voor.exists():
+        try:
+            oud = json.loads(voor.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            oud = {}
+        for groep, sleutel in sleutels:
+            waarde = oud.get(f"{groep}/{sleutel}")
+            _c.kde_schrijf("kdeglobals", groep, sleutel, waarde if waarde else None)
+        voor.unlink(missing_ok=True)
+    else:
+        if aan and not voor.exists():
+            try:
+                voor.parent.mkdir(parents=True, exist_ok=True)
+                voor.write_text(json.dumps({f"{g}/{k}": _c.kde_lees("kdeglobals", g, k, "") for g, k in sleutels}),
+                                encoding="utf-8")
+            except OSError:
+                pass
+        familie, _p = lees_letter(_c.kde_lees("kdeglobals", "General", "font", ""))
+        punten = GROTE_LETTERS if aan else GEWONE_LETTERS
+        for sleutel in ("font", "menuFont", "toolBarFont"):
+            _c.kde_schrijf("kdeglobals", "General", sleutel, letter(familie, punten))
+        _c.kde_schrijf("kdeglobals", "General", "smallestReadableFont", letter(familie, punten - 2))
+        _c.kde_schrijf("kdeglobals", "WM", "activeFont", letter(familie, punten, 600))
     _c.draai("gdbus", "emit", "--session", "--object-path", "/KDEPlatformTheme", "--signal",
           "org.kde.KDEPlatformTheme.refreshFonts", timeout=5)
     _c.kwin_herlees()
