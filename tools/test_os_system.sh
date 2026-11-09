@@ -434,6 +434,10 @@ for klok in "$SD/system/bugos-update-apps.timer" "$SD/user/bugos-updatecheck.tim
         ! grep -qE "^OnUnit(In)?[Aa]ctiveSec=" "$klok"' "$naam: elke dag op de klok, en inhalen als hij gemist is"
     klopt 'sd_goed "$klok" "${klok%.timer}.service"' "$naam: systemd kan hem lezen"
 done
+# U443: ook de systeemupdate van rpm-ostree (zijn eigen timer telt 'na opstarten' en 'na de vorige keer').
+DI="$SD/system/rpm-ostreed-automatic.timer.d/50-bugos-elke-dag.conf"
+klopt 'grep -qx "OnBootSec=" "$DI" && grep -qx "OnUnitInactiveSec=" "$DI" && grep -qx "OnCalendar=daily" "$DI" && grep -qx "Persistent=true" "$DI"' \
+    "U443: de systeemupdate gaat elke dag op de klok, ook op een laptop die slaapt of kort aanstaat"
 
 # U071: "niet storen" van vanochtend (1 uur) is vanavond voorbij: de hele tijd vergelijken, niet alleen de dag.
 # shellcheck source=system_files/usr/share/bugos/lib.sh
