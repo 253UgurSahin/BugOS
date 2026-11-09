@@ -680,11 +680,47 @@ Tests after: 20 test files passed (here).
 ### U213 [low] Welcome said "Language: Nederlands" on a system with LANG=C (English)
   commit: 6e099b4
 
+## Round 16 (2026-11-09)
+Two reviewers: the round-15 fixes (7 found plus one minor: U214, U217-U223; U215/U216 not used), and a fresh trace of a user's first month
+(open a photo or PDF, plug in a phone, print, pair headphones, install an app, make a backup) (4 found plus 3 unsure,
+U224-U230). 15 found; 14 fixed, each with a test that failed first; U230 skipped (below). Tests after: 20 test files passed (here).
+
+### U214 [medium] (from U200) A stick pulled out and put back was never mounted again on a PC with only the BugOS disk
+  commit: 5284e79   test: tools/test_files.py
+### U217 [medium] (from U208) A second start un-maximized a maximized window
+  commit: f836c1e   test: tools/test_os_apps.py
+### U218 [medium] (from U208) On Wayland the open window probably did not come forward (no activation token)
+  commit: f836c1e   test: tools/test_os_apps.py (the token is passed on; check on a real Plasma 6.8 PC)
+### U219 [low, security] (from U208) Another account could take the app's address in the shared /tmp
+  commit: f836c1e   test: tools/test_os_apps.py
+### U220 [low] (from U208) A hung or closing first window swallowed a new start
+  commit: f836c1e   test: tools/test_os_apps.py
+### U221 [medium] (from U208, U199) A window you opened again closed by itself when its job finished
+  commit: f836c1e   test: tools/test_os_apps.py
+### U222 [low] (from U208) The Store and Task Manager ignored what a second start asked for (appstream://, --zoek, --prestaties)
+  commit: f836c1e   test: tools/test_os_apps.py
+### U223 [low] (from U205) Ctrl+A in the start menu typed into the search field
+  commit: 99b88dc   test: tools/test_menus.py
+### U224 [high] No program opened photos or PDFs after installing; the Store had no photo viewer
+  commit: f1110e0   test: tools/test_os_system.sh
+### U225 [low] A phone or camera (MTP/PTP) could not open in Files (no kio-fuse)
+  commit: eae2492   test: tools/test_os_system.sh (check with a phone on a real PC)
+### U226 [medium] Backup offered a disk inside the computer as backup place (and could preselect it)
+  commit: 9438d74   test: tools/test_backup.py
+### U227 [low] Settings stayed stale after pairing headphones, adding a printer or installing an app
+  commit: 389a370   test: tools/test_os_settings.py
+### U228 [low] The backup folder changed name on another network (DHCP host name), so a full new copy began
+  commit: c867332   test: tools/test_backup.py
+### U229 [low] Choosing English in Europe gave US dates and Letter paper (now en_IE, or your English region)
+  commit: c59ed71   test: tools/test_settings.py
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
 - U161: a printer queue stopped by CUPS has no "Start again" button (needs admin rights); the advanced page can.
 - U163: two small blocking calls in Settings (usually well under a second).
+- U230 (round 16): "Show in folder" in Firefox and notifications opens Dolphin, not Files. Files would have to
+  provide org.freedesktop.FileManager1 on D-Bus next to Dolphin's own service (M; needs a real Plasma session to test).
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
