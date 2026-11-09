@@ -105,8 +105,16 @@ if [ -e "$TMP/bin/powerprofilesctl" ] || nep powerprofilesctl 'case "$1" in get)
     echo balanced >"$TMP/profiel"
     # U432: 'status' (het snelmenu kijkt steeds) neemt geen merkje weg: dat kan van een 'aan' zijn die nog bezig is.
     touch "$BUGOS_GAMER_MAP/bugos-spelmodus-1007"
+    mkdir -p "$TMP/gijs/.config/bugos"
+    # Een 'aan' die nog bezig is, houdt het slot vast:
+    flock "$TMP/gijs/.config/bugos/.spelmodus.slot" sleep 3 &
+    sleep 0.5
     gebruiker gijs status 1007
     klopt '[ -e "$BUGOS_GAMER_MAP/bugos-spelmodus-1007" ]' "U432: 'status' laat het merkje van een 'aan' in uitvoering staan"
+    wait
+    # U489: niemand is bezig (slot vrij) en game-modus staat uit: dan ruimt 'status' het merkje wel op.
+    gebruiker gijs status 1007
+    klopt '[ ! -e "$BUGOS_GAMER_MAP/bugos-spelmodus-1007" ]' "U489: 'status' ruimt een merkje van gewiste instellingen op als niemand bezig is"
     rm -f "$BUGOS_GAMER_MAP/bugos-spelmodus-1007"
     # U435: een nep-merkje (nummer 0, of een bestand dat niet van dat account is) telt niet.
     touch "$BUGOS_GAMER_MAP/bugos-spelmodus-0" "$BUGOS_GAMER_MAP/bugos-spelmodus-1888"

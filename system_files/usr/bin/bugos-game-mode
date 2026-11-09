@@ -204,7 +204,11 @@ fi
 # En andersom: staat hij uit (of zijn je instellingen gewist), dan weg met je merkje (U420).
 # Alleen met het slot: 'status' (van het snelmenu) zou anders een 'aan' die nog bezig is, zijn merkje afpakken (U432).
 if [ "${1:-}" = status ]; then
-    :
+    # Wel opruimen als niemand anders nu bezig is (het slot is vrij): anders bleef een merkje van gewiste instellingen
+    # staan tot je zelf game-modus aan- of uitzet (U489).
+    if [ ! -f "$MARKER" ] && [ -e "$GAMER_MERK" ] && exec 9>"$BUGOS_CONFIG/.spelmodus.slot" && flock -n 9 2>/dev/null; then
+        [ -f "$MARKER" ] || rm -f "$GAMER_MERK"
+    fi
 elif [ -f "$MARKER" ] && [ ! -e "$GAMER_MERK" ]; then
     [ -d "$GAMER_MAP" ] || mkdir -m 1777 -p "$GAMER_MAP" 2>/dev/null
     touch "$GAMER_MERK" 2>/dev/null
