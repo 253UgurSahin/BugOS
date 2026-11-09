@@ -193,6 +193,20 @@ _twee = [bt.Proces(600, "firefox", 1, 1, 1, True, f"/user.slice/user-{_ik}.slice
          bt.Proces(602, "kwin_wayland", 1, 1, 1, False,
                    f"/user.slice/user-{_ik}.slice/user@{_ik}.service/session.slice/plasma-kwin_wayland.service")]
 _g433 = {x.pids[0]: x for x in bt.groepeer(_twee, {})}
+# U451: een 'sudo' (van root) in je eigen Konsole: Konsole blijft te sluiten.
+_kons = f"/user.slice/user-{_ik}.slice/user@{_ik}.service/app.slice/app-org.kde.konsole-99.scope"
+_g447 = bt.groepeer([bt.Proces(700, "konsole", 1, 1, 1, True, _kons), bt.Proces(701, "sudo", 700, 1, 1, False, _kons)], {})
+klopt(len(_g447) == 1 and _g447[0].pids == [700, 701] and _g447[0].eigen,
+      f"U451: een sudo in je eigen Konsole maakt Konsole niet onsluitbaar ({[(x.naam, x.pids, x.eigen) for x in _g447]})")
+# U451: 'van jou' volgens de echte gebruiker (Uid: in status), niet volgens de eigenaar van de map in /proc.
+proces(900, "ssh-agent", f"{GEBRUIKER}/app.slice/ssh-agent.service")
+schrijf(PROC / "900" / "status", f"Name:\tssh-agent\nUid:\t{os.getuid()}\t{os.getuid()}\t{os.getuid()}\t{os.getuid()}\n")
+proces(901, "iets", f"{GEBRUIKER}/app.slice/iets.service")
+schrijf(PROC / "901" / "status", "Name:\tiets\nUid:\t4242\t4242\t4242\t4242\n")
+_p447 = {p.pid: p.eigen for p in bt.processen() if p.pid in (900, 901)}
+import shutil as _sh447
+_sh447.rmtree(PROC / "900"); _sh447.rmtree(PROC / "901")
+klopt(_p447 == {900: True, 901: False}, f"U451: 'van jou' volgens de echte gebruiker in /proc/<pid>/status ({_p447})")
 klopt(_g433[602].naam != "Andere accounts" and _g433[602].pids == [602],
       f"U441: je eigen kwin_wayland (in /proc van root) staat niet onder 'Andere accounts' ({_g433[602].naam})")
 klopt(_g433[600].pids == [600] and _g433[600].eigen and _g433[601].soort == "systeem" and _g433[601].beschermd,

@@ -205,8 +205,11 @@ def processen() -> list[Proces]:
         rest = stat[stat.rfind(")") + 2:].split()
         if len(rest) < 22 or int(rest[6]) & PF_KTHREAD:
             continue
+        # Van wie is hij? De echte gebruiker (Uid: in status), niet de eigenaar van /proc/<pid>: die is root voor
+        # programma's met extra rechten (gamescope) en voor ssh-agent, ook al zijn ze van jou (U451).
+        uid = next((r.split()[1] for r in lees(map_ / "status").splitlines() if r.startswith("Uid:")), "")
         try:
-            eigen = map_.stat().st_uid == mijn
+            eigen = int(uid) == mijn if uid.isdigit() else map_.stat().st_uid == mijn
         except OSError:
             continue
         geheugen_ = 0
@@ -328,7 +331,9 @@ def groepeer(lijst: list[Proces], procent: dict[int, float]) -> list[Taak]:
         taak.pids.append(p.pid)
         taak.processor += procent.get(p.pid, 0.0)
         taak.geheugen += p.geheugen
-        taak.eigen = taak.eigen and p.eigen
+        # Een 'sudo' of 'pkexec' in je eigen Konsole of Instellingen (van root) maakt die niet onsluitbaar (U451).
+        if p.eigen or soort == "systeem" or taak.pids == [p.pid]:
+            taak.eigen = taak.eigen and p.eigen
         if (p.naam[:15] in BESCHERMD_KORT or p.pid == eigen_pid or soort == "systeem"
                 or BESCHERMDE_EENHEID.match(eenheid)):
             taak.beschermd = True
