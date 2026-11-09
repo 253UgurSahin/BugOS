@@ -114,7 +114,13 @@ uit() {
     [ -f "$MARKER" ] || return 0
     vorig="$(cat "$BUGOS_CONFIG/stroomprofiel-voor-spelmodus" 2>/dev/null)"
     [ -n "$vorig" ] || vorig=balanced
-    stroomprofiel_zet "$vorig"
+    # Volle kracht is voor de hele computer. Alleen terugzetten als hij nog op volle kracht staat (koos iemand intussen
+    # zelf iets, dan blijft dat), en nooit 'volle kracht' terugzetten: dat was dan van een ander account dat ook aan
+    # het gamen was, en dan bleef de pc voor altijd op volle kracht (U385).
+    if [ "$(stroomprofiel_get)" = performance ]; then
+        [ "$vorig" = performance ] && vorig=balanced
+        stroomprofiel_zet "$vorig"
+    fi
     # Niet storen alleen uitzetten als het door de game-modus aan is gegaan.
     # Veranderde je 'niet storen' zelf tijdens de game-modus (uit, of een andere tijd)? Dan blijft dat zo (U143).
     if [ "$(kreadconfig6 --file plasmanotifyrc --group DoNotDisturb --key Until 2>/dev/null)" != "$NIET_STOREN_TOT" ]; then

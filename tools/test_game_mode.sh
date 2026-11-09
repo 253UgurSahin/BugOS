@@ -62,5 +62,15 @@ echo "$straks" >"$TMP/until"
 draai uit
 klopt '[ "$(cat "$TMP/profiel")" = power-saver ] && [ "$(cat "$TMP/until")" = "$straks" ]' \
     "U127: game-modus uit terwijl hij al uit stond: stroomprofiel en 'niet storen' blijven van jou"
+# U385: twee gebruikers (snel wisselen): A aan, B aan, A uit, B uit -> de pc mag niet op volle kracht blijven staan.
+if [ -e "$TMP/bin/powerprofilesctl" ] || nep powerprofilesctl 'case "$1" in get) cat "'"$TMP"'/profiel";; set) echo "$2" >"'"$TMP"'/profiel";; esac'; then
+    echo balanced >"$TMP/profiel"
+    gebruiker() { HOME="$TMP/$1" XDG_CONFIG_HOME="$TMP/$1/.config" PATH="$TMP/bin:$PATH" bash "$TMP/spelmodus" "$2" >/dev/null 2>&1; }
+    gebruiker anna aan
+    gebruiker bram aan
+    gebruiker anna uit
+    gebruiker bram uit
+    klopt '[ "$(cat "$TMP/profiel")" != performance ]' "U385: twee mensen met game-modus: daarna staat de pc niet voor altijd op volle kracht ($(cat "$TMP/profiel"))"
+fi
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
