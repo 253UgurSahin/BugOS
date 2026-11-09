@@ -21,7 +21,7 @@ from bugos_ui import (  # noqa: E402
     TAAL, ZIJBALK_BREEDTE, Banner, Chip, Kaart, Knop, Venster, Zoekveld, bestaat, draai, label, maak_app,
     raster, start, t, uitvoeren,
 )
-from PySide6.QtCore import QProcess, QSize, Qt  # noqa: E402
+from PySide6.QtCore import QProcess, QSize, Qt, QTimer  # noqa: E402
 from PySide6.QtGui import QIcon, QPixmap  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
     QFrame, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
@@ -270,6 +270,18 @@ class Winkel(Venster):
             if self.kaarten:
                 self.toon()
 
+    def closeEvent(self, e) -> None:  # noqa: N802
+        # Nooit midden in het installeren stoppen (dan breekt flatpak af): wachten, en daarna vanzelf dicht.
+        if self.proces.state() != QProcess.ProcessState.NotRunning:
+            self.sluit_na = True
+            naam = next((a["naam"] for a in self.cat["apps"] if a["id"] == self.bezig_met), self.bezig_met)
+            self.melding.zet(t(f"Even wachten: {naam} wordt nog geïnstalleerd. Daarna gaat de Winkel vanzelf dicht.",
+                               f"One moment: {naam} is still being installed. The Store closes by itself afterwards."),
+                             "bezig")
+            e.ignore()
+            return
+        super().closeEvent(e)
+
     def installeer(self, app: dict) -> None:
         self.bezig_met = app["id"]
         self.melding.zet(t(f"{app['naam']} wordt geïnstalleerd. Dit kan een paar minuten duren…",
@@ -292,6 +304,11 @@ class Winkel(Venster):
                                f"Installing {naam} failed. Are you online? Please try again."), "fout")
         for k in self.kaarten:
             k.ververs()
+        if getattr(self, "sluit_na", False):
+            if code == 0:
+                QTimer.singleShot(0, self.close)   # je wilde al sluiten, en het is gelukt
+            else:
+                self.sluit_na = False   # mislukt: open laten, zodat je de melding ziet
 
     def meer_apps(self) -> None:
         zoek = self.zoek.text().strip()

@@ -489,6 +489,26 @@ for zoek, app_id in (("Firefox", "org.mozilla.firefox"), ("Steam", "com.valvesof
 ww.zoek.setText("VLC")
 kaart = next((k for k in ww.kaarten if k.app["id"] == "org.videolan.VLC"), None)
 klopt(kaart is not None and kaart.knop.text() == "Installeren", "U013: een app die er echt niet is: 'Installeren'")
+# U052: de Winkel sluiten tijdens het installeren: niet afbreken, wachten en daarna vanzelf dicht;
+# mislukt het, dan blijft de Winkel open met de melding.
+nep_programma("flatpak", 'if [ "$1" = install ]; then /usr/bin/sleep 1; exit "${BUGOS_TEST_FLATPAK:-0}"; fi\nexit 0\n')
+vlc = next(a for a in cat["apps"] if a["id"] == "org.videolan.VLC")
+for _code, _verwacht in (("0", "dicht"), ("1", "open")):
+    os.environ["BUGOS_TEST_FLATPAK"] = _code
+    ww.show()
+    ww.installeer(vlc)
+    wacht(lambda: ww.proces.state() != ww.proces.ProcessState.NotRunning, 3000)
+    ww.close()
+    _bleef = ww.isVisible() and ww.proces.state() != ww.proces.ProcessState.NotRunning
+    wacht(lambda: ww.proces.state() == ww.proces.ProcessState.NotRunning, 8000)
+    for _ in range(20):
+        app.processEvents()
+    if _verwacht == "dicht":
+        klopt(_bleef and not ww.isVisible(), "U052: Winkel sluiten tijdens installeren: wacht tot het klaar is, dan dicht")
+    else:
+        klopt(_bleef and ww.isVisible() and "lukte niet" in ww.melding.tekst.text(),
+              "U052: ... en mislukt het installeren, dan blijft de Winkel open met de melding")
+del os.environ["BUGOS_TEST_FLATPAK"]
 ww.close()
 
 # ================================== U016: een schermlezer hoort een naam bij schuifjes, regels en keuzekaarten ===
