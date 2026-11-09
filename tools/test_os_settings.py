@@ -103,6 +103,20 @@ else:
     os.environ["BUGOS_SYS"] = _oud_sys
 klopt(na == 300 and any("Battery" in c for c in opdr),
       f"U235: op de accu toont Instellingen de accu-tijd (KDE: 5 minuten), niet die van de lader ({na})")
+# U243: met de lader erin (de accu zegt 'Unknown' door een laadgrens) gelden de tijden van de lader; en 10 min slapen
+# (KDE op de accu) staat als keuze in Instellingen.
+(_sys235 / "class" / "power_supply" / "BAT0" / "status").write_text("Unknown\n")
+(_sys235 / "class" / "power_supply" / "AC").mkdir()
+(_sys235 / "class" / "power_supply" / "AC" / "type").write_text("Mains\n")
+(_sys235 / "class" / "power_supply" / "AC" / "online").write_text("1\n")
+os.environ["BUGOS_SYS"] = str(_sys235)
+_pr = bi._profiel() if hasattr(bi, "_profiel") else __import__("bugos_config_scherm")._profiel()
+if _oud_sys is None:
+    os.environ.pop("BUGOS_SYS", None)
+else:
+    os.environ["BUGOS_SYS"] = _oud_sys
+klopt(_pr == "AC" and 600 in bi.SLAAP_KEUZES,
+      f"U243: lader erin (accu 'Unknown'): de tijden van de lader; en 10 min slapen is een keuze ({_pr})")
 
 
 # U061: Instellingen vraagt bluetoothctl niets op een computer zonder bluetooth (geen 5 s wachten per vraag).

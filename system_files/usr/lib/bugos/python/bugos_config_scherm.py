@@ -276,7 +276,7 @@ def zet_achtergrond(pad: str) -> bool:
 
 PROFIELGROEPEN = ("AC", "Battery", "LowBattery")
 SCHERM_UIT_KEUZES = (300, 600, 1800, 0)     # seconden; 0 = nooit
-SLAAP_KEUZES = (900, 1800, 3600, 0)
+SLAAP_KEUZES = (600, 900, 1800, 3600, 0)   # 10 min: KDE's eigen tijd op de accu (U243)
 KNOP_VRAGEN, KNOP_SLAPEN, KNOP_UIT, KNOP_NIETS, KNOP_SCHERM_UIT = 16, 1, 8, 0, 64
 
 
@@ -293,9 +293,21 @@ _KDE_STANDAARD = {("AC", "TurnOffDisplayIdleTimeoutSec"): 600, ("AC", "AutoSuspe
 def _profiel() -> str:
     """Welke tijden gelden nu: een laptop die op de accu loopt, gebruikt die van 'Battery' (U235)."""
     accu = batterij()
-    if accu is not None and not (accu.laadt or accu.vol or accu.aan_lader):
-        return "Battery"
-    return "AC"
+    if accu is None or accu.laadt or accu.vol or accu.aan_lader or _aan_stroom():
+        return "AC"
+    return "Battery"
+
+
+def _aan_stroom() -> bool:
+    """Zit de lader erin? Sommige laptops met een laadgrens zeggen bij de accu 'Unknown' (U243)."""
+    basis = Path(os.environ.get("BUGOS_SYS", "/sys")) / "class" / "power_supply"
+    for pad in basis.glob("*"):
+        try:
+            if (pad / "type").read_text().strip() == "Mains" and (pad / "online").read_text().strip() == "1":
+                return True
+        except OSError:
+            continue
+    return False
 
 
 def _energie_getal(groep: str, sleutel: str, standaard: int) -> int:

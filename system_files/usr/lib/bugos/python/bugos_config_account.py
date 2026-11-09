@@ -103,7 +103,8 @@ HOUDEN = ""   # formaten_voor: de LC_-instellingen laten zoals ze zijn
 def formaten_voor(code: str, land: str) -> tuple[str, str | None]:
     """(LANG, streek voor papier/maten/geld) bij de gekozen taal. Engels buiten Engeland of Amerika is geen
     Amerikaans: in een euroland Iers-Engels (dag/maand, A4, de euro); elders (Polen, Turkije…) Engels met het
-    papier, de maten en het geld van je eigen land (U229, U232). streek None haalt die weg, HOUDEN laat ze."""
+    datum op z'n Europees en het papier, de maten en het geld van je eigen land (U229, U232, U242).
+    streek None haalt die weg, HOUDEN laat ze."""
     if code != "en":
         return land, None
     nu = (_c.kde_lees("plasma-localerc", "Formats", "LANG", "") or os.environ.get("LANG", "")).split(".")[0]
@@ -113,7 +114,7 @@ def formaten_voor(code: str, land: str) -> tuple[str, str | None]:
         return land, None
     if nu.split("_")[1][:2] in EURO_LANDEN:
         return "en_IE", None
-    return "en_US", nu
+    return "en_IE", nu   # dag/maand en 24 uur, zoals bijna overal buiten Amerika (U242)
 
 
 def zet_taal(code: str) -> bool:

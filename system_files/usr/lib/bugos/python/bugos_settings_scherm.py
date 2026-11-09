@@ -173,7 +173,7 @@ class EnergiePagina(Blad):
         self.scherm_uit.gekozen.connect(lambda s: op_achtergrond(self, lambda: bi.zet_scherm_uit_na(s), lambda _u: None))
         g.voeg(Rij("computer", t("Scherm uit als je niets doet", "Screen off when you do nothing"),
                    t("Even met de muis bewegen en het is terug", "Move the mouse and it is back"), self.scherm_uit))
-        self.slaap = Keuzes([(900, t("15 min", "15 min")), (1800, t("30 min", "30 min")), (3600, t("1 uur", "1 hour")),
+        self.slaap = Keuzes([(600, t("10 min", "10 min")), (900, t("15 min", "15 min")), (1800, t("30 min", "30 min")), (3600, t("1 uur", "1 hour")),
                              (0, t("Nooit", "Never"))])
         self.slaap.gekozen.connect(lambda s: op_achtergrond(self, lambda: bi.zet_slaap_na(s), lambda _u: None))
         g.voeg(Rij("maan", t("Slaapstand als je niets doet", "Sleep when you do nothing"),

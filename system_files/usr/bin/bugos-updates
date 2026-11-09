@@ -47,9 +47,9 @@ hand)
     echo "UPDATES=hand" >"$CONF"
     systemctl disable --now "${TIMERS[@]}"
     gebruiker_timer mask   # (gaat in bij de volgende keer inloggen)
-    # bugos-updatecheck meldt een nieuwe versie; bijwerken gaat via die melding of Instellingen > Updates (U238).
-    t "Updates doe je nu zelf: BugOS meldt het als er een nieuwe versie is (Instellingen > Updates)." \
-        "You now do updates yourself: BugOS tells you when a new version is available (Settings > Updates)."
+    # bugos-updatecheck meldt een nieuwe versie; bijwerken gaat via die melding of Instellingen > Updates en meer (U238).
+    t "Updates doe je nu zelf: BugOS meldt het als er een nieuwe versie is (Instellingen > Updates en meer)." \
+        "You now do updates yourself: BugOS tells you when a new version is available (Settings > Updates and more)."
     ;;
 nu)
     als_beheerder "$@"
