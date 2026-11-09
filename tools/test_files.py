@@ -503,6 +503,23 @@ _oud507 = venster.vraag_tekst
 _gevraagd507 = []
 venster.vraag_tekst = lambda *a, **kw: (_gevraagd507.append(kw.get("kies_tot")), "Taart")[1]
 venster.hernoem()
+# U515: 'Taart v1.2' houdt ook .odt; '..' als naam geeft geen verborgen bestand.
+venster.ga_naar(_d507)
+for _ in range(30):
+    app.processEvents()
+venster.selecteer(_d507 / "Taart.odt")
+for _ in range(10):
+    app.processEvents()
+venster.vraag_tekst = lambda *a, **kw: "Taart v1.2"
+venster.hernoem()
+venster.selecteer(_d507 / "Taart v1.2.odt")
+for _ in range(10):
+    app.processEvents()
+venster.vraag_tekst = lambda *a, **kw: ".."
+venster.hernoem()
+klopt(sorted(p.name for p in _d507.iterdir()) == ["Taart v1.2.odt"],
+      f"U515: 'Taart v1.2' wordt 'Taart v1.2.odt', en '..' maakt niets verborgens ({sorted(p.name for p in _d507.iterdir())})")
+(_d507 / "Taart v1.2.odt").rename(_d507 / "Taart.odt")
 venster.vraag_tekst = lambda *a, **kw: "."
 venster.nieuwe_map()
 _punt509 = venster.melding.tekst.text()

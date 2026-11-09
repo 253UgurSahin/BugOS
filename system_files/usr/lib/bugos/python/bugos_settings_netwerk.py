@@ -150,11 +150,11 @@ class WifiPagina(Blad):
         def probeer():
             voor = bi.wifi_uuids(n.naam) if not bekend else set()
             uitkomst = bi.verbind(n.naam, wachtwoord, bekend)
-            if not uitkomst[0] and not bekend and bi.wachtwoord_fout(uitkomst[1] or ""):
+            if not uitkomst[0] and not bekend and voor is not None and bi.wachtwoord_fout(uitkomst[1] or ""):
                 # nmcli laat het nieuwe profiel staan (met het verkeerde wachtwoord): weg ermee, anders vroeg de
                 # volgende klik niets en zei hij 'misschien is het wachtwoord veranderd' (U498). Alleen het profiel dat
                 # nu nieuw is, en alleen bij een fout wachtwoord (niet buiten bereik of te traag) (U503).
-                bi.vergeet_uuids(bi.wifi_uuids(n.naam) - voor)
+                bi.vergeet_uuids((bi.wifi_uuids(n.naam) or set()) - voor)
             return uitkomst
 
         op_achtergrond(self, probeer, klaar)
@@ -178,7 +178,7 @@ class WifiPagina(Blad):
         if not w.exec():
             return
         wachtwoord = w.textValue()
-        self.melding.toon(t(f"Verbinden met {naam}…", f"Connecting to {naam}…"), seconden=30)
+        self.melding.toon(t(f"Verbinden met {naam}…", f"Connecting to {naam}…"), seconden=50)   # (U518)
 
         def klaar(uitkomst) -> None:
             gelukt = bool(uitkomst and uitkomst[0])
@@ -188,7 +188,15 @@ class WifiPagina(Blad):
                               "goed" if gelukt else "fout")
             self.ververs()
 
-        op_achtergrond(self, lambda: bi.verbind(naam, wachtwoord, verborgen=True), klaar)
+        def probeer():
+            # Net als bij een zichtbaar netwerk: een verkeerd wachtwoord blijft niet bewaard (U498, U503, U518).
+            voor = bi.wifi_uuids(naam)
+            uitkomst = bi.verbind(naam, wachtwoord, verborgen=True)
+            if not uitkomst[0] and voor is not None and bi.wachtwoord_fout(uitkomst[1] or ""):
+                bi.vergeet_uuids((bi.wifi_uuids(naam) or set()) - voor)
+            return uitkomst
+
+        op_achtergrond(self, probeer, klaar)
 
     def verbreek(self, n: bi.Netwerk) -> None:
         def klaar(ok) -> None:

@@ -107,10 +107,10 @@ def verbind(naam: str, wachtwoord: str = "", bekend: bool = False, verborgen: bo
         return True, ""
     if verborgen:   # een netwerk dat zijn naam niet uitzendt: zelf de naam opgeven (U109)
         if wachtwoord:
-            code, uit = _c.draai("nmcli", "--ask", "device", "wifi", "connect", naam, "hidden", "yes",
-                                 invoer=wachtwoord + "\n", timeout=45)
+            code, uit = _c.draai("nmcli", "--wait", "40", "--ask", "device", "wifi", "connect", naam, "hidden", "yes",
+                                 invoer=wachtwoord + "\n", timeout=45)   # --wait: (U503, U518)
         else:
-            code, uit = _c.draai("nmcli", "device", "wifi", "connect", naam, "hidden", "yes", timeout=45)
+            code, uit = _c.draai("nmcli", "--wait", "40", "device", "wifi", "connect", naam, "hidden", "yes", timeout=45)
         return code == 0, uit
     if wachtwoord and bekend:
         code, uit = _c.draai("nmcli", "--wait", "55", "--ask", "connection", "up", "id", naam, invoer=wachtwoord + "\n",
@@ -132,11 +132,13 @@ def bekend_netwerk(naam: str) -> bool:
     return any(splits_nmcli(r)[:2] == [naam, "802-11-wireless"] for r in uit.splitlines())
 
 
-def wifi_uuids(naam: str) -> set[str]:
+def wifi_uuids(naam: str) -> set[str] | None:
     """De UUID's van alle opgeslagen profielen voor dit netwerk (SSID), welke naam het profiel ook heeft."""
     if _c.VOORBEELD:
         return set()
-    _, uit = _c.draai("nmcli", "-t", "-f", "UUID,TYPE", "connection", "show")
+    code, uit = _c.draai("nmcli", "-t", "-f", "UUID,TYPE", "connection", "show")
+    if code != 0:
+        return None   # niet te zien: dan ook niets als 'nieuw' weggooien (U518)
     uuids = set()
     for regel in uit.splitlines():
         delen = splits_nmcli(regel)
@@ -168,7 +170,7 @@ def vergeet_netwerk(naam: str) -> bool:
     # zijn UUID weggooien (U345).
     # Alle opgeslagen profielen voor dit netwerk (SSID), ook een ouder 'Thuis' naast 'Thuis 1': anders verbond
     # NetworkManager er meteen weer mee (U357).
-    weg = sorted(wifi_uuids(naam))
+    weg = sorted(wifi_uuids(naam) or ())
     if not weg:
         return _c.draai("nmcli", "connection", "delete", "id", naam)[0] == 0
     return all(_c.draai("nmcli", "connection", "delete", "uuid", u)[0] == 0 for u in weg)

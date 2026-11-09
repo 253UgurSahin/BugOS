@@ -15,7 +15,7 @@ import subprocess
 from pathlib import Path
 
 from bugos_ui import lijn_icoon, t
-from bugos_files_plekken import INFO_ROL, PAD_ROL, thuis, toon_naam
+from bugos_files_plekken import INFO_ROL, PAD_ROL, VERBERG_EXT, thuis, toon_naam
 from bugos_files_acties import (  # noqa: I001
     NAAM_FOUTEN, RECHTEN_FOUTEN, Klus, Weggooien, achter_uitleg, naar_prullenbak, op_losse_schijf, prullenbak_legen, terugzetten, vrije_naam,
     zelfde_schijf,
@@ -246,13 +246,16 @@ class Bewerken:
             return
         # De tegel laat 'Recept' zien zonder '.odt': typ je 'Taart', dan wordt het 'Taart.odt', niet een bestand
         # zonder soort (U507).
-        if verborgen_ext and not Path(nieuw).suffix:
+        # Eerst controleren, dan pas de extensie erbij: anders werd '..' het verborgen '...odt' (U515).
+        if "/" in nieuw or nieuw.strip(".") == "":
+            self.melding.toon(t("Een naam mag geen / bevatten en niet alleen uit punten bestaan.",
+                                "A name cannot contain / or be only dots."), "fout")
+            return
+        # 'Taart v1.2' of 'Brief Dr. Jansen' hebben ook een punt, maar geen echte extensie: dan ook .odt erbij (U515).
+        if verborgen_ext and Path(nieuw).suffix.lower() not in VERBERG_EXT:
             nieuw += oud.suffix
             if nieuw == oud.name:
                 return
-        if "/" in nieuw or nieuw in (".", ".."):
-            self.melding.toon(t("Een naam mag geen / bevatten.", "A name cannot contain /."), "fout")
-            return
         doel = oud.with_name(nieuw)
         # Op een USB-stick (FAT/exFAT) zijn Foto.JPG en Foto.jpg hetzelfde bestand: dan is het
         # alleen andere hoofdletters, en dat mag gewoon.

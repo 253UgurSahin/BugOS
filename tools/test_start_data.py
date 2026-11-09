@@ -232,6 +232,15 @@ _volg504 = [r.split()[0] + " " + r.split()[1] for r in logboek().splitlines() if
 klopt(_volg504[:1] == ["rfkill unblock"] and "bluetoothctl power" in _volg504
       and _volg504[:_volg504.index("bluetoothctl power")].count("bluetoothctl show") >= 2,
       f"U504: bluetooth aan in het snelmenu wacht op de kaart ({_volg504})")
+# U517: tijdens het wachten klik je 'uit': dan niet daarna alsnog 'aan'.
+_run517 = TMP / "run517"
+_run517.mkdir()
+LOG.write_text("")
+(NEP / "bluetoothctl").write_text(f'#!/usr/bin/bash\necho "bluetoothctl $*" >>"{LOG}"\n'
+                                  f'[ "$1" = show ] && echo nieuwer >"{_run517}/bugos-bt-wens-$(id -u)"\nexit 0\n')
+(NEP / "bluetoothctl").chmod(0o755)
+draai("--zet", "bluetooth", "aan", env_extra={"XDG_RUNTIME_DIR": str(_run517)})
+klopt("bluetoothctl power on" not in logboek(), "U517: bluetooth: de laatste klik telt (geen 'aan' na een nieuwere klik)")
 nep("bluetoothctl", "Controller 00:11:22:33:44:55 BugOS [default]\n\tPowered: yes")
 # U260: game-modus vanuit het snelmenu wordt niet na 5 s afgebroken (dan bleef 'volle kracht' half aan staan).
 LOG.write_text("")

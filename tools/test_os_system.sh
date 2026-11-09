@@ -197,6 +197,7 @@ klopt 'grep -A4 "pkexec /usr/bin/bugos-updates nu" "$BIN/bugos-updatecheck" | gr
     "U488: 'Nu updaten' in de melding werkt ook je eigen apps bij"
 klopt '[ "$(grep -c "bezig_weg" "$BIN/bugos-updatecheck")" -ge 4 ] && grep -q "notify-send -p" "$BIN/bugos-updatecheck"' \
     "U505: de melding 'Bezig met updaten' gaat weg bij klaar, mislukt of Annuleren"
+klopt 'grep -A6 "^    bezig_weg() {" "$BIN/bugos-updatecheck" | grep -q "return 0"' "U516: Annuleren laat de updatecheck niet als 'mislukt' eindigen (geen nieuwe vraag een half uur later)"
 # U192: wel internet, maar de bron is er niet: niet elk half uur opnieuw.
 nep nmcli 'echo full'
 draai bugos-updatecheck

@@ -60,6 +60,7 @@ if [ "$KEUZE" = nu ]; then
     bezig_weg() {
         [ -n "$BEZIG_ID" ] && gdbus call --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications \
             --method org.freedesktop.Notifications.CloseNotification "$BEZIG_ID" >/dev/null 2>&1
+        return 0   # lukt het sluiten niet, dan is dat geen fout (anders vroeg systemd het een half uur later opnieuw) (U516)
     }
     pkexec /usr/bin/bugos-updates nu
     uitkomst=$?

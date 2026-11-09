@@ -486,6 +486,13 @@ def snel_zet(wat: str, waarde: str) -> None:
     if wat == "wifi":
         draai("nmcli", "radio", "wifi", "on" if aan else "off")
     elif wat == "bluetooth":
+        # De laatste klik telt: klik je tijdens het wachten 'uit', dan niet daarna alsnog 'aan' (U517).
+        wens = Path(os.environ.get("XDG_RUNTIME_DIR") or "/tmp") / f"bugos-bt-wens-{os.getuid()}"
+        mijn = f"{os.getpid()}-{time.time_ns()}"
+        try:
+            wens.write_text(mijn)
+        except OSError:
+            pass
         if aan:
             draai("rfkill", "unblock", "bluetooth")
             # Na de vliegtuigstand komt de kaart pas even later terug: wachten, zoals Instellingen en Help (U499, U504).
@@ -493,6 +500,11 @@ def snel_zet(wat: str, waarde: str) -> None:
                 if "Controller" in (draai("bluetoothctl", "show") or ""):
                     break
                 time.sleep(0.5)
+            try:
+                if wens.read_text() != mijn:
+                    return   # intussen een nieuwere klik
+            except OSError:
+                pass
         draai("bluetoothctl", "power", "on" if aan else "off")
     elif wat == "spel":
         # Los starten: na 5 s afbreken (draai) liet 'volle kracht' en 'niet storen' half aan staan (U260).

@@ -556,7 +556,7 @@ klopt(not _mist, f"U069: Engelse zoekwoorden in Instellingen vinden iets (niet: 
 
 # U109-U111: wifi: een verborgen netwerk (wachtwoord via de invoer), en een computer zonder wifi.
 opd, _ = vang(bi.verbind, "Thuis", "geheim123", False, True)
-klopt(opd and opd[0][:6] == ("nmcli", "--ask", "device", "wifi", "connect", "Thuis") and "hidden" in opd[0]
+klopt(opd and tuple(x for x in opd[0] if x not in ("--wait", "40"))[:6] == ("nmcli", "--ask", "device", "wifi", "connect", "Thuis") and "hidden" in opd[0]
       and "geheim123" not in opd[0], f"U109: verborgen netwerk: nmcli ... hidden yes, het wachtwoord niet op de opdrachtregel ({opd[:1]})")
 _, geen = vang(bi.heeft_wifi, antwoord=lambda c: (0, "ethernet\nloopback\n"))
 _, wel = vang(bi.heeft_wifi, antwoord=lambda c: (0, "wifi\nethernet\n"))
@@ -1058,6 +1058,24 @@ klopt(_vergeten498 == ["nieuw-2"], f"U498/U503: na een verkeerd wachtwoord gaat 
 klopt(not bi.wachtwoord_fout("") and not bi.wachtwoord_fout("Error: No network with SSID 'x' found.")
       and bi.wachtwoord_fout("Error: Connection activation failed: Secrets were required, but not provided."),
       "U503: alleen bij een fout wachtwoord weggooien (niet buiten bereik of te traag)")
+# U518: ook een verborgen netwerk: een verkeerd wachtwoord blijft niet bewaard (alleen het nieuwe profiel weg).
+_weg518 = []
+_oud518 = (bi.verbind, bi.vergeet_uuids, bi.wifi_uuids)
+_u518 = [set(), {"nieuw-9"}]
+bi.wifi_uuids = lambda naam: _u518.pop(0) if _u518 else set()
+bi.verbind = lambda naam, ww="", bekend=False, verborgen=False: (False, "Secrets were required, but not provided")
+bi.vergeet_uuids = lambda u: _weg518.extend(sorted(u))
+from PySide6.QtWidgets import QInputDialog as _QID518
+_oud_exec518, _oud_tv518 = _QID518.exec, _QID518.textValue
+_QID518.exec = lambda self: 1
+_wp518 = venster.paginas["wifi"]
+_teller518 = {"n": 0}
+_QID518.textValue = lambda self: (_teller518.__setitem__("n", _teller518["n"] + 1), "Verstopt" if _teller518["n"] <= 2 else "fout")[1]
+_wp518.verbind_verborgen()
+wacht()
+_QID518.exec, _QID518.textValue = _oud_exec518, _oud_tv518
+bi.verbind, bi.vergeet_uuids, bi.wifi_uuids = _oud518
+klopt(_weg518 == ["nieuw-9"], f"U518: een verborgen netwerk met een verkeerd wachtwoord blijft niet bewaard ({_weg518})")
 # U499: bluetooth aan na de vliegtuigstand: eerst wachten tot de kaart er is, dan pas 'power on'.
 _sys499 = Path(tempfile.mkdtemp(prefix="bugos-sys-"))
 (_sys499 / "class" / "bluetooth" / "hci0").mkdir(parents=True)
