@@ -48,5 +48,15 @@ HOME="$TMP/thuis" XDG_CONFIG_HOME="$TMP/thuis/.config" PATH="$TMP/bin:$PATH" bas
 code=$?
 klopt '[ $code -eq 0 ] && grep -q "staat aan\|is on" "$TMP/meldingen"' "U073: startmenu aan met een startknop: staat aan"
 
+# U259: een vervangen widget komt op dezelfde plek (niet achteraan, rechts van de klok). Met een nagebootst paneel.
+if command -v node >/dev/null 2>&1; then
+    awk "/^JS='/{f=1; sub(/^JS='/, \"\")} f&&/^'\$/{exit} f" "$ROOT/system_files/usr/bin/bugos-panel" >"$TMP/paneel.js"
+    BEGIN="org.bugos.startmenu,org.kde.plasma.icontasks,org.bugos.taskbar,org.bugos.quickmenu,org.kde.plasma.systemtray,org.kde.plasma.digitalclock,org.kde.plasma.showdesktop"
+    UIT="$(node "$ROOT/tools/panel-sim.js" "$TMP/paneel.js" "$BEGIN" 'vervang("org.bugos.startmenu", "org.kde.plasma.kickoff", "");')"
+    klopt '[ "${UIT%%,*}" = org.kde.plasma.kickoff ]' "U259: het KDE-menu komt links, op de plek van het BugOS-startmenu ($UIT)"
+    UIT="$(node "$ROOT/tools/panel-sim.js" "$TMP/paneel.js" "org.kde.plasma.icontasks,org.kde.plasma.systemtray,org.kde.plasma.digitalclock" 'vervang("", "org.bugos.quickmenu", "org.kde.plasma.systemtray");')"
+    klopt '[ "$UIT" = "org.kde.plasma.icontasks,org.bugos.quickmenu,org.kde.plasma.systemtray,org.kde.plasma.digitalclock" ]' \
+        "U259: het snelmenu komt vóór het systeemvak, niet achter de klok ($UIT)"
+fi
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

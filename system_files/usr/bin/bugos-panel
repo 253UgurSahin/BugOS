@@ -80,17 +80,14 @@ function vervang(oud, nieuw, voor) {
         }
         if (oud !== "" && doel === null) continue;
         if (oud === "" && buur === null) continue;
+        // Op de plek van de oude (of vóór de buur). Plasma leest AppletOrder alleen bij het opstarten en schrijft
+        // hem zelf opnieuw bij elke verandering; widget.index zet de plek echt (Widget::setIndex) (U259).
+        var plek = (oud !== "" ? doel : buur).index;
         var w = p.addWidget(nieuw);
         if (nieuw == "org.kde.plasma.kickoff") zet_kickoff(w);
         if (nieuw == "org.bugos.startmenu") zet_sneltoets(w);
-        p.currentConfigGroup = ["General"];
-        var volgorde = String(p.readConfig("AppletOrder", "")).split(";").filter(function (x) { return x !== "" && x != String(w.id); });
-        var plek = volgorde.indexOf(String(oud !== "" ? doel.id : buur.id));
-        if (plek < 0) plek = 0;
-        if (oud !== "") volgorde[plek] = String(w.id); else volgorde.splice(plek, 0, String(w.id));
-        p.writeConfig("AppletOrder", volgorde.join(";"));
         if (oud !== "") doel.remove();
-        p.reloadConfig();
+        if (typeof plek == "number" && plek >= 0) w.index = plek;
         gedaan++;
     }
     print(gedaan);
