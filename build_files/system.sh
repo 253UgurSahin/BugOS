@@ -234,6 +234,7 @@ install -Dm0644 "$MERK/logo-white.svg" /usr/share/pixmaps/fedora_whitelogo.svg
 install -Dm0644 "$MERK/mark.svg" /usr/share/icons/hicolor/scalable/places/distributor-logo.svg
 install -Dm0644 "$MERK/mark.svg" /usr/share/icons/BugOS/places/scalable/distributor-logo.svg
 install -Dm0644 "$MERK/mark-ink.svg" /usr/share/icons/hicolor/scalable/places/distributor-logo-symbolic.svg
+install -Dm0644 "$MERK/mark-ink.svg" /usr/share/icons/BugOS/places/scalable/distributor-logo-symbolic.svg
 
 # "Over dit systeem" (KDE Info-centrum): onze naam, versie, logo en website.
 # Name en Version moeten er expliciet in: anders pakt KDE ze per regel uit

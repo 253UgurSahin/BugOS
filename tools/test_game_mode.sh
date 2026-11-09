@@ -69,7 +69,8 @@ if [ -e "$TMP/bin/powerprofilesctl" ] || nep powerprofilesctl 'case "$1" in get)
     echo balanced >"$TMP/profiel"
     nep id 'if [ "$1" = -u ]; then echo "${NEP_UID:-1000}"; else /usr/bin/id "$@"; fi'
     nep getent 'case "$2" in 1999) exit 2;; *) exit 0;; esac'   # 1999: een account dat niet meer bestaat
-    gebruiker() { NEP_UID="$3" HOME="$TMP/$1" XDG_CONFIG_HOME="$TMP/$1/.config" PATH="$TMP/bin:$PATH" bash "$TMP/spelmodus" "$2" >/dev/null 2>&1; }
+    # shellcheck disable=SC2086  # $2 kan "fps status" zijn (twee woorden)
+    gebruiker() { NEP_UID="$3" HOME="$TMP/$1" XDG_CONFIG_HOME="$TMP/$1/.config" PATH="$TMP/bin:$PATH" bash "$TMP/spelmodus" $2 >/dev/null 2>&1; }
     gebruiker anna aan 1001
     gebruiker bram aan 1002
     gebruiker anna uit 1001
@@ -87,7 +88,7 @@ if [ -e "$TMP/bin/powerprofilesctl" ] || nep powerprofilesctl 'case "$1" in get)
     klopt 'grep -q "^GAMER_MAP=\"\${BUGOS_GAMER_MAP:-/var/tmp/bugos-spel}\"" "$TMP/spelmodus" && grep -qx "d /var/tmp/bugos-spel 1777 root root -" "$ROOT/system_files/usr/lib/tmpfiles.d/bugos.conf"' \
         "U404: de merkjes staan niet in /dev/shm (dat wist uitloggen en opnieuw opstarten)"
     rm -f "$BUGOS_GAMER_MAP"/bugos-spelmodus-1001   # oude BugOS: merkje weg, game-modus nog aan
-    gebruiker anna status 1001
+    gebruiker anna "fps status" 1001
     klopt '[ -e "$BUGOS_GAMER_MAP/bugos-spelmodus-1001" ]' "U404: game-modus staat aan maar het merkje is weg: het komt terug"
     gebruiker dolf aan 1004
     gebruiker dolf uit 1004
@@ -97,9 +98,14 @@ if [ -e "$TMP/bin/powerprofilesctl" ] || nep powerprofilesctl 'case "$1" in get)
     touch "$BUGOS_GAMER_MAP/bugos-spelmodus-1999"
     gebruiker emma aan 1005
     rm -rf "$TMP/emma/.config/bugos"            # emma's instellingen gewist terwijl game-modus aan stond
-    gebruiker emma status 1005
+    gebruiker emma "fps status" 1005
     klopt '[ ! -e "$BUGOS_GAMER_MAP/bugos-spelmodus-1005" ]' "U420: zonder 'game-modus aan' verdwijnt je merkje"
     echo balanced >"$TMP/profiel"
+    # U432: 'status' (het snelmenu kijkt steeds) neemt geen merkje weg: dat kan van een 'aan' zijn die nog bezig is.
+    touch "$BUGOS_GAMER_MAP/bugos-spelmodus-1007"
+    gebruiker gijs status 1007
+    klopt '[ -e "$BUGOS_GAMER_MAP/bugos-spelmodus-1007" ]' "U432: 'status' laat het merkje van een 'aan' in uitvoering staan"
+    rm -f "$BUGOS_GAMER_MAP/bugos-spelmodus-1007"
     gebruiker frits aan 1006
     gebruiker frits uit 1006
     klopt '[ "$(cat "$TMP/profiel")" = balanced ]' "U420: merkjes van gewiste accounts houden de pc niet op volle kracht ($(cat "$TMP/profiel"))"

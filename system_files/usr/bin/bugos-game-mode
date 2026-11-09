@@ -195,7 +195,10 @@ fi
 
 # Staat game-modus aan maar is je merkje weg (oude BugOS, opgeruimd)? Dan weer neerzetten (U404).
 # En andersom: staat hij uit (of zijn je instellingen gewist), dan weg met je merkje (U420).
-if [ -f "$MARKER" ] && [ ! -e "$GAMER_MERK" ]; then
+# Alleen met het slot: 'status' (van het snelmenu) zou anders een 'aan' die nog bezig is, zijn merkje afpakken (U432).
+if [ "${1:-}" = status ]; then
+    :
+elif [ -f "$MARKER" ] && [ ! -e "$GAMER_MERK" ]; then
     [ -d "$GAMER_MAP" ] || mkdir -m 1777 -p "$GAMER_MAP" 2>/dev/null
     touch "$GAMER_MERK" 2>/dev/null
 elif [ ! -f "$MARKER" ] && [ -e "$GAMER_MERK" ]; then
