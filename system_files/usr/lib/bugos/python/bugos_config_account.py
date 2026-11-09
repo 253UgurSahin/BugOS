@@ -93,6 +93,19 @@ def taal() -> str:
     return code if any(code == c for c, _l, _n in TALEN) else "en"
 
 
+def formaten_voor(code: str, land: str) -> str:
+    """Datum, getallen en papier bij de gekozen taal. Engels in Europa (je kwam van Nederlands, Duits…) is geen
+    Amerikaans: dan dag/maand, A4 en de euro (en_IE), in plaats van Letter-papier en maand/dag (U229)."""
+    if code != "en":
+        return land
+    nu = (_c.kde_lees("plasma-localerc", "Formats", "LANG", "") or os.environ.get("LANG", "")).split(".")[0]
+    if nu.startswith("en_"):
+        return nu   # al een Engelse streek (Brits, Iers, Amerikaans…): die houden
+    if nu and nu not in ("C", "POSIX") and "_" in nu:
+        return "en_IE"
+    return land
+
+
 def zet_taal(code: str) -> bool:
     """De taal van KDE en de BugOS-programma's; geldt na opnieuw inloggen (zo doet KDE dat ook)."""
     if _c.VOORBEELD:
@@ -102,7 +115,7 @@ def zet_taal(code: str) -> bool:
     if land is None:
         return False
     goed = _c.kde_schrijf("plasma-localerc", "Translations", "LANGUAGE", code if code == "en" else f"{code}:en_US")
-    goed = _c.kde_schrijf("plasma-localerc", "Formats", "LANG", f"{land}.UTF-8") and goed
+    goed = _c.kde_schrijf("plasma-localerc", "Formats", "LANG", f"{formaten_voor(code, land)}.UTF-8") and goed
     return goed
 
 

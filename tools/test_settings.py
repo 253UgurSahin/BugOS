@@ -252,6 +252,27 @@ QThreadPool.globalInstance().waitForDone(5000)
 venster.close()
 
 shutil.rmtree(TMP, ignore_errors=True)
+# U229: Engels kiezen in Europa geeft geen Amerikaanse datum en Letter-papier.
+import bugos_config_account as _ca  # noqa: E402
+
+_lees, _schrijf, _vb = _ca._c.kde_lees, _ca._c.kde_schrijf, _ca._c.VOORBEELD
+_geschreven = {}
+_ca._c.VOORBEELD = False
+_ca._c.kde_schrijf = lambda bestand, groep, sleutel, waarde: _geschreven.__setitem__(sleutel, waarde) or True
+_uit = {}
+for _nu, _verwacht in (("nl_NL.UTF-8", "en_IE.UTF-8"), ("en_GB.UTF-8", "en_GB.UTF-8"), ("", "en_US.UTF-8")):
+    _ca._c.kde_lees = lambda bestand, groep, sleutel, standaard="", _w=_nu: _w if sleutel == "LANG" else standaard
+    _oud_env = os.environ.pop("LANG", None)
+    _ca.zet_taal("en")
+    if _oud_env is not None:
+        os.environ["LANG"] = _oud_env
+    _uit[_nu] = _geschreven.get("LANG") == _verwacht
+_ca.zet_taal("nl")
+_nl = _geschreven.get("LANG")
+_ca._c.kde_lees, _ca._c.kde_schrijf, _ca._c.VOORBEELD = _lees, _schrijf, _vb
+klopt(all(_uit.values()) and _nl == "nl_NL.UTF-8",
+      f"U229: Engels in Europa geeft dag/maand en A4 (en_IE); een Engelse streek blijft; Nederlands blijft nl_NL ({_uit}, {_nl})")
+
 print()
 print("Alles goed." if not fouten else f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)
