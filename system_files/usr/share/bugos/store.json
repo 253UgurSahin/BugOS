@@ -22,6 +22,7 @@
     {"id": "org.onlyoffice.desktopeditors", "naam": "ONLYOFFICE", "cat": ["kantoor"], "nl": "Kantoorpakket dat veel op Microsoft Office lijkt.", "en": "Office suite that looks a lot like Microsoft Office."},
     {"id": "org.kde.okular", "naam": "Okular", "cat": ["kantoor"], "nl": "PDF's lezen, invullen en ondertekenen.", "en": "Read, fill in and sign PDFs."},
 
+    {"id": "org.kde.gwenview", "naam": "Gwenview", "cat": ["foto", "aanbevolen"], "nl": "Je foto's bekijken.", "en": "View your photos."},
     {"id": "org.gimp.GIMP", "naam": "GIMP", "cat": ["foto"], "nl": "Foto's bewerken, zoals Photoshop.", "en": "Edit photos, like Photoshop."},
     {"id": "org.kde.krita", "naam": "Krita", "cat": ["foto"], "nl": "Tekenen en schilderen.", "en": "Drawing and painting."},
     {"id": "org.kde.kdenlive", "naam": "Kdenlive", "cat": ["foto"], "nl": "Video's monteren.", "en": "Edit videos."},

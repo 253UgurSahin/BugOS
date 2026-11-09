@@ -2,7 +2,7 @@
 # bugos-first-boot - draait één keer na installatie (als systeemdienst).
 #
 # Zet de standaard-apps uit de Winkel klaar: Steam (als die er nog niet is),
-# LibreOffice (kantoor) en VLC (films en muziek).
+# LibreOffice (kantoor), VLC (films en muziek), Gwenview (foto's) en Okular (PDF's).
 # Lukt het niet (bijv. geen internet)? Dan probeert hij het de volgende keer
 # opnieuw bij het opstarten.
 
@@ -13,6 +13,9 @@ mkdir -p /var/lib/bugos
 APPS=(
     org.libreoffice.LibreOffice
     org.videolan.VLC
+    # Foto's en PDF's openen met dubbelklik: de fundering heeft er geen programma voor (U224).
+    org.kde.gwenview
+    org.kde.okular
 )
 # Steam als Flatpak alleen als de systeemversie ontbreekt.
 command -v steam >/dev/null 2>&1 || APPS+=(com.valvesoftware.Steam)

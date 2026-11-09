@@ -439,5 +439,11 @@ nep flatpak 'echo "$*" >>"'"$TMP"'/flatpak-log"'
 draai bugos-first-boot
 klopt '[ "$code" -ne 0 ] && ! grep -q install "$TMP/flatpak-log"' "U180: eerste start over een hotspot: nog niets downloaden, later opnieuw"
 nep busctl 'exit 0'
+: >"$TMP/flatpak-log"
+draai bugos-first-boot
+klopt 'grep -q "org.kde.gwenview" "$TMP/flatpak-log" && grep -q "org.kde.okular" "$TMP/flatpak-log"' \
+    "U224: na de installatie is er een programma voor foto's (Gwenview) en PDF's (Okular)"
+klopt 'grep -q "^image/jpeg=org.kde.gwenview.desktop" "$ROOT/system_files/etc/xdg/kde-mimeapps.list" && grep -q "^application/pdf=org.kde.okular.desktop" "$ROOT/system_files/etc/xdg/kde-mimeapps.list"' \
+    "U224: een foto opent standaard in Gwenview en een PDF in Okular"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
