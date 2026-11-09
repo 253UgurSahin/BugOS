@@ -563,6 +563,50 @@ test that failed first; 3 not done (see Skipped). Tests after: 20 test files pas
   commit: bb72666
 ### U163 [low] (open) The Default programs menu and "Test notification" do short work on the window's thread (see Skipped)
 
+## Round 13 (2026-11-09)
+Three reviewers: the round-12 fixes (6 found: U164-U169), Files previews, the Store and Help (8: U170-U177), and a
+new user's first day (5: U178-U182). 19 found; all fixed, each with a test that failed first (two text-only).
+Tests after: 20 test files passed (here).
+
+### U164 [medium] (from U139) Backup/Switch mounted again a drive you had just closed ("Safely remove"), every 3 s
+  commit: cdb6f0e   test: tools/test_files.py
+### U165 [medium] (from U157) Bluetooth switched off by airplane mode or an Fn key could not be turned back on
+  commit: cdb6f0e   test: tools/test_os_settings.py
+### U166 [low] (from U162) Searching "microphone" found nothing; the Sound page now says where to set it
+  commit: cdb6f0e
+### U167 [low] (from U152) The Backup bar sat at 85% while writing to the drive
+  commit: cdb6f0e
+### U168 [low] (from U144) Folder copies lost the kernel's fast copy (copy_file_range, reflink on btrfs)
+  commit: cdb6f0e   test: tools/test_os_apps.py (copy tests)
+### U169 [low] (from U148) A quick light-dark-light could leave the Windows programs dark; a stuck Wine held the lock
+  commit: cdb6f0e   test: tools/test_os_system.sh
+### U170 [medium] Files kept 512 px photo previews without a limit: a big photo folder took gigabytes of memory
+  commit: 906facd   test: tools/test_os_apps.py
+### U171 [medium] Files: leaving a folder did not cancel its queued previews; the next folder waited
+  commit: 906facd   test: tools/test_os_apps.py
+### U172 [low] Files: PDFs and videos never got a preview of their own
+  commit: 906facd   test: tools/test_os_apps.py (PDF; video where ffmpegthumbnailer exists)
+### U173 [medium] Store/Windows programs: WhatsApp pointed to an app Flathub has delisted; now ZapZap
+  commit: 63d6523   test: tools/test_os_apps.py
+### U174 [low] Help on a PC without Wi-Fi said "Choose your Wi-Fi" instead of "Is the cable plugged in?"
+  commit: 63d6523   test: tools/test_help.py
+### U175 [low] The calculator was called "Rekenmachine" in the English Store
+  commit: 63d6523   test: tools/test_os_apps.py
+### U176 [low] The real installer names of Telegram, Epic and GOG Galaxy were not recognised
+  commit: 63d6523   test: tools/test_os_apps.py
+### U177 [low] Help checked the printing service again before the password was typed
+  commit: 63d6523   test: tools/test_os_apps.py
+### U178 [medium] "I choose when" users often got no update notification (checked before Plasma and Wi-Fi), or in the old language
+  commit: ffa22c6   test: tools/test_os_system.sh
+### U179 [low] Welcome showed "older computer" off while light mode had just turned itself on
+  commit: 7a0df2f   test: tools/test_os_apps.py
+### U180 [low] First boot downloaded LibreOffice, VLC (and Steam) over a phone hotspot
+  commit: 7a0df2f   test: tools/test_os_system.sh
+### U181 [low] Welcome said "Steam is ready" when it was not (yet)
+  commit: 7a0df2f   test: tools/test_os_apps.py
+### U182 [low] Finishing Welcome while the password window was open threw the update choice away
+  commit: 7a0df2f
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
