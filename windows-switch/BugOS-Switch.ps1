@@ -825,12 +825,18 @@ ovLUnl0L5eQZEbTp/9k=
 # ==================================================== beheerder-taken =====
 # Het programma start zichzelf opnieuw als beheerder voor stap 3 en 4.
 
+# Windows en BugOS naast elkaar: Windows houdt de klok van de pc in de lokale tijd, BugOS (zoals Linux) in UTC. Dan loopt
+# na elke wissel de klok aan een kant 1 of 2 uur verkeerd. Windows ook UTC laten gebruiken (U446). Bij 'Ruimte maken' en
+# bij het maken van de USB-stick (die stap doet iedereen, ook wie BugOS op een tweede schijf zet) (U453).
+# Onschuldig als Windows later alleen draait (Windows 10/11 kunnen dit gewoon).
+function Set-KlokUtc {
+    try { Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\TimeZoneInformation' -Name 'RealTimeIsUniversal' -Value 1 -Type DWord } catch { Write-Verbose 'Klok niet op UTC gezet.' }
+}
+
 if ($Taak -eq 'Krimp') {
     try {
         Invoke-Krimp $KrimpGB
-        # Windows en BugOS naast elkaar: Windows houdt de klok van de pc in de lokale tijd, BugOS (zoals Linux) in UTC.
-        # Dan loopt na elke wissel de klok aan een kant 1 of 2 uur verkeerd. Windows ook UTC laten gebruiken (U446).
-        try { Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\TimeZoneInformation' -Name 'RealTimeIsUniversal' -Value 1 -Type DWord } catch { Write-Verbose 'Klok niet op UTC gezet.' }
+        Set-KlokUtc
         exit 0
     } catch { Toon ((T 'Ruimte maken lukte niet: ' 'Making space failed: ') + $_.Exception.Message) 'Error'; exit 1 }
 }
@@ -859,6 +865,7 @@ if ($Taak -eq 'Usb') {
     $form.Show(); [System.Windows.Forms.Application]::DoEvents()
     try {
         Write-IsoNaarSchijf $IsoPad $SchijfNummer { param($p, $t) Zet-Balk $bar $p; $lbl.Text = $t; [System.Windows.Forms.Application]::DoEvents() } $SchijfId
+        Set-KlokUtc
         $form.Close(); exit 0
     } catch {
         $form.Close(); Toon ((T 'De USB-stick maken lukte niet: ' 'Making the USB stick failed: ') + $_.Exception.Message) 'Error'; exit 1
