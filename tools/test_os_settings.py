@@ -973,6 +973,14 @@ _sp2 = venster.paginas["scherm"]
 _sp2.toon((None, False, 1.0))
 _aan = {w: k.isEnabled() for w, k in _sp2.grootte.knoppen.items()}
 klopt(_aan[1.0] and not _aan[2.0] and not _aan[1.5], f"U397: op een klein scherm geen 150-200% (dan past niets meer) ({_aan})")
+# U407: een grootte kiezen vraagt de huidige schaal niet opnieuw (kscreen-doctor, tot 8 s): het venster blijft vlot.
+_oud407 = sys.modules["bugos_settings_scherm"].bi.schaal
+_gevraagd407 = []
+sys.modules["bugos_settings_scherm"].bi.schaal = lambda: (_gevraagd407.append(1), 1.0)[1]
+_sp2.zet_grootte(2.0)
+sys.modules["bugos_settings_scherm"].bi.schaal = _oud407
+klopt(not _gevraagd407 and "te groot" in _sp2.melding.tekst.text(),
+      f"U407: een grootte kiezen wacht niet op kscreen-doctor ({len(_gevraagd407)} keer gevraagd)")
 
 # U353: zoeken in Instellingen vindt ook woorden die op de pagina's staan (taakbalk, fps, opslag, dubbelklikken…).
 _mist = []

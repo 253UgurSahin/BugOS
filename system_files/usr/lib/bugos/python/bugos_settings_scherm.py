@@ -96,6 +96,7 @@ class SchermPagina(Blad):
         if not uitkomst:
             return
         helder, nacht, schaal = uitkomst
+        self._schaal = schaal   # onthouden: bij een klik niet opnieuw kscreen-doctor vragen (dat houdt het venster op) (U407)
         self.helder_rij.setVisible(helder is not None)
         if helder is not None:
             self.helder.zet(helder)
@@ -107,7 +108,7 @@ class SchermPagina(Blad):
             knop.setEnabled(waarde <= max(groot_genoeg(), schaal + 0.01))
 
     def zet_grootte(self, waarde: float) -> None:
-        if waarde > max(groot_genoeg(), bi.schaal() + 0.01):   # (U397)
+        if waarde > max(groot_genoeg(), getattr(self, "_schaal", 1.0) + 0.01):   # (U397, U407)
             self.melding.toon(t("Dat is te groot voor dit scherm: dan past niets meer.",
                                 "That is too big for this screen: nothing would fit any more."), "let_op")
             self.ververs()
