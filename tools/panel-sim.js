@@ -7,8 +7,10 @@ const begin = process.argv[3].split(",");
 let id = 1;
 const lijst = [];
 function maak(type) {
-    const w = { id: id++, type, currentConfigGroup: [], writeConfig() {}, readConfig(_k, s) { return s; },
-        remove() { lijst.splice(lijst.indexOf(w), 1); } };
+    const cfg = {};
+    if (type === "org.kde.plasma.icontasks" && process.env.LAUNCHERS) cfg.launchers = process.env.LAUNCHERS.split(",");
+    const w = { id: id++, type, cfg, currentConfigGroup: [], writeConfig(k, v) { cfg[k] = v; },
+        readConfig(k, s) { return k in cfg ? cfg[k] : s; }, remove() { lijst.splice(lijst.indexOf(w), 1); } };
     Object.defineProperty(w, "index", {
         get() { return lijst.indexOf(w); },
         set(n) { lijst.splice(lijst.indexOf(w), 1); lijst.splice(n, 0, w); },
@@ -22,3 +24,5 @@ global.panels = () => [paneel];
 global.print = () => {};
 new Function(js + "\n" + process.argv[4])();
 console.log(lijst.map((w) => w.type).join(","));
+const taken = lijst.find((w) => w.type === "org.kde.plasma.icontasks");
+if (taken && taken.cfg.launchers) console.log(taken.cfg.launchers.join(","));

@@ -57,6 +57,11 @@ if command -v node >/dev/null 2>&1; then
     UIT="$(node "$ROOT/tools/panel-sim.js" "$TMP/paneel.js" "org.kde.plasma.icontasks,org.kde.plasma.systemtray,org.kde.plasma.digitalclock" 'vervang("", "org.bugos.quickmenu", "org.kde.plasma.systemtray");')"
     klopt '[ "$UIT" = "org.kde.plasma.icontasks,org.bugos.quickmenu,org.kde.plasma.systemtray,org.kde.plasma.digitalclock" ]' \
         "U259: het snelmenu komt vóór het systeemvak, niet achter de klok ($UIT)"
+    # U302: van vóór de Engelse namen: het oude snelmenu wordt het nieuwe (zelfde plek), en vastgezette apps verhuizen mee.
+    UIT="$(LAUNCHERS="applications:bugos-bestanden.desktop,applications:org.mozilla.firefox.desktop,applications:bugos-winkel.desktop" \
+        node "$ROOT/tools/panel-sim.js" "$TMP/paneel.js" "org.bugos.startmenu,org.kde.plasma.icontasks,org.bugos.snelmenu,org.kde.plasma.systemtray" 'hernoemd();')"
+    klopt '[ "$(head -1 <<<"$UIT")" = "org.bugos.startmenu,org.kde.plasma.icontasks,org.bugos.quickmenu,org.kde.plasma.systemtray" ] && [ "$(tail -1 <<<"$UIT")" = "applications:bugos-files.desktop,applications:org.mozilla.firefox.desktop,applications:bugos-store.desktop" ]' \
+        "U302: na de update van vóór de Engelse namen: het snelmenu en de vastgezette apps werken weer ($UIT)"
 fi
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

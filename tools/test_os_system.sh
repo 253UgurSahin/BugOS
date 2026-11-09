@@ -455,6 +455,14 @@ draai bugos-theme donker
 sleep 1
 klopt '[ ! -s "$TMP/wine-log" ]' "U169: een oudere licht/donker-keuze zet de Windows-kleuren niet meer"
 nep plasma-apply-colorscheme 'echo "$1" >"'"$TMP"'/schema"'
+# U302: van vóór de Engelse namen: 'BugOSDonker' wordt 'BugOSDark', en het oude game-modusbestand gaat weg.
+echo BugOSDonker >"$TMP/schema"
+mkdir -p "$TMP/thuis/.config/environment.d"
+echo MANGOHUD=1 >"$TMP/thuis/.config/environment.d/90-bugos-spelmodus.conf"
+nep flatpak 'exit 0'
+draai bugos-theme inloggen
+klopt '[ "$(cat "$TMP/schema")" = BugOSDark ] && [ ! -e "$TMP/thuis/.config/environment.d/90-bugos-spelmodus.conf" ]' \
+    "U302: na de update van vóór de Engelse namen: donker blijft donker (BugOSDark), en de FPS-teller niet voor altijd aan"
 # U148: na een nieuwe Wine-versie (de map is nog niet bijgewerkt) niet bij licht/donker Wine starten (dat toont een venster).
 echo 1 >"$TMP/thuis/.local/share/bugos/windows/.update-timestamp"
 : >"$TMP/wine-log"

@@ -18,6 +18,8 @@
 MARKER="$BUGOS_CONFIG/spelmodus-aan"
 STOREN_MARKER="$BUGOS_CONFIG/niet-storen-voor-spelmodus"
 ENVFILE="${XDG_CONFIG_HOME:-$HOME/.config}/environment.d/90-bugos-game-mode.conf"
+# Zo heette het bestand vóór de Engelse namen: weg ermee, anders bleef de FPS-teller voor altijd aan (U302).
+rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/environment.d/90-bugos-spelmodus.conf"
 FPS_METEEN="$BUGOS_CONFIG/fps-meteen"
 MH_ENV="${XDG_CONFIG_HOME:-$HOME/.config}/environment.d/80-bugos-mangohud.conf"
 MH_CONF="$BUGOS_CONFIG/mangohud.conf"

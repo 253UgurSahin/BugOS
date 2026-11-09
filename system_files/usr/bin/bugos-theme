@@ -39,6 +39,24 @@ huidig() {
     fi
 }
 
+# Van vóór de Engelse namen (U302): BugOSDonker/BugOSLicht heten nu BugOSDark/BugOSLight. Zonder dit vielen
+# KDE-programma's terug op een vreemde stijl en zei Instellingen 'licht' terwijl je donker had gekozen.
+oude_namen() {
+    local schema
+    schema="$(kreadconfig6 --file kdeglobals --group General --key ColorScheme 2>/dev/null)"
+    case "$schema" in
+    BugOSDonker) plasma-apply-colorscheme BugOSDark >/dev/null 2>&1 ||
+        kwriteconfig6 --file kdeglobals --group General --key ColorScheme --notify BugOSDark ;;
+    BugOSLicht) plasma-apply-colorscheme BugOSLight >/dev/null 2>&1 ||
+        kwriteconfig6 --file kdeglobals --group General --key ColorScheme --notify BugOSLight ;;
+    esac
+    if [ -f "$KVANTUM" ] && [ "$(kreadconfig6 --file "$KVANTUM" --group General --key theme 2>/dev/null)" = BugOSDonker ]; then
+        kvantum_zet BugOSDark
+    fi
+    # Het oude game-modusbestand (MANGOHUD=1): anders bleef de FPS-teller voor altijd aan.
+    rm -f "$CONFIG/environment.d/90-bugos-spelmodus.conf"
+}
+
 # Een eigen KDE-accentkleur maakt de zachte BugOS-selectie fel (oude BugOS zette die).
 geen_accent() {
     kwriteconfig6 --file kdeglobals --group General --key AccentColor --delete 2>/dev/null
@@ -150,6 +168,7 @@ status)
     huidig
     ;;
 inloggen)
+    oude_namen
     gtk_laag
     flatpak_toegang
     terminal_zet "$(huidig)"
