@@ -58,5 +58,8 @@ PY
 )"
 controle '[ "$NV" = ok ] && grep -q "if (Test-NieuweNvidia \$gpu) { .nvidia. }" <<<"$PS" && grep -q "Name) -join .\\(, \\). *$" <<<"$(grep -A1 "function Get-IsoSoort" <<<"$PS")"' \
     "U396/U408: alleen GTX 16, RTX en MX 450+ krijgen de Nvidia-versie; oudere kaarten de gewone ($NV)"
+# U446: ruimte maken voor BugOS naast Windows zet de klok van Windows op UTC (anders 1-2 uur verschil na elke wissel).
+controle 'grep -A6 "Invoke-Krimp \$KrimpGB\s*$" <<<"$PS" | grep -q "RealTimeIsUniversal.*-Value 1 -Type DWord"' \
+    "U446: naast Windows loopt de klok niet een of twee uur verkeerd (Windows ook op UTC)"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

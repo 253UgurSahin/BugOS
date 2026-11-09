@@ -826,7 +826,13 @@ ovLUnl0L5eQZEbTp/9k=
 # Het programma start zichzelf opnieuw als beheerder voor stap 3 en 4.
 
 if ($Taak -eq 'Krimp') {
-    try { Invoke-Krimp $KrimpGB; exit 0 } catch { Toon ((T 'Ruimte maken lukte niet: ' 'Making space failed: ') + $_.Exception.Message) 'Error'; exit 1 }
+    try {
+        Invoke-Krimp $KrimpGB
+        # Windows en BugOS naast elkaar: Windows houdt de klok van de pc in de lokale tijd, BugOS (zoals Linux) in UTC.
+        # Dan loopt na elke wissel de klok aan een kant 1 of 2 uur verkeerd. Windows ook UTC laten gebruiken (U446).
+        try { Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\TimeZoneInformation' -Name 'RealTimeIsUniversal' -Value 1 -Type DWord } catch { Write-Verbose 'Klok niet op UTC gezet.' }
+        exit 0
+    } catch { Toon ((T 'Ruimte maken lukte niet: ' 'Making space failed: ') + $_.Exception.Message) 'Error'; exit 1 }
 }
 if ($Taak -eq 'Usb') {
     Maak-Letters
