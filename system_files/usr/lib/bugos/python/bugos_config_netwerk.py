@@ -200,6 +200,8 @@ def zet_bt(aan: bool) -> bool:
     if _c.VOORBEELD:
         _c._VB["bt"] = aan
         return True
+    if not bt_hardware():
+        return False   # geen bluetooth in deze computer: niet 8 seconden op bluetoothctl wachten (U157)
     if aan and shutil.which("rfkill"):
         _c.draai("rfkill", "unblock", "bluetooth")
     return _c.draai("bluetoothctl", "power", "on" if aan else "off", timeout=8)[0] == 0

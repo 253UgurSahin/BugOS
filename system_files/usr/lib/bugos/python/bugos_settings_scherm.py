@@ -201,7 +201,7 @@ class EnergiePagina(Blad):
         self.batterij_kaart.setVisible(bat is not None)
         if bat is not None:
             staat = t("vol", "full") if bat.vol else t("wordt opgeladen", "charging") if bat.laadt else \
-                t("op batterij", "on battery")
+                t("aan de lader, laadt niet", "plugged in, not charging") if bat.aan_lader else t("op batterij", "on battery")
             self.batterij.zet_uitleg(f"{bat.procent}% · {staat}")
         self.profiel_rij.setVisible(profiel is not None)
         self.geen_profiel.setVisible(profiel is None)
@@ -209,10 +209,11 @@ class EnergiePagina(Blad):
             self.profielen[profiel].setChecked(True)
 
     def zet_profiel(self, profiel: str) -> None:
-        op_achtergrond(self, lambda: bi.zet_energieprofiel(profiel), lambda ok: self.melding.toon(
+        # Daarna opnieuw lezen: lukte het niet, dan staat de keuze weer op wat echt aan staat (U156).
+        op_achtergrond(self, lambda: bi.zet_energieprofiel(profiel), lambda ok: (self.ververs(), self.melding.toon(
             t(f"Je computer werkt nu: {PROFIEL_TEKST[profiel][0][0].lower()}.",
               f"Your computer now works: {PROFIEL_TEKST[profiel][0][1].lower()}.") if ok else
-            t("Dat lukte niet.", "That did not work."), "goed" if ok else "fout"))
+            t("Dat lukte niet.", "That did not work."), "goed" if ok else "fout")))
 
 
 # ============================================================= uiterlijk ===

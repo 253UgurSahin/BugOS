@@ -211,19 +211,28 @@ class Batterij:
     procent: int
     laadt: bool
     vol: bool
+    aan_lader: bool = False   # aan de lader, maar laadt niet (bijv. een laadgrens van 80%) (U155)
 
 
 def batterij() -> Batterij | None:
     if _c.VOORBEELD:
         return Batterij(76, False, False)
     basis = Path(os.environ.get("BUGOS_SYS", "/sys")) / "class" / "power_supply"
-    for pad in sorted(basis.glob("BAT*")):
+    # Een batterij herken je aan type=Battery (niet alleen 'BAT0': sommige laptops noemen hem anders), maar niet
+    # die van een muis of toetsenbord (scope=Device) (U155).
+    for pad in sorted(basis.glob("*")):
         try:
+            soort = (pad / "type").read_text().strip() if (pad / "type").exists() else \
+                ("Battery" if pad.name.startswith("BAT") else "")
+            if soort != "Battery":
+                continue
+            if (pad / "scope").exists() and (pad / "scope").read_text().strip() == "Device":
+                continue
             procent = int((pad / "capacity").read_text().strip())
             staat = (pad / "status").read_text().strip()
         except (OSError, ValueError):
             continue
-        return Batterij(procent, staat == "Charging", staat == "Full")
+        return Batterij(procent, staat == "Charging", staat == "Full", staat == "Not charging")
     return None
 
 

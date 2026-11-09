@@ -509,6 +509,49 @@ klopt(_v2.zij.width() == round(_shell.ZIJBALK_BREEDTE * 1.2) or _v2.zij.minimumW
 _v2.deleteLater()
 venster.resize(1120, 760)
 
+# U155: aan de lader maar laadt niet (laadgrens 80%), en een batterij die niet 'BAT0' heet.
+_ps = TMP / "sys-u155" / "class" / "power_supply" / "axp288_fuel_gauge"
+_ps.mkdir(parents=True)
+for _k, _v in (("type", "Battery"), ("capacity", "80"), ("status", "Not charging")):
+    (_ps / _k).write_text(_v + "\n")
+_muis = _ps.parent / "hid-muis-battery"
+_muis.mkdir()
+for _k, _v in (("type", "Battery"), ("scope", "Device"), ("capacity", "10"), ("status", "Discharging")):
+    (_muis / _k).write_text(_v + "\n")
+os.environ["BUGOS_SYS"] = str(TMP / "sys-u155")
+bi.VOORBEELD = False
+_bat = bi.batterij()
+bi.VOORBEELD = True
+del os.environ["BUGOS_SYS"]
+klopt(_bat is not None and _bat.procent == 80 and _bat.aan_lader and not _bat.laadt,
+      f"U155: batterij met een andere naam, aan de lader maar niet laden (niet de batterij van de muis) ({_bat})")
+# U157: zonder bluetooth in de computer: geen tegel en geen schakelaar die niets doen, en niet 8 s wachten.
+_oud_hw = bi.bt_hardware
+bi.bt_hardware = lambda: False
+_opd, _gelukt = vang(bi.zet_bt, True)
+bi.bt_hardware = _oud_hw
+klopt(_gelukt is False and not any(c[0] == "bluetoothctl" for c in _opd), "U157: geen bluetooth: niet aan bluetoothctl vragen")
+venster.ga_naar("bluetooth")
+wacht()
+_btp = venster.paginas["bluetooth"]
+_btp.toon((False, [], False))
+klopt(_btp.schakel.isHidden() and _btp.nieuw.isHidden(), "U157: Bluetooth-pagina zonder bluetooth: 'heeft geen bluetooth', geen knoppen")
+_btp.toon((False, [], True))
+# U156: een energieprofiel dat niet lukt: de pagina leest opnieuw wat echt aan staat.
+venster.ga_naar("energie")
+wacht()
+_ep = venster.paginas["energie"]
+_gelezen: list = []
+_ep.ververs = lambda: _gelezen.append(1)
+_oud_ez = bi.zet_energieprofiel
+bi.zet_energieprofiel = lambda p: False
+_ep.zet_profiel("performance")
+wacht()
+wacht()
+bi.zet_energieprofiel = _oud_ez
+del _ep.ververs
+klopt(_gelezen, "U156: energieprofiel lukt niet: de keuze springt terug naar wat echt aan staat")
+
 # U010: wie geen beheerder is, verandert zijn eigen wachtwoord via passwd (PAM), in een nep-terminal;
 # geen wachtwoord op de opdrachtregel, en geen vraag om het wachtwoord van een beheerder.
 nep_pw = TMP / "nep-pw"

@@ -201,7 +201,7 @@ class BluetoothPagina(Blad):
         g.voeg(self.hoofd)
         kop = QHBoxLayout()
         kop.addWidget(sectie(t("Jouw apparaten", "Your devices")), 1)
-        nieuw = Knop(t("Nieuw apparaat koppelen", "Pair a new device"), "stil", "lijn:map-plus")
+        nieuw = self.nieuw = Knop(t("Nieuw apparaat koppelen", "Pair a new device"), "stil", "lijn:map-plus")
         nieuw.clicked.connect(lambda _c=False: start("bluedevil-wizard") if bestaat("bluedevil-wizard")
                               else kde_instelling("kcm_bluetooth"))
         kop.addWidget(nieuw)
@@ -209,12 +209,19 @@ class BluetoothPagina(Blad):
         self.lijst = self.kaart()
 
     def ververs(self) -> None:
-        op_achtergrond(self, lambda: (bi.bt_aan(), bi.bt_apparaten()), self.toon)
+        op_achtergrond(self, lambda: (bi.bt_aan(), bi.bt_apparaten(), bi.VOORBEELD or bi.bt_hardware()), self.toon)
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:
             return
-        aan, apparaten = uitkomst
+        aan, apparaten, *rest = uitkomst
+        heeft = rest[0] if rest else True
+        # Geen bluetooth in de computer: dat zeggen, geen schakelaar en knop die niets doen (U157).
+        for w in (self.schakel, self.nieuw, self.lijst):
+            w.setVisible(heeft)
+        if not heeft:
+            self.hoofd.zet_uitleg(t("Deze computer heeft geen bluetooth", "This computer has no Bluetooth"))
+            return
         self.schakel.zet_stil(aan)
         verbonden = sum(1 for a in apparaten if a.verbonden)
         self.hoofd.zet_uitleg((t(f"Aan · {verbonden} verbonden", f"On · {verbonden} connected") if verbonden
