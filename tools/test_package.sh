@@ -76,5 +76,12 @@ nep distrobox 'case "$1" in list) exit 0;; create) echo "Error: writing blob: No
 rm -f "$TMP/fouten"
 installeer "$TMP/half.rpm"
 klopt 'grep -qi "vol\|full" "$TMP/fouten" 2>/dev/null && ! grep -qi "internet\|online" "$TMP/fouten"' "U424: doosje maken met een volle computer: dat wordt gezegd"
+# U465: programma's uit een .rpm/.deb worden bijgewerkt (elke dag, bij 'Updates vanzelf').
+nep distrobox 'case "$1" in list) echo " bugos-ubuntu ";; upgrade) echo "$2" >>"'"$TMP"'/bijgewerkt";; esac; exit 0'
+rm -f "$TMP/bijgewerkt"
+HOME="$TMP/thuis" PATH="$TMP/bin:$PATH" bash "$TMP/bugos-package" --bijwerken >/dev/null 2>&1
+SDU="$ROOT/system_files/usr/lib/systemd/user"
+klopt '[ "$(cat "$TMP/bijgewerkt" 2>/dev/null)" = bugos-ubuntu ] && grep -qx "ExecCondition=/usr/bin/bugos-updates mag-vanzelf" "$SDU/bugos-update-doosjes.service" && grep -qx "OnCalendar=daily" "$SDU/bugos-update-doosjes.timer" && grep -q "enable bugos-update-doosjes.timer" "$ROOT/build_files/build.sh"' \
+    "U465: programma's uit een .rpm/.deb krijgen ook updates (hun doosje, elke dag bij 'Updates vanzelf')"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

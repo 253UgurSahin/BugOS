@@ -12,6 +12,18 @@
 # shellcheck source=system_files/usr/share/bugos/lib.sh
 . /usr/share/bugos/lib.sh
 
+# bugos-package --bijwerken: de doosjes van BugOS bijwerken (elke dag, bij 'Updates vanzelf') (U465).
+if [ "${1:-}" = --bijwerken ]; then
+    command -v distrobox >/dev/null 2>&1 || exit 0
+    lijst="$(distrobox list 2>/dev/null)"
+    for doos in bugos-fedora bugos-ubuntu; do
+        if grep -q " $doos " <<<"$lijst"; then
+            distrobox upgrade "$doos" >/dev/null 2>&1 || echo "bugos-package: $doos bijwerken lukte niet" >&2
+        fi
+    done
+    exit 0
+fi
+
 BESTAND="${1:-}"
 if [ -z "$BESTAND" ] || [ ! -f "$BESTAND" ]; then
     fout "$(t "Ik kan dit bestand niet vinden." "I cannot find this file.")"
@@ -110,7 +122,8 @@ if uit="$(distrobox enter "$DOOS" -- bash -c "$INSTALL || exit 1; $EXPORT" bugos
         melding "$(t "Klaar!" "Done!")" "$(t "\"$TOON\" is geïnstalleerd. Het heeft geen plek in het startmenu; je gebruikt het in de Terminal met: distrobox enter $DOOS" \
             "\"$TOON\" is installed. It has no place in the start menu; you use it in the Terminal with: distrobox enter $DOOS")"
     else
-        melding "$(t "Klaar!" "Done!")" "$(t "\"$TOON\" staat nu in je startmenu." "\"$TOON\" is now in your start menu.")"
+        melding "$(t "Klaar!" "Done!")" "$(t "\"$TOON\" staat nu in je startmenu. Gaan je updates vanzelf, dan wordt het elke dag bijgewerkt." \
+            "\"$TOON\" is now in your start menu. If your updates are automatic, it is updated every day.")"
     fi
 else
     fout "$(t "Het installeren van \"$TOON\" is niet gelukt. Je computer is niet veranderd." \

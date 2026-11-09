@@ -75,6 +75,8 @@ systemctl enable rpm-ostreed-automatic.timer bugos-update-apps.timer
 systemctl enable podman.socket || true
 # Elke gebruiker: dagelijks kijken of er een update is (doet alleen iets bij "zelf updaten").
 systemctl --global enable bugos-updatecheck.timer
+# Programma's uit een .rpm/.deb (in hun doosje) ook bijwerken, bij "Updates vanzelf" (U465).
+systemctl --global enable bugos-update-doosjes.timer
 
 # 7. Standaard: updates automatisch (de gebruiker kan dit omzetten).
 mkdir -p /etc/bugos

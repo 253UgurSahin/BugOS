@@ -1,0 +1,12 @@
+[Unit]
+Description=BugOS: update programs installed from a .rpm or .deb (their box)
+ConditionKernelCommandLine=!rd.live.image
+
+[Service]
+Type=oneshot
+# Alleen bij 'Updates vanzelf' (U300), zoals de apps.
+ExecCondition=/usr/bin/bugos-updates mag-vanzelf
+# Programma's uit een .rpm/.deb staan in een eigen doosje: zonder dit kregen ze nooit een (veiligheids)update (U465).
+ExecStart=/usr/bin/bugos-package --bijwerken
+Nice=19
+IOSchedulingClass=idle
