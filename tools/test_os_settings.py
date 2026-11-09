@@ -517,7 +517,12 @@ klopt(kde_sleutels(opd).get(("Mouse", "cursorSize")) == "48" and not any(c[0] ==
       and any(c[0] == "gdbus" and "org.kde.KGlobalSettings.notifyChange" in c and c[-2:] == ("5", "0") for c in opd),
       "U065: grote aanwijzer: cursorSize=48 geschreven en KDE verteld dat de aanwijzer veranderde")
 opd, _ = vang(bi.zet_grote_aanwijzer, False)
-klopt(kde_sleutels(opd).get(("Mouse", "cursorSize")) == "24", "U065: grote aanwijzer uit: terug naar 24")
+klopt(kde_sleutels(opd).get(("Mouse", "cursorSize")) == "--delete", "U065/U455: grote aanwijzer uit: terug naar KDE's standaard (24)")
+# U455: je eigen grootte (32, uit KDE's eigen scherm) komt terug na grote aanwijzer aan en uit.
+_lees455 = lambda cmd: (0, "32\n") if cmd[0] == "kreadconfig6" else (0, "")
+vang(bi.zet_grote_aanwijzer, True, antwoord=_lees455)
+opd, _ = vang(bi.zet_grote_aanwijzer, False, antwoord=_lees455)
+klopt(kde_sleutels(opd).get(("Mouse", "cursorSize")) == "32", f"U455: grote aanwijzer uit: je eigen grootte (32) komt terug ({kde_sleutels(opd)})")
 
 # U066: de schermlezer via de kded-module van Plasma 6.8 (kaccess start Orca niet meer).
 opd, _ = vang(bi.zet_toetshulp, "schermlezer", True)
