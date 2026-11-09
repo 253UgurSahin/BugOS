@@ -714,6 +714,29 @@ U224-U230). 15 found; 14 fixed, each with a test that failed first; U230 skipped
 ### U229 [low] Choosing English in Europe gave US dates and Letter paper (now en_IE, or your English region)
   commit: c59ed71   test: tools/test_settings.py
 
+## Round 17 (2026-11-09)
+Two reviewers: the round-16 fixes (6 found, 2 unsure: U231-U234, U239, U240), and a fresh trace of the system
+lifecycle (build, install, updates, rollback, signed switch, a second user, laptop life, full disk, wrong clock): no
+high or medium defect, 3 low plus 1 text item (U235-U238) and 2 unsure. 12 found; 8 fixed, each with a test that
+failed first; 4 skipped or for you (below). Tests after: 20 test files passed (here).
+
+### U231 [medium] (from U226) An old backup on a disk inside the computer could no longer be restored
+  commit: 34ab626   test: tools/test_backup.py
+### U232 [low] (from U229) English in a non-euro country (Poland, Turkey…) gave the euro; now that country's paper, sizes and money
+  commit: 6c9acc6   test: tools/test_settings.py
+### U233 [low] (from U221) Store, Backup and Switch still promised to close by themselves after you opened them again
+  commit: d86fc49   test: tools/test_os_apps.py (static)
+### U234 [low] (from U221) Backup: closed while counting and opened again gave a false "not enough space"
+  commit: d86fc49   test: tools/test_os_apps.py
+### U235 [low] On battery, Settings showed the mains times for screen off and sleep (KDE uses shorter ones)
+  commit: 6614cd3   test: tools/test_os_settings.py
+### U236 [low] The switch to signed updates kept the boot "starting" while downloading, also over a hotspot
+  commit: b30b1f8   test: tools/test_os_system.sh
+### U237 [low] "1.5 GB" with a point in Dutch (Help: disk almost full; Backup: not enough space)
+  commit: 2896c3f   test: tools/test_help.py, tools/test_os_apps.py
+### U238 [low] "Updates yourself via the BugOS Store" (the Store cannot update; U100)
+  commit: 2896c3f
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -721,6 +744,10 @@ U224-U230). 15 found; 14 fixed, each with a test that failed first; U230 skipped
 - U163: two small blocking calls in Settings (usually well under a second).
 - U230 (round 16): "Show in folder" in Firefox and notifications opens Dolphin, not Files. Files would have to
   provide org.freedesktop.FileManager1 on D-Bus next to Dolphin's own service (M; needs a real Plasma session to test).
+- U239 (round 17, from U224): PCs whose first boot already finished do not get Gwenview and Okular (first boot runs
+  once). No BugOS image has been released yet, so no such PC exists; add a one-off step if that changes.
+- U240 (round 17, unsure): the daily `flatpak uninstall --unused` as root may remove a runtime that only another
+  account's own (--user) app needs. BugOS installs apps system-wide; only Discover --user installs are exposed.
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
@@ -740,6 +767,9 @@ U224-U230). 15 found; 14 fixed, each with a test that failed first; U230 skipped
   finished, it needs a new session or another model (it only got as far as U097).
 - U125: on a real PC, open Settings from the quick menu and check Task Manager lists it as "Settings" (closable).
 - U133-U137: try Settings with only the keyboard (Tab, Enter, Escape) and with "Big letters" on.
+- U218 (round 17): BugOS's own start/quick menus launch through Plasma's "executable" engine, which passes no
+  activation token. On a real Plasma 6.8 PC, check that opening Settings from the quick menu while it is already
+  open brings it to the front (not only a blinking taskbar button). If not, the menus must launch via Plasma (M).
 - U196: before you add the signing key (A032), bugos-ondertekend should change the origin in place
   (bootc switch --mutate-in-place) instead of rpm-ostree rebase; a rebase to the same image removes the older
   version, so "Back to the previous version" has nothing to go back to on that first signed boot.
