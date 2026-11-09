@@ -1322,6 +1322,28 @@ chosen drive does not silently change). All 20 test files pass; U530-U533 have n
 Still open from this sweep (not done): Help "Fix" button enabled again while its fix runs; Task Manager background
 rows re-sort every second under the mouse; Store category click ignored while the search field has text.
 
+## Round 44 (2026-11-09) — only broken or security is fixed (user's rule from here on)
+Two reviewers: the round-43 fixes, and a hunt for broken/security issues in the most-used paths and in everything
+that runs as root. Every Python file parses, every bash script passes `bash -n`, pyflakes finds no undefined names,
+all 20 test files pass. No security issue found.
+
+### U534 [low-medium, wrong action] (from U533) With two sticks, choosing A and pulling A out silently chose B for the backup
+  commit: d188f40   test: tools/test_os_apps.py
+
+### Found, not fixed (minor)
+- Renaming "Brief.odt" to "Brief mevr.Jansen" or "Versie 2.0b" leaves no .odt (the file still opens).
+- Settings: `self.auto.setEnabled(True)` is outside the RuntimeError guard (only a printed traceback if the page is
+  gone while the password prompt is open).
+- Files: Ctrl+Enter within 0.5 s of a mouse click is ignored.
+- Dual boot on one disk: Files skips the whole BugOS disk, so Windows C: made by "Make space" never shows (design).
+- Developer mode for a non-admin probably ends with "Are you online?" (no user flathub remote; system install with
+  --noninteractive gets no password prompt). Check on the image.
+- Welcome says "No internet yet" when NetworkManager's connectivity check is off or "unknown" (Help handles it, U090).
+- bugos-ondertekend (dormant until the signing key exists) ignores "I choose when" after "Go back".
+- Help's printer fix asks the generic root password; a non-admin family member cannot use it.
+- flatpak-user-update.timer (U117) may not exist in current Universal Blue images; check on the image.
+- An admin can set a very weak password through AccountsService (no quality check).
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
