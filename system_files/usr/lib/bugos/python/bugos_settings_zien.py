@@ -137,7 +137,8 @@ class MuisPagina(Blad):
                            schuifje(a.tikken, lambda aan, x=a: self.zet(x, "tikken", aan))))
             if "natuurlijk" in a.kan:
                 g.voeg(Rij("onder", t("Scrollen zoals op een telefoon", "Scroll like on a phone"),
-                           t("Veeg omhoog om naar boven te gaan", "Swipe up to go up") if a.touchpad else
+                           # Zoals op een telefoon: omhoog vegen schuift de pagina omhoog, je gaat verder naar beneden (U160).
+                           t("Veeg omhoog om verder naar beneden te gaan", "Swipe up to go further down") if a.touchpad else
                            t("Wieltje naar je toe gaat omhoog", "Wheel towards you goes up"),
                            schuifje(a.natuurlijk, lambda aan, x=a: self.zet(x, "natuurlijk", aan))))
             if "linkshandig" in a.kan:

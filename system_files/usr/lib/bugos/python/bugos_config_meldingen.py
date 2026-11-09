@@ -6,6 +6,7 @@ bugos_config (_c.draai), zodat een test die bi.draai of bi.VOORBEELD vervangt da
 
 from __future__ import annotations
 
+import getpass
 import os
 import re
 import shutil
@@ -257,7 +258,10 @@ def wachtrij() -> int:
     """Hoeveel documenten staan te wachten om geprint te worden."""
     if _c.VOORBEELD:
         return 1
-    return len([r for r in _c.draai("lpstat", "-o", timeout=8)[1].splitlines() if r.strip()])
+    # Alleen die van jou: die van anderen kun je zonder beheerder niet weghalen (U158).
+    ik = getpass.getuser()
+    return len([r for r in _c.draai("lpstat", "-o", timeout=8)[1].splitlines()
+                if len(r.split()) >= 2 and r.split()[1] == ik])
 
 
 def zet_standaard_printer(naam: str) -> bool:
@@ -280,10 +284,18 @@ def testpagina(naam: str) -> bool:
 def wachtrij_leegmaken() -> bool:
     if _c.VOORBEELD:
         return True
-    return _c.draai("cancel", "-a", timeout=8)[0] == 0
+    # 'cancel -a' vraagt CUPS om álles (van iedereen): dat mag alleen een beheerder. Je eigen documenten wel (U158).
+    return _c.draai("cancel", "-u", getpass.getuser(), timeout=8)[0] == 0
 
 
 def scanprogramma() -> str | None:
     if _c.VOORBEELD:
         return "skanpage"
-    return next((p for p in ("skanpage", "skanlite", "simple-scan") if shutil.which(p)), None)
+    gevonden = next((p for p in ("skanpage", "skanlite", "simple-scan") if shutil.which(p)), None)
+    if gevonden:
+        return gevonden
+    # Uit de BugOS Winkel komt hij als Flatpak: dan heet hij niet 'skanpage' op het pad (U159).
+    for app_id in ("org.kde.skanpage", "org.kde.skanlite", "org.gnome.SimpleScan"):
+        if shutil.which("flatpak") and _c.draai("flatpak", "info", app_id, timeout=10)[0] == 0:
+            return f"flatpak:{app_id}"
+    return None

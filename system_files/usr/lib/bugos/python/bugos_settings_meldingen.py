@@ -129,8 +129,9 @@ class PrintersPagina(Blad):
         self.lijst = self.kaart()
         self.wacht_kaart = self.kaart(t("Wachtrij", "Queue"))
         self.leeg_knop = Knop(t("Wachtrij leegmaken", "Clear the queue"), "gewoon", "lijn:kruis")
-        self.leeg_knop.clicked.connect(lambda _c=False: op_achtergrond(self, bi.wachtrij_leegmaken,
-                                                                       lambda _u: self.ververs()))
+        self.leeg_knop.clicked.connect(lambda _c=False: op_achtergrond(self, bi.wachtrij_leegmaken, lambda ok: (
+            self.ververs(), None if ok else self.melding.toon(t("Leegmaken lukte niet.", "Clearing did not work."),
+                                                              "fout"))))
         self.wacht_rij = Rij("document", "…", "", self.leeg_knop)
         self.wacht_kaart.voeg(self.wacht_rij)
         g = self.kaart(t("Scannen", "Scanning"))
@@ -185,6 +186,9 @@ class PrintersPagina(Blad):
 
     def scan(self) -> None:
         if self.scanprogramma and not bi.VOORBEELD:
-            start(self.scanprogramma)
+            if self.scanprogramma.startswith("flatpak:"):
+                start("flatpak", "run", self.scanprogramma.split(":", 1)[1])
+            else:
+                start(self.scanprogramma)
         elif not self.scanprogramma:
             start("bugos-store")

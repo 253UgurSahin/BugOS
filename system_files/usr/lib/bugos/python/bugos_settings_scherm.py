@@ -19,8 +19,8 @@ class GeluidPagina(Blad):
     titel_nl, titel_en = "Geluid", "Sound"
     uitleg_nl = "Hoe hard, en waar het geluid uit komt."
     uitleg_en = "How loud, and where the sound comes from."
-    zoekwoorden = ("geluid volume luidspreker speaker koptelefoon hdmi tv stil dempen microfoon sound audio volume "
-                   "speaker speakers headphones hdmi tv mute silent microphone mic")
+    zoekwoorden = ("geluid volume luidspreker speaker koptelefoon hdmi tv stil dempen sound audio volume "
+                   "speaker speakers headphones hdmi tv mute silent")
     kde = "kcm_pulseaudio"
 
     def bouw(self) -> None:

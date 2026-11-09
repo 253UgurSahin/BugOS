@@ -551,6 +551,23 @@ wacht()
 bi.zet_energieprofiel = _oud_ez
 del _ep.ververs
 klopt(_gelezen, "U156: energieprofiel lukt niet: de keuze springt terug naar wat echt aan staat")
+# U158: de wachtrij telt alleen je eigen documenten, en leegmaken vraagt CUPS alleen om die (cancel -u jij).
+import getpass as _gp  # noqa: E402
+
+_ik = _gp.getuser()
+_, _aantal = vang(bi.wachtrij, antwoord=lambda c: (0, f"HP-12 {_ik} 1024 Mon\nHP-13 iemand 2048 Mon\n"))
+_opd, _ = vang(bi.wachtrij_leegmaken)
+klopt(_aantal == 1 and _opd and _opd[-1] == ("cancel", "-u", _ik),
+      f"U158: wachtrij: alleen je eigen documenten tellen en weghalen ({_aantal}, {_opd[-1:]})")
+# U159: een scanprogramma uit de Winkel (Flatpak) wordt gevonden.
+_, _scan = vang(bi.scanprogramma, antwoord=lambda c: (0, "") if c[:3] == ("flatpak", "info", "org.kde.skanpage") else (1, ""))
+_which = shutil.which
+shutil.which = lambda n, *a, **k: "/usr/bin/flatpak" if n == "flatpak" else None
+bi.VOORBEELD, _oud_d = False, bi.draai
+bi.draai = lambda *c, **k: (0, "") if c[:3] == ("flatpak", "info", "org.kde.skanpage") else (1, "")
+_scan = bi.scanprogramma()
+bi.VOORBEELD, bi.draai, shutil.which = True, _oud_d, _which
+klopt(_scan == "flatpak:org.kde.skanpage", f"U159: Skanpage uit de Winkel (Flatpak) telt als scanprogramma ({_scan})")
 
 # U010: wie geen beheerder is, verandert zijn eigen wachtwoord via passwd (PAM), in een nep-terminal;
 # geen wachtwoord op de opdrachtregel, en geen vraag om het wachtwoord van een beheerder.
