@@ -848,6 +848,34 @@ checked by reading the script only (no PowerShell here); the Windows CI runs it.
 ### U291 [low] Help's "Show what takes up space" opened Dolphin instead of BugOS Files
   commit: 05eb8c2   test: tools/test_help.py
 
+## Round 22 (2026-11-09)
+Two reviewers: the round-21 fixes (3 found plus 3 unsure: U296-U299), and a fresh sweep of upgrading a machine that
+has been in use for months, including /etc merges and rollback (4 found plus 3 unsure: U300-U303). 8 fixed, each
+with a test that failed first. Tests after: 20 test files passed (here).
+
+Note: `main` (the tree before the English rename) was built and pushed as an image on 2026-11-03, so "main image
+→ this branch" is a real upgrade path (U302). Earlier rounds said no image had been released; that was not right.
+
+### U296 [medium] (from U284) Fast USB SSDs (UAS, they report SCSI) disappeared from the Windows tool's step 2
+  commit: b64e260   test: tools/test_windows_start.sh
+### U297 [low, latent] (from U290) Help imported bugos_config_netwerk directly, leaving bugos_config half loaded
+  commit: b64e260   test: tools/test_help.py
+### U298 [low] (from U287) Every download error was explained as "the connection dropped"; now with the real reason
+  commit: b64e260   test: tools/test_windows_start.sh
+### U299 [low] The red error text on its pink background was 4.36:1 (light)
+  commit: b64e260   test: tools/test_os_apps.py (design files regenerated)
+### U300 [medium] "Back to the previous version" wrote "update myself" into the /etc of the version you left; the older
+version still said "automatic" and staged the newer one again within an hour (U033 one boot later)
+  commit: b02c7a8   test: tools/test_os_system.sh. The choice now also lives in /var/lib/bugos
+  (shared by all versions), and every update service (system, apps, per-user apps) checks it with ExecCondition.
+### U301 [low-medium] After a renamed timer, "update myself" quietly turned app updates back on (the /etc merge adds the new symlink)
+  commit: same as U300   test: tools/test_os_system.sh
+### U302 [medium, machines on a pre-rename image] Renamed ids were not migrated: broken quick-menu widget, pinned taskbar
+apps gone, dark mode showing as light (BugOSDonker), FPS counter stuck on
+  commit: b87b83f   test: tools/test_panel.sh (simulated panel), tools/test_os_system.sh
+### U303 [low] After switching to signed updates and going back, the PC stayed on unverified updates for good
+  commit: 9b932d6   test: tools/test_signed.sh
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -882,6 +910,12 @@ checked by reading the script only (no PowerShell here); the Windows CI runs it.
 - U294 (round 21, unsure): the kickstart sets `keyboard us`; check on a real install that AZERTY/QWERTZ users can
   pick their layout in the live installer.
 - U295 (round 21, unsure): Task Manager runs nvidia-smi on every refresh while open (may keep an Optimus GPU awake).
+- U304 (round 22, unsure): an older version you roll back to does not yet have the U300 conditions, so a rollback
+  to a version from before this round can still update forward once. Only fixable in versions that have it.
+- U305 (round 22, unsure): whether Plasma's scripting `widget.type` still reports "org.bugos.snelmenu" for a widget
+  whose plugin is missing (U302 relies on it); check once on a real PC that had the old image.
+- U306 (round 22, unsure): light mode switched on automatically by a pre-rename image below 6,000,000 kB is not
+  re-checked against U023's newer threshold.
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 

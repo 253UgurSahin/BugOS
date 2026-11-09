@@ -487,6 +487,13 @@ nep busctl 'exit 0'
 draai bugos-first-boot
 klopt 'grep -q "org.kde.gwenview" "$TMP/flatpak-log" && grep -q "org.kde.okular" "$TMP/flatpak-log"' \
     "U224: na de installatie is er een programma voor foto's (Gwenview) en PDF's (Okular)"
+# U239: een computer die de eerste start al deed, krijgt alleen de nieuwe standaard-apps erbij (één keer).
+touch "$TMP/var-bugos/eerste-start-klaar"
+rm -f "$TMP/var-bugos/standaard-apps-2"
+: >"$TMP/flatpak-log"
+draai bugos-first-boot
+klopt 'grep -q "org.kde.gwenview" "$TMP/flatpak-log" && ! grep -q "LibreOffice" "$TMP/flatpak-log" && [ -e "$TMP/var-bugos/standaard-apps-2" ] && grep -q "standaard-apps-2" "$ROOT/system_files/usr/lib/systemd/system/bugos-first-boot.service"' \
+    "U239: al klaargezet: alleen Gwenview en Okular erbij, één keer"
 klopt 'grep -q "^image/jpeg=org.kde.gwenview.desktop" "$ROOT/system_files/etc/xdg/kde-mimeapps.list" && grep -q "^application/pdf=org.kde.okular.desktop" "$ROOT/system_files/etc/xdg/kde-mimeapps.list"' \
     "U224: een foto opent standaard in Gwenview en een PDF in Okular"
 klopt 'grep -qx "kio-fuse" "$ROOT/build_files/packages.txt"' \

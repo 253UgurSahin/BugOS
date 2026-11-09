@@ -2,7 +2,7 @@
 Description=BugOS: set up the default apps after installing
 Wants=network-online.target
 After=network-online.target
-ConditionPathExists=!/var/lib/bugos/eerste-start-klaar
+ConditionPathExists=!/var/lib/bugos/standaard-apps-2
 ConditionKernelCommandLine=!rd.live.image
 
 [Service]

@@ -8,6 +8,9 @@
 
 set -u
 KLAAR=/var/lib/bugos/eerste-start-klaar
+# Later bijgekomen standaard-apps (Gwenview, Okular: U224) krijgen ook computers die de eerste start al deden,
+# één keer (U239). Haal je ze daarna weg, dan blijven ze weg.
+KLAAR2=/var/lib/bugos/standaard-apps-2
 mkdir -p /var/lib/bugos
 
 APPS=(
@@ -19,6 +22,8 @@ APPS=(
 )
 # Steam als Flatpak alleen als de systeemversie ontbreekt.
 command -v steam >/dev/null 2>&1 || APPS+=(com.valvesoftware.Steam)
+# Al eens klaargezet: alleen wat er later bij kwam.
+[ -f "$KLAAR" ] && APPS=(org.kde.gwenview org.kde.okular)
 
 # Niet over een verbinding met een databundel (telefoon-hotspot): dat is al gauw een paar gigabyte. Dan over
 # vijf minuten opnieuw kijken (Restart=on-failure), zoals de dagelijkse app-updates (U180).
@@ -34,7 +39,7 @@ flatpak remote-add --if-not-exists --system flathub https://dl.flathub.org/repo/
 if flatpak install --system --noninteractive --or-update flathub "${APPS[@]}"; then
     # De BugOS-stijl ook voor deze apps (Kvantum en Breeze-GTK in de Flatpak-doos).
     /usr/bin/bugos-flatpak-style || true
-    touch "$KLAAR"
+    touch "$KLAAR" "$KLAAR2"
 else
     echo "BugOS: apps installeren lukte nog niet, volgende keer opnieuw." >&2
     exit 1
