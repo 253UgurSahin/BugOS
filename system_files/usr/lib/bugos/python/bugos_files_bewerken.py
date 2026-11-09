@@ -142,7 +142,9 @@ class Bewerken:
     def _klus_klaar(self, gelukt: int, fout: str, knip: bool, achter: list | None = None,
                     klembord: bool = True) -> None:
         if fout:
-            self.melding.toon(t(f"Niet alles lukte: {fout}", f"Not everything worked: {fout}"), "fout", seconden=12)
+            # Wilde je al sluiten (en liep je weg), dan blijft de fout staan tot je hem ziet.
+            self.melding.toon(t(f"Niet alles lukte: {fout}", f"Not everything worked: {fout}"), "fout",
+                              seconden=0 if self.sluit_na_klus else 12)
         elif achter:  # bijv. een naam met ':' op een USB-stick: de rest staat er wel
             self.melding.toon(achter_uitleg(achter, knip), "let_op", seconden=0)
         else:

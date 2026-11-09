@@ -604,6 +604,7 @@ vb._klus_klaar(0, "de stick is eruit getrokken", False)
 app.processEvents()
 klopt(vb.isVisible() and not vb.sluit_na_klus and "stick" in vb.melding.tekst.text(),
       "U038: Bestanden: mislukt het kopiëren nadat je het venster sloot, dan blijft het open met de foutmelding")
+klopt(not vb.melding.klok.isActive(), "U047: Bestanden: die foutmelding blijft staan (verdwijnt niet na 12 seconden)")
 
 
 def laat_los(waar, pad: Path, shift: bool = False) -> bool:
