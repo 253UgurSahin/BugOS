@@ -363,6 +363,28 @@ klopt(upd.auto.isChecked() and (nep_pk / "gedaan").read_text().split()[:7] == ["
       "U006: Annuleren bij 'Updates vanzelf' uit: de schakelaar springt terug")
 
 
+# U065: de grote aanwijzer altijd in kcminputrc schrijven (plasma-apply-cursortheme negeert --size als het
+# thema al het huidige is) en KDE laten weten dat de aanwijzer veranderd is.
+opd, _ = vang(bi.zet_grote_aanwijzer, True)
+klopt(kde_sleutels(opd).get(("Mouse", "cursorSize")) == "48" and not any(c[0] == "plasma-apply-cursortheme" for c in opd)
+      and any(c[0] == "gdbus" and "org.kde.KGlobalSettings.notifyChange" in c and c[-2:] == ("5", "0") for c in opd),
+      "U065: grote aanwijzer: cursorSize=48 geschreven en KDE verteld dat de aanwijzer veranderde")
+opd, _ = vang(bi.zet_grote_aanwijzer, False)
+klopt(kde_sleutels(opd).get(("Mouse", "cursorSize")) == "24", "U065: grote aanwijzer uit: terug naar 24")
+
+# U066: de schermlezer via de kded-module van Plasma 6.8 (kaccess start Orca niet meer).
+opd, _ = vang(bi.zet_toetshulp, "schermlezer", True)
+klopt(any(c[0] == "gdbus" and "/modules/screenreader" in c and c[-2:] == ("org.kde.screenreader.setEnabled", "true")
+          for c in opd) and not kde_sleutels(opd), "U066: schermlezer aan via org.kde.kded6 /modules/screenreader")
+_, aan = vang(bi.toetshulp, "schermlezer", antwoord=lambda c: (0, "(true,)\n") if c[0] == "gdbus" else (0, "false"))
+_, uit = vang(bi.toetshulp, "schermlezer", antwoord=lambda c: (0, "(false,)\n") if c[0] == "gdbus" else (0, "true"))
+klopt(aan is True and uit is False, "U066: de schermlezer-schakelaar leest de kded-module, niet kaccessrc")
+opd, _ = vang(bi.zet_toetshulp, "schermlezer", True, antwoord=lambda c: (1, "") if c[0] == "gdbus" else (0, ""))
+klopt(kde_sleutels(opd).get(("ScreenReader", "Enabled")) == "true", "U066: zonder de kded-module: zoals vroeger via kaccessrc")
+opd, _ = vang(bi.zet_toetshulp, "plaktoetsen", True)
+klopt(kde_sleutels(opd).get(("Keyboard", "StickyKeys")) == "true" and not any(c[0] == "gdbus" for c in opd),
+      "U066: plaktoetsen blijven via kaccessrc")
+
 # U010: wie geen beheerder is, verandert zijn eigen wachtwoord via passwd (PAM), in een nep-terminal;
 # geen wachtwoord op de opdrachtregel, en geen vraag om het wachtwoord van een beheerder.
 nep_pw = TMP / "nep-pw"

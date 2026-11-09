@@ -74,12 +74,12 @@ def zet_grote_aanwijzer(aan: bool) -> None:
     if _c.VOORBEELD:
         _c._VB["grote_aanwijzer"] = aan
         return
-    maat = str(GROTE_AANWIJZER if aan else GEWONE_AANWIJZER)
-    thema = _c.kde_lees("kcminputrc", "Mouse", "cursorTheme", "breeze_cursors") or "breeze_cursors"
-    if shutil.which("plasma-apply-cursortheme") and \
-            _c.draai("plasma-apply-cursortheme", "--size", maat, thema, timeout=10)[0] == 0:
-        return
-    _c.kde_schrijf("kcminputrc", "Mouse", "cursorSize", maat)
+    # Altijd zelf schrijven: plasma-apply-cursortheme doet niets (en zegt "gelukt") als het thema al het
+    # huidige is, en kijkt in Plasma 6.8 niet meer naar --size (U065). Daarna het signaal dat KDE's eigen
+    # instellingenscherm ook stuurt (CursorChanged = 5), zodat KWin en de open programma's het meteen zien.
+    _c.kde_schrijf("kcminputrc", "Mouse", "cursorSize", str(GROTE_AANWIJZER if aan else GEWONE_AANWIJZER))
+    _c.draai("gdbus", "emit", "--session", "--object-path", "/KGlobalSettings", "--signal",
+             "org.kde.KGlobalSettings.notifyChange", "5", "0", timeout=5)
     _c.kwin_herlees()
 
 
@@ -110,9 +110,22 @@ TOETSHULP = {"plaktoetsen": ("Keyboard", "StickyKeys"), "langzame_toetsen": ("Ke
              "schermlezer": ("ScreenReader", "Enabled")}
 
 
+# Sinds Plasma 6.8 start de kded-module "screenreader" Orca (als orca.service), niet kaccess meer; die kijkt
+# dan niet meer naar Enabled in kaccessrc. Dus via D-Bus, zoals KDE's eigen instellingenscherm (U066).
+_SCHERMLEZER = ("--session", "--dest", "org.kde.kded6", "--object-path", "/modules/screenreader", "--method")
+
+
+def _schermlezer_dbus(*methode: str) -> tuple[int, str]:
+    return _c.draai("gdbus", "call", *_SCHERMLEZER, *methode, timeout=10)
+
+
 def toetshulp(naam: str) -> bool:
     if _c.VOORBEELD:
         return _c._VB[naam]
+    if naam == "schermlezer":
+        code, uit = _schermlezer_dbus("org.kde.screenreader.enabled")
+        if code == 0 and uit.strip():
+            return "true" in uit
     groep, sleutel = TOETSHULP[naam]
     return _c.kde_lees("kaccessrc", groep, sleutel, "false") == "true"
 
@@ -121,6 +134,8 @@ def zet_toetshulp(naam: str, aan: bool) -> None:
     """Plaktoetsen, langzame toetsen en de schermlezer: kaccess van KDE regelt het verder."""
     if _c.VOORBEELD:
         _c._VB[naam] = aan
+        return
+    if naam == "schermlezer" and _schermlezer_dbus("org.kde.screenreader.setEnabled", "true" if aan else "false")[0] == 0:
         return
     groep, sleutel = TOETSHULP[naam]
     _c.kde_schrijf("kaccessrc", groep, sleutel, "true" if aan else "false")
