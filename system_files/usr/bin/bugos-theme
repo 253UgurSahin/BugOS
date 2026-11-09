@@ -66,7 +66,8 @@ oude_namen() {
     rm -f "$CONFIG/environment.d/90-bugos-spelmodus.conf"
 }
 
-# Een eigen KDE-accentkleur maakt de zachte BugOS-selectie fel (oude BugOS zette die).
+# Een eigen KDE-accentkleur maakt de zachte BugOS-selectie fel (oude BugOS zette die). Alleen bij de eerste keer:
+# een accentkleur die je daarna zelf in KDE kiest, blijft staan, ook als je licht/donker omzet (U373).
 geen_accent() {
     kwriteconfig6 --file kdeglobals --group General --key AccentColor --delete 2>/dev/null
     kwriteconfig6 --file kdeglobals --group General --key LastUsedCustomAccentColor --delete 2>/dev/null
@@ -86,7 +87,14 @@ gtk_laag() {
         cmp -s "$bron" "$map/bugos.css" || cp -f "$bron" "$map/bugos.css"
         if ! grep -qxF "$regel" "$css" 2>/dev/null && [ ! -f "$BUGOS_CONFIG/gtk-$v" ]; then
             # Vooraan: @import moet in CSS boven de rest staan.
-            { echo "$regel"; cat "$css" 2>/dev/null || true; } >"$css.bugos" && mv -f "$css.bugos" "$css"
+            # Alleen vervangen als het nieuwe bestand er helemaal is: bij een volle schijf bleef er anders een leeg
+            # gtk.css over, en waren je eigen regels weg (U372).
+            if { echo "$regel" && { [ ! -f "$css" ] || cat "$css"; }; } >"$css.bugos" 2>/dev/null &&
+                [ "$(wc -c <"$css.bugos")" -gt "$(wc -c <"$css" 2>/dev/null || echo 0)" ]; then
+                mv -f "$css.bugos" "$css"
+            else
+                rm -f "$css.bugos"
+            fi
         fi
         # Merkje alleen als de regel er echt in staat (lukte schrijven niet, dan de volgende keer opnieuw).
         if grep -qxF "$regel" "$css" 2>/dev/null; then
@@ -156,7 +164,6 @@ windows_kleuren() {
 
 case "${1:-status}" in
 licht | donker)
-    geen_accent
     if [ "$1" = donker ]; then
         schema=BugOSDark kv=BugOSDark
     else

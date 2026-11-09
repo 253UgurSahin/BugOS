@@ -461,6 +461,21 @@ nep plasma-apply-colorscheme 'exit 1'
 draai bugos-theme donker
 klopt '[ "$code" -ne 0 ]' "U342: licht/donker dat niet lukt, geeft een fout terug (niet 'Klaar')"
 nep plasma-apply-colorscheme 'echo "$1" >"'"$TMP"'/schema"'
+# U372: lukt het schrijven van gtk.css niet (bijv. een volle schijf), dan blijft je eigen gtk.css heel.
+mkdir -p "$TMP/thuis/.config/gtk-3.0"
+printf 'mijn regel {}\n' >"$TMP/thuis/.config/gtk-3.0/gtk.css"
+rm -f "$TMP/thuis/.config/bugos/gtk-3.0"
+nep cat 'exit 1'
+nep flatpak 'exit 0'
+draai bugos-theme inloggen
+rm -f "$TMP/bin/cat"
+klopt 'grep -qx "mijn regel {}" "$TMP/thuis/.config/gtk-3.0/gtk.css"' "U372: mislukt het schrijven, dan blijft je eigen gtk.css heel"
+# U373: licht/donker omzetten laat een accentkleur staan die je zelf in KDE koos.
+nep kwriteconfig6 'echo "$*" >>"'"$TMP"'/kw-thema"'
+: >"$TMP/kw-thema"
+draai bugos-theme donker
+klopt '! grep -q "AccentColor --delete" "$TMP/kw-thema"' "U373: licht/donker omzetten laat je eigen accentkleur staan"
+nep kwriteconfig6 'exit 0'
 # U302: van vóór de Engelse namen: 'BugOSDonker' wordt 'BugOSDark', en het oude game-modusbestand gaat weg.
 echo BugOSDonker >"$TMP/schema"
 mkdir -p "$TMP/thuis/.config/environment.d"
