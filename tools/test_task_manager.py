@@ -105,6 +105,22 @@ schrijf(TMP / "sys" / "class" / "drm" / "card1" / "device" / "gpu_busy_percent",
 klopt(bt.videokaart() == 88.0, f"U406: met twee videokaarten telt de drukste ({bt.videokaart()})")
 import shutil as _sh406
 _sh406.rmtree(TMP / "sys" / "class" / "drm" / "card1")
+# U421: Intel (geen gpu_busy_percent) met een slapende Nvidia: nvidia-smi niet aanroepen (dat wekt de kaart).
+_kaarten421 = TMP / "sys421"
+schrijf(_kaarten421 / "class" / "drm" / "card0" / "device" / "vendor", "0x8086\n")
+schrijf(_kaarten421 / "class" / "drm" / "card1" / "device" / "vendor", "0x10de\n")
+schrijf(_kaarten421 / "class" / "drm" / "card1" / "device" / "power" / "runtime_status", "suspended\n")
+_oud_sys421, _oud_proc421 = bt.sys_map, os.environ.pop("BUGOS_PROC", None)
+_oud_bestaat421, _oud_run421 = bt.Path.exists, bt.subprocess.run
+_smi421 = []
+bt.sys_map = lambda: _kaarten421
+bt.Path.exists = lambda self: True if str(self) == "/usr/bin/nvidia-smi" else _oud_bestaat421(self)
+bt.subprocess.run = lambda cmd, *a, **k: (_smi421.append(cmd), _oud_run421(["true"], *a, **k))[1]
+_v421 = bt.videokaart()
+bt.sys_map, bt.Path.exists, bt.subprocess.run = _oud_sys421, _oud_bestaat421, _oud_run421
+if _oud_proc421 is not None:
+    os.environ["BUGOS_PROC"] = _oud_proc421
+klopt(not _smi421 and _v421 is None, f"U421: Intel met een slapende Nvidia: nvidia-smi wordt niet gestart ({_smi421})")
 
 # 2. processen
 lijst = bt.processen()

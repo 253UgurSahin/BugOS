@@ -168,7 +168,8 @@ def videokaart() -> float | None:
             # Een slapende Nvidia-kaart niet wakker maken met nvidia-smi (kost accu); slaapt hij, dan doet hij niets.
             wakker = lees(kaart / "device" / "power" / "runtime_status").strip() != "suspended"
             nvidia_wakker = wakker or bool(nvidia_wakker)
-    if (not waarden or nvidia_wakker) and os.environ.get("BUGOS_PROC") is None and Path("/usr/bin/nvidia-smi").exists():
+    # Intel heeft geen gpu_busy_percent: dan ook geen nvidia-smi als de Nvidia-kaart slaapt (Optimus-laptop) (U421).
+    if (nvidia_wakker or (nvidia_wakker is None and not waarden)) and os.environ.get("BUGOS_PROC") is None and Path("/usr/bin/nvidia-smi").exists():
         try:
             uit = subprocess.run(["nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
                                  capture_output=True, text=True, timeout=3).stdout.split()
