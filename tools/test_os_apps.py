@@ -149,6 +149,12 @@ _op48 = sorted(str(p.relative_to(_doel48 / "Pictures")) for p in (_doel48 / "Pic
 klopt(sorted(_d48[_thuis48 / "Pictures"]) == ["Vakantie/a[1]*.jpg", "img_1.jpg"]
       and _op48 == ["IMG_1.JPG", "Vakantie", "Vakantie/A[1]*.JPG"],
       f"U048: de tweede van elk paar gaat niet mee (ook met * en [ in de naam): {_op48}")
+# U051: stond 'img_1.jpg' al in de back-up en komt 'IMG_1.JPG' er later bij, dan blijft de oude in de back-up staan.
+(_doel48.parent / "y" / "Pictures").mkdir(parents=True)
+(_doel48.parent / "y" / "Pictures" / "img_1.jpg").write_text("klein")
+_d51 = _bb48.dubbel_op_schijf(TMP, [_thuis48 / "Pictures"], _doel48.parent / "y")
+klopt("IMG_1.JPG" in _d51[_thuis48 / "Pictures"] and "img_1.jpg" not in _d51[_thuis48 / "Pictures"],
+      f"U051: wat al in de back-up staat, blijft; de nieuwe met andere hoofdletters gaat niet mee ({_d51})")
 klopt("hoofdletters" in _bb48.DEELS_UITLEG or "capitals" in _bb48.DEELS_UITLEG,
       "U048: de melding 'konden niet mee' noemt ook namen die alleen in hoofdletters verschillen")
 

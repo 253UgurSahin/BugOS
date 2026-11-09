@@ -134,14 +134,27 @@ def _rsync_letterlijk(pad: str) -> str:
     return "".join("\\" + c if c in "*?[\\" else c for c in pad)
 
 
-def dubbel_op_schijf(schijf: Path, mappen: list[Path]) -> dict[Path, list[str]]:
+def dubbel_op_schijf(schijf: Path, mappen: list[Path], doel: Path | None = None) -> dict[Path, list[str]]:
     """Kent de schijf geen hoofdletters (FAT/exFAT), dan zou 'IMG_1.JPG' 'img_1.jpg' overschrijven.
-    Geeft per map de tweede van zo'n paar (relatief), die laten we dan buiten de back-up (en zeggen dat)."""
+    Geeft per map de tweede van zo'n paar (relatief), die laten we dan buiten de back-up (en zeggen dat).
+    Staat er van zo'n paar al één in de back-up (doel), dan blijft díe; de ander gaat niet mee
+    (anders zou de nieuwe de oude in de back-up vervangen)."""
     if kent_hoofdletters(schijf):
         return {}
     uit = {}
     for m in mappen:
-        dubbel = [os.path.relpath(p, m) for p in dubbele_namen(m)] if m.is_dir() else []
+        dubbel = []
+        for p in (dubbele_namen(m) if m.is_dir() else []):
+            overslaan = p
+            if doel is not None:
+                try:
+                    al_daar = set(os.listdir(doel / m.name / os.path.relpath(p.parent, m)))
+                except OSError:
+                    al_daar = set()
+                broers = [n for n in os.listdir(p.parent) if n != p.name and n.casefold() == p.name.casefold()]
+                if p.name in al_daar and broers and not any(b in al_daar for b in broers):
+                    overslaan = p.parent / broers[0]   # deze staat al in de back-up: de andere gaat niet mee
+            dubbel.append(os.path.relpath(overslaan, m))
         if dubbel:
             uit[m] = dubbel
     return uit
@@ -224,7 +237,7 @@ def zonder_venster(schijf: Path) -> int:
     doel.mkdir(parents=True, exist_ok=True)
     schrijf_lijstje(doel)
     mappen = bron_mappen()
-    dubbel = dubbel_op_schijf(schijf, mappen)
+    dubbel = dubbel_op_schijf(schijf, mappen, doel)
     deels = [m.name for m in dubbel]
     for m in mappen:
         code = subprocess.call(rsync_maak(m, doel, dubbel.get(m, ())))
@@ -270,7 +283,7 @@ def venster() -> int:
         def run(self) -> None:
             try:
                 past, nodig, vrij = ruimte_genoeg(self.schijf, self.mappen, self.doel, self.stop)
-                self.dubbel = dubbel_op_schijf(self.schijf, self.mappen)
+                self.dubbel = dubbel_op_schijf(self.schijf, self.mappen, self.doel)
             except OSError:  # de schijf is er intussen uit
                 past, nodig, vrij = False, 0, -1
             self.klaar.emit(past, nodig, vrij)
