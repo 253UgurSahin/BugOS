@@ -967,6 +967,9 @@ klopt(_up.melding.tekst.text() == "Klaar. Deze versie blijft nu ook na opnieuw o
 # U389: 'Nu updaten' terwijl er al een update loopt: zeg dat, niet 'ben je online?'.
 _up.klaar_met("nu", 1, "error: Transaction in progress: (null)\n")
 klopt("al een update" in _up.melding.tekst.text(), f"U389: er loopt al een update: dat wordt gezegd ({_up.melding.tekst.text()!r})")
+_up.klaar_met("nu", 1, "error: Writing objects: No space left on device\n")
+klopt("vol" in _up.melding.tekst.text() and "online" not in _up.melding.tekst.text(),
+      f"U411: updaten met een volle computer: dat wordt gezegd ({_up.melding.tekst.text()!r})")
 
 # U397: op een klein scherm (hier 800×600) worden groottes waarbij niets meer past, niet aangeboden.
 _sp2 = venster.paginas["scherm"]

@@ -344,6 +344,12 @@ class Winkel(Venster):
                                "Vraag het aan wie de computer beheert.",
                                f"Installing {naam} needs an administrator's password. "
                                "Ask the person who looks after this computer."), "fout")
+        elif any(w in uit.lower() for w in ("no space left on device", "not enough disk space", "not enough free space", "not enough space")):
+            # Een volle computer is geen 'heb je internet?' (U411).
+            self.melding.zet(t(f"{naam} installeren lukte niet: je computer is vol. Maak eerst ruimte (bijv. de "
+                               "prullenbak leegmaken in Bestanden) en probeer het dan opnieuw.",
+                               f"Installing {naam} failed: your computer is full. Make room first (for example empty "
+                               "the trash in Files) and try again."), "fout")
         else:
             self.melding.zet(t(f"{naam} installeren lukte niet. Heb je internet? Probeer het nog eens.",
                                f"Installing {naam} failed. Are you online? Please try again."), "fout")

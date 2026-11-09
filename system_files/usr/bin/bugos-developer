@@ -24,29 +24,38 @@ aan() {
         "$(t "Dit kan 5 tot 10 minuten duren." "This can take 5 to 10 minutes.")"
 
     # Lukt een stap niet, dan zeggen we dat eerlijk en blijft de modus uit (geen "AAN" zonder dat het werkt).
-    local gelukt=ja
+    local gelukt=ja log
+    # Wat flatpak en distrobox zeggen, bewaren: een volle schijf is geen 'ben je online?' (U411).
+    log="$(mktemp)"
     # 9>&-: het slot (U262) niet doorgeven aan wat blijft draaien (podman/conmon van het doosje), anders bleef
     # het slot de hele sessie dicht en wachtte 'uit' eeuwig (U270).
-    flatpak install --user --noninteractive flathub com.visualstudio.code >/dev/null 2>&1 9>&- ||
-        flatpak install --noninteractive flathub com.visualstudio.code >/dev/null 2>&1 9>&- ||
+    flatpak install --user --noninteractive flathub com.visualstudio.code >>"$log" 2>&1 9>&- ||
+        flatpak install --noninteractive flathub com.visualstudio.code >>"$log" 2>&1 9>&- ||
         gelukt=nee
 
     systemctl --user enable --now podman.socket >/dev/null 2>&1 9>&-
 
     if [ "$gelukt" = ja ] && ! distrobox list 2>/dev/null 9>&- | grep -q " $DOOS "; then
         distrobox create --yes --name "$DOOS" --image "$DOOS_BEELD" \
-            --additional-packages "$DEV_PAKKETTEN" >/dev/null 2>&1 9>&- || gelukt=nee
+            --additional-packages "$DEV_PAKKETTEN" >>"$log" 2>&1 9>&- || gelukt=nee
     fi
     # Eerste keer binnengaan maakt het doosje echt af.
     if [ "$gelukt" = ja ]; then
-        distrobox enter "$DOOS" -- true >/dev/null 2>&1 9>&- || gelukt=nee
+        distrobox enter "$DOOS" -- true >>"$log" 2>&1 9>&- || gelukt=nee
     fi
 
     if [ "$gelukt" != ja ]; then
-        fout "$(t "Ontwikkelaarsmodus klaarzetten lukte niet. Ben je online? Probeer het daarna opnieuw." \
-            "Setting up developer mode did not work. Are you online? Then try again.")"
+        if grep -qiE "no space left on device|not enough (disk |free )?space" "$log"; then
+            fout "$(t "Ontwikkelaarsmodus klaarzetten lukte niet: je computer is vol. Maak eerst ruimte (bijv. de prullenbak leegmaken in Bestanden) en probeer het dan opnieuw." \
+                "Setting up developer mode did not work: your computer is full. Make room first (for example empty the trash in Files) and try again.")"
+        else
+            fout "$(t "Ontwikkelaarsmodus klaarzetten lukte niet. Ben je online? Probeer het daarna opnieuw." \
+                "Setting up developer mode did not work. Are you online? Then try again.")"
+        fi
+        rm -f "$log"
         return 1
     fi
+    rm -f "$log"
 
     touch "$MARKER"
     melding "$(t "Ontwikkelaarsmodus staat AAN 🛠️" "Developer mode is ON 🛠️")" \

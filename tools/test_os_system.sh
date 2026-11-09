@@ -227,6 +227,11 @@ draai bugos-developer aan
 klopt '[ $code -ne 0 ] && [ "$(HOME="$TMP/thuis" XDG_CONFIG_HOME="$TMP/thuis/.config" bash "$TMP/bugos-developer" status)" = uit ]' \
     "ontwikkelaar: alles mislukt -> afsluitcode niet 0 en status uit"
 klopt 'grep -qi "online" "$TMP/vensters" 2>/dev/null' "ontwikkelaar: mislukt -> uitleg 'Are you online?'"
+# U411: mislukt omdat de computer vol is: dat zeggen, niet 'ben je online?'.
+nep flatpak 'echo "error: No space left on device" >&2; exit 1'
+rm -f "$TMP/vensters"
+draai bugos-developer aan
+klopt 'grep -qi "full" "$TMP/vensters" && ! grep -qi "online" "$TMP/vensters"' "U411: ontwikkelaar: computer vol -> dat wordt gezegd"
 nep flatpak 'exit 0'
 draai bugos-developer aan
 klopt '[ $code -ne 0 ] && [ ! -e "$TMP/thuis/.config/bugos/ontwikkelaar-aan" ]' "ontwikkelaar: dev-doosje mislukt -> niet aan"

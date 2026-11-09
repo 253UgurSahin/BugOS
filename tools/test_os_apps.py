@@ -591,6 +591,7 @@ klopt(kaart is not None and kaart.knop.text() == "Installeren", "U013: een app d
 # mislukt het, dan blijft de Winkel open met de melding.
 nep_programma("flatpak", 'if [ "$1" = install ]; then echo "$*" >"$BUGOS_TEST_FLATPAK_ARGS"; /usr/bin/sleep 1; '
                           '[ "${BUGOS_TEST_FLATPAK:-0}" = 9 ] && echo "error: Not authorized" && exit 1; '
+                          '[ "${BUGOS_TEST_FLATPAK:-0}" = 8 ] && echo "error: No space left on device" && exit 1; '
                           'exit "${BUGOS_TEST_FLATPAK:-0}"; fi\nexit 0\n')
 os.environ["BUGOS_TEST_FLATPAK_ARGS"] = str(TMP / "flatpak-args")
 vlc = next(a for a in cat["apps"] if a["id"] == "org.videolan.VLC")
@@ -617,6 +618,12 @@ ww.show()
 ww.installeer(vlc)
 wacht(lambda: ww.proces.state() == ww.proces.ProcessState.NotRunning and ww.bezig_met is None, 8000)
 klopt("beheerder" in ww.melding.tekst.text(), f"U059: geen toestemming: de Winkel zegt dat een beheerder nodig is ({ww.melding.tekst.text()[:60]})")
+# U411: een volle computer is geen 'heb je internet?'.
+os.environ["BUGOS_TEST_FLATPAK"] = "8"
+ww.installeer(vlc)
+wacht(lambda: ww.proces.state() == ww.proces.ProcessState.NotRunning and ww.bezig_met is None, 8000)
+klopt("vol" in ww.melding.tekst.text() and "internet" not in ww.melding.tekst.text(),
+      f"U411: Winkel: computer vol -> dat wordt gezegd ({ww.melding.tekst.text()[:60]})")
 del os.environ["BUGOS_TEST_FLATPAK"]
 ww.close()
 # U081: na je eerste app staat 'Mijn apps' meteen in de zijbalk (niet pas na opnieuw openen).

@@ -307,6 +307,12 @@ class UpdatesPagina(Blad):
             # Er loopt al een update (vanzelf, of van een ander account): dat is geen 'ben je online?' (U389).
             self.melding.toon(t("Er loopt al een update. Probeer het over een paar minuten nog eens.",
                                 "An update is already running. Try again in a few minutes."), "let_op", seconden=0)
+        elif code != 0 and any(w in uit.lower() for w in ("no space left on device", "not enough disk space", "not enough free space", "not enough space")):
+            # Een volle computer is geen 'ben je online?' (U411).
+            self.melding.toon(t("Dat lukte niet: je computer is vol. Maak eerst ruimte (bijv. de prullenbak leegmaken in "
+                                "Bestanden) en probeer het dan opnieuw.",
+                                "That did not work: your computer is full. Make room first (for example empty the trash "
+                                "in Files) and try again."), "fout", seconden=0)
         elif code != 0:
             self.melding.toon(t("Dat lukte niet. Ben je online? Probeer het later nog eens.",
                                 "That did not work. Are you online? Try again later."), "fout", seconden=0)
