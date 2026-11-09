@@ -1344,6 +1344,26 @@ all 20 test files pass. No security issue found.
 - flatpak-user-update.timer (U117) may not exist in current Universal Blue images; check on the image.
 - An admin can set a very weak password through AccountsService (no quality check).
 
+## Round 45 (2026-11-09) — only broken or security is fixed
+One reviewer on install, image build, updates/rollback and data at risk. Build, signing, tags, update/rollback,
+first boot, Welcome, Files erase/set-up and Backup/Switch restore: nothing broken. Two fixed.
+
+### U535 [medium, data at risk] Windows Fast Startup stayed on, so a "shut down" Windows disk was hibernated while BugOS mounted it at login (files written there could vanish, or the volume be damaged)
+  commit: see `git log --grep U535`   test: tools/test_windows_start.sh (HiberbootEnabled=0 with the UTC clock fix)
+  Note: only for PCs set up with the Windows tool. Mounting a hibernated NTFS volume read-only in BugOS itself
+  (M) would also cover dual-boot PCs set up another way; check which NTFS driver the image uses (ntfs3 or ntfs-3g).
+### U536 [low-medium, stuck forever] Publishing an ISO built from a test branch would put every new PC on that branch for good
+  commit: see `git log --grep U536`   test: tools/test_windows_start.sh (iso.yml refuses publish unless tag = latest)
+
+### Found, not fixed (minor)
+- The Windows tool's raw \\.\PhysicalDriveN write never ran in CI (PowerShell 5.1); test once on a real PC.
+- A USB write that fails before the first block leaves a RAW stick; Clear-Disk may refuse it on retry.
+- Once the signing key exists: a run cancelled between pushing `latest` and `cosign sign` leaves `latest` unsigned.
+- Base-image services (flatpak-preinstall, brew timers) may run even with "I choose when".
+- A PCIe disk the kernel marks removable shows as "External drive" (erase still needs a named confirmation).
+- Downloads redirected to a network share: the ISO free-space check throws.
+- A hand-made backup stick whose top folder is a link is followed on restore (nothing overwritten).
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
