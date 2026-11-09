@@ -119,6 +119,8 @@ Rectangle {
     SystemPalette { id: palette; colorGroup: SystemPalette.Active }
 
     Keys.onEscapePressed: sluiten()
+    // Typen zoekt altijd, waar de focus ook staat (zoals het startmenu van Windows) (U205).
+    Keys.onPressed: event => menu.naarZoekveld(event)
 
     ColumnLayout {
         anchors.fill: parent
@@ -235,7 +237,8 @@ Rectangle {
                         PilKnop {
                             tekst: menu.tr("Alle apps", "All apps")
                             pijl: "›"
-                            onGeklikt: stapel.currentIndex = 1
+                            // Daarna de focus op de lijst (niet op deze knop, die nu niet meer te zien is) (U204).
+                            onGeklikt: { stapel.currentIndex = 1; alleLijst.currentIndex = 0; alleLijst.forceActiveFocus() }
                         }
                     }
                     GridLayout {
@@ -283,7 +286,7 @@ Rectangle {
                         tekst: menu.tr("Terug", "Back")
                         pijl: "‹"
                         pijlVoor: true
-                        onGeklikt: stapel.currentIndex = 0
+                        onGeklikt: { stapel.currentIndex = 0; zoekveld.forceActiveFocus() }   // (U204)
                     }
                     Kopje { text: menu.tr("Alle apps", "All apps"); Layout.fillWidth: true; Layout.leftMargin: 6 }
                 }

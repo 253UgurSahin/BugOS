@@ -118,7 +118,26 @@ for _w in ("settings", "files", "explorer", "wifi"):
     _uit[_w] = _open[-1] if _open else None
 klopt(_uit == {"settings": "bugos-settings.desktop", "files": "bugos-files.desktop", "explorer": "bugos-files.desktop",
                "wifi": "instelling:wifi"}, f"U098: Enter opent de beste treffer ({_uit})")
+# U205: typen zoekt ook als de focus niet in het zoekveld staat; U204: na 'Alle apps' staat de focus op de lijst.
+_sv.show()
+_sm.findChild(QObject, "zoekveld").setProperty("text", "")
+_sm.setProperty("focus", True)
+_sm.forceActiveFocus()
+wacht(50)
+QTest.keyClick(_sv, Qt.Key.Key_F)
+QTest.keyClick(_sv, Qt.Key.Key_I)
+wacht(50)
+klopt(_sm.findChild(QObject, "zoekveld").property("text") == "fi",
+      f"U205: typen in het startmenu zoekt, ook zonder focus in het zoekveld ({_sm.findChild(QObject, 'zoekveld').property('text')!r})")
 _sv.close()
+_smtekst = (QML.parent.parent.parent.parent / "org.bugos.startmenu" / "contents" / "ui" / "StartMenu.qml").read_text()
+klopt("alleLijst.forceActiveFocus()" in _smtekst and "stapel.currentIndex = 0; zoekveld.forceActiveFocus()" in _smtekst,
+      "U204: na 'Alle apps' en 'Terug' staat de toetsenbordfocus op iets wat je ziet")
+for _m in ("org.bugos.startmenu", "org.bugos.quickmenu"):
+    _mt = (QML.parent.parent.parent.parent / _m / "contents" / "ui" / "main.qml").read_text()
+    klopt("onPressed: wasOpen = root.expanded" in _mt and "onClicked: root.expanded = !wasOpen" in _mt,
+          f"U203: {_m}: nog eens op de knop klikken sluit het menu (gaat niet meteen weer open)")
+klopt('snel.tr("Wifi", "Wi-Fi")' in QML.read_text(), "U206: de wifi-tegel heet in het Engels 'Wi-Fi'")
 
 # U099: elk QML-type dat een plasmoid gebruikt, bestaat (een Qt-type, of een .qml-bestand ernaast). Na een hernoeming
 # verwees main.qml naar "Snelmenu" (bestaat niet): dan laadt Plasma het hele snelmenu niet, en de tests hierboven

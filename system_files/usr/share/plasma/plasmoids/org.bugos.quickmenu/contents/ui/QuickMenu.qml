@@ -101,7 +101,7 @@ Rectangle {
             columns: 3
             rowSpacing: 10
             columnSpacing: 10
-            SnelKnop { wat: "wifi"; icoon: "network-wireless"; tekst: "Wifi"; extra: "wifi" }
+            SnelKnop { wat: "wifi"; icoon: "network-wireless"; tekst: snel.tr("Wifi", "Wi-Fi"); extra: "wifi" }
             SnelKnop { wat: "bluetooth"; icoon: "network-bluetooth"; tekst: "Bluetooth"; extra: "bluetooth" }
             SnelKnop { wat: "spel"; icoon: "input-gamepad"; tekst: snel.tr("Game-modus", "Game mode") }
             SnelKnop { wat: "donker"; icoon: "contrast"; tekst: snel.tr("Donker", "Dark") }
