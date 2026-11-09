@@ -1203,6 +1203,21 @@ passed (here).
 ### U466 [low] A flathub remote that exists but is disabled was never enabled (first boot retried forever, the Store said "Are you online?")
   commit: 26ec68a   test: tools/test_os_system.sh
 
+## Round 37 (2026-11-09)
+Two reviewers: the round-36 fixes (4 found plus 4 unsure: U472-U473), and a fresh sweep of "do the words still match
+what the system does" (1 medium plus 6 small: U474-U476). All fixed; tests after: 20 test files passed (here).
+
+### U472 [low] (from U464) While removing, the Store said "being installed"; the removed app stayed in "My apps"; a failed removal closed the window
+  commit: 765dbb3   test: tools/test_os_apps.py
+### U473 [low-medium] (from U465) Box updates ran over a phone hotspot, never retried after a failure, and started podman for accounts without boxes
+  commit: 8c0b8ba   test: tools/test_package.sh
+### U474 [medium] Time and language told you to set the clock "under 'More settings'", which is KDE's Region page (no clock there)
+  commit: 1db779e   test: tools/test_os_settings.py (a "Set the clock yourself…" row opens kcm_clock)
+### U475 [low-medium] With "I choose when", your own (--user) apps and .rpm/.deb programs were never updated; Welcome promised a notification for every update
+  commit: 1db779e   test: tools/test_os_settings.py ("Update now" also updates them; Welcome says what the choice does)
+### U476 [low] Small text mismatches: quick-menu subtitle without game mode, "Files from Windows" without Firefox, the English rollback warning naming a switch that does not exist, the English test notification shorter than the Dutch, old names in docs/PLAN.md
+  commit: dc0d376
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -1322,6 +1337,12 @@ passed (here).
   who looks after this computer".
 - U471 (round 35, unsure): with BugOS in English and LANG set to another region by hand in KDE, the date in Settings
   is in that region's language (as on the taskbar clock).
+- U477 (round 37, unsure): a Flatpak installed both per user and system-wide: `flatpak uninstall -y <id>` without
+  --user/--system may refuse or remove only one copy. Rare in BugOS (the Store installs system-wide).
+- U478 (round 37, unsure): if the base image's flathub remote carries a Fedora filter, enabling it (U466) keeps the
+  filter; check whether Fedora 44 still sets one.
+- U479 (round 37, wording): the Welcome "I'm going to play games" note says you can turn it off later, but that choice
+  only starts Steam once.
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
