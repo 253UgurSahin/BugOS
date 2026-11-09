@@ -726,6 +726,16 @@ _upd.bij_volgende()
 wacht(lambda: not getattr(_upd, "bezig", False), 5000)
 os.environ["PATH"] = _oud_path
 klopt(_upd.begin == _begin and _begin != "hand", f"U129: Annuleren bij het wachtwoord: de updatekeuze is niet als gedaan onthouden ({_upd.begin})")
+(_pk / "pkexec").write_text("#!/usr/bin/bash\nexit 1\n")
+os.environ["PATH"] = f"{_pk}:{_oud_path}"
+_upd2 = welkom.Updates()
+_upd2.hand.setChecked(_upd2.begin != "hand")
+_upd2.auto.setChecked(_upd2.begin == "hand")
+_upd2.bij_volgende()
+wacht(lambda: not getattr(_upd2, "bezig", False), 5000)
+os.environ["PATH"] = _oud_path
+klopt("toestemming" not in _upd2.mislukt.text() and "permission" not in _upd2.mislukt.text() and _upd2.mislukt.text(),
+      f"U422: Welkom: bewaren mislukt (geen Annuleren) is geen 'geen toestemming' ({_upd2.mislukt.text()[:50]!r})")
 klopt(_upd.auto.isChecked() and not _upd.mislukt.isHidden() and ("toestemming" in _upd.mislukt.text() or "permission" in _upd.mislukt.text()),
       f"U412: Annuleren bij het wachtwoord: de knop gaat terug en Welkom zegt het ({_upd.mislukt.text()[:50]!r})")
 

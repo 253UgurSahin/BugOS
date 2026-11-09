@@ -40,6 +40,12 @@ zet_keuze() {
     return 0
 }
 
+# Bij 'terug' is het terugzetten al gebeurd: niet stoppen, wel zeggen dat updates nog vanzelf kunnen gaan (U423).
+niet_bewaard_terug() {
+    t "Let op: de keuze 'zelf updaten' kon niet bewaard worden (is je computer vol?). Zet 'Updates vanzelf' uit in Instellingen, anders kan de nieuwe versie terugkomen." \
+        "Note: the choice 'update yourself' could not be saved (is your computer full?). Turn off 'Updates automatically' in Settings, or the new version may come back." >&2
+}
+
 niet_bewaard() {
     t "Dat lukte niet: de keuze kon niet bewaard worden (is je computer vol?)." \
         "That did not work: the choice could not be saved (is your computer full?)." >&2
@@ -142,7 +148,7 @@ terug)
     # Daarom zetten we ze uit, en zeggen dat.
     MODUS="$(lees_keuze)"
     if [ "$MODUS" = auto ] && [ "$VASTZETTEN" = 1 ]; then
-        zet_keuze hand
+        zet_keuze hand || niet_bewaard_terug
         systemctl disable --now "${TIMERS[@]}"
         gebruiker_timer mask
         # Je draait deze versie al: niet 'start opnieuw op' zeggen (U393).
@@ -150,7 +156,7 @@ terug)
             "Done. This version now stays, also after a restart. Updates are no longer automatic, or the new version would come back; turn them on again in Settings when it is fine."
         echo bugos-blijft
     elif [ "$MODUS" = auto ]; then
-        zet_keuze hand   # ook in /var, zodat de oudere versie het ziet (U300)
+        zet_keuze hand || niet_bewaard_terug   # ook in /var, zodat de oudere versie het ziet (U300)
         systemctl disable --now "${TIMERS[@]}"
         gebruiker_timer mask
         t "Klaar. Start de computer opnieuw op om terug te gaan. Updates gaan nu niet meer vanzelf, anders komt de nieuwe versie terug; zet ze weer aan in Instellingen als het mag." \

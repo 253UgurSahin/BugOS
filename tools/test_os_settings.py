@@ -967,6 +967,12 @@ klopt(_up.melding.tekst.text() == "Klaar. Deze versie blijft nu ook na opnieuw o
 # U389: 'Nu updaten' terwijl er al een update loopt: zeg dat, niet 'ben je online?'.
 _up.klaar_met("nu", 1, "error: Transaction in progress: (null)\n")
 klopt("al een update" in _up.melding.tekst.text(), f"U389: er loopt al een update: dat wordt gezegd ({_up.melding.tekst.text()!r})")
+# U422: 'hand' lukte niet omdat bewaren mislukte: Instellingen toont wat bugos-updates zegt.
+_t422 = sys.modules["bugos_settings_systeem"].t
+_up.klaar_met("hand", 1, _t422("Dat lukte niet: de keuze kon niet bewaard worden (is je computer vol?).",
+                               "That did not work: the choice could not be saved (is your computer full?).") + "\n")
+klopt("could not be saved" in _up.melding.tekst.text() or "kon niet bewaard" in _up.melding.tekst.text(),
+      f"U422: updatekeuze niet bewaard: Instellingen zegt waarom ({_up.melding.tekst.text()!r})")
 _up.klaar_met("nu", 1, "error: Writing objects: No space left on device\n")
 klopt("vol" in _up.melding.tekst.text() and "online" not in _up.melding.tekst.text(),
       f"U411: updaten met een volle computer: dat wordt gezegd ({_up.melding.tekst.text()!r})")

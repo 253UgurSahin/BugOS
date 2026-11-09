@@ -68,6 +68,13 @@ draai bugos-updates auto
 rmdir "$TMP/var-bugos/updates.conf.nieuw"
 klopt '[ $code -ne 0 ] && grep -qx UPDATES=hand "$TMP/var-bugos/updates.conf" && grep -q "could not be saved" "$TMP/uit"' \
     "U413: updatekeuze niet te bewaren: zegt dat, en de oude keuze blijft ($code)"
+# U423: 'terug' terwijl de keuze niet bewaard kan worden: wel terug, maar zeggen dat updates nog vanzelf kunnen gaan.
+echo UPDATES=auto >"$TMP/var-bugos/updates.conf"
+mkdir -p "$TMP/var-bugos/updates.conf.nieuw"
+draai bugos-updates terug
+rmdir "$TMP/var-bugos/updates.conf.nieuw"
+klopt 'grep -q "could not be saved" "$TMP/uit"' "U423: 'terug' zegt het als 'zelf updaten' niet bewaard kon worden"
+echo UPDATES=hand >"$TMP/var-bugos/updates.conf"
 # U300: elke versie heeft een eigen /etc; de keuze moet ook in /var staan, dat alle versies delen. Na het
 # opnieuw opstarten in de oudere versie (die /etc zegt nog 'auto') werkt hij dan niet vanzelf bij.
 klopt 'grep -qx UPDATES=hand "$TMP/var-bugos/updates.conf"' "U300: 'terug' zet 'zelf updaten' ook in /var (gedeeld door alle versies)"

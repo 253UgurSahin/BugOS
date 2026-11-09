@@ -338,14 +338,20 @@ class Updates(Pagina):
                 else:
                     # Je ging al naar de volgende pagina: zeg dat de keuze niet is doorgevoerd, en zet de knop terug (U412).
                     (self.hand if self.begin == "hand" else self.auto).setChecked(True)
-                    tekst = (t("Updates staan nog op 'vanzelf': er was geen toestemming. Ga terug naar 'Updates' om het "
-                               "opnieuw te proberen, of kies het later in Instellingen.",
-                               "Updates are still automatic: permission was not given. Go back to 'Updates' to try "
-                               "again, or choose it later in Settings.") if self.begin != "hand" else
-                             t("Updates staan nog op 'ik kies zelf': er was geen toestemming. Ga terug naar 'Updates' om "
-                               "het opnieuw te proberen, of kies het later in Instellingen.",
-                               "Updates are still 'I choose when': permission was not given. Go back to 'Updates' to "
-                               "try again, or choose it later in Settings."))
+                    if code not in (126, 127):
+                        # Geen kwestie van toestemming: bewaren lukte niet (bijv. een volle computer) (U422).
+                        tekst = t("De updatekeuze kon niet bewaard worden (is je computer vol?). Kies het later opnieuw in "
+                                  "Instellingen.", "The update choice could not be saved (is your computer full?). "
+                                  "Choose it again later in Settings.")
+                    else:
+                        tekst = (t("Updates staan nog op 'vanzelf': er was geen toestemming. Ga terug naar 'Updates' om het "
+                                   "opnieuw te proberen, of kies het later in Instellingen.",
+                                   "Updates are still automatic: permission was not given. Go back to 'Updates' to try "
+                                   "again, or choose it later in Settings.") if self.begin != "hand" else
+                                 t("Updates staan nog op 'ik kies zelf': er was geen toestemming. Ga terug naar 'Updates' om "
+                                   "het opnieuw te proberen, of kies het later in Instellingen.",
+                                   "Updates are still 'I choose when': permission was not given. Go back to 'Updates' to "
+                                   "try again, or choose it later in Settings."))
                     self.mislukt.setText(tekst)
                     self.mislukt.show()
                     QProcess.startDetached("notify-send", ["-a", "BugOS", "-i", "bugos-logo",

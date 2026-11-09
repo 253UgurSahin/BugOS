@@ -291,7 +291,11 @@ class UpdatesPagina(Blad):
             # Lees opnieuw wat er echt staat: zei je 'Annuleren' bij het wachtwoord, dan springt de schakelaar terug.
             op_achtergrond(self, lambda: status_van("bugos-updates"), lambda aan: self.auto.zet_stil(aan is True))
             if code != 0 and code not in (126, 127):
-                self.melding.toon(t("Dat lukte niet. Probeer het nog eens.", "That did not work. Try again."), "fout")
+                # bugos-updates zegt zelf waarom (bijv. 'kon niet bewaard worden'), in jouw taal (U422).
+                regels = [r.strip() for r in uit.splitlines() if r.strip()]
+                eigen = t("Dat lukte niet", "That did not work")
+                self.melding.toon(regels[-1] if regels and regels[-1].startswith(eigen) and len(regels[-1]) < 300 else
+                                  t("Dat lukte niet. Probeer het nog eens.", "That did not work. Try again."), "fout")
             return
         self.nu.setEnabled(True)
         self.terug.setEnabled(True)
