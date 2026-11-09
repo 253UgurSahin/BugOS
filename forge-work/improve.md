@@ -1218,6 +1218,20 @@ what the system does" (1 medium plus 6 small: U474-U476). All fixed; tests after
 ### U476 [low] Small text mismatches: quick-menu subtitle without game mode, "Files from Windows" without Firefox, the English rollback warning naming a switch that does not exist, the English test notification shorter than the Dutch, old names in docs/PLAN.md
   commit: dc0d376
 
+## Round 38 (2026-11-09)
+Two reviewers: the round-37 fixes (2 found plus 3 unsure: U480), and a fresh sweep of "accessibility and keyboard use
+of the UI added in rounds 25-37" (2 medium plus 3 low: U481-U483). All fixed, each with a test that failed first.
+Tests after: 20 test files passed (here).
+
+### U480 [low-medium] (from U473/U475) "Update now" said "Done, restart" while your own apps and boxes still updated in the background; a box update that always fails retried every 30 min all day; two box updates could overlap
+  commit: a007dca   test: tools/test_os_settings.py, tools/test_package.sh
+### U481 [medium] (from U401) Welcome started with focus on an unnamed scroll area (an empty Tab stop on every page) and Enter did not go to "Next"
+  commit: 1b65e8b   test: tools/test_os_apps.py (schuifbaar has no focus of its own; Enter = Next, also on a choice)
+### U482 [medium] (from U464) Store cards were cut off on the right (Remove + Open, Big letters); buttons did not say which app; focus was lost after a removal; Banner messages were silent for the screen reader
+  commit: b3296e4   test: tools/test_os_apps.py (Banner now sends an accessibility alert, in every app)
+### U483 [low] (from U454) The "these times apply on battery/charger" hint was visual only and missing on the Sleep row
+  commit: 625831a   test: tools/test_os_settings.py
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -1343,6 +1357,12 @@ what the system does" (1 medium plus 6 small: U474-U476). All fixed; tests after
   filter; check whether Fedora 44 still sets one.
 - U479 (round 37, wording): the Welcome "I'm going to play games" note says you can turn it off later, but that choice
   only starts Steam once.
+- U484 (round 38, unsure): does `distrobox upgrade` return non-zero when dnf/apt inside fails (offline)? If not, the
+  U473 retry never fires. Check on a real PC.
+- U485 (round 38, check): `kcm_clock` as the Plasma 6.8 module id for Date and time (U474); QMessageBox Yes/Cancel
+  labels may be English on a Dutch desktop if KDE's platform theme does not translate them.
+- U486 (round 38, cosmetic): a hidden row (the clock row with automatic time on, the lid row on a desktop) leaves a
+  double divider line.
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
