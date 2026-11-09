@@ -144,6 +144,8 @@ klopt(len(_qt_types) > 100 and not _mist, f"U099: alle QML-types in de plasmoids
 # U135: in het start- en snelmenu is de toetsenbordfocus goed te zien (een rode rand), en Enter werkt op het tandwiel.
 _sm_tekst = (QML.parent.parent.parent.parent / "org.bugos.startmenu" / "contents" / "ui" / "StartMenu.qml").read_text()
 _qm_tekst = QML.read_text()
+klopt("regel.activeFocus ? 2 : 0" in _sm_tekst and "ListView.view.currentIndex = i" in _sm_tekst,
+      "U149: startmenu: de regel met de toetsenbordfocus licht op en is ook de gekozen regel (Enter opent die)")
 klopt(_sm_tekst.count("activeFocus ? 2 : 0") >= 4 and "pijl.activeFocus ? 2 : 0" in _qm_tekst
       and "tandwiel.activeFocus ? 2 : 0" in _qm_tekst and _qm_tekst.count("Keys.onReturnPressed") >= 3,
       "U135: startmenu-tegels, -regels, -knoppen en de pijltjes en het tandwiel van het snelmenu tonen de focus")

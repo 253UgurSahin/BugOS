@@ -462,9 +462,16 @@ Rectangle {
         onClicked: { menu.start(app.pad); menu.sluiten() }
         Keys.onReturnPressed: clicked()
         Keys.onEnterPressed: clicked()
+        // Met Tab naar een regel: dan wordt die ook de gekozen regel, zodat wat oplicht ook is wat Enter opent (U149).
+        onActiveFocusChanged: if (activeFocus && ListView.view) {
+            const i = ListView.view.indexAt(x + 1, y + 1)
+            if (i >= 0) ListView.view.currentIndex = i
+        }
         background: Rectangle {
             radius: menu.o.rKnop
-            color: regel.hovered || regel.gemarkeerd ? menu.zweef : "transparent"
+            color: regel.hovered || regel.gemarkeerd || regel.activeFocus ? menu.zweef : "transparent"
+            border.width: regel.activeFocus ? 2 : 0
+            border.color: menu.rood
         }
         contentItem: RowLayout {
             spacing: 12
