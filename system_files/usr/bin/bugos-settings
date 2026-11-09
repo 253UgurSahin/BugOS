@@ -135,7 +135,8 @@ class StartPagina(Blad):
         gevonden = 0
         if woorden:
             for klasse in PAGINAS[1:]:
-                bron = f"{klasse.naam()} {klasse.uitleg_nl} {klasse.uitleg_en} {klasse.zoekwoorden}".lower()
+                bron = (f"{klasse.titel_nl} {klasse.titel_en} {klasse.uitleg_nl} {klasse.uitleg_en} "
+                        f"{klasse.zoekwoorden}").lower()
                 if all(w in bron for w in woorden):
                     rij = Rij(klasse.icoon, klasse.naam(), t(klasse.uitleg_nl, klasse.uitleg_en), klikbaar=True)
                     rij.geklikt.connect(lambda s=klasse.sleutel: self.venster.ga_naar(s))

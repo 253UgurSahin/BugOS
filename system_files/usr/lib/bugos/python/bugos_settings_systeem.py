@@ -85,7 +85,9 @@ class UpdatesPagina(Blad):
     titel_nl, titel_en = "Updates en meer", "Updates and more"
     uitleg_nl = "Zet dingen aan of uit met één tik. Je kunt het altijd terugdraaien."
     uitleg_en = "Turn things on or off with one tap. You can always undo it."
-    zoekwoorden = "update bijwerken versie terug game spel modus ontwikkelaar programmeren lichte stand startmenu snelmenu"
+    zoekwoorden = ("update bijwerken versie terug game spel modus ontwikkelaar programmeren lichte stand startmenu "
+                   "snelmenu updates update upgrade version roll back rollback game mode gaming developer coding "
+                   "programming light mode start menu quick menu taskbar")
 
     bezig = False   # loopt "Nu updaten" of "Terug" nog?
 
@@ -242,7 +244,8 @@ class UpdatesPagina(Blad):
 class OverPagina(Blad):
     sleutel, icoon = "over", "laptop"
     titel_nl, titel_en = "Over deze computer", "About this computer"
-    zoekwoorden = "over versie processor geheugen naam computer systeem info"
+    zoekwoorden = ("over versie processor geheugen naam computer systeem info about about this computer version "
+                   "processor cpu memory ram name computer system info information")
 
     def bouw(self) -> None:
         boven = Kaart(marge=24, ruimte=18, richting="h")

@@ -19,7 +19,8 @@ class GeluidPagina(Blad):
     titel_nl, titel_en = "Geluid", "Sound"
     uitleg_nl = "Hoe hard, en waar het geluid uit komt."
     uitleg_en = "How loud, and where the sound comes from."
-    zoekwoorden = "geluid volume luidspreker speaker koptelefoon hdmi tv stil dempen microfoon"
+    zoekwoorden = ("geluid volume luidspreker speaker koptelefoon hdmi tv stil dempen microfoon sound audio volume "
+                   "speaker speakers headphones hdmi tv mute silent microphone mic")
     kde = "kcm_pulseaudio"
 
     def bouw(self) -> None:
@@ -63,7 +64,9 @@ class SchermPagina(Blad):
     titel_nl, titel_en = "Scherm", "Display"
     uitleg_nl = "Helderheid, warm licht voor de avond, en hoe groot alles is."
     uitleg_en = "Brightness, warm light for the evening, and how big everything is."
-    zoekwoorden = "scherm beeldscherm monitor helderheid nachtlicht nachtlampje groot groter klein schaal tekst"
+    zoekwoorden = ("scherm beeldscherm monitor helderheid nachtlicht nachtlampje groot groter klein schaal tekst "
+                   "display screen monitor brightness night light night color blue light size bigger smaller scale "
+                   "scaling text")
     kde = "kcm_kscreen"
 
     def bouw(self) -> None:
@@ -133,7 +136,8 @@ class EnergiePagina(Blad):
     titel_nl, titel_en = "Energie", "Power"
     uitleg_nl = "Zuinig of snel, en hoe het met de batterij gaat."
     uitleg_en = "Saving or fast, and how the battery is doing."
-    zoekwoorden = "energie batterij accu stroom zuinig snel prestaties slaapstand opladen"
+    zoekwoorden = ("energie batterij accu stroom zuinig snel prestaties slaapstand opladen power battery energy "
+                   "saver performance sleep suspend charging lid screen off")
     kde = "kcm_powerdevilprofilesconfig"
 
     def bouw(self) -> None:
@@ -218,7 +222,8 @@ class UiterlijkPagina(Blad):
     titel_nl, titel_en = "Uiterlijk", "Appearance"
     uitleg_nl = "Licht of donker, en de achtergrond van je bureaublad."
     uitleg_en = "Light or dark, and your desktop background."
-    zoekwoorden = "uiterlijk licht donker thema kleur achtergrond bureaublad foto wallpaper"
+    zoekwoorden = ("uiterlijk licht donker thema kleur achtergrond bureaublad foto wallpaper appearance light dark "
+                   "theme dark mode color colour background desktop wallpaper picture")
     kde = "kcm_colors"
 
     def bouw(self) -> None:

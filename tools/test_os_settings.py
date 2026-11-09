@@ -385,6 +385,18 @@ opd, _ = vang(bi.zet_toetshulp, "plaktoetsen", True)
 klopt(kde_sleutels(opd).get(("Keyboard", "StickyKeys")) == "true" and not any(c[0] == "gdbus" for c in opd),
       "U066: plaktoetsen blijven via kaccessrc")
 
+# U069: in het Engels zoeken vindt de gewone instellingen ook (en elk woord los, in welke taal dan ook).
+from PySide6.QtWidgets import QWidget  # noqa: E402
+_start = venster.paginas["start"]
+_mist = []
+for _w in ["night light", "night", "sleep", "screen reader", "sticky keys", "do not disturb", "version", "mute", "font", "scale", "game mode", "left-handed", "lid", "screen off", "about", "magnifier", "lock screen"]:
+    _start.zoek(_w)
+    _rijen = [r for r in _start.zoek_kaart.findChildren(QWidget) if hasattr(r, "titel")]
+    if not _rijen or any(r.titel.text() in ("Niks gevonden", "Nothing found") for r in _rijen):
+        _mist.append(_w)
+_start.zoek("")
+klopt(not _mist, f"U069: Engelse zoekwoorden in Instellingen vinden iets (niet: {_mist})")
+
 # U010: wie geen beheerder is, verandert zijn eigen wachtwoord via passwd (PAM), in een nep-terminal;
 # geen wachtwoord op de opdrachtregel, en geen vraag om het wachtwoord van een beheerder.
 nep_pw = TMP / "nep-pw"

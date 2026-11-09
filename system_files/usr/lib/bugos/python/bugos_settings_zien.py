@@ -15,8 +15,10 @@ class ZienPagina(Blad):
     titel_nl, titel_en = "Makkelijker zien", "Easier to see"
     uitleg_nl = "Grotere letters, een grotere muisaanwijzer en een vergrootglas."
     uitleg_en = "Bigger letters, a bigger mouse pointer and a magnifier."
-    zoekwoorden = ("zien ogen bril slecht groot grote letters tekst lettertype muisaanwijzer cursor vergrootglas inzoomen "
-                   "zoom toegankelijkheid plaktoetsen langzame toetsen schermlezer voorlezen")
+    zoekwoorden = ("zien ogen bril slecht groot grote letters tekst lettertype muisaanwijzer cursor vergrootglas "
+                   "inzoomen zoom toegankelijkheid plaktoetsen langzame toetsen schermlezer voorlezen easier to see "
+                   "accessibility eyes vision big large text letters font size mouse pointer cursor magnifier zoom "
+                   "sticky keys slow keys screen reader read aloud orca")
     kde = "kcm_access"
 
     def bouw(self) -> None:
@@ -88,7 +90,9 @@ class MuisPagina(Blad):
     titel_nl, titel_en = "Muis en touchpad", "Mouse and touchpad"
     uitleg_nl = "Hoe snel de aanwijzer beweegt, en wat klikken en scrollen doen."
     uitleg_en = "How fast the pointer moves, and what clicking and scrolling do."
-    zoekwoorden = "muis touchpad aanwijzer cursor snelheid linkshandig scrollen scrollrichting tikken klikken dubbelklik"
+    zoekwoorden = ("muis touchpad aanwijzer cursor snelheid linkshandig scrollen scrollrichting tikken klikken "
+                   "dubbelklik mouse touchpad trackpad pointer cursor speed left-handed left handed scrolling "
+                   "scroll direction natural scrolling tap click double click")
     kde = "kcm_mouse"
 
     def bouw(self) -> None:

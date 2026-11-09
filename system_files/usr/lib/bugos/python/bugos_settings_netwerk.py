@@ -20,7 +20,8 @@ class WifiPagina(Blad):
     titel_nl, titel_en = "Wifi en internet", "Wi-Fi and internet"
     uitleg_nl = "Klik op een netwerk om te verbinden. BugOS onthoudt het wachtwoord."
     uitleg_en = "Click a network to connect. BugOS remembers the password."
-    zoekwoorden = "wifi wlan internet netwerk draadloos wachtwoord kabel ethernet verbinding"
+    zoekwoorden = ("wifi wlan internet netwerk draadloos wachtwoord kabel ethernet verbinding wifi wi-fi wlan "
+                   "internet network wireless password cable ethernet connection")
     kde = "kcm_networkmanagement"
 
     def bouw(self) -> None:
@@ -144,7 +145,8 @@ class BluetoothPagina(Blad):
     titel_nl, titel_en = "Bluetooth", "Bluetooth"
     uitleg_nl = "Koptelefoons, muizen, toetsenborden en telefoons zonder draad. Klik op een apparaat om te verbinden."
     uitleg_en = "Headphones, mice, keyboards and phones without a cable. Click a device to connect."
-    zoekwoorden = "bluetooth koptelefoon oortjes muis toetsenbord telefoon koppelen draadloos"
+    zoekwoorden = ("bluetooth koptelefoon oortjes muis toetsenbord telefoon koppelen draadloos bluetooth headphones "
+                   "earbuds mouse keyboard phone pair pairing wireless")
     kde = "kcm_bluetooth"
 
     def bouw(self) -> None:

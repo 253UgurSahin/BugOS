@@ -35,7 +35,8 @@ class TijdPagina(Blad):
     titel_nl, titel_en = "Tijd en taal", "Time and language"
     uitleg_nl = "De klok, je tijdzone en de taal van BugOS."
     uitleg_en = "The clock, your time zone and the language of BugOS."
-    zoekwoorden = "tijd klok datum tijdzone zomertijd wintertijd taal nederlands engels language land"
+    zoekwoorden = ("tijd klok datum tijdzone zomertijd wintertijd taal nederlands engels language land time clock "
+                   "date time zone timezone daylight saving language english dutch region")
     kde = "kcm_regionandlang"
 
     def bouw(self) -> None:
@@ -138,8 +139,9 @@ class InloggenPagina(Blad):
     titel_nl, titel_en = "Inloggen en wachtwoord", "Login and password"
     uitleg_nl = "Jouw naam en wachtwoord, en wanneer het scherm op slot gaat."
     uitleg_en = "Your name and password, and when the screen locks."
-    zoekwoorden = ("inloggen aanmelden wachtwoord account gebruiker naam beheerder op slot vergrendelen "
-                   "automatisch inloggen zonder wachtwoord")
+    zoekwoorden = ("inloggen aanmelden wachtwoord account gebruiker naam beheerder op slot vergrendelen automatisch "
+                   "inloggen zonder wachtwoord login log in sign in password account user name administrator admin "
+                   "lock screen lock automatic login")
     kde = "kcm_users"
 
     def bouw(self) -> None:

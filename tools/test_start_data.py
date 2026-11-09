@@ -103,6 +103,10 @@ klopt(soorten == {"app", "instelling"}, "gegevens: elke app heeft een soort (app
 wifi = next((a for a in data["apps"] if a["pad"] == "instelling:wifi"), None)
 klopt(wifi is not None and wifi["naam"] == "Wifi en internet" and wifi["uitleg"] == "Instellingen"
       and "wlan" in wifi["zoek"], "gegevens: de pagina 'Wifi en internet' is te vinden met 'wlan'")
+_mist = [w for w in ["night light", "night", "sleep", "screen reader", "sticky keys", "do not disturb", "version", "mute", "font", "scale", "game mode", "left-handed", "lid", "screen off", "about", "magnifier", "lock screen"]
+         if not any(all(d in a["zoek"] for d in w.split()) for a in data["apps"] if a["soort"] == "instelling")]
+klopt(not _mist and any(a["pad"] == "instelling:over" for a in data["apps"]),
+      f"U069: startmenu vindt instellingen ook in het Engels, en 'Over deze computer' (niet: {_mist})")
 namen = [a["naam"] for a in data["apps"] if a["soort"] == "app"]
 klopt(namen == ["Bestanden", "Firefox", "Steam"], f"gegevens: apps op naam, verborgen niet ({namen})")
 fav = [a["id"] for a in data["favorieten"]]

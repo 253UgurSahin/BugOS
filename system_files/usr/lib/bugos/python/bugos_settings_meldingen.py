@@ -16,7 +16,8 @@ class MeldingenPagina(Blad):
     titel_nl, titel_en = "Meldingen", "Notifications"
     uitleg_nl = "De berichtjes rechtsonder in beeld, en wanneer ze stil moeten zijn."
     uitleg_en = "The little messages in the corner, and when they should keep quiet."
-    zoekwoorden = "meldingen notificaties berichtjes pop-up popup niet storen stil geluid games films"
+    zoekwoorden = ("meldingen notificaties berichtjes pop-up popup niet storen stil geluid games films "
+                   "notifications notification popups do not disturb dnd quiet silent sounds games movies")
     kde = "kcm_notifications"
 
     def bouw(self) -> None:
@@ -58,7 +59,9 @@ class ProgrammasPagina(Blad):
     titel_nl, titel_en = "Standaardprogramma's", "Default programs"
     uitleg_nl = "Welk programma opent wat: internet, e-mail, foto's, muziek, video's en documenten."
     uitleg_en = "Which program opens what: internet, email, photos, music, videos and documents."
-    zoekwoorden = "standaard programma app browser internet e-mail mail foto's muziek video pdf openen met bestandstype"
+    zoekwoorden = ("standaard programma app browser internet e-mail mail foto's muziek video pdf openen met "
+                   "bestandstype default programs apps applications browser web email mail photos music video pdf "
+                   "open with file type")
     kde = "kcm_componentchooser"
 
     def bouw(self) -> None:
@@ -112,7 +115,8 @@ class PrintersPagina(Blad):
     titel_nl, titel_en = "Printers en scannen", "Printers and scanning"
     uitleg_nl = "Je printers, wat er nog geprint moet worden, en scannen."
     uitleg_en = "Your printers, what still has to be printed, and scanning."
-    zoekwoorden = "printer printen afdrukken scanner scannen wachtrij testpagina inkt papier"
+    zoekwoorden = ("printer printen afdrukken scanner scannen wachtrij testpagina inkt papier printers printing "
+                   "print scanner scanning scan queue test page ink paper")
     kde = "kcm_printer_manager"
 
     def bouw(self) -> None:
