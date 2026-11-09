@@ -129,6 +129,14 @@ QTest.keyClick(_sv, Qt.Key.Key_I)
 wacht(50)
 klopt(_sm.findChild(QObject, "zoekveld").property("text") == "fi",
       f"U205: typen in het startmenu zoekt, ook zonder focus in het zoekveld ({_sm.findChild(QObject, 'zoekveld').property('text')!r})")
+# U223: een sneltoets (Ctrl+A) met de focus op een tegel is geen zoektekst.
+_sm.findChild(QObject, "zoekveld").setProperty("text", "")
+_sm.forceActiveFocus()
+wacht(50)
+QTest.keyClick(_sv, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
+wacht(50)
+klopt(_sm.findChild(QObject, "zoekveld").property("text") == "",
+      f"U223: Ctrl+A in het startmenu typt niets in het zoekveld ({_sm.findChild(QObject, 'zoekveld').property('text')!r})")
 _sv.close()
 _smtekst = (QML.parent.parent.parent.parent / "org.bugos.startmenu" / "contents" / "ui" / "StartMenu.qml").read_text()
 klopt("alleLijst.forceActiveFocus()" in _smtekst and "stapel.currentIndex = 0; zoekveld.forceActiveFocus()" in _smtekst,

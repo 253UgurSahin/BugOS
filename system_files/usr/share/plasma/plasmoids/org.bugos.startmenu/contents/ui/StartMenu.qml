@@ -92,6 +92,9 @@ Rectangle {
     }
     // Typ je verder terwijl de lijst de focus heeft, dan gaat de tekst gewoon in het zoekveld.
     function naarZoekveld(e) {
+        // Sneltoetsen (Ctrl+A, Alt+…) zijn geen zoektekst (U223)
+        if (e.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))
+            return
         if (e.key === Qt.Key_Backspace) {
             zoekveld.forceActiveFocus()
             zoekveld.text = zoekveld.text.slice(0, -1)
