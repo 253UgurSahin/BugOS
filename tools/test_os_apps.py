@@ -1469,6 +1469,15 @@ _som = sum(k.sizeHint().width() for k in _kr) + 16 * (len(_kr) - 1)
 klopt(_kr and _som <= _pv.pad_vak.width() and "Bronnen" in _kr[-1].text(),
       f"U272: een diep pad past in de balk in Bestanden ({[k.text() for k in _kr]}, {_som} van {_pv.pad_vak.width()} px)")
 _pv.close()
+# U274: een schijf in Bestanden > Deze computer is voor een schermlezer een knop (niet 'paneel').
+from PySide6.QtGui import QAccessible as _QA  # noqa: E402
+
+_sr = _fo.SchijfRij("usb", "USB-stick", "12 GB vrij")
+_sr.show()
+_ai = _QA.queryAccessibleInterface(_sr)
+klopt(_ai is not None and _ai.role() == _QA.Role.Button and _ai.text(_QA.Text.Name) == "USB-stick",
+      f"U274: een schijf in Bestanden is voor een schermlezer een knop met zijn naam ({_ai and _ai.role()})")
+_sr.close()
 _stukken = [(n, (ROOT / "system_files/usr/bin" / n).read_text()) for n in
             ("bugos-settings", "bugos-task-manager", "bugos-store", "bugos-welcome", "bugos-backup", "bugos-switch", "bugos-help")]
 klopt(all("een_keer=True" in tekst for _n, tekst in _stukken), "U208: Instellingen, Taakbeheer, Winkel, Welkom, Back-up, Overstap en Hulp openen maar één keer")

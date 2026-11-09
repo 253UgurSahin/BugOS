@@ -150,9 +150,19 @@ class _RijVoorSchermlezer(QAccessibleWidget):
         return super().text(soort)
 
 
+class _KnopVoorSchermlezer(QAccessibleWidget):
+    """Een eigen vlak dat je kunt aanklikken (bijv. een schijf in Bestanden): voor een schermlezer een knop,
+    niet 'paneel' (U274). De naam en uitleg komen uit accessibleName/-Description."""
+
+    def __init__(self, ding):
+        super().__init__(ding, QAccessible.Role.Button)
+
+
 def _schermlezer(_soort: str, ding):
     if isinstance(ding, Rij) and ding.property("klikbaar") == "true":
         return _RijVoorSchermlezer(ding)
+    if isinstance(ding, QWidget) and ding.property("knop_voor_schermlezer") is True:
+        return _KnopVoorSchermlezer(ding)
     return None
 
 

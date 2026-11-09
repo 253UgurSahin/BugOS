@@ -90,6 +90,7 @@ class SchijfRij(QFrame):
             self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
             self.setAccessibleName(naam)
             self.setAccessibleDescription(uitleg)
+            self.setProperty("knop_voor_schermlezer", True)   # een knop, geen 'paneel' (U274)
         self.setMinimumHeight(60)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(14, 8, 10, 8)
