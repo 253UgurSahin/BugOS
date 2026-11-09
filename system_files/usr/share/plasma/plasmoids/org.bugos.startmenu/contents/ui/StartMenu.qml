@@ -478,7 +478,7 @@ Rectangle {
         Keys.onEnterPressed: clicked()
         background: Rectangle {
             radius: menu.o.rKnop
-            color: bregel.hovered ? menu.zweef : "transparent"
+            color: bregel.hovered || bregel.activeFocus ? menu.zweef : "transparent"   // ook zichtbaar met het toetsenbord
         }
         contentItem: RowLayout {
             spacing: 10
