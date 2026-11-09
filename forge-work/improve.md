@@ -1130,6 +1130,25 @@ Severity is now low across the board; the image sweep found no medium or high is
 ### U425 [low] The distributor-logo icon was installed in a folder icon lookup never searches (Breeze's logo showed instead)
   commit: 286a4fa   test: tools/test_os_system.sh (plus a hicolor icon-cache refresh)
 
+## Round 33 (2026-11-09)
+Two reviewers: the round-32 fixes (2 found plus 4 unsure: U431-U432), and a fresh sweep of "local multi-user safety
+and privileged helpers" (3 found plus 5 unsure: U433-U436). 6 fixed, each with a test that failed first. Tests after:
+20 test files passed (here). No way was found for a non-admin to get root or read another account's data; the
+findings are wrong behaviour between family accounts.
+
+### U431 [low-medium] (from U423) "Back" with a full computer still showed "Done ... no longer automatic" in Settings; the warning went unseen
+  commit: 7b8e48b   test: tools/test_os_system.sh (the warning is now the last line, which Settings shows)
+### U432 [low] (from U420) The quick menu's status check could remove the game-mode marker of an "on" still in progress
+  commit: 7a3ec67   test: tools/test_game_mode.sh (also: the symbolic distributor logo in the BugOS theme)
+### U433 [low-medium] Task Manager merged another logged-in account's Firefox with yours, so you could not close your own
+  commit: 39bd309   test: tools/test_task_manager.py (other accounts are now one protected "Other accounts" entry)
+### U434 [low-medium] Restore from a shared family stick silently brought Dad's backup into the child's folder
+  commit: 59fb928   test: tools/test_backup.py (always asks which, names it, warns when it is someone else's)
+### U435 [low] Any account could fake a game-mode marker (bugos-spelmodus-0) and keep the PC on "Full power"
+  commit: 2ca2e20   test: tools/test_game_mode.sh (a marker counts only if it is a regular file of that account, UID 1000+)
+### U436 [low] File and drive names in tooltips were rendered as rich text ("<h1>…" from a stick)
+  commit: da6aaa3   test: tools/test_os_apps.py
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
@@ -1218,6 +1237,12 @@ Severity is now low across the board; the image sweep found no medium or high is
   polkitd); it works, `rpm -V polkit` reports it.
 - U429 (round 32, unsure): BugOS app icons live only in the BugOS icon theme; switching to another theme loses them.
 - U430 (round 32, unsure): a UCSI USB-C port might report online=1 for a dock that does not charge (U405).
+- U437 (round 33, unsure): backups use rsync -rtl (no -p): on an ext4/btrfs stick a private 0600 file becomes 0644.
+  FAT/exFAT sticks have no permissions anyway. Check on a real ext4 stick whether this matters for you.
+- U438 (round 33, unsure): whether a Wi-Fi network saved by a non-admin is system-wide (visible/forgettable by other
+  accounts) depends on Fedora's NetworkManager polkit defaults; check on the image.
+- U439 (round 33, cosmetic): after picking a smaller size, larger size buttons stay enabled until Settings re-reads.
+- U440 (round 33, edge): a .deb whose name starts with "-" is passed to `flatpak search` without "--".
 - U079 (part): a free-space check before restoring (Switch, Backup). The full disk is now named clearly and
   a retry skips what is already there; counting first would also have to honour --ignore-existing/--update.
 
