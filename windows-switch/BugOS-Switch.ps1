@@ -216,6 +216,18 @@ function Invoke-Krimp([int] $gb) {
 
 # ========================================================== 4. USB-STICK ==
 
+function Test-UsbLetter([object] $logisch) {
+    # Hangt deze schijfletter aan een USB-schijf? Via WMI (werkt ook zonder beheerdersrechten) (U284).
+    try {
+        foreach ($deel in @(Get-CimAssociatedInstance -InputObject $logisch -ResultClassName Win32_DiskPartition -ErrorAction Stop)) {
+            foreach ($schijf in @(Get-CimAssociatedInstance -InputObject $deel -ResultClassName Win32_DiskDrive -ErrorAction Stop)) {
+                if ($schijf.InterfaceType -eq 'USB' -or "$($schijf.PNPDeviceID)" -like 'USBSTOR*') { return $true }
+            }
+        }
+    } catch { }
+    return $false
+}
+
 function Get-UsbSchijven {
     Get-Disk | Where-Object { $_.BusType -eq 'USB' -and $_.Size -gt 7GB -and -not $_.IsBoot -and -not $_.IsSystem }
 }
@@ -295,6 +307,8 @@ function Save-BugOSIso([object] $gevonden, [string] $map, [scriptblock] $Voortga
     $doel = Join-Path $map $info.naam
     $totaal = [int64](($info.delen | Measure-Object grootte -Sum).Sum)
     $vrij = (Get-PSDrive (Split-Path $map -Qualifier).TrimEnd(':')).Free
+    # Een half bestand van een eerdere poging wordt overschreven: die ruimte telt mee (U287).
+    if (Test-Path -LiteralPath $doel) { $vrij += (Get-Item -LiteralPath $doel).Length }
     if ($vrij -lt $totaal + 1GB) { throw (T "Te weinig ruimte: er is $([math]::Round($totaal / 1GB, 1)) GB nodig." "Not enough space: $([math]::Round($totaal / 1GB, 1)) GB is needed.") }
 
     $client = New-Object System.Net.Http.HttpClient
@@ -304,6 +318,7 @@ function Save-BugOSIso([object] $gevonden, [string] $map, [scriptblock] $Voortga
     $buffer = New-Object byte[] (1MB)
     $klaar = 0L
     $laatste = [DateTime]::MinValue
+    $gelukt = $false
     try {
         foreach ($deel in $info.delen) {
             # Alle stukjes worden direct achter elkaar in één bestand geschreven.
@@ -321,9 +336,14 @@ function Save-BugOSIso([object] $gevonden, [string] $map, [scriptblock] $Voortga
                 }
             } finally { $stroom.Dispose() }
         }
+        $gelukt = $true
+    } catch {
+        # Een halve download is niets waard: weg ermee, en een gewone uitleg in plaats van een .NET-fout (U287).
+        throw (T 'Het downloaden is halverwege gestopt (is de verbinding weggevallen?). Probeer het opnieuw.' 'The download stopped halfway (did the connection drop?). Please try again.')
     } finally {
         $uit.Dispose()
         $client.Dispose()
+        if (-not $gelukt) { Remove-Item -LiteralPath $doel -Force -ErrorAction SilentlyContinue }
     }
 
     & $Voortgang 100 (T 'Controleren of alles goed is overgekomen...' 'Checking that everything arrived correctly...')
@@ -1034,7 +1054,9 @@ $Paginas += {
     $y = Nieuw-Tekst (T 'Kies de USB-schijf:' 'Choose the USB drive:') ($y + 16) -Vet
     $script:W.schijf = Nieuw-Lijst ($y + 4) 400
     $lijst = $script:W.schijf
-    Get-CimInstance Win32_LogicalDisk | Where-Object { $_.DriveType -in 2, 3 -and $_.DeviceID -ne 'C:' } | ForEach-Object {
+    # Alleen schijven die je eruit haalt: een D:-schijf in de laptop gaat mee de prullenbak in als je straks
+    # bij het installeren de hele schijf kiest (U284). Een vaste (type 3) schijf telt alleen als hij via USB hangt.
+    Get-CimInstance Win32_LogicalDisk | Where-Object { $_.DeviceID -ne 'C:' -and ($_.DriveType -eq 2 -or ($_.DriveType -eq 3 -and (Test-UsbLetter $_))) } | ForEach-Object {
         [void]$lijst.Items.Add("$($_.DeviceID)  $($_.VolumeName)  ($([math]::Round($_.FreeSpace / 1GB)) GB $(T 'vrij' 'free'))")
     }
     if ($lijst.Items.Count -gt 0) { $lijst.SelectedIndex = 0 }
@@ -1046,11 +1068,19 @@ $Paginas += {
         if ($lijst.SelectedIndex -lt 0) { Toon (T 'Steek eerst een USB-schijf in en ga even terug en weer verder.' 'Plug in a USB drive first, then go back and forward again.'); return }
         $letter = ($lijst.SelectedItem -split '\s+')[0] + '\'
         $vrij = (Get-PSDrive $letter.Substring(0, 1)).Free
-        if ($vrij -lt (Get-MeeneemGrootte)) { Toon (T 'Er is niet genoeg ruimte op die schijf.' 'Not enough space on that drive.') 'Warning'; return }
+        # Wat er al in BugOS-Switch staat (een eerdere keer), hoeft er niet nog een keer bij (U286).
+        $al = 0L
+        if (Test-Path -LiteralPath "$($letter)BugOS-Switch") { $al = [int64](Get-ChildItem -LiteralPath "$($letter)BugOS-Switch" -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum }
+        if ($vrij + $al -lt (Get-MeeneemGrootte)) { Toon (T 'Er is niet genoeg ruimte op die schijf.' 'Not enough space on that drive.') 'Warning'; return }
         $knop.Enabled = $false; $verder.Enabled = $false
         try {
             Invoke-Meenemen $letter { param($p, $t) Zet-Balk $balk $p; $status.Text = $t; [System.Windows.Forms.Application]::DoEvents() }
-            if ($script:Deels.Count -gt 0) {
+            $nogVrij = (Get-PSDrive $letter.Substring(0, 1)).Free
+            if ($script:Deels.Count -gt 0 -and $nogVrij -lt 64MB) {
+                # Vol geraakt (kleine bestanden nemen op een grote stick meer ruimte in dan ze groot zijn) (U288).
+                $status.Text = (T 'De schijf is vol geraakt: niet alles kon mee. Gebruik een grotere schijf, of maak ruimte op deze en klik nog een keer.' 'The drive got full: not everything could be copied. Use a bigger drive, or make room on this one and click again.')
+                $status.ForeColor = $Fout
+            } elseif ($script:Deels.Count -gt 0) {
                 $welke = $script:Deels -join ', '
                 $status.Text = (T "Klaar, maar een paar bestanden uit $welke konden niet mee (bijv. open in een programma, groter dan 4 GB, of alleen in OneDrive). Sluit je programma's en klik nog een keer: wat er al staat, gaat sneller." "Done, but a few files from $welke could not be copied (e.g. open in a program, larger than 4 GB, or only in OneDrive). Close your programs and click again: what is already there goes faster.")
                 $status.ForeColor = $Grijs
@@ -1090,7 +1120,7 @@ $Paginas += {
         $getal = $script:W.getal
         if (-not (Vraag (T "Windows wordt $($getal.Value) GB kleiner. Je bestanden blijven gewoon staan.`n`nHeb je een back-up gemaakt (stap 2)? Doorgaan?" "Windows will shrink by $($getal.Value) GB. Your files stay where they are.`n`nDid you make a backup (step 2)? Continue?"))) { return }
         $code = Start-AlsBeheerder @('-Taak', 'Krimp', '-KrimpGB', [string][int]$getal.Value)
-        if ($code -eq 0) { Toon (T 'Gelukt! Er is ruimte voor BugOS. Kies straks bij het installeren "Automatisch".' 'Done! There is space for BugOS. When installing, choose "Automatic".') }
+        if ($code -eq 0) { Toon (T 'Gelukt! Er is ruimte voor BugOS. Kies straks bij het installeren "De schijf delen met Windows of een ander systeem" (niet "De hele schijf gebruiken": dan gaat Windows weg).' 'Done! There is space for BugOS. When installing, choose "Share disk with other operating systems" (not "Use entire disk": that removes Windows).') }
     })
 }
 
