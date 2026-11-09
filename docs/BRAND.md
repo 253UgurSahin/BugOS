@@ -68,15 +68,15 @@ All files are in [`branding/logo/`](../branding/logo/) (and as PNG in [`branding
 | `bugos-mark.svg` | Just the bug, in color. When there is little space. |
 | `bugos-mark-dark.svg` | Just the bug, on a dark background (light head with dark eyes). |
 | `bugos-mark-system.svg` | Inside BugOS itself: the head changes color along with light and dark. |
-| `bugos-mark-ink.svg`, `-wit`, `-rood` | In one color, for example for a stamp, sticker or laser. |
+| `bugos-mark-ink.svg`, `-white`, `-red` | In one color, for example for a stamp, sticker or laser. |
 | `bugos-icon.svg` | App icon: the bug on a dark, rounded tile. |
 | `bugos-icon-light.svg` | App icon on a light tile. |
-| `bugos-wordmark.svg`, `-wit` | Just the word BugOS. |
+| `bugos-wordmark.svg`, `-white` | Just the word BugOS. |
 
 ### Rules for the logo
 
 - **Space around it:** keep at least the width of the bug's head free on all sides.
-- **On dark:** always use a dark variant (`-donker` or `-wit`). The normal bug has a black head, and that disappears on a dark background.
+- **On dark:** always use a dark variant (`-dark` or `-white`). The normal bug has a black head, and that disappears on a dark background.
 - **Not too small:** the bug at least 16 pixels, the logo with the word at least 96 pixels wide.
 - **Don't:** stretch or squash it, rotate it, give it other colors, put a shadow or border around it,
   or set the word BugOS in a different font.
@@ -105,7 +105,7 @@ The colors are also in the code: [`bugos_ui.py`](../system_files/usr/lib/bugos/p
 | Segoe UI | Only in BugOS Overstap on Windows (there it belongs to Windows itself). |
 
 All fonts are free and open (license: SIL Open Font License).
-They are in [`branding/fonts/`](../branding/fonts/) and are also included in BugOS itself.
+They are in [`branding/fonts/`](../branding/fonts/) and are also included in BugOS itself; Inter (the text font) is only in [`system_files/usr/share/fonts/bugos`](../system_files/usr/share/fonts/bugos).
 The website uses its own copies and loads **nothing** from Google: that keeps your visit private.
 
 ## The wallpaper: "Stip"
@@ -212,7 +212,7 @@ GNOME apps), an app from the Store (Flatpak), the terminal or a Windows program.
   | GTK programs (Firefox, GNOME apps) | A thin layer `bugos.css` on top of Breeze-GTK, by `python3 tools/gtk/make.py` |
   | Store apps (Flatpak) | The same Kvantum and GTK files, read-only; `bugos-flatpak-style` adds the style extensions |
   | Terminal | Konsole profiles and colors `BugOS` / `BugOSDark`, by `python3 tools/konsole/make.py` |
-  | Windows programs (Wine) | System colors `light.reg` / `dark.reg`, by `python3 tools/wine/make.py` |
+  | Windows programs (Wine) | System colors `licht.reg` / `donker.reg`, by `python3 tools/wine/make.py` |
 
   CI fails when a made file is out of date. Never change a made file by hand.
 - **One surface per window.** The title bar, the toolbars, the sidebar and the page all have the window color

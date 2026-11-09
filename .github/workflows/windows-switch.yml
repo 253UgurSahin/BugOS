@@ -71,10 +71,11 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.plaatjes_vastleggen }}
         shell: powershell
         run: |
-          $doel = 'docs\beelden\overstap'
+          # De plek en namen die README.md gebruikt (docs/images/switch/switch-N.png) (U359).
+          $doel = 'docs\images\switch'
           New-Item -ItemType Directory -Force $doel | Out-Null
-          Copy-Item fotos\schaal-1\overstap-*.png $doel -Force
-          Copy-Item fotos\schaal-1.5\switch-1.png (Join-Path $doel 'switch-1-150percent.png') -Force
+          Get-ChildItem fotos\schaal-1\overstap-*.png | ForEach-Object { Copy-Item $_.FullName (Join-Path $doel ($_.Name -replace '^overstap-', 'switch-')) -Force }
+          Copy-Item fotos\schaal-1.5\overstap-1.png (Join-Path $doel 'switch-1-150percent.png') -Force
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add $doel

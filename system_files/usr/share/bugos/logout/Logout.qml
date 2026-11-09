@@ -136,7 +136,7 @@ Item {
         }
         Text {
             objectName: "uitleg"
-            text: root.toonAlles ? root.tr("Kies wat je wilt. Je bestanden zijn bewaard.", "Choose what you want. Your files are saved.")
+            text: root.toonAlles ? root.tr("Kies wat je wilt. Open programma's vragen of je je werk wilt bewaren.", "Choose what you want. Open programs ask whether to save your work.")
                 : root.gestopt ? root.tr("Weet je het zeker? Druk dan op de knop.", "Are you sure? Then press the button.")
                 : root.resterend === 1 ? root.tr("Over 1 seconde gebeurt het vanzelf.", "It happens by itself in 1 second.")
                 : root.tr("Over %1 seconden gebeurt het vanzelf.", "It happens by itself in %1 seconds.").arg(root.resterend)

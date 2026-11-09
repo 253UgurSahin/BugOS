@@ -57,7 +57,7 @@ The most important idea: **BugOS can't break.**
 2. GitHub bakes a new BugOS when we start it by hand, and by itself once a week (Monday night), so security updates from Fedora come along.
 3. The user's computer fetches it in the background.
 4. The next time the computer starts, the new version runs.
-5. Problems? Then you pick the previous version in the startup menu, and everything is back to how it was yesterday.
+5. Problems? Then you pick the previous version in Settings, or in the startup menu (hold Shift or press Esc while starting; it is hidden otherwise), and everything is back to how it was yesterday.
 
 ## What is already in it (version 0.3)
 
@@ -71,7 +71,7 @@ The most important idea: **BugOS can't break.**
 | Backup | `bugos-backup` | Your files to a USB drive with one button, and back again. Nothing is ever thrown away. |
 | Files from Windows | `bugos-switch` | Brings back the files, bookmarks and background you took from Windows with BugOS Overstap. |
 | Game mode on/off | `bugos-game-mode` | Full power, notifications muted and an FPS counter. |
-| BugOS Store | `bugos-store` | 37 well-known, safe apps in 10 topics, install with one click. "Find more apps" opens the big KDE store. |
+| BugOS Store | `bugos-store` | 39 well-known, safe apps in 10 topics, install with one click. "Find more apps" opens the big KDE store. |
 | Start menu | `org.bugos.startmenu` | The start button at the bottom left (the ladybug), by default. A greeting, a big search bar that finds apps and the pages of Settings, pinned apps, recent files, all apps by topic, and at the bottom Settings, Lock, Sign out, Restart and Shut down. Alt+F1 and the Windows key open it. Prefer the KDE menu? Settings → Updates and more → Taskbar. |
 | Quick menu | `org.bugos.quickmenu` | Next to the system tray, by default. Big buttons for Wi-Fi, Bluetooth, game mode, dark, do not disturb and mute, plus sliders for volume and (on a laptop) brightness, and the battery; the little arrow next to a button opens the matching page in Settings (for example to pick a Wi-Fi network). It is the one place for these things: the KDE tray icons that do the same (sound, network, Bluetooth, brightness and battery, clipboard, keyboard layout...) are hidden, but keep working in the background (volume keys, low-battery warnings). |
 | Shutdown screen | `logout/Logout.qml` | The screen for Shut down, Restart or Sign out: big tiles for Sleep, Restart, Shut down (red), Sign out and a "Never mind" button. From the start menu it counts down 30 seconds and says so in plain words. It goes into Plasma's shell package and into the BugOS look-and-feel. |
@@ -92,8 +92,8 @@ The most important idea: **BugOS can't break.**
 | Update notification | `bugos-updatecheck` | With "update myself" you get a notification once a day with an "Update now" button. |
 | Developer mode | `bugos-developer` | VS Code, containers and a dev box with programming languages. |
 | Light mode | `bugos-light-mode` | Turns off the heavy effects on old PCs by itself. |
-| First start | `bugos-first-boot` | Sets up LibreOffice, VLC and Steam. |
-| Translations | `vertalingen/*.json` | Any language can be added without writing code (see [TRANSLATING.md](TRANSLATING.md)). |
+| First start | `bugos-first-boot` | Sets up LibreOffice, VLC, Gwenview (photos), Okular (PDFs) and Steam. |
+| Translations | `translations/*.json` | Any language can be added without writing code (see [TRANSLATING.md](TRANSLATING.md)). |
 | Style | `look-and-feel`, `color-schemes`, `bugos_ui.py` | Taskbar at the bottom, BugOS colors for light and dark, the fonts, the logo, the "Stip" background, the boot, sign-in and lock screens, and pinned favorites in the start menu. All BugOS apps use the same design (`bugos_ui.py`). See [BRAND.md](BRAND.md). The window title bar: Breeze border with BugOS colours (no line between bar and window), big round buttons, a red round close button, title on the left. |
 
 ### For Windows (`windows-switch/`)

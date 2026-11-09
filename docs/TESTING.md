@@ -3,7 +3,7 @@
 ## Step 1: Turn on the bakery (once)
 
 1. On GitHub, go to this repo, then **Actions**. Turn on the workflows if GitHub asks you to.
-2. Every time something changes, GitHub builds BugOS again. You see a green check mark ✅ when it worked.
+2. GitHub builds BugOS once a week (Monday night), and whenever you start **Actions > BugOS bouwen > Run workflow** yourself. You see a green check mark ✅ when it worked.
 3. Go to your GitHub profile, then **Packages**, then `bugos`, then **Package settings**. Set the visibility to **Public**. Do the same for `bugos-nvidia`. This is needed, otherwise computers can't fetch the updates.
 
 ## Step 2: Make a USB stick (ISO)
@@ -11,7 +11,7 @@
 1. Go to **Actions**, then **BugOS ISO maken**, then **Run workflow**.
 2. Choose `bugos` (normal PC) or `bugos-nvidia` (PC with an Nvidia card).
 3. Leave "tag" on `latest` and "soort" on `live` (the "try it first" stick).
-4. Turn on "publiceren" if the ISO should become a real download (a GitHub Release). Leave it off if you only want to test.
+4. Turn on "publiceren" if the ISO should become a real download (a GitHub Release). Leave it off if you only want to test. (Only the live stick is published; the classic stick is always a 7-day test download.)
 5. After about 30 to 60 minutes the ISO is at the bottom of the page (**Artifacts**), or under **Releases** if you published it.
 6. Put it on a USB stick with **BugOS Overstap** (Windows), [Fedora Media Writer](https://fedoraproject.org/workstation/download) or [balenaEtcher](https://etcher.balena.io/).
 
@@ -36,7 +36,7 @@ Type this in the terminal:
 sudo bootc switch ghcr.io/253ugursahin/bugos:latest
 ```
 
-Then restart the computer. Want to go back? Pick the previous version in the start-up menu.
+Then restart the computer. Want to go back? Use Settings > Updates and more, or hold Shift (or press Esc) while the computer starts and pick the previous version in the start-up menu.
 
 ## What should you test?
 
@@ -48,7 +48,7 @@ Then restart the computer. Want to go back? Pick the previous version in the sta
 - [ ] Search for "Game mode" in the start menu and turn it on and off again
 - [ ] Run `bugos-updates status` in the terminal
 - [ ] Open **Settings** and search for "wifi"
-- [ ] Open **Something is not working** and mute the sound: do you get a "Fix" button?
+- [ ] Open **Something is not working** and mute the sound: do you get an "Unmute" button?
 - [ ] Open **Backup** and make a backup to a USB stick
 - [ ] Try **BugOS Overstap** on a Windows PC (steps 1 and 2 are safe, they change nothing on your PC)
 - [ ] Open the **BugOS Store** and install something
@@ -73,10 +73,10 @@ Then restart the computer. Want to go back? Pick the previous version in the sta
 ## Downloading BugOS Overstap (for Windows)
 
 - Go to **Actions**, then **Windows-overstap**, pick the latest green run and download **BugOS-Switch** at the bottom.
-- Or make a version tag (like `v0.2`). Then it shows up under **Releases** as a zip.
+- Or make a version tag (like `v0.2`) and start **Windows-overstap** by hand on that tag. Then it shows up under **Releases** as a zip.
 
 ## Turning on the website
 
-Go to **Settings**, then **Pages**, and set **Source** to **GitHub Actions**. As soon as everything is on `main`, the website goes online by itself.
+Go to **Settings**, then **Pages**, and set **Source** to **GitHub Actions**. Then start **Actions > website > Run workflow** (it does not run by itself on every change).
 
 Found something strange? Open an **Issue** on GitHub, or just tell me in the chat.

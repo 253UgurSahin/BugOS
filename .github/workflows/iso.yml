@@ -7,7 +7,8 @@
 #                        op de stick, dus installeren werkt ook zonder internet.
 #   soort = klassiek  -> alleen het installatieprogramma, werkt zonder internet
 #
-#   publiceren = aan  -> de ISO komt als download in een GitHub Release.
+#   publiceren = aan  -> de ISO komt als download in een GitHub Release (alleen de live-stick; de klassieke
+#                        stick blijft een test-download van 7 dagen) (U362).
 #                        GitHub staat maar 2 GB per bestand toe, dus de ISO
 #                        wordt in stukjes geknipt. BugOS Overstap (Windows)
 #                        plakt ze vanzelf weer aan elkaar.

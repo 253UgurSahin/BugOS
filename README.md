@@ -27,7 +27,7 @@ so you can simply do what you sat down at the computer for.
 ## What is BugOS?
 
 BugOS is a free operating system. You use it just like Windows, but it **can't break**.
-Did something go wrong after an update? Then you pick yesterday's version when the computer starts, and everything is back the way it was.
+Did something go wrong after an update? Then you pick yesterday's version (in Settings, or hold Shift or press Esc while the computer starts to see the startup menu), and everything is back the way it was.
 
 | | |
 |---|---|

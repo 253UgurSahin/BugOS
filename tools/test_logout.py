@@ -182,7 +182,7 @@ def main() -> int:
         gevallen.append(g)
         klopt(g.root.width() == 1600 and g.root.height() == 900, "kiezen: zo groot als screenGeometry")
         klopt(g.zichtbaar() == KNOPPEN, "kiezen: slaapstand, opnieuw opstarten, uitzetten, afmelden en 'Toch niet' zichtbaar")
-        klopt(g.tekst("kop") == "Wat wil je doen?" and g.tekst("uitleg") == "Kies wat je wilt. Je bestanden zijn bewaard.",
+        klopt(g.tekst("kop") == "Wat wil je doen?" and g.tekst("uitleg") == "Kies wat je wilt. Open programma's vragen of je je werk wilt bewaren.",
               "kiezen: kop en uitleg in gewone woorden")
         klopt(g.tekst("knop_uit") == "Uitzetten" and g.tekst("knop_annuleren") == "Toch niet", "kiezen: knoppen heten 'Uitzetten' en 'Toch niet'")
         klopt(not g.telt_af(), "kiezen: er wordt niet afgeteld")

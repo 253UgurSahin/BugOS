@@ -58,8 +58,8 @@ TOON="${TOON//>/›}"
 GEVONDEN="$(LC_ALL=C flatpak search --columns=application "$NAAM" 2>/dev/null | head -n1)"
 if [[ "$GEVONDEN" =~ ^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+$ ]]; then
     if vraag "$(t \
-        "\"$TOON\" staat ook in de BugOS Winkel. Dat is veiliger en krijgt vanzelf updates.\n\nWil je het uit de Winkel halen?" \
-        "\"$TOON\" is also in the BugOS Store. That is safer and updates automatically.\n\nDo you want to get it from the Store?")"; then
+        "\"$TOON\" staat ook in de BugOS Winkel. Dat is veiliger en wordt bijgewerkt met de rest.\n\nWil je het uit de Winkel halen?" \
+        "\"$TOON\" is also in the BugOS Store. That is safer and is updated with everything else.\n\nDo you want to get it from the Store?")"; then
         exec bugos-store "appstream://$GEVONDEN"
     fi
 fi

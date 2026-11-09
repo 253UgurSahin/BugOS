@@ -48,7 +48,7 @@ Run it again after merging new screens, so `template.json` has every text.
 
 Texts with a changing part in them are written as an f-string, like `t(f"{n} GB vrij", f"{n} GB free")`.
 The English text is different every time, so it cannot be looked up in a dictionary: these texts stay in
-English for now. The script skips them and tells you how many there are (about 115 at the moment).
+English for now. The script skips them and tells you how many there are (about 130 at the moment).
 
 To make such a text translatable, write it with a placeholder and fill it in afterwards:
 `t("{n} GB vrij", "{n} GB free").format(n=n)`. Then `"{n} GB free"` lands in `template.json`, and the

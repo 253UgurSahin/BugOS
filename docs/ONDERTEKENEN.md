@@ -12,7 +12,7 @@ It uses the same method as Universal Blue and Bazzite: [cosign](https://docs.sig
 | Part | Where | What it does |
 |---|---|---|
 | Private key | GitHub secret `SIGNING_SECRET` (and `SIGNING_PASSWORD` if the key has one) | `build.yml` signs every BugOS it pushes. Without the secret it skips this and shows a warning. |
-| Public key | `system_files/etc/pki/containers/bugos.pub` | `build.sh` adds a rule to `/etc/containers/policy.json`: images from `ghcr.io/253ugursahin` need this signature. Without the file nothing is checked (as before). |
+| Public key | `system_files/etc/pki/containers/bugos.pub` | `build_files/system.sh` (run by `build.sh`) adds a rule to `/etc/containers/policy.json`: images from `ghcr.io/253ugursahin` need this signature. Without the file nothing is checked (as before). |
 | Switching over | `bugos-ondertekend.service` | Runs once on every installed PC: moves it from "no check" to "check the signature" (`rpm-ostree rebase ostree-image-signed:...`). It takes effect at the next restart, like an update. |
 
 ## Turning it on (once)
@@ -42,5 +42,5 @@ The line under "Booted" starts with `ostree-image-signed:docker://ghcr.io/253ugu
 
 ## Local test builds
 
-`tools/iso-lokaal.sh` builds an unsigned `:lokaal` image. A PC installed from such a stick (with the key
+`tools/iso-local.sh` builds an unsigned `:lokaal` image. A PC installed from such a stick (with the key
 in it) cannot update from GitHub until it gets a signed image. That is only for testing.

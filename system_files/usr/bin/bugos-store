@@ -201,8 +201,9 @@ class Winkel(Venster):
         hb.setContentsMargins(0, 6, 0, 0)
         hb.setSpacing(6)
         hb.addWidget(label(t("Apps voor alles wat je doet", "Apps for everything you do"), "titel"))
-        hb.addWidget(label(t("Bekende, veilige apps. Installeren met één klik, updates gaan vanzelf.",
-                             "Well-known, safe apps. Install with one click, updates are automatic."), "sub"))
+        # 'updates gaan vanzelf' klopte niet bij 'Ik kies zelf wanneer' (U361)
+        hb.addWidget(label(t("Bekende, veilige apps. Installeren met één klik, en ze worden bijgewerkt met de rest.",
+                             "Well-known, safe apps. Install with one click, and they are updated with everything else."), "sub"))
         rechts.addWidget(self.held)
 
         self.kop = label("", "kop2")

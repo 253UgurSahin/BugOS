@@ -254,6 +254,17 @@ for wf in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
             los.append(f"{wf.name}:{nr} {m.group(1)}@{m.group(2)}")
 klopt(not los, "workflows: elke actie van buiten GitHub staat op een vaste commit" + (f"; los: {los}" if los else ""))
 
+# U359-U364: wat BugOS belooft, klopt met wat het doet (de Windows-plaatjes, de verborgen opstartlijst, CI-uitleg).
+_ws = (ROOT / ".github/workflows/windows-switch.yml").read_text(encoding="utf-8")
+_test = (ROOT / "docs/TESTING.md").read_text(encoding="utf-8")
+_welkom = (ROOT / "system_files/usr/bin/bugos-welcome").read_text(encoding="utf-8")
+klopt("docs\\images\\switch" in _ws and "docs\\beelden" not in _ws and "switch-1.png" not in _ws,
+      "U359: de Windows-workflow zet zijn plaatjes in docs/images/switch (waar README ze laat zien)")
+klopt("Shift" in _welkom and "Esc" in _welkom and "Shift" in (ROOT / "README.md").read_text(encoding="utf-8"),
+      "U360: 'kies de vorige versie' zegt ook hoe je het (verborgen) opstartmenu ziet: Shift of Esc")
+klopt("Every time something changes, GitHub builds" not in _test and "iso-lokaal" not in (ROOT / "docs/ONDERTEKENEN.md").read_text(encoding="utf-8"),
+      "U363: TESTING.md en ONDERTEKENEN.md kloppen met de workflows en bestandsnamen")
+
 # U248/U249: geen invoer rechtstreeks in een opdracht (alleen via env), en build.yml leest standaard alleen.
 _geplakt = []
 for wf in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
