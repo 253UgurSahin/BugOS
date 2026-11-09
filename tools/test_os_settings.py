@@ -152,7 +152,9 @@ def login_hulpje(wortel: Path) -> Path:
     tekst = tekst.replace("/usr/lib/plasmalogin", f"{wortel}/usr/lib/plasmalogin").replace("/etc/", f"{wortel}/etc/")
     (wortel / "login").write_text(tekst, encoding="utf-8")
     nep_id = wortel / "bin" / "id"
-    nep_id.write_text('#!/usr/bin/bash\nif [ "$1" = -u ]; then echo 0; else exec /usr/bin/id "$@"; fi\n')
+    # 'id -u' (wie ben ik): 0; 'id -u <naam>' (de gebruiker die vanzelf inlogt): een gewone gebruiker (U247)
+    nep_id.write_text('#!/usr/bin/bash\nif [ "$1" = -u ] && [ -z "${2:-}" ]; then echo 0; '
+                      'elif [ "$1" = -u ]; then echo 1000; else exec /usr/bin/id "$@"; fi\n')
     nep_id.chmod(0o755)
     return wortel / "login"
 
