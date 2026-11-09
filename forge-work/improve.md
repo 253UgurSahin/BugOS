@@ -1364,6 +1364,25 @@ first boot, Welcome, Files erase/set-up and Backup/Switch restore: nothing broke
 - Downloads redirected to a network share: the ISO free-space check throws.
 - A hand-made backup stick whose top folder is a link is followed on restore (nothing overwritten).
 
+## Round 46 (2026-11-09) — final round, nothing broken or security found
+One reviewer on the newest fixes (U535, U536), the shell pieces (start menu, quick menu, taskbar, logout QML,
+bugos-start-data, bugos-panel), multi-account privacy, and start-up crashes. Result: no functional break and no
+security issue. Every app starts with an empty home and without optional commands; all test files pass
+(test_image.sh needs a built image). Nothing fixed this round.
+
+### Found, not fixed (minor)
+- iso.yml checks the image tag but not the branch it runs from (a test branch with tag=latest would publish its own
+  live environment).
+- Fast Startup stays off after the Windows tool ran, even if BugOS is never installed (Windows only starts slower).
+- Backup, Switch and Big letters crash on start if their JSON file is valid but not an object (hand-edited file, or
+  an odd or tampered stick for Switch); fix is an isinstance check.
+- bugos-start-data: an unreadable path or a NUL in recent files could empty the start menu on Python <= 3.13.
+- Within the 5-minute auth_admin_keep window an admin can change their password without typing the current one.
+
+## Where it stands (2026-11-09)
+46 rounds, U001-U536. From round 44 on only broken or security issues were fixed; rounds 44-46 found 3 such issues
+(U534-U536) and round 46 found none. Next: the real-PC tests under "For you".
+
 ## Skipped
 - U147: a mask left by the round-10 image is not migrated; that image was never released (nothing was merged).
 - U154: two screens with different sizes get one size; a per-screen choice is a bigger change (M).
