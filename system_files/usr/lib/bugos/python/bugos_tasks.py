@@ -332,8 +332,13 @@ def groepeer(lijst: list[Proces], procent: dict[int, float]) -> list[Taak]:
         taak.processor += procent.get(p.pid, 0.0)
         taak.geheugen += p.geheugen
         # Een 'sudo' of 'pkexec' in je eigen Konsole of Instellingen (van root) maakt die niet onsluitbaar (U451).
-        if p.eigen or soort == "systeem" or taak.pids == [p.pid]:
+        # Ook als de sudo eerder in de lijst staat dan Konsole: één proces van jou is genoeg (U463).
+        if soort == "systeem":
             taak.eigen = taak.eigen and p.eigen
+        elif taak.pids == [p.pid]:
+            taak.eigen = p.eigen
+        else:
+            taak.eigen = taak.eigen or p.eigen
         if (p.naam[:15] in BESCHERMD_KORT or p.pid == eigen_pid or soort == "systeem"
                 or BESCHERMDE_EENHEID.match(eenheid)):
             taak.beschermd = True

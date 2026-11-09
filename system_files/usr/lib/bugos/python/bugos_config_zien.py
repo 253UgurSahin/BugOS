@@ -107,7 +107,7 @@ def zet_grote_aanwijzer(aan: bool) -> None:
     # instellingenscherm ook stuurt (CursorChanged = 5), zodat KWin en de open programma's het meteen zien.
     # Je eigen grootte (bijv. 32 uit KDE's eigen scherm) bewaren en bij 'uit' terugzetten, niet altijd 24 (U455).
     # Alleen bewaren als hij nu niet al groot is (anders bewaren we 48 als 'jouw' grootte).
-    voor = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "bugos" / "grote-aanwijzer-voor"
+    voor = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "bugos" / "grote-aanwijzer-voor"
     if aan:
         nu = _c.kde_lees("kcminputrc", "Mouse", "cursorSize", "")
         if not (nu.isdigit() and int(nu) >= GROTE_AANWIJZER):

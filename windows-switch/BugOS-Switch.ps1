@@ -830,7 +830,7 @@ ovLUnl0L5eQZEbTp/9k=
 # bij het maken van de USB-stick (die stap doet iedereen, ook wie BugOS op een tweede schijf zet) (U453).
 # Onschuldig als Windows later alleen draait (Windows 10/11 kunnen dit gewoon).
 function Set-KlokUtc {
-    try { Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\TimeZoneInformation' -Name 'RealTimeIsUniversal' -Value 1 -Type DWord } catch { Write-Verbose 'Klok niet op UTC gezet.' }
+    try { Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\TimeZoneInformation' -Name 'RealTimeIsUniversal' -Value 1 -Type DWord -ErrorAction Stop } catch { Write-Verbose 'Klok niet op UTC gezet.' }
 }
 
 if ($Taak -eq 'Krimp') {

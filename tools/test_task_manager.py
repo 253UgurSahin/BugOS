@@ -196,6 +196,8 @@ _g433 = {x.pids[0]: x for x in bt.groepeer(_twee, {})}
 # U451: een 'sudo' (van root) in je eigen Konsole: Konsole blijft te sluiten.
 _kons = f"/user.slice/user-{_ik}.slice/user@{_ik}.service/app.slice/app-org.kde.konsole-99.scope"
 _g447 = bt.groepeer([bt.Proces(700, "konsole", 1, 1, 1, True, _kons), bt.Proces(701, "sudo", 700, 1, 1, False, _kons)], {})
+_g463 = bt.groepeer([bt.Proces(690, "sudo", 1, 1, 1, False, _kons), bt.Proces(700, "konsole", 1, 1, 1, True, _kons)], {})
+klopt(len(_g463) == 1 and _g463[0].eigen, "U463: ook als de sudo vóór Konsole in de lijst staat, blijft Konsole te sluiten")
 klopt(len(_g447) == 1 and _g447[0].pids == [700, 701] and _g447[0].eigen,
       f"U451: een sudo in je eigen Konsole maakt Konsole niet onsluitbaar ({[(x.naam, x.pids, x.eigen) for x in _g447]})")
 # U451: 'van jou' volgens de echte gebruiker (Uid: in status), niet volgens de eigenaar van de map in /proc.
