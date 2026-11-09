@@ -24,7 +24,7 @@ from pathlib import Path
 
 sys.path.insert(0, "/usr/lib/bugos/python")
 
-from bugos_ui import CONFIG, t  # noqa: E402
+from bugos_ui import CONFIG, platte_tip, t  # noqa: E402
 from bugos_files_acties import dubbele_namen, kent_hoofdletters  # noqa: E402
 
 LOG = CONFIG / "backup.json"
@@ -165,17 +165,18 @@ def backup_doel(schijf: Path) -> Path:
 
 def terug_vraag(bron: Path) -> str:
     """De vraag voor het terugzetten, met de naam van de back-up. Is hij van een ander account (een gedeelde
-    familiestick), dan zeggen we dat erbij: anders kwamen papa's bestanden stil in jouw map (U434)."""
-    tekst = t(f"De bestanden van de back-up '{bron.name}' komen terug op je computer. Een bestand dat op je computer "
+    familiestick), dan zeggen we dat erbij: anders kwamen papa's bestanden stil in jouw map (U434).
+    Vaste zinnen (te vertalen) met {naam}/{wie} erin; de naam komt van de stick, dus letterlijk tonen (U442)."""
+    tekst = t("De bestanden van de back-up '{naam}' komen terug op je computer. Een bestand dat op je computer "
               "ouder is dan in de back-up, wordt vervangen. Nieuwere bestanden op je computer blijven staan.",
-              f"The files from the backup '{bron.name}' come back to your computer. A file that is older on your "
-              "computer than in the backup is replaced. Newer files on your computer are kept.")
+              "The files from the backup '{naam}' come back to your computer. A file that is older on your "
+              "computer than in the backup is replaced. Newer files on your computer are kept.").replace("{naam}", bron.name)
     wie = bron.name.split("@", 1)[0]
     if wie != getpass.getuser():
-        tekst += "\n\n" + t(f"Let op: deze back-up is van '{wie}', niet van jou. Zijn of haar bestanden komen dan in "
-                             "jouw map.", f"Note: this backup is from '{wie}', not from you. Their files will then "
-                             "end up in your folder.")
-    return tekst
+        tekst += "\n\n" + t("Let op: deze back-up is van '{wie}', niet van jou. Zijn of haar bestanden komen dan in "
+                             "jouw map.", "Note: this backup is from '{wie}', not from you. Their files will then "
+                             "end up in your folder.").replace("{wie}", wie)
+    return platte_tip(tekst)
 
 
 def backups_op(schijf: Path) -> list[Path]:
@@ -737,7 +738,9 @@ def venster() -> int:
                 keuze, ok = QInputDialog.getItem(
                     self, t("Welke back-up?", "Which backup?"),
                     t("Er staan meer back-ups op deze schijf. Welke wil je terugzetten?",
-                      "There are several backups on this drive. Which one do you want to restore?"),
+                      "There are several backups on this drive. Which one do you want to restore?") if len(lijst) > 1 else
+                    t("Op deze schijf staat deze back-up. Wil je hem terugzetten?",
+                      "This drive has this backup. Do you want to restore it?"),   # (U442)
                     [p.name for p in lijst], 0, False)
                 if not ok:
                     return

@@ -43,10 +43,10 @@ zet_keuze() {
 # Bij 'terug' is het terugzetten al gebeurd: niet stoppen, wel zeggen dat updates nog vanzelf kunnen gaan (U423).
 # Op stdout en als laatste regel: Instellingen toont de laatste regel (U431).
 niet_bewaard_terug() {
-    local herstart=""
-    [ "$1" = herstart ] && herstart="$(t " Start de computer opnieuw op om terug te gaan." " Restart the computer to go back.")"
-    t "Teruggezet, maar let op: de keuze 'zelf updaten' kon niet bewaard worden (is je computer vol?). Zet 'Updates vanzelf' uit in Instellingen, anders kan de nieuwe versie terugkomen.$herstart" \
-        "Rolled back, but note: the choice 'update yourself' could not be saved (is your computer full?). Turn off 'Updates automatically' in Settings, or the new version may come back.$herstart"
+    # Vaste zinnen (te vertalen); de waarschuwing als laatste (U442).
+    [ "${1:-}" = herstart ] && t "Start de computer opnieuw op om terug te gaan." "Restart the computer to go back."
+    t "Teruggezet, maar let op: de keuze 'zelf updaten' kon niet bewaard worden (is je computer vol?). Zet 'Updates vanzelf' uit in Instellingen, anders kan de nieuwe versie terugkomen." \
+        "Rolled back, but note: the choice 'update yourself' could not be saved (is your computer full?). Turn off 'Updates automatically' in Settings, or the new version may come back."
 }
 
 niet_bewaard() {

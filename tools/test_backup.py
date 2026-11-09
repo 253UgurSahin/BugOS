@@ -176,6 +176,14 @@ _eigen434 = bb.terug_vraag(Path(f"/stick/BugOS-Backup/{_ik}@bugos"))
 klopt("papa@bugos" in _v434 and "'papa'" in _v434 and "\n\n" not in _eigen434 and "if lijst[0] != backup_doel(schijf):" in (ROOT / "system_files/usr/bin/bugos-backup").read_text(),
       "U434: terugzetten van andermans back-up: altijd kiezen, met naam en een waarschuwing")
 
+# U442: een mapnaam als '<h1>x' op de stick wordt in de vraag geen opmaak, en de zinnen zijn te vertalen.
+from PySide6.QtGui import QTextDocument as _QTD442
+_d442 = _QTD442()
+_d442.setHtml(bb.terug_vraag(Path("/stick/BugOS-Backup/<h1>papa@bugos")))
+klopt("<h1>papa@bugos" in _d442.toPlainText() and 't("De bestanden van de back-up \'{naam}\'' in
+      (ROOT / "system_files/usr/bin/bugos-backup").read_text(),
+      f"U442: de naam van de back-up wordt letterlijk getoond, en de vraag is te vertalen ({_d442.toPlainText()[:60]!r})")
+
 # U097: het lijstje op de stick bepaalt niet welke opdracht er draait: alleen de vaste soorten tellen.
 _gevraagd: list = []
 _echt_run = bb.subprocess.run
