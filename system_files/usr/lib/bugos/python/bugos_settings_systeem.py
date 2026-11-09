@@ -121,12 +121,32 @@ class UpdatesPagina(Blad):
         self.nu = Knop(t("Nu updaten", "Update now"), "gewoon", "lijn:verversen")
         self.nu.clicked.connect(lambda _c=False: None if bi.VOORBEELD else self.updates("nu"))
         self.terug = Knop(t("Terug naar de vorige versie", "Back to the previous version"), "stil", "lijn:terug")
-        self.terug.clicked.connect(lambda _c=False: None if bi.VOORBEELD else self.updates("terug"))
+        self.terug.clicked.connect(lambda _c=False: None if bi.VOORBEELD else self.vraag_terug())
         kr.addWidget(self.nu)
         kr.addWidget(self.terug)
         kr.addStretch(1)
         g.lay.addWidget(knoppen)
         self.bouw_rest()
+
+    def vraag_terug(self) -> None:
+        """Eerst zeggen wat 'terug' ook terugzet: wat sinds de update in het systeem veranderde, hoort bij de nieuwe
+        versie (elke versie heeft zijn eigen /etc) (U368)."""
+        from PySide6.QtWidgets import QMessageBox
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle(t("Terug naar de vorige versie", "Back to the previous version"))
+        box.setText(t("Terug naar de vorige versie?", "Go back to the previous version?"))
+        box.setInformativeText(t(
+            "Je bestanden blijven gewoon staan. Maar wat je sinds de laatste update in het systeem veranderde, gaat ook "
+            "terug: een nieuw wachtwoord (dan geldt het oude weer), nieuwe gebruikers, en wifi-netwerken die je sindsdien "
+            "toevoegde.",
+            "Your files stay where they are. But what you changed in the system since the last update goes back too: "
+            "a new password (the old one works again), new users, and Wi-Fi networks you added since."))
+        ja = box.addButton(t("Terug", "Go back"), QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(t("Annuleren", "Cancel"), QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        if box.clickedButton() is ja:
+            self.updates("terug")
 
     def bouw_rest(self) -> None:
         """Alles onder de kaart Updates (spelen en werken, taakbalk, hulp)."""

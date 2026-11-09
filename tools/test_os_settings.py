@@ -876,6 +876,19 @@ klopt(_tel == [1], f"U227: terug in Instellingen na een KDE-venster: de printers
 del _pr.ververs
 del venster.isActiveWindow
 
+# U368: 'Terug naar de vorige versie' vraagt het eerst, en zegt dat wachtwoord, nieuwe gebruikers en wifi ook teruggaan.
+from PySide6.QtWidgets import QMessageBox as _QMB2  # noqa: E402
+
+_up = venster.paginas["updates"]
+_teksten, _gestart = [], []
+_oud_exec, _oud_up = _QMB2.exec, _up.updates
+_QMB2.exec = lambda self: _teksten.append(self.informativeText()) or 0   # 'Annuleren'
+_up.updates = lambda wat: _gestart.append(wat)
+_up.vraag_terug()
+_QMB2.exec, _up.updates = _oud_exec, _oud_up
+klopt(_teksten and "wachtwoord" in _teksten[0] and "wifi" in _teksten[0] and not _gestart,
+      f"U368: 'terug' waarschuwt eerst dat wachtwoord, gebruikers en wifi ook teruggaan; Annuleren doet niets ({_gestart})")
+
 # U353: zoeken in Instellingen vindt ook woorden die op de pagina's staan (taakbalk, fps, opslag, dubbelklikken…).
 _mist = []
 for _w in ("taakbalk", "dubbelklikken", "fps", "opslag", "schijfruimte", "computernaam", "lettergrootte", "tekstgrootte",
