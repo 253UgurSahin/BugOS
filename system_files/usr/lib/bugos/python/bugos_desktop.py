@@ -154,6 +154,27 @@ def schrijf_veilig(pad: Path, tekst: str) -> None:
     os.replace(tijdelijk, pad)
 
 
+def _systeem_tekst(bestand: str) -> str | None:
+    """De tekst van het systeem-bestand dat geldt (het eerste in de XDG-volgorde)."""
+    for map_ in systeem_autostart():
+        try:
+            return (map_ / bestand).read_text(encoding="utf-8")
+        except OSError:
+            continue
+    return None
+
+
+def _is_verborgen(tekst: str) -> bool:
+    groep = ""
+    for regel in tekst.splitlines():
+        kaal = regel.strip()
+        if kaal.startswith("[") and kaal.endswith("]"):
+            groep = kaal
+        elif groep == "[Desktop Entry]" and kaal.split("=", 1)[0].strip() == "Hidden":
+            return kaal.split("=", 1)[1].strip().lower() == "true" if "=" in kaal else False
+    return False
+
+
 def zet_opstart(item: Opstart, aan: bool) -> None:
     """Aan of uit, alleen voor jou (in ~/.config/autostart). Het origineel blijft heel, en een eigen
     aangepaste versie (andere opdracht, extra opties) ook: we veranderen alleen 'Hidden'."""
@@ -164,12 +185,15 @@ def zet_opstart(item: Opstart, aan: bool) -> None:
         eigen = pad.read_text(encoding="utf-8")
     except OSError:
         eigen = None
-    if item.van_systeem and eigen is None:
+    if item.van_systeem and (eigen is None or (aan and eigen.strip() == ALLEEN_UIT.strip())):
+        systeem = _systeem_tekst(item.bestand)
         if not aan:
             schrijf_veilig(pad, ALLEEN_UIT)
-        return
-    if item.van_systeem and aan and eigen.strip() == ALLEEN_UIT.strip():
-        pad.unlink(missing_ok=True)  # alleen ons eigen 'uit'-briefje: weg ermee, dan geldt het origineel weer
+        elif systeem is not None and _is_verborgen(systeem):
+            # Staat hij voor de hele computer uit (Hidden=true)? Dan een eigen kopie die wel aan staat (U075).
+            schrijf_veilig(pad, met_hidden(systeem, "false"))
+        elif eigen is not None:
+            pad.unlink(missing_ok=True)  # alleen ons eigen 'uit'-briefje: weg ermee, dan geldt het origineel weer
         return
     if eigen is None:
         return

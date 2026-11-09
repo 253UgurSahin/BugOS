@@ -202,6 +202,18 @@ tekst = (eigen / "discord.desktop").read_text()
 klopt((eigen / "discord.desktop").exists() and "Exec=discord --start-minimized" in tekst and "Hidden=false" in tekst,
       "opstarten weer aan (eigen aangepaste versie): het bestand blijft, met Hidden=false")
 klopt(not list(eigen.glob(".*bugos-nieuw")), "opstarten: geen tijdelijke bestanden achtergebleven")
+# U075: staat een systeem-programma voor de hele computer uit (Hidden=true), dan kun je hem voor jezelf aanzetten.
+schrijf(etc / "chat.desktop", "[Desktop Entry]\nType=Application\nName=Chat\nExec=chat --stil\nHidden=true\n")
+c = {x.naam: x for x in bt.opstart_lijst()}["Chat"]
+klopt(not c.aan, "U075: systeem-programma met Hidden=true staat uit")
+bt.zet_opstart(c, True)
+tekst = (eigen / "chat.desktop").read_text() if (eigen / "chat.desktop").exists() else ""
+klopt({x.naam: x for x in bt.opstart_lijst()}["Chat"].aan and "Exec=chat --stil" in tekst and "Hidden=false" in tekst,
+      "U075: aanzetten maakt een eigen kopie met Hidden=false (en hij staat echt aan)")
+bt.zet_opstart({x.naam: x for x in bt.opstart_lijst()}["Chat"], False)
+klopt(not {x.naam: x for x in bt.opstart_lijst()}["Chat"].aan, "U075: en weer uit")
+bt.zet_opstart({x.naam: x for x in bt.opstart_lijst()}["Chat"], True)
+klopt({x.naam: x for x in bt.opstart_lijst()}["Chat"].aan, "U075: na uit weer aan: staat aan")
 
 # 8. het venster (zonder scherm)
 lader = importlib.machinery.SourceFileLoader("taakbeheer", str(ROOT / "system_files" / "usr" / "bin" /
@@ -240,7 +252,7 @@ try:
     venster.ga_naar("opstarten")
     app.processEvents()
     rijen = venster.paginas["opstarten"].findChildren(tb.OpstartRij)
-    klopt(len(rijen) == 2, "venster: Opstarten toont de programma's met een schuifje")
+    klopt(len(rijen) == 3, "venster: Opstarten toont de programma's met een schuifje")
     # Sluiten mag het venster niet laten vastlopen, ook als KWin traag antwoordt.
     import time as _tijd  # noqa: E402
     _gestopt: list = []
