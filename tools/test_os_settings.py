@@ -760,7 +760,11 @@ oud_kies, oud_tzset = sa.KiesDialoog, time.tzset
 tp.ververs, sp.ververs = (lambda: gelezen.append("tijd")), (lambda: gelezen.append("scherm"))
 bi.zet_tijd_auto, bi.zet_schaal = (lambda aan: False), (lambda w: False)
 tp.zet_auto(True)
+_ss = sys.modules["bugos_settings_scherm"]
+_oud_gg = _ss.groot_genoeg
+_ss.groot_genoeg = lambda: 2.0   # een groot scherm: dan mag 150% (zie U397)
 sp.zet_grootte(1.5)
+_ss.groot_genoeg = _oud_gg
 wacht()
 wacht()
 klopt("tijd" in gelezen and "scherm" in gelezen, f"U070: mislukt: tijd en schermgrootte worden opnieuw gelezen ({gelezen})")
@@ -926,6 +930,12 @@ klopt(_up.melding.tekst.text() == "Klaar. Deze versie blijft nu ook na opnieuw o
 # U389: 'Nu updaten' terwijl er al een update loopt: zeg dat, niet 'ben je online?'.
 _up.klaar_met("nu", 1, "error: Transaction in progress: (null)\n")
 klopt("al een update" in _up.melding.tekst.text(), f"U389: er loopt al een update: dat wordt gezegd ({_up.melding.tekst.text()!r})")
+
+# U397: op een klein scherm (hier 800×600) worden groottes waarbij niets meer past, niet aangeboden.
+_sp2 = venster.paginas["scherm"]
+_sp2.toon((None, False, 1.0))
+_aan = {w: k.isEnabled() for w, k in _sp2.grootte.knoppen.items()}
+klopt(_aan[1.0] and not _aan[2.0] and not _aan[1.5], f"U397: op een klein scherm geen 150-200% (dan past niets meer) ({_aan})")
 
 # U353: zoeken in Instellingen vindt ook woorden die op de pagina's staan (taakbalk, fps, opslag, dubbelklikken…).
 _mist = []

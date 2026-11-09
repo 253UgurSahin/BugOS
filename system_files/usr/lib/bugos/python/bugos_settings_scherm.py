@@ -101,14 +101,38 @@ class SchermPagina(Blad):
             self.helder.zet(helder)
         self.nacht.zet_stil(nacht)
         self.grootte.zet(min((1.0, 1.25, 1.5, 1.75, 2.0), key=lambda w: abs(w - schaal)))
+        # Op een klein scherm (1366×768) is 200% maar 683×384: dan past niets meer, ook de knop terug niet. Alleen
+        # groottes aanbieden waarbij minstens 1024×700 overblijft (de huidige blijft altijd te kiezen) (U397).
+        for waarde, knop in self.grootte.knoppen.items():
+            knop.setEnabled(waarde <= max(groot_genoeg(), schaal + 0.01))
 
     def zet_grootte(self, waarde: float) -> None:
+        if waarde > max(groot_genoeg(), bi.schaal() + 0.01):   # (U397)
+            self.melding.toon(t("Dat is te groot voor dit scherm: dan past niets meer.",
+                                "That is too big for this screen: nothing would fit any more."), "let_op")
+            self.ververs()
+            return
         self.melding.toon(t(f"Grootte {waarde:.0%} wordt ingesteld…", f"Setting size to {waarde:.0%}…"))
         op_achtergrond(self, lambda: bi.zet_schaal(waarde), lambda ok: (None if ok else self.ververs(), self.melding.toon(
             t("Klaar. Sommige programma's worden pas groter als je ze opnieuw opent.",
               "Done. Some programs only change after you open them again.") if ok else
             t("Dat lukte niet. Probeer het bij 'Meer instellingen'.", "That did not work. Try 'More settings'."),
             "goed" if ok else "fout")))   # mislukt: opnieuw lezen, dan staat de echte grootte weer gekozen
+
+
+def groot_genoeg() -> float:
+    """De grootste schaal waarbij het scherm nog minstens 1024×700 (logische) beeldpunten heeft (U397)."""
+    from PySide6.QtGui import QGuiApplication
+    scherm = QGuiApplication.primaryScreen()
+    if scherm is None:
+        return 2.0
+    echt_b = scherm.size().width() * scherm.devicePixelRatio()
+    echt_h = scherm.size().height() * scherm.devicePixelRatio()
+    beste = 1.0
+    for w in (1.0, 1.25, 1.5, 1.75, 2.0):
+        if echt_b / w >= 1024 and echt_h / w >= 700:
+            beste = w
+    return beste
 
 
 # =============================================================== energie ===
