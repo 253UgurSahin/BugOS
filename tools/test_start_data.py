@@ -173,6 +173,8 @@ draai("--zet", "volume", "40")
 klopt("wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.40" in logboek() and "set-mute" not in logboek(),
       "zet volume: alleen het volume, niet stil/aan")
 LOG.write_text("")
+_donker = json.loads(draai("--zet", "donker", "aan"))
+klopt(_donker["donker"] is True, "U128: Donker aantikken in het snelmenu toont meteen 'aan' (bugos-theme loopt nog)")
 draai("--zet", "niet_storen", "aan")
 klopt("kwriteconfig6 --file plasmanotifyrc --group DoNotDisturb --key Until --notify 2999,12,31,0,0,0" in logboek(),
       "zet niet storen: dezelfde waarde als Instellingen, met --notify")

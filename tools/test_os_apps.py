@@ -591,6 +591,8 @@ for pagina in (welkom.Uiterlijk(), welkom.Updates()):
 _gestart: list = []
 _oud_start = welkom.start
 welkom.start = lambda *a: _gestart.append(a)
+_oud_steam = welkom.steam_opdracht
+welkom.steam_opdracht = lambda: ("steam",)
 jij = welkom.Jij()
 jij.dev.schuif.setChecked(True)
 jij.gamer.schuif.setChecked(True)
@@ -599,9 +601,33 @@ jij.bij_volgende()
 jij.oud.schuif.setChecked(True)
 jij.bij_volgende()
 welkom.start = _oud_start
-klopt(_gestart == [("bugos-developer", "aan"), ("steam",), ("bugos-light-mode", "aan")]
+klopt(_gestart == [("bugos-developer", "aan"), ("bugos-light-mode", "aan"), ("steam",)] or
+      _gestart == [("bugos-developer", "aan"), ("steam",), ("bugos-light-mode", "aan")]
       and not jij.dev.schuif.isEnabled() and not jij.al_bezig.isHidden(),
       f"U074: Welkom start elke keuze maar één keer, en zegt dat het al loopt ({_gestart})")
+# U130: geen Steam (ook niet als Flatpak): het schuifje gaat niet op slot met 'wordt klaargezet'.
+welkom.steam_opdracht = lambda: ()
+welkom.start = lambda *a: _gestart.append(a)
+_gestart.clear()
+jij2 = welkom.Jij()
+jij2.gamer.schuif.setChecked(True)
+jij2.bij_volgende()
+welkom.start, welkom.steam_opdracht = _oud_start, _oud_steam
+klopt(not _gestart and jij2.gamer.schuif.isEnabled(), "U130: zonder Steam: niets 'klaargezet' en het schuifje blijft vrij")
+# U129: de updatekeuze wordt pas onthouden als het lukte (Annuleren bij het wachtwoord: Volgende probeert opnieuw).
+_upd = welkom.Updates()
+_pk = TMP / "pk-nep"
+_pk.mkdir()
+(_pk / "pkexec").write_text("#!/usr/bin/bash\nexit 126\n")
+(_pk / "pkexec").chmod(0o755)
+_oud_path = os.environ["PATH"]
+os.environ["PATH"] = f"{_pk}:{_oud_path}"
+_begin = _upd.begin
+_upd.hand.setChecked(True)
+_upd.bij_volgende()
+wacht(lambda: not getattr(_upd, "bezig", False), 5000)
+os.environ["PATH"] = _oud_path
+klopt(_upd.begin == _begin and _begin != "hand", f"U129: Annuleren bij het wachtwoord: de updatekeuze is niet als gedaan onthouden ({_upd.begin})")
 
 os.environ["BUGOS_INSTELLINGEN_VOORBEELD"] = "1"
 inst = laad("bugos_instellingen", "bugos-settings")

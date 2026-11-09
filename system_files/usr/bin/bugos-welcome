@@ -12,6 +12,8 @@ Jip-en-Janneke: een paar grote, simpele stappen.
 Gestart met --eerste-keer opent hij alleen als hij nog nooit is afgemaakt.
 """
 
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -23,7 +25,7 @@ from bugos_ui import (  # noqa: E402
     label, maak_app, ronde_pixmap, start, t, uitvoeren,
 )
 from bugos_welcome_panel import Zijpaneel  # noqa: E402
-from PySide6.QtCore import QLocale, QRectF, QSize, Qt, QThread, QTimer, Signal  # noqa: E402
+from PySide6.QtCore import QLocale, QProcess, QRectF, QSize, Qt, QThread, QTimer, Signal  # noqa: E402
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
     QButtonGroup, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
@@ -243,8 +245,8 @@ class Uiterlijk(Pagina):
             rij.addWidget(k)
         rij.addStretch(1)
         self.lay.addLayout(rij)
-        self.lay.addWidget(label(t("Tip: je kunt dit later veranderen bij Instellingen → Licht of donker.",
-                                   "Tip: you can change this later in Settings → Light or dark."), "klein"))
+        self.lay.addWidget(label(t("Tip: je kunt dit later veranderen bij Instellingen → Uiterlijk.",
+                                   "Tip: you can change this later in Settings → Appearance."), "klein"))
         self.klaar_met_vullen()
         self.knoppen[bugos_ui.DONKER].setChecked(True)
 
@@ -298,9 +300,19 @@ class Updates(Pagina):
 
     def bij_volgende(self) -> None:
         gekozen = "hand" if self.hand.isChecked() else "auto"
-        if gekozen != self.begin:
-            start("pkexec", "/usr/bin/bugos-updates", gekozen)
-            self.begin = gekozen
+        if gekozen != self.begin and not getattr(self, "bezig", False):
+            # Pas onthouden als het lukte: Annuleren bij het wachtwoord, dan probeert Volgende het opnieuw (U129).
+            self.bezig = True
+            proces = QProcess(self)
+
+            def klaar(code, _status, p=proces, g=gekozen) -> None:
+                self.bezig = False
+                if code == 0:
+                    self.begin = g
+                p.deleteLater()
+
+            proces.finished.connect(klaar)
+            proces.start("pkexec", ["/usr/bin/bugos-updates", gekozen])
 
 
 class Jij(Pagina):
@@ -332,13 +344,24 @@ class Jij(Pagina):
     def bij_volgende(self) -> None:
         for naam, rij, opdracht in (("dev", self.dev, ("bugos-developer", "aan")),
                                     ("oud", self.oud, ("bugos-light-mode", "aan")),
-                                    ("gamer", self.gamer, ("steam",))):
-            if naam in self.gestart or not rij.schuif.isChecked():
+                                    ("gamer", self.gamer, steam_opdracht()
+                                     if self.gamer.schuif.isChecked() and "gamer" not in self.gestart else ())):
+            if naam in self.gestart or not rij.schuif.isChecked() or not opdracht:
                 continue
             start(*opdracht)
             self.gestart.add(naam)
             rij.schuif.setEnabled(False)   # niet meer uit te zetten hier: het loopt al
             self.al_bezig.show()
+
+
+def steam_opdracht() -> tuple:
+    """Steam starten: het programma, of de Flatpak-versie (als Steam zo in BugOS kwam) (U130)."""
+    if shutil.which("steam"):
+        return ("steam",)
+    if shutil.which("flatpak") and subprocess.run(["flatpak", "info", "com.valvesoftware.Steam"], capture_output=True,
+                                                  timeout=10).returncode == 0:
+        return ("flatpak", "run", "com.valvesoftware.Steam")
+    return ()
 
 
 class Klaar(Pagina):

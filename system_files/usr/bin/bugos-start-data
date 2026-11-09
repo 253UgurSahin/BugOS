@@ -494,7 +494,11 @@ def main(args: list[str]) -> int:
         return 0
     if len(args) == 3 and args[0] == "--zet":
         snel_zet(args[1], args[2])
-        print(json.dumps(snel_status()))
+        s = snel_status()
+        if args[1] == "donker":
+            # bugos-theme loopt nog: de kleuren staan er misschien nog niet. Toon wat je net koos (U128).
+            s["donker"] = args[2] in ("aan", "true", "1", "on")
+        print(json.dumps(s))
         return 0
     apps = alle_apps()
     print(json.dumps({
