@@ -181,5 +181,17 @@ except OSError:
 bb.backup_doel = _oud_doel
 klopt(_code == 1, f"U211: de back-upmap kan niet gemaakt worden: een nette fout ({_code})")
 
+# U226: een tweede schijf of de Windows-schijf ín de computer is geen back-upplek (en wordt niet vooraf gekozen).
+import bugos_drives as _bd  # noqa: E402
+
+_oud_sch = _bd.schijven
+_bd.schijven = lambda *a: [_bd.Schijf(apparaat="/dev/sda2", naam="DATA", soort="intern", station="/dev/sda",
+                                      wortel="/run/media/x/DATA"),
+                           _bd.Schijf(apparaat="/dev/sdb1", naam="Stick", soort="stick", station="/dev/sdb",
+                                      wortel="/run/media/x/Stick")]
+_over = bb.zonder_interne([Path("/run/media/x/DATA"), Path("/run/media/x/Stick")], bb.interne_plekken())
+_bd.schijven = _oud_sch
+klopt(_over == [Path("/run/media/x/Stick")], f"U226: Back-up biedt alleen schijven aan die je eruit haalt ({_over})")
+
 print(f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)

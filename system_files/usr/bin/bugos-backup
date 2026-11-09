@@ -118,7 +118,21 @@ def schijven() -> list[Path]:
             for p in sorted(basis.iterdir()):
                 if p.is_dir() and os.access(p, os.W_OK) and p.is_mount():
                     gevonden.append(p)
-    return gevonden
+    return zonder_interne(gevonden, interne_plekken())
+
+
+def interne_plekken() -> set[str]:
+    """Waar de schijven ín de computer open staan (een tweede schijf, de Windows-schijf)."""
+    try:
+        import bugos_drives
+        return {s.wortel for s in bugos_drives.schijven() if s.soort == "intern" and s.wortel}
+    except Exception:  # noqa: BLE001  zonder lsblk: niets weten
+        return set()
+
+
+def zonder_interne(paden: list[Path], interne: set[str]) -> list[Path]:
+    """Een back-up hoort op iets wat je eruit haalt: gaat de computer kapot, dan ook een schijf erin (U226)."""
+    return [p for p in paden if str(p) not in interne]
 
 
 def backup_doel(schijf: Path) -> Path:
