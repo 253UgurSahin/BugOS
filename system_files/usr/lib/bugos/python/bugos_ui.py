@@ -406,6 +406,9 @@ def maak_app(naam: str, bureaublad_bestand: str, args: Sequence[str], een_keer: 
     f.setPixelSize(px(14))
     app.setFont(f)
     app.setStyleSheet(_stijlblad(K))
+    # De teksten van BugOS zijn Nederlands of Engels, dus van links naar rechts. Zonder dit draait Qt het hele
+    # venster om zodra KDE een Arabische vertaling laadt: pijlen en schuifjes de verkeerde kant op (U275).
+    app.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
     return app
 
 

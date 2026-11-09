@@ -1478,6 +1478,18 @@ _ai = _QA.queryAccessibleInterface(_sr)
 klopt(_ai is not None and _ai.role() == _QA.Role.Button and _ai.text(_QA.Text.Name) == "USB-stick",
       f"U274: een schijf in Bestanden is voor een schermlezer een knop met zijn naam ({_ai and _ai.role()})")
 _sr.close()
+# U275: een Arabische Qt-vertaling draait de BugOS-vensters (Engelse tekst) niet om naar rechts-naar-links.
+from PySide6.QtCore import QLibraryInfo as _QLI, QTranslator as _QTr  # noqa: E402
+
+_ar = _QTr()
+if _ar.load("qtbase_ar", _QLI.path(_QLI.LibraryPath.TranslationsPath)):
+    app.installTranslator(_ar)
+    for _ in range(5):
+        app.processEvents()
+    _richting = app.layoutDirection()
+    app.removeTranslator(_ar)
+    klopt(_richting == Qt.LayoutDirection.LeftToRight,
+          f"U275: met een Arabische Qt-vertaling blijven de BugOS-vensters van links naar rechts ({_richting})")
 _stukken = [(n, (ROOT / "system_files/usr/bin" / n).read_text()) for n in
             ("bugos-settings", "bugos-task-manager", "bugos-store", "bugos-welcome", "bugos-backup", "bugos-switch", "bugos-help")]
 klopt(all("een_keer=True" in tekst for _n, tekst in _stukken), "U208: Instellingen, Taakbeheer, Winkel, Welkom, Back-up, Overstap en Hulp openen maar één keer")
