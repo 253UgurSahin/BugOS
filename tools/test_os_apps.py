@@ -726,6 +726,8 @@ _upd.bij_volgende()
 wacht(lambda: not getattr(_upd, "bezig", False), 5000)
 os.environ["PATH"] = _oud_path
 klopt(_upd.begin == _begin and _begin != "hand", f"U129: Annuleren bij het wachtwoord: de updatekeuze is niet als gedaan onthouden ({_upd.begin})")
+klopt(_upd.auto.isChecked() and not _upd.mislukt.isHidden() and ("toestemming" in _upd.mislukt.text() or "permission" in _upd.mislukt.text()),
+      f"U412: Annuleren bij het wachtwoord: de knop gaat terug en Welkom zegt het ({_upd.mislukt.text()[:50]!r})")
 
 os.environ["BUGOS_INSTELLINGEN_VOORBEELD"] = "1"
 inst = laad("bugos_instellingen", "bugos-settings")

@@ -295,6 +295,10 @@ class Updates(Pagina):
             huidig = (draai("bugos-updates", "status", timeout=5)[1].strip() or "auto")
         self.begin = huidig
         (self.hand if huidig == "hand" else self.auto).setChecked(True)
+        # Lukte het kiezen niet (Annuleren bij het wachtwoord)? Dan zeggen we dat hier en met een melding (U412).
+        self.mislukt = label("", "klein")
+        self.mislukt.hide()
+        self.lay.addWidget(self.mislukt)
         self.klaar_met_vullen()
 
     def _optie(self, icoon: str, tint: str, kop_t: str, sub_t: str, aanbevolen: bool) -> QPushButton:
@@ -330,6 +334,23 @@ class Updates(Pagina):
                 self.bezig = False
                 if code == 0:
                     self.begin = g
+                    self.mislukt.hide()
+                else:
+                    # Je ging al naar de volgende pagina: zeg dat de keuze niet is doorgevoerd, en zet de knop terug (U412).
+                    (self.hand if self.begin == "hand" else self.auto).setChecked(True)
+                    tekst = (t("Updates staan nog op 'vanzelf': er was geen toestemming. Ga terug naar 'Updates' om het "
+                               "opnieuw te proberen, of kies het later in Instellingen.",
+                               "Updates are still automatic: permission was not given. Go back to 'Updates' to try "
+                               "again, or choose it later in Settings.") if self.begin != "hand" else
+                             t("Updates staan nog op 'ik kies zelf': er was geen toestemming. Ga terug naar 'Updates' om "
+                               "het opnieuw te proberen, of kies het later in Instellingen.",
+                               "Updates are still 'I choose when': permission was not given. Go back to 'Updates' to "
+                               "try again, or choose it later in Settings."))
+                    self.mislukt.setText(tekst)
+                    self.mislukt.show()
+                    QProcess.startDetached("notify-send", ["-a", "BugOS", "-i", "bugos-logo",
+                                                           t("Updatekeuze niet doorgevoerd", "Update choice not saved"),
+                                                           tekst])
                 p.deleteLater()
 
             proces.finished.connect(klaar)
