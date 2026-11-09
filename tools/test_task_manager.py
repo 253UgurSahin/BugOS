@@ -215,6 +215,34 @@ klopt(not {x.naam: x for x in bt.opstart_lijst()}["Chat"].aan, "U075: en weer ui
 bt.zet_opstart({x.naam: x for x in bt.opstart_lijst()}["Chat"], True)
 klopt({x.naam: x for x in bt.opstart_lijst()}["Chat"].aan, "U075: na uit weer aan: staat aan")
 
+# U125: wat BugOS start, krijgt zijn eigen systemd-scope (zoals KDE dat doet): dan staat het in Taakbeheer onder
+# zijn eigen naam, en niet onder wie het startte (het snelmenu, Welkom, Instellingen).
+import bugos_base  # noqa: E402
+
+_rt = TMP / "runtime"
+(_rt / "systemd").mkdir(parents=True)
+(_rt / "systemd" / "private").write_text("")
+_apps = TMP / "share-u125" / "applications"
+_apps.mkdir(parents=True)
+(_apps / "bugos-settings.desktop").write_text("[Desktop Entry]\nName=Settings\nExec=bugos-settings\n")
+_oud_env = {k: os.environ.get(k) for k in ("XDG_RUNTIME_DIR", "XDG_DATA_DIRS")}
+os.environ.update(XDG_RUNTIME_DIR=str(_rt), XDG_DATA_DIRS=str(TMP / "share-u125"))
+_which = bugos_base.shutil.which
+bugos_base.shutil.which = lambda n, *a, **k: "/usr/bin/" + n
+_cmd = bugos_base.eigen_plek(("bugos-settings", "tijd"))
+_niet = bugos_base.eigen_plek(("pkexec", "bugos-updates", "nu"))
+bugos_base.shutil.which = _which
+for _k, _v in _oud_env.items():
+    if _v is None:
+        os.environ.pop(_k, None)
+    else:
+        os.environ[_k] = _v
+_eenheid = _cmd[5].split("=", 1)[1] if len(_cmd) > 6 else ""
+klopt(_cmd[:3] == ["systemd-run", "--user", "--scope"] and _cmd[-2:] == ["bugos-settings", "tijd"]
+      and bt.soort_van(f"/user.slice/user-1000.slice/user@1000.service/app.slice/{_eenheid}")[:2] == ("app", "bugos-settings")
+      and _niet == ["pkexec", "bugos-updates", "nu"],
+      f"U125: Instellingen starten in een eigen scope, die Taakbeheer als 'Instellingen' ziet ({_eenheid})")
+
 # 8. het venster (zonder scherm)
 lader = importlib.machinery.SourceFileLoader("taakbeheer", str(ROOT / "system_files" / "usr" / "bin" /
                                                                "bugos-task-manager"))

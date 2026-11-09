@@ -265,9 +265,26 @@ def draai(*cmd: str) -> str:
         return ""
 
 
+def eigen_plek(cmd: tuple | list) -> list[str]:
+    """Start een programma (met een .desktop-bestand) in zijn eigen systemd-scope, zoals KDE dat doet: dan ziet
+    Taakbeheer het als dat programma (niet als deel van wie het startte) en kun je het daar sluiten (U125).
+    Zonder systemd voor de gebruiker (of een opdracht zonder .desktop): gewoon zoals het was."""
+    naam = os.path.basename(cmd[0]) if cmd else ""
+    runtime = os.environ.get("XDG_RUNTIME_DIR", "")
+    if not naam or not runtime or not os.path.exists(os.path.join(runtime, "systemd", "private")) or \
+            not shutil.which("systemd-run"):
+        return list(cmd)
+    mappen = [os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))] + \
+        os.environ.get("XDG_DATA_DIRS", "/usr/local/share:/usr/share").split(":")
+    if not any(os.path.exists(os.path.join(m, "applications", f"{naam}.desktop")) for m in mappen if m):
+        return list(cmd)
+    eenheid = "app-" + naam.replace("\\", "\\x5c").replace("-", "\\x2d") + f"-{os.getpid():x}{os.urandom(3).hex()}.scope"
+    return ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={eenheid}", "--", *cmd]
+
+
 def los_starten(*cmd: str) -> bool:
     try:
-        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        subprocess.Popen(eigen_plek(cmd), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         return True
     except OSError as e:
         print(f"bugos-start-data: {cmd[0]} kon niet starten: {e}", file=sys.stderr)
