@@ -56,12 +56,17 @@ def bewaar_voorbeeld(pad: str, beeld: QImage) -> None:
     uri, naam, cache = _thumb_plek(pad)
     try:
         map_ = cache / "large"
-        map_.mkdir(parents=True, exist_ok=True)
+        map_.mkdir(parents=True, exist_ok=True, mode=0o700)   # alleen voor jou, zoals freedesktop wil (U201)
         beeld.setText("Thumb::URI", uri)
         beeld.setText("Thumb::MTime", str(int(os.stat(pad).st_mtime)))
-        tijdelijk = map_ / f".{naam}.bugos"
-        if beeld.save(str(tijdelijk), "PNG"):
+        import tempfile
+        fd, tijdelijk = tempfile.mkstemp(prefix=f".{naam}.", suffix=".bugos", dir=map_)   # elke schrijver een eigen naam
+        os.close(fd)
+        if beeld.save(tijdelijk, "PNG"):
+            os.chmod(tijdelijk, 0o600)
             os.replace(tijdelijk, map_ / naam)
+        else:
+            os.unlink(tijdelijk)
     except OSError:
         pass
 

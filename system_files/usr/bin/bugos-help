@@ -347,8 +347,10 @@ def venster() -> int:
             if bezig:
                 e.ignore()
                 self.hide()
+                # Een verborgen venster dat 'sluit', laat het programma niet stoppen: daarom echt afsluiten (U199).
                 for k in bezig:
-                    k.finished.connect(lambda: None if any(x.isRunning() for x in self.klusjes) else self.close())
+                    k.finished.connect(lambda: None if any(x.isRunning() for x in self.klusjes)
+                                       else QApplication.quit())
                 return
             super().closeEvent(e)
 

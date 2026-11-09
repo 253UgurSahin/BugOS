@@ -81,9 +81,11 @@ fi
 # Programma's van dit pakket naar het startmenu brengen.
 # shellcheck disable=SC2016
 # Tellen hoeveel er naar het startmenu gingen: een pakket zonder programma met een venster heeft er geen (U195).
-EXPORT='n=0; f=0; for d in $( (rpm -qlp "$1" 2>/dev/null || dpkg-deb -c "$1" 2>/dev/null | awk '\''{print $6}'\'') | grep -E '\''share/applications/.*\.desktop$'\''); do if distrobox-export --app "$(basename "$d" .desktop)" >/dev/null 2>&1; then n=$((n+1)); else f=1; fi; done; echo "bugos-startmenu=$n"; exit $f'
+EXPORT='n=0; f=0; for d in $( (rpm -qlp "$1" 2>/dev/null || dpkg-deb -c "$1" 2>/dev/null | awk '\''{print $6}'\'') | grep -E '\''share/applications/.*\.desktop$'\''); do if distrobox-export --app "$(basename "$d" .desktop)" >/dev/null 2>&1; then n=$((n+1)); else f=1; fi; done; echo "bugos-startmenu=$n"; [ "$n" -gt 0 ] || exit $f'
 
-if uit="$(distrobox enter "$DOOS" -- bash -c "$INSTALL && $EXPORT" bugos-package "$BESTAND" 2>/dev/null)"; then
+# 'INSTALL || exit 1': EXPORT bestaat uit meer opdrachten; met && zou alleen de eerste van een gelukte installatie
+# afhangen, en meldde BugOS 'Klaar' na een mislukte installatie (U198).
+if uit="$(distrobox enter "$DOOS" -- bash -c "$INSTALL || exit 1; $EXPORT" bugos-package "$BESTAND" 2>/dev/null)"; then
     if [ "$(echo "$uit" | sed -n 's/^bugos-startmenu=//p' | tail -1)" = 0 ]; then
         melding "$(t "Klaar!" "Done!")" "$(t "\"$TOON\" is geïnstalleerd. Het heeft geen plek in het startmenu; je gebruikt het in de Terminal met: distrobox enter $DOOS" \
             "\"$TOON\" is installed. It has no place in the start menu; you use it in the Terminal with: distrobox enter $DOOS")"

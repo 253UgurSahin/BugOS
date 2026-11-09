@@ -192,7 +192,7 @@ _n = sch.losse_openen([sch.Schijf(apparaat="/dev/sdb1", naam="Stick", soort="sti
 _log1 = (_ub / "log").read_text()
 _n2 = sch.losse_openen([sch.Schijf(apparaat="/dev/sdb1", naam="Stick", soort="stick", station="/dev/sdb", fs="vfat")])
 _log2 = (_ub / "log").read_text()
-sch.losse_openen([])   # eruit gehaald
+sch.losse_openen([sch.Schijf(apparaat="/dev/sda2", naam="D", soort="intern", station="/dev/sda", fs="ntfs")])   # eruit gehaald
 _n3 = sch.losse_openen([sch.Schijf(apparaat="/dev/sdb1", naam="Stick", soort="stick", station="/dev/sdb", fs="vfat")])
 os.environ["PATH"] = _oud_pad
 klopt(_n == 1 and _log1.split() == ["mount", "-b", "/dev/sdb1", "--no-user-interaction"],
@@ -200,6 +200,17 @@ klopt(_n == 1 and _log1.split() == ["mount", "-b", "/dev/sdb1", "--no-user-inter
 klopt(_n2 == 0 and _log2.count("mount") == 1,
       "U164: weer dicht ('Veilig verwijderen') of lukte openen niet: niet elke 3 seconden opnieuw openzetten")
 klopt(_n3 == 1, "U183: dezelfde stick eruit en weer erin (Back-up blijft open): hij gaat weer vanzelf open")
+# U200: open is de grootte anders (bestandssysteem) dan dicht (partitie): weer dichtgezet, dan niet opnieuw openen.
+_ub2 = (_ub / "log").read_text().count("mount")
+os.environ["PATH"] = f"{_ub}:{_oud_pad}"
+sch.losse_openen([sch.Schijf(apparaat="/dev/sdb1", naam="Stick", soort="stick", station="/dev/sdb", fs="vfat",
+                             wortel="/run/media/x/Stick", grootte=31_000)])   # nu open
+sch.losse_openen([])                                                           # lsblk gaf even niets
+sch.losse_openen([sch.Schijf(apparaat="/dev/sdb1", naam="Stick", soort="stick", station="/dev/sdb", fs="vfat",
+                             grootte=32_000)])                                 # zelf weer dichtgezet
+os.environ["PATH"] = _oud_pad
+klopt((_ub / "log").read_text().count("mount") == _ub2,
+      "U200: een stick die je zelf weer dichtzette, gaat niet opnieuw open (ook niet na een lege lsblk)")
 _sys = TMP / "sys-mmc"
 for _d, _t in (("mmcblk0", "MMC"), ("mmcblk1", "SD")):
     (_sys / "block" / _d / "device").mkdir(parents=True)

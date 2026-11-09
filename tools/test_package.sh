@@ -55,5 +55,12 @@ rm -f "$TMP/meldingen"
 installeer "$TMP/alleen-terminal.rpm"
 klopt 'grep -q "Terminal" "$TMP/meldingen" 2>/dev/null && ! grep -q "staat nu in je startmenu\|is now in your start menu" "$TMP/meldingen"' \
     "U195: zonder plek in het startmenu: zeggen dat je het in de Terminal gebruikt"
+# U198: mislukt de installatie (bijv. geen internet), dan niet 'Klaar' zeggen, ook niet zonder plek in het startmenu.
+nep dnf 'exit 1'
+nep kdialog 'echo "$*" >>"'"$TMP"'/fouten"; exit 0'
+rm -f "$TMP/meldingen" "$TMP/fouten"
+installeer "$TMP/kapot.rpm"
+klopt '! grep -q "Klaar\|Done" "$TMP/meldingen" 2>/dev/null && grep -q "niet gelukt\|did not work" "$TMP/fouten" 2>/dev/null' \
+    "U198: een mislukte installatie zegt dat het niet lukte (niet 'Klaar')"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

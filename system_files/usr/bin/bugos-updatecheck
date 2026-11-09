@@ -37,7 +37,8 @@ for _ in $(seq 24); do
 done
 # Lukt kijken niet? Zonder internet code 75: systemd probeert het een half uur later opnieuw. Met internet
 # (de bron is er niet, of de registry weigert) heeft opnieuw proberen geen zin: dan morgen weer (U192).
-if ! NIEUW="$(skopeo inspect --format '{{.Digest}}' "$BRON" 2>/dev/null)"; then
+# Met een tijdslimiet: zonder limiet op de dienst (U187) mag skopeo op een haperend netwerk niet eeuwig hangen (U202).
+if ! NIEUW="$(timeout 180 skopeo inspect --format '{{.Digest}}' "$BRON" 2>/dev/null)"; then
     [ "$(LC_ALL=C nmcli -t networking connectivity 2>/dev/null)" = full ] && exit 0
     exit 75
 fi

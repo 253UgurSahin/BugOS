@@ -1222,6 +1222,12 @@ if shutil.which("pdftoppm"):
     klopt(not _pv.isNull() and max(_pv.width(), _pv.height()) <= 256, f"U172: een PDF krijgt een eigen voorbeeldje ({_pv.width()}x{_pv.height()})")
     _uri, _naam, _cache = _tg._thumb_plek(str(_pdf))
     klopt((_cache / "large" / _naam).exists(), "U197: het voorbeeldje van een PDF wordt bewaard (de volgende keer niet opnieuw maken)")
+    klopt(stat.S_IMODE(os.stat(_cache / "large" / _naam).st_mode) == 0o600 and stat.S_IMODE(os.stat(_cache / "large").st_mode) == 0o700,
+          "U201: bewaarde voorbeeldjes zijn alleen voor jou (map 0700, bestand 0600)")
+_help_tekst = (ROOT / "system_files/usr/bin/bugos-help").read_text()
+klopt("else QApplication.quit())" in _help_tekst, "U199: Hulp sluiten tijdens een controle: het programma stopt echt (niet onzichtbaar door)")
+klopt("timeout 180 skopeo inspect" in (ROOT / "system_files/usr/bin/bugos-updatecheck").read_text(),
+      "U202: de updatecheck kan niet eeuwig op skopeo blijven hangen")
 
 # ========================== U173, U175-U177: Winkel en Windows-installaties ===
 _alt = (ROOT / "system_files/usr/share/bugos/alternatives.txt").read_text()

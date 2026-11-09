@@ -311,13 +311,17 @@ def losse_openen(lijst: list[Schijf] | None = None) -> int:
     en Overstap ze zien. KDE doet dat standaard niet (automount staat uit) (U139). Geeft hoeveel er opengingen."""
     lijst = schijven() if lijst is None else lijst
     # Een stick die eruit is gehaald en weer terugkomt, mag opnieuw (alleen wat er nog in zit, blijft 'geprobeerd') (U183).
-    _al_geprobeerd.intersection_update({(s.fs_apparaat or s.apparaat, s.grootte) for s in lijst})
+    # Alleen op het apparaat (niet de grootte: die is open de grootte van het bestandssysteem, dicht die van de
+    # partitie), en niet als lsblk even niets gaf (U200).
+    if lijst:
+        nog = {s.fs_apparaat or s.apparaat for s in lijst}
+        _al_geprobeerd.intersection_update({k for k in _al_geprobeerd if k in nog})
     gedaan = 0
     for s in lijst:
         if s.soort in ("stick", "extern", "kaart") and not s.wortel and not s.op_slot and not s.nieuw and s.fs:
             # Elke schijf maar één keer proberen: zette je hem zelf dicht ('Veilig verwijderen'), of lukt openen
             # niet (een kapotte stick), dan niet elke 3 seconden opnieuw (U164).
-            sleutel = (s.fs_apparaat or s.apparaat, s.grootte)
+            sleutel = s.fs_apparaat or s.apparaat
             if sleutel in _al_geprobeerd:
                 continue
             _al_geprobeerd.add(sleutel)
