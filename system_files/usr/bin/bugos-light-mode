@@ -57,7 +57,7 @@ aan() {
         printf 'baloo\taan\n' >>"$VOOR"
     fi
     # Animaties uit, doorzichtige/wazige effecten uit.
-    kwriteconfig6 --file kdeglobals --group KDE --key AnimationDurationFactor 0
+    kwriteconfig6 --file kdeglobals --group KDE --key AnimationDurationFactor --notify 0
     kwriteconfig6 --file kwinrc --group Plugins --key blurEnabled false
     kwriteconfig6 --file kwinrc --group Plugins --key contrastEnabled false
     kwriteconfig6 --file kwinrc --group Plugins --key slidingpopupsEnabled false
@@ -69,6 +69,8 @@ aan() {
 
 uit() {
     local regel bestand groep sleutel waarde baloo_was=aan
+    # Niets om terug te zetten (hij stond al uit): dan ook niets aan jouw instellingen veranderen (U127).
+    [ -f "$MARKER" ] || [ -f "$VOOR" ] || return 0
     if [ -f "$VOOR" ]; then
         # Precies terug naar hoe het was vóór de lichte stand (ook wat je zelf had ingesteld).
         while IFS=$'\t' read -r regel waarde; do
@@ -96,6 +98,13 @@ uit() {
     kwin_herladen
     rm -f "$MARKER" "$VOOR"
 }
+
+# Eén tegelijk: snel aan en weer uit (Instellingen, Welkom) liep anders door elkaar heen (U126).
+mkdir -p "$BUGOS_CONFIG"
+if [ "${1:-}" != status ]; then   # 'status' hoeft niet te wachten
+    exec 9>"$BUGOS_CONFIG/.lichte-stand.slot"
+    flock 9 2>/dev/null || true
+fi
 
 case "${1:-auto}" in
 auto)

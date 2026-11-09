@@ -93,8 +93,11 @@ niet_storen_uit() {
 niet_storen_status() {
     # De hele tijd vergelijken, niet alleen de dag: "1 uur niet storen" van vanochtend is vanavond voorbij (U071).
     # KDE schrijft "j,m,d,u,min,sec[.ms][,tijdzone]" of een ISO-tijd.
-    local tot tot_s nu_s j m d u mi s zone
-    tot="$(kreadconfig6 --file plasmanotifyrc --group DoNotDisturb --key Until 2>/dev/null)"
+    niet_storen_tot_status "$(kreadconfig6 --file plasmanotifyrc --group DoNotDisturb --key Until 2>/dev/null)"
+}
+# Zelfde, voor een 'tot'-waarde die je al hebt (bijv. bewaard door de game-modus).
+niet_storen_tot_status() {
+    local tot="$1" tot_s nu_s j m d u mi s zone
     if [ -z "$tot" ]; then
         echo uit
         return

@@ -96,6 +96,8 @@ aan() {
                 "Full power, notifications muted. The FPS counter in games appears after you log in again.")"
     fi
     niet_storen_status >"$STOREN_MARKER"
+    # Ook de echte eindtijd bewaren ('1 uur niet storen'): anders wordt dat na de game-modus 'voor altijd' (U124).
+    kreadconfig6 --file plasmanotifyrc --group DoNotDisturb --key Until >"$STOREN_MARKER.tot" 2>/dev/null
     niet_storen_aan
     if [ ! -f "$FPS_METEEN" ]; then
         printf 'MANGOHUD=1\n' >"$ENVFILE"
@@ -105,15 +107,27 @@ aan() {
 }
 
 uit() {
-    local vorig
+    local vorig tot
+    # Stond de game-modus al uit? Dan niets veranderen (geen stroomprofiel of 'niet storen' van jezelf weg) (U127).
+    [ -f "$MARKER" ] || return 0
     vorig="$(cat "$BUGOS_CONFIG/stroomprofiel-voor-spelmodus" 2>/dev/null)"
     [ -n "$vorig" ] || vorig=balanced
     stroomprofiel_zet "$vorig"
     # Niet storen alleen uitzetten als het door de game-modus aan is gegaan.
     if [ "$(cat "$STOREN_MARKER" 2>/dev/null)" != aan ]; then
         niet_storen_uit
+    else
+        # Het stond al aan: terug naar de eindtijd van toen (die van de game-modus was 'voor altijd') (U124).
+        tot="$(cat "$STOREN_MARKER.tot" 2>/dev/null)"
+        if [ -n "$tot" ] && [ "$tot" != "$NIET_STOREN_TOT" ]; then
+            if [ "$(niet_storen_tot_status "$tot")" = aan ]; then
+                kwriteconfig6 --file plasmanotifyrc --group DoNotDisturb --key Until --notify "$tot" 2>/dev/null
+            else
+                niet_storen_uit   # die tijd is intussen voorbij
+            fi
+        fi
     fi
-    rm -f "$ENVFILE" "$MARKER" "$STOREN_MARKER"
+    rm -f "$ENVFILE" "$MARKER" "$STOREN_MARKER" "$STOREN_MARKER.tot"
     if fps_meteen_actief; then
         # Deze sessie leest ons MangoHud-bestand: verbergen, en de teller is meteen weg (ook in een game die draait).
         mangohud_bestand verborgen
@@ -133,6 +147,13 @@ uit() {
         melding "$(t "Game-modus staat uit" "Game mode is off")" ""
     fi
 }
+
+# Eén tegelijk (snel aan en uit in Instellingen) (U126).
+mkdir -p "$BUGOS_CONFIG"
+if [ "${1:-}" != status ]; then   # 'status' hoeft niet te wachten
+    exec 9>"$BUGOS_CONFIG/.spelmodus.slot"
+    flock 9 2>/dev/null || true
+fi
 
 case "${1:-wissel}" in
 aan) aan ;;

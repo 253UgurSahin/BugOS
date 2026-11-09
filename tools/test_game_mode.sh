@@ -39,5 +39,22 @@ else
     klopt '[ "$(cat "$TMP/profiel")" = power-saver ]' "zonder powerprofilesctl: uit zet het profiel van daarvoor terug (power-saver)"
 fi
 
+# U124: 'niet storen' voor 1 uur, dan game-modus aan en uit: weer 'tot over een uur', niet 'voor altijd'.
+# U127: game-modus uit terwijl hij al uit stond: niets veranderen.
+nep kreadconfig6 'cat "'"$TMP"'/until" 2>/dev/null'
+nep kwriteconfig6 'if [[ " $* " == *" --delete "* ]]; then rm -f "'"$TMP"'/until"; else echo "${!#}" >"'"$TMP"'/until"; fi'
+nep powerprofilesctl 'case "$1" in get) cat "'"$TMP"'/profiel";; set) echo "$2" >"'"$TMP"'/profiel";; esac'
+straks="$(date -d "+1 hour" +%Y,%-m,%-d,%-H,%-M,0)"
+echo "$straks" >"$TMP/until"
+echo balanced >"$TMP/profiel"
+draai aan
+klopt '[ "$(cat "$TMP/until")" = "2999,12,31,0,0,0" ]' "U124: tijdens game-modus: niet storen 'voor altijd'"
+draai uit
+klopt '[ "$(cat "$TMP/until")" = "$straks" ]' "U124: na game-modus: weer 'niet storen tot over een uur' ($(cat "$TMP/until"))"
+echo power-saver >"$TMP/profiel"
+echo "$straks" >"$TMP/until"
+draai uit
+klopt '[ "$(cat "$TMP/profiel")" = power-saver ] && [ "$(cat "$TMP/until")" = "$straks" ]' \
+    "U127: game-modus uit terwijl hij al uit stond: stroomprofiel en 'niet storen' blijven van jou"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

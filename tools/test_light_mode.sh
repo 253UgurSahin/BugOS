@@ -17,7 +17,7 @@ sed "s|/usr/share/bugos|$ROOT/system_files/usr/share/bugos|g" "$ROOT/system_file
 # Nep-KDE-instellingen: één bestand per bestand/groep/sleutel.
 K="$TMP/kde"
 nep kreadconfig6 'f="'"$K"'/$2.$4.$6"; [ -f "$f" ] && cat "$f"; exit 0'
-nep kwriteconfig6 'f="'"$K"'/$2.$4.$6"; if [ "$7" = --delete ]; then rm -f "$f"; else printf "%s" "$7" >"$f"; fi'
+nep kwriteconfig6 'f="'"$K"'/$2.$4.$6"; if [[ " $* " == *" --delete "* ]]; then rm -f "$f"; else printf "%s" "${!#}" >"$f"; fi'
 # Nep-zoeker: de gebruiker had hem zelf uitgezet.
 # Zoals de echte balooctl6: 'status' zegt "uit" op stderr (vertaald) met code 1; de keuze staat in baloofilerc.
 mkdir -p "$K"
@@ -42,6 +42,12 @@ printf true >"$K/baloofilerc.Basic Settings.Indexing-Enabled"
 draai aan
 draai uit
 klopt '[ "$(cat "$K/baloofilerc.Basic Settings.Indexing-Enabled")" = true ]' "uit: stond de zoeker aan, dan komt hij weer aan"
+
+# U127: uit terwijl hij al uit stond: niets aan jouw instellingen veranderen.
+printf "0.5" >"$K/kdeglobals.KDE.AnimationDurationFactor"
+draai uit
+klopt '[ "$(cat "$K/kdeglobals.KDE.AnimationDurationFactor" 2>/dev/null)" = 0.5 ]' \
+    "U127: lichte stand uit terwijl hij al uit stond: je eigen animatie-instelling blijft"
 
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
