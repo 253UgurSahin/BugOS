@@ -459,6 +459,30 @@ else:
     (_xdg / "user-dirs.dirs").write_text(_oud_dirs)
 klopt(_gevraagd == [str(_echte)], f"U114: 'Eigen foto kiezen' begint in de map Afbeeldingen van de gebruiker ({_gevraagd})")
 
+# U126: Updates en meer: een schakelaar gaat op slot tijdens het omzetten en leest daarna wat er echt staat
+# (lukt het niet, bijv. offline, dan springt hij terug).
+_nep_ls = TMP / "nep-lichte-stand"
+_nep_ls.mkdir()
+(_nep_ls / "bugos-light-mode").write_text("#!/usr/bin/bash\n[ \"$1\" = status ] && { echo uit; exit 0; }\nsleep 0.3; exit 1\n")
+(_nep_ls / "bugos-light-mode").chmod(0o755)
+_oud_path = os.environ["PATH"]
+os.environ["PATH"] = f"{_nep_ls}:{_oud_path}"
+bi.VOORBEELD = False
+_up = _sys.UpdatesPagina(venster)
+_sch = _up.schakels[("bugos-light-mode", ())]
+_sch.setChecked(True)
+_op_slot = not _sch.isEnabled()
+for _ in range(60):
+    wacht()
+    if _sch.isEnabled():
+        break
+    time.sleep(0.1)
+bi.VOORBEELD = True
+os.environ["PATH"] = _oud_path
+klopt(_op_slot and _sch.isEnabled() and not _sch.isChecked(),
+      "U126: lichte stand aanzetten lukt niet: de schakelaar was op slot en springt daarna terug naar uit")
+_up.deleteLater()
+
 # U010: wie geen beheerder is, verandert zijn eigen wachtwoord via passwd (PAM), in een nep-terminal;
 # geen wachtwoord op de opdrachtregel, en geen vraag om het wachtwoord van een beheerder.
 nep_pw = TMP / "nep-pw"
