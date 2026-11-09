@@ -404,7 +404,7 @@ def venster() -> int:
 
 
 def als_tekst(uitslagen: list[Uitslag]) -> str:
-    regels = ["BugOS hulp-uitslag"]
+    regels = [t("BugOS hulp-uitslag", "BugOS help report")]
     try:
         regels.append(Path("/usr/share/bugos/image-info.json").read_text().strip())
     except OSError:

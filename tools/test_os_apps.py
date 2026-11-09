@@ -1091,6 +1091,14 @@ _laag = [(v, a, round(_contrast(_L[v], _L[a]), 2)) for v in ("tekst2", "tekst3",
          for a in ("achter", "vlak") if _contrast(_L[v], _L[a]) < 4.5]
 klopt(not _laag, f"U137: kleine tekst in het lichte thema haalt 4,5:1 ({_laag})")
 
+# ========================== U138: taalrestjes: de Hulp-uitslag, 'rustig verstuurd', dezelfde woorden voor afmelden ===
+_help = (ROOT / "system_files/usr/bin/bugos-help").read_text()
+_tm = (ROOT / "system_files/usr/bin/bugos-task-manager").read_text()
+_sm = (ROOT / "system_files/usr/share/plasma/plasmoids/org.bugos.startmenu/contents/ui/StartMenu.qml").read_text()
+klopt('t("BugOS hulp-uitslag", "BugOS help report")' in _help and "niets verstuurd" in _tm
+      and 'menu.tr("Afmelden", "Log out")' in _sm and 'menu.tr("Opnieuw opstarten", "Restart")' in _sm,
+      "U138: Hulp-uitslag ook in het Engels, geen 'rustig verstuurd', startmenu zegt Afmelden/Opnieuw opstarten zoals het uitzetscherm")
+
 # ========================== U067: 'Grote letters' maakt ook de letters van de BugOS-apps groter ===
 from PySide6.QtGui import QFont  # noqa: E402
 

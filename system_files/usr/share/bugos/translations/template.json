@@ -50,6 +50,7 @@
   "BugOS Welcome": "",
   "BugOS asks for your password…": "",
   "BugOS collects nothing about you.": "",
+  "BugOS help report": "",
   "BugOS is already up to date.": "",
   "BugOS is checking everything. This only takes a few seconds.": "",
   "BugOS is ready. Click the ladybug at the bottom left to find your apps.": "",
@@ -578,5 +579,6 @@
   "something with the same name in other capitals is already there, and this drive sees them as the same": "",
   "the drive is full": "",
   "the drive stopped responding (was it unplugged?)": "",
-  "the name has a character this drive does not allow (like : ? * or \")": ""
+  "the name has a character this drive does not allow (like : ? * or \")": "",
+  "↑ nothing sent": ""
 }

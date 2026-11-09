@@ -271,7 +271,8 @@ class Taakbeheer(Venster):
         self.kaart_schijf.zet(bt.snelheid(m["schijf"]), t(f"{m['schijf_bezig']:.0f}% van de tijd bezig",
                                                           f"busy {m['schijf_bezig']:.0f}% of the time"), m["schijf"])
         self.kaart_internet.zet(f"↓ {bt.snelheid(m['binnen'])}",
-                                t(f"↑ {bt.snelheid(m['buiten'])} verstuurd", f"↑ {bt.snelheid(m['buiten'])} sent"),
+                                t(f"↑ {bt.snelheid(m['buiten'])} verstuurd", f"↑ {bt.snelheid(m['buiten'])} sent")
+                                if m["buiten"] >= 1000 else t("↑ niets verstuurd", "↑ nothing sent"),   # niet 'rustig verstuurd
                                 m["binnen"] + m["buiten"])
         if m.get("videokaart") is not None:
             self.kaart_video.show()

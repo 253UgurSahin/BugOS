@@ -369,8 +369,8 @@ Rectangle {
             }
             OnderKnop { icoon: "configure"; tekst: menu.tr("Instellingen", "Settings"); onGeklikt: { menu.start("/usr/share/applications/bugos-settings.desktop"); menu.sluiten() } }
             OnderKnop { icoon: "system-lock-screen"; tekst: menu.tr("Vergrendelen", "Lock"); onGeklikt: { menu.aanUit("slot"); menu.sluiten() } }
-            OnderKnop { icoon: "system-log-out"; tekst: menu.tr("Uitloggen", "Log out"); onGeklikt: { menu.aanUit("uitloggen"); menu.sluiten() } }
-            OnderKnop { icoon: "system-reboot"; tekst: menu.tr("Herstarten", "Restart"); onGeklikt: { menu.aanUit("herstarten"); menu.sluiten() } }
+            OnderKnop { icoon: "system-log-out"; tekst: menu.tr("Afmelden", "Log out"); onGeklikt: { menu.aanUit("uitloggen"); menu.sluiten() } }
+            OnderKnop { icoon: "system-reboot"; tekst: menu.tr("Opnieuw opstarten", "Restart"); onGeklikt: { menu.aanUit("herstarten"); menu.sluiten() } }
             OnderKnop { icoon: "system-shutdown"; tekst: menu.tr("Uitzetten", "Shut down"); rood: true; onGeklikt: { menu.aanUit("uitzetten"); menu.sluiten() } }
         }
     }
