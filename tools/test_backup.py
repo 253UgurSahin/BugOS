@@ -135,5 +135,22 @@ schrijf(oud_stijl / "Music" / "lied.mp3", b"m")
 klopt([c[-1].rstrip("/") for c in bb.terug_opdrachten(oud_stijl, THUIS)] == [str(THUIS / "Music")],
       "terugzetten: een back-up zonder lijstje werkt ook (Engelse namen)")
 
+# U078/U079: een stick die eruit is (rsync geeft dan ook 23) en een volle schijf zijn geen "een paar bestanden".
+import subprocess  # noqa: E402
+
+_weg = TMP / "stick-eruit" / "Documents"
+_naar = TMP / "ergens"
+_naar.mkdir()
+_r = subprocess.run(["rsync", "-a", f"{_weg}/", f"{_naar}/"], capture_output=True, text=True)
+for _mod, _naam in ((bb, "Back-up"), (bo, "Overstap")):
+    klopt(_r.returncode == 23 and _mod.uitslag(_r.returncode, ["rsync", "-a", f"{_weg}/", f"{_naar}/"], _r.stderr) == "weg",
+          f"U078: {_naam}: bronmap weg (stick eruit) geeft geen 'een paar bestanden konden niet mee'")
+    _bron = THUIS
+    klopt(_mod.uitslag(11, ["rsync", f"{_bron}/", f"{_naar}/"], "rsync: write failed: No space left on device (28)")
+          == "vol" and _mod.uitslag(23, ["rsync", f"{_bron}/", f"{_naar}/"]) == "deels"
+          and _mod.uitslag(24, ["rsync", f"{_bron}/", f"{_naar}/"]) == "goed"
+          and _mod.uitslag(12, ["rsync", f"{_bron}/", f"{_naar}/"]) == "fout",
+          f"U079: {_naam}: een volle schijf heet 'vol', 23 met de bron er nog is 'deels'")
+
 print(f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)

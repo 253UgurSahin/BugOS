@@ -233,6 +233,18 @@ def laatste_backup() -> str:
 # FAT32-stick). Bij 23 gaan we gewoon door met de volgende mappen en zeggen we het erbij.
 GOED, DEELS = (0, 24), (23,)
 
+
+def uitslag(code: int, cmd: list[str], uitvoer: str = "") -> str:
+    """'goed', 'deels', 'vol' of 'weg' (de schijf of map waar het vandaan komt is er niet meer) of 'fout'.
+    rsync geeft ook 23 als de bronmap verdwenen is (stick eruit): dat is niet 'een paar bestanden' (U078)."""
+    if code not in GOED and "No space left on device" in uitvoer:
+        return "vol"
+    if code in GOED:
+        return "goed"
+    if not Path(cmd[-2]).exists():
+        return "weg"
+    return "deels" if code in DEELS else "fout"
+
 DEELS_UITLEG = t("Een paar bestanden konden niet mee: {mappen}. Dat komt meestal door een naam met : ? * of \", "
                  "een bestand groter dan 4 GB op een FAT32-schijf, of twee namen die alleen in hoofdletters "
                  "verschillen (zo'n schijf ziet dat als hetzelfde). De rest staat er wel.",
@@ -249,11 +261,16 @@ def zonder_venster(schijf: Path) -> int:
     dubbel = dubbel_op_schijf(schijf, mappen, doel)
     deels = [m.name for m in dubbel]
     for m in mappen:
-        code = subprocess.call(rsync_maak(m, doel, dubbel.get(m, ())))
-        if code in DEELS:
+        cmd = rsync_maak(m, doel, dubbel.get(m, ()))
+        r = subprocess.run(cmd, stderr=subprocess.PIPE, text=True, errors="replace")
+        sys.stderr.write(r.stderr)
+        soort = uitslag(r.returncode, cmd, r.stderr)
+        if soort == "deels":
             if m.name not in deels:
                 deels.append(m.name)
-        elif code not in GOED:
+        elif soort != "goed":
+            if soort == "vol":
+                print(t("De schijf is vol.", "The drive is full."), file=sys.stderr)
             return 1
     if subprocess.call(wegschrijven(doel)) != 0:
         return 1
@@ -405,6 +422,7 @@ def venster() -> int:
                 self.klaar()
                 return
             cmd = self.nu = self.wachtrij.pop(0)
+            self.uitvoer = ""
             if cmd[0] == "sync":
                 self.melding.zet(t("Bezig met wegschrijven… Haal de schijf er nog niet uit.",
                                    "Writing to the drive… Do not unplug it yet."), "bezig")
@@ -412,6 +430,7 @@ def venster() -> int:
 
         def lees(self) -> None:
             tekst = bytes(self.proces.readAllStandardOutput()).decode(errors="ignore")
+            self.uitvoer = (self.uitvoer + tekst)[-8000:]   # voor 'schijf vol' (U079)
             for stuk in tekst.replace("\r", "\n").split():
                 if stuk.endswith("%") and stuk[:-1].isdigit():
                     self.balk.setValue(int(stuk[:-1]))
@@ -421,12 +440,20 @@ def venster() -> int:
                 self.wachtrij.clear()
                 self.stop(False)
                 return
-            if code in DEELS:
+            soort = uitslag(code, self.nu, getattr(self, "uitvoer", ""))
+            if soort == "deels":
                 naam = Path(self.nu[-2].rstrip("/")).name or "~"
                 if naam not in self.deels:
                     self.deels.append(naam)
-            elif code not in GOED:
-                self.melding.zet(t("Het lukte niet helemaal. Zit de schijf er nog in? Probeer het opnieuw.",
+            elif soort != "goed":
+                maak = self.stand.get("klus") == "maak"
+                self.melding.zet((t("De schijf is vol. Kies een grotere schijf, of maak er ruimte op.",
+                                    "The drive is full. Choose a bigger drive, or make room on it.") if maak else
+                                  t("Je computer is vol. Maak eerst ruimte (bijv. de prullenbak leegmaken in "
+                                    "Bestanden) en probeer het dan opnieuw.",
+                                    "Your computer is full. Make room first (for example empty the trash in Files) "
+                                    "and try again.")) if soort == "vol" else
+                                 t("Het lukte niet helemaal. Zit de schijf er nog in? Probeer het opnieuw.",
                                    "It did not fully work. Is the drive still plugged in? Try again."), "fout")
                 self.wachtrij.clear()
                 self.sluit_na = False  # ook na 'Eerst afmaken': de foutmelding moet je kunnen zien

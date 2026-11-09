@@ -195,6 +195,18 @@ def afronden(bron: Path) -> list[str]:
 GOED, DEELS = (0, 24), (23,)
 
 
+def uitslag(code: int, cmd: list[str], uitvoer: str = "") -> str:
+    """'goed', 'deels', 'vol' of 'weg' (de schijf of map waar het vandaan komt is er niet meer) of 'fout'.
+    rsync geeft ook 23 als de bronmap verdwenen is (stick eruit): dat is niet 'een paar bestanden' (U078)."""
+    if code not in GOED and "No space left on device" in uitvoer:
+        return "vol"
+    if code in GOED:
+        return "goed"
+    if not Path(cmd[-2]).exists():
+        return "weg"
+    return "deels" if code in DEELS else "fout"
+
+
 def deels_uitleg(mappen: list[str]) -> str:
     return t(f"Een paar bestanden uit {', '.join(mappen)} konden niet mee. De rest staat er wel.",
              f"A few files from {', '.join(mappen)} could not be copied. Everything else is there.")
@@ -203,10 +215,14 @@ def deels_uitleg(mappen: list[str]) -> str:
 def zonder_venster(bron: Path) -> int:
     deels = []
     for _, cmd in stappen(bron):
-        code = subprocess.call(cmd, stdout=subprocess.DEVNULL)
-        if code in DEELS:
+        r = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, errors="replace")
+        sys.stderr.write(r.stderr)
+        soort = uitslag(r.returncode, cmd, r.stderr)
+        if soort == "deels":
             deels.append(Path(cmd[-2].rstrip("/")).name)
-        elif code not in GOED:
+        elif soort != "goed":
+            if soort == "vol":
+                print(t("Je computer is vol.", "Your computer is full."), file=sys.stderr)
             return 1
     for regel in afronden(bron):
         print(regel)
@@ -335,12 +351,15 @@ def venster() -> int:
                 return
             tekst, cmd = self.wachtrij.pop(0)
             self.nu = cmd
+            self.uitvoer = ""
             self.melding.zet(tekst, "bezig")
             self.balk.setValue(0)
             self.proces.start(cmd[0], cmd[1:])
 
         def lees(self) -> None:
-            for stuk in bytes(self.proces.readAllStandardOutput()).decode(errors="ignore").replace("\r", "\n").split():
+            tekst = bytes(self.proces.readAllStandardOutput()).decode(errors="ignore")
+            self.uitvoer = (self.uitvoer + tekst)[-8000:]   # voor 'schijf vol' (U079)
+            for stuk in tekst.replace("\r", "\n").split():
                 if stuk.endswith("%") and stuk[:-1].isdigit():
                     self.balk.setValue(int(stuk[:-1]))
 
@@ -349,10 +368,15 @@ def venster() -> int:
                 self.wachtrij.clear()
                 self.vrij()
                 return
-            if code in DEELS:
+            soort = uitslag(code, self.nu, getattr(self, "uitvoer", ""))
+            if soort == "deels":
                 self.deels.append(Path(self.nu[-2].rstrip("/")).name)
-            elif code not in GOED:
-                self.melding.zet(t("Het lukte niet helemaal. Zit de schijf er nog in? Probeer het opnieuw.",
+            elif soort != "goed":
+                self.melding.zet(t("Je computer is vol. Maak eerst ruimte (bijv. de prullenbak leegmaken in Bestanden) "
+                                   "en probeer het dan opnieuw: wat er al staat, wordt niet opnieuw gekopieerd.",
+                                   "Your computer is full. Make room first (for example empty the trash in Files) "
+                                   "and try again: what is already there is not copied again.") if soort == "vol" else
+                                 t("Het lukte niet helemaal. Zit de schijf er nog in? Probeer het opnieuw.",
                                    "It did not fully work. Is the drive still plugged in? Try again."), "fout")
                 self.wachtrij.clear()
                 self.sluit_na = False  # ook na 'Eerst afmaken': de foutmelding moet je kunnen zien
