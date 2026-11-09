@@ -43,6 +43,10 @@ MAPPEN = [
 
 def gebruikersmap(xdg: str, standaard: str) -> Path:
     """Vraag aan het systeem waar bijvoorbeeld 'Afbeeldingen' staat."""
+    # Alleen de vaste soorten: de naam gaat naar xdg-user-dir (een sh-script), en kan uit een bestand op een
+    # stick van iemand anders komen (U097).
+    if xdg not in {"DOCUMENTS", "PICTURES", "MUSIC", "VIDEOS", "DESKTOP", "DOWNLOAD"}:
+        return Path.home() / standaard
     try:
         uit = subprocess.run(["xdg-user-dir", xdg], capture_output=True, text=True, timeout=5).stdout.strip()
         if uit and Path(uit) != Path.home():
@@ -75,7 +79,12 @@ def terug_opdrachten(bron: Path, thuis: Path) -> list[list[str]]:
         lijstje = json.loads((bron / LIJSTJE).read_text())
     except (OSError, ValueError):
         lijstje = {}
-    soort_van = {naam: xdg for xdg, naam in lijstje.items()}
+    # Het lijstje staat op de stick: alleen de bekende soorten met een gewone mapnaam gebruiken (U097).
+    soorten = {x for x, _s in MAPPEN}
+    if not isinstance(lijstje, dict):
+        lijstje = {}
+    soort_van = {naam: xdg for xdg, naam in lijstje.items()
+                 if xdg in soorten and isinstance(naam, str) and naam and "/" not in naam and naam not in (".", "..")}
     soort_van.update({s: x for x, s in MAPPEN if s not in soort_van})  # oude back-ups: de Engelse namen
     opdrachten = []
     try:
@@ -83,6 +92,8 @@ def terug_opdrachten(bron: Path, thuis: Path) -> list[list[str]]:
     except OSError:
         return []
     for m in mappen:
+        if m.name.startswith("."):
+            continue   # verborgen mappen (bijv. .config) maakt de back-up niet; die zetten we ook niet terug (U097)
         xdg = soort_van.get(m.name)
         standaard = next((s for x, s in MAPPEN if x == xdg), m.name)
         naar = gebruikersmap(xdg, standaard) if xdg else thuis / m.name

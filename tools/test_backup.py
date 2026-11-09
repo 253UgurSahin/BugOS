@@ -152,5 +152,22 @@ for _mod, _naam in ((bb, "Back-up"), (bo, "Overstap")):
           and _mod.uitslag(12, ["rsync", f"{_bron}/", f"{_naar}/"]) == "fout",
           f"U079: {_naam}: een volle schijf heet 'vol', 23 met de bron er nog is 'deels'")
 
+# U097: het lijstje op de stick bepaalt niet welke opdracht er draait: alleen de vaste soorten tellen.
+_gevraagd: list = []
+_echt_run = bb.subprocess.run
+bb.subprocess.run = lambda cmd, *a, **k: (_gevraagd.append(cmd), _echt_run(["true"], *a, **k))[1] \
+    if cmd and cmd[0] == "xdg-user-dir" else _echt_run(cmd, *a, **k)
+_stick = TMP / "vreemde-stick"
+(_stick / "Fotos").mkdir(parents=True)
+(_stick / ".config").mkdir()
+(_stick / bb.LIJSTJE).write_text(json.dumps({"ONBEKEND x": "Fotos", "PICTURES": "../weg"}))
+_opdr = bb.terug_opdrachten(_stick, THUIS)
+(_stick / bb.LIJSTJE).write_text("[1, 2]")
+_lijst_ok = isinstance(bb.terug_opdrachten(_stick, THUIS), list)
+bb.subprocess.run = _echt_run
+klopt(all(c[1] in {x for x, _s in bb.MAPPEN} for c in _gevraagd) and _lijst_ok
+      and not any(".config" in " ".join(o) for o in _opdr),
+      f"U097: terugzetten vraagt xdg-user-dir alleen naar vaste soorten, slaat verborgen mappen over ({_gevraagd})")
+
 print(f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)

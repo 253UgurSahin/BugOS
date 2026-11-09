@@ -41,6 +41,10 @@ KOPPELING = {
 
 
 def gebruikersmap(xdg: str, standaard: str) -> Path:
+    # Alleen de vaste soorten: de naam gaat naar xdg-user-dir (een sh-script), en kan uit een bestand op een
+    # stick van iemand anders komen (U097).
+    if xdg not in {"DOCUMENTS", "PICTURES", "MUSIC", "VIDEOS", "DESKTOP", "DOWNLOAD"}:
+        return Path.home() / standaard
     try:
         uit = subprocess.run(["xdg-user-dir", xdg], capture_output=True, text=True, timeout=5).stdout.strip()
         if uit and Path(uit) != Path.home():
