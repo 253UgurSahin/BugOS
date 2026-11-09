@@ -14,6 +14,9 @@
 . /usr/share/bugos/lib.sh
 
 CONF=/etc/bugos/updates.conf
+# De keuze staat óók in /var: dat delen alle versies. /etc heeft elke versie apart, dus na 'terug naar de vorige
+# versie' zag die oudere versie anders nog 'vanzelf' en zette de nieuwe meteen weer klaar (U300).
+KEUZE=/var/lib/bugos/updates.conf
 # Iedereen moet de keuze kunnen lezen (bugos-updatecheck, Instellingen), ook als de beheerder umask 077 heeft (U247).
 umask 022
 
@@ -28,6 +31,20 @@ gebruiker_timer() {
     systemctl --global "$1" "$GEBRUIKER_TIMER" >/dev/null 2>&1 || true
 }
 
+zet_keuze() {
+    mkdir -p /etc/bugos /var/lib/bugos
+    echo "UPDATES=$1" >"$CONF"
+    echo "UPDATES=$1" >"$KEUZE"
+}
+
+lees_keuze() {
+    local UPDATES=auto bestand="$CONF"
+    [ -f "$KEUZE" ] && bestand="$KEUZE"
+    # shellcheck source=/dev/null
+    [ -f "$bestand" ] && . "$bestand"
+    echo "${UPDATES:-auto}"
+}
+
 als_beheerder() {
     if [ "$(id -u)" -ne 0 ]; then
         # Altijd het echte programma: niet een gelijknamig bestand ergens anders op je PATH (U246).
@@ -38,16 +55,14 @@ als_beheerder() {
 case "${1:-status}" in
 auto)
     als_beheerder "$@"
-    mkdir -p /etc/bugos
-    echo "UPDATES=auto" >"$CONF"
+    zet_keuze auto
     systemctl enable --now "${TIMERS[@]}"
     gebruiker_timer unmask
     t "Updates gaan nu vanzelf." "Updates are now automatic."
     ;;
 hand)
     als_beheerder "$@"
-    mkdir -p /etc/bugos
-    echo "UPDATES=hand" >"$CONF"
+    zet_keuze hand
     systemctl disable --now "${TIMERS[@]}"
     gebruiker_timer mask   # (gaat in bij de volgende keer inloggen)
     # bugos-updatecheck meldt een nieuwe versie; bijwerken gaat via die melding of Instellingen > Updates en meer (U238).
@@ -103,12 +118,9 @@ terug)
     rpm-ostree rollback || exit 1
     # Gaan updates vanzelf, dan zou BugOS de nieuwe versie (waar je net vanaf wilde) meteen weer klaarzetten.
     # Daarom zetten we ze uit, en zeggen dat.
-    MODUS=auto
-    # shellcheck source=/dev/null
-    [ -f "$CONF" ] && . "$CONF" && MODUS="${UPDATES:-auto}"
+    MODUS="$(lees_keuze)"
     if [ "$MODUS" = auto ]; then
-        mkdir -p /etc/bugos
-        echo "UPDATES=hand" >"$CONF"
+        zet_keuze hand   # ook in /var, zodat de oudere versie het ziet (U300)
         systemctl disable --now "${TIMERS[@]}"
         gebruiker_timer mask
         t "Klaar. Start de computer opnieuw op om terug te gaan. Updates gaan nu niet meer vanzelf, anders komt de nieuwe versie terug; zet ze weer aan in Instellingen als het mag." \
@@ -118,13 +130,15 @@ terug)
     fi
     ;;
 status)
-    MODUS=auto
-    # shellcheck source=/dev/null
-    [ -f "$CONF" ] && . "$CONF" && MODUS="${UPDATES:-auto}"
-    echo "$MODUS"
+    lees_keuze
+    ;;
+mag-vanzelf)
+    # Voor de update-diensten (ExecCondition): alleen bij 'vanzelf' bijwerken. Zo is deze ene keuze de baas,
+    # wat er na een update of 'terug' ook aan timers aan staat (U300, U301).
+    [ "$(lees_keuze)" = auto ]
     ;;
 *)
-    echo "Gebruik: bugos-updates auto|hand|status|nu|terug" >&2
+    echo "Gebruik: bugos-updates auto|hand|status|nu|terug|mag-vanzelf" >&2
     exit 2
     ;;
 esac

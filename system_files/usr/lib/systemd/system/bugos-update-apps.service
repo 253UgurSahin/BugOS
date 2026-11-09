@@ -14,6 +14,9 @@ IOSchedulingClass=idle
 # 3 (vermoedelijk ja). Dan slaan we deze keer over, zoals de systeem-update ook doet (U089).
 # (systemd vervangt $naam zelf: daarom $$m, dan krijgt bash $m.)
 ExecCondition=/bin/bash -c 'm="$(busctl get-property org.freedesktop.NetworkManager /org/freedesktop/NetworkManager org.freedesktop.NetworkManager Metered 2>/dev/null | cut -c 3-)"; [ "$$m" != 1 ] && [ "$$m" != 3 ]'
+# Alleen als je 'Updates vanzelf' koos: ook als er na een update (een hernoemde timer) of 'terug naar de vorige
+# versie' toch een timer aan staat (U300, U301).
+ExecCondition=/usr/bin/bugos-updates mag-vanzelf
 ExecStart=/usr/bin/flatpak update --system --noninteractive --assumeyes
 ExecStartPost=-/usr/bin/flatpak uninstall --system --unused --noninteractive --assumeyes
 # Nieuwe apps (of een nieuwe KDE-versie) krijgen ook de BugOS-stijl.

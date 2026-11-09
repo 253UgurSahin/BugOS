@@ -51,7 +51,7 @@ klopt '[ $code -eq 0 ] && grep -q Done "$TMP/uit"' "updates terug: rollback gelu
 # U033/U034: "terug" zet automatische updates uit (anders komt de nieuwe versie terug), en twee keer
 # "terug" gaat niet weer vooruit.
 sed -e "s|/usr/share/bugos|$ROOT/system_files/usr/share/bugos|g" -e "s|/etc/bugos|$TMP/etc-bugos|g" \
-    "$BIN/bugos-updates" >"$TMP/bugos-updates"
+    -e "s|/var/lib/bugos|$TMP/var-bugos|g" "$BIN/bugos-updates" >"$TMP/bugos-updates"
 mkdir -p "$TMP/etc-bugos"
 echo UPDATES=auto >"$TMP/etc-bugos/updates.conf"
 nep systemctl 'echo "$*" >>"'"$TMP"'/systemctl"'
@@ -62,6 +62,16 @@ draai bugos-updates terug
 klopt '[ $code -eq 0 ] && [ -f "$TMP/rollback" ] && grep -qx UPDATES=hand "$TMP/etc-bugos/updates.conf" && grep -q "disable --now rpm-ostreed-automatic.timer" "$TMP/systemctl"' \
     "updates terug (vanzelf): teruggezet, en updates gaan niet meer vanzelf"
 klopt 'grep -q "no longer automatic" "$TMP/uit"' "updates terug (vanzelf): zegt dat updates nu uit staan"
+# U300: elke versie heeft een eigen /etc; de keuze moet ook in /var staan, dat alle versies delen. Na het
+# opnieuw opstarten in de oudere versie (die /etc zegt nog 'auto') werkt hij dan niet vanzelf bij.
+klopt 'grep -qx UPDATES=hand "$TMP/var-bugos/updates.conf"' "U300: 'terug' zet 'zelf updaten' ook in /var (gedeeld door alle versies)"
+echo UPDATES=auto >"$TMP/etc-bugos/updates.conf"   # zoals de /etc van de oudere versie
+draai bugos-updates mag-vanzelf
+klopt '[ $code -ne 0 ]' "U300: de oudere versie (met 'auto' in zijn eigen /etc) werkt toch niet vanzelf bij"
+for f in system/bugos-update-apps.service system/rpm-ostreed-automatic.service.d/50-bugos-keuze.conf user/flatpak-user-update.service.d/50-bugos-keuze.conf; do
+    klopt 'grep -q "^ExecCondition=/usr/bin/bugos-updates mag-vanzelf" "$ROOT/system_files/usr/lib/systemd/'"$f"'"' "U300/U301: $f werkt alleen bij 'Updates vanzelf'"
+done
+rm -f "$TMP/var-bugos/updates.conf"
 printf '{"deployments":[{"booted":false,"timestamp":1000},{"booted":true,"timestamp":2000}]}' >"$TMP/status.json"
 rm -f "$TMP/rollback"
 draai bugos-updates terug
@@ -403,7 +413,7 @@ klopt '[ "$(dnd 2999,12,31,0,0,0)" = aan ] && [ "$(dnd "")" = uit ] && [ "$(dnd 
     "U071: spelmodus (2999), leeg, onzin en ISO-tijd"
 # U089: app-updates niet over een verbinding met een databundel (Metered 1 of 3); anders wel, ook zonder NetworkManager.
 # Zoals systemd hem draait: $$ wordt $.
-voorwaarde="$(sed -n 's/^ExecCondition=//p' "$ROOT/system_files/usr/lib/systemd/system/bugos-update-apps.service")"
+voorwaarde="$(sed -n 's|^ExecCondition=\(/bin/bash .*\)|\1|p' "$ROOT/system_files/usr/lib/systemd/system/bugos-update-apps.service")"   # de Metered-regel
 voorwaarde="${voorwaarde//\$\$/\$}"
 gemeten() { nep busctl "$1"; PATH="$TMP/bin:$PATH" eval "$voorwaarde"; }
 klopt '! gemeten "echo \"u 1\"" && ! gemeten "echo \"u 3\""' "U089: app-updates slaan een hotspot (Metered ja/vermoedelijk ja) over"
