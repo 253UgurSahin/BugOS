@@ -91,24 +91,34 @@ niet_storen_uit() {
 }
 # Print "aan" als niet storen aanstaat (er staat een tot-tijd die nog niet voorbij is), anders "uit".
 niet_storen_status() {
-    local tot dag vandaag j m d
+    # De hele tijd vergelijken, niet alleen de dag: "1 uur niet storen" van vanochtend is vanavond voorbij (U071).
+    # KDE schrijft "j,m,d,u,min,sec[.ms][,tijdzone]" of een ISO-tijd.
+    local tot tot_s nu_s j m d u mi s zone
     tot="$(kreadconfig6 --file plasmanotifyrc --group DoNotDisturb --key Until 2>/dev/null)"
     if [ -z "$tot" ]; then
         echo uit
         return
     fi
-    vandaag="$(date +%Y%m%d)"
     case "$tot" in
     *,*)
-        IFS=, read -r j m d _ <<<"$tot"
-        dag="$(printf '%04d%02d%02d' "$j" "$m" "$d" 2>/dev/null)"
+        IFS=, read -r j m d u mi s zone _ <<<"$tot"
+        s="${s%%.*}"
+        tot="$(printf '%04d-%02d-%02d %02d:%02d:%02d' "$j" "$m" "$d" "${u:-0}" "${mi:-0}" "${s:-0}" 2>/dev/null)" || tot=""
+        # Een lege TZ betekent UTC: alleen zetten als KDE er een tijdzone bij schreef.
+        if [ -z "$tot" ]; then
+            tot_s=""
+        elif [ -n "$zone" ]; then
+            tot_s="$(TZ="$zone" date -d "$tot" +%s 2>/dev/null)"
+        else
+            tot_s="$(date -d "$tot" +%s 2>/dev/null)"
+        fi
         ;;
     *)
-        dag="${tot:0:10}"
-        dag="${dag//-/}"
+        tot_s="$(date -d "$tot" +%s 2>/dev/null)"
         ;;
     esac
-    if [ -n "$dag" ] && [ "$dag" -ge "$vandaag" ] 2>/dev/null; then echo aan; else echo uit; fi
+    nu_s="$(date +%s)"
+    if [ -n "$tot_s" ] && [ "$tot_s" -gt "$nu_s" ] 2>/dev/null; then echo aan; else echo uit; fi
 }
 
 # Plek waar BugOS onthoudt wat de gebruiker heeft gekozen.

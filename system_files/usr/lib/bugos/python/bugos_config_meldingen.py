@@ -24,10 +24,20 @@ def lees_tot(tekst: str) -> bool:
     if not tekst:
         return False
     nu = datetime.now().astimezone()
+    # KConfig schrijft de seconden met een komma-deel ("7.913") en soms een tijdzone als 7e veld (U072).
+    delen = tekst.split(",")
     try:
-        delen = [int(x) for x in tekst.split(",")]
-        if len(delen) == 6:
-            return datetime(*delen).astimezone() > nu
+        if len(delen) >= 3:
+            getallen = [int(float(x)) for x in delen[:6]]
+            zone = None
+            if len(delen) > 6:
+                from zoneinfo import ZoneInfo
+                try:
+                    zone = ZoneInfo(delen[6].strip())
+                except (ValueError, KeyError, OSError):
+                    zone = None
+            tot = datetime(*getallen, tzinfo=zone) if zone else datetime(*getallen).astimezone()
+            return tot > nu
     except (ValueError, TypeError, OverflowError):
         pass
     try:

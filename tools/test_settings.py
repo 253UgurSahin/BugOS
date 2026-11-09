@@ -157,6 +157,13 @@ klopt(_profiel == "balanced" and _gezet and _opdrachten[-1][:3] == ("busctl", "-
 klopt(bi.lees_tot("2999,12,31,0,0,0") and not bi.lees_tot("2001,1,1,0,0,0") and not bi.lees_tot("")
       and bi.lees_tot("2999-01-01T00:00:00") and not bi.lees_tot("onzin"),
       "meldingen: 'niet storen tot' lezen (lijstje van KDE of ISO-tijd)")
+from datetime import datetime as _dt, timedelta as _td, timezone as _tz  # noqa: E402
+_straks, _net = _dt.now() + _td(hours=2), _dt.now() - _td(minutes=10)
+_kde = lambda d, sec="7.913": f"{d.year},{d.month},{d.day},{d.hour},{d.minute},{sec}"  # noqa: E731
+_utc = _dt.now(_tz.utc) + _td(hours=2)
+klopt(bi.lees_tot(_kde(_straks)) and not bi.lees_tot(_kde(_net)) and bi.lees_tot(_kde(_utc, "12.345") + ",UTC")
+      and not bi.lees_tot(_kde(_dt.now(_tz.utc) - _td(hours=2)) + ",UTC"),
+      "U072: 'niet storen tot' zoals KDE het echt schrijft (seconden met komma-deel, tijdzone erachter)")
 cache = "[MIME Cache]\napplication/pdf=org.kde.okular.desktop;firefox.desktop;\nimage/png=org.kde.gwenview.desktop;\n"
 klopt(bi.lees_mimeinfo(cache)["application/pdf"] == ["org.kde.okular.desktop", "firefox.desktop"],
       "programma's: mimeinfo.cache lezen")

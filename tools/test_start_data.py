@@ -182,6 +182,21 @@ import time  # noqa: E402
 time.sleep(0.5)
 klopt("bugos-settings wifi" in logboek(), "start: 'instelling:wifi' opent BugOS Instellingen op de wifi-pagina")
 
+# U072: 'niet storen tot' zoals KDE het echt schrijft (seconden met komma-deel, soms een tijdzone erachter).
+import importlib.machinery  # noqa: E402
+import importlib.util  # noqa: E402
+from datetime import datetime, timedelta, timezone  # noqa: E402
+_lader = importlib.machinery.SourceFileLoader("bugos_start_data_mod", str(SCRIPT))
+sd = importlib.util.module_from_spec(importlib.util.spec_from_loader(_lader.name, _lader))
+_lader.exec_module(sd)
+_kde = lambda d, sec="7.913": f"{d.year},{d.month},{d.day},{d.hour},{d.minute},{sec}"  # noqa: E731
+_u = datetime.now(timezone.utc)
+klopt(sd.niet_storen_tot_in_toekomst(_kde(datetime.now() + timedelta(hours=1)))
+      and not sd.niet_storen_tot_in_toekomst(_kde(datetime.now() - timedelta(minutes=10)))
+      and sd.niet_storen_tot_in_toekomst(_kde(_u + timedelta(hours=2), "12.345") + ",UTC")
+      and not sd.niet_storen_tot_in_toekomst(_kde(_u - timedelta(hours=2)) + ",UTC"),
+      "U072: snelmenu leest 'niet storen tot' met komma-seconden en tijdzone goed")
+
 shutil.rmtree(TMP, ignore_errors=True)
 print()
 print("Alles goed." if not fouten else f"{fouten} fout(en).")

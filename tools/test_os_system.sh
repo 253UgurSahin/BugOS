@@ -342,5 +342,15 @@ for klok in "$SD/system/bugos-update-apps.timer" "$SD/user/bugos-updatecheck.tim
     klopt 'sd_goed "$klok" "${klok%.timer}.service"' "$naam: systemd kan hem lezen"
 done
 
+# U071: "niet storen" van vanochtend (1 uur) is vanavond voorbij: de hele tijd vergelijken, niet alleen de dag.
+# shellcheck source=system_files/usr/share/bugos/lib.sh
+. "$ROOT/system_files/usr/share/bugos/lib.sh"
+dnd() { nep kreadconfig6 "echo '$1'"; PATH="$TMP/bin:$PATH" niet_storen_status; }
+klopt '[ "$(dnd "$(date -d "-10 min" +%Y,%-m,%-d,%-H,%-M,7.913)")" = uit ]' "U071: niet storen dat 10 minuten geleden afliep: uit"
+klopt '[ "$(dnd "$(date -d "+10 min" +%Y,%-m,%-d,%-H,%-M,7.913)")" = aan ]' "U071: niet storen tot over 10 minuten: aan"
+klopt '[ "$(dnd "$(date -u -d "+2 hour" +%Y,%-m,%-d,%-H,%-M,12),UTC")" = aan ] && [ "$(dnd "$(date -u -d "-2 hour" +%Y,%-m,%-d,%-H,%-M,12),UTC")" = uit ]' \
+    "U071: met een tijdzone erachter (zoals KDE dat soms schrijft)"
+klopt '[ "$(dnd 2999,12,31,0,0,0)" = aan ] && [ "$(dnd "")" = uit ] && [ "$(dnd onzin)" = uit ] && [ "$(dnd 2999-01-01T00:00:00)" = aan ]' \
+    "U071: spelmodus (2999), leeg, onzin en ISO-tijd"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
