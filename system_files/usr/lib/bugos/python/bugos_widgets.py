@@ -250,6 +250,14 @@ class Banner(QFrame):
         self.teken.setPixmap(QIcon.fromTheme(icoon).pixmap(20, 20))
         self.tekst.setText(tekst)
         self.setVisible(bool(tekst))
+        # De schermlezer zegt het ook ('VLC is verwijderd', 'lukte niet'): anders bleef Orca stil (U482).
+        self.setAccessibleName(tekst)
+        if tekst and soort != "bezig":
+            try:
+                from PySide6.QtGui import QAccessible, QAccessibleEvent
+                QAccessible.updateAccessibility(QAccessibleEvent(self.tekst, QAccessible.Event.Alert))
+            except (ImportError, AttributeError, RuntimeError):
+                pass
 
 
 class Schuif(QAbstractButton):

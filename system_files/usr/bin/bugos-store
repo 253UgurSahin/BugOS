@@ -124,10 +124,12 @@ class AppKaart(Kaart):
         # Een app die je uit de Winkel haalde, kun je hier ook weer weghalen (U464). Niet voor wat in BugOS zelf zit.
         self.weg = Knop(t("Verwijderen", "Remove"), "stil")
         self.weg.clicked.connect(lambda: self.winkel.vraag_verwijderen(self.app))
+        self.weg.setAccessibleDescription(app_naam(app))   # 'Verwijderen' van welke app? (U482)
         rij.addWidget(self.weg)
         self.knop = Knop("", "hoofd")
         self.knop.setMinimumWidth(124)
         self.knop.clicked.connect(self.klik)
+        self.knop.setAccessibleDescription(app_naam(app))   # (U482)
         rij.addWidget(self.knop)
         blok.addLayout(rij)
         self.lay.addLayout(blok, 1)
@@ -191,7 +193,8 @@ class Winkel(Venster):
         # Rechts: zoeken en de apps
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Past een kaart toch niet (grote letters): opzij kunnen schuiven, niets valt eraf (U482).
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         rechts_w = QWidget()
         rechts_w.setObjectName("pagina")
         rechts = QVBoxLayout(rechts_w)
@@ -298,7 +301,9 @@ class Winkel(Venster):
 
     def resizeEvent(self, e):  # noqa: N802
         super().resizeEvent(e)
-        nieuw = max(1, min(3, (self.width() - ZIJBALK_BREEDTE - 72) // 330))
+        # Zo breed als een kaart echt is (met 'Verwijderen' en 'Openen', grote letters), niet een vaste 330 (U482).
+        breed = max([330] + [k.minimumSizeHint().width() + 16 for k in self.kaarten[:3]])
+        nieuw = max(1, min(3, (self.width() - ZIJBALK_BREEDTE - 72) // breed))
         if nieuw != self.kolommen:
             self.kolommen = nieuw
             if self.kaarten:
@@ -354,6 +359,7 @@ class Winkel(Venster):
         rij = self.lijst.currentRow()
         if not self.zoek.text().strip() and rij >= 0 and self.lijst.sleutel(rij) == "_mijn":
             self.toon()
+            self.zoek.setFocus()   # de kaart met de focus is weg: niet de focus kwijt (U482)
         if code == 0:
             self.melding.zet(t(f"✅ {naam} is verwijderd.", f"✅ {naam} has been removed."), "goed")
         elif any(w in uit.lower() for w in ("not authorized", "not allowed", "authentication", "authoriz")):
