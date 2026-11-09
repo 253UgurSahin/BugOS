@@ -99,6 +99,15 @@ printf '{"deployments":[{"booted":false,"timestamp":2000},{"booted":true,"timest
 rm -f "$TMP/rollback"
 draai bugos-updates terug
 klopt '[ $code -eq 0 ] && [ -f "$TMP/rollback" ]' "U379: oudere versie via het opstartmenu gestart: 'terug' maakt hem vast"
+# U392: ... ook als er intussen vanzelf weer een update klaarstond (staged): eerst die weg, dan vastzetten.
+nep rpm-ostree 'case "$1" in status) cat "'"$TMP"'/status.json";; cleanup) echo "cleanup $*" >>"'"$TMP"'/rollback";; rollback) echo rollback >>"'"$TMP"'/rollback";; esac'
+printf '{"deployments":[{"booted":false,"staged":true,"timestamp":3000},{"booted":false,"timestamp":2000},{"booted":true,"timestamp":1000}]}' >"$TMP/status.json"
+rm -f "$TMP/rollback"
+echo UPDATES=auto >"$TMP/etc-bugos/updates.conf"; rm -f "$TMP/var-bugos/updates.conf"
+draai bugos-updates terug
+klopt '[ $code -eq 0 ] && grep -q cleanup "$TMP/rollback" && grep -q rollback "$TMP/rollback" && grep -q "This version now stays" "$TMP/uit" && grep -q bugos-blijft "$TMP/uit"' \
+    "U392/U393: oude versie gekozen terwijl er al een update klaarstond: toch vastgezet, en geen 'start opnieuw op'"
+nep rpm-ostree 'case "$1" in status) cat "'"$TMP"'/status.json";; rollback) echo rollback >>"'"$TMP"'/rollback";; esac'
 # U043: er staat een update klaar (staged) voor de volgende keer opstarten: eerst weghalen, dan pas terug.
 nep rpm-ostree 'case "$1" in status) cat "'"$TMP"'/status.json";; cleanup) echo "cleanup $*" >>"'"$TMP"'/rollback";;
 rollback) grep -q cleanup "'"$TMP"'/rollback" 2>/dev/null || { echo "error: Staged deployment" >&2; exit 1; }; echo rollback >>"'"$TMP"'/rollback";; esac'

@@ -919,6 +919,10 @@ else:
     os.environ["XDG_CONFIG_HOME"] = _oud_cfg2
 klopt("Oud" not in _snap and "Nieuw" in _snap, f"U383: 'Grote letters' aan maakt een nieuwe momentopname (geen oude) ({_snap[:60]})")
 
+# U393: 'terug' terwijl je de oude versie al draait: de melding zegt dat hij blijft (en niet de merktekst).
+_up.klaar_met("terug", 0, "Klaar. Deze versie blijft nu ook na opnieuw opstarten.\nbugos-blijft\n")
+klopt(_up.melding.tekst.text() == "Klaar. Deze versie blijft nu ook na opnieuw opstarten.",
+      f"U393: na 'terug' op de oude versie: 'deze versie blijft' ({_up.melding.tekst.text()!r})")
 # U389: 'Nu updaten' terwijl er al een update loopt: zeg dat, niet 'ben je online?'.
 _up.klaar_met("nu", 1, "error: Transaction in progress: (null)\n")
 klopt("al een update" in _up.melding.tekst.text(), f"U389: er loopt al een update: dat wordt gezegd ({_up.melding.tekst.text()!r})")

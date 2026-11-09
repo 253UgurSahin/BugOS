@@ -323,10 +323,14 @@ class UpdatesPagina(Blad):
             if wat == "terug":
                 # bugos-updates zegt zelf wat er gebeurde (al klaar, of: updates gaan nu niet meer vanzelf),
                 # en zet misschien 'Updates vanzelf' uit: de schakelaar opnieuw lezen.
-                regels = [r.strip() for r in uit.splitlines() if r.strip()]
+                regels = [r.strip() for r in uit.splitlines() if r.strip() and r.strip() != "bugos-blijft"]
                 if regels:
                     tekst = regels[-1]
                 op_achtergrond(self, lambda: status_van("bugos-updates"), lambda aan: self.auto.zet_stil(aan is True))
+                if "bugos-blijft" in uit:
+                    # Je draait de oude versie al: geen 'Nu opnieuw opstarten' nodig (U393).
+                    self.melding.toon(tekst, "goed", seconden=0)
+                    return
             self.melding.toon(tekst, "goed", t("Nu opnieuw opstarten", "Restart now"), herstart, seconden=0)
 
 

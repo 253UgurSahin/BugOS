@@ -111,7 +111,8 @@ terug)
     # rollback déze (oudere) versie vast: precies wat 'terug' moet doen (U379).
     VASTZETTEN=0
     if echo "$STATUS" | jq -e '(.deployments[] | select(.booted) | .timestamp) as $nu
-        | .deployments[0] | (.booted == false and ((.staged // false) | not) and (.timestamp // 0) > ($nu // 0))' >/dev/null 2>&1; then
+        | [.deployments[] | select((.staged // false) | not)][0]
+        | (.booted == false and (.timestamp // 0) > ($nu // 0))' >/dev/null 2>&1; then
         VASTZETTEN=1   # (niet een update die alleen klaarstaat: die ruimen we hieronder op)
     fi
     # Is er geen oudere versie dan deze (net geïnstalleerd, of je ging al terug en startte opnieuw op)?
@@ -123,14 +124,23 @@ terug)
     fi
     # Staat er een update klaar voor de volgende keer opstarten, dan weigert rpm-ostree terug te gaan:
     # die update eerst weghalen (hij komt later gewoon weer).
-    if [ "$VASTZETTEN" = 0 ] && echo "$STATUS" | jq -e '.deployments[0] | (.booted == false and (.staged // false))' >/dev/null 2>&1; then
+    # (Ook bij VASTZETTEN: een update die vanzelf weer klaarstond, eerst weg; dan maakt rollback deze versie vast) (U392)
+    if echo "$STATUS" | jq -e '.deployments[0] | (.booted == false and (.staged // false))' >/dev/null 2>&1; then
         rpm-ostree cleanup -p || exit 1
     fi
     rpm-ostree rollback || exit 1
     # Gaan updates vanzelf, dan zou BugOS de nieuwe versie (waar je net vanaf wilde) meteen weer klaarzetten.
     # Daarom zetten we ze uit, en zeggen dat.
     MODUS="$(lees_keuze)"
-    if [ "$MODUS" = auto ]; then
+    if [ "$MODUS" = auto ] && [ "$VASTZETTEN" = 1 ]; then
+        zet_keuze hand
+        systemctl disable --now "${TIMERS[@]}"
+        gebruiker_timer mask
+        # Je draait deze versie al: niet 'start opnieuw op' zeggen (U393).
+        t "Klaar. Deze versie blijft nu ook na opnieuw opstarten. Updates gaan niet meer vanzelf, anders komt de nieuwe versie terug; zet ze weer aan in Instellingen als het mag." \
+            "Done. This version now stays, also after a restart. Updates are no longer automatic, or the new version would come back; turn them on again in Settings when it is fine."
+        echo bugos-blijft
+    elif [ "$MODUS" = auto ]; then
         zet_keuze hand   # ook in /var, zodat de oudere versie het ziet (U300)
         systemctl disable --now "${TIMERS[@]}"
         gebruiker_timer mask
@@ -138,6 +148,7 @@ terug)
             "Done. Restart the computer to go back. Updates are no longer automatic, or the new version would come back; turn them on again in Settings when it is fine."
     elif [ "$VASTZETTEN" = 1 ]; then
         t "Klaar. Deze versie blijft nu ook na opnieuw opstarten." "Done. This version now stays, also after a restart."
+        echo bugos-blijft
     else
         t "Klaar. Start de computer opnieuw op om terug te gaan." "Done. Restart the computer to go back."
     fi
