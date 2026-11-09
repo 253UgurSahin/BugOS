@@ -53,3 +53,8 @@ English for now. The script skips them and tells you how many there are (about 1
 To make such a text translatable, write it with a placeholder and fill it in afterwards:
 `t("{n} GB vrij", "{n} GB free").format(n=n)`. Then `"{n} GB free"` lands in `template.json`, and the
 translator keeps `{n}` exactly as it is.
+
+The start menu, the quick menu and the taskbar (QML), the start-menu helper `bugos-start-data` and the
+names of the BugOS programs in their `.desktop` files do not read these dictionaries yet: they only know
+Dutch and English. With a `de.json`, the BugOS apps become German, but those parts stay English for now
+(U276). `collect-translations.py` does not collect their texts either.
