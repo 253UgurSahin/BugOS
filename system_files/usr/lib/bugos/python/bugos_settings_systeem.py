@@ -395,10 +395,10 @@ class SpelenPagina(Schakelaars, Blad):
             if script == "bugos-game-mode":
                 # De FPS-teller meteen (MangoHud altijd verborgen klaar in games) of pas na opnieuw inloggen.
                 g.voeg(Rij("grafiek", t("FPS-teller meteen klaar", "FPS counter ready at once"),
-                           t("Aan: de teller gaat meteen aan en uit met game-modus; MangoHud draait dan verborgen mee "
-                             "in games. Uit: de teller komt pas na opnieuw inloggen.",
-                             "On: the counter turns on and off at once with game mode; MangoHud then runs hidden in "
-                             "games. Off: the counter only appears after you log in again."),
+                           t("Aan: de teller verschijnt meteen als je game-modus aanzet. "
+                             "Uit: pas nadat je opnieuw inlogt.",
+                             "On: the counter appears right away when you turn on game mode. "
+                             "Off: only after you log in again."),
                            self.schakel("bugos-game-mode", "fps")))
 
 

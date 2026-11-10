@@ -207,7 +207,7 @@ for klasse in mod.PAGINAS:
     venster.ga_naar(klasse.sleutel)
     QThreadPool.globalInstance().waitForDone(5000)
     app.processEvents()
-    klopt(venster.stapel.currentWidget() is venster.paginas[klasse.sleutel], f"venster: pagina '{klasse.naam()}' opent")
+    klopt(venster.open_blad() is venster.paginas[klasse.sleutel], f"venster: pagina '{klasse.naam()}' opent")
 wifi = venster.paginas["wifi"]
 klopt(wifi.hoofd.uitleg.text() == "Verbonden met Buren" and wifi.lijst.lay.count() > 3,
       "wifi-pagina: verbonden netwerk en de lijst met netwerken")
@@ -217,6 +217,11 @@ gevonden = [r.titel.text() for r in venster.paginas["start"].zoek_kaart.findChil
 klopt(venster.stapel.currentWidget() is venster.paginas["start"] and "Bluetooth" in gevonden and "Geluid" in gevonden,
       "zoeken: 'koptelefoon' vindt Bluetooth en Geluid")
 klopt(mod.Instellingen("schakelaars").stapel.currentWidget().sleutel == "updates", "oude naam 'schakelaars' werkt nog")
+klopt(venster.nav.count() <= 10, f"zijbalk: hooguit 10 onderdelen (nu {venster.nav.count()}), zoals Windows 11")
+venster.ga_naar("bluetooth")
+app.processEvents()
+klopt(venster.huidige() == "bluetooth" and venster.nav.sleutel(venster.nav.currentRow()) == "apparaten",
+      "groepen: 'bluetooth' opent de groep Apparaten met het tabje Bluetooth")
 klopt(mod.begin_pagina(["-qwindowgeometry", "1180x740+0+0", "wifi"]) == "wifi" and mod.begin_pagina([]) == "start",
       "startpagina: het woord 'wifi' wordt gevonden, ook na Qt-opties")
 muis_p = venster.paginas["muis"]
