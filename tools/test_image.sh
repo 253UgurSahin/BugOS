@@ -66,6 +66,8 @@ klopt '[ -f /usr/share/bugos/wine/licht.reg ] && [ -f /usr/share/bugos/wine/donk
 klopt '[ -f /usr/share/plasma/shells/org.kde.plasma.desktop/contents/logout/bugos-aftellen.js ] && [ -f /usr/share/plasma/look-and-feel/org.bugos.desktop/contents/logout/bugos-aftellen.js ]' "uitzetscherm: bugos-aftellen.js staat naast Logout.qml (U088)"
 klopt 'fc-list | grep -q "Inter" && fc-list | grep -q "JetBrains Mono"' "letters: Inter en JetBrains Mono geïnstalleerd"
 
+klopt '! grep -qE "^(TEMPLATES|PUBLICSHARE)=" /etc/xdg/user-dirs.defaults && grep -q "^DOCUMENTS=" /etc/xdg/user-dirs.defaults'     "thuismap: een nieuwe gebruiker krijgt geen lege mappen Templates en Public (zoals Windows)"
+
 # 5b. Het startmenu toont alleen programma's met een gewone naam (style.sh: hernoemen en verbergen).
 #     Geen KDE-namen (KFind, Krfb, KCharSelect...), geen hulpjes voor gevorderden.
 apps="$(LANG=en_US.UTF-8 /usr/bin/bugos-start-data 2>/dev/null | python3 -c 'import json, sys
