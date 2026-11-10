@@ -17,12 +17,33 @@ cp -avf /ctx/system_files/. /
 # alleen de programma's in /usr/bin uitvoerbaar.
 (cd /ctx/system_files && find . -type f -print0) | while IFS= read -r -d '' f; do chmod 0644 "/${f#./}"; done
 (cd /ctx/system_files && find . -mindepth 1 -type d -print0) | while IFS= read -r -d '' d; do chmod 0755 "/${d#./}"; done
-chmod 0755 /usr/bin/bugos-*
+chmod 0755 /usr/bin/bugos-* /usr/libexec/bugos-user-check
 # De Python-onderdelen van BugOS vooraf vertalen: /usr is straks alleen-lezen, dus anders doet elke app dat bij
 # elke start opnieuw. Met een controlegetal (checked-hash): ostree zet de tijden van bestanden gelijk, en een
 # veranderd bestand (usr-overlay bij het zoeken naar een fout) wordt dan toch opnieuw gelezen (U313, U319).
 find /usr/lib/bugos/python -name __pycache__ -prune -exec rm -rf {} +
 python3 -m compileall -q --invalidation-mode checked-hash /usr/lib/bugos/python
+
+# De pictogrammen van de apps in de BugOS Winkel meeleveren. Anders zie je op een vers systeem (de catalogus
+# van Flathub is dan nog niet opgehaald) en zonder internet bij Firefox, LibreOffice, Spotify en Steam alleen een
+# grijs bestandje. Lukt het ophalen niet (geen internet tijdens het bouwen), dan gaat de bouw gewoon door.
+python3 - <<'EOF' || true
+import json, pathlib, urllib.request
+uit = pathlib.Path("/usr/share/bugos/store-icons")
+uit.mkdir(parents=True, exist_ok=True)
+apps = [a["id"] for a in json.load(open("/usr/share/bugos/store.json", encoding="utf-8"))["apps"]]
+def haal(url):
+    return urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "bugos-build"}), timeout=20).read()
+for app_id in apps:
+    try:
+        icoon = json.loads(haal(f"https://flathub.org/api/v2/appstream/{app_id}")).get("icon") or ""
+        if icoon.startswith("https://dl.flathub.org/"):
+            (uit / f"{app_id}.png").write_bytes(haal(icoon))
+    except Exception as e:  # noqa: BLE001
+        print("BugOS Winkel: geen pictogram voor", app_id, e)
+print(len(list(uit.glob("*.png"))), "van", len(apps), "Winkel-pictogrammen")
+EOF
+chmod 0644 /usr/share/bugos/store-icons/* 2>/dev/null || true
 
 # 2. Extra programma's installeren.
 #    --skip-unavailable: als een pakket (even) niet bestaat, gaat de bouw
@@ -61,6 +82,8 @@ update-desktop-database /usr/share/applications || true
 
 # 6. Diensten aanzetten.
 systemctl enable bugos-first-boot.service
+# Geen gebruiker na het installeren? Dan alsnog KDE's assistent om er een te maken.
+systemctl enable bugos-user-check.service
 # Updates: BugOS regelt dit zelf (geen uupd van Universal Blue).
 #  - het systeem: rpm-ostree haalt de nieuwe BugOS op de achtergrond op en zet
 #    hem klaar ("stage"); hij wordt actief bij de volgende keer opstarten.

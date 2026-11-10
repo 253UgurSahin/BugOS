@@ -149,6 +149,9 @@ def meer_knop(items_maker) -> QPushButton:
     return k
 
 
+TOON_KDE_KNOP = False
+
+
 class Blad(Pagina):
     """Een pagina van Instellingen: titel, uitleg, kaarten, en onderaan de weg naar KDE voor gevorderden."""
 
@@ -163,7 +166,10 @@ class Blad(Pagina):
         super().__init__(self.naam(), t(self.uitleg_nl, self.uitleg_en) if self.uitleg_nl else "")
         self.venster = venster
         self.bouw()
-        if self.kde:
+        # Geen 'Meer instellingen' meer onder elke pagina: dat bracht je steeds naar KDE. Alles van KDE staat nu op
+        # één plek: Over deze computer > Geavanceerde instellingen. (self.kde blijft: wie het nodig heeft, weet welk
+        # KDE-onderdeel bij de pagina hoort.)
+        if self.kde and TOON_KDE_KNOP:
             meer = Knop(t("Meer instellingen (voor gevorderden)", "More settings (advanced)"), "stil", "lijn:code")
             meer.clicked.connect(lambda _c=False: kde_instelling(self.kde))
             self.lay.addWidget(meer, 0, Qt.AlignmentFlag.AlignLeft)

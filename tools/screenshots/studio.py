@@ -90,7 +90,7 @@ SCENES = {
     "help-crop": (HELP, [], {}, help_all_good, None, (0, 0, 1760, 1120)),
     "settings": (SETTINGS, [], SAMPLE, None, None, None),
     "power-crop": (SETTINGS, ["updates"], SAMPLE, None, None, (480, 0, 1760, 1100)),
-    "store": (STORE, [], {"BUGOS_GEINSTALLEERD": "org.mozilla.firefox,org.videolan.VLC"}, None, None, None),
+    "store": (STORE, [], {"BUGOS_GEINSTALLEERD": "org.mozilla.firefox,org.libreoffice.LibreOffice,org.videolan.VLC,org.kde.gwenview,org.kde.okular,com.valvesoftware.Steam"}, None, None, None),
     "backup": (BACKUP, [], {"BUGOS_SCHIJVEN": "fake"}, None, None, None),
     "switch": (SWITCH, [], {"BUGOS_SCHIJVEN": "fake"}, None, None, None),
     "live": (LIVE, [], {}, None, None, None),

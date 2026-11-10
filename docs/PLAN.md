@@ -66,13 +66,13 @@ The most important idea: **BugOS can't break.**
 | App in the start menu | File | What it does |
 |---|---|---|
 | BugOS Welcome | `bugos-welcome` | The first screen: language, Wi-Fi, light or dark, updates, gaming or programming, and bringing back files from Windows. |
-| Settings | `bugos-settings` | Like Settings in Windows, but calmer. Home: quick toggles (Wi-Fi, Bluetooth, night light, dark) and the volume. Its own pages in plain words: Wi-Fi and internet (networks, connect with a password), Bluetooth (connect devices), Printers and scanning (printers, queue, test page, scanning), Sound (volume, which speaker), Display (brightness, night light, size), Power (saver/balanced/fast, battery, screen off, sleep, power button, closing the lid), Appearance (light/dark, background), Notifications (do not disturb, quiet during games, sound, test notification), Mouse and touchpad (speed, left-handed, scroll direction, tapping, double-click), Easier to see (large text, large pointer, shake the mouse, magnifier, sticky keys, slow keys, screen reader), Time and language (set the clock automatically or by hand, time zone, language), Login and password (name, change password, sign in without a password, lock screen), Default programs (internet, email, photos, music, videos, PDF, text), Updates and more, About this computer. Search across everything. Each page has 'More settings (for advanced users)' that leads to KDE. |
+| Settings | `bugos-settings` | Like Settings in Windows 11, but calmer: 10 groups in the sidebar (Home, Wi-Fi and internet, Devices, Sound and notifications, Display and appearance, Power, Account and language, Easier to see, Apps and gaming, Updates and info); a group with more pages has tabs at the top. Home: quick toggles (Wi-Fi, Bluetooth, night light, dark) and the volume. Its own pages in plain words: Wi-Fi and internet (networks, connect with a password), Bluetooth (connect devices), Printers and scanning (printers, queue, test page, scanning), Sound (volume, which speaker), Display (brightness, night light, size), Power (saver/balanced/fast, battery, screen off, sleep, power button, closing the lid), Appearance (light/dark, background), Notifications (do not disturb, quiet during games, sound, test notification), Mouse and touchpad (speed, left-handed, scroll direction, tapping, double-click), Easier to see (large text, large pointer, shake the mouse, magnifier, sticky keys, slow keys, screen reader), Time and language (set the clock automatically or by hand, time zone, language), Login and password (name, change password, sign in without a password, lock screen), Default programs (internet, email, photos, music, videos, PDF, text), Gaming and coding (game mode, developer mode, light mode), Updates, About this computer. Search across everything. Each page has 'More settings (for advanced users)' that leads to KDE. |
 | Something is not working | `bugos-help` | Checks internet, Wi-Fi, Bluetooth, sound, printer, storage and updates. Every problem has a "Fix" button. |
 | Backup | `bugos-backup` | Your files to a USB drive with one button, and back again. Nothing is ever thrown away. |
-| Files from Windows | `bugos-switch` | Brings back the files, bookmarks and background you took from Windows with BugOS Overstap. |
+| Files from Windows | `bugos-switch` | Brings back the files, bookmarks and background you took from Windows with BugOS Switch. |
 | Game mode on/off | `bugos-game-mode` | Full power, notifications muted and an FPS counter. |
 | BugOS Store | `bugos-store` | 39 well-known, safe apps in 10 topics, install with one click, and remove again in "My apps". "Search more apps" opens the big KDE store. |
-| Start menu | `org.bugos.startmenu` | The start button at the bottom left (the ladybug), by default. A greeting, a big search bar that finds apps and the pages of Settings, pinned apps, recent files, all apps by topic, and at the bottom Settings, Lock, Sign out, Restart and Shut down. Alt+F1 and the Windows key open it. Prefer the KDE menu? Settings → Updates and more → Taskbar. |
+| Start menu | `org.bugos.startmenu` | The start button at the bottom left (the ladybug), by default. A greeting, a big search bar that finds apps and the pages of Settings, pinned apps, recent files, all apps by topic, and at the bottom Settings, Lock, Sign out, Restart and Shut down. Alt+F1 and the Windows key open it. Prefer the KDE menu? Settings → Appearance → Taskbar. |
 | Quick menu | `org.bugos.quickmenu` | Next to the system tray, by default. Big buttons for Wi-Fi, Bluetooth, game mode, dark, do not disturb and mute, plus sliders for volume and (on a laptop) brightness, and the battery; the little arrow next to a button opens the matching page in Settings (for example to pick a Wi-Fi network). It is the one place for these things: the KDE tray icons that do the same (sound, network, Bluetooth, brightness and battery, clipboard, keyboard layout...) are hidden, but keep working in the background (volume keys, low-battery warnings). |
 | Shutdown screen | `logout/Logout.qml` | The screen for Shut down, Restart or Sign out: big tiles for Sleep, Restart, Shut down (red), Sign out and a "Never mind" button. From the start menu it counts down 30 seconds and says so in plain words. It goes into Plasma's shell package and into the BugOS look-and-feel. |
 | Set up the taskbar | `bugos-panel` | Puts the BugOS start menu and the quick menu on the taskbar (`standaard`, once after signing in, also for people who already had a taskbar), or turns one of the two on/off (`startmenu|snelmenu aan|uit|status`). `systeemvak rustig|alles` hides or brings back the KDE tray icons the quick menu replaces (turning the quick menu off brings them back). "Off" puts the KDE menu back the way BugOS had set it up. |
@@ -98,7 +98,7 @@ The most important idea: **BugOS can't break.**
 
 ### For Windows (`windows-switch/`)
 
-**BugOS Overstap** (the Windows app that helps you switch) has the same look as BugOS (dark sidebar with the steps, red buttons) and works in four steps:
+**BugOS Switch** (the Windows app that helps you switch) has the same look as BugOS (dark sidebar with the steps, red buttons) and works in four steps:
 
 1. Check: can this PC run BugOS? It looks at 64-bit, memory, UEFI, space, BitLocker and Nvidia.
 2. Take along: documents, photos, music, videos, desktop, downloads, bookmarks and background go to a USB drive.
@@ -135,7 +135,7 @@ The most important idea: **BugOS can't break.**
 - [x] In BugOS: bring back the files from Windows with one button
 - [x] **"Try first" USB stick** with the new installer (Anaconda WebUI). It asks few questions, warns about BitLocker and explains the blue key screen for Nvidia.
 - [x] **The stick is BugOS**: BugOS itself is on the stick and installs without internet. No more Aurora or Fedora names or logos on the stick, in the installer and in the installed system (welcome screen, terminal, sign-in screen, "About this system", start menu, store). The stick starts in English; you choose your language, keyboard and time zone in the installer (the date and time page is no longer hidden).
-- [x] A download place for the ISO: GitHub Releases, in pieces of less than 2 GB. BugOS Overstap glues them back together by itself.
+- [x] A download place for the ISO: GitHub Releases, in pieces of less than 2 GB. BugOS Switch glues them back together by itself.
 - [ ] **Sign the Windows program**, so Windows doesn't show a warning. This normally costs money (a certificate). For open-source projects it can be free through [SignPath Foundation](https://signpath.org). The owner of the repo has to apply, so **this is a task for the manager**.
 
 ### Phase 4: Polishing ✅ (except for the manager's items)
@@ -153,25 +153,25 @@ The most important idea: **BugOS can't break.**
 - [x] **All BugOS apps** redesigned, in light and dark: Welcome, Settings, Store, Something is not working, Backup, Files from Windows and the "try first" stick
 - [x] **Desktop**: new colors, our own fonts, start menu and quick menu, boot screen, sign-in and lock screen, boot logo
 - [x] **New website** with real screenshots, a try-it-yourself for "back to yesterday" and a light/dark switch
-- [x] **BugOS Overstap** (Windows) in the new style, sharp on 125% and 150% screens
+- [x] **BugOS Switch** (Windows) in the new style, sharp on 125% and 150% screens
 - [x] **Premium round:** our own BugOS line icons, calmer apps (only problems get color), and a website that tells the story: why a ladybug, the Bugie test and a day at home
 
 ### For the manager: what is needed to hand out BugOS
 - [ ] Make the **repo** and the **packages** (`bugos`, `bugos-nvidia`) **public**. Without that:
-  - BugOS Overstap can't download BugOS,
+  - BugOS Switch can't download BugOS,
   - and installed computers get no updates.
   - (Installing from the "try first" stick does work: BugOS itself is on the stick.)
 - [ ] In **Settings**, set the default branch to `main`. Then the weekly build (with security updates) runs on `main`.
 - [ ] Signing through SignPath, volunteers and a domain name (see above).
 
 ### Next: testing on real computers
-- [ ] **Switched to English, new base `kinoite-main`:** the docs and the default language are now English, the word "oma" has been replaced by "Bugie". The image builds (locally with Podman, 2026-11-04: `ID=bugos`, no Aurora left, Discover Flatpak-only, update timers on, `bootc container lint` passes). Not tested yet: the stick (ISO) in a VM, and the English screenshots (run `screenshots.yml` again).
-- [ ] **New stick not tested yet** (branch `claude/fix-iso-alleen-bugos`). BugOS now goes on the stick as an OCI folder; unpacking it into the container storage did not work (whiteouts: "open /etc/.wh.bazaar: invalid argument"). Next step: run `tools/iso-local.sh` (or iso.yml), boot the ISO in a VM, install without a network and check the installed system (no Aurora/Fedora; `stat /usr/libexec/utempter/utempter` must be `root:utmp`).
+- [x] **Switched to English, new base `kinoite-main`:** the docs and the default language are English, "oma" is "Bugie". Tested 2026-11-10 in a VM (QEMU, UEFI): the stick boots, BugOS installs, signs in and runs.
+- [x] **The stick installs BugOS** (tested 2026-11-10 in a VM with `tools/iso-local.sh`). Found and fixed: Fedora's KDE installer profile hid the Account and Date-and-time pages, so after installing there was no user and the clock was on New York time (now `hidden_webui_pages =` empty, plus `bugos-user-check.service` as a safety net). Still open: the installer's "Automatically set timezone" is ticked but BugOS does not look up your location, so it stays on New York unless you untick it; and the installing step shows no progress for 20-40 minutes.
 - [ ] Try the "try first" stick on a real PC
 - [x] Start menu and quick menu by default (tested outside Plasma: tools/qml-test.py, tools/test_start_data.py, tools/test_logout.py)
 - [ ] Check the start menu, quick menu and shutdown screen on a real PC (Windows key, picking Wi-Fi, shutting down) — see TESTING.md
-- [ ] Desktop photos from the real screen: the photo round (`tools/screenshots/desktop.sh`) starts KWin and plasmashell in the container, but the build computer has no graphics card; even with KWin's software renderer (KWIN_DRM_DEVICES), KWin 6.8 found no 'render device'. Next step: test on a real PC or a VM with a screen. Until then: photos from the photo studio.
-- [ ] Try BugOS Overstap on a real Windows PC (steps 3 and 4 on a spare PC first)
+- [x] Desktop photos from the real screen: the website's hero, start menu, quick menu, Settings and Store images are screenshots of a real BugOS install in a VM (2880x1800 at 200%). `tools/website/og.py` makes og.png and the README banner from the site itself.
+- [ ] Try BugOS Switch on a real Windows PC (steps 3 and 4 on a spare PC first)
 
 ## Things to watch out for
 

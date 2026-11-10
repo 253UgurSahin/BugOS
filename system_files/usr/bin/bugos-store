@@ -32,7 +32,11 @@ ICOON_MAPPEN = [
     Path("/var/lib/flatpak/appstream/flathub/x86_64/active/icons/128x128"),
     Path("/var/lib/flatpak/appstream/flathub/x86_64/active/icons/64x64"),
     Path.home() / ".local/share/flatpak/appstream/flathub/x86_64/active/icons/128x128",
+    # Meegeleverd met BugOS (build.sh): ook op een vers systeem en zonder internet een echt pictogram.
+    Path("/usr/share/bugos/store-icons"),
 ]
+# Apps die BugOS als gewoon pakket heeft (niet als Flatpak): hun pictogram heet in het thema anders.
+THEMA_NAMEN = {"org.mozilla.firefox": "firefox", "com.valvesoftware.Steam": "steam"}
 if os.environ.get("BUGOS_APPICONEN"):
     ICOON_MAPPEN.insert(0, Path(os.environ["BUGOS_APPICONEN"]))
 
@@ -86,7 +90,9 @@ def icoon_voor(app_id: str) -> QIcon:
             bestand = map_ / f"{app_id}{ext}"
             if bestand.is_file():
                 return QIcon(str(bestand)) if ext == ".svg" else QIcon(QPixmap(str(bestand)))
-    return QIcon.fromTheme(app_id, QIcon.fromTheme("application-x-executable"))
+    if QIcon.hasThemeIcon(app_id):
+        return QIcon.fromTheme(app_id)
+    return QIcon.fromTheme(THEMA_NAMEN.get(app_id, app_id), QIcon.fromTheme("application-x-executable"))
 
 
 def tekst(app: dict) -> str:

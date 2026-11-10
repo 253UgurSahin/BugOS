@@ -183,6 +183,15 @@ beschermd = {x.pids[0]: x.beschermd for x in bt.groepeer(kern, {})}
 klopt(all(beschermd[p] for p in range(500, 507)),
       "beschermd: sessie-berichtenbus, gebruikersbeheer, toegankelijkheid, dconf en de Flatpak-portalen")
 klopt(not beschermd[507] and not beschermd[508], "niet beschermd: gewone achtergrondhulpjes (ssh-agent, KDE Connect)")
+# Hulpjes die vanzelf starten en geen venster hebben, staan niet bij 'Open programma's' (gezien in de VM:
+# Geoclue, KDE Connect en de Xwayland-brug stonden er tussen). BugOS Welkom start ook vanzelf, maar is wel een programma.
+_soort = {x.pids[0]: x.soort for x in bt.groepeer([
+    bt.Proces(800, "kdeconnectd", 1, 1, 1, True, f"{GEB}/app.slice/app-org.kde.kdeconnect.daemon@autostart.service"),
+    bt.Proces(801, "agent", 1, 1, 1, True, f"{GEB}/app.slice/app-geoclue\\x2ddemo\\x2dagent@autostart.service"),
+    bt.Proces(802, "xwaylandvideob", 1, 1, 1, True, f"{GEB}/app.slice/app-org.kde.xwaylandvideobridge@autostart.service"),
+    bt.Proces(803, "python3", 1, 1, 1, True, f"{GEB}/app.slice/app-bugos\\x2dwelcome@autostart.service")], {})}
+klopt(_soort[800] == _soort[801] == _soort[802] == "achtergrond" and _soort[803] == "app",
+      f"vanzelf gestarte hulpjes zonder venster zijn achtergrond, BugOS Welkom is een programma ({_soort})")
 # U433: Firefox van mama (ander account, snel wisselen) en die van jou: jouw Firefox blijft van jou (en te sluiten).
 _ff = "app.slice/app-flatpak-org.mozilla.firefox-1234.scope"
 _ik = os.getuid()

@@ -1,0 +1,9 @@
+#!/usr/bin/bash
+# Is er geen gewone gebruiker (uid 1000-59999)? Dan mag plasma-setup vóór het inlogscherm een account laten maken.
+# Zie bugos-user-check.service.
+set -u
+if ! getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 { n++ } END { exit n ? 0 : 1 }'; then
+    echo "BugOS: geen gebruiker gevonden, KDE's eerste-keer-assistent maakt er een."
+    rm -f /etc/plasma-setup-done
+fi
+exit 0

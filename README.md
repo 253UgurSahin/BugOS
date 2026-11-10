@@ -34,7 +34,7 @@ Did something go wrong after an update? Then you go back to yesterday's version 
 | **Just easy** | Wi-Fi, Bluetooth, sound and printers work right away. Big buttons and everyday words. |
 | **Apps in one click** | The BugOS Store has well-known, safe apps. Downloads from a website work too. |
 | **Windows programs** | Double-click an `.exe` and it starts. Is there a better version for BugOS? Then BugOS suggests it. |
-| **Gaming** | Steam, game mode, controllers and Nvidia are already built in. |
+| **Gaming** | Steam, game mode and controller support are built in, and there is a version with the Nvidia driver. |
 | **Programming** | One switch sets up VS Code, containers and programming languages. |
 | **Updates by themselves** | Quietly in the background, and only active when you restart. Rather choose yourself? You can do that too. |
 | **Old computers too** | Does your computer have little memory? Then BugOS turns on light mode by itself. |
@@ -98,11 +98,11 @@ Did something go wrong after an update? Then you go back to yesterday's version 
 BugOS is still being built (version 0.3). Try it first on a spare computer or in a virtual PC.
 [docs/TESTING.md](docs/TESTING.md) explains exactly how.
 
-Still on Windows? The little program **BugOS Overstap** (in [`windows-switch/`](windows-switch/))
+Still on Windows? The little program **BugOS Switch** (in [`windows-switch/`](windows-switch/))
 checks whether your computer can run BugOS, takes your files along and makes the USB stick for you.
 
 <p align="center">
-  <img src="docs/images/switch/switch-1.png" width="700" alt="BugOS Overstap on Windows, step 1: can my computer run BugOS?">
+  <img src="docs/images/switch/switch-1.png" width="700" alt="BugOS Switch on Windows, step 1: can my computer run BugOS?">
 </p>
 
 ## How is the repo organized?

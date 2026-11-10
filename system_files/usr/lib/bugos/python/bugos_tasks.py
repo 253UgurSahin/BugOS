@@ -33,6 +33,14 @@ SCHIJF_NAAM = re.compile(r"^(sd[a-z]+|vd[a-z]+|xvd[a-z]+|hd[a-z]+|nvme\d+n\d+|mm
 NIET_NETWERK = ("lo", "veth", "docker", "br-", "virbr", "podman", "tun", "tap", "wg", "vnet")
 APP_EENHEID = re.compile(r"^app-(?:(?:flatpak|gnome|kde|snap|dbus)-)?(?P<id>.+?)(?:@[^.]*)?(?:-[0-9a-fA-F]+)?"
                          r"\.(?:scope|service)$")
+# Hulpjes die bij het inloggen vanzelf starten (…@autostart) en geen venster hebben: geen "programma dat je
+# opende", dus bij de achtergrond (anders stonden Geoclue, KDE Connect en de Xwayland-brug bij je programma's).
+AUTOSTART_HULPJES = {"geoclue-demo-agent", "org.kde.kdeconnect.daemon", "org.kde.xwaylandvideobridge",
+                     "xembedsniproxy", "gmenudbusmenuproxy", "kaccess", "org.kde.kunifiedpush-distributor",
+                     "polkit-kde-authentication-agent-1", "powerdevil", "baloo_file", "spice-vdagent",
+                     "at-spi-dbus-bus", "pam_kwallet_init", "xdg-user-dirs", "orca-autostart", "vboxclient",
+                     "vmware-user", "kxkb2locale1", "org.kde.plasma-fallback-session-restore",
+                     "bugos-panel", "bugos-theme", "bugos-light-mode", "bugos-open-drives"}
 # Onderdelen van BugOS zelf: die kun je niet per ongeluk beëindigen.
 BESCHERMD = {"kwin_wayland", "kwin_x11", "plasmashell", "ksmserver", "kded6", "kded5", "plasma_session",
              "Xwayland", "systemd", "dbus-broker", "dbus-daemon", "startplasma-wayland", "startplasma-x11",
@@ -247,7 +255,10 @@ def soort_van(groep: str) -> tuple[str, str, str]:
         if deel.startswith("app-"):
             m = APP_EENHEID.match(deel)
             if m:
-                return "app", ontsnap_terug(m.group("id")), deel
+                app_id = ontsnap_terug(m.group("id"))
+                if "@autostart" in deel and app_id in AUTOSTART_HULPJES:
+                    return "achtergrond", app_id, deel
+                return "app", app_id, deel
     eenheid = next((d for d in reversed(delen) if d.endswith((".service", ".scope"))), delen[-1])
     return "achtergrond", eenheid, eenheid
 

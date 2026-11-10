@@ -1,7 +1,7 @@
 ﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-    BugOS Overstap - van Windows naar BugOS, in vier simpele stappen.
+    BugOS Switch - van Windows naar BugOS, in vier simpele stappen.
 
 .DESCRIPTION
     Jip-en-Janneke:
@@ -63,11 +63,11 @@ function Start-AlsBeheerder([string[]] $Argumenten) {
 }
 
 function Toon([string] $tekst, [string] $soort = 'Information') {
-    [void][System.Windows.Forms.MessageBox]::Show($tekst, 'BugOS Overstap', 'OK', $soort)
+    [void][System.Windows.Forms.MessageBox]::Show($tekst, 'BugOS Switch', 'OK', $soort)
 }
 
 function Vraag([string] $tekst) {
-    [System.Windows.Forms.MessageBox]::Show($tekst, 'BugOS Overstap', 'YesNo', 'Warning') -eq 'Yes'
+    [System.Windows.Forms.MessageBox]::Show($tekst, 'BugOS Switch', 'YesNo', 'Warning') -eq 'Yes'
 }
 
 # ============================================================ 1. CONTROLE ==
@@ -846,7 +846,7 @@ if ($Taak -eq 'Krimp') {
 if ($Taak -eq 'Usb') {
     Maak-Letters
     $form = New-Object System.Windows.Forms.Form
-    $form.Text = 'BugOS Overstap'
+    $form.Text = 'BugOS Switch'
     $form.AutoScaleMode = 'None'
     $form.Font = $script:LetterGewoon
     $form.ClientSize = New-Object System.Drawing.Size((Px 540), (Px 160))
@@ -890,7 +890,7 @@ Maak-Letters
 $script:Breedte = 548   # breedte van de inhoud (zonder schaal)
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = 'BugOS Overstap'
+$form.Text = 'BugOS Switch'
 $form.AutoScaleMode = 'None'
 $form.Font = $script:LetterGewoon
 $form.ClientSize = New-Object System.Drawing.Size((Px 880), (Px 560))
@@ -1071,7 +1071,7 @@ $Paginas = @()
 
 # --- Pagina 0: welkom -------------------------------------------------------
 $Paginas += {
-    $kop.Text = (T 'Welkom bij de BugOS Overstap' 'Welcome to BugOS Overstap')
+    $kop.Text = (T 'Welkom bij de BugOS Overstap' 'Welcome to BugOS Switch')
     $y = Nieuw-Tekst (T 'Dit programma helpt je om over te stappen van Windows naar BugOS. Het gaat in vier stappen:' 'This program helps you move from Windows to BugOS. It takes four steps:') 0
     $y += 14
     $y += (Nieuw-Rij 'nummer' (T 'Controleren' 'Check') (T 'Kijken of je computer BugOS aankan.' 'See whether your computer can run BugOS.') $y '1') + 10

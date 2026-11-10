@@ -498,9 +498,9 @@ klopt(dicht_na_afloop, "U006: daarna gaat Instellingen vanzelf dicht")
 klopt(open_na_fout, "U046: mislukt de update nadat je Instellingen sloot, dan blijft het open met de foutmelding")
 klopt((nep_pk / "melding").exists() and "opnieuw op" in (nep_pk / "melding").read_text(),
       "U046: gaat Instellingen vanzelf dicht na de update, dan zie je de uitkomst als melding (opnieuw opstarten)")
-# U017 (instelbaar): onder Game-modus staat de keuze "FPS-teller meteen klaar".
+# U017 (instelbaar): onder Game-modus (pagina Gamen en programmeren) staat de keuze "FPS-teller meteen klaar".
 from PySide6.QtWidgets import QLabel  # noqa: E402
-_teksten = [w.text() for w in upd.findChildren(QLabel)]
+_teksten = [w.text() for w in venster.paginas["spelen"].findChildren(QLabel)]
 klopt(any("FPS" in x and ("meteen" in x or "at once" in x) for x in _teksten),
       "U017: Instellingen heeft de keuze 'FPS-teller meteen klaar'")
 klopt("lukte niet" in mislukt, "U006: 'Nu updaten' mislukt: dat zegt Instellingen ook")
@@ -601,7 +601,7 @@ else:
     (_xdg / "user-dirs.dirs").write_text(_oud_dirs)
 klopt(_gevraagd == [str(_echte)], f"U114: 'Eigen foto kiezen' begint in de map Afbeeldingen van de gebruiker ({_gevraagd})")
 
-# U126: Updates en meer: een schakelaar gaat op slot tijdens het omzetten en leest daarna wat er echt staat
+# U126: Gamen en programmeren: een schakelaar gaat op slot tijdens het omzetten en leest daarna wat er echt staat
 # (lukt het niet, bijv. offline, dan springt hij terug).
 _nep_ls = TMP / "nep-lichte-stand"
 _nep_ls.mkdir()
@@ -610,7 +610,7 @@ _nep_ls.mkdir()
 _oud_path = os.environ["PATH"]
 os.environ["PATH"] = f"{_nep_ls}:{_oud_path}"
 bi.VOORBEELD = False
-_up = _sys.UpdatesPagina(venster)
+_up = _sys.SpelenPagina(venster)
 _sch = _up.schakels[("bugos-light-mode", ())]
 _sch.setChecked(True)
 _op_slot = not _sch.isEnabled()
@@ -1160,6 +1160,26 @@ _mp.zet(bi.Aanwijzer("touchpad", "Touchpad", True, True, False, False, 50, True,
 wacht()
 _mp.ververs, bi.zet_aanwijzer = _oud_v, _oud_z
 klopt(_ververst == [1], f"U350: lukt een muis- of touchpadinstelling niet, dan staat de schakelaar weer zoals het echt is ({_ververst})")
+
+# Authentiek BugOS: ontwikkelaarsmodus heeft een eigen pagina (niet verstopt in Updates), en geen pagina stuurt je
+# met 'Meer instellingen' naar KDE; dat kan alleen nog via Over deze computer > Geavanceerde instellingen.
+from PySide6.QtWidgets import QLabel as _QL, QPushButton as _QPB  # noqa: E402
+_v2 = mod.Instellingen("spelen")
+_spel_teksten = " ".join(w.text() for w in _v2.paginas["spelen"].findChildren(_QL))
+klopt(_v2.stapel.currentWidget().sleutel == "spelen" and ("Ontwikkelaarsmodus" in _spel_teksten or "Developer mode" in _spel_teksten),
+      "Gamen en programmeren: eigen pagina met de ontwikkelaarsmodus")
+_upd_teksten = " ".join(w.text() for w in _v2.paginas["updates"].findChildren(_QL))
+klopt("Ontwikkelaarsmodus" not in _upd_teksten and "Developer mode" not in _upd_teksten,
+      "Updates gaat alleen over updates (geen ontwikkelaarsmodus meer)")
+_ui_teksten = " ".join(w.text() for w in _v2.paginas["uiterlijk"].findChildren(_QL))
+klopt("startmenu" in _ui_teksten.lower() or "start menu" in _ui_teksten.lower(), "de taakbalk-schakelaars staan bij Uiterlijk")
+_kde_knoppen = [k.text() for pg in _v2.paginas.values() for k in pg.findChildren(_QPB)
+                if "Meer instellingen" in k.text() or "More settings" in k.text()]
+klopt(not _kde_knoppen, f"geen 'Meer instellingen'-knop naar KDE op de pagina's ({_kde_knoppen})")
+_over_teksten = " ".join(w.text() for w in _v2.paginas["over"].findChildren(_QL))
+klopt("Geavanceerde instellingen" in _over_teksten or "Advanced settings" in _over_teksten,
+      "Over deze computer heeft de enige weg naar alle KDE-instellingen")
+_v2.close()
 
 shutil.rmtree(TMP, ignore_errors=True)
 print()

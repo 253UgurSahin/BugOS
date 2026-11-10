@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-abIgapM9Ut4OBPRAy+0NAdxsMSIhWGSrzWVTNdL2IBo=' 'sha256-r7hJJKNuBbFYwaWkqYJVg7cKS6fIao4spmvlQggauWg='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ezLhV05LGlo+tVvw+bpS+jxjrRTYSEvfjlFq97ruqnE=' 'sha256-r7hJJKNuBbFYwaWkqYJVg7cKS6fIao4spmvlQggauWg='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>BugOS</title>
 <meta name="description" content="BugOS is a free operating system that can't break, keeps itself up to date and collects nothing about you. Made for Bugie, and just as nice for gamers and developers.">
@@ -16,7 +16,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preload" href="fonts/funnel-display.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/atkinson-hyperlegible-next.woff2" as="font" type="font/woff2" crossorigin>
-<script>document.documentElement.classList.add("js");try{var t=localStorage.getItem("bugos-theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<script>document.documentElement.classList.add("js");try{var t=new URLSearchParams(location.search).get("theme")||localStorage.getItem("bugos-theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
 <style>
 /* Website v4. Eén verhaal van boven naar beneden:
    nacht-opening met de ringen van "Stip" -> het verhaal (tekst kleurt mee met scrollen)
@@ -210,7 +210,7 @@ code { font-family: var(--f-code); font-size: .9em; }
 .grijs { background: var(--bg2); }
 .citaat { font: 650 clamp(40px, 6vw, 84px)/1 var(--f-display); letter-spacing: -0.05em; max-width: 14ch; margin: 26px 0 0; text-wrap: balance; }
 .citaat .aan { color: var(--rood); }
-.omatest .lead { margin-top: 28px; }
+.bugietest .lead { margin-top: 28px; }
 .regels { list-style: none; margin: clamp(56px, 7vw, 88px) 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 .regels li { background: var(--vlak); border-radius: 24px; box-shadow: var(--tegel-rand); padding: 28px 26px 30px; display: grid; gap: 12px; align-content: start; transition: transform .35s var(--zacht), box-shadow .35s var(--zacht); }
 .regels li:hover { transform: translateY(-4px); box-shadow: var(--tegel-rand), var(--schaduw); }
@@ -472,7 +472,7 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
     </ul>
     <div class="apparaat">
       <div class="deksel" id="deksel">
-        <img src="assets/desktop-dark-1440.webp" srcset="assets/desktop-dark-1440.webp 1440w, assets/desktop-dark.webp 2880w" sizes="(max-width: 1100px) 100vw, 1060px" width="2880" height="1800" fetchpriority="high" alt="The BugOS desktop: the start menu with a 'Good evening' greeting and the BugOS Store, on the red Dot wallpaper.">
+        <img src="assets/desktop-dark-1440.webp" srcset="assets/desktop-dark-1440.webp 1440w, assets/desktop-dark.webp 2880w" sizes="(max-width: 1100px) 100vw, 1060px" width="2880" height="1800" fetchpriority="high" alt="The BugOS desktop: the start menu with a 'Good afternoon' greeting and pinned apps, next to the BugOS Store, on the red Dot wallpaper.">
       </div>
       <div class="voet"></div>
       <div class="zweef links" data-zweef="-0.06" aria-hidden="true"><img src="assets/quickmenu-dark.webp" width="840" height="800" alt=""></div>
@@ -529,7 +529,7 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
 </section>
 
 <!-- ============================================================ DE BUGIE-TEST -->
-<section class="sectie grijs omatest" id="oma-test">
+<section class="sectie grijs bugietest" id="bugie-test">
   <div class="wrap">
     <h2 class="label">Our rule: the Bugie test</h2>
     <p class="citaat rv"><span class="aan">“</span>If Bugie doesn't get it, we make it again.<span class="aan">”</span></p>
@@ -553,40 +553,40 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
     <div class="kop-blok">
       <span class="label">A day at home</span>
       <h2 class="rv">One computer. Everyone at home.</h2>
-      <p class="lead rv">Bugie, Daan and Sanne share the same computer. This is a normal day with BugOS.</p>
+      <p class="lead rv">The whole family shares one computer. This is a normal day with BugOS.</p>
     </div>
     <div class="verloop" id="verloop">
       <ol class="dag">
         <li class="moment">
           <time datetime="08:30">08:30</time>
-          <h3>The computer is ready.</h3><p>Bugie turns on the computer. The updates were already done last night, quietly in the background. Bugie doesn't notice a thing.</p><span class="wie">Automatic updates</span>
-          <figure><div class="venster"><img loading="lazy" data-licht="assets/power-light-crop.webp" data-donker="assets/power-dark-crop.webp" src="assets/power-light-crop.webp" width="1760" height="1100" alt="Settings, Updates and more: the 'Automatic updates' switch is on."></div></figure>
+          <h3>The computer is ready.</h3><p>You turn on the computer. The updates were already done last night, quietly in the background. You don't notice a thing.</p><span class="wie">Automatic updates</span>
+          <figure><div class="venster"><img loading="lazy" data-licht="assets/power-light-crop.webp" data-donker="assets/power-dark-crop.webp" src="assets/power-light-crop.webp" width="1760" height="1100" alt="Settings, Updates: the 'Automatic updates' switch is on."></div></figure>
         </li>
         <li class="moment">
           <time datetime="10:15">10:15</time>
-          <h3>The printer is acting up.</h3><p>Bugie opens "Something is not working". BugOS checks the wifi, sound, the printer and more. If there's a problem, there's a button that fixes it for you.</p><span class="wie">Help in one click</span>
+          <h3>The printer is acting up.</h3><p>Open "Something is not working". BugOS checks the wifi, sound, the printer and more. If there's a problem, there's a button that fixes it for you.</p><span class="wie">Help in one click</span>
           <figure><div class="venster"><img loading="lazy" data-licht="assets/help-light-crop.webp" data-donker="assets/help-dark-crop.webp" src="assets/help-light-crop.webp" width="1760" height="1120" alt="Something is not working: everything has been checked, with a green dot next to internet, wifi, bluetooth, sound, printer, storage and updates."></div></figure>
         </li>
         <li class="moment">
           <time datetime="11:30">11:30</time>
-          <h3>Photos of the grandkids.</h3><p>In Files, your photos, documents and downloads each have their own place, just like in Windows. You see a small preview of every file right away. Click something, and the bottom shows what you can do with it.</p><span class="wie">The file manager</span>
+          <h3>The holiday photos.</h3><p>In Files, your photos, documents and downloads each have their own place, just like in Windows. You see a small preview of every file right away. Click something, and the bottom shows what you can do with it.</p><span class="wie">The file manager</span>
           <figure><div class="venster"><img loading="lazy" data-licht="assets/explorer-light.webp" data-donker="assets/explorer-dark.webp" src="assets/explorer-light.webp" width="2360" height="1480" alt="Files, the BugOS file manager: the Pictures folder with folders and previews of the photos."></div></figure>
         </li>
         <li class="moment">
           <time datetime="13:00">13:00</time>
           <h3>Getting an app.</h3><p>The BugOS Store has well-known, safe apps. One click on Install and you're done. Updates happen by themselves.</p><span class="wie">The BugOS Store</span>
-          <figure><div class="venster"><img loading="lazy" data-licht="assets/store-light.webp" data-donker="assets/store-dark.webp" src="assets/store-light.webp" width="2360" height="1600" alt="The BugOS Store with recommended apps like Firefox, VLC, LibreOffice, Spotify and Steam."></div></figure>
+          <figure><div class="venster"><img loading="lazy" data-licht="assets/store-light.webp" data-donker="assets/store-dark.webp" src="assets/store-light.webp" width="2360" height="1600" alt="The BugOS Store with recommended apps: Firefox, LibreOffice, Gwenview, VLC and Steam are installed, Spotify has an Install button."></div></figure>
         </li>
         <li class="moment smal-beeld">
           <time datetime="16:30">16:30</time>
-          <h3>Daan comes over to game.</h3><p>Game mode on, plug in the controller, play. Steam is ready to go, and the right Nvidia driver is already in there too.</p><span class="wie">For gamers</span>
-          <figure class="smal"><div class="venster" style="border-color:#1F2024"><img loading="lazy" src="assets/quickmenu-dark.webp" width="840" height="800" alt="The quick menu with big buttons: wifi, bluetooth, game mode and dark mode are on."></div></figure>
+          <h3>Time to game.</h3><p>Game mode on in the quick menu, plug in the controller, play. Steam is set up for you, and the Nvidia version of BugOS has the right driver built in.</p><span class="wie">For gamers</span>
+          <figure class="smal"><div class="venster" style="border-color:#1F2024"><img loading="lazy" src="assets/quickmenu-dark.webp" width="840" height="800" alt="The quick menu with big buttons for Wi-Fi, Bluetooth, game mode, dark, do not disturb and mute, and a volume slider. Dark is on."></div></figure>
         </li>
         <li class="moment">
           <time datetime="21:00">21:00</time>
-          <h3>Sanne starts coding.</h3><p>One switch sets up VS Code, containers and programming languages. Everything lives in its own little box, so the system stays intact. Bugie never sees any of it.</p><span class="wie">For developers</span>
+          <h3>Time to code.</h3><p>Settings → Gaming and coding → Developer mode. One switch sets up VS Code, containers and programming languages. Everything lives in its own little box, so the system stays intact. Nobody else at home sees any of it.</p><span class="wie">For developers</span>
           <figure>
-            <div class="terminal" role="img" tabindex="0" aria-label="A terminal: developer mode is on and Sanne opens her project in VS Code.">
+            <div class="terminal" role="img" tabindex="0" aria-label="A terminal: developer mode is on and a project opens in VS Code.">
               <div class="balk" aria-hidden="true"><i></i><i></i><i></i></div>
               <div><span class="c"># Developer mode is on</span></div>
               <div><span class="p">$</span> distrobox enter dev</div>
@@ -646,7 +646,7 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
       <li class="tegel half nacht beeld-midden rv" style="--d:.08s">
         <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/></svg></span>
         <h3>One search for everything</h3><p>Open the start menu and type what you're looking for: an app or a setting.</p>
-        <div class="beeld"><img loading="lazy" src="assets/startmenu-dark.webp" width="1320" height="1280" alt="The start menu: 'Good evening', a search box, pinned apps and recently opened files."></div>
+        <div class="beeld"><img loading="lazy" src="assets/startmenu-dark.webp" width="1320" height="1280" alt="The start menu: a greeting, a search box for apps and settings, pinned apps, and buttons to lock, sign out, restart and shut down."></div>
       </li>
       <li class="tegel klein rv">
         <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M3.5 8.5h17M7 6.5h.01M9.5 6.5h.01"/></svg></span>
@@ -668,7 +668,7 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
       <li class="tegel groot rv" style="--d:.08s">
         <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></span>
         <h3>Settings in plain words</h3><p>Everything in one place, in everyday words. The switches you use most are right at the top.</p>
-        <div class="beeld"><img loading="lazy" data-licht="assets/settings-light.webp" data-donker="assets/settings-dark.webp" src="assets/settings-light.webp" width="2240" height="1640" alt="Settings: big switches for wifi, bluetooth, night light and dark, a volume slider and a list of all settings with a short explanation each."></div>
+        <div class="beeld"><img loading="lazy" data-licht="assets/settings-light.webp" data-donker="assets/settings-dark.webp" src="assets/settings-light.webp" width="2240" height="1640" alt="Settings: ten groups in the sidebar, switches for night light and dark, a volume slider and a list of all settings with a short explanation each."></div>
       </li>
       <li class="tegel klein rv">
         <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.3 2.5 3.5 5.3 3.5 8.5s-1.2 6-3.5 8.5c-2.3-2.5-3.5-5.3-3.5-8.5s1.2-6 3.5-8.5z"/></svg></span>
@@ -721,7 +721,7 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
     <div class="kop-blok">
       <span class="label">Switching</span>
       <h2 class="rv">From Windows to BugOS in four steps.</h2>
-      <p class="lead rv">The little BugOS Overstap program does the heavy lifting on your Windows computer. Nothing happens until you press a button.</p>
+      <p class="lead rv">The little BugOS Switch program does the heavy lifting on your Windows computer. Nothing happens until you press a button.</p>
     </div>
     <ol class="stappen">
       <li class="rv"><span class="nr">1</span><h3>Check</h3><p>Can your computer run BugOS? Overstap checks it for you.</p></li>
@@ -743,8 +743,8 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
 <circle cx="128" cy="146" r="94" fill="url(#winmerk-l)" clip-path="url(#winmerk-links)"/>
 <circle cx="128" cy="146" r="94" fill="url(#winmerk-r)" clip-path="url(#winmerk-rechts)"/>
 <g fill="#16171C"><circle cx="90" cy="120" r="18"/><circle cx="166" cy="120" r="18"/><circle cx="88" cy="186" r="14"/><circle cx="168" cy="186" r="14"/></g>
-</g></svg>BugOS Overstap<div class="win-knoppen"><span><svg viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor"/></svg></span><span><svg viewBox="0 0 10 10"><rect x=".5" y=".5" width="9" height="9" fill="none" stroke="currentColor"/></svg></span><span><svg viewBox="0 0 10 10"><path d="M0 0l10 10M10 0 0 10" stroke="currentColor"/></svg></span></div></div>
-      <img loading="lazy" src="assets/switch-windows.webp" width="1320" height="840" alt="BugOS Overstap on Windows, step 1: Can my computer run BugOS? With a green check mark next to 64-bit, memory, UEFI and graphics card.">
+</g></svg>BugOS Switch<div class="win-knoppen"><span><svg viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor"/></svg></span><span><svg viewBox="0 0 10 10"><rect x=".5" y=".5" width="9" height="9" fill="none" stroke="currentColor"/></svg></span><span><svg viewBox="0 0 10 10"><path d="M0 0l10 10M10 0 0 10" stroke="currentColor"/></svg></span></div></div>
+      <img loading="lazy" src="assets/switch-windows.webp" width="1320" height="840" alt="BugOS Switch on Windows, step 1: Can my computer run BugOS? With a green check mark next to 64-bit, memory, UEFI and graphics card.">
     </figure>
     <p class="terugzetten">In BugOS you put everything back with one button, in the "Files from Windows" app.</p>
   </div>
@@ -772,9 +772,9 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
       <div class="vragen-lijst">
         <details><summary>Is BugOS really free?</summary><p>Yes. BugOS is free and will stay free. The source code is open (GPL-3.0), so anyone can see how it works. There are no ads and you don't need an account.</p></details>
         <details><summary>Will my Windows programs work?</summary><p>Many will. Double-click an .exe and BugOS starts it with Wine. For well-known programs, like Spotify or Zoom, BugOS offers the real BugOS version right away. Some programs, like Adobe or the newest Office, don't work; for those, BugOS suggests a good alternative.</p></details>
-        <details><summary>Can I keep Windows?</summary><p>Yes. BugOS Overstap can make Windows a bit smaller, so BugOS fits next to it. When you start up, you pick which one you want to use.</p></details>
+        <details><summary>Can I keep Windows?</summary><p>Yes. BugOS Switch can make Windows a bit smaller, so BugOS fits next to it. When you start up, you pick which one you want to use.</p></details>
         <details><summary>What if an update goes wrong?</summary><p>Then you pick yesterday's version when you start up. Everything is back the way it was. You can also do it from Settings, with the "Back to previous version" button.</p></details>
-        <details><summary>Is it good for gaming?</summary><p>For sure. Steam with Proton is built in, controllers work right away and game mode gets the most out of your computer. Games with strict anti-cheat (some online shooters) sometimes don't work; check protondb.com to be sure.</p></details>
+        <details><summary>Is it good for gaming?</summary><p>For sure. Steam with Proton is built in, controllers work in Steam games and game mode gets the most out of your computer. Games with strict anti-cheat (some online shooters) sometimes don't work; check protondb.com to be sure.</p></details>
         <details><summary>Will my printer work?</summary><p>Most printers work right away. Doesn't yours? Then open "Something is not working": BugOS checks it and helps you add the printer.</p></details>
         <details><summary>Is BugOS safe?</summary><p>Yes. Programs can't change the system itself, apps run in their own closed-off space and updates come by themselves. On top of that, BugOS collects nothing about you.</p></details>
       </div>
@@ -814,8 +814,8 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
       <div class="optie rv" style="--d:.16s">
         <svg class="ic" viewBox="0 0 52 52" aria-hidden="true"><rect width="52" height="52" rx="14" fill="#2F7BF5"/><path d="M16 26h20M29 19l7 7-7 7" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <h3>Still on Windows?</h3>
-        <p>BugOS Overstap picks the right version, brings your files along and makes the USB stick for you.</p>
-        <a class="knop knop-rand" href="https://github.com/253UgurSahin/BugOS/releases/latest">BugOS Overstap (.zip)</a>
+        <p>BugOS Switch picks the right version, brings your files along and makes the USB stick for you.</p>
+        <a class="knop knop-rand" href="https://github.com/253UgurSahin/BugOS/releases/latest">BugOS Switch (.zip)</a>
         <small>For Windows 10 and 11</small>
       </div>
     </div>

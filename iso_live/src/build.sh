@@ -120,7 +120,15 @@ default_partitioning =
     /home (min 500 MiB, free 50 GiB)
     /var  (btrfs)
 
-# De pagina "Date and time" blijft zichtbaar: BugOS is voor de hele wereld,
+[User Interface]
+# Het KDE-profiel van Fedora (fedora-kde, onder fedora-kinoite) verbergt de
+# pagina's "Account" en "Datum en tijd": daar maakt KDE's eerste-keer-assistent
+# (plasma-setup) de gebruiker. Die staat bij BugOS uit (system.sh), dus het
+# installatieprogramma moet ze tonen. Zonder deze regel was er na het
+# installeren GEEN gebruiker (je kon niet inloggen) en stond de klok op New York.
+hidden_webui_pages =
+
+# De pagina "Date and time" is dus zichtbaar: BugOS is voor de hele wereld,
 # dus de gebruiker kiest zelf zijn tijdzone (er staat er geen vast in de
 # kickstart hieronder).
 

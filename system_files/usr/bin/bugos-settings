@@ -31,10 +31,12 @@ from bugos_settings_onderdelen import (  # noqa: E402,F401  (KiesDialoog en Wach
     Blad, KiesDialoog, Regelaar, WachtwoordDialoog, op_achtergrond, stijl,
 )
 from bugos_settings_scherm import EnergiePagina, GeluidPagina, SchermPagina, UiterlijkPagina  # noqa: E402
-from bugos_settings_systeem import OverPagina, UpdatesPagina  # noqa: E402
+from bugos_settings_systeem import OverPagina, SpelenPagina, UpdatesPagina  # noqa: E402
 from bugos_settings_zien import MuisPagina, ZienPagina  # noqa: E402
 from PySide6.QtCore import QEvent, QSize, QTimer  # noqa: E402
-from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout  # noqa: E402
+from PySide6.QtWidgets import (  # noqa: E402
+    QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
+)
 
 
 # ================================================================= start ===
@@ -91,12 +93,14 @@ class StartPagina(Blad):
         # alle onderdelen, met hoe ze nu staan
         self.alles = self.kaart(t("Alle instellingen", "All settings"))
         self.rijen: dict[str, Rij] = {}
-        for klasse in PAGINAS[1:]:
-            rij = Rij(klasse.icoon, klasse.naam(), t(klasse.uitleg_nl, klasse.uitleg_en) if klasse.uitleg_nl else "",
-                      klikbaar=True)
-            rij.geklikt.connect(lambda s=klasse.sleutel: self.venster.ga_naar(s))
+        for g in GROEPEN[1:]:
+            rij = Rij(g.icoon, g.naam(), g.uitleg(), klikbaar=True)
+            eerste = g.paginas[0].sleutel
+            rij.geklikt.connect(lambda s=eerste: self.venster.ga_naar(s))
             self.alles.voeg(rij)
-            self.rijen[klasse.sleutel] = rij
+            # Op de sleutel van elke pagina in de groep: toon() zet bijv. de wifi-naam en het volume erbij.
+            for klasse in g.paginas:
+                self.rijen.setdefault(klasse.sleutel, rij)
 
     def ververs(self) -> None:
         def lees():
@@ -148,36 +152,164 @@ class StartPagina(Blad):
                     gevonden += 1
             if not gevonden:
                 self.zoek_kaart.voeg(Rij("kruis", t("Niks gevonden", "Nothing found"),
-                                         t("Probeer een ander woord, of kies 'Meer instellingen'.",
-                                           "Try another word, or choose 'More settings'.")))
+                                         t("Probeer een ander woord.", "Try another word.")))
         self.zoek_kop.setVisible(bool(woorden))
         self.zoek_kaart.setVisible(bool(woorden))
 
 
 PAGINAS: list[type[Blad]] = [StartPagina, WifiPagina, BluetoothPagina, PrintersPagina, GeluidPagina, SchermPagina,
                              EnergiePagina, UiterlijkPagina, MeldingenPagina, MuisPagina, ZienPagina, TijdPagina,
-                             InloggenPagina, ProgrammasPagina, UpdatesPagina, OverPagina]
+                             InloggenPagina, ProgrammasPagina, SpelenPagina, UpdatesPagina, OverPagina]
 OUDE_NAMEN = {"schakelaars": "updates"}
 
 
+# ================================================================ groepen ===
+# Zoals Windows 11: niet 17 losse onderdelen in de zijbalk (dat paste niet eens op een laptopscherm), maar 10
+# groepen. Een groep met meer pagina's krijgt bovenaan tabjes. Elke pagina houdt zijn eigen sleutel, dus
+# 'bugos-settings bluetooth', het zoeken in het startmenu en de links vanuit andere apps werken gewoon.
+
+class Indeling:
+    def __init__(self, sleutel: str, icoon: str, nl: str, en: str, unl: str, uen: str, paginas: list[type[Blad]]):
+        self.sleutel, self.icoon, self.nl, self.en, self.unl, self.uen = sleutel, icoon, nl, en, unl, uen
+        self.paginas = paginas
+
+    def naam(self) -> str:
+        return t(self.nl, self.en)
+
+    def uitleg(self) -> str:
+        return t(self.unl, self.uen)
+
+
+GROEPEN: list[Indeling] = [
+    Indeling("start", StartPagina.icoon, "Start", "Home", "", "", [StartPagina]),
+    Indeling("wifi", WifiPagina.icoon, "Wifi en internet", "Wi-Fi and internet",
+             "Klik op een netwerk om te verbinden.", "Click a network to connect.", [WifiPagina]),
+    Indeling("apparaten", BluetoothPagina.icoon, "Apparaten", "Devices",
+             "Bluetooth, printers en scanners, muis en touchpad.", "Bluetooth, printers and scanners, mouse and touchpad.",
+             [BluetoothPagina, PrintersPagina, MuisPagina]),
+    Indeling("geluid-groep", GeluidPagina.icoon, "Geluid en meldingen", "Sound and notifications",
+             "Volume, luidsprekers, niet storen.", "Volume, speakers, do not disturb.", [GeluidPagina, MeldingenPagina]),
+    Indeling("beeld", SchermPagina.icoon, "Scherm en uiterlijk", "Display and appearance",
+             "Helderheid, grootte, licht of donker, achtergrond en taakbalk.",
+             "Brightness, size, light or dark, background and taskbar.", [SchermPagina, UiterlijkPagina]),
+    Indeling("energie", EnergiePagina.icoon, "Energie", "Power",
+             "Zuinig of snel, batterij en slaapstand.", "Saving or fast, battery and sleep.", [EnergiePagina]),
+    Indeling("account", InloggenPagina.icoon, "Account en taal", "Account and language",
+             "Je naam en wachtwoord, de klok en de taal.", "Your name and password, the clock and the language.",
+             [InloggenPagina, TijdPagina]),
+    Indeling("zien", ZienPagina.icoon, "Makkelijker zien", "Easier to see",
+             "Grotere letters, vergrootglas, voorlezen.", "Bigger text, magnifier, read aloud.", [ZienPagina]),
+    Indeling("apps", SpelenPagina.icoon, "Apps en gamen", "Apps and gaming",
+             "Standaardprogramma's, game-modus en ontwikkelaarsmodus.", "Default programs, game mode and developer mode.",
+             [ProgrammasPagina, SpelenPagina]),
+    Indeling("systeem", UpdatesPagina.icoon, "Updates en info", "Updates and info",
+             "Updates, terug naar de vorige versie, over deze computer.",
+             "Updates, back to the previous version, about this computer.", [UpdatesPagina, OverPagina]),
+]
+GROEP_VAN = {k.sleutel: g for g in GROEPEN for k in g.paginas}
+
+
+class GroepPagina(QWidget):
+    """Meer pagina's onder één onderdeel van de zijbalk, met tabjes bovenaan (zoals Windows)."""
+
+    def __init__(self, groep: Indeling, bladen: list[Blad]):
+        super().__init__()
+        self.groep = groep
+        self.bladen = {b.sleutel: b for b in bladen}
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        rij = QHBoxLayout()
+        rij.setContentsMargins(40, 22, 40, 0)
+        rij.setSpacing(8)
+        self.tabs: dict[str, QPushButton] = {}
+        knoppen = QButtonGroup(self)
+        for b in bladen:
+            k = QPushButton(b.naam())
+            k.setObjectName("tab")
+            k.setCheckable(True)
+            k.setMinimumHeight(36)
+            k.clicked.connect(lambda _c=False, s=b.sleutel: self.toon(s))
+            knoppen.addButton(k)
+            rij.addWidget(k)
+            self.tabs[b.sleutel] = k
+        rij.addStretch(1)
+        lay.addLayout(rij)
+        self.stapel = QStackedWidget()
+        for b in bladen:
+            self.stapel.addWidget(b)
+        lay.addWidget(self.stapel, 1)
+        self.toon(bladen[0].sleutel, ververs=False)
+
+    @property
+    def sleutel(self) -> str:   # wat er nu echt open is (voor Instellingen.huidige en de tests)
+        return self.stapel.currentWidget().sleutel
+
+    def toon(self, sleutel: str, ververs: bool = True) -> None:
+        blad = self.bladen[sleutel]
+        self.stapel.setCurrentWidget(blad)
+        self.tabs[sleutel].setChecked(True)
+        if ververs:
+            blad.ververs()
+
+    def ververs(self) -> None:
+        self.stapel.currentWidget().ververs()
+
+
 # ================================================================ venster ===
+
+TAB_STIJL = """
+QPushButton#tab { border: 1px solid palette(mid); border-radius: 18px; padding: 6px 18px;
+                  background: transparent; font-weight: 600; }
+QPushButton#tab:hover { background: palette(midlight); }
+QPushButton#tab:checked { background: #DE2F3E; border-color: #DE2F3E; color: #FFFFFF; }
+"""
 
 class Instellingen(Venster):
     def __init__(self, begin: str = "start"):
         super().__init__(t("Instellingen", "Settings"), zoeken=t("Zoek een instelling", "Search settings"),
                          maat=(1120, 820))
         self.setStyleSheet(stijl())
-        for klasse in PAGINAS:
-            self.voeg_pagina(klasse.sleutel, klasse.icoon,
-                             t("Start", "Home") if klasse is StartPagina else klasse.naam(), klasse(self))
-        for i in range(self.nav.count()):  # veel onderdelen: de regels iets dichter op elkaar
-            self.nav.item(i).setSizeHint(QSize(0, 40))
-        self.onder_knop(t("Meer instellingen", "More settings"), "code", lambda: start("systemsettings"),
-                        tip=t("Alle KDE-instellingen (voor gevorderden)", "All KDE settings (advanced)"))
+        self.groepen: dict[str, GroepPagina] = {}
+        for g in GROEPEN:
+            bladen = [klasse(self) for klasse in g.paginas]
+            if len(bladen) == 1:
+                self.voeg_pagina(bladen[0].sleutel, g.icoon, g.naam(), bladen[0])
+                continue
+            groep = GroepPagina(g, bladen)
+            self.voeg_pagina(g.sleutel, g.icoon, g.naam(), groep)
+            self.groepen[g.sleutel] = groep
+            for b in bladen:
+                self.paginas[b.sleutel] = b   # elke pagina blijft op zijn eigen sleutel te vinden
+        self.setStyleSheet(self.styleSheet() + TAB_STIJL)
         self.zoekveld.textChanged.connect(self.zoeken)
         begin = OUDE_NAMEN.get(begin, begin)
         self.ga_naar(begin if begin in self.paginas else "start")
         self.nav.setFocus()  # niet meteen in het zoekveld
+
+    def open_blad(self):
+        """De pagina die je nu ziet (in een groep: die van het gekozen tabje)."""
+        w = self.stapel.currentWidget()
+        return w.stapel.currentWidget() if isinstance(w, GroepPagina) else w
+
+    def huidige(self) -> str:
+        """De pagina die open is (in een groep: het gekozen tabje)."""
+        rij = super().huidige()
+        groep = self.groepen.get(rij) if hasattr(self, "groepen") else None
+        return groep.sleutel if groep is not None else rij
+
+    def ga_naar(self, sleutel: str) -> None:
+        sleutel = OUDE_NAMEN.get(sleutel, sleutel)
+        g = GROEP_VAN.get(sleutel)
+        if g is None or g.sleutel not in getattr(self, "groepen", {}):
+            super().ga_naar(sleutel)
+            return
+        groep = self.groepen[g.sleutel]
+        if super().huidige() == g.sleutel:
+            groep.toon(sleutel)
+        else:
+            groep.toon(sleutel, ververs=False)
+            super().ga_naar(g.sleutel)   # opent de groep (en ververst het gekozen tabje)
 
     def tweede_start(self, args: list[str]) -> None:
         """Instellingen was al open en wordt opnieuw gestart (bijv. vanuit het snelmenu): naar die pagina (U208)."""

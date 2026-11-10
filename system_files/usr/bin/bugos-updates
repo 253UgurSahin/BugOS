@@ -47,8 +47,8 @@ niet_bewaard_terug() {
     # waarschuwing is, geen groen 'gelukt' (U490).
     echo bugos-niet-bewaard
     [ "${1:-}" = herstart ] && t "Start de computer opnieuw op om terug te gaan." "Restart the computer to go back."
-    t "Teruggezet, maar let op: de keuze 'zelf updaten' kon niet bewaard worden (is je computer vol?). Zet 'Updates vanzelf' uit in Instellingen > Updates en meer, anders kan de nieuwe versie terugkomen." \
-        "Rolled back, but note: the choice to update yourself could not be saved (is your computer full?). Turn off 'Automatic updates' in Settings > Updates and more, or the new version may come back."
+    t "Teruggezet, maar let op: de keuze 'zelf updaten' kon niet bewaard worden (is je computer vol?). Zet 'Updates vanzelf' uit in Instellingen > Updates, anders kan de nieuwe versie terugkomen." \
+        "Rolled back, but note: the choice to update yourself could not be saved (is your computer full?). Turn off 'Automatic updates' in Settings > Updates, or the new version may come back."
 }
 
 niet_bewaard() {
@@ -89,9 +89,9 @@ hand)
     zet_keuze hand || niet_bewaard
     systemctl disable --now "${TIMERS[@]}"
     gebruiker_timer mask   # (gaat in bij de volgende keer inloggen)
-    # bugos-updatecheck meldt een nieuwe versie; bijwerken gaat via die melding of Instellingen > Updates en meer (U238).
-    t "Updates doe je nu zelf: BugOS meldt het als er een nieuwe versie is (Instellingen > Updates en meer)." \
-        "You now do updates yourself: BugOS tells you when a new version is available (Settings > Updates and more)."
+    # bugos-updatecheck meldt een nieuwe versie; bijwerken gaat via die melding of Instellingen > Updates (U238).
+    t "Updates doe je nu zelf: BugOS meldt het als er een nieuwe versie is (Instellingen > Updates)." \
+        "You now do updates yourself: BugOS tells you when a new version is available (Settings > Updates)."
     ;;
 nu)
     als_beheerder "$@"

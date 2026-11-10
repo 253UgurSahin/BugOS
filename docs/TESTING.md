@@ -13,7 +13,7 @@
 3. Leave "tag" on `latest` and "soort" on `live` (the "try it first" stick).
 4. Turn on "publiceren" if the ISO should become a real download (a GitHub Release). Leave it off if you only want to test. (Only the live stick is published; the classic stick is always a 7-day test download.)
 5. After about 30 to 60 minutes the ISO is at the bottom of the page (**Artifacts**), or under **Releases** if you published it.
-6. Put it on a USB stick with **BugOS Overstap** (Windows), [Fedora Media Writer](https://fedoraproject.org/workstation/download) or [balenaEtcher](https://etcher.balena.io/).
+6. Put it on a USB stick with **BugOS Switch** (Windows), [Fedora Media Writer](https://fedoraproject.org/workstation/download) or [balenaEtcher](https://etcher.balena.io/).
 
 This is what the "try it first" stick looks like when it starts:
 
@@ -36,7 +36,7 @@ Type this in the terminal:
 sudo bootc switch ghcr.io/253ugursahin/bugos:latest
 ```
 
-Then restart the computer. Want to go back? Use Settings > Updates and more, or hold Shift (or press Esc) while the computer starts and pick the previous version in the start-up menu.
+Then restart the computer. Want to go back? Use Settings > Updates, or hold Shift (or press Esc) while the computer starts and pick the previous version in the start-up menu.
 
 ## What should you test?
 
@@ -50,12 +50,12 @@ Then restart the computer. Want to go back? Use Settings > Updates and more, or 
 - [ ] Open **Settings** and search for "wifi"
 - [ ] Open **Something is not working** and mute the sound: do you get an "Unmute" button?
 - [ ] Open **Backup** and make a backup to a USB stick
-- [ ] Try **BugOS Overstap** on a Windows PC (steps 1 and 2 are safe, they change nothing on your PC)
+- [ ] Try **BugOS Switch** on a Windows PC (steps 1 and 2 are safe, they change nothing on your PC)
 - [ ] Open the **BugOS Store** and install something
 - [ ] The ladybug at the bottom left is the **BugOS start menu**: search for "wifi" and open the page; the Windows key opens the menu
 - [ ] The **quick menu** (two sliders, next to the system tray): turn Wi-Fi off and on; the little arrow next to Wi-Fi opens Settings
 - [ ] Shut down from the start menu: you see the **BugOS shutdown screen** with big tiles; "Cancel" takes you back
-- [ ] Rather have the KDE menu? Settings → Updates and more → Taskbar: turn the BugOS start menu off and on again
+- [ ] Rather have the KDE menu? Settings → Appearance → Taskbar: turn the BugOS start menu off and on again
 - [ ] Start the "try it first" stick: does the welcome screen appear with "Try first" and "Install BugOS"?
 - [ ] Is there no "Aurora" or "Fedora" anywhere on the stick (no "Welcome Center", one install button, English texts (or your chosen language))?
 - [ ] Install BugOS **without internet** (cable out, Wi-Fi off): does it work, and does BugOS start afterwards?
@@ -68,9 +68,9 @@ Then restart the computer. Want to go back? Use Settings > Updates and more, or 
 - [ ] Is the background light in light mode and dark in dark mode?
 - [ ] Does the text look neat everywhere (the Inter font)? Are there no strange or too-small letters?
 - [ ] Lock the screen (Windows key + L): do you see the Stip background?
-- [ ] BugOS Overstap on Windows: is the window sharp, also when Windows is set to 125% or 150%?
+- [ ] BugOS Switch on Windows: is the window sharp, also when Windows is set to 125% or 150%?
 
-## Downloading BugOS Overstap (for Windows)
+## Downloading BugOS Switch (for Windows)
 
 - Go to **Actions**, then **Windows-overstap**, pick the latest green run and download **BugOS-Switch** at the bottom.
 - Or make a version tag (like `v0.2`) and start **Windows-overstap** by hand on that tag. Then it shows up under **Releases** as a zip.

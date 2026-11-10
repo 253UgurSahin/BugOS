@@ -230,7 +230,9 @@ ACTIES: list[tuple[list[str], str]] = [
     (["go-down", "pan-down", "expand"], "onder"),
     (["go-first", "go-first-view"], "eerste"), (["go-last", "go-last-view"], "laatste"),
     (["go-top"], "top"), (["go-bottom"], "bodem"), (["go-home"], "huis"),
-    (["arrow-left"], "pijl-links"), (["arrow-right"], "pijl-rechts"), (["arrow-up"], "pijl-op"), (["arrow-down"], "pijl-neer"),
+    # arrow-* is bij KDE (Breeze) een hoekje, geen pijl: het pijltje van het systeemvak, schuifbalken en sorteren.
+    # Een hoekje, net als Windows 11 (^ naast de klok); de echte pijlen heten go-*.
+    (["arrow-left"], "links"), (["arrow-right"], "rechts"), (["arrow-up"], "boven"), (["arrow-down"], "onder"),
     (["window-close", "dialog-close", "tab-close"], "kruis"), (["window-minimize"], "streep"),
     (["window-maximize"], "vierkant"), (["window-restore"], "terugzetten"),
     (["window-new"], "nieuw-venster"), (["window-pin"], "speld"),

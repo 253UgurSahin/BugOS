@@ -1,0 +1,21 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "BugOS"
+            }
+        ],
+        "Category": "Date and Time",
+        "Description": "De klok op de taakbalk: tijd en datum, klein en even groot, zoals in Windows. Klik voor de kalender.",
+        "Description[en]": "The clock on the taskbar: time and date, small and the same size, like in Windows. Click for the calendar.",
+        "Icon": "preferences-system-time",
+        "Id": "org.bugos.clock",
+        "License": "GPL-3.0-or-later",
+        "Name": "BugOS Klok",
+        "Name[en]": "BugOS Clock",
+        "Version": "0.1",
+        "Website": "https://github.com/253UgurSahin/BugOS"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

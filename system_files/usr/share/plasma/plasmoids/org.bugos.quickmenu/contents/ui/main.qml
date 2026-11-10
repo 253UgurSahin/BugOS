@@ -59,7 +59,8 @@ PlasmoidItem {
         // kleinere maat, waardoor het schuifje maar 14 x 12 px werd naast een bel van 20 x 22.
         Kirigami.Icon {
             anchors.centerIn: parent
-            readonly property int maat: Math.min(Kirigami.Units.iconSizes.smallMedium, parent.width, parent.height)
+            // Zo groot als de pictogrammen in het systeemvak van Windows 11 (16), niet groter dan de rest.
+            readonly property int maat: Math.min(Kirigami.Units.iconSizes.small, parent.width, parent.height)
             width: maat
             height: maat
             roundToIconSize: false

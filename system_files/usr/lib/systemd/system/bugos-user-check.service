@@ -1,0 +1,20 @@
+# BugOS: nooit een inlogscherm zonder iemand die kan inloggen.
+#
+# Normaal maakt het installatieprogramma de gebruiker, en staat KDE's eigen
+# eerste-keer-assistent (plasma-setup) daarom uit (/etc/plasma-setup-done).
+# Is er toch geen gewone gebruiker (bijv. een installatie zonder accountpagina,
+# of 'bootc switch' vanaf een systeem zonder gebruiker), dan halen we dat
+# merkteken weg: dan vraagt plasma-setup vóór het inlogscherm om een account.
+[Unit]
+Description=BugOS: zorg dat er een gebruiker is om mee in te loggen
+Before=plasma-setup.service display-manager.service
+After=local-fs.target systemd-sysusers.service systemd-userdbd.service
+ConditionPathExists=/etc/plasma-setup-done
+ConditionKernelCommandLine=!rd.live.image
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/bugos-user-check
+
+[Install]
+WantedBy=multi-user.target
