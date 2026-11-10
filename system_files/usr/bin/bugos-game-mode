@@ -53,7 +53,7 @@ andere_gamers() {
     local f
     local nr
     for f in "$GAMER_MAP"/bugos-spelmodus-*; do
-        [ -f "$f" ] && [ ! -L "$f" ] && [ "$f" != "$GAMER_MERK" ] || continue
+        if ! { [ -f "$f" ] && [ ! -L "$f" ] && [ "$f" != "$GAMER_MERK" ]; }; then continue; fi
         # Alleen een echt merkje telt: een gewoon account (1000 of hoger), en het bestand is van dat account zelf.
         # Anders kon iemand met 'touch .../bugos-spelmodus-0' (of het nummer van een ander) de pc op volle kracht houden (U435).
         nr="${f##*-}"
@@ -112,6 +112,7 @@ aan() {
     else
         stroomprofiel_get >"$BUGOS_CONFIG/stroomprofiel-voor-spelmodus"
     fi
+    # shellcheck disable=SC2174  # bedoeld: alleen de map zelf krijgt 1777 (de mappen erboven bestaan al)
     [ -d "$GAMER_MAP" ] || mkdir -m 1777 -p "$GAMER_MAP" 2>/dev/null
     touch "$GAMER_MERK" 2>/dev/null
     stroomprofiel_zet performance
@@ -210,6 +211,7 @@ if [ "${1:-}" = status ]; then
         [ -f "$MARKER" ] || rm -f "$GAMER_MERK"
     fi
 elif [ -f "$MARKER" ] && [ ! -e "$GAMER_MERK" ]; then
+    # shellcheck disable=SC2174  # bedoeld: alleen de map zelf krijgt 1777 (de mappen erboven bestaan al)
     [ -d "$GAMER_MAP" ] || mkdir -m 1777 -p "$GAMER_MAP" 2>/dev/null
     touch "$GAMER_MERK" 2>/dev/null
 elif [ ! -f "$MARKER" ] && [ -e "$GAMER_MERK" ]; then
