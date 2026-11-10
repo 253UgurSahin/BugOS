@@ -38,7 +38,7 @@ PlasmoidItem {
     function voerUit(cmd) { opdracht.connectSource(cmd) }
     function aanhalen(tekst) { return "'" + String(tekst).replace(/'/g, "'\\''") + "'" }
 
-    onExpandedChanged: if (expanded) voerUit("bugos-start-data")
+    onExpandedChanged: if (root.expanded) voerUit("bugos-start-data")
     Component.onCompleted: voerUit("bugos-start-data")
 
     // Rechtermuisknop op Start: de snelle lijst van Windows (Win+X), met Taakbeheer.

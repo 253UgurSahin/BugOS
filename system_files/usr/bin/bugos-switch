@@ -281,7 +281,7 @@ def venster() -> int:
             lay.addWidget(kop_met_icoon("lijn:download", "neutraal", t("Je bestanden van Windows", "Your files from Windows"),
                                         t("Heb je met \"BugOS Overstap\" je bestanden op een USB-schijf gezet? "
                                           "Steek die schijf in en druk op de knop.",
-                                          "Did you put your files on a USB drive with \"BugOS Overstap\"? "
+                                          "Did you put your files on a USB drive with \"BugOS Switch\"? "
                                           "Plug in that drive and press the button.")))
             wat = Groep()
             for icoon, tint, kop_t, sub_t in (
