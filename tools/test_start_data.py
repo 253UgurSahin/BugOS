@@ -94,6 +94,11 @@ apps.mkdir(parents=True)
                                               "Categories=System;\nIcon=folder\n")
 (apps / "tr.desktop").write_text("[Desktop Entry]\nType=Application\nName=Sistem İzleyicisi\nCategories=System;\n")
 (apps / "geheim.desktop").write_text("[Desktop Entry]\nType=Application\nName=Geheim\nNoDisplay=true\n")
+# Een programma met een eigen BugOS-naam, en een waarvan de uitleg de naam herhaalt.
+(apps / "org.kde.okular.desktop").write_text("[Desktop Entry]\nType=Application\nName=Okular\n"
+                                              "GenericName=Document Viewer\nCategories=Office;\nIcon=okular\n")
+(apps / "dubbel.desktop").write_text("[Desktop Entry]\nType=Application\nName=Terminal\nGenericName=Terminal\n"
+                                     "Categories=System;\n")
 (TMP / "thuis").mkdir()
 (TMP / "data").mkdir()
 
@@ -114,7 +119,13 @@ _tr = next((a for a in data["apps"] if a["naam"] == "Sistem İzleyicisi"), None)
 klopt(_tr is not None and "izleyici" in _tr["zoek"],
       f"U268: de zoektekst van 'Sistem İzleyicisi' bevat 'izleyici' (Turkse İ), zodat het startmenu hem vindt ({_tr and _tr['zoek']!r})")
 namen = [a["naam"] for a in data["apps"] if a["soort"] == "app"]
-klopt(namen == ["Bestanden", "Firefox", "Sistem İzleyicisi", "Steam"], f"gegevens: apps op naam, verborgen niet ({namen})")
+klopt(namen == ["Bestanden", "Documenten bekijken", "Firefox", "Sistem İzleyicisi", "Steam", "Terminal"],
+      f"gegevens: apps op naam, verborgen niet ({namen})")
+_ok = next((a for a in data["apps"] if a["id"] == "org.kde.okular.desktop"), {})
+klopt(_ok.get("uitleg") == "PDF's en andere documenten lezen" and "okular" in _ok.get("zoek", ""),
+      f"startmenu: Okular heet 'Documenten bekijken' met een eigen uitleg, en is als 'okular' te vinden ({_ok})")
+_db = next((a for a in data["apps"] if a["id"] == "dubbel.desktop"), {})
+klopt(_db.get("uitleg") == "", f"startmenu: een uitleg die alleen de naam herhaalt, valt weg ({_db.get('uitleg')!r})")
 fav = [a["id"] for a in data["favorieten"]]
 klopt(fav == ["firefox.desktop", "bugos-files.desktop", "steam.desktop"],
       f"favorieten: Firefox en Steam ook onder hun rpm-naam, zonder dubbelen ({fav})")
