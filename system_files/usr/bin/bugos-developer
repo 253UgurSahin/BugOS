@@ -14,7 +14,8 @@
 
 MARKER="$BUGOS_CONFIG/ontwikkelaar-aan"
 DOOS=dev
-DOOS_BEELD=registry.fedoraproject.org/fedora-toolbox:latest
+# Dezelfde Fedora-versie als BugOS zelf (een vaste versie, niet 'latest') (U263).
+DOOS_BEELD="registry.fedoraproject.org/fedora-toolbox:$(. /etc/os-release 2>/dev/null && echo "${VERSION_ID:-44}")"
 DEV_PAKKETTEN="git gcc gcc-c++ make cmake python3 python3-pip nodejs npm rust cargo golang jq"
 
 aan() {
@@ -22,17 +23,39 @@ aan() {
     melding "$(t "Ontwikkelaarsmodus wordt klaargezet..." "Setting up developer mode...")" \
         "$(t "Dit kan 5 tot 10 minuten duren." "This can take 5 to 10 minutes.")"
 
-    flatpak install --user --noninteractive flathub com.visualstudio.code >/dev/null 2>&1 ||
-        flatpak install --noninteractive flathub com.visualstudio.code >/dev/null 2>&1
+    # Lukt een stap niet, dan zeggen we dat eerlijk en blijft de modus uit (geen "AAN" zonder dat het werkt).
+    local gelukt=ja log
+    # Wat flatpak en distrobox zeggen, bewaren: een volle schijf is geen 'ben je online?' (U411).
+    log="$(mktemp)"
+    # 9>&-: het slot (U262) niet doorgeven aan wat blijft draaien (podman/conmon van het doosje), anders bleef
+    # het slot de hele sessie dicht en wachtte 'uit' eeuwig (U270).
+    flatpak install --user --noninteractive flathub com.visualstudio.code >>"$log" 2>&1 9>&- ||
+        flatpak install --noninteractive flathub com.visualstudio.code >>"$log" 2>&1 9>&- ||
+        gelukt=nee
 
-    systemctl --user enable --now podman.socket >/dev/null 2>&1
+    systemctl --user enable --now podman.socket >/dev/null 2>&1 9>&-
 
-    if ! distrobox list 2>/dev/null | grep -q " $DOOS "; then
+    if [ "$gelukt" = ja ] && ! distrobox list 2>/dev/null 9>&- | grep -q " $DOOS "; then
         distrobox create --yes --name "$DOOS" --image "$DOOS_BEELD" \
-            --additional-packages "$DEV_PAKKETTEN" >/dev/null 2>&1
+            --additional-packages "$DEV_PAKKETTEN" >>"$log" 2>&1 9>&- || gelukt=nee
     fi
     # Eerste keer binnengaan maakt het doosje echt af.
-    distrobox enter "$DOOS" -- true >/dev/null 2>&1
+    if [ "$gelukt" = ja ]; then
+        distrobox enter "$DOOS" -- true >>"$log" 2>&1 9>&- || gelukt=nee
+    fi
+
+    if [ "$gelukt" != ja ]; then
+        if grep -qiE "no space left on device|not enough (disk |free )?space" "$log"; then
+            fout "$(t "Ontwikkelaarsmodus klaarzetten lukte niet: je computer is vol. Maak eerst ruimte (bijv. de prullenbak leegmaken in Bestanden) en probeer het dan opnieuw." \
+                "Setting up developer mode did not work: your computer is full. Make room first (for example empty the trash in Files) and try again.")"
+        else
+            fout "$(t "Ontwikkelaarsmodus klaarzetten lukte niet. Ben je online? Probeer het daarna opnieuw." \
+                "Setting up developer mode did not work. Are you online? Then try again.")"
+        fi
+        rm -f "$log"
+        return 1
+    fi
+    rm -f "$log"
 
     touch "$MARKER"
     melding "$(t "Ontwikkelaarsmodus staat AAN 🛠️" "Developer mode is ON 🛠️")" \
@@ -47,9 +70,16 @@ uit() {
         "$(t "Je bestanden en doosjes zijn bewaard." "Your files and boxes are kept.")"
 }
 
+# Nooit twee keer tegelijk (Welkom en Instellingen): de tweede wacht, en ziet dan dat het doosje er al is (U262).
+slot() {
+    mkdir -p "$BUGOS_CONFIG"
+    exec 9>"$BUGOS_CONFIG/.ontwikkelaar.slot"
+    flock 9 2>/dev/null || true
+}
+
 case "${1:-status}" in
-aan) aan ;;
-uit) uit ;;
+aan) slot; aan ;;
+uit) slot; uit ;;
 status) if [ -f "$MARKER" ]; then echo aan; else echo uit; fi ;;
 *)
     echo "Gebruik: bugos-developer aan|uit|status" >&2

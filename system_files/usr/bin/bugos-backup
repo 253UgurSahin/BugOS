@@ -17,7 +17,6 @@ import getpass
 import json
 import os
 import shutil
-import socket
 import subprocess
 import sys
 import time
@@ -25,7 +24,8 @@ from pathlib import Path
 
 sys.path.insert(0, "/usr/lib/bugos/python")
 
-from bugos_ui import CONFIG, t  # noqa: E402
+from bugos_ui import CONFIG, platte_tip, t  # noqa: E402
+from bugos_files_acties import dubbele_namen, kent_hoofdletters  # noqa: E402
 
 LOG = CONFIG / "backup.json"
 
@@ -42,6 +42,10 @@ MAPPEN = [
 
 def gebruikersmap(xdg: str, standaard: str) -> Path:
     """Vraag aan het systeem waar bijvoorbeeld 'Afbeeldingen' staat."""
+    # Alleen de vaste soorten: de naam gaat naar xdg-user-dir (een sh-script), en kan uit een bestand op een
+    # stick van iemand anders komen (U097).
+    if xdg not in {"DOCUMENTS", "PICTURES", "MUSIC", "VIDEOS", "DESKTOP", "DOWNLOAD"}:
+        return Path.home() / standaard
     try:
         uit = subprocess.run(["xdg-user-dir", xdg], capture_output=True, text=True, timeout=5).stdout.strip()
         if uit and Path(uit) != Path.home():
@@ -74,7 +78,12 @@ def terug_opdrachten(bron: Path, thuis: Path) -> list[list[str]]:
         lijstje = json.loads((bron / LIJSTJE).read_text())
     except (OSError, ValueError):
         lijstje = {}
-    soort_van = {naam: xdg for xdg, naam in lijstje.items()}
+    # Het lijstje staat op de stick: alleen de bekende soorten met een gewone mapnaam gebruiken (U097).
+    soorten = {x for x, _s in MAPPEN}
+    if not isinstance(lijstje, dict):
+        lijstje = {}
+    soort_van = {naam: xdg for xdg, naam in lijstje.items()
+                 if xdg in soorten and isinstance(naam, str) and naam and "/" not in naam and naam not in (".", "..")}
     soort_van.update({s: x for x, s in MAPPEN if s not in soort_van})  # oude back-ups: de Engelse namen
     opdrachten = []
     try:
@@ -82,6 +91,8 @@ def terug_opdrachten(bron: Path, thuis: Path) -> list[list[str]]:
     except OSError:
         return []
     for m in mappen:
+        if m.name.startswith("."):
+            continue   # verborgen mappen (bijv. .config) maakt de back-up niet; die zetten we ook niet terug (U097)
         xdg = soort_van.get(m.name)
         standaard = next((s for x, s in MAPPEN if x == xdg), m.name)
         naar = gebruikersmap(xdg, standaard) if xdg else thuis / m.name
@@ -93,6 +104,12 @@ def schijven() -> list[Path]:
     """Alle aangesloten USB-schijven en losse schijven waarop je mag schrijven."""
     if os.environ.get("BUGOS_SCHIJVEN"):  # voor tests en screenshots
         return [Path(p) for p in os.environ["BUGOS_SCHIJVEN"].split(":") if Path(p).is_dir()]
+    # Een stick die er net in zit, is nog dicht (KDE opent hem niet vanzelf): eerst openzetten (U139).
+    try:
+        import bugos_drives
+        bugos_drives.losse_openen_op_achtergrond()
+    except Exception:  # noqa: BLE001  zonder udisks/lsblk gewoon kijken wat er al open is
+        pass
     gebruiker = getpass.getuser()
     gevonden = []
     for basis in (Path("/run/media") / gebruiker, Path("/media") / gebruiker, Path("/media")):
@@ -100,11 +117,66 @@ def schijven() -> list[Path]:
             for p in sorted(basis.iterdir()):
                 if p.is_dir() and os.access(p, os.W_OK) and p.is_mount():
                     gevonden.append(p)
-    return gevonden
+    interne = interne_plekken()
+    LAATSTE_INTERNE.clear()
+    LAATSTE_INTERNE.update(interne)
+    return zonder_interne(gevonden, interne)
+
+
+LAATSTE_INTERNE: set[str] = set()   # de schijven in de computer, van de laatste keer kijken
+
+
+def interne_plekken() -> set[str]:
+    """Waar de schijven ín de computer open staan (een tweede schijf, de Windows-schijf)."""
+    try:
+        import bugos_drives
+        return {s.wortel for s in bugos_drives.schijven() if s.soort == "intern" and s.wortel}
+    except Exception:  # noqa: BLE001  zonder lsblk: niets weten
+        return set()
+
+
+def zonder_interne(paden: list[Path], interne: set[str]) -> list[Path]:
+    """Een back-up hoort op iets wat je eruit haalt: gaat de computer kapot, dan ook een schijf erin (U226).
+    Staat er al een back-up op een schijf in de computer (van vroeger)? Dan blijft hij, om terug te zetten (U231)."""
+    return [p for p in paden if str(p) not in interne or backups_op(p)]
+
+
+def alleen_terugzetten(schijf: Path) -> bool:
+    """Een schijf in de computer: daar kun je wel een oude back-up van terugzetten, maar geen nieuwe op maken."""
+    return str(schijf) in LAATSTE_INTERNE
+
+
+HOSTNAAM = Path("/etc/hostname")
+
+
+def computernaam() -> str:
+    """De vaste naam van de computer. Niet de naam die het netwerk geeft (school, kantoor): die wisselt, en dan
+    begon elke back-up in een nieuwe map, helemaal opnieuw (U228)."""
+    try:
+        naam = HOSTNAAM.read_text(encoding="utf-8").strip()
+    except OSError:
+        naam = ""
+    return naam or "bugos"   # zonder eigen naam heet BugOS 'bugos' (DEFAULT_HOSTNAME)
 
 
 def backup_doel(schijf: Path) -> Path:
-    return schijf / "BugOS-Backup" / f"{getpass.getuser()}@{socket.gethostname()}"
+    return schijf / "BugOS-Backup" / f"{getpass.getuser()}@{computernaam()}"
+
+
+def terug_vraag(bron: Path) -> str:
+    """De vraag voor het terugzetten, met de naam van de back-up. Is hij van een ander account (een gedeelde
+    familiestick), dan zeggen we dat erbij: anders kwamen papa's bestanden stil in jouw map (U434).
+    Vaste zinnen (te vertalen) met {naam}/{wie} erin; de naam komt van de stick, dus letterlijk tonen (U442)."""
+    tekst = t("De bestanden van de back-up '{naam}' komen terug op je computer. Een bestand dat op je computer "
+              "ouder is dan in de back-up, wordt vervangen. Nieuwere bestanden op je computer blijven staan.",
+              "The files from the backup '{naam}' come back to your computer. A file that is older on your "
+              "computer than in the backup is replaced. Newer files on your computer are kept.").replace("{naam}", bron.name)
+    wie = bron.name.split("@", 1)[0]
+    if wie != getpass.getuser():
+        tekst += "\n\n" + t("Let op: deze back-up is van '{wie}', niet van jou. Zijn of haar bestanden komen dan in "
+                             "jouw map.", "Note: this backup is from '{wie}', not from you. Their files will then "
+                             "end up in your folder.").replace("{wie}", wie)
+    return platte_tip(tekst)
 
 
 def backups_op(schijf: Path) -> list[Path]:
@@ -118,26 +190,78 @@ def backups_op(schijf: Path) -> list[Path]:
     return sorted(alle, key=lambda p: p != eigen)
 
 
-def rsync_maak(bron: Path, doel: Path) -> list[str]:
+def rsync_maak(bron: Path, doel: Path, overslaan: list[str] | tuple = ()) -> list[str]:
     # Geen --delete: wat ooit in de back-up staat, blijft daar staan.
     # --modify-window: USB-schijven (FAT/exFAT) onthouden tijd minder precies.
     # -l: snelkoppelingen (symlinks) gaan ook mee (op FAT/exFAT kan dat niet; dan zegt rsync 23: "deels").
-    return ["rsync", "-rtl", "--modify-window=2", "--info=progress2", "--no-inc-recursive",
+    # overslaan: paden (binnen 'bron') die niet mee kunnen, zie dubbel_op_schijf.
+    weg = [f"--exclude=/{_rsync_letterlijk(r)}" for r in overslaan]
+    return ["rsync", "-rtl", "--modify-window=2", "--info=progress2", "--no-inc-recursive", *weg,
             f"{bron}/", f"{doel / bron.name}/"]
 
 
+def _rsync_letterlijk(pad: str) -> str:
+    """Een pad als rsync-patroon dat precies dat pad betekent (* ? [ en \\ niet als jokerteken)."""
+    return "".join("\\" + c if c in "*?[\\" else c for c in pad)
+
+
+def dubbel_op_schijf(schijf: Path, mappen: list[Path], doel: Path | None = None) -> dict[Path, list[str]]:
+    """Kent de schijf geen hoofdletters (FAT/exFAT), dan zou 'IMG_1.JPG' 'img_1.jpg' overschrijven.
+    Geeft per map de tweede van zo'n paar (relatief), die laten we dan buiten de back-up (en zeggen dat).
+    Staat er van zo'n paar al één in de back-up (doel), dan blijft díe; de ander gaat niet mee
+    (anders zou de nieuwe de oude in de back-up vervangen)."""
+    if kent_hoofdletters(schijf):
+        return {}
+    uit = {}
+    for m in mappen:
+        dubbel = [os.path.relpath(p, m) for p in _dubbel_in(m, m, doel)] if m.is_dir() else []
+        if dubbel:
+            uit[m] = dubbel
+    return uit
+
+
+def _dubbel_in(basis: Path, m: Path, doel: Path | None) -> list[Path]:
+    """Wat er in 'basis' (ook dieper) niet mee kan. Blijft een map staan omdat hij al in de back-up staat,
+    dan kijken we ook daarbinnen (anders kan daar weer een naamgenoot de oude in de back-up vervangen)."""
+    uit = []
+    for p in dubbele_namen(basis):
+        overslaan, behouden = p, None
+        if doel is not None:
+            try:
+                al_daar = set(os.listdir(doel / m.name / os.path.relpath(p.parent, m)))
+            except OSError:
+                al_daar = set()
+            broers = [n for n in os.listdir(p.parent) if n != p.name and n.casefold() == p.name.casefold()]
+            if p.name in al_daar and broers and not any(b in al_daar for b in broers):
+                overslaan, behouden = p.parent / broers[0], p   # deze staat al in de back-up: de andere gaat niet mee
+        uit.append(overslaan)
+        if behouden is not None and behouden.is_dir() and not behouden.is_symlink():
+            uit += _dubbel_in(behouden, m, doel)
+    return uit
+
+
 def rsync_terug(doel: Path, thuis: Path) -> list[str]:
-    # --update: een nieuwer bestand op de computer wordt nooit overschreven.
-    return ["rsync", "-rtl", "--update", "--modify-window=2", "--info=progress2", "--no-inc-recursive",
-            f"{doel}/", f"{thuis}/"]
+    # --update: een nieuwer bestand op de computer wordt nooit overschreven. Maar rsync vervangt een bestand altijd als
+    # de back-up op die plek een map of snelkoppeling heeft (ander soort): dan het oude bewaren met een naam erachter
+    # (--backup), in een map 'Vervangen bij terugzetten <datum tijd>' in die map (Documenten, Afbeeldingen…), zodat
+    # terugzetten nooit iets van je computer laat verdwijnen (U371). Met de tijd erbij: een tweede keer terugzetten op
+    # dezelfde dag overschrijft niet wat de eerste keer bewaarde (U381).
+    stempel = time.strftime("%Y-%m-%d %H.%M.%S")
+    bewaar = thuis / t(f"Vervangen bij terugzetten {stempel}", f"Replaced when restoring {stempel}")
+    return ["rsync", "-rtl", "--update", "--backup", f"--backup-dir={bewaar}", "--modify-window=2",
+            "--info=progress2", "--no-inc-recursive", f"{doel}/", f"{thuis}/"]
 
 
-def ruimte_genoeg(schijf: Path, mappen: list[Path], doel: Path | None = None) -> tuple[bool, int, int]:
+def ruimte_genoeg(schijf: Path, mappen: list[Path], doel: Path | None = None,
+                  stop=None) -> tuple[bool, int, int]:
     """Past wat er nog gekopieerd moet worden? Wat al (even groot) in de back-up staat, telt niet mee:
-    rsync kopieert alleen wat nieuw of veranderd is."""
+    rsync kopieert alleen wat nieuw of veranderd is. Bij veel bestanden duurt dit even: het venster
+    doet het op de achtergrond, en 'stop' (een threading.Event) breekt het tellen af."""
     nodig = 0
     for m in mappen:
         for wortel, _, bestanden in os.walk(m):
+            if stop is not None and stop.is_set():
+                return False, nodig, 0
             for b in bestanden:
                 bron = Path(wortel) / b
                 try:
@@ -157,15 +281,31 @@ def ruimte_genoeg(schijf: Path, mappen: list[Path], doel: Path | None = None) ->
     return nodig < vrij, nodig, vrij
 
 
+def wegschrijven(doel: Path) -> list[str]:
+    """De laatste stap: alles echt naar de schijf schrijven. Tot dan zit een deel nog in het geheugen
+    van de computer, en wie de schijf er dan uittrekt, mist dat stuk. Dit kan even duren."""
+    return ["sync", "-f", str(doel)]
+
+
 def onthoud(schijf: Path) -> None:
-    CONFIG.mkdir(parents=True, exist_ok=True)
-    LOG.write_text(json.dumps({"schijf": str(schijf), "tijd": int(time.time())}))
+    """De datum van de back-up bewaren. Lukt dat niet (je computer is vol), dan is de back-up zelf toch klaar:
+    geen fout naar boven, anders bleef het venster op 'Niet uittrekken' hangen (U410)."""
+    try:
+        CONFIG.mkdir(parents=True, exist_ok=True)
+        tijdelijk = LOG.with_name(LOG.name + ".nieuw")
+        tijdelijk.write_text(json.dumps({"schijf": str(schijf), "tijd": int(time.time())}))
+        os.replace(tijdelijk, LOG)
+    except OSError:
+        pass
 
 
 def laatste_backup() -> str:
     try:
         d = json.loads(LOG.read_text())
-        dagen = int((time.time() - d["tijd"]) // 86400)
+        # Kalenderdagen, niet blokken van 24 uur (maandag 22:00 is dinsdagochtend 'gisteren'); en na een klok die
+        # terugsprong (dubbel opstarten met Windows) niet '-1 dagen geleden' (U444).
+        import datetime as _dt
+        dagen = max((_dt.date.today() - _dt.date.fromtimestamp(int(d["tijd"]))).days, 0)
         if dagen == 0:
             return t("Laatste back-up: vandaag", "Last backup: today")
         if dagen == 1:
@@ -180,23 +320,64 @@ def laatste_backup() -> str:
 # FAT32-stick). Bij 23 gaan we gewoon door met de volgende mappen en zeggen we het erbij.
 GOED, DEELS = (0, 24), (23,)
 
+
+def uitslag(code: int, cmd: list[str], uitvoer: str = "") -> str:
+    """'goed', 'deels', 'vol', 'alleen-lezen' of 'weg' (de schijf of map waar het vandaan komt is er niet meer) of 'fout'.
+    rsync geeft ook 23 als de bronmap verdwenen is (stick eruit): dat is niet 'een paar bestanden' (U078).
+    Een schijf die alleen gelezen kan worden (schuifje, of na een schijffout) geeft ook 23: dan ging er niets mee (U409)."""
+    if code not in GOED and "No space left on device" in uitvoer:
+        return "vol"
+    if code not in GOED and "Read-only file system" in uitvoer:
+        return "alleen-lezen"
+    if code in GOED:
+        return "goed"
+    try:
+        weg = not Path(cmd[-2]).exists()
+    except OSError:   # een stick die eruit is, kan ook een leesfout geven
+        weg = True
+    if weg:
+        return "weg"
+    return "deels" if code in DEELS else "fout"
+
+ALLEEN_LEZEN = t("Op deze schijf kan niets geschreven worden (hij is beveiligd tegen schrijven, of er zit een fout op). "
+                 "Kies een andere schijf, of kijk hem na op een andere computer.",
+                 "Nothing can be written to this drive (it is write-protected, or it has an error). "
+                 "Choose another drive, or check it on another computer.")
+
 DEELS_UITLEG = t("Een paar bestanden konden niet mee: {mappen}. Dat komt meestal door een naam met : ? * of \", "
-                 "of een bestand groter dan 4 GB op een FAT32-schijf. De rest staat er wel.",
-                 "A few files could not be copied: {mappen}. Usually a name with : ? * or \", or a file larger "
-                 "than 4 GB on a FAT32 drive. Everything else is there.")
+                 "een bestand groter dan 4 GB op een FAT32-schijf, of twee namen die alleen in hoofdletters "
+                 "verschillen (zo'n schijf ziet dat als hetzelfde). De rest staat er wel.",
+                 "A few files could not be copied: {mappen}. Usually a name with : ? * or \", a file larger "
+                 "than 4 GB on a FAT32 drive, or two names that differ only in capitals (such a drive sees "
+                 "them as the same). Everything else is there.")
 
 
 def zonder_venster(schijf: Path) -> int:
     doel = backup_doel(schijf)
-    doel.mkdir(parents=True, exist_ok=True)
+    try:
+        doel.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return 1
     schrijf_lijstje(doel)
-    deels = []
-    for m in bron_mappen():
-        code = subprocess.call(rsync_maak(m, doel))
-        if code in DEELS:
-            deels.append(m.name)
-        elif code not in GOED:
+    mappen = bron_mappen()
+    dubbel = dubbel_op_schijf(schijf, mappen, doel)
+    deels = [m.name for m in dubbel]
+    for m in mappen:
+        cmd = rsync_maak(m, doel, dubbel.get(m, ()))
+        r = subprocess.run(cmd, stderr=subprocess.PIPE, text=True, errors="replace")
+        sys.stderr.write(r.stderr)
+        soort = uitslag(r.returncode, cmd, r.stderr)
+        if soort == "deels":
+            if m.name not in deels:
+                deels.append(m.name)
+        elif soort != "goed":
+            if soort == "vol":
+                print(t("De schijf is vol.", "The drive is full."), file=sys.stderr)
+            elif soort == "alleen-lezen":
+                print(ALLEEN_LEZEN, file=sys.stderr)
             return 1
+    if subprocess.call(wegschrijven(doel)) != 0:
+        return 1
     onthoud(schijf)
     if deels:
         print(DEELS_UITLEG.format(mappen=", ".join(deels)), file=sys.stderr)
@@ -209,10 +390,33 @@ def zonder_venster(schijf: Path) -> int:
 def venster() -> int:
     from bugos_ui import (
         Banner, Chip, IcoonChip, Knop, SchijfKiezer, Voortgang, kop_met_icoon, label, maak_app, pagina,
-        raster, schijf_info, sectie, uitvoeren,
+        raster, schijf_info, schuifbaar, sectie, uitvoeren,
     )
-    from PySide6.QtCore import QProcess, QTimer
+    import threading
+
+    from PySide6.QtCore import QProcess, QThread, QTimer, Signal
     from PySide6.QtWidgets import QFrame, QHBoxLayout, QInputDialog, QMessageBox, QVBoxLayout, QWidget
+
+    class Teller(QThread):
+        """Tel op de achtergrond of alles op de schijf past: bij duizenden foto's duurt dat even,
+        en dan mag het venster niet vastlopen."""
+
+        klaar = Signal(bool, object, object)  # past, nodig, vrij (object: getallen boven de 2 GB)
+
+        def __init__(self, schijf: Path, mappen: list[Path], doel: Path):
+            super().__init__()
+            self.schijf, self.mappen, self.doel = schijf, mappen, doel
+            self.stop = threading.Event()
+
+        dubbel: dict = {}  # per map: wat niet mee kan omdat de schijf geen hoofdletters kent
+
+        def run(self) -> None:
+            try:
+                past, nodig, vrij = ruimte_genoeg(self.schijf, self.mappen, self.doel, self.stop)
+                self.dubbel = dubbel_op_schijf(self.schijf, self.mappen, self.doel)
+            except OSError:  # de schijf is er intussen uit
+                past, nodig, vrij = False, 0, -1
+            self.klaar.emit(past, nodig, vrij)
 
     def wat_mee_gaat() -> QWidget:
         """Zes kleine kaartjes: deze mappen gaan mee in de back-up."""
@@ -242,7 +446,7 @@ def venster() -> int:
             w, lay = pagina()
             buiten = QVBoxLayout(self)
             buiten.setContentsMargins(0, 0, 0, 0)
-            buiten.addWidget(w)
+            buiten.addWidget(schuifbaar(w))
             lay.addWidget(kop_met_icoon("lijn:opslag", "neutraal", t("Back-up", "Backup"),
                                         t("Zet je documenten, foto's, muziek, video's, bureaublad en downloads veilig "
                                           "op een USB-schijf. Er wordt nooit iets weggegooid.",
@@ -277,6 +481,9 @@ def venster() -> int:
             self.proces.readyReadStandardOutput.connect(self.lees)
             self.proces.finished.connect(self.klaar_met_een)
             self.stand: dict = {"klus": "", "schijf": None}
+            self.sluit_na = False  # het venster ging dicht tijdens het kopiëren: sluiten zodra het klaar is
+            self.gestopt = False   # de gebruiker koos 'Nu stoppen'
+            self.teller: Teller | None = None  # telt of alles past
             self.maak.clicked.connect(self.maak_backup)
             self.terugzetten.clicked.connect(self.zet_terug)
             self.kiezer.gewijzigd.connect(self.knoppen)
@@ -290,20 +497,27 @@ def venster() -> int:
             g = self.kiezer.gekozen()
             return Path(g) if g else None
 
+        def druk(self) -> bool:
+            """Zijn we bezig (ruimte tellen of kopiëren)?"""
+            return self.proces.state() != QProcess.ProcessState.NotRunning or \
+                (self.teller is not None and self.teller.isRunning())
+
         def knoppen(self) -> None:
-            if self.proces.state() != QProcess.ProcessState.NotRunning:
+            if self.druk():
                 return
             s = self.gekozen()
-            self.maak.setEnabled(s is not None)
+            self.maak.setEnabled(s is not None and not alleen_terugzetten(s))
             self.terugzetten.setEnabled(s is not None and bool(backups_op(s)))
 
         def ververs_schijven(self) -> None:
-            if self.proces.state() != QProcess.ProcessState.NotRunning:
+            if self.druk():
                 return
             items = []
             for s in schijven():
                 extra = schijf_info(s)
-                if backups_op(s):
+                if alleen_terugzetten(s):
+                    extra += t("  ·  zit in de computer: alleen terugzetten", "  ·  inside the computer: restore only")
+                elif backups_op(s):
                     extra += t("  ·  heeft al een back-up", "  ·  already has a backup")
                 items.append((str(s), s.name, extra))
             self.kiezer.zet(items)
@@ -311,24 +525,59 @@ def venster() -> int:
 
         def volgende(self) -> None:
             if not self.wachtrij:
+                self.stap_nr = 0
                 self.klaar()
                 return
+            # Eén balk voor alle mappen samen (niet zes keer van 0 tot 100%) (U152).
+            if not getattr(self, "stap_nr", 0):
+                # Alleen de rsync-stappen tellen: het wegschrijven (sync) aan het eind heeft geen procenten (U167).
+                self.stappen_totaal = max(sum(1 for c in self.wachtrij if c and c[0] != "sync"), 1)
+            self.stap_nr = getattr(self, "stap_nr", 0) + 1
             cmd = self.nu = self.wachtrij.pop(0)
+            self.uitvoer = ""
+            if cmd[0] == "sync":
+                self.balk.setValue(100)   # alles is gekopieerd; nu alleen nog wegschrijven
+                self.melding.zet(t("Bezig met wegschrijven… Haal de schijf er nog niet uit.",
+                                   "Writing to the drive… Do not unplug it yet."), "bezig")
             self.proces.start(cmd[0], cmd[1:])
 
         def lees(self) -> None:
             tekst = bytes(self.proces.readAllStandardOutput()).decode(errors="ignore")
+            self.uitvoer = (self.uitvoer + tekst)[-8000:]   # voor 'schijf vol' (U079)
             for stuk in tekst.replace("\r", "\n").split():
                 if stuk.endswith("%") and stuk[:-1].isdigit():
-                    self.balk.setValue(int(stuk[:-1]))
+                    totaal = max(getattr(self, "stappen_totaal", 1), 1)
+                    gedaan = max(getattr(self, "stap_nr", 1) - 1, 0)
+                    self.balk.setValue(int((gedaan + int(stuk[:-1]) / 100) / totaal * 100))
 
         def klaar_met_een(self, code: int, _status) -> None:
-            if code in DEELS:
-                self.deels.append(Path(self.nu[-2].rstrip("/")).name or "~")
-            elif code not in GOED:
-                self.melding.zet(t("Het lukte niet helemaal. Zit de schijf er nog in? Probeer het opnieuw.",
+            if self.gestopt:
+                # Gestopt: zeg het, en de volgende keer begint gewoon opnieuw (ook als je het venster weer opende) (U241).
+                self.gestopt = False
+                self.wachtrij.clear()
+                self.melding.zet(t("Gestopt. Wat al gekopieerd was, blijft staan.",
+                                   "Stopped. What was already copied stays."), "info")
+                self.balk.hide()
+                self.stop(False)
+                return
+            soort = uitslag(code, self.nu, getattr(self, "uitvoer", ""))
+            if soort == "deels":
+                naam = Path(self.nu[-2].rstrip("/")).name or "~"
+                if naam not in self.deels:
+                    self.deels.append(naam)
+            elif soort != "goed":
+                maak = self.stand.get("klus") == "maak"
+                self.melding.zet((t("De schijf is vol. Kies een grotere schijf, of maak er ruimte op.",
+                                    "The drive is full. Choose a bigger drive, or make room on it.") if maak else
+                                  t("Je computer is vol. Maak eerst ruimte (bijv. de prullenbak leegmaken in "
+                                    "Bestanden) en probeer het dan opnieuw.",
+                                    "Your computer is full. Make room first (for example empty the trash in Files) "
+                                    "and try again.")) if soort == "vol" else
+                                 ALLEEN_LEZEN if soort == "alleen-lezen" and maak else
+                                 t("Het lukte niet helemaal. Zit de schijf er nog in? Probeer het opnieuw.",
                                    "It did not fully work. Is the drive still plugged in? Try again."), "fout")
                 self.wachtrij.clear()
+                self.sluit_na = False  # ook na 'Eerst afmaken': de foutmelding moet je kunnen zien
                 self.stop(False)
                 return
             self.volgende()
@@ -338,7 +587,13 @@ def venster() -> int:
                 if self.stand["klus"] == "maak":
                     onthoud(self.stand["schijf"])
                     self.wanneer.setText(laatste_backup())
-                self.melding.zet(DEELS_UITLEG.format(mappen=", ".join(self.deels)), "let_op")
+                # Terugzetten naar je computer: de redenen voor een stick (: ? *, 4 GB, hoofdletters) gelden dan niet (U150).
+                self.melding.zet(DEELS_UITLEG.format(mappen=", ".join(self.deels)) if self.stand["klus"] == "maak" else
+                                 t(f"Een paar bestanden uit {', '.join(self.deels)} konden niet terug (bijv. omdat je "
+                                   "daar niet mag schrijven). De rest staat er weer.",
+                                   f"A few files from {', '.join(self.deels)} could not be restored (for example "
+                                   "because you may not write there). Everything else is back."), "let_op")
+                self.sluit_na = False  # niet alles kon mee: dat moet je kunnen lezen, ook na 'Eerst afmaken'
                 self.stop(True)
                 return
             if self.stand["klus"] == "maak":
@@ -347,16 +602,70 @@ def venster() -> int:
                 self.melding.zet(t("Klaar! Je bestanden staan veilig op de schijf. Je mag hem er nu uithalen.",
                                    "Done! Your files are safe on the drive. You can unplug it now."), "goed")
             else:
-                self.melding.zet(t("Klaar! Je bestanden staan weer op je computer.",
-                                   "Done! Your files are back on your computer."), "goed")
+                self.melding.zet(t("Klaar! Je bestanden staan weer op je computer. Werd er iets vervangen, dan staat het "
+                                   "oude in een map 'Vervangen bij terugzetten'.",
+                                   "Done! Your files are back on your computer. If something was replaced, the old one "
+                                   "is in a folder 'Replaced when restoring'."), "goed")   # (U382)
             self.stop(True)
 
         def stop(self, gelukt: bool) -> None:
+            self.stap_nr = 0
             self.balk.setValue(100 if gelukt else self.balk.value())
             self.kiezer.setEnabled(True)
             self.knoppen()
+            if self.sluit_na:
+                QTimer.singleShot(0, self.close)
+
+        def vraag_stoppen(self) -> bool:
+            """Het venster gaat dicht terwijl we bezig zijn: stoppen, of eerst afmaken?"""
+            maak = self.stand["klus"] == "maak"
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Icon.Question)
+            box.setWindowTitle(t("Nog bezig", "Still busy"))
+            box.setText(t("De back-up is nog bezig." if maak else "Het terugzetten is nog bezig.",
+                          "The backup is still busy." if maak else "Restoring is still busy."))
+            box.setInformativeText(
+                t("Maak je het eerst af, dan gaat het venster daarna vanzelf dicht. Stop je nu, dan is nog niet "
+                  "alles gekopieerd (wat er al staat, blijft gewoon staan).",
+                  "If you let it finish, the window closes by itself afterwards. If you stop now, not everything "
+                  "is copied yet (what is already there stays)."))
+            door = box.addButton(t("Eerst afmaken", "Finish first"), QMessageBox.ButtonRole.AcceptRole)
+            stop = box.addButton(t("Nu stoppen", "Stop now"), QMessageBox.ButtonRole.DestructiveRole)
+            box.setDefaultButton(door)
+            box.exec()
+            return box.clickedButton() is stop
+
+        def tweede_start(self, _args: list[str]) -> None:
+            """Weer geopend terwijl het venster wachtte om dicht te gaan: dat gaat niet meer door (U233)."""
+            if self.sluit_na and self.proces.state() != QProcess.ProcessState.NotRunning and not self.gestopt:
+                self.melding.zet(t("Nog even bezig…", "Still busy…"), "bezig")
+
+        def closeEvent(self, e) -> None:  # noqa: N802
+            if self.teller is not None and self.teller.isRunning():
+                # Nog aan het tellen (er is nog niets gekopieerd): stop het tellen, en sluit daarna.
+                e.ignore()
+                self.sluit_na = True
+                self.teller.stop.set()
+                return
+            if self.proces.state() == QProcess.ProcessState.NotRunning:
+                super().closeEvent(e)
+                return
+            # Nooit stilletjes midden in een back-up stoppen: vraag het, en sluit pas als het proces klaar is.
+            e.ignore()
+            if self.sluit_na:
+                return  # al gevraagd; we wachten
+            self.sluit_na = True
+            if self.vraag_stoppen():
+                self.gestopt = True
+                self.wachtrij.clear()
+                self.melding.zet(t("Bezig met stoppen…", "Stopping…"), "bezig")
+                self.proces.terminate()  # rsync ruimt zijn halve bestand zelf op
+            else:
+                self.melding.zet(t("Even wachten: het venster gaat vanzelf dicht als het klaar is.",
+                                   "One moment: the window closes by itself when it is done."), "bezig")
 
         def bezig(self, tekst: str) -> None:
+            self.gestopt = False
             self.deels = []
             self.melding.zet(tekst, "bezig")
             self.balk.setValue(0)
@@ -369,19 +678,54 @@ def venster() -> int:
             schijf = self.gekozen()
             if schijf is None:
                 return
+            if self.druk():
+                return
             mappen = bron_mappen()
-            past, nodig, vrij = ruimte_genoeg(schijf, mappen, backup_doel(schijf))
+            self.bezig(t("Even kijken of alles op de schijf past…", "Checking whether everything fits on the drive…"))
+            self.teller = Teller(schijf, mappen, backup_doel(schijf))
+            self.teller.klaar.connect(lambda past, nodig, vrij: self.geteld(schijf, mappen, past, nodig, vrij))
+            self.teller.start()
+
+        def geteld(self, schijf: Path, mappen: list[Path], past: bool, nodig: int, vrij: int) -> None:
+            if self.teller is not None:
+                self.teller.wait()  # de draad is net klaar; even netjes afsluiten
+            if self.sluit_na or (self.teller is not None and self.teller.stop.is_set()):
+                # Het venster ging dicht tijdens het tellen (en werd misschien weer geopend): niets doen, en zeker
+                # geen 'te weinig ruimte' van een tellen dat halverwege stopte (U234).
+                self.melding.zet(t("Gestopt. Er is niets gekopieerd.", "Stopped. Nothing was copied."), "info")
+                self.balk.hide()
+                self.stop(False)
+                return
+            if vrij < 0:
+                self.melding.zet(t("De schijf reageert niet. Zit hij er nog in? Probeer het opnieuw.",
+                                   "The drive does not respond. Is it still plugged in? Try again."), "fout")
+                self.balk.hide()
+                self.stop(False)
+                return
             if not past:
-                self.melding.zet(t(f"Te weinig ruimte op de schijf: nodig {nodig / 1024**3:.1f} GB, vrij {vrij / 1024**3:.1f} GB.",
+                self.melding.zet(t(f"Te weinig ruimte op de schijf: nodig {nodig / 1024**3:.1f} GB, vrij {vrij / 1024**3:.1f} GB".replace(".", ",") + ".",
                                    f"Not enough space on the drive: need {nodig / 1024**3:.1f} GB, free {vrij / 1024**3:.1f} GB."),
                                  "fout")
+                self.balk.hide()
+                self.stop(False)
                 return
             doel = backup_doel(schijf)
-            doel.mkdir(parents=True, exist_ok=True)
+            try:
+                doel.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                # Stick eruit, alleen-lezen geworden, of de map is van een ander account: niet eeuwig 'controleren' (U211).
+                self.melding.zet(t("De schijf reageert niet (of je mag er niet op schrijven). Zit hij er nog in?",
+                                   "The drive does not respond (or you may not write to it). Is it still plugged in?"),
+                                 "fout")
+                self.balk.hide()
+                self.stop(False)
+                return
             schrijf_lijstje(doel)
             self.stand.update(klus="maak", schijf=schijf)
-            self.wachtrij[:] = [rsync_maak(m, doel) for m in mappen]
+            dubbel = self.teller.dubbel if self.teller is not None else {}
+            self.wachtrij[:] = [rsync_maak(m, doel, dubbel.get(m, ())) for m in mappen] + [wegschrijven(doel)]
             self.bezig(t("Bezig met kopiëren… Haal de schijf er niet uit.", "Copying… Do not unplug the drive."))
+            self.deels = [m.name for m in dubbel]  # die gaan niet mee: dat zeggen we straks
             self.volgende()
 
         def zet_terug(self) -> None:
@@ -392,32 +736,37 @@ def venster() -> int:
             if not lijst:
                 return
             bron = lijst[0]
-            if len(lijst) > 1 and lijst[0] != backup_doel(schijf):
+            if lijst[0] != backup_doel(schijf):   # ook als er maar één is: dan zie je van wie hij is (U434)
                 # Geen back-up van deze computer, wel van andere: laat kiezen (bijv. "bugie@oude-laptop").
                 keuze, ok = QInputDialog.getItem(
                     self, t("Welke back-up?", "Which backup?"),
                     t("Er staan meer back-ups op deze schijf. Welke wil je terugzetten?",
-                      "There are several backups on this drive. Which one do you want to restore?"),
+                      "There are several backups on this drive. Which one do you want to restore?") if len(lijst) > 1 else
+                    t("Op deze schijf staat deze back-up. Wil je hem terugzetten?",
+                      "This drive has this backup. Do you want to restore it?"),   # (U442)
                     [p.name for p in lijst], 0, False)
                 if not ok:
                     return
                 bron = next(p for p in lijst if p.name == keuze)
             vraag = QMessageBox.question(
                 self, t("Terugzetten?", "Restore?"),
-                t("Je bestanden van de back-up komen terug op je computer. Een bestand dat op je computer ouder is "
-                  "dan in de back-up, wordt vervangen. Nieuwere bestanden op je computer blijven staan.",
-                  "Your files from the backup come back to your computer. A file that is older on your computer "
-                  "than in the backup is replaced. Newer files on your computer are kept."),
+                terug_vraag(bron),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Cancel)
             if vraag != QMessageBox.StandardButton.Yes:
                 return
+            opdrachten = terug_opdrachten(bron, Path.home())
+            if not opdrachten:
+                # De schijf is weg (eruit getrokken tijdens de vraag), of er staat niets in: niet 'Klaar!' zeggen (U140).
+                self.melding.zet(t("Er is niets om terug te zetten. Zit de schijf er nog in?",
+                                   "There is nothing to restore. Is the drive still plugged in?"), "fout")
+                return
             self.stand.update(klus="terug", schijf=schijf)
-            self.wachtrij[:] = terug_opdrachten(bron, Path.home())
+            self.wachtrij[:] = opdrachten
             self.bezig(t("Bezig met terugzetten… Nieuwere bestanden op je computer blijven gewoon staan.",
                          "Restoring… Newer files on your computer are kept."))
             self.volgende()
 
-    app = maak_app("bugos-backup", "bugos-backup", sys.argv)
+    app = maak_app("bugos-backup", "bugos-backup", sys.argv, een_keer=True)   # (U208)
     return uitvoeren(app, Backup())
 
 

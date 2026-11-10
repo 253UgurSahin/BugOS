@@ -19,7 +19,7 @@ from fontTools.varLib import instancer
 
 HIER = Path(__file__).resolve().parent
 sys.path.insert(0, str(HIER))
-from merk import INKT, merkteken, svg, tegel  # noqa: E402
+from mark import INKT, merkteken, svg, tegel  # noqa: E402
 
 ROOT = HIER.parent.parent
 LOGO = ROOT / "branding" / "logo"

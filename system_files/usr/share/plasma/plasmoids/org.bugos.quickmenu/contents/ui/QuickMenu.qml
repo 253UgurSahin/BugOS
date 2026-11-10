@@ -12,6 +12,10 @@ import QtQuick.Layouts
 
 Rectangle {
     id: snel
+    // 'Grote letters' (KDE: 10 punten gewoon, 12 groot): de letters hier groeien mee (U067).
+    // In Plasma zet main.qml dit via Kirigami.Theme (dat verandert meteen mee, Qt.application.font niet) (U084).
+    property real schaal: Qt.application.font.pointSize > 0
+        ? Math.min(1.5, Math.max(1, Qt.application.font.pointSize / 10)) : 1
 
     // Status van "bugos-start-data --snel".
     property var status: ({})
@@ -57,7 +61,7 @@ Rectangle {
             Label {
                 text: snel.tr("Snelmenu", "Quick menu")
                 font.family: snel.o.kopLetter
-                font.pixelSize: snel.o.letterKop
+                font.pixelSize: Math.round(snel.o.letterKop * snel.schaal)
                 font.weight: Font.DemiBold
                 color: snel.tekst
                 Layout.fillWidth: true
@@ -66,11 +70,19 @@ Rectangle {
                 id: tandwiel
                 implicitWidth: 36; implicitHeight: 36
                 hoverEnabled: true
-                Accessible.name: snel.tr("Alle instellingen", "All settings")
+                // 'Alle instellingen' heet in het startmenu de KDE-app; dit is BugOS Instellingen (U324)
+                Accessible.name: snel.tr("Instellingen", "Settings")
                 ToolTip.visible: hovered
                 ToolTip.text: Accessible.name
                 onClicked: snel.open("instellingen")
-                background: Rectangle { radius: 18; color: tandwiel.hovered ? snel.o.knop : "transparent" }
+                Keys.onReturnPressed: clicked()   // ook met Enter, zoals de andere knoppen (U135)
+                Keys.onEnterPressed: clicked()
+                background: Rectangle {
+                    radius: 18
+                    color: tandwiel.hovered || tandwiel.activeFocus ? snel.o.knop : "transparent"
+                    border.width: tandwiel.activeFocus ? 2 : 0
+                    border.color: snel.rood
+                }
                 contentItem: Item {
                     Loader { anchors.centerIn: parent; width: 20; height: 20; sourceComponent: snel.icoonTekenaar; onLoaded: item.naam = "configure" }
                 }
@@ -81,7 +93,7 @@ Rectangle {
             visible: snel.leeg
             text: snel.tr("Even kijken…", "One moment…")
             color: snel.tekst2
-            font.pixelSize: snel.o.letterKlein
+            font.pixelSize: Math.round(snel.o.letterKlein * snel.schaal)
             Layout.topMargin: -8
         }
 
@@ -90,7 +102,7 @@ Rectangle {
             columns: 3
             rowSpacing: 10
             columnSpacing: 10
-            SnelKnop { wat: "wifi"; icoon: "network-wireless"; tekst: "Wifi"; extra: "wifi" }
+            SnelKnop { wat: "wifi"; icoon: "network-wireless"; tekst: snel.tr("Wifi", "Wi-Fi"); extra: "wifi" }
             SnelKnop { wat: "bluetooth"; icoon: "network-bluetooth"; tekst: "Bluetooth"; extra: "bluetooth" }
             SnelKnop { wat: "spel"; icoon: "input-gamepad"; tekst: snel.tr("Game-modus", "Game mode") }
             SnelKnop { wat: "donker"; icoon: "contrast"; tekst: snel.tr("Donker", "Dark") }
@@ -142,7 +154,7 @@ Rectangle {
                           ? snel.tr("Batterij " + snel.status.batterij + "%, wordt opgeladen", "Battery " + snel.status.batterij + "%, charging")
                           : snel.tr("Batterij " + snel.status.batterij + "%", "Battery " + snel.status.batterij + "%")
                     color: snel.tekst
-                    font.pixelSize: snel.o.letterKlein
+                    font.pixelSize: Math.round(snel.o.letterKlein * snel.schaal)
                     font.weight: Font.Medium
                     elide: Text.ElideRight
                 }
@@ -185,11 +197,18 @@ Rectangle {
                 from: rij.minimum
                 to: 100
                 stepSize: 5
+                wheelEnabled: true   // ook met het scrollwieltje, zoals het volume van KDE (U348)
+                implicitHeight: 28   // anders 0 hoog in sommige stijlen, en dan kun je er niet op klikken
                 Accessible.name: rij.naam
-                onMoved: verzend.restart()
-                // Nieuwe status pas overnemen als je niet aan het schuiven bent
-                Binding { target: schuif; property: "value"; value: snel.status[rij.wat] || 0; when: !schuif.pressed }
-                Timer { id: verzend; interval: 150; onTriggered: snel.zet(rij.wat, String(Math.round(schuif.value))) }
+                // Wat je koos, onthouden: bij loslaten zet de status-koppeling de oude waarde even terug,
+                // dus daar mogen we niet uit lezen. En de status pas weer overnemen als hij is bijgewerkt.
+                property real teSturen: 0
+                property bool vasthouden: false
+                onMoved: { teSturen = value; vasthouden = true; verzend.restart(); loslaten.restart() }
+                Binding { target: schuif; property: "value"; value: snel.status[rij.wat] || 0
+                          when: !schuif.pressed && !schuif.vasthouden }
+                Timer { id: verzend; interval: 150; onTriggered: snel.zet(rij.wat, String(Math.round(schuif.teSturen))) }
+                Timer { id: loslaten; interval: 2500; onTriggered: schuif.vasthouden = false }
                 background: Rectangle {
                     x: schuif.leftPadding
                     y: schuif.topPadding + schuif.availableHeight / 2 - height / 2
@@ -220,8 +239,8 @@ Rectangle {
             Label {
                 text: Math.round(schuif.value) + "%"
                 color: snel.tekst2
-                font.pixelSize: snel.o.letterKlein
-                Layout.preferredWidth: 40
+                font.pixelSize: Math.round(snel.o.letterKlein * snel.schaal)
+                Layout.preferredWidth: Math.round(44 * snel.schaal)
                 horizontalAlignment: Text.AlignRight
             }
             Pijltje { naar: rij.naar; Accessible.name: rij.meerNaam }
@@ -243,11 +262,13 @@ Rectangle {
         background: Rectangle {
             radius: 14
             color: pijl.hovered || pijl.activeFocus ? snel.o.knopHover : "transparent"
+            border.width: pijl.activeFocus ? 2 : 0   // (U135)
+            border.color: snel.rood
         }
         contentItem: Label {
             text: "›"
             color: snel.tekst2
-            font.pixelSize: 20
+            font.pixelSize: Math.round(20 * snel.schaal)
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
         }
@@ -307,7 +328,7 @@ Rectangle {
                 contentItem: Label {
                     text: "›"
                     color: knop.aan ? "white" : snel.tekst2
-                    font.pixelSize: 20
+                    font.pixelSize: Math.round(20 * snel.schaal)
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                 }
@@ -336,7 +357,7 @@ Rectangle {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
                 elide: Text.ElideRight
-                font.pixelSize: snel.o.letterKlein
+                font.pixelSize: Math.round(snel.o.letterKlein * snel.schaal)
                 font.weight: Font.Medium
                 color: knop.aan ? "white" : snel.tekst
             }

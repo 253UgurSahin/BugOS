@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+{{CSP}}
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>BugOS</title>
 <meta name="description" content="BugOS is a free operating system that can't break, keeps itself up to date and collects nothing about you. Made for Bugie, and just as nice for gamers and developers.">
@@ -28,8 +29,8 @@
 
 :root {
   --bg: #FFFFFF; --bg2: #F7F5F5; --vlak: #FFFFFF; --vlak2: #FBFAFA;
-  --inkt: #0E0F12; --tekst2: #5A5F6B; --tekst3: #8A8F9A; --vaag: #C9C6C6; --lijn: #ECE9E9; --lijn2: #DEDADA;
-  --rood: #DE2F3E; --rood-diep: #B81E33; --koraal: #FF5C50; --rood-zacht: #FDECEC; --rood-tekst: #C1222F; --groen: #14965A;
+  --inkt: #0E0F12; --tekst2: #5A5F6B; --tekst3: #696D75; --vaag: #C9C6C6; --lijn: #ECE9E9; --lijn2: #DEDADA;
+  --rood: #DE2F3E; --rood-diep: #B81E33; --knop-rood: #DE2F3E; --knop-rood-hover: #B81E33; --koraal: #FF5C50; --rood-zacht: #FDECEC; --rood-tekst: #C1222F; --groen: #14965A;
   --merk-kop: #16171C; --merk-oog: #FFFFFF;
   --nacht: #050506; --nacht-tekst: #F2F2F4; --nacht-tekst2: #A2A7B1; --nacht-lijn: #202126;
   --f-display: "Funnel Display", "Segoe UI", system-ui, sans-serif;
@@ -45,8 +46,8 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #08080A; --bg2: #0E0E11; --vlak: #131316; --vlak2: #111114;
-    --inkt: #F2F2F4; --tekst2: #A2A7B1; --tekst3: #6E737D; --vaag: #34353B; --lijn: #1F2024; --lijn2: #2B2C31;
-    --rood: #F04452; --rood-diep: #D22E3E; --koraal: #FF6A5E; --rood-zacht: #2B1519; --rood-tekst: #FF7C85; --groen: #3FD17F;
+    --inkt: #F2F2F4; --tekst2: #A2A7B1; --tekst3: #7C818B; --vaag: #34353B; --lijn: #1F2024; --lijn2: #2B2C31;
+    --rood: #F04452; --rood-diep: #D22E3E; --knop-rood: #D22E3E; --knop-rood-hover: #B81E33; --koraal: #FF6A5E; --rood-zacht: #2B1519; --rood-tekst: #FF7C85; --groen: #3FD17F;
     --merk-kop: #F4F2F2; --merk-oog: #16171C;
     --schaduw: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -12px rgba(0,0,0,.6);
     --schaduw-groot: 0 2px 6px rgba(0,0,0,.4), 0 48px 96px -36px rgba(0,0,0,.85);
@@ -56,8 +57,8 @@
 }
 :root[data-theme="dark"] {
   --bg: #08080A; --bg2: #0E0E11; --vlak: #131316; --vlak2: #111114;
-  --inkt: #F2F2F4; --tekst2: #A2A7B1; --tekst3: #6E737D; --vaag: #34353B; --lijn: #1F2024; --lijn2: #2B2C31;
-  --rood: #F04452; --rood-diep: #D22E3E; --koraal: #FF6A5E; --rood-zacht: #2B1519; --rood-tekst: #FF7C85; --groen: #3FD17F;
+  --inkt: #F2F2F4; --tekst2: #A2A7B1; --tekst3: #7C818B; --vaag: #34353B; --lijn: #1F2024; --lijn2: #2B2C31;
+  --rood: #F04452; --rood-diep: #D22E3E; --knop-rood: #D22E3E; --knop-rood-hover: #B81E33; --koraal: #FF6A5E; --rood-zacht: #2B1519; --rood-tekst: #FF7C85; --groen: #3FD17F;
   --merk-kop: #F4F2F2; --merk-oog: #16171C;
   --schaduw: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -12px rgba(0,0,0,.6);
   --schaduw-groot: 0 2px 6px rgba(0,0,0,.4), 0 48px 96px -36px rgba(0,0,0,.85);
@@ -101,8 +102,8 @@ code { font-family: var(--f-code); font-size: .9em; }
 .knop:active { transform: scale(.98); }
 .knop svg { width: 18px; height: 18px; flex: none; transition: transform .25s var(--zacht); }
 .knop:hover svg.pijl { transform: translateY(2px); }
-.knop-rood { background: var(--rood); color: #fff; box-shadow: 0 12px 32px -12px rgba(222,47,62,.85), inset 0 1px 0 rgba(255,255,255,.22); }
-.knop-rood:hover { background: var(--rood-diep); box-shadow: 0 16px 40px -12px rgba(222,47,62,.95), inset 0 1px 0 rgba(255,255,255,.22); }
+.knop-rood { background: var(--knop-rood); color: #fff; box-shadow: 0 12px 32px -12px rgba(222,47,62,.85), inset 0 1px 0 rgba(255,255,255,.22); }
+.knop-rood:hover { background: var(--knop-rood-hover); box-shadow: 0 16px 40px -12px rgba(222,47,62,.95), inset 0 1px 0 rgba(255,255,255,.22); }
 .knop-glas { color: #F2F2F4; border-color: rgba(255,255,255,.16); background: rgba(255,255,255,.05); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .knop-glas:hover { background: rgba(255,255,255,.1); }
 .knop-rand { color: var(--inkt); border-color: var(--lijn2); background: transparent; }
@@ -190,7 +191,7 @@ code { font-family: var(--f-code); font-size: .9em; }
 /* het verhaal */
 .verhaal .groot { margin-top: 28px; font: 500 clamp(30px, 4vw, 54px)/1.18 var(--f-display); letter-spacing: -0.03em; color: var(--tekst3); max-width: 23em; text-wrap: pretty; }
 .verhaal .groot b { color: var(--inkt); font-weight: 600; }
-.js .verhaal .groot.vul, .js .verhaal .groot.vul b { color: var(--vaag); }
+.js .verhaal .groot.vul, .js .verhaal .groot.vul b { color: var(--tekst3); } /* nog niet gelezen: rustig grijs, wel leesbaar (4.5:1) */
 .verhaal .groot .w { transition: color .35s ease; }
 .js .verhaal .groot.vul .w.aan { color: var(--inkt); }
 .js .verhaal .groot.vul b .w.aan { color: var(--inkt); }
@@ -237,10 +238,12 @@ code { font-family: var(--f-code); font-size: .9em; }
 .moment.smal-beeld figure { max-width: 420px; }
 .podium { display: none; }
 @media (min-width: 1000px) {
-  .js .verloop.actief .moment { min-height: 72vh; display: flex; flex-direction: column; justify-content: center; padding-block: 0; opacity: .32; transition: opacity .5s ease; }
+  .js .verloop.actief .moment { min-height: 72vh; display: flex; flex-direction: column; justify-content: center; padding-block: 0; }
+  /* De andere momenten: rustig grijs in plaats van doorzichtig, zodat ze leesbaar blijven (4.5:1). */
+  .js .verloop.actief .moment h3, .js .verloop.actief .moment p, .js .verloop.actief .moment .wie { transition: color .5s ease; }
+  .js .verloop.actief .moment:not(.nu) h3, .js .verloop.actief .moment:not(.nu) p, .js .verloop.actief .moment:not(.nu) .wie { color: var(--tekst3); }
   .js .verloop.actief .moment:first-child { min-height: 60vh; justify-content: flex-start; padding-top: 8vh; }
   .js .verloop.actief .moment:last-child { min-height: 60vh; }
-  .js .verloop.actief .moment.nu { opacity: 1; }
   .js .verloop.actief .moment.nu time::before { background: var(--rood); border-color: var(--rood); box-shadow: 0 0 0 6px var(--rood-zacht); }
   .js .verloop.actief .moment.nu time { color: var(--inkt); }
   .js .verloop.actief .moment time::before { top: auto; }
@@ -259,7 +262,7 @@ code { font-family: var(--f-code); font-size: .9em; }
 .terminal { border-radius: var(--r-groot); background: #0B0B0D; border: 1px solid #1F2024; box-shadow: var(--schaduw-groot); padding: clamp(22px, 3vw, 34px); font: 15px/1.9 var(--f-code); color: #D9DBE0; overflow-x: auto; }
 .terminal .balk { display: flex; gap: 8px; margin-bottom: 18px; }
 .terminal .balk i { width: 11px; height: 11px; border-radius: 50%; background: #2A2B30; }
-.terminal .p { color: #FF7C85; } .terminal .c { color: #6B707A; } .terminal .g { color: #3FD17F; }
+.terminal .p { color: #FF7C85; } .terminal .c { color: #7C818B; } .terminal .g { color: #3FD17F; }
 .terminal div { white-space: pre; }
 
 /* kan niet stuk */
@@ -557,7 +560,7 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
           <time datetime="21:00">21:00</time>
           <h3>Sanne starts coding.</h3><p>One switch sets up VS Code, containers and programming languages. Everything lives in its own little box, so the system stays intact. Bugie never sees any of it.</p><span class="wie">For developers</span>
           <figure>
-            <div class="terminal" role="img" aria-label="A terminal: developer mode is on and Sanne opens her project in VS Code.">
+            <div class="terminal" role="img" tabindex="0" aria-label="A terminal: developer mode is on and Sanne opens her project in VS Code.">
               <div class="balk" aria-hidden="true"><i></i><i></i><i></i></div>
               <div><span class="c"># Developer mode is on</span></div>
               <div><span class="p">$</span> distrobox enter dev</div>
@@ -857,7 +860,7 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
   momenten.forEach(function (m) {
     var s = document.createElement("div"); s.className = "scherm";
     var f = m.querySelector("figure").cloneNode(true);
-    f.querySelectorAll("[role=img]").forEach(function (n) { n.removeAttribute("role"); n.removeAttribute("aria-label"); });
+    f.querySelectorAll("[role=img]").forEach(function (n) { n.removeAttribute("role"); n.removeAttribute("aria-label"); n.removeAttribute("tabindex"); });
     f.querySelectorAll("img").forEach(function (i) { i.alt = ""; i.removeAttribute("loading"); });
     s.appendChild(f); podium.appendChild(s); schermen.push(s);
   });

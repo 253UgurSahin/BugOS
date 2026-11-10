@@ -22,6 +22,7 @@
     {"id": "org.onlyoffice.desktopeditors", "naam": "ONLYOFFICE", "cat": ["kantoor"], "nl": "Kantoorpakket dat veel op Microsoft Office lijkt.", "en": "Office suite that looks a lot like Microsoft Office."},
     {"id": "org.kde.okular", "naam": "Okular", "cat": ["kantoor"], "nl": "PDF's lezen, invullen en ondertekenen.", "en": "Read, fill in and sign PDFs."},
 
+    {"id": "org.kde.gwenview", "naam": "Gwenview", "cat": ["foto", "aanbevolen"], "nl": "Je foto's bekijken.", "en": "View your photos."},
     {"id": "org.gimp.GIMP", "naam": "GIMP", "cat": ["foto"], "nl": "Foto's bewerken, zoals Photoshop.", "en": "Edit photos, like Photoshop."},
     {"id": "org.kde.krita", "naam": "Krita", "cat": ["foto"], "nl": "Tekenen en schilderen.", "en": "Drawing and painting."},
     {"id": "org.kde.kdenlive", "naam": "Kdenlive", "cat": ["foto"], "nl": "Video's monteren.", "en": "Edit videos."},
@@ -42,6 +43,7 @@
     {"id": "com.discordapp.Discord", "naam": "Discord", "cat": ["praten", "gamen"], "nl": "Chatten en bellen met vrienden.", "en": "Chat and call with friends."},
     {"id": "org.signal.Signal", "naam": "Signal", "cat": ["praten"], "nl": "Veilig berichten sturen.", "en": "Send messages securely."},
     {"id": "org.telegram.desktop", "naam": "Telegram", "cat": ["praten"], "nl": "Berichten en groepen.", "en": "Messages and groups."},
+    {"id": "com.rtosta.zapzap", "naam": "ZapZap", "cat": ["praten"], "nl": "WhatsApp op je computer (niet van WhatsApp zelf).", "en": "WhatsApp on your computer (not made by WhatsApp)."},
     {"id": "us.zoom.Zoom", "naam": "Zoom", "cat": ["praten"], "nl": "Videobellen.", "en": "Video calls."},
     {"id": "com.github.IsmaelMartinez.teams_for_linux", "naam": "Teams for Linux", "cat": ["praten"], "nl": "Microsoft Teams (niet van Microsoft zelf).", "en": "Microsoft Teams (not made by Microsoft)."},
 
@@ -51,7 +53,7 @@
 
     {"id": "org.keepassxc.KeePassXC", "naam": "KeePassXC", "cat": ["handig"], "nl": "Al je wachtwoorden veilig op één plek.", "en": "All your passwords safe in one place."},
     {"id": "com.bitwarden.desktop", "naam": "Bitwarden", "cat": ["handig"], "nl": "Wachtwoordkluis, ook op je telefoon.", "en": "Password vault, also on your phone."},
-    {"id": "org.kde.kcalc", "naam": "Rekenmachine", "cat": ["handig"], "nl": "Gewoon een rekenmachine.", "en": "Just a calculator."},
+    {"id": "org.kde.kcalc", "naam": "Rekenmachine", "naam_en": "Calculator", "cat": ["handig"], "nl": "Gewoon een rekenmachine.", "en": "Just a calculator."},
     {"id": "org.kde.filelight", "naam": "Filelight", "cat": ["handig"], "nl": "Zien wat je schijf vol maakt.", "en": "See what fills up your disk."},
     {"id": "com.github.tchx84.Flatseal", "naam": "Flatseal", "cat": ["handig"], "nl": "Bepalen wat apps mogen (voor gevorderden).", "en": "Control what apps may do (advanced)."},
 

@@ -12,119 +12,48 @@ Jip-en-Janneke: een paar grote, simpele stappen.
 Gestart met --eerste-keer opent hij alleen als hij nog nooit is afgemaakt.
 """
 
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, "/usr/lib/bugos/python")
 
+
+def _al_klaar() -> bool:
+    """Bij elk inloggen (--eerste-keer): al klaar, of op de live-USB? Dan meteen stoppen, vóór PySide6 en bugos_ui
+    geladen zijn: dat kostte bij elk inloggen een kwart seconde en 50 MB, alleen om te stoppen (U309)."""
+    import os
+    if (Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "bugos" / "welkom-klaar").exists():
+        return True
+    try:
+        return "rd.live.image" in Path("/proc/cmdline").read_text()
+    except OSError:
+        return False
+
+
+if __name__ == "__main__" and "--eerste-keer" in sys.argv and _al_klaar():
+    sys.exit(0)
+
 import bugos_ui  # noqa: E402
 from bugos_ui import (  # noqa: E402
-    CONFIG, Chip, Groep, IcoonChip, K, Kaart, KeuzeKaart, Knop, SchakelRij, Tegel, achtergrond_pad, bestaat, draai,
-    label, maak_app, ronde_pixmap, start, t, uitvoeren,
+    CONFIG, Chip, Groep, IcoonChip, Kaart, KeuzeKaart, Knop, SchakelRij, Tegel, achtergrond_pad, bestaat, draai,
+    label, maak_app, ronde_pixmap, schuifbaar, start, t, uitvoeren,
 )
-from PySide6.QtCore import QLocale, QPointF, QRectF, QSize, Qt, QThread, QTimer, Signal  # noqa: E402
-from PySide6.QtGui import QColor, QFont, QIcon, QLinearGradient, QPainter, QPen, QPixmap  # noqa: E402
+from bugos_welcome_panel import Zijpaneel  # noqa: E402
+from PySide6.QtCore import QLocale, QProcess, QRectF, QSize, Qt, QThread, QTimer, Signal  # noqa: E402
+from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtGui import QColor, QIcon, QKeySequence, QPainter, QPixmap, QShortcut  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QButtonGroup, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
+    QAbstractButton, QButtonGroup, QHBoxLayout, QLabel, QLineEdit, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 KLAAR = CONFIG / "welkom-klaar"
-DISPLAY = bugos_ui.DISPLAY
 
 
 def heeft_internet() -> bool:
     code, uit = draai("nmcli", "-t", "-f", "CONNECTIVITY", "general", timeout=5)
     return code == 0 and uit.strip() == "full"
-
-
-# ============================================================ zijpaneel ===
-
-class Zijpaneel(QWidget):
-    """Links: de BugOS-achtergrond, het logo en de stappen."""
-
-    def __init__(self, stappen: list[str]):
-        super().__init__()
-        self.stappen = stappen
-        self.huidig = 0
-        self.beeld = QPixmap(achtergrond_pad(donker=True))
-        # De zijbalk is altijd donker: het logo met de lichte kop.
-        self.logo = QIcon("/usr/share/bugos/logo-dark.svg")
-        self.setFixedWidth(330)
-
-    def zet(self, i: int) -> None:
-        self.huidig = i
-        self.update()
-
-    def paintEvent(self, _e):  # noqa: N802
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        r = QRectF(self.rect())
-        p.fillRect(r, QColor("#0E0F13"))
-        if not self.beeld.isNull():
-            bw, bh = self.beeld.width(), self.beeld.height()
-            schaal = r.height() / bh * 1.15
-            dw, dh = bw * schaal, bh * schaal
-            p.drawPixmap(QRectF(r.right() - dw * 0.62, r.bottom() - dh, dw, dh), self.beeld, QRectF(0, 0, bw, bh))
-            donker = QLinearGradient(0, 0, 0, r.height())
-            donker.setColorAt(0, QColor(14, 15, 19, 235))
-            donker.setColorAt(0.55, QColor(14, 15, 19, 150))
-            donker.setColorAt(1, QColor(14, 15, 19, 40))
-            p.fillRect(r, donker)
-
-        # logo + woord
-        self.logo.paint(p, 32, 34, 34, 34)
-        f = p.font()
-        f.setFamily(DISPLAY)
-        f.setPixelSize(26)
-        f.setWeight(f.Weight.DemiBold)
-        p.setFont(f)
-        p.setPen(QColor("#FFFFFF"))
-        p.drawText(QRectF(76, 32, 220, 40), Qt.AlignmentFlag.AlignVCenter, "BugOS")
-
-        # stappen
-        y = 128
-        for i, naam in enumerate(self.stappen):
-            klaar, nu = i < self.huidig, i == self.huidig
-            cx, cy = 44, y + 14
-            if klaar:
-                p.setBrush(QColor(K["accent"]))
-                p.setPen(Qt.PenStyle.NoPen)
-                p.drawEllipse(QRectF(cx - 11, cy - 11, 22, 22))
-                vink = QPen(QColor("#FFFFFF"), 2.2)
-                vink.setCapStyle(Qt.PenCapStyle.RoundCap)
-                vink.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-                p.setPen(vink)
-                p.setBrush(Qt.BrushStyle.NoBrush)
-                p.drawPolyline([QPointF(cx - 5, cy + 0.5), QPointF(cx - 1.5, cy + 4), QPointF(cx + 5, cy - 3.5)])
-            elif nu:
-                p.setBrush(QColor("#FFFFFF"))
-                p.setPen(Qt.PenStyle.NoPen)
-                p.drawEllipse(QRectF(cx - 11, cy - 11, 22, 22))
-                p.setBrush(QColor(K["accent"]))
-                p.drawEllipse(QRectF(cx - 5, cy - 5, 10, 10))
-            else:
-                p.setBrush(Qt.BrushStyle.NoBrush)
-                p.setPen(QPen(QColor(255, 255, 255, 90), 1.6))
-                p.drawEllipse(QRectF(cx - 10, cy - 10, 20, 20))
-            if i < len(self.stappen) - 1:
-                p.setPen(QPen(QColor(255, 255, 255, 140 if klaar else 50), 1.6))
-                p.drawLine(QPointF(cx, cy + 14), QPointF(cx, cy + 34))
-            f = QFont(self.font())
-            f.setPixelSize(15)
-            f.setWeight(f.Weight.DemiBold if nu else f.Weight.Normal)
-            p.setFont(f)
-            p.setPen(QColor(255, 255, 255, 255 if nu else (200 if klaar else 130)))
-            p.drawText(QRectF(70, y, 240, 28), Qt.AlignmentFlag.AlignVCenter, naam)
-            y += 48
-
-        f = p.font()
-        f.setPixelSize(13)
-        f.setWeight(f.Weight.Normal)
-        p.setFont(f)
-        p.setPen(QColor(255, 255, 255, 150))
-        p.drawText(QRectF(32, r.bottom() - 52, 260, 24), Qt.AlignmentFlag.AlignVCenter,
-                   t(f"Stap {self.huidig + 1} van {len(self.stappen)}", f"Step {self.huidig + 1} of {len(self.stappen)}"))
 
 
 # ============================================================== pagina's ===
@@ -159,7 +88,7 @@ class Hallo(Pagina):
         blok = QVBoxLayout()
         blok.setSpacing(2)
         blok.addWidget(label(t("Taal", "Language"), "klein"))
-        naam = QLocale().nativeLanguageName() or "Nederlands"
+        naam = QLocale().nativeLanguageName() or t("Nederlands", "English")   # (U213: met LANG=C is dat Engels)
         blok.addWidget(label(naam[:1].upper() + naam[1:], "kop2"))
         taal.lay.addLayout(blok, 1)
         knop = Knop(t("Andere taal", "Other language"), "rand")
@@ -170,8 +99,10 @@ class Hallo(Pagina):
         tips = Groep()
         for icoon, tint, kop_t, sub_t in (
             ("lijn:vink", "neutraal", t("Kan niet stuk", "Can't break"),
-             t("Gaat er iets mis na een update? Dan kies je gewoon de vorige versie.",
-               "Something wrong after an update? Just pick the previous version.")),
+             t("Gaat er iets mis na een update? Dan ga je terug naar de vorige versie in Instellingen. Start de "
+               "computer niet meer goed? Houd bij het opstarten Shift ingedrukt (of druk op Esc) en kies de vorige.",
+               "Something wrong after an update? Go back to the previous version in Settings. If the computer does "
+               "not start properly, hold Shift (or press Esc) while it starts and pick the previous one.")),   # het opstartmenu is normaal verborgen (U360)
             ("lijn:ster", "neutraal", t("Alles in de BugOS Winkel", "Everything in the BugOS Store"),
              t("Apps installeer je met één klik, zoals op je telefoon.", "Install apps with one click, like on your phone.")),
             ("lijn:slot", "neutraal", t("Geen account, geen reclame", "No account, no ads"),
@@ -224,7 +155,7 @@ class Internet(Pagina):
         self.lay.addWidget(kaart)
         rij = QHBoxLayout()
         kies = Knop(t("Wifi kiezen", "Choose Wi-Fi"), "hoofd", "lijn:wifi", groot=True)
-        kies.clicked.connect(lambda: start("systemsettings", "kcm_networkmanagement"))
+        kies.clicked.connect(lambda: start("bugos-settings", "wifi"))   # de eenvoudige wifi-pagina van BugOS (U334)
         opnieuw = Knop(t("Opnieuw kijken", "Check again"), "stil", "lijn:verversen")
         opnieuw.clicked.connect(self.ververs)
         rij.addWidget(kies)
@@ -333,8 +264,8 @@ class Uiterlijk(Pagina):
             rij.addWidget(k)
         rij.addStretch(1)
         self.lay.addLayout(rij)
-        self.lay.addWidget(label(t("Tip: je kunt dit later veranderen bij Instellingen → Licht of donker.",
-                                   "Tip: you can change this later in Settings → Light or dark."), "klein"))
+        self.lay.addWidget(label(t("Tip: je kunt dit later veranderen bij Instellingen → Uiterlijk.",
+                                   "Tip: you can change this later in Settings → Appearance."), "klein"))
         self.klaar_met_vullen()
         self.knoppen[bugos_ui.DONKER].setChecked(True)
 
@@ -347,21 +278,29 @@ class Updates(Pagina):
     def __init__(self):
         super().__init__(t("Updates", "Updates"),
                          t("Updates houden je computer veilig. Ze worden pas actief na opnieuw opstarten, "
-                           "en gaat er ooit iets mis, dan kies je gewoon de vorige versie.",
+                           "en gaat er ooit iets mis, dan ga je terug naar de vorige versie in Instellingen (of, als "
+                           "hij niet meer goed start: houd bij het opstarten Shift ingedrukt of druk op Esc).",
                            "Updates keep your computer safe. They only take effect after a restart, "
-                           "and if something ever goes wrong, just pick the previous version."))
+                           "and if something ever goes wrong, go back to the previous version in Settings (or, if it "
+                           "does not start properly: hold Shift or press Esc while it starts)."))   # (U360, U367)
         self.groep = QButtonGroup(self)
         self.auto = self._optie("lijn:vink", "neutraal", t("Vanzelf, stil op de achtergrond", "Automatically, quietly"),
                                 t("BugOS houdt zichzelf bij. Jij merkt er niks van.",
                                   "BugOS keeps itself up to date. You won't notice a thing."), True)
         self.hand = self._optie("lijn:verversen", "neutraal", t("Ik kies zelf wanneer", "I choose when"),
-                                t("Je krijgt een melding als er een update is.", "You get a notification when there is an update."),
+                                t("Je krijgt een melding als er een nieuwe BugOS is. Je apps werk je bij met 'Nu updaten' in Instellingen.",
+                                  "You get a notification when a new BugOS is available. Update your apps with 'Update now' "
+                                  "in Settings."),
                                 False)
         huidig = "auto"
         if bestaat("bugos-updates"):
             huidig = (draai("bugos-updates", "status", timeout=5)[1].strip() or "auto")
         self.begin = huidig
         (self.hand if huidig == "hand" else self.auto).setChecked(True)
+        # Lukte het kiezen niet (Annuleren bij het wachtwoord)? Dan zeggen we dat hier en met een melding (U412).
+        self.mislukt = label("", "klein")
+        self.mislukt.hide()
+        self.lay.addWidget(self.mislukt)
         self.klaar_met_vullen()
 
     def _optie(self, icoon: str, tint: str, kop_t: str, sub_t: str, aanbevolen: bool) -> QPushButton:
@@ -388,9 +327,42 @@ class Updates(Pagina):
 
     def bij_volgende(self) -> None:
         gekozen = "hand" if self.hand.isChecked() else "auto"
-        if gekozen != self.begin:
-            start("pkexec", "/usr/bin/bugos-updates", gekozen)
-            self.begin = gekozen
+        if gekozen != self.begin and not getattr(self, "bezig", False):
+            # Pas onthouden als het lukte: Annuleren bij het wachtwoord, dan probeert Volgende het opnieuw (U129).
+            self.bezig = True
+            proces = QProcess(self)
+
+            def klaar(code, _status, p=proces, g=gekozen) -> None:
+                self.bezig = False
+                if code == 0:
+                    self.begin = g
+                    self.mislukt.hide()
+                else:
+                    # Je ging al naar de volgende pagina: zeg dat de keuze niet is doorgevoerd, en zet de knop terug (U412).
+                    (self.hand if self.begin == "hand" else self.auto).setChecked(True)
+                    if code not in (126, 127):
+                        # Geen kwestie van toestemming: bewaren lukte niet (bijv. een volle computer) (U422).
+                        tekst = t("De updatekeuze kon niet bewaard worden (is je computer vol?). Kies het later opnieuw in "
+                                  "Instellingen.", "The update choice could not be saved (is your computer full?). "
+                                  "Choose it again later in Settings.")
+                    else:
+                        tekst = (t("Updates staan nog op 'vanzelf': er was geen toestemming. Ga terug naar 'Updates' om het "
+                                   "opnieuw te proberen, of kies het later in Instellingen.",
+                                   "Updates are still automatic: permission was not given. Go back to 'Updates' to try "
+                                   "again, or choose it later in Settings.") if self.begin != "hand" else
+                                 t("Updates staan nog op 'ik kies zelf': er was geen toestemming. Ga terug naar 'Updates' om "
+                                   "het opnieuw te proberen, of kies het later in Instellingen.",
+                                   "Updates are still 'I choose when': permission was not given. Go back to 'Updates' to "
+                                   "try again, or choose it later in Settings."))
+                    self.mislukt.setText(tekst)
+                    self.mislukt.show()
+                    QProcess.startDetached("notify-send", ["-a", "BugOS", "-i", "bugos-logo",
+                                                           t("Updatekeuze niet doorgevoerd", "Update choice not saved"),
+                                                           tekst])
+                p.deleteLater()
+
+            proces.finished.connect(klaar)
+            proces.start("pkexec", ["/usr/bin/bugos-updates", gekozen])
 
 
 class Jij(Pagina):
@@ -399,8 +371,9 @@ class Jij(Pagina):
                          t("Zet aan wat bij jou past. Niks aanzetten mag ook.", "Turn on what fits you. Turning on nothing is fine too."))
         g = Groep()
         self.gamer = SchakelRij(t("Ik ga gamen", "I'm going to play games"),
-                                t("Steam staat klaar. Met de Game-modus speel je op volle kracht.",
-                                  "Steam is ready. Game mode gives you full power."), False, "lijn:spel", "neutraal")
+                                t("Steam staat in het startmenu (of komt er zo bij). Met de Game-modus speel je op volle kracht.",
+                                  "Steam is in the start menu (or will be soon). Game mode gives you full power."),
+                                False, "lijn:spel", "neutraal")
         self.dev = SchakelRij(t("Ik ga programmeren", "I'm going to code"),
                               t("BugOS zet VS Code, containers en programmeertalen voor je klaar.",
                                 "BugOS sets up VS Code, containers and programming languages."), False, "lijn:code", "neutraal")
@@ -410,15 +383,57 @@ class Jij(Pagina):
         for w in (self.gamer, self.dev, self.oud):
             g.voeg(w)
         self.lay.addWidget(g)
+        # Wat al gestart is, gaat door (ook als je via Terug hier weer komt): elk maar één keer starten (U074).
+        self.gestart: set[str] = set()
+        self.al_bezig = label(t("Wat je hier aanzette, wordt al klaargezet. Uitzetten kan later in Instellingen.",
+                                "What you turned on here is already being set up. You can turn it off later in Settings."),
+                              "klein")
+        self.al_bezig.hide()
+        self.lay.addWidget(self.al_bezig)
+        self.steam_nog = label(t("Steam wordt nog gedownload (of komt zodra je internet hebt). Hij staat straks in het "
+                                 "startmenu.", "Steam is still being downloaded (or will be once you are online). It will "
+                                 "be in the start menu soon."), "klein")
+        self.steam_nog.hide()
+        self.lay.addWidget(self.steam_nog)
+        # Wat al aan staat (de lichte stand zet zichzelf aan op een oudere pc), staat hier ook aan (U179).
+        for naam, rij, script in (("oud", self.oud, "bugos-light-mode"), ("dev", self.dev, "bugos-developer")):
+            try:
+                if subprocess.run([script, "status"], capture_output=True, text=True,
+                                  timeout=5).stdout.strip() == "aan":
+                    rij.schuif.setChecked(True)
+                    rij.schuif.setEnabled(False)   # staat al aan: uitzetten kan in Instellingen (U189)
+                    self.gestart.add(naam)
+                    self.al_bezig.show()
+            except (OSError, subprocess.SubprocessError):
+                pass
         self.klaar_met_vullen()
 
     def bij_volgende(self) -> None:
-        if self.dev.schuif.isChecked():
-            start("bugos-developer", "aan")
-        if self.oud.schuif.isChecked():
-            start("bugos-light-mode", "aan")
-        if self.gamer.schuif.isChecked():
-            start("steam")
+        for naam, rij, opdracht in (("dev", self.dev, ("bugos-developer", "aan")),
+                                    ("oud", self.oud, ("bugos-light-mode", "aan")),
+                                    ("gamer", self.gamer, steam_opdracht()
+                                     if self.gamer.schuif.isChecked() and "gamer" not in self.gestart else ())):
+            if naam == "gamer" and rij.schuif.isChecked() and not opdracht and naam not in self.gestart:
+                self.steam_nog.show()   # (U181)
+            if naam in self.gestart or not rij.schuif.isChecked() or not opdracht:
+                continue
+            start(*opdracht)
+            self.gestart.add(naam)
+            rij.schuif.setEnabled(False)   # niet meer uit te zetten hier: het loopt al
+            self.al_bezig.show()
+
+
+def steam_opdracht() -> tuple:
+    """Steam starten: het programma, of de Flatpak-versie (als Steam zo in BugOS kwam) (U130)."""
+    if shutil.which("steam"):
+        return ("steam",)
+    try:
+        if shutil.which("flatpak") and subprocess.run(["flatpak", "info", "com.valvesoftware.Steam"],
+                                                      capture_output=True, timeout=10).returncode == 0:
+            return ("flatpak", "run", "com.valvesoftware.Steam")
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return ()
 
 
 class Klaar(Pagina):
@@ -447,6 +462,15 @@ class Klaar(Pagina):
 # ================================================================ venster ===
 
 class Welkom(QWidget):
+    def closeEvent(self, e) -> None:  # noqa: N802
+        # Staat de wachtwoordvraag voor de updatekeuze nog open? Dan eerst afwachten: sluiten zou hem afbreken (U212).
+        if any(getattr(p, "bezig", False) for p in getattr(self, "paginas", [])):
+            self.setEnabled(False)
+            e.ignore()
+            QTimer.singleShot(500, self.close)
+            return
+        super().closeEvent(e)
+
     def __init__(self):
         super().__init__()
         self.setObjectName("venster")
@@ -467,7 +491,7 @@ class Welkom(QWidget):
         rechts.setSpacing(0)
         self.stapels = QStackedWidget()
         for p in self.paginas:
-            self.stapels.addWidget(p)
+            self.stapels.addWidget(schuifbaar(p))
         rechts.addWidget(self.stapels, 1)
 
         onder = QHBoxLayout()
@@ -484,12 +508,37 @@ class Welkom(QWidget):
         rechts.addLayout(onder)
         hoofd.addLayout(rechts, 1)
         self.ververs()
+        # Enter = Volgende, ook als de focus op een keuze staat (setDefault werkt alleen in een dialoog); een knop
+        # met de focus doet bij Enter gewoon zichzelf (U481).
+        self.volgende.setFocus()
+        for toets in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            QShortcut(QKeySequence(toets), self, activated=self.enter, autoRepeat=False)   # Enter vasthouden: één pagina (U530)
+
+    def enter(self) -> None:
+        nu = QApplication.focusWidget()
+        if isinstance(nu, QLineEdit):
+            nu.returnPressed.emit()   # bijv. het wifi-wachtwoord: Enter is daar 'verbinden'
+        elif isinstance(nu, QAbstractButton) and nu is not self.volgende and not nu.isCheckable():
+            nu.click()                # een gewone knop ('Opnieuw kijken') doet zichzelf
+        elif self.volgende.isEnabled():
+            self.volgende.click()     # op een keuze (spatie kiest): Enter gaat verder
 
     def ga(self, richting: int) -> None:
         nu = self.stapels.currentIndex()
         if richting > 0:
             self.paginas[nu].bij_volgende()
             if nu == len(self.paginas) - 1:
+                # Staat de vraag om het wachtwoord (updatekeuze) nog open? Eerst afwachten: sluiten zou hem
+                # afbreken, en dan is je keuze nooit gezet (U182).
+                from PySide6.QtCore import QElapsedTimer
+                klok = QElapsedTimer()
+                klok.start()
+                wacht = any(getattr(p, "bezig", False) for p in self.paginas)
+                if wacht:   # niet nog eens klikken (of Terug) terwijl we wachten (U193)
+                    self.setEnabled(False)
+                while any(getattr(p, "bezig", False) for p in self.paginas) and klok.elapsed() < 180000:
+                    QApplication.processEvents()
+                    QThread.msleep(50)
                 CONFIG.mkdir(parents=True, exist_ok=True)
                 KLAAR.touch()
                 self.close()
@@ -514,7 +563,7 @@ def main() -> int:
                 return 0  # op de live-USB toont bugos-live het welkomstscherm
         except OSError:
             pass
-    app = maak_app("bugos-welcome", "bugos-welcome", sys.argv)
+    app = maak_app("bugos-welcome", "bugos-welcome", sys.argv, een_keer=True)   # (U208)
     return uitvoeren(app, Welkom())
 
 

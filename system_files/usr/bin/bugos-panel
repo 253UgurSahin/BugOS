@@ -80,20 +80,44 @@ function vervang(oud, nieuw, voor) {
         }
         if (oud !== "" && doel === null) continue;
         if (oud === "" && buur === null) continue;
+        // Op de plek van de oude (of vóór de buur). Plasma leest AppletOrder alleen bij het opstarten en schrijft
+        // hem zelf opnieuw bij elke verandering; widget.index zet de plek echt (Widget::setIndex) (U259).
+        var plek = (oud !== "" ? doel : buur).index;
         var w = p.addWidget(nieuw);
         if (nieuw == "org.kde.plasma.kickoff") zet_kickoff(w);
         if (nieuw == "org.bugos.startmenu") zet_sneltoets(w);
-        p.currentConfigGroup = ["General"];
-        var volgorde = String(p.readConfig("AppletOrder", "")).split(";").filter(function (x) { return x !== "" && x != String(w.id); });
-        var plek = volgorde.indexOf(String(oud !== "" ? doel.id : buur.id));
-        if (plek < 0) plek = 0;
-        if (oud !== "") volgorde[plek] = String(w.id); else volgorde.splice(plek, 0, String(w.id));
-        p.writeConfig("AppletOrder", volgorde.join(";"));
         if (oud !== "") doel.remove();
-        p.reloadConfig();
+        if (typeof plek == "number" && plek >= 0) w.index = plek;
         gedaan++;
     }
     print(gedaan);
+}
+// Van vóór de Engelse namen (U302): het snelmenu heette org.bugos.snelmenu, en de vastgezette apps
+// bugos-bestanden, bugos-winkel enz. Zonder dit staat er een kapot widget en verdwijnen je apps van de taakbalk.
+var OUDE_APPS = {"bugos-bestanden.desktop": "bugos-files.desktop", "bugos-winkel.desktop": "bugos-store.desktop",
+    "bugos-instellingen.desktop": "bugos-settings.desktop", "bugos-hulp.desktop": "bugos-help.desktop",
+    "bugos-overstap.desktop": "bugos-switch.desktop", "bugos-pakket.desktop": "bugos-package.desktop",
+    "bugos-spelmodus.desktop": "bugos-game-mode.desktop", "bugos-taakbeheer.desktop": "bugos-task-manager.desktop",
+    "bugos-welkom.desktop": "bugos-welcome.desktop"};
+function hernoemd() {
+    vervang("org.bugos.snelmenu", "org.bugos.quickmenu", "");
+    var ps = panels();
+    for (var i = 0; i < ps.length; i++) {
+        var ws = ps[i].widgets();
+        for (var j = 0; j < ws.length; j++) {
+            if (ws[j].type != "org.kde.plasma.icontasks" && ws[j].type != "org.kde.plasma.taskmanager") continue;
+            ws[j].currentConfigGroup = ["General"];
+            var l = ws[j].readConfig("launchers", []);
+            if (typeof l == "string") l = l === "" ? [] : l.split(",");
+            var nieuw = [], anders = false;
+            for (var k = 0; k < l.length; k++) {
+                var naam = String(l[k]).replace(/^applications:/, "");
+                if (OUDE_APPS[naam]) { nieuw.push("applications:" + OUDE_APPS[naam]); anders = true; }
+                else nieuw.push(l[k]);
+            }
+            if (anders) ws[j].writeConfig("launchers", nieuw);
+        }
+    }
 }
 function weg(soort) {
     var ps = panels(), n = 0;
@@ -123,11 +147,25 @@ function systeemvak(rustig) {
             vak.currentConfigGroup = ["General"];
             var oud = vak.readConfig("hiddenItems", []);
             if (typeof oud == "string") oud = oud.split(",");
-            var nieuw = [];
+            // Wat BugOS zelf verborg, onthouden we apart (bugosHidden): wat jij zelf verborg (bijv. KDE Connect),
+            // blijft verborgen als je het snelmenu weer uitzet (U456). Nog nooit bewaard? Staat de hele lijst er al
+            // (een oudere BugOS zette hem), dan was die van ons; anders is wat er staat van jou.
+            var vorig = vak.readConfig("bugosHidden", ["-"]);
+            if (typeof vorig == "string") vorig = vorig.split(",");
+            var vanOns = vorig;
+            if (vorig.length == 1 && vorig[0] == "-") {
+                var alles = true;
+                for (var a = 0; a < RUSTIG.length; a++) if (oud.indexOf(RUSTIG[a]) < 0) alles = false;
+                vanOns = alles ? RUSTIG : [];
+            }
+            var nieuw = [], erbij = [];
             for (var k = 0; k < oud.length; k++)
-                if (oud[k] !== "" && RUSTIG.indexOf(oud[k]) < 0) nieuw.push(oud[k]);
-            if (rustig) nieuw = nieuw.concat(RUSTIG);
+                if (oud[k] !== "" && vanOns.indexOf(oud[k]) < 0 && nieuw.indexOf(oud[k]) < 0) nieuw.push(oud[k]);
+            if (rustig)
+                for (var r = 0; r < RUSTIG.length; r++)
+                    if (nieuw.indexOf(RUSTIG[r]) < 0) { nieuw.push(RUSTIG[r]); erbij.push(RUSTIG[r]); }
             vak.writeConfig("hiddenItems", nieuw);
+            vak.writeConfig("bugosHidden", erbij.length ? erbij : [""]);
             vak.reloadConfig();
             n++;
         }
@@ -178,7 +216,13 @@ status_van() {
 case "$WAT:$ACTIE" in
 startmenu:aan)
     bureaublad_er || niet_bereikbaar
-    plasma_script "$JS vervang(\"org.kde.plasma.kickoff\", \"org.bugos.startmenu\", \"\");" >/dev/null || niet_bereikbaar
+    uit="$(plasma_script "$JS vervang(\"org.kde.plasma.kickoff\", \"org.bugos.startmenu\", \"\");")" || niet_bereikbaar
+    # 0: er stond geen KDE-startknop (Kickoff) op een taakbalk, bijv. een ander KDE-menu. Dan niet "staat aan" zeggen (U073).
+    if [ "$uit" = 0 ]; then
+        melding "$(t "BugOS-startmenu kon niet aan" "BugOS start menu could not be turned on")" \
+            "$(t "Er staat geen KDE-startknop op de taakbalk om te vervangen." "There is no KDE start button on the taskbar to replace.")"
+        exit 4
+    fi
     melding "$(t "BugOS-startmenu staat aan" "BugOS start menu is on")" \
         "$(t "Liever het gewone KDE-menu? Zet het uit in Instellingen." "Prefer the regular KDE menu? Turn it off in Settings.")"
     ;;
@@ -191,7 +235,14 @@ startmenu:status)
     ;;
 snelmenu:aan)
     bureaublad_er || niet_bereikbaar
-    plasma_script "$JS vervang(\"\", \"org.bugos.quickmenu\", \"org.kde.plasma.systemtray\"); systeemvak(true);" >/dev/null || niet_bereikbaar
+    # Twee aparte keren: Plasma plakt de print()-uitvoer zonder scheiding aan elkaar ("00"), dan zie je de 0 niet (U083).
+    uit="$(plasma_script "$JS vervang(\"\", \"org.bugos.quickmenu\", \"org.kde.plasma.systemtray\");")" || niet_bereikbaar
+    if [ "$uit" = 0 ]; then   # geen systeemvak op een taakbalk: het snelmenu kan nergens naast (U073)
+        melding "$(t "Snelmenu kon niet aan" "Quick menu could not be turned on")" \
+            "$(t "Er staat geen systeemvak op de taakbalk." "There is no system tray on the taskbar.")"
+        exit 4
+    fi
+    plasma_script "$JS systeemvak(true);" >/dev/null || niet_bereikbaar
     ;;
 snelmenu:uit)
     bureaublad_er || niet_bereikbaar
@@ -218,7 +269,10 @@ standaard:*)
     MARKER2="$BUGOS_CONFIG/paneel-systeemvak-1"
     # Stap 3: de taakbalkruimte (rechtermuisknop op leeg = Taakbeheer), ook voor wie stap 1 en 2 al had.
     MARKER3="$BUGOS_CONFIG/paneel-taakbalkruimte-1"
-    [ -f "$MARKER" ] && [ -f "$MARKER2" ] && [ -f "$MARKER3" ] && exit 0
+    # Stap 0: namen van vóór de Engelse namen omzetten (snelmenu, vastgezette apps) (U302). Vóór stap 3, die het
+    # snelmenu zoekt.
+    MARKER0="$BUGOS_CONFIG/paneel-hernoemd-1"
+    [ -f "$MARKER0" ] && [ -f "$MARKER" ] && [ -f "$MARKER2" ] && [ -f "$MARKER3" ] && exit 0
     for _ in $(seq 1 30); do
         bureaublad_er && break
         sleep 2
@@ -226,6 +280,9 @@ standaard:*)
     bureaublad_er || exit 0  # volgende keer opnieuw proberen
     # Een merkteken alleen als de stap echt lukte; anders probeert hij het bij de volgende keer inloggen opnieuw.
     mkdir -p "$BUGOS_CONFIG"
+    if [ ! -f "$MARKER0" ]; then
+        plasma_script "$JS hernoemd();" >/dev/null && touch "$MARKER0"
+    fi
     if [ ! -f "$MARKER" ]; then
         gelukt=1
         if [ "$(status_van org.kde.plasma.kickoff)" = aan ]; then

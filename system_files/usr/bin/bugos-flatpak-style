@@ -6,7 +6,8 @@
 # zet dit script het passende stijl-stukje erbij:
 #   - KDE-apps (Qt): de Kvantum-stijl (org.kde.KStyle.Kvantum, per KDE-versie);
 #   - GTK-apps: het Breeze-GTK-thema (org.gtk.Gtk3theme.Breeze), waar BugOS zijn
-#     kleuren en vormen bovenop zet (zie bugos-theme).
+#     kleuren en vormen bovenop zet (zie bugos-theme);
+#   - games: de FPS-teller van game-modus (MangoHud) voor de freedesktop-fundering.
 # De kleuren en vormen zelf komen uit de map van de gebruiker; bugos-theme geeft
 # Flatpak-apps toegang tot die bestanden (alleen lezen).
 #
@@ -23,7 +24,13 @@ GTK=0
 while read -r id tak; do
     case "$id" in
     org.kde.Platform) WIL+=("org.kde.KStyle.Kvantum//$tak") ;;
-    org.gnome.Platform | org.freedesktop.Platform) GTK=1 ;;
+    org.gnome.Platform) GTK=1 ;;
+    org.freedesktop.Platform)
+        GTK=1
+        # De FPS-teller (MangoHud) van game-modus, ook in games uit de Winkel (Steam, Heroic, Lutris als
+        # Flatpak): die zien de MangoHud van het systeem niet (U264).
+        WIL+=("org.freedesktop.Platform.VulkanLayer.MangoHud//$tak")
+        ;;
     esac
 done < <(flatpak list --system --runtime --columns=application,branch 2>/dev/null)
 [ "$GTK" = 1 ] && WIL+=("org.gtk.Gtk3theme.Breeze//3.22")

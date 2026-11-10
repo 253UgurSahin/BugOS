@@ -1,24 +1,31 @@
 ---
 # BugOS bouwen
-# Jip-en-Janneke: elke keer als er iets verandert (en elke nacht), bouwt
-# GitHub een nieuwe BugOS. Computers met BugOS halen die vanzelf op als update.
+# Jip-en-Janneke: elke week (en als je het met de hand start) bouwt GitHub een
+# nieuwe BugOS. Computers met BugOS halen die vanzelf op als update.
 name: BugOS bouwen
 
-# Alleen met de hand starten (Actions > Build > Run workflow): automatisch draaien gaf elke keer een mail.
-# Weer automatisch? Haal de # weg bij de regels hieronder.
+# Met de hand starten kan altijd (Actions > Build > Run workflow).
+# Eén keer per week bouwt GitHub vanzelf, zodat beveiligingsupdates van Fedora bij de computers
+# komen; zonder dat blijven ze bij GitHub hangen (A031). Te veel mail? Zet in GitHub bij
+# Settings > Notifications > Actions "Only notify for failed workflows" aan.
+# Bij elke verandering bouwen? Haal de # weg bij push en pull_request.
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1" # elke maandagnacht
 #  push:
 #    branches: [main, "claude/**"]
 #    paths-ignore: ["**.md", "docs/**", "tools/screenshots/**", ".github/workflows/screenshots.yml"]
 #  pull_request:
 #    branches: [main]
-#  schedule:
-#    - cron: "17 3 * * *" # elke nacht, zodat beveiligingsupdates meekomen
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+# Standaard alleen lezen; de job die het beeld bouwt, krijgt zelf wat hij nodig heeft (U248).
+permissions:
+  contents: read
 
 jobs:
   controle:
@@ -85,6 +92,18 @@ jobs:
         run: bash tools/test_panel.sh
       - name: Windows-programma openen testen (rare namen, mislukte Wine-start; met nep-programma's)
         run: bash tools/test_exe.sh
+      - name: Windows-overstap testen (het startbestand opent een script dat bestaat)
+        run: bash tools/test_windows_start.sh
+      - name: Randgevallen testen (rare namen, pictogrammen, alles laadt, bouwregels)
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_edges.py
+      - name: OS-systeem testen (updates, ontwikkelaar, taal, lichte stand, game-modus, diensten; met nep-programma's)
+        run: bash tools/test_os_system.sh
+      - name: OS-instellingen testen (scherm, inloggen, wifi, printers, updates, wachtwoord, menu's; met nep-programma's)
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_os_settings.py
+      - name: OS-apps testen (kopiëren naar USB, wegschrijven, back-up, winkel, schermlezer, slepen; met tijdelijke mappen)
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_os_apps.py
+      - name: Snelmenu testen (schuiven voor volume en helderheid sturen wat je kiest)
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_menus.py
       - name: "'Er werkt iets niet' testen (nakijken en repareren op de achtergrond)"
         run: QT_QPA_PLATFORM=offscreen python3 tools/test_help.py
       - name: Overstappen op ondertekende updates testen (met een nep-rpm-ostree)
@@ -151,6 +170,9 @@ jobs:
             --label containers.bootc=1 \
             -t localhost/${{ matrix.image }}:build .
 
+      - name: Testen in het gebouwde beeld (naam, pictogrammen, diensten, stijl; elk programma laadt)
+        run: sudo podman run --rm -v "$PWD:/repo:ro" --entrypoint /usr/bin/bash localhost/${{ matrix.image }}:build /repo/tools/test_image.sh
+
       - name: Uploaden naar GitHub Packages
         if: github.event_name != 'pull_request'
         env:
@@ -164,7 +186,7 @@ jobs:
           echo "DIGEST=$(cat /tmp/digest)" >> "$GITHUB_ENV"
 
       # Ondertekenen: computers met BugOS installeren alleen een update met deze handtekening
-      # (zie build_files/build.sh, "Ondertekende updates"). De sleutel staat als geheim in GitHub
+      # (zie build_files/system.sh, "Ondertekende updates"). De sleutel staat als geheim in GitHub
       # (SIGNING_SECRET, gemaakt met "cosign generate-key-pair"); zonder dat geheim slaan we dit over.
       - name: Ondertekenen hulpmiddel (cosign)
         if: github.event_name != 'pull_request' && env.HEEFT_SLEUTEL == 'ja'

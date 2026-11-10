@@ -133,10 +133,15 @@ def _andere_schijf(a, c):
 
 
 os.rename = _andere_schijf
+import bugos_files_acties as _ac0  # noqa: E402
+
+_echt_hv0 = _ac0.hernoem_veilig
+_ac0.hernoem_veilig = lambda a, c: (_andere_schijf(a, c), c)[1] if not _keer else _echt_hv0(a, c)   # (U384: renameat2)
 (docs / "verhuis").mkdir()
 (docs / "verhuis" / "a.txt").write_text("a")
 v2 = b.kopieer_een(docs / "verhuis", doel, verplaats=True)
 os.rename = _echt_rename
+_ac0.hernoem_veilig = _echt_hv0
 klopt(v2 == doel / "verhuis" and (v2 / "a.txt").read_text() == "a" and not (docs / "verhuis").exists()
       and not any(p.name.endswith(".bugos-bezig") for p in doel.iterdir()),
       "verplaatsen naar een andere schijf: alles over, origineel weg, geen tijdelijke map over")
@@ -167,6 +172,101 @@ klopt(mislukt == 1 and [x[0].name for x in b.prullenbak_inhoud()] == ["vast"],
       "prullenbak legen: wat niet weg kan, telt als mislukt en blijft zichtbaar; de rest is weg")
 b.prullenbak_legen()
 
+# U244: prullenbak legen en 'echt weggooien' halen ook de bewaarde voorbeeldjes weg (daar staat de naam in).
+import bugos_files_acties as _ac  # noqa: E402
+import bugos_files_tegels as _tg  # noqa: E402
+
+_cache = Path(os.environ.get("XDG_CACHE_HOME", TMP / "thuis" / ".cache")) / "thumbnails"
+
+
+def _maak_thumb(pad: Path, maat: str = "large") -> Path:
+    _u, _n, _c = _tg._thumb_plek(str(pad))
+    (_c / maat).mkdir(parents=True, exist_ok=True)
+    (_c / maat / _n).write_bytes(b"png")
+    return _c / maat / _n
+
+
+(docs / "geheim (1).pdf").write_text("p")
+(docs / "map met foto's").mkdir()
+(docs / "map met foto's" / "a.jpg").write_text("j")
+_t1 = _maak_thumb(docs / "geheim (1).pdf")
+_t2 = _maak_thumb(docs / "map met foto's" / "a.jpg", "normal")
+_in_bak, _info = b.naar_prullenbak(docs / "geheim (1).pdf")
+_t4 = _maak_thumb(_in_bak)   # U255: een voorbeeldje gemaakt in de prullenbak (tegels)
+b.naar_prullenbak(docs / "map met foto's")
+b.prullenbak_legen()
+(docs / "op-stick.png").write_text("s")
+_t3 = _maak_thumb(docs / "op-stick.png", "x-large")
+_wg = _ac.Weggooien([docs / "op-stick.png"])
+_wg.run()
+klopt(not _t1.exists() and not _t2.exists() and not _t3.exists() and not _t4.exists(),
+      "U244: een gewist bestand (prullenbak geleegd, of echt weggegooid) laat geen voorbeeldje met zijn naam achter")
+
+# U256: een grote map in de prullenbak: niet voor elk bestand vier keer 'bestaat niet' weghalen (dat maakte legen traag).
+_groot = TMP / "groot-weg"
+_groot.mkdir()
+for _i in range(500):
+    (_groot / f"f{_i}.txt").write_text("x")
+_tel_weg = []
+_echt_unlink = Path.unlink
+Path.unlink = lambda self, *a, **k: (_tel_weg.append(self), _echt_unlink(self, *a, **k))[1]
+_ac.vergeet_voorbeelden(TMP / "ergens" / "groot-weg", _groot)
+Path.unlink = _echt_unlink
+klopt(len(_tel_weg) <= 1, f"U256: vergeten van voorbeeldjes van een grote map haalt alleen weg wat er is ({len(_tel_weg)} keer)")
+
+# U269: een prullenbak met veel losse dingen: de voorbeeldjes-mappen maar één keer lezen (niet per ding).
+for _i in range(30):
+    (docs / f"los{_i}.txt").write_text("x")
+    b.naar_prullenbak(docs / f"los{_i}.txt")
+_lees = []
+_echt_listdir = os.listdir
+os.listdir = lambda p=".": (_lees.append(str(p)) if "thumbnails" in str(p) else None, _echt_listdir(p))[1]
+b.prullenbak_legen()
+os.listdir = _echt_listdir
+klopt(len(_lees) <= 4 and b.prullenbak_inhoud() == [],
+      f"U269: prullenbak met 30 dingen legen leest de voorbeeldjes-mappen één keer ({len(_lees)} keer)")
+
+# U309/U310: wat bij elk inloggen draait, laadt geen Qt: bugos_drives (bugos-open-drives) en 'Welkom' als hij al klaar is.
+import subprocess as _sp2  # noqa: E402
+
+_lib = str(ROOT / "system_files" / "usr" / "lib" / "bugos" / "python")
+_r = _sp2.run([sys.executable, "-c", f"import sys; sys.path.insert(0, {_lib!r}); import bugos_drives; print('PySide6' in sys.modules)"],
+              capture_output=True, text=True)
+_nep_qt = TMP / "geen-qt"
+(_nep_qt / "PySide6").mkdir(parents=True)
+(_nep_qt / "PySide6" / "__init__.py").write_text("raise ImportError('Qt geladen')\n")
+_thuis2 = TMP / "welkom-thuis"
+(_thuis2 / ".config" / "bugos").mkdir(parents=True)
+(_thuis2 / ".config" / "bugos" / "welkom-klaar").write_text("")
+_w = _sp2.run([sys.executable, str(ROOT / "system_files/usr/bin/bugos-welcome"), "--eerste-keer"], capture_output=True, text=True,
+              env=dict(os.environ, PYTHONPATH=str(_nep_qt), HOME=str(_thuis2), XDG_CONFIG_HOME=str(_thuis2 / ".config")))
+klopt(_r.stdout.strip() == "False" and _w.returncode == 0,
+      f"U309/U310: bij elk inloggen geen Qt laden: bugos_drives zonder PySide6 ({_r.stdout.strip()}), Welkom stopt meteen ({_w.returncode})")
+
+# U384: komt er tijdens het kopiëren een ander bestand met dezelfde naam (een tweede venster, een download), dan wordt
+# dat niet overschreven: de kopie krijgt een vrije naam.
+import bugos_files_acties as _ac2  # noqa: E402
+
+_race_bron = TMP / "race-bron"
+_race_bron.mkdir()
+(_race_bron / "IMG_0001.JPG").write_bytes(b"A" * 300_000)
+_race_doel = TMP / "race-doel"
+_race_doel.mkdir()
+_gemaakt = []
+
+
+def _stop():
+    if not _gemaakt:
+        (_race_doel / "IMG_0001.JPG").write_bytes(b"van telefoon B")
+        _gemaakt.append(1)
+    return False
+
+
+_klaar = _ac2.kopieer_een(_race_bron / "IMG_0001.JPG", _race_doel, verplaats=False, stop=_stop)
+klopt((_race_doel / "IMG_0001.JPG").read_bytes() == b"van telefoon B" and _klaar is not None and _klaar.name != "IMG_0001.JPG"
+      and _klaar.read_bytes() == b"A" * 300_000,
+      f"U384: een bestand dat tijdens het kopiëren dezelfde naam kreeg, wordt niet overschreven ({_klaar and _klaar.name})")
+
 # 7c. snelkoppelingen: telt waar de koppeling zelf staat (kapot of naar een andere schijf)
 (docs / "kapot").symlink_to(TMP / "bestaat-niet")
 klopt(b.zelfde_schijf(docs / "kapot", thuis), "snelkoppeling: een kapotte koppeling in Documenten mag naar de prullenbak")
@@ -177,6 +277,71 @@ klopt(b.toon_naam("SpotifySetup.exe", False) == "SpotifySetup.exe", "naam: progr
 klopt(b.toon_naam("foto.jpg", True) == "foto.jpg", "naam: map houdt zijn naam")
 
 # 9. schijven herkennen (een nep-lijstje, zoals lsblk het geeft)
+# U139: een stick die er net in zit, wordt opengezet (KDE doet dat niet vanzelf), zodat Back-up en Overstap hem zien.
+# U142: de vaste stukjes van eMMC-geheugen (mmcblk0boot0) zijn geen 'SD-kaart', en ingebouwd eMMC is 'intern'.
+_ub = TMP / "nep-udisks"
+_ub.mkdir()
+(_ub / "udisksctl").write_text(f"#!/usr/bin/bash\necho \"$*\" >>{_ub}/log\n")
+(_ub / "udisksctl").chmod(0o755)
+_oud_pad = os.environ["PATH"]
+os.environ["PATH"] = f"{_ub}:{_oud_pad}"
+_n = sch.losse_openen([sch.Schijf(apparaat="/dev/sdb1", naam="Stick", soort="stick", station="/dev/sdb", fs="vfat"),
+                        sch.Schijf(apparaat="/dev/sdc1", naam="Al open", soort="stick", station="/dev/sdc", fs="vfat",
+                                   wortel="/run/media/x/A"),
+                        sch.Schijf(apparaat="/dev/sda2", naam="D", soort="intern", station="/dev/sda", fs="ntfs")])
+_log1 = (_ub / "log").read_text()
+_n2 = sch.losse_openen([sch.Schijf(apparaat="/dev/sdb1", naam="Stick", soort="stick", station="/dev/sdb", fs="vfat")])
+_log2 = (_ub / "log").read_text()
+sch.losse_openen([sch.Schijf(apparaat="/dev/sda2", naam="D", soort="intern", station="/dev/sda", fs="ntfs")])   # eruit gehaald
+_n3 = sch.losse_openen([sch.Schijf(apparaat="/dev/sdb1", naam="Stick", soort="stick", station="/dev/sdb", fs="vfat")])
+os.environ["PATH"] = _oud_pad
+klopt(_n == 1 and _log1.split() == ["mount", "-b", "/dev/sdb1", "--no-user-interaction"],
+      "U139: een dichte USB-stick gaat vanzelf open (zonder te vragen); open en interne schijven niet")
+klopt(_n2 == 0 and _log2.count("mount") == 1,
+      "U164: weer dicht ('Veilig verwijderen') of lukte openen niet: niet elke 3 seconden opnieuw openzetten")
+klopt(_n3 == 1, "U183: dezelfde stick eruit en weer erin (Back-up blijft open): hij gaat weer vanzelf open")
+# U200: open is de grootte anders (bestandssysteem) dan dicht (partitie): weer dichtgezet, dan niet opnieuw openen.
+_ub2 = (_ub / "log").read_text().count("mount")
+os.environ["PATH"] = f"{_ub}:{_oud_pad}"
+sch.losse_openen([sch.Schijf(apparaat="/dev/sdb1", naam="Stick", soort="stick", station="/dev/sdb", fs="vfat",
+                             wortel="/run/media/x/Stick", grootte=31_000)])   # nu open
+_oud_lsblk = os.environ.get("BUGOS_LSBLK")
+os.environ["BUGOS_LSBLK"] = ""                                                 # lsblk gaf even niets
+sch.losse_openen()
+if _oud_lsblk is None:
+    del os.environ["BUGOS_LSBLK"]
+else:
+    os.environ["BUGOS_LSBLK"] = _oud_lsblk
+sch.losse_openen([sch.Schijf(apparaat="/dev/sdb1", naam="Stick", soort="stick", station="/dev/sdb", fs="vfat",
+                             grootte=32_000)])                                 # zelf weer dichtgezet
+os.environ["PATH"] = _oud_pad
+klopt((_ub / "log").read_text().count("mount") == _ub2,
+      "U200: een stick die je zelf weer dichtzette, gaat niet opnieuw open (ook niet na een lege lsblk)")
+# U214: alleen de BugOS-schijf (geen andere schijf meer in de lijst): stick eruit en weer erin gaat weer open.
+_ub3 = (_ub / "log").read_text().count("mount")
+os.environ["PATH"] = f"{_ub}:{_oud_pad}"
+sch.losse_openen([sch.Schijf(apparaat="/dev/sdd1", naam="S2", soort="stick", station="/dev/sdd", fs="vfat")])
+sch.losse_openen([])                                                           # eruit: geen losse schijf meer
+sch.losse_openen([sch.Schijf(apparaat="/dev/sdd1", naam="S2", soort="stick", station="/dev/sdd", fs="vfat")])
+os.environ["PATH"] = _oud_pad
+klopt((_ub / "log").read_text().count("mount") == _ub3 + 2,
+      "U214: op een laptop met alleen de BugOS-schijf gaat een stick die eruit en weer erin ging, weer open")
+_sys = TMP / "sys-mmc"
+for _d, _t in (("mmcblk0", "MMC"), ("mmcblk1", "SD")):
+    (_sys / "block" / _d / "device").mkdir(parents=True)
+    (_sys / "block" / _d / "device" / "type").write_text(_t + "\n")
+os.environ["BUGOS_SYS"] = str(_sys)
+_emmc = [{"name": "mmcblk0boot0", "path": "/dev/mmcblk0boot0", "type": "disk", "size": 4194304, "rm": False},
+         {"name": "mmcblk0", "path": "/dev/mmcblk0", "type": "disk", "size": 64000000000, "rm": False, "children": [
+             {"name": "mmcblk0p1", "path": "/dev/mmcblk0p1", "type": "part", "size": 64000000000, "fstype": "ntfs",
+              "label": "Data", "mountpoints": [None]}]},
+         {"name": "mmcblk1", "path": "/dev/mmcblk1", "type": "disk", "size": 32000000000, "rm": True, "children": [
+             {"name": "mmcblk1p1", "path": "/dev/mmcblk1p1", "type": "part", "size": 32000000000, "fstype": "exfat",
+              "mountpoints": [None]}]}]
+_lijst = sch.schijven(_emmc)
+del os.environ["BUGOS_SYS"]
+klopt(not any("boot0" in x.apparaat for x in _lijst) and [x.soort for x in _lijst] == ["intern", "kaart"],
+      f"U142: eMMC: geen nep-'SD-kaart (4,2 MB)', ingebouwd geheugen is intern, een echte SD-kaart is een kaart ({[(x.apparaat, x.soort) for x in _lijst]})")
 LINUX = "0fc63daf-8483-4772-8e79-3d69d8477de4"
 NEP = [
     {"name": "nvme0n1", "path": "/dev/nvme0n1", "type": "disk", "size": 512110190592, "rm": False, "hotplug": False,
@@ -317,6 +482,159 @@ for _ in range(50):
     app.processEvents()
 venster.selecteer(docs / "map")
 klopt(venster.gekozen() == [docs / "map"], "kiezen: één map gekozen")
+# U506: Ctrl+A (alles kiezen) kiest elk bestand één keer, niet vier keer (één per kolom).
+venster.lijst.selectAll()
+for _ in range(20):
+    app.processEvents()
+_alles506 = venster.gekozen()
+_echt506 = sorted(p.name for p in docs.iterdir() if not p.name.startswith("."))
+klopt(len(_alles506) >= 2 and len(_alles506) == len(set(_alles506)) and set(p.name for p in _alles506) <= set(_echt506),
+      f"U506: Ctrl+A kiest elk bestand één keer ({len(_alles506)} gekozen, {len(set(_alles506))} verschillend)")
+# U507-U509: hernoemen houdt de verborgen extensie, foutmeldingen in gewone woorden, geen map '.' of '..'.
+_d507 = Path(tempfile.mkdtemp(prefix="bugos-hernoem-"))
+(_d507 / "Recept.odt").write_text("x")
+venster.ga_naar(_d507)
+for _ in range(50):
+    app.processEvents()
+venster.selecteer(_d507 / "Recept.odt")
+for _ in range(20):
+    app.processEvents()
+_oud507 = venster.vraag_tekst
+_gevraagd507 = []
+venster.vraag_tekst = lambda *a, **kw: (_gevraagd507.append(kw.get("kies_tot")), "Taart")[1]
+venster.hernoem()
+# U515: 'Taart v1.2' houdt ook .odt; '..' als naam geeft geen verborgen bestand.
+venster.ga_naar(_d507)
+for _ in range(30):
+    app.processEvents()
+venster.selecteer(_d507 / "Taart.odt")
+for _ in range(10):
+    app.processEvents()
+venster.vraag_tekst = lambda *a, **kw: "Taart v1.2"
+venster.hernoem()
+venster.selecteer(_d507 / "Taart v1.2.odt")
+for _ in range(10):
+    app.processEvents()
+venster.vraag_tekst = lambda *a, **kw: ".."
+venster.hernoem()
+(_d507 / "notes.txt").write_text("x")
+venster.ververs()
+for _ in range(30):
+    app.processEvents()
+venster.selecteer(_d507 / "notes.txt")
+for _ in range(10):
+    app.processEvents()
+venster.vraag_tekst = lambda *a, **kw: "index.html"
+venster.hernoem()
+_html527 = (_d507 / "index.html").exists() and not (_d507 / "index.html.txt").exists()
+for _p in ("index.html", "index.html.txt", "notes.txt"):
+    (_d507 / _p).unlink(missing_ok=True)
+klopt(_html527, "U527: hernoemen naar 'index.html' houdt .html (geen 'index.html.txt')")
+klopt(sorted(p.name for p in _d507.iterdir()) == ["Taart v1.2.odt"],
+      f"U515: 'Taart v1.2' wordt 'Taart v1.2.odt', en '..' maakt niets verborgens ({sorted(p.name for p in _d507.iterdir())})")
+(_d507 / "Taart v1.2.odt").rename(_d507 / "Taart.odt")
+venster.vraag_tekst = lambda *a, **kw: "."
+venster.nieuwe_map()
+_punt509 = venster.melding.tekst.text()
+venster.vraag_tekst = _oud507
+klopt((_d507 / "Taart.odt").exists() and not (_d507 / "Taart").exists() and _gevraagd507 == [len("Recept")],
+      f"U507: 'Recept' hernoemen naar 'Taart' wordt 'Taart.odt' ({sorted(p.name for p in _d507.iterdir())}, {_gevraagd507})")
+klopt(not (_d507.parent / f"{_d507.name} (2)").exists() and ("punten" in _punt509 or "dots" in _punt509),
+      f"U509: een map '.' maakt geen map naast deze ({_punt509!r})")
+import errno as _errno508
+klopt("teken" in venster.naam_fout(OSError(_errno508.EINVAL, "Invalid argument")) or
+      "character" in venster.naam_fout(OSError(_errno508.EINVAL, "Invalid argument")),
+      "U508: een naam die de stick niet kent, in gewone woorden (niet 'Invalid argument')")
+# U510: een map waar je niet in mag kijken (thuismap van een ander account) is geen 'lege map'.
+_nav510 = sys.modules["bugos_files_navigeren"]
+_oud510 = _nav510.os.access
+_nav510.os.access = lambda p, m: False if str(p) == str(_d507) else _oud510(p, m)
+venster.ga_naar(docs)
+venster.ga_naar(_d507)
+_nav510.os.access = _oud510
+klopt(venster.huidig == docs and ("mag je niet" in venster.melding.tekst.text() or "may not" in venster.melding.tekst.text()),
+      f"U510: een map zonder leesrechten opent niet als 'lege map' ({venster.melding.tekst.text()!r})")
+from PySide6.QtCore import Qt  # noqa: E402
+# U511: de plekken links openen ook met Enter (itemActivated), en een klik opent maar één keer.
+_it511 = next(venster.zijbalk.item(i) for i in range(venster.zijbalk.count())
+              if (venster.zijbalk.item(i).data(Qt.ItemDataRole.UserRole) or "").startswith("plek:"))
+venster.zijbalk.itemActivated.emit(_it511)
+klopt(venster.huidig != docs, f"U511: Enter op een plek links opent die plek ({venster.huidig})")
+klopt("self.volgnummer" in (ROOT / "system_files/usr/lib/bugos/python/bugos_files_tegels.py").read_text(),
+      "U512: voorbeelden: de nieuwste vraag eerst (wat je nu ziet)")
+# U519: een bestand op een map in hetzelfde venster slepen (binnenkomen boven het bestand zelf, loslaten op de map).
+from PySide6.QtCore import QMimeData as _QMD519, QPointF as _QPF519, QUrl as _QU519
+from PySide6.QtGui import QDragEnterEvent as _QDE519, QDragMoveEvent as _QDM519, QDropEvent as _QDR519
+_d519 = Path(tempfile.mkdtemp(prefix="bugos-slepen-"))
+(_d519 / "brief.txt").write_text("x")
+(_d519 / "Werk").mkdir()
+venster.show()
+venster.ga_naar(_d519)
+for _ in range(80):
+    app.processEvents()
+def _plek519(naam):
+    idx = venster.sorteer.mapFromSource(venster.model.index(str(_d519 / naam)))
+    return _QPF519(venster.lijst.visualRect(idx).center())
+_md519 = _QMD519()
+_md519.setUrls([_QU519.fromLocalFile(str(_d519 / "brief.txt"))])
+_vp519 = venster.lijst.viewport()
+_A = Qt.DropAction.CopyAction | Qt.DropAction.MoveAction
+_in519 = _QDE519(_plek519("brief.txt").toPoint(), _A, _md519, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+app.sendEvent(_vp519, _in519)
+_mv519 = _QDM519(_plek519("Werk").toPoint(), _A, _md519, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ShiftModifier)
+app.sendEvent(_vp519, _mv519)
+_dr519 = _QDR519(_plek519("Werk"), _A, _md519, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ShiftModifier)
+app.sendEvent(_vp519, _dr519)
+for _ in range(100):
+    app.processEvents()
+    if (_d519 / "Werk" / "brief.txt").exists():
+        break
+    __import__("time").sleep(0.02)
+klopt(_in519.isAccepted() and (_d519 / "Werk" / "brief.txt").exists(),
+      f"U519: een bestand op een map in hetzelfde venster slepen werkt ({_in519.isAccepted()}, {sorted(p.name for p in (_d519 / 'Werk').iterdir())})")
+# U521: plakken terwijl er nog iets loopt: niet stil niets doen.
+class _Bezig521:
+    def isRunning(self):  # noqa: N802
+        return True
+_oud_klus521 = venster.klus
+venster.klus = _Bezig521()
+from PySide6.QtWidgets import QApplication as _QA521
+_QA521.clipboard().setMimeData(_md519)
+(_d519 / "brief.txt").write_text("y")
+_md521 = _QMD519()
+_md521.setUrls([_QU519.fromLocalFile(str(_d519 / "brief.txt"))])
+_QA521.clipboard().setMimeData(_md521)
+venster.plak()
+_t521 = venster.melding.tekst.text()
+venster.klus = _oud_klus521
+_QA521.clipboard().clear()
+klopt("Even wachten" in _t521 or "One moment" in _t521, f"U521: plakken tijdens een klus zegt 'even wachten' ({_t521!r})")
+# U522: een plaatje uit Firefox (https, geen bestand) loslaten: zeggen hoe het wel kan.
+_md522 = _QMD519()
+_md522.setUrls([_QU519("https://example.org/foto.jpg")])
+app.sendEvent(_vp519, _QDE519(_plek519("brief.txt").toPoint(), _A, _md522, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier))
+app.sendEvent(_vp519, _QDR519(_plek519("brief.txt"), _A, _md522, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier))
+_t522 = venster.melding.tekst.text()
+klopt("internet" in _t522, f"U522: iets van internet loslaten zegt hoe je het bewaart ({_t522[:50]!r})")
+# U520/U523: Ctrl+klik (met 'enkele klik opent') opent niet; Enter met meer gekozen opent alles.
+_geopend = []
+_oud_open = venster.openen
+venster.openen = lambda index=None: _geopend.append("index" if index is not None else "alles")
+_idx = venster.sorteer.mapFromSource(venster.model.index(str(_d519 / "brief.txt")))
+_oud_mod = _QA521.keyboardModifiers
+venster._laatste_muis = __import__("time").monotonic()
+_QA521.keyboardModifiers = staticmethod(lambda: Qt.KeyboardModifier.ControlModifier)
+venster.geactiveerd(_idx)
+_QA521.keyboardModifiers = _oud_mod
+_na_ctrl = list(_geopend)
+venster._laatste_muis = 0.0
+venster.lijst.selectAll()
+venster.geactiveerd(_idx)
+venster.openen = _oud_open
+klopt(_na_ctrl == [] and _geopend == ["alles"], f"U520/U523: Ctrl+klik opent niet; Enter met meer gekozen opent alles ({_geopend})")
+venster.hide()
+venster.ga_naar(docs)
+venster.selecteer(docs / "map")
 klopt(not venster.keuzebalk.isHidden() and venster.keuzebalk.knoppen["naam"].isVisibleTo(venster.keuzebalk),
       "kiezen: de knoppenbalk verschijnt, met Naam wijzigen")
 klopt(venster.keuzebalk.knoppen["terugzetten"].isHidden(), "kiezen: geen Zet terug buiten de prullenbak")
@@ -399,13 +717,44 @@ klopt("Leegmaken (alles wissen)…" not in [a.text() for a in venster.schijf_men
 _gewist: list = []
 _oud_vraag, _oud_beheer = venster.vraag_ja, venster.beheer
 venster.vraag_ja = lambda *a, **kw: True
-venster.beheer = lambda x, *a, **kw: _gewist.append(x.apparaat)
+_stappen: list = []
+venster.beheer = lambda x, *a, **kw: (_gewist.append(x.apparaat), _stappen.append(str(a[0]) if a else ""))
 andere = sch.Schijf("/dev/sdq1", "Andere stick", "stick", "/dev/sdq", "/dev/sdq1", fs="vfat")
 venster.leegmaak_schijf(andere)                     # zit er niet (meer) in
 venster.leegmaak_schijf(windows)                    # intern: nooit
 venster.leegmaak_schijf(venster.lijst_schijven[0])  # de stick die er echt in zit
 venster.vraag_ja, venster.beheer = _oud_vraag, _oud_beheer
 klopt(_gewist == ["/dev/sdx1"], "leegmaken: alleen de stick die er nu echt in zit (geen andere, geen interne)")
+# U386: 'Veilig verwijderen' terwijl dit venster nog kopieert: wachten. U387: een schijf die een ander account opende.
+class _BezigeKlus:
+    def isRunning(self):  # noqa: N802
+        return True
+
+
+_oud_klus = venster.klus
+venster.klus = _BezigeKlus()
+_bezig_voor = set(venster.bezig)
+venster.uitwerpen("/dev/sdx")
+_uit_bezig = "/dev/sdx" in venster.bezig
+venster.klus = _oud_klus
+klopt(not _uit_bezig and "Even wachten" in venster.melding.tekst.text(),
+      f"U386: 'Veilig verwijderen' tijdens het kopiëren wacht ({venster.melding.tekst.text()!r})")
+venster.ga_naar(Path("/run/media/iemand-anders/FOTOS"))
+klopt("iemand-anders" in venster.melding.tekst.text(),
+      f"U387: een stick die een ander account opende: dat wordt gezegd ({venster.melding.tekst.text()!r})")
+# U369: 'In gebruik nemen': terwijl je een naam kiest, zit er een andere stick op dezelfde plek (sdx, met bestanden):
+# niets wissen.
+_leeg = sch.Schijf("/dev/sdx", "USB-stick (16 GB)", "stick", "/dev/sdx", "/dev/sdx", grootte=16000000000, nieuw=True)
+_oud_vt, _oud_beheer2 = venster.vraag_tekst, venster.beheer
+venster.vraag_tekst = lambda *a, **kw: "Nieuw"
+_klaar: list = []
+venster.beheer = lambda x, *a, **kw: _klaar.append(x.station)
+venster.neem_in_gebruik(_leeg)
+venster.vraag_tekst, venster.beheer = _oud_vt, _oud_beheer2
+klopt(_klaar == [], f"U369: 'In gebruik nemen' wist geen andere stick die intussen op dezelfde plek zit ({_klaar})")
+# U058: exFAT kent hoogstens 11 tekens; "Stick van Bugie" (15) zou het wissen laten mislukken, dus een kortere naam.
+klopt(_stappen and "Stick van Bugie" not in _stappen[0] and "USB-stick" in _stappen[0],
+      "U058: leegmaken van een stick met een lange naam (15 tekens) gebruikt een naam die exFAT kent")
 klopt(venster.ruimte_balk is not None and venster.status.text() == "1 aangesloten", "Deze computer: ruimte bovenaan, en 1 aangesloten")
 from PySide6.QtCore import QEvent, Qt  # noqa: E402
 from PySide6.QtGui import QKeyEvent  # noqa: E402
@@ -435,6 +784,14 @@ for _ in range(20):
     app.processEvents()
 leeg = [x for x in venster.computer.widget().findChildren(b.SchijfRij) if x.property("leeg") == "true"]
 klopt(len(leeg) == 1, "Deze computer zonder stick: 'Steek een USB-stick in' (en verder niets)")
+# U077: 'Ruimte maken > Prullenbak leegmaken' op Deze computer: je blijft op Deze computer, en Terug klopt.
+(thuis / "weg-ermee.txt").write_text("x")
+b.naar_prullenbak(thuis / "weg-ermee.txt")
+_terug_voor = list(venster.terug_lijst)
+venster.vraag_ja = lambda *a, **kw: True
+venster.leegmaken()
+klopt(venster.in_computer and not venster.in_prullenbak and venster.terug_lijst == _terug_voor
+      and not b.prullenbak_inhoud(), "U077: prullenbak leegmaken vanaf Deze computer: je blijft daar, Terug klopt")
 
 # 12. opdrachten op de achtergrond (openen, veilig verwijderen): het venster loopt niet vast
 from PySide6.QtCore import QElapsedTimer  # noqa: E402
@@ -453,6 +810,26 @@ def wacht_op(stappen, laatste=None):
 klopt(wacht_op([["true"], ["true"]], ["false"]) is True, "achtergrond: alles gelukt (de laatste stap mag mislukken)")
 klopt(wacht_op([["true"], ["false"], ["true"]]) is False, "achtergrond: stopt bij een stap die mislukt")
 klopt(wacht_op([["bestaat-niet-bugos"]]) is False, "achtergrond: een programma dat er niet is, geeft netjes 'mislukt'")
+# U207: het venster sluiten terwijl een schijf klaargemaakt of gewist wordt: wachten, daarna vanzelf dicht.
+venster.show()
+venster.bezig.add("/dev/sdq1")
+venster.close()
+_bleef = venster.isVisible()
+venster.bezig.discard("/dev/sdq1")
+venster._na_schijfklus(True)
+app.processEvents()
+klopt(_bleef and not venster.isVisible(), "U207: sluiten tijdens een schijfklus: eerst afmaken, dan vanzelf dicht")
+venster.sluit_na_klus = False
+venster.show()
+# U141: naam wijzigen of repareren mislukt: de schijf gaat toch weer open (de laatste stap draait altijd).
+_teken = TMP / "weer-open"
+_uit: list = []
+venster.draai([["false"]], lambda ok, _u: _uit.append(ok), altijd=["touch", str(_teken)])
+_k = QElapsedTimer()
+_k.start()
+while not _uit and _k.elapsed() < 10000:
+    app.processEvents()
+klopt(_uit == [False] and _teken.exists(), "U141: mislukt het hernoemen of repareren, dan gaat de schijf toch weer open")
 
 venster.close()
 import shutil  # noqa: E402

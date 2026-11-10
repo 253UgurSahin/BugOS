@@ -105,6 +105,7 @@ def main() -> int:
         return 2
     name, out, extra = sys.argv[1], Path(sys.argv[2]), sys.argv[3:]
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    os.environ["BUGOS_MEERDERE"] = "1"   # foto's van licht en donker tegelijk: elk een eigen venster (U208)
     programs, args, env, prepare, state, crop = SCENES[name]
     path = program(*programs)
     for k, v in env.items():

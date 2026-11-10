@@ -6,10 +6,37 @@
 #   1. BugOS kijkt eerst of het programma in de BugOS Winkel staat.
 #   2. Zo niet, dan zet BugOS het in een eigen "doosje" (container), zodat het
 #      werkt zonder het systeem te kunnen breken. Het verschijnt gewoon in je
-#      startmenu.
+#      startmenu. Let op: het doosje beschermt het systeem, niet je eigen bestanden.
+#      Het programma kan bij je bestanden zoals elk programma (U245).
 
 # shellcheck source=system_files/usr/share/bugos/lib.sh
 . /usr/share/bugos/lib.sh
+
+# bugos-package --bijwerken: de doosjes van BugOS bijwerken (elke dag, bij 'Updates vanzelf') (U465).
+if [ "${1:-}" = --bijwerken ]; then
+    command -v distrobox >/dev/null 2>&1 || exit 0
+    # Nog nooit een doosje gemaakt (geen podman-opslag)? Dan podman niet eens starten (U473).
+    [ -d "${XDG_DATA_HOME:-$HOME/.local/share}/containers" ] || exit 0
+    # Eén tegelijk: 'Nu updaten' en de dagelijkse update niet door elkaar (dan faalt er een op het slot van dnf) (U480).
+    if [ -n "${XDG_RUNTIME_DIR:-}" ] && exec 9>"$XDG_RUNTIME_DIR/bugos-doosjes.slot"; then
+        # Hoogstens een uur wachten; en het slot (9) niet doorgeven aan podman/conmon, die kunnen blijven draaien en
+        # dan bleef het slot de hele sessie dicht (zoals U270) (U487).
+        if [ "${2:-}" = --nu ]; then
+            # Met de hand ('Nu updaten'): loopt de dagelijkse al, dan die laten doen, niet een uur wachten (U494).
+            flock -n 9 2>/dev/null || exit 0
+        else
+            flock -w 3600 9 2>/dev/null || true
+        fi
+    fi
+    lijst="$(distrobox list 2>/dev/null 9>&-)"
+    mislukt=0
+    for doos in bugos-fedora bugos-ubuntu; do
+        if grep -q " $doos " <<<"$lijst"; then
+            distrobox upgrade "$doos" >/dev/null 2>&1 9>&- || { echo "bugos-package: $doos bijwerken lukte niet" >&2; mislukt=1; }
+        fi
+    done
+    exit "$mislukt"   # mislukt: systemd probeert het later opnieuw (U473)
+fi
 
 BESTAND="${1:-}"
 if [ -z "$BESTAND" ] || [ ! -f "$BESTAND" ]; then
@@ -22,7 +49,14 @@ BESTAND="$(realpath "$BESTAND")"
 case "$BESTAND" in
 *.rpm)
     SOORT=rpm
-    NAAM="$(rpm -qp --qf '%{NAME}' "$BESTAND" 2>/dev/null)"
+    # Geen echt .rpm-bestand (kapot of half gedownload)? Dan meteen zeggen, niet eerst minuten een doosje maken (U351).
+    if ! NAAM="$(rpm -qp --qf '%{NAME}' "$BESTAND" 2>/dev/null)" || [ -z "$NAAM" ]; then
+        if command -v rpm >/dev/null 2>&1; then
+            fout "$(t "Dit .rpm-bestand is kapot of niet helemaal gedownload. Download het nog eens." \
+                "This .rpm file is broken or not fully downloaded. Download it again.")"
+            exit 1
+        fi
+    fi
     DOOS=bugos-fedora
     DOOS_BEELD=registry.fedoraproject.org/fedora-toolbox:latest
     ;;
@@ -40,30 +74,44 @@ esac
 [ -z "$NAAM" ] && NAAM="$(basename "$BESTAND")"
 # De meldingen lezen \n als nieuwe regel (printf %b): een \ in de naam moet dus dubbel.
 TOON="${NAAM//\\/\\\\}"
+# Een naam als "<b>…</b>" mag de tekst van de vraag niet opmaken of verbergen (kdialog leest < > als opmaak) (U251).
+TOON="${TOON//</‹}"
+TOON="${TOON//>/›}"
 
 # Stap 1: staat het in de Winkel?
-GEVONDEN="$(flatpak search --columns=application "$NAAM" 2>/dev/null | head -n1)"
-if [ -n "$GEVONDEN" ] && [ "$GEVONDEN" != "No matches found" ]; then
+# LC_ALL=C: anders zegt flatpak "Geen overeenkomsten gevonden" (in je eigen taal) en zouden we dat voor een app aanzien.
+# En alleen iets dat op een app-naam lijkt (org.voorbeeld.App) telt.
+GEVONDEN="$(LC_ALL=C flatpak search --columns=application "$NAAM" 2>/dev/null | head -n1)"
+if [[ "$GEVONDEN" =~ ^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+$ ]]; then
     if vraag "$(t \
-        "\"$TOON\" staat ook in de BugOS Winkel. Dat is veiliger en krijgt vanzelf updates.\n\nWil je het uit de Winkel halen?" \
-        "\"$TOON\" is also in the BugOS Store. That is safer and updates automatically.\n\nDo you want to get it from the Store?")"; then
+        "\"$TOON\" staat ook in de BugOS Winkel. Dat is veiliger en wordt bijgewerkt met de rest.\n\nWil je het uit de Winkel halen?" \
+        "\"$TOON\" is also in the BugOS Store. That is safer and is updated with everything else.\n\nDo you want to get it from the Store?")"; then
         exec bugos-store "appstream://$GEVONDEN"
     fi
 fi
 
 # Stap 2: in een doosje installeren.
 vraag "$(t \
-    "Wil je \"$TOON\" installeren?\n\nBugOS zet het in een veilig doosje. Daarna staat het gewoon in je startmenu." \
-    "Do you want to install \"$TOON\"?\n\nBugOS puts it in a safe box. Afterwards it is in your start menu.")" || exit 0
+    "Wil je \"$TOON\" installeren?\n\nBugOS zet het in een apart doosje, zodat het BugOS zelf niet kapot kan maken. Het kan wel bij je eigen bestanden, zoals elk programma: installeer het alleen als je de website vertrouwt.\n\nDaarna staat het gewoon in je startmenu." \
+    "Do you want to install \"$TOON\"?\n\nBugOS puts it in a separate box, so it cannot break BugOS itself. It can still use your own files, like any program: only install it if you trust the website.\n\nAfterwards it is in your start menu.")" || exit 0
 
 melding "$(t "Bezig met installeren..." "Installing...")" \
     "$(t "Dit kan een paar minuten duren. Je mag gewoon doorwerken." "This can take a few minutes. You can keep working.")"
 
 if ! distrobox list 2>/dev/null | grep -q " $DOOS "; then
-    distrobox create --yes --name "$DOOS" --image "$DOOS_BEELD" >/dev/null 2>&1 || {
-        fout "$(t "Het doosje kon niet gemaakt worden. Heb je internet?" "The box could not be created. Are you online?")"
+    LOG="$(mktemp)"
+    distrobox create --yes --name "$DOOS" --image "$DOOS_BEELD" >"$LOG" 2>&1 || {
+        # Een volle computer is geen 'heb je internet?' (U424).
+        if grep -qiE "no space left on device|not enough (disk |free )?space" "$LOG"; then
+            fout "$(t "Het doosje kon niet gemaakt worden: je computer is vol. Maak eerst ruimte (bijv. de prullenbak leegmaken in Bestanden)." \
+                "The box could not be created: your computer is full. Make room first (for example empty the trash in Files).")"
+        else
+            fout "$(t "Het doosje kon niet gemaakt worden. Heb je internet?" "The box could not be created. Are you online?")"
+        fi
+        rm -f "$LOG"
         exit 1
     }
+    rm -f "$LOG"
 fi
 
 # De bestandsnaam gaat als los argument ($1) mee, nooit in de opdrachttekst zelf: een naam als
@@ -78,10 +126,19 @@ fi
 
 # Programma's van dit pakket naar het startmenu brengen.
 # shellcheck disable=SC2016
-EXPORT='for d in $( (rpm -qlp "$1" 2>/dev/null || dpkg-deb -c "$1" 2>/dev/null | awk '\''{print $6}'\'') | grep -E '\''share/applications/.*\.desktop$'\''); do distrobox-export --app "$(basename "$d" .desktop)"; done'
+# Tellen hoeveel er naar het startmenu gingen: een pakket zonder programma met een venster heeft er geen (U195).
+EXPORT='n=0; f=0; for d in $( (rpm -qlp "$1" 2>/dev/null || dpkg-deb -c "$1" 2>/dev/null | awk '\''{print $6}'\'') | grep -E '\''share/applications/.*\.desktop$'\''); do if distrobox-export --app "$(basename "$d" .desktop)" >/dev/null 2>&1; then n=$((n+1)); else f=1; fi; done; echo "bugos-startmenu=$n"; [ "$n" -gt 0 ] || exit $f'
 
-if distrobox enter "$DOOS" -- bash -c "$INSTALL && $EXPORT" bugos-package "$BESTAND" >/dev/null 2>&1; then
-    melding "$(t "Klaar!" "Done!")" "$(t "\"$TOON\" staat nu in je startmenu." "\"$TOON\" is now in your start menu.")"
+# 'INSTALL || exit 1': EXPORT bestaat uit meer opdrachten; met && zou alleen de eerste van een gelukte installatie
+# afhangen, en meldde BugOS 'Klaar' na een mislukte installatie (U198).
+if uit="$(distrobox enter "$DOOS" -- bash -c "$INSTALL || exit 1; $EXPORT" bugos-package "$BESTAND" 2>/dev/null)"; then
+    if [ "$(echo "$uit" | sed -n 's/^bugos-startmenu=//p' | tail -1)" = 0 ]; then
+        melding "$(t "Klaar!" "Done!")" "$(t "\"$TOON\" is geïnstalleerd. Het heeft geen plek in het startmenu; je gebruikt het in de Terminal met: distrobox enter $DOOS" \
+            "\"$TOON\" is installed. It has no place in the start menu; you use it in the Terminal with: distrobox enter $DOOS")"
+    else
+        melding "$(t "Klaar!" "Done!")" "$(t "\"$TOON\" staat nu in je startmenu. Gaan je updates vanzelf, dan wordt het elke dag bijgewerkt." \
+            "\"$TOON\" is now in your start menu. If your updates are automatic, it is updated every day.")"
+    fi
 else
     fout "$(t "Het installeren van \"$TOON\" is niet gelukt. Je computer is niet veranderd." \
         "Installing \"$TOON\" did not work. Your computer has not changed.")"

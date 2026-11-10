@@ -2,11 +2,14 @@
 # bugos-game-mode - game-modus aan of uit.
 #
 #   bugos-game-mode aan | uit | wissel | status
+#   bugos-game-mode fps aan | uit | status     -> FPS-teller meteen klaar (instelling)
 #
 # Game-modus aan betekent:
 #   • computer op volle kracht (stroomprofiel "prestaties")
 #   • meldingen even stil (niet storen)
-#   • FPS-teller (MangoHud) in Steam-games
+#   • FPS-teller (MangoHud) in games: normaal vanaf de volgende keer inloggen; met "FPS-teller meteen
+#     klaar" (Instellingen) meteen, want dan draait MangoHud altijd verborgen mee en zetten we hem
+#     alleen zichtbaar of onzichtbaar in ons eigen MangoHud-bestand (MangoHud leest dat opnieuw als het verandert).
 # Uit zet alles terug zoals het was (ook niet storen: stond dat al aan, dan blijft het aan).
 
 # shellcheck source=system_files/usr/share/bugos/lib.sh
@@ -15,45 +18,219 @@
 MARKER="$BUGOS_CONFIG/spelmodus-aan"
 STOREN_MARKER="$BUGOS_CONFIG/niet-storen-voor-spelmodus"
 ENVFILE="${XDG_CONFIG_HOME:-$HOME/.config}/environment.d/90-bugos-game-mode.conf"
+# Zo heette het bestand vóór de Engelse namen: weg ermee, anders bleef de FPS-teller voor altijd aan (U302).
+rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/environment.d/90-bugos-spelmodus.conf"
+FPS_METEEN="$BUGOS_CONFIG/fps-meteen"
+MH_ENV="${XDG_CONFIG_HOME:-$HOME/.config}/environment.d/80-bugos-mangohud.conf"
+MH_CONF="$BUGOS_CONFIG/mangohud.conf"
+
+# Ons eigen MangoHud-bestand: zichtbaar of verborgen (no_display). Heb je zelf een MangoHud.conf
+# (eigen indeling), dan nemen we die over: MangoHud kijkt met MANGOHUD_CONFIGFILE alleen naar ons bestand.
+mangohud_bestand() {
+    local eigen="${XDG_CONFIG_HOME:-$HOME/.config}/MangoHud/MangoHud.conf"
+    mkdir -p "$BUGOS_CONFIG"
+    {
+        printf '# Gemaakt door bugos-game-mode (een kopie van je eigen MangoHud.conf, als je die hebt).\n'
+        [ -f "$eigen" ] && cat "$eigen" && printf '\n'
+        [ "$1" = zichtbaar ] || printf '# De FPS-teller is verborgen (game-modus staat uit).\nno_display\n'
+    } >"$MH_CONF.nieuw"
+    # Op dezelfde plek overschrijven (niet verplaatsen): MangoHud let op dit bestand en ziet de wijziging zo.
+    cat "$MH_CONF.nieuw" >"$MH_CONF"
+    rm -f "$MH_CONF.nieuw"
+}
+
+# Heeft deze sessie MangoHud al met ons bestand? Dan werkt aan/uit meteen, zonder opnieuw in te loggen.
+fps_meteen_actief() {
+    [ "${MANGOHUD:-}" = 1 ] && [ "${MANGOHUD_CONFIGFILE:-}" = "$MH_CONF" ]
+}
+
+# Volle kracht is voor de hele computer, maar game-modus is per account. Wie nu gamet, staat als een leeg bestand in
+# /var/tmp/bugos-spel (voor iedereen te zien) (U385, U394). Niet /dev/shm: dat wist uitloggen en opnieuw opstarten,
+# terwijl 'game-modus aan' van dat account blijft; dan dacht een ander dat 'volle kracht' zijn eigen keuze was (U404).
+GAMER_MAP="${BUGOS_GAMER_MAP:-/var/tmp/bugos-spel}"
+GAMER_MERK="$GAMER_MAP/bugos-spelmodus-$(id -u)"
+andere_gamers() {
+    local f
+    local nr
+    for f in "$GAMER_MAP"/bugos-spelmodus-*; do
+        [ -f "$f" ] && [ ! -L "$f" ] && [ "$f" != "$GAMER_MERK" ] || continue
+        # Alleen een echt merkje telt: een gewoon account (1000 of hoger), en het bestand is van dat account zelf.
+        # Anders kon iemand met 'touch .../bugos-spelmodus-0' (of het nummer van een ander) de pc op volle kracht houden (U435).
+        nr="${f##*-}"
+        case "$nr" in '' | *[!0-9]*) continue ;; esac
+        [ "$nr" -ge 1000 ] || continue
+        [ "$(stat -c %u -- "$f" 2>/dev/null)" = "$nr" ] || continue
+        # Een account dat er niet meer is, gamet niet: anders bleef de pc voor altijd op volle kracht (U420).
+        if command -v getent >/dev/null && ! getent passwd "${f##*-}" >/dev/null 2>&1; then
+            continue
+        fi
+        return 0
+    done
+    return 1
+}
+
+fps_aan() {
+    mkdir -p "$BUGOS_CONFIG" "$(dirname "$MH_ENV")"
+    touch "$FPS_METEEN"
+    if [ -f "$MARKER" ]; then mangohud_bestand zichtbaar; else mangohud_bestand verborgen; fi
+    printf 'MANGOHUD=1\nMANGOHUD_CONFIGFILE=%s\n' "$MH_CONF" >"$MH_ENV"
+    rm -f "$ENVFILE"   # niet meer nodig: MangoHud staat nu altijd klaar
+    systemctl --user set-environment MANGOHUD=1 "MANGOHUD_CONFIGFILE=$MH_CONF" 2>/dev/null
+    if ! fps_meteen_actief; then
+        melding "$(t "FPS-teller meteen klaar" "FPS counter ready at once")" \
+            "$(t "Log één keer opnieuw in. Daarna gaat de FPS-teller meteen aan en uit met game-modus." \
+                "Log in again once. After that the FPS counter turns on and off at once with game mode.")"
+    fi
+}
+
+fps_uit() {
+    rm -f "$FPS_METEEN" "$MH_ENV"
+    if fps_meteen_actief; then
+        # Deze sessie gebruikt ons bestand nog (tot opnieuw inloggen). Weggooien zou MangoHud de volle teller
+        # laten tonen; dus laten staan zoals game-modus nu is. Bij de volgende keer inloggen is het niet meer in gebruik.
+        if [ -f "$MARKER" ]; then mangohud_bestand zichtbaar; else mangohud_bestand verborgen; fi
+    else
+        rm -f "$MH_CONF"
+    fi
+    systemctl --user unset-environment MANGOHUD_CONFIGFILE 2>/dev/null
+    if [ -f "$MARKER" ]; then
+        # Game-modus staat aan: zoals vroeger, MANGOHUD=1 voor de volgende keer inloggen.
+        printf 'MANGOHUD=1\n' >"$ENVFILE"
+    else
+        systemctl --user unset-environment MANGOHUD 2>/dev/null
+    fi
+}
 
 aan() {
     # Staat hij al aan? Dan niets doen: anders onthouden we "volle kracht" en "niet storen" als hoe
     # het eerst was, en zet 'uit' ze nooit meer terug.
     [ -f "$MARKER" ] && return 0
     mkdir -p "$BUGOS_CONFIG" "$(dirname "$ENVFILE")"
-    stroomprofiel_get >"$BUGOS_CONFIG/stroomprofiel-voor-spelmodus"
+    # Speelt een ander account al (snel wisselen)? Dan is 'volle kracht' van die game-modus, niet jouw keuze (U394).
+    if andere_gamers; then
+        echo door-ander >"$BUGOS_CONFIG/stroomprofiel-voor-spelmodus"
+    else
+        stroomprofiel_get >"$BUGOS_CONFIG/stroomprofiel-voor-spelmodus"
+    fi
+    [ -d "$GAMER_MAP" ] || mkdir -m 1777 -p "$GAMER_MAP" 2>/dev/null
+    touch "$GAMER_MERK" 2>/dev/null
     stroomprofiel_zet performance
     # Melding eerst, anders wordt hij door 'niet storen' meteen stilgehouden.
-    melding "$(t "Game-modus staat aan" "Game mode is on")" \
-        "$(t "Volle kracht, meldingen stil, FPS-teller in games." "Full power, notifications muted, FPS counter in games.")"
+    # De FPS-teller (MANGOHUD=1) krijgen games pas mee na opnieuw inloggen: dat zeggen we eerlijk,
+    # behalve als deze sessie hem al heeft (dan was game-modus aan bij het inloggen, of staat
+    # "FPS-teller meteen klaar" aan: dan zetten we hem hier gewoon zichtbaar).
+    # (Ook als je de keuze net uitzette: deze sessie leest ons bestand nog tot je opnieuw inlogt.)
+    { [ -f "$FPS_METEEN" ] || fps_meteen_actief; } && mangohud_bestand zichtbaar
+    if [ "${MANGOHUD:-}" = 1 ]; then
+        melding "$(t "Game-modus staat aan" "Game mode is on")" \
+            "$(t "Volle kracht, meldingen stil, FPS-teller in games." "Full power, notifications muted, FPS counter in games.")"
+    else
+        melding "$(t "Game-modus staat aan" "Game mode is on")" \
+            "$(t "Volle kracht, meldingen stil. De FPS-teller in games komt na opnieuw inloggen." \
+                "Full power, notifications muted. The FPS counter in games appears after you log in again.")"
+    fi
     niet_storen_status >"$STOREN_MARKER"
+    # Ook de echte eindtijd bewaren ('1 uur niet storen'): anders wordt dat na de game-modus 'voor altijd' (U124).
+    kreadconfig6 --file plasmanotifyrc --group DoNotDisturb --key Until >"$STOREN_MARKER.tot" 2>/dev/null
     niet_storen_aan
-    printf 'MANGOHUD=1\n' >"$ENVFILE"
-    systemctl --user set-environment MANGOHUD=1 2>/dev/null
+    if [ ! -f "$FPS_METEEN" ]; then
+        printf 'MANGOHUD=1\n' >"$ENVFILE"
+        systemctl --user set-environment MANGOHUD=1 2>/dev/null
+    fi
     touch "$MARKER"
 }
 
 uit() {
-    local vorig
+    local vorig tot
+    # Stond de game-modus al uit? Dan niets veranderen (geen stroomprofiel of 'niet storen' van jezelf weg) (U127).
+    [ -f "$MARKER" ] || return 0
     vorig="$(cat "$BUGOS_CONFIG/stroomprofiel-voor-spelmodus" 2>/dev/null)"
     [ -n "$vorig" ] || vorig=balanced
-    stroomprofiel_zet "$vorig"
-    # Niet storen alleen uitzetten als het door de game-modus aan is gegaan.
-    if [ "$(cat "$STOREN_MARKER" 2>/dev/null)" != aan ]; then
-        niet_storen_uit
+    # Volle kracht is voor de hele computer. Alleen terugzetten als hij nog op volle kracht staat (koos iemand intussen
+    # zelf iets, dan blijft dat), en nooit 'volle kracht' terugzetten: dat was dan van een ander account dat ook aan
+    # het gamen was, en dan bleef de pc voor altijd op volle kracht (U385).
+    rm -f "$GAMER_MERK"
+    # Speelt een ander account nog? Dan blijft volle kracht aan (die zet het zelf terug) (U394).
+    if ! andere_gamers && [ "$(stroomprofiel_get)" = performance ]; then
+        [ "$vorig" = door-ander ] && vorig=balanced
+        stroomprofiel_zet "$vorig"
     fi
-    rm -f "$ENVFILE" "$MARKER" "$STOREN_MARKER"
-    systemctl --user unset-environment MANGOHUD 2>/dev/null
-    melding "$(t "Game-modus staat uit" "Game mode is off")" ""
+    # Niet storen alleen uitzetten als het door de game-modus aan is gegaan.
+    # Veranderde je 'niet storen' zelf tijdens de game-modus (uit, of een andere tijd)? Dan blijft dat zo (U143).
+    if [ "$(kreadconfig6 --file plasmanotifyrc --group DoNotDisturb --key Until 2>/dev/null)" != "$NIET_STOREN_TOT" ]; then
+        :
+    elif [ "$(cat "$STOREN_MARKER" 2>/dev/null)" != aan ]; then
+        niet_storen_uit
+    else
+        # Het stond al aan: terug naar de eindtijd van toen (die van de game-modus was 'voor altijd') (U124).
+        tot="$(cat "$STOREN_MARKER.tot" 2>/dev/null)"
+        if [ -n "$tot" ] && [ "$tot" != "$NIET_STOREN_TOT" ]; then
+            if [ "$(niet_storen_tot_status "$tot")" = aan ]; then
+                kwriteconfig6 --file plasmanotifyrc --group DoNotDisturb --key Until --notify "$tot" 2>/dev/null
+            else
+                niet_storen_uit   # die tijd is intussen voorbij
+            fi
+        fi
+    fi
+    rm -f "$ENVFILE" "$MARKER" "$STOREN_MARKER" "$STOREN_MARKER.tot"
+    if fps_meteen_actief; then
+        # Deze sessie leest ons MangoHud-bestand: verbergen, en de teller is meteen weg (ook in een game die draait).
+        mangohud_bestand verborgen
+        melding "$(t "Game-modus staat uit" "Game mode is off")" ""
+        return 0
+    fi
+    if [ -f "$FPS_METEEN" ]; then
+        mangohud_bestand verborgen   # klaar voor de volgende keer inloggen (dan leest de sessie het wel)
+    else
+        systemctl --user unset-environment MANGOHUD 2>/dev/null
+    fi
+    # Had deze sessie de FPS-teller, dan blijft hij in games tot je opnieuw inlogt.
+    if [ "${MANGOHUD:-}" = 1 ]; then
+        melding "$(t "Game-modus staat uit" "Game mode is off")" \
+            "$(t "De FPS-teller in games verdwijnt na opnieuw inloggen." "The FPS counter in games goes away after you log in again.")"
+    else
+        melding "$(t "Game-modus staat uit" "Game mode is off")" ""
+    fi
 }
+
+# Eén tegelijk (snel aan en uit in Instellingen) (U126).
+mkdir -p "$BUGOS_CONFIG"
+if [ "${1:-}" != status ]; then   # 'status' hoeft niet te wachten
+    exec 9>"$BUGOS_CONFIG/.spelmodus.slot"
+    flock 9 2>/dev/null || true
+fi
+
+# Staat game-modus aan maar is je merkje weg (oude BugOS, opgeruimd)? Dan weer neerzetten (U404).
+# En andersom: staat hij uit (of zijn je instellingen gewist), dan weg met je merkje (U420).
+# Alleen met het slot: 'status' (van het snelmenu) zou anders een 'aan' die nog bezig is, zijn merkje afpakken (U432).
+if [ "${1:-}" = status ]; then
+    # Wel opruimen als niemand anders nu bezig is (het slot is vrij): anders bleef een merkje van gewiste instellingen
+    # staan tot je zelf game-modus aan- of uitzet (U489).
+    if [ ! -f "$MARKER" ] && [ -e "$GAMER_MERK" ] && exec 9>"$BUGOS_CONFIG/.spelmodus.slot" && flock -n 9 2>/dev/null; then
+        [ -f "$MARKER" ] || rm -f "$GAMER_MERK"
+    fi
+elif [ -f "$MARKER" ] && [ ! -e "$GAMER_MERK" ]; then
+    [ -d "$GAMER_MAP" ] || mkdir -m 1777 -p "$GAMER_MAP" 2>/dev/null
+    touch "$GAMER_MERK" 2>/dev/null
+elif [ ! -f "$MARKER" ] && [ -e "$GAMER_MERK" ]; then
+    rm -f "$GAMER_MERK"
+fi
 
 case "${1:-wissel}" in
 aan) aan ;;
 uit) uit ;;
 wissel) if [ -f "$MARKER" ]; then uit; else aan; fi ;;
 status) if [ -f "$MARKER" ]; then echo aan; else echo uit; fi ;;
+fps)
+    case "${2:-status}" in
+    aan) fps_aan ;;
+    uit) fps_uit ;;
+    status) if [ -f "$FPS_METEEN" ]; then echo aan; else echo uit; fi ;;
+    *) echo "Gebruik: bugos-game-mode fps aan|uit|status" >&2; exit 2 ;;
+    esac
+    ;;
 *)
-    echo "Gebruik: bugos-game-mode aan|uit|wissel|status" >&2
+    echo "Gebruik: bugos-game-mode aan|uit|wissel|status|fps" >&2
     exit 2
     ;;
 esac

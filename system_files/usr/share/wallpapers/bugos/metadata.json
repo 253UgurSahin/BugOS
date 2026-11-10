@@ -3,6 +3,7 @@
         "Authors": [{ "Name": "BugOS" }],
         "Id": "bugos",
         "License": "GPL-3.0-or-later",
-        "Name": "BugOS Stip"
+        "Name": "BugOS Dot",
+        "Name[nl]": "BugOS Stip"
     }
 }

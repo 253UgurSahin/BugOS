@@ -54,10 +54,10 @@ The most important idea: **BugOS can't break.**
 ## How does an update reach the user? (the bakery)
 
 1. We change something in this repo.
-2. GitHub automatically bakes a new BugOS. This also happens every night, so security updates from Fedora come along.
+2. GitHub bakes a new BugOS when we start it by hand, and by itself once a week (Monday night), so security updates from Fedora come along.
 3. The user's computer fetches it in the background.
 4. The next time the computer starts, the new version runs.
-5. Problems? Then you pick the previous version in the startup menu, and everything is back to how it was yesterday.
+5. Problems? Then you pick the previous version in Settings, or in the startup menu (hold Shift or press Esc while starting; it is hidden otherwise), and everything is back to how it was yesterday.
 
 ## What is already in it (version 0.3)
 
@@ -66,17 +66,17 @@ The most important idea: **BugOS can't break.**
 | App in the start menu | File | What it does |
 |---|---|---|
 | BugOS Welcome | `bugos-welcome` | The first screen: language, Wi-Fi, light or dark, updates, gaming or programming, and bringing back files from Windows. |
-| Settings | `bugos-settings` | Like Settings in Windows, but calmer. Home: quick toggles (Wi-Fi, Bluetooth, night light, dark) and the volume. Its own pages in plain words: Wi-Fi and internet (networks, connect with a password), Bluetooth (connect devices), Printers and scanning (printers, queue, test page, scanning), Sound (volume, which speaker), Screen (brightness, night light, size), Power (saver/balanced/fast, battery, screen off, sleep, power button, closing the lid), Appearance (light/dark, background), Notifications (do not disturb, quiet during games, sound, test notification), Mouse and touchpad (speed, left-handed, scroll direction, tapping, double-click), Easier to see (large text, large pointer, shake the mouse, magnifier, sticky keys, slow keys, screen reader), Time and language (set the clock automatically, time zone, language), Sign-in and password (name, change password, sign in without a password, lock screen), Default apps (internet, email, photos, music, videos, PDF, text), Updates and more, About this computer. Search across everything. Each page has 'More settings (for advanced users)' that leads to KDE. |
+| Settings | `bugos-settings` | Like Settings in Windows, but calmer. Home: quick toggles (Wi-Fi, Bluetooth, night light, dark) and the volume. Its own pages in plain words: Wi-Fi and internet (networks, connect with a password), Bluetooth (connect devices), Printers and scanning (printers, queue, test page, scanning), Sound (volume, which speaker), Display (brightness, night light, size), Power (saver/balanced/fast, battery, screen off, sleep, power button, closing the lid), Appearance (light/dark, background), Notifications (do not disturb, quiet during games, sound, test notification), Mouse and touchpad (speed, left-handed, scroll direction, tapping, double-click), Easier to see (large text, large pointer, shake the mouse, magnifier, sticky keys, slow keys, screen reader), Time and language (set the clock automatically or by hand, time zone, language), Login and password (name, change password, sign in without a password, lock screen), Default programs (internet, email, photos, music, videos, PDF, text), Updates and more, About this computer. Search across everything. Each page has 'More settings (for advanced users)' that leads to KDE. |
 | Something is not working | `bugos-help` | Checks internet, Wi-Fi, Bluetooth, sound, printer, storage and updates. Every problem has a "Fix" button. |
 | Backup | `bugos-backup` | Your files to a USB drive with one button, and back again. Nothing is ever thrown away. |
 | Files from Windows | `bugos-switch` | Brings back the files, bookmarks and background you took from Windows with BugOS Overstap. |
 | Game mode on/off | `bugos-game-mode` | Full power, notifications muted and an FPS counter. |
-| BugOS Store | `bugos-store` | 37 well-known, safe apps in 10 topics, install with one click. "Find more apps" opens the big KDE store. |
+| BugOS Store | `bugos-store` | 39 well-known, safe apps in 10 topics, install with one click, and remove again in "My apps". "Search more apps" opens the big KDE store. |
 | Start menu | `org.bugos.startmenu` | The start button at the bottom left (the ladybug), by default. A greeting, a big search bar that finds apps and the pages of Settings, pinned apps, recent files, all apps by topic, and at the bottom Settings, Lock, Sign out, Restart and Shut down. Alt+F1 and the Windows key open it. Prefer the KDE menu? Settings → Updates and more → Taskbar. |
 | Quick menu | `org.bugos.quickmenu` | Next to the system tray, by default. Big buttons for Wi-Fi, Bluetooth, game mode, dark, do not disturb and mute, plus sliders for volume and (on a laptop) brightness, and the battery; the little arrow next to a button opens the matching page in Settings (for example to pick a Wi-Fi network). It is the one place for these things: the KDE tray icons that do the same (sound, network, Bluetooth, brightness and battery, clipboard, keyboard layout...) are hidden, but keep working in the background (volume keys, low-battery warnings). |
 | Shutdown screen | `logout/Logout.qml` | The screen for Shut down, Restart or Sign out: big tiles for Sleep, Restart, Shut down (red), Sign out and a "Never mind" button. From the start menu it counts down 30 seconds and says so in plain words. It goes into Plasma's shell package and into the BugOS look-and-feel. |
 | Set up the taskbar | `bugos-panel` | Puts the BugOS start menu and the quick menu on the taskbar (`standaard`, once after signing in, also for people who already had a taskbar), or turns one of the two on/off (`startmenu|snelmenu aan|uit|status`). `systeemvak rustig|alles` hides or brings back the KDE tray icons the quick menu replaces (turning the quick menu off brings them back). "Off" puts the KDE menu back the way BugOS had set it up. |
-| Files | `bugos-files` | The file explorer: big tiles with previews, your usual places and USB sticks on the left. When you pick something, the bottom shows what you can do with it (Open, Copy, Throw away...). Throwing away goes to the trash first (with Undo); nothing is ever overwritten. **This computer**: all your drives (USB stick, external drive, second drive, Windows drive, SD card, CD) with how much space is left; open with one click (also when locked: KDE asks for the password) and safely remove the whole stick. Per stick or drive (the '…' button): rename, check and repair, erase. A **new, empty drive**: 'Start using' (partition and format, like Disk Management in Windows); after that it is always there. Disk management (KDE Partition Manager) for advanced users. |
+| Files | `bugos-files` | The file explorer: big tiles with previews, your usual places and USB sticks on the left. When you pick something, the bottom shows what you can do with it (Open, Copy, Throw away...). Throwing away goes to the trash first (with Undo) on your own computer; on a USB stick or other drive it asks first and cannot be undone. Nothing is ever overwritten. **This computer**: all your drives (USB stick, external drive, second drive, Windows drive, SD card, CD) with how much space is left; open with one click (also when locked: KDE asks for the password) and safely remove the whole stick. Per stick or drive (the '…' button): rename, check and repair, erase. A **new, empty drive**: 'Start using' (partition and format, like Disk Management in Windows); after that it is always there. Disk management (KDE Partition Manager) for advanced users. |
 | Task Manager | `bugos-task-manager` | Like Task Manager in Windows (Ctrl+Shift+Esc), but simpler: at the top, in plain words, how things are going (with a tip when it is busy), open programs with 'Close' (politely, and forced if it doesn't respond), performance with small graphs (processor with temperature, memory, disk, internet, graphics card) and programs that start with the computer on/off. You can't stop parts of BugOS itself by accident. |
 | Open drives | `bugos-open-drives` | After signing in, opens the drives inside the computer so they are always there (like D: in Windows). No password needed for administrators (polkit rule). |
 | Sign in without a password | `bugos-login` | Sets the sign-in screen (SDDM) to 'sign in automatically' for one user, or turns it off again. Settings calls it through pkexec; KDE asks for your password once (polkit action org.bugos.login). |
@@ -92,8 +92,8 @@ The most important idea: **BugOS can't break.**
 | Update notification | `bugos-updatecheck` | With "update myself" you get a notification once a day with an "Update now" button. |
 | Developer mode | `bugos-developer` | VS Code, containers and a dev box with programming languages. |
 | Light mode | `bugos-light-mode` | Turns off the heavy effects on old PCs by itself. |
-| First start | `bugos-first-boot` | Sets up LibreOffice, VLC and Steam. |
-| Translations | `vertalingen/*.json` | Any language can be added without writing code (see [TRANSLATING.md](TRANSLATING.md)). |
+| First start | `bugos-first-boot` | Sets up LibreOffice, VLC, Gwenview (photos), Okular (PDFs) and Steam. |
+| Translations | `translations/*.json` | Any language can be added without writing code (see [TRANSLATING.md](TRANSLATING.md)). |
 | Style | `look-and-feel`, `color-schemes`, `bugos_ui.py` | Taskbar at the bottom, BugOS colors for light and dark, the fonts, the logo, the "Stip" background, the boot, sign-in and lock screens, and pinned favorites in the start menu. All BugOS apps use the same design (`bugos_ui.py`). See [BRAND.md](BRAND.md). The window title bar: Breeze border with BugOS colours (no line between bar and window), big round buttons, a red round close button, title on the left. |
 
 ### For Windows (`windows-switch/`)
@@ -109,7 +109,7 @@ The most important idea: **BugOS can't break.**
 
 | Workflow | What it does |
 |---|---|
-| `build.yml` | Builds BugOS (normal and Nvidia), on every change and every night. |
+| `build.yml` | Builds BugOS (normal and Nvidia), by hand and once a week by itself. |
 | `iso.yml` | Makes a USB stick (ISO) on request. By default that is the "try first" stick with the new installer. On request it puts the ISO in pieces of less than 2 GB in a GitHub Release. |
 | `windows-switch.yml` | Checks the Windows program on a real Windows computer and packs it. With a version tag (like `v0.2`) it turns it into a download. |
 | `website.yml` | Puts the website (`website/`) online through GitHub Pages. Set to manual for now. |
@@ -161,7 +161,7 @@ The most important idea: **BugOS can't break.**
   - BugOS Overstap can't download BugOS,
   - and installed computers get no updates.
   - (Installing from the "try first" stick does work: BugOS itself is on the stick.)
-- [ ] In **Settings**, set the default branch to `main`. Then the nightly build (with security updates) runs on `main`.
+- [ ] In **Settings**, set the default branch to `main`. Then the weekly build (with security updates) runs on `main`.
 - [ ] Signing through SignPath, volunteers and a domain name (see above).
 
 ### Next: testing on real computers

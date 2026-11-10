@@ -7,7 +7,8 @@
 #                        op de stick, dus installeren werkt ook zonder internet.
 #   soort = klassiek  -> alleen het installatieprogramma, werkt zonder internet
 #
-#   publiceren = aan  -> de ISO komt als download in een GitHub Release.
+#   publiceren = aan  -> de ISO komt als download in een GitHub Release (alleen de live-stick; de klassieke
+#                        stick blijft een test-download van 7 dagen) (U362).
 #                        GitHub staat maar 2 GB per bestand toe, dus de ISO
 #                        wordt in stukjes geknipt. BugOS Overstap (Windows)
 #                        plakt ze vanzelf weer aan elkaar.
@@ -77,11 +78,23 @@ jobs:
 
       - name: Namen bepalen
         id: naam
+        # De invoer via env: in plaats van ${{ }} in het script, zodat een rare waarde geen opdracht wordt (A035).
+        env:
+          VARIANT: ${{ inputs.variant }}
+          TAG: ${{ inputs.tag }}
+          PUBLICEREN: ${{ inputs.publiceren }}
         run: |
+          [[ "$TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || { echo "::error::Geen geldige bouw: $TAG"; exit 1; }
+          # Een gepubliceerde ISO is wat de Windows-tool aan iedereen geeft, en de installatie volgt die tag voor altijd.
+          # Alleen 'latest' mag dus gepubliceerd worden, geen testbranch (U536).
+          if [ "$PUBLICEREN" = true ] && [ "$TAG" != latest ]; then
+            echo "::error::Publiceren kan alleen met de bouw 'latest' (nu: $TAG). Een ISO van een testbranch zou pc's voor altijd op die branch zetten."
+            exit 1
+          fi
           REGISTRY="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
-          echo "image=${REGISTRY}/${{ inputs.variant }}:${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          echo "image=${REGISTRY}/${VARIANT}:${TAG}" >> "$GITHUB_OUTPUT"
           echo "datum=$(date -u +%Y.%m.%d)" >> "$GITHUB_OUTPUT"
-          if [ "${{ inputs.variant }}" = bugos-nvidia ]; then echo "soort=nvidia" >> "$GITHUB_OUTPUT"; else echo "soort=main" >> "$GITHUB_OUTPUT"; fi
+          if [ "$VARIANT" = bugos-nvidia ]; then echo "soort=nvidia" >> "$GITHUB_OUTPUT"; else echo "soort=main" >> "$GITHUB_OUTPUT"; fi
 
       - name: Inloggen bij GitHub Packages
         run: |
@@ -197,8 +210,12 @@ jobs:
 
       - name: ISO-instellingen invullen
         id: prep
+        env:
+          VARIANT: ${{ inputs.variant }}
+          TAG: ${{ inputs.tag }}
         run: |
-          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${{ inputs.variant }}:${{ inputs.tag }}"
+          [[ "$TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || { echo "::error::Geen geldige bouw: $TAG"; exit 1; }
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${VARIANT}:${TAG}"
           sed "s|@IMAGE@|${IMAGE}|g" disk_config/iso.toml > /tmp/iso.toml
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
           echo "uid=$(id -u)" >> "$GITHUB_OUTPUT"

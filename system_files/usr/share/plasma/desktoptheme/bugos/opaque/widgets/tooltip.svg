@@ -9,7 +9,7 @@
         .ColorScheme-ButtonBackground { color:#F1EEEE; }
         .ColorScheme-Highlight { color:#FDE9E9; }
         .ColorScheme-ButtonFocus { color:#DE2F3E; }
-        .ColorScheme-NeutralText { color:#B86E00; }
+        .ColorScheme-NeutralText { color:#8F5600; }
     </style>
 
   </defs>

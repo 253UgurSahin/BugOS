@@ -6,7 +6,7 @@
 #   bugos-light-mode uit   -> alle effecten weer aan
 #   bugos-light-mode status
 #
-# "Oud of traag" = minder dan 6 GB geheugen, of 2 of minder processorkernen.
+# "Oud of traag" = 4 GB geheugen of minder, of 2 of minder processorkernen.
 
 # shellcheck source=system_files/usr/share/bugos/lib.sh
 . /usr/share/bugos/lib.sh
@@ -25,11 +25,17 @@ INSTELLINGEN=(
 
 baloo() { balooctl6 "$@" 2>/dev/null || balooctl "$@" 2>/dev/null; }
 
+# KWin de nieuwe instellingen laten lezen. Via gdbus: dat is er altijd (qdbus6 bestaat niet op Fedora 44).
+kwin_herladen() {
+    gdbus call --session --dest org.kde.KWin --object-path /KWin --method org.kde.KWin.reconfigure >/dev/null 2>&1
+}
+
 is_traag() {
     local geheugen_kb kernen
     geheugen_kb="$(awk '/MemTotal/ {print $2}' /proc/meminfo)"
     kernen="$(nproc)"
-    [ "$geheugen_kb" -lt 6000000 ] || [ "$kernen" -le 2 ]
+    # Onder de 5 GB: een pc met 6 GB laat er vaak maar 5,6 GB van zien (de rest is voor beeld en BIOS).
+    [ "$geheugen_kb" -lt 5000000 ] || [ "$kernen" -le 2 ]
 }
 
 aan() {
@@ -43,24 +49,28 @@ aan() {
         waarde="$(kreadconfig6 --file "$bestand" --group "$groep" --key "$sleutel" 2>/dev/null)"
         printf '%s\t%s\n' "$regel" "${waarde:--}" >>"$VOOR"
     done
-    if baloo status | grep -qi disabled; then
+    # Stond het zoeken in bestanden al uit? Dat staat in de instelling zelf ('baloo status' meldt "uit"
+    # in de taal van de gebruiker en op stderr, dus daar lezen we het niet uit).
+    if [ "$(kreadconfig6 --file baloofilerc --group "Basic Settings" --key Indexing-Enabled 2>/dev/null)" = false ]; then
         printf 'baloo\tuit\n' >>"$VOOR"
     else
         printf 'baloo\taan\n' >>"$VOOR"
     fi
     # Animaties uit, doorzichtige/wazige effecten uit.
-    kwriteconfig6 --file kdeglobals --group KDE --key AnimationDurationFactor 0
+    kwriteconfig6 --file kdeglobals --group KDE --key AnimationDurationFactor --notify 0
     kwriteconfig6 --file kwinrc --group Plugins --key blurEnabled false
     kwriteconfig6 --file kwinrc --group Plugins --key contrastEnabled false
     kwriteconfig6 --file kwinrc --group Plugins --key slidingpopupsEnabled false
     # Bestanden-zoeker (die steeds alles doorzoekt) op een laag pitje.
     balooctl6 disable >/dev/null 2>&1 || balooctl disable >/dev/null 2>&1
-    qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1
+    kwin_herladen
     touch "$MARKER"
 }
 
 uit() {
     local regel bestand groep sleutel waarde baloo_was=aan
+    # Niets om terug te zetten (hij stond al uit): dan ook niets aan jouw instellingen veranderen (U127).
+    [ -f "$MARKER" ] || [ -f "$VOOR" ] || return 0
     if [ -f "$VOOR" ]; then
         # Precies terug naar hoe het was vóór de lichte stand (ook wat je zelf had ingesteld).
         while IFS=$'\t' read -r regel waarde; do
@@ -69,25 +79,33 @@ uit() {
                 continue
             fi
             read -r bestand groep sleutel <<<"$regel"
+            # --notify: dan krijgen ook het paneel en open programma's de animaties meteen terug (U261).
             if [ "$waarde" = - ]; then
-                kwriteconfig6 --file "$bestand" --group "$groep" --key "$sleutel" --delete
+                kwriteconfig6 --file "$bestand" --group "$groep" --key "$sleutel" --notify --delete
             else
-                kwriteconfig6 --file "$bestand" --group "$groep" --key "$sleutel" "$waarde"
+                kwriteconfig6 --file "$bestand" --group "$groep" --key "$sleutel" --notify "$waarde"
             fi
         done <"$VOOR"
     else
         # Lichte stand van vóór deze versie: terug naar de standaard van KDE.
         for regel in "${INSTELLINGEN[@]}"; do
             read -r bestand groep sleutel <<<"$regel"
-            kwriteconfig6 --file "$bestand" --group "$groep" --key "$sleutel" --delete
+            kwriteconfig6 --file "$bestand" --group "$groep" --key "$sleutel" --notify --delete
         done
     fi
     if [ "$baloo_was" = aan ]; then
         baloo enable >/dev/null
     fi
-    qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1
+    kwin_herladen
     rm -f "$MARKER" "$VOOR"
 }
+
+# Eén tegelijk: snel aan en weer uit (Instellingen, Welkom) liep anders door elkaar heen (U126).
+mkdir -p "$BUGOS_CONFIG"
+if [ "${1:-}" != status ]; then   # 'status' hoeft niet te wachten
+    exec 9>"$BUGOS_CONFIG/.lichte-stand.slot"
+    flock 9 2>/dev/null || true
+fi
 
 case "${1:-auto}" in
 auto)

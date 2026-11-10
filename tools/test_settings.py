@@ -89,7 +89,8 @@ bi.VOORBEELD = False
 bat = bi.batterij()
 klopt(bat is not None and bat.procent == 64 and bat.laadt, "energie: batterij 64%, wordt opgeladen")
 bi.VOORBEELD = True
-klopt(len(bi.bugos_achtergronden()) == 2, "uiterlijk: de twee achtergronden van BugOS")
+klopt(len(bi.bugos_achtergronden()) == 3 and Path(bi.bugos_achtergronden()[0][1]).is_dir(),
+      "uiterlijk: de achtergronden van BugOS (eerst het pakket dat licht/donker volgt, U131)")
 
 # 6. voorbeeldstand: aanzetten en uitzetten werkt zonder iets aan de computer te doen
 bi.zet_wifi(False)
@@ -115,8 +116,10 @@ klopt(muis is not None and muis.naam == "Logitech Muis" and muis.linkshandig and
       and muis.kan == {"linkshandig", "natuurlijk", "snelheid"}, "muis: naam, linkshandig, snelheid 75%, wat hij kan")
 klopt(bi.lees_aanwijzer("event1", {"pointer": {"type": "b", "data": False}, "keyboard": {"type": "b", "data": True}})
       is None, "muis: een toetsenbord is geen muis")
+# Met de echte namen van KWin: tikken kan als tapFingerCount > 0 (er bestaat geen supportsTapToClick) (U153).
 pad = bi.lees_aanwijzer("event7", {"name": "Touchpad", "pointer": True, "touchpad": True, "tapToClick": True,
-                                   "supportsTapToClick": True, "supportsDisableEvents": True, "enabled": False})
+                                   "tapFingerCount": {"type": "i", "data": 3}, "supportsDisableEvents": True,
+                                   "enabled": False})
 klopt(pad is not None and pad.touchpad and pad.tikken and not pad.aan and pad.kan == {"tikken", "aan"},
       "muis: ook als busctl de waarden zonder 'type' en 'data' geeft")
 tijd = bi.lees_timedatectl("Timezone=Europe/Amsterdam\nLocalRTC=no\nCanNTP=yes\nNTP=yes\nNTPSynchronized=yes\n")
@@ -157,6 +160,13 @@ klopt(_profiel == "balanced" and _gezet and _opdrachten[-1][:3] == ("busctl", "-
 klopt(bi.lees_tot("2999,12,31,0,0,0") and not bi.lees_tot("2001,1,1,0,0,0") and not bi.lees_tot("")
       and bi.lees_tot("2999-01-01T00:00:00") and not bi.lees_tot("onzin"),
       "meldingen: 'niet storen tot' lezen (lijstje van KDE of ISO-tijd)")
+from datetime import datetime as _dt, timedelta as _td, timezone as _tz  # noqa: E402
+_straks, _net = _dt.now() + _td(hours=2), _dt.now() - _td(minutes=10)
+_kde = lambda d, sec="7.913": f"{d.year},{d.month},{d.day},{d.hour},{d.minute},{sec}"  # noqa: E731
+_utc = _dt.now(_tz.utc) + _td(hours=2)
+klopt(bi.lees_tot(_kde(_straks)) and not bi.lees_tot(_kde(_net)) and bi.lees_tot(_kde(_utc, "12.345") + ",UTC")
+      and not bi.lees_tot(_kde(_dt.now(_tz.utc) - _td(hours=2)) + ",UTC"),
+      "U072: 'niet storen tot' zoals KDE het echt schrijft (seconden met komma-deel, tijdzone erachter)")
 cache = "[MIME Cache]\napplication/pdf=org.kde.okular.desktop;firefox.desktop;\nimage/png=org.kde.gwenview.desktop;\n"
 klopt(bi.lees_mimeinfo(cache)["application/pdf"] == ["org.kde.okular.desktop", "firefox.desktop"],
       "programma's: mimeinfo.cache lezen")
@@ -242,6 +252,35 @@ QThreadPool.globalInstance().waitForDone(5000)
 venster.close()
 
 shutil.rmtree(TMP, ignore_errors=True)
+# U229: Engels kiezen in Europa geeft geen Amerikaanse datum en Letter-papier.
+import bugos_config_account as _ca  # noqa: E402
+
+_lees, _schrijf, _vb = _ca._c.kde_lees, _ca._c.kde_schrijf, _ca._c.VOORBEELD
+_geschreven = {}
+_ca._c.VOORBEELD = False
+_ca._c.kde_schrijf = lambda bestand, groep, sleutel, waarde: _geschreven.__setitem__(sleutel, waarde) or True
+_uit = {}
+for _nu, _verwacht in (("nl_NL.UTF-8", "en_IE.UTF-8"), ("en_GB.UTF-8", "en_GB.UTF-8"), ("", "en_US.UTF-8"),
+                       ("pl_PL.UTF-8", "en_IE.UTF-8"), ("es_US.UTF-8", "en_US.UTF-8"), ("fr_CA.UTF-8", "en_CA.UTF-8")):
+    _geschreven.clear()
+    _ca._c.kde_lees = lambda bestand, groep, sleutel, standaard="", _w=_nu: _w if sleutel == "LANG" else standaard
+    _oud_env = os.environ.pop("LANG", None)
+    _ca.zet_taal("en")
+    if _oud_env is not None:
+        os.environ["LANG"] = _oud_env
+    _uit[_nu] = _geschreven.get("LANG") == _verwacht
+    if _nu == "pl_PL.UTF-8":   # U232: Polen krijgt geen euro: het papier, de maten en het geld blijven Pools
+        _uit["pl-geld"] = _geschreven.get("LC_MONETARY") == "pl_PL.UTF-8" and _geschreven.get("LC_PAPER") == "pl_PL.UTF-8"
+    if _nu == "en_GB.UTF-8":   # al Engels: de eigen LC_-instellingen niet weghalen
+        _uit["gb-houden"] = "LC_MONETARY" not in _geschreven
+_geschreven.clear()
+_ca.zet_taal("nl")
+_nl = _geschreven.get("LANG")
+_uit["nl-weg"] = "LC_MONETARY" in _geschreven and _geschreven["LC_MONETARY"] is None
+_ca._c.kde_lees, _ca._c.kde_schrijf, _ca._c.VOORBEELD = _lees, _schrijf, _vb
+klopt(all(_uit.values()) and _nl == "nl_NL.UTF-8",
+      f"U229/U232/U242: Engels in Europa geeft dag/maand (en_IE); buiten de eurolanden blijven papier en geld van je land; Nederlands blijft nl_NL ({_uit}, {_nl})")
+
 print()
 print("Alles goed." if not fouten else f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)

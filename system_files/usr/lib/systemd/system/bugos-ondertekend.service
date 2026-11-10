@@ -1,15 +1,20 @@
 [Unit]
 Description=BugOS: switch to signed updates (once)
 Documentation=https://github.com/253UgurSahin/BugOS/blob/main/docs/ONDERTEKENEN.md
-Wants=network-online.target
-After=network-online.target rpm-ostreed.service
+# Geen Wants/After network-online: dan wachtte elke keer opstarten (ook lang na de eerste keer) op het
+# netwerk. Het script wacht zelf even op internet (U312).
+After=rpm-ostreed.service
 ConditionPathExists=/etc/pki/containers/bugos.pub
-ConditionPathExists=!/var/lib/bugos/ondertekend
 ConditionKernelCommandLine=!rd.live.image
 
 [Service]
-Type=oneshot
+# exec, niet oneshot: het opstarten wacht niet op het downloaden (zoals bugos-first-boot) (U236).
+Type=exec
+# De hotspot-controle (U236) staat in het script, ná het wachten op internet: hier vroeg bij het opstarten
+# was er nog geen verbinding, en dan zei NetworkManager 'onbekend' (U318).
 ExecStart=/usr/bin/bugos-ondertekend
+Restart=on-failure
+RestartSec=30min
 Nice=19
 IOSchedulingClass=idle
 

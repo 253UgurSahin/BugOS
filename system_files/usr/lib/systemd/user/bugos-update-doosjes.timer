@@ -1,0 +1,11 @@
+[Unit]
+Description=BugOS: update programs from a .rpm or .deb every day
+
+[Timer]
+# Elke dag op de klok, en inhalen als de pc uit stond of sliep (U021).
+OnCalendar=daily
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

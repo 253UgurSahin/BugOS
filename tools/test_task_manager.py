@@ -39,7 +39,7 @@ def schrijf(pad: Path, tekst: str) -> None:
     pad.write_text(tekst, encoding="utf-8")
 
 
-GEBRUIKER = "/user.slice/user-1000.slice/user@1000.service"
+GEBRUIKER = f"/user.slice/user-{os.getuid()}.slice/user@{os.getuid()}.service"   # jijzelf (U441)
 
 
 def proces(pid: int, naam: str, groep: str, tijd: int = 10, rss: int = 1000, pss_kb: int = 0, kernel: bool = False,
@@ -88,10 +88,39 @@ klopt(bt.geheugen() == (16000000 * 1024, 8000000 * 1024), "geheugen: totaal en b
 klopt(bt.schijf_tellers() == (2000 * 512, 4000 * 512, 120), "schijf: alleen hele schijven (geen sda1, geen loop)")
 klopt(bt.netwerk_tellers() == (5000, 3000), "internet: zonder lo en docker")
 klopt(bt.temperatuur() is None and bt.videokaart() is None, "temperatuur en videokaart: niet aanwezig, geen fout")
+# U400: acpitz (moederbord) als hwmon0 en de echte processor als hwmon1: de processor telt.
+schrijf(TMP / "sys" / "class" / "hwmon" / "hwmon0" / "name", "acpitz\n")
+schrijf(TMP / "sys" / "class" / "hwmon" / "hwmon0" / "temp1_input", "27800\n")
+schrijf(TMP / "sys" / "class" / "hwmon" / "hwmon1" / "name", "coretemp\n")
+schrijf(TMP / "sys" / "class" / "hwmon" / "hwmon1" / "temp1_input", "61000\n")
+klopt(bt.temperatuur() == 61.0, f"U400: de processorsensor gaat voor acpitz ({bt.temperatuur()})")
+import shutil as _sh
+_sh.rmtree(TMP / "sys" / "class" / "hwmon" / "hwmon1")
 schrijf(TMP / "sys" / "class" / "hwmon" / "hwmon0" / "name", "k10temp\n")
 schrijf(TMP / "sys" / "class" / "hwmon" / "hwmon0" / "temp1_input", "52000\n")
 schrijf(TMP / "sys" / "class" / "drm" / "card0" / "device" / "gpu_busy_percent", "37\n")
 klopt(bt.temperatuur() == 52.0 and bt.videokaart() == 37.0, "temperatuur (52 °C) en videokaart (37%) als ze er zijn")
+# U406: twee AMD-kaarten (ingebouwd en los): de drukste telt, niet de eerste.
+schrijf(TMP / "sys" / "class" / "drm" / "card1" / "device" / "gpu_busy_percent", "88\n")
+klopt(bt.videokaart() == 88.0, f"U406: met twee videokaarten telt de drukste ({bt.videokaart()})")
+import shutil as _sh406
+_sh406.rmtree(TMP / "sys" / "class" / "drm" / "card1")
+# U421: Intel (geen gpu_busy_percent) met een slapende Nvidia: nvidia-smi niet aanroepen (dat wekt de kaart).
+_kaarten421 = TMP / "sys421"
+schrijf(_kaarten421 / "class" / "drm" / "card0" / "device" / "vendor", "0x8086\n")
+schrijf(_kaarten421 / "class" / "drm" / "card1" / "device" / "vendor", "0x10de\n")
+schrijf(_kaarten421 / "class" / "drm" / "card1" / "device" / "power" / "runtime_status", "suspended\n")
+_oud_sys421, _oud_proc421 = bt.sys_map, os.environ.pop("BUGOS_PROC", None)
+_oud_bestaat421, _oud_run421 = bt.Path.exists, bt.subprocess.run
+_smi421 = []
+bt.sys_map = lambda: _kaarten421
+bt.Path.exists = lambda self: True if str(self) == "/usr/bin/nvidia-smi" else _oud_bestaat421(self)
+bt.subprocess.run = lambda cmd, *a, **k: (_smi421.append(cmd), _oud_run421(["true"], *a, **k))[1]
+_v421 = bt.videokaart()
+bt.sys_map, bt.Path.exists, bt.subprocess.run = _oud_sys421, _oud_bestaat421, _oud_run421
+if _oud_proc421 is not None:
+    os.environ["BUGOS_PROC"] = _oud_proc421
+klopt(not _smi421 and _v421 is None, f"U421: Intel met een slapende Nvidia: nvidia-smi wordt niet gestart ({_smi421})")
 
 # 2. processen
 lijst = bt.processen()
@@ -133,13 +162,13 @@ SESSIE = f"{GEBRUIKER}/session.slice"
 lang = [bt.Proces(400, "xdg-desktop-por", 1, 1, 1, True, f"{SESSIE}/xdg-desktop-portal-kde.service"),
         bt.Proces(401, "polkit-kde-auth", 1, 1, 1, True, f"{SESSIE}/plasma-polkit-agent.service"),
         bt.Proces(402, "kwin_wayland_wr", 1, 1, 1, True, f"{SESSIE}/plasma-kwin_wayland.service"),
-        bt.Proces(403, "startplasma-way", 1, 1, 1, True, "/user.slice/user-1000.slice/session-2.scope"),
+        bt.Proces(403, "startplasma-way", 1, 1, 1, True, f"/user.slice/user-{os.getuid()}.slice/session-2.scope"),
         bt.Proces(404, "spotify", 1, 1, 1, True, f"{SESSIE}/spotify-helper.service")]
 beschermd = {x.pids[0]: x.beschermd for x in bt.groepeer(lang, {})}
 klopt(all(beschermd[p] for p in (400, 401, 402, 403)) and not beschermd[404],
       "beschermd: ook lange namen (xdg-desktop-portal-kde, kwin_wayland_wrapper, startplasma) en plasma-diensten")
 # B002: de rest van wat de sessie nodig heeft (gezien in de echte BugOS live-sessie, met hun eenheden).
-GEB = "/user.slice/user-1000.slice/user@1000.service"
+GEB = GEBRUIKER
 kern = [bt.Proces(500, "dbus-broker-lau", 1, 1, 1, True, f"{GEB}/session.slice/dbus-broker.service"),
         bt.Proces(501, "(sd-pam)", 1, 1, 1, True, f"{GEB}/init.scope"),
         bt.Proces(502, "at-spi-bus-laun", 1, 1, 1, True, f"{GEB}/session.slice/at-spi-dbus-bus.service"),
@@ -154,6 +183,36 @@ beschermd = {x.pids[0]: x.beschermd for x in bt.groepeer(kern, {})}
 klopt(all(beschermd[p] for p in range(500, 507)),
       "beschermd: sessie-berichtenbus, gebruikersbeheer, toegankelijkheid, dconf en de Flatpak-portalen")
 klopt(not beschermd[507] and not beschermd[508], "niet beschermd: gewone achtergrondhulpjes (ssh-agent, KDE Connect)")
+# U433: Firefox van mama (ander account, snel wisselen) en die van jou: jouw Firefox blijft van jou (en te sluiten).
+_ff = "app.slice/app-flatpak-org.mozilla.firefox-1234.scope"
+_ik = os.getuid()
+_ander = _ik + 1
+_twee = [bt.Proces(600, "firefox", 1, 1, 1, True, f"/user.slice/user-{_ik}.slice/user@{_ik}.service/{_ff}"),
+         bt.Proces(601, "firefox", 1, 1, 1, False, f"/user.slice/user-{_ander}.slice/user@{_ander}.service/{_ff}"),
+         # U441: kwin_wayland (extra rechten) staat in /proc op naam van root, maar is van jou.
+         bt.Proces(602, "kwin_wayland", 1, 1, 1, False,
+                   f"/user.slice/user-{_ik}.slice/user@{_ik}.service/session.slice/plasma-kwin_wayland.service")]
+_g433 = {x.pids[0]: x for x in bt.groepeer(_twee, {})}
+# U451: een 'sudo' (van root) in je eigen Konsole: Konsole blijft te sluiten.
+_kons = f"/user.slice/user-{_ik}.slice/user@{_ik}.service/app.slice/app-org.kde.konsole-99.scope"
+_g447 = bt.groepeer([bt.Proces(700, "konsole", 1, 1, 1, True, _kons), bt.Proces(701, "sudo", 700, 1, 1, False, _kons)], {})
+_g463 = bt.groepeer([bt.Proces(690, "sudo", 1, 1, 1, False, _kons), bt.Proces(700, "konsole", 1, 1, 1, True, _kons)], {})
+klopt(len(_g463) == 1 and _g463[0].eigen, "U463: ook als de sudo vóór Konsole in de lijst staat, blijft Konsole te sluiten")
+klopt(len(_g447) == 1 and _g447[0].pids == [700, 701] and _g447[0].eigen,
+      f"U451: een sudo in je eigen Konsole maakt Konsole niet onsluitbaar ({[(x.naam, x.pids, x.eigen) for x in _g447]})")
+# U451: 'van jou' volgens de echte gebruiker (Uid: in status), niet volgens de eigenaar van de map in /proc.
+proces(900, "ssh-agent", f"{GEBRUIKER}/app.slice/ssh-agent.service")
+schrijf(PROC / "900" / "status", f"Name:\tssh-agent\nUid:\t{os.getuid()}\t{os.getuid()}\t{os.getuid()}\t{os.getuid()}\n")
+proces(901, "iets", f"{GEBRUIKER}/app.slice/iets.service")
+schrijf(PROC / "901" / "status", "Name:\tiets\nUid:\t4242\t4242\t4242\t4242\n")
+_p447 = {p.pid: p.eigen for p in bt.processen() if p.pid in (900, 901)}
+import shutil as _sh447
+_sh447.rmtree(PROC / "900"); _sh447.rmtree(PROC / "901")
+klopt(_p447 == {900: True, 901: False}, f"U451: 'van jou' volgens de echte gebruiker in /proc/<pid>/status ({_p447})")
+klopt(_g433[602].naam != "Andere accounts" and _g433[602].pids == [602],
+      f"U441: je eigen kwin_wayland (in /proc van root) staat niet onder 'Andere accounts' ({_g433[602].naam})")
+klopt(_g433[600].pids == [600] and _g433[600].eigen and _g433[601].soort == "systeem" and _g433[601].beschermd,
+      f"U433: een app van een ander account telt niet bij die van jou ({[(x.naam, x.pids, x.eigen) for x in _g433.values()]})")
 
 # 5. advies in gewone woorden
 klopt(bt.advies([10, 20, 30], 4, 16, m["taken"])[0] == "goed", "advies: rustig -> 'Alles loopt soepel'")
@@ -202,6 +261,49 @@ tekst = (eigen / "discord.desktop").read_text()
 klopt((eigen / "discord.desktop").exists() and "Exec=discord --start-minimized" in tekst and "Hidden=false" in tekst,
       "opstarten weer aan (eigen aangepaste versie): het bestand blijft, met Hidden=false")
 klopt(not list(eigen.glob(".*bugos-nieuw")), "opstarten: geen tijdelijke bestanden achtergebleven")
+# U075: staat een systeem-programma voor de hele computer uit (Hidden=true), dan kun je hem voor jezelf aanzetten.
+schrijf(etc / "chat.desktop", "[Desktop Entry]\nType=Application\nName=Chat\nExec=chat --stil\nHidden=true\n")
+c = {x.naam: x for x in bt.opstart_lijst()}["Chat"]
+klopt(not c.aan, "U075: systeem-programma met Hidden=true staat uit")
+bt.zet_opstart(c, True)
+tekst = (eigen / "chat.desktop").read_text() if (eigen / "chat.desktop").exists() else ""
+klopt({x.naam: x for x in bt.opstart_lijst()}["Chat"].aan and "Exec=chat --stil" in tekst and "Hidden=false" in tekst,
+      "U075: aanzetten maakt een eigen kopie met Hidden=false (en hij staat echt aan)")
+bt.zet_opstart({x.naam: x for x in bt.opstart_lijst()}["Chat"], False)
+klopt(not {x.naam: x for x in bt.opstart_lijst()}["Chat"].aan, "U075: en weer uit")
+bt.zet_opstart({x.naam: x for x in bt.opstart_lijst()}["Chat"], True)
+klopt({x.naam: x for x in bt.opstart_lijst()}["Chat"].aan, "U075: na uit weer aan: staat aan")
+
+# U125: wat BugOS start, krijgt zijn eigen systemd-scope (zoals KDE dat doet): dan staat het in Taakbeheer onder
+# zijn eigen naam, en niet onder wie het startte (het snelmenu, Welkom, Instellingen).
+import bugos_base  # noqa: E402
+
+_rt = TMP / "runtime"
+(_rt / "systemd").mkdir(parents=True)
+(_rt / "systemd" / "private").write_text("")
+_apps = TMP / "share-u125" / "applications"
+_apps.mkdir(parents=True)
+(_apps / "bugos-settings.desktop").write_text("[Desktop Entry]\nName=Settings\nExec=bugos-settings\n")
+_oud_env = {k: os.environ.get(k) for k in ("XDG_RUNTIME_DIR", "XDG_DATA_DIRS")}
+os.environ.update(XDG_RUNTIME_DIR=str(_rt), XDG_DATA_DIRS=str(TMP / "share-u125"))
+_which = bugos_base.shutil.which
+bugos_base.shutil.which = lambda n, *a, **k: "/usr/bin/" + n
+_cmd = bugos_base.eigen_plek(("bugos-settings", "tijd"))
+_niet = bugos_base.eigen_plek(("pkexec", "bugos-updates", "nu"))
+(_apps / "rare naam+x.desktop").write_text("[Desktop Entry]\nName=X\nExec=x\n")
+_raar = bugos_base.eigen_plek(("rare naam+x",))
+bugos_base.shutil.which = _which
+for _k, _v in _oud_env.items():
+    if _v is None:
+        os.environ.pop(_k, None)
+    else:
+        os.environ[_k] = _v
+_eenheid = _cmd[5].split("=", 1)[1] if len(_cmd) > 6 else ""
+klopt(_cmd[:3] == ["systemd-run", "--user", "--scope"] and _cmd[-2:] == ["bugos-settings", "tijd"]
+      and bt.soort_van(f"/user.slice/user-1000.slice/user@1000.service/app.slice/{_eenheid}")[:2] == ("app", "bugos-settings")
+      and _niet == ["pkexec", "bugos-updates", "nu"],
+      f"U125: Instellingen starten in een eigen scope, die Taakbeheer als 'Instellingen' ziet ({_eenheid})")
+klopt(_raar == ["rare naam+x"], "U146: een naam die systemd niet toestaat (spatie, +): gewoon starten, niet via systemd-run")
 
 # 8. het venster (zonder scherm)
 lader = importlib.machinery.SourceFileLoader("taakbeheer", str(ROOT / "system_files" / "usr" / "bin" /
@@ -240,7 +342,7 @@ try:
     venster.ga_naar("opstarten")
     app.processEvents()
     rijen = venster.paginas["opstarten"].findChildren(tb.OpstartRij)
-    klopt(len(rijen) == 2, "venster: Opstarten toont de programma's met een schuifje")
+    klopt(len(rijen) == 3, "venster: Opstarten toont de programma's met een schuifje")
     # Sluiten mag het venster niet laten vastlopen, ook als KWin traag antwoordt.
     import time as _tijd  # noqa: E402
     _gestopt: list = []
@@ -267,6 +369,26 @@ try:
     tb.bt.stop = _oud_stop
 finally:
     venster.close()  # stopt ook het meten op de achtergrond
+
+# U311: geminimaliseerd of verborgen meet Taakbeheer niet; weer in beeld meteen wel; stoppen gaat meteen.
+import time as _tijd  # noqa: E402
+import bugos_tasks_ui as _tu  # noqa: E402
+
+_d = _tu.Meetdraad()
+_tel = []
+_d.meter.meet = lambda: _tel.append(1) or {}
+_d.zet_zichtbaar(False)
+_d.start()
+_tijd.sleep(0.6)
+_verborgen = len(_tel)
+_d.zet_zichtbaar(True)
+_tijd.sleep(0.4)
+_zichtbaar = len(_tel)
+_t0 = _tijd.time()
+_d.stop()
+_d.wait(3000)
+klopt(_verborgen == 0 and _zichtbaar >= 1 and _tijd.time() - _t0 < 1.0,
+      f"U311: Taakbeheer meet niet als het venster weg is, wel meteen weer in beeld, en stopt meteen ({_verborgen}, {_zichtbaar})")
 
 shutil.rmtree(TMP, ignore_errors=True)  # alleen onze eigen tijdelijke testmap
 print()

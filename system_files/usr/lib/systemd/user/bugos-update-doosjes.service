@@ -1,0 +1,21 @@
+[Unit]
+Description=BugOS: update programs installed from a .rpm or .deb (their box)
+ConditionKernelCommandLine=!rd.live.image
+# Mislukt het elke keer (bijv. een kapotte bron van een programma), dan na een paar pogingen stoppen tot morgen,
+# niet elk half uur een zware update de hele dag door (U480).
+StartLimitIntervalSec=12h
+StartLimitBurst=4
+
+[Service]
+Type=oneshot
+# Niet via een telefoon-hotspot (Metered 1 of 3), zoals de apps (U089, U473). ($$m: systemd vervangt $m zelf.)
+ExecCondition=/bin/bash -c 'm="$(busctl get-property org.freedesktop.NetworkManager /org/freedesktop/NetworkManager org.freedesktop.NetworkManager Metered 2>/dev/null | cut -c 3-)"; [ "$$m" != 1 ] && [ "$$m" != 3 ]'
+# Alleen bij 'Updates vanzelf' (U300), zoals de apps.
+ExecCondition=/usr/bin/bugos-updates mag-vanzelf
+# Programma's uit een .rpm/.deb staan in een eigen doosje: zonder dit kregen ze nooit een (veiligheids)update (U465).
+ExecStart=/usr/bin/bugos-package --bijwerken
+Nice=19
+IOSchedulingClass=idle
+# Nog geen internet (wifi verbindt pas na het inloggen)? Dan een half uur later opnieuw, niet pas morgen (U473).
+Restart=on-failure
+RestartSec=30min

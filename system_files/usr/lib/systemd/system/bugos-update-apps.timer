@@ -2,8 +2,9 @@
 Description=Update BugOS apps (Flatpak) every day
 
 [Timer]
-OnBootSec=15min
-OnUnitInactiveSec=1d
+# Elke dag op de klok (niet "een dag na de vorige keer": die tijd telt niet door als een laptop slaapt).
+# Stond de computer uit of sliep hij, dan gebeurt het zodra hij weer aan is (Persistent).
+OnCalendar=daily
 RandomizedDelaySec=30min
 Persistent=true
 

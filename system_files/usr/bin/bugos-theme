@@ -32,14 +32,42 @@ kvantum_zet() {
 }
 
 huidig() {
-    if [ "$(kreadconfig6 --file kdeglobals --group General --key ColorScheme 2>/dev/null)" = BugOSDark ]; then
+    local schema achter r g b
+    schema="$(kreadconfig6 --file kdeglobals --group General --key ColorScheme 2>/dev/null)"
+    case "$schema" in
+    BugOSDark) echo donker; return ;;
+    BugOSLight | "") echo licht; return ;;
+    esac
+    # Een ander kleurenschema (bijv. Breeze Dark in de KDE-instellingen): donker als de vensters donker zijn (U325).
+    achter="$(kreadconfig6 --file kdeglobals --group Colors:Window --key BackgroundNormal 2>/dev/null)"
+    IFS=, read -r r g b _ <<<"$achter"   # ook met een doorzichtigheid erachter (r,g,b,a) (U331)
+    if [[ "$r$g$b" =~ ^[0-9]+$ ]] && [ $((r * 299 + g * 587 + b * 114)) -lt 128000 ]; then
         echo donker
     else
         echo licht
     fi
 }
 
-# Een eigen KDE-accentkleur maakt de zachte BugOS-selectie fel (oude BugOS zette die).
+# Van vóór de Engelse namen (U302): BugOSDonker/BugOSLicht heten nu BugOSDark/BugOSLight. Zonder dit vielen
+# KDE-programma's terug op een vreemde stijl en zei Instellingen 'licht' terwijl je donker had gekozen.
+oude_namen() {
+    local schema
+    schema="$(kreadconfig6 --file kdeglobals --group General --key ColorScheme 2>/dev/null)"
+    case "$schema" in
+    BugOSDonker) plasma-apply-colorscheme BugOSDark >/dev/null 2>&1 ||
+        kwriteconfig6 --file kdeglobals --group General --key ColorScheme --notify BugOSDark ;;
+    BugOSLicht) plasma-apply-colorscheme BugOSLight >/dev/null 2>&1 ||
+        kwriteconfig6 --file kdeglobals --group General --key ColorScheme --notify BugOSLight ;;
+    esac
+    if [ -f "$KVANTUM" ] && [ "$(kreadconfig6 --file "$KVANTUM" --group General --key theme 2>/dev/null)" = BugOSDonker ]; then
+        kvantum_zet BugOSDark
+    fi
+    # Het oude game-modusbestand (MANGOHUD=1): anders bleef de FPS-teller voor altijd aan.
+    rm -f "$CONFIG/environment.d/90-bugos-spelmodus.conf"
+}
+
+# Een eigen KDE-accentkleur maakt de zachte BugOS-selectie fel (oude BugOS zette die). Alleen bij de eerste keer:
+# een accentkleur die je daarna zelf in KDE kiest, blijft staan, ook als je licht/donker omzet (U373).
 geen_accent() {
     kwriteconfig6 --file kdeglobals --group General --key AccentColor --delete 2>/dev/null
     kwriteconfig6 --file kdeglobals --group General --key LastUsedCustomAccentColor --delete 2>/dev/null
@@ -59,7 +87,14 @@ gtk_laag() {
         cmp -s "$bron" "$map/bugos.css" || cp -f "$bron" "$map/bugos.css"
         if ! grep -qxF "$regel" "$css" 2>/dev/null && [ ! -f "$BUGOS_CONFIG/gtk-$v" ]; then
             # Vooraan: @import moet in CSS boven de rest staan.
-            { echo "$regel"; cat "$css" 2>/dev/null || true; } >"$css.bugos" && mv -f "$css.bugos" "$css"
+            # Alleen vervangen als het nieuwe bestand er helemaal is: bij een volle schijf bleef er anders een leeg
+            # gtk.css over, en waren je eigen regels weg (U372).
+            if { echo "$regel" && { [ ! -f "$css" ] || cat "$css"; }; } >"$css.bugos" 2>/dev/null &&
+                [ "$(wc -c <"$css.bugos")" -gt "$(wc -c <"$css" 2>/dev/null || echo 0)" ]; then
+                mv -f "$css.bugos" "$css"
+            else
+                rm -f "$css.bugos"
+            fi
         fi
         # Merkje alleen als de regel er echt in staat (lukte schrijven niet, dan de volgende keer opnieuw).
         if grep -qxF "$regel" "$css" 2>/dev/null; then
@@ -100,9 +135,35 @@ terminal_zet() {
     esac
 }
 
+# Windows-programma's (Wine) krijgen de nieuwe kleuren ook, niet pas als je een .exe via BugOS opent (U132).
+# Op de achtergrond: Wine opstarten duurt even. Zelfde stempel als bugos-exe, dan doet die het niet nog eens.
+windows_kleuren() {
+    local prefix="${WINEPREFIX:-$HOME/.local/share/bugos/windows}" kleuren="/usr/share/bugos/wine/$1.reg"
+    [ -d "$prefix" ] && [ -f "$kleuren" ] && command -v wine >/dev/null 2>&1 || return 0
+    # Nieuwe Wine-versie (na een BugOS-update)? Dan zou Wine eerst een venster 'bijwerken' tonen: dat laten we aan
+    # het openen van een Windows-programma over (bugos-exe zet de kleuren dan ook) (U148).
+    local wine_tijd
+    wine_tijd="$(stat -c %Y /usr/share/wine/wine.inf 2>/dev/null)"   # Wine vergelijkt zelf met wine.inf
+    if [ -f "$prefix/.update-timestamp" ] && [ -n "$wine_tijd" ] &&
+        [ "$(head -c 20 "$prefix/.update-timestamp" | tr -dc 0-9)" != "$wine_tijd" ] &&
+        [ "$(head -c 7 "$prefix/.update-timestamp")" != disable ]; then
+        return 0
+    fi
+    (
+        # Eén tegelijk: snel licht-donker-licht, dan wint de laatste (U148).
+        exec 8>"$prefix/.bugos-kleuren.slot"
+        flock -w 120 8 2>/dev/null || exit 0
+        # Intussen weer omgezet (snel licht-donker-licht)? Dan is deze niet meer de goede: niets doen (U169).
+        [ "$(huidig)" = "$1" ] || exit 0
+        export WINEPREFIX="$prefix" WINEDEBUG=-all
+        wine regedit /S "$(winepath -w "$kleuren")" >/dev/null 2>&1 &&
+            echo "$1 $(cksum <"$kleuren")" >"$prefix/.bugos-kleuren"
+    ) </dev/null >/dev/null 2>&1 &
+    disown 2>/dev/null || true
+}
+
 case "${1:-status}" in
 licht | donker)
-    geen_accent
     if [ "$1" = donker ]; then
         schema=BugOSDark kv=BugOSDark
     else
@@ -117,11 +178,15 @@ licht | donker)
     case "$stijl" in
     "" | default | breeze-dark | breeze-light) plasma-apply-desktoptheme bugos >/dev/null 2>&1 ;;
     esac
+    windows_kleuren "$1"
+    # Zeg eerlijk of het lukte: Instellingen toont dan 'Dat lukte niet' in plaats van 'Klaar' (U342).
+    [ "$(huidig)" = "$1" ] || exit 1
     ;;
 status)
     huidig
     ;;
 inloggen)
+    oude_namen
     gtk_laag
     flatpak_toegang
     terminal_zet "$(huidig)"

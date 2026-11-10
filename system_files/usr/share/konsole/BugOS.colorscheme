@@ -13,37 +13,37 @@ Color=255,255,255
 Color=22,23,28
 
 [Color0Intense]
-Color=138,143,154
+Color=107,112,128
 
 [Color0Faint]
 Color=115,116,119
 
 [Color1]
-Color=211,38,58
+Color=200,33,58
 
 [Color1Intense]
-Color=169,30,46
+Color=160,26,46
 
 [Color1Faint]
-Color=229,125,137
+Color=222,122,137
 
 [Color2]
-Color=18,135,81
+Color=14,122,72
 
 [Color2Intense]
-Color=14,108,65
+Color=11,98,58
 
 [Color2Faint]
-Color=113,183,151
+Color=110,175,145
 
 [Color3]
-Color=166,99,0
+Color=143,86,0
 
 [Color3Intense]
-Color=133,79,0
+Color=114,69,0
 
 [Color3Faint]
-Color=202,161,102
+Color=188,154,102
 
 [Color4]
 Color=42,111,220

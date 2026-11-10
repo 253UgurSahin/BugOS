@@ -12,7 +12,10 @@
 STATUS="$(rpm-ostree status --json 2>/dev/null)" || exit 0
 
 # Staat er al een update klaar die nog niet gebruikt wordt? Dan vragen om te herstarten.
-if [ "$(echo "$STATUS" | jq -r '.deployments[0].booted')" = false ]; then
+# Alleen als die bovenste versie nieuwer is: na "terug naar de vorige versie" staat de oude bovenaan.
+KLAAR="$(echo "$STATUS" | jq -r '(.deployments[] | select(.booted) | .timestamp) as $nu
+    | .deployments[0] | (.booted == false and (.timestamp // 0) > ($nu // 0))')"
+if [ "$KLAAR" = true ]; then
     melding "$(t "Update staat klaar" "Update is ready")" \
         "$(t "Start de computer opnieuw op om de nieuwe versie te gebruiken." "Restart the computer to use the new version.")"
     exit 0
@@ -26,19 +29,52 @@ NU="$(echo "$STATUS" | jq -r '.deployments[] | select(.booted) | ."container-ima
 BRON="docker://${REF##*docker://}"
 [[ "$REF" == *docker://* ]] || BRON="docker://${REF#*:}"
 
-NIEUW="$(skopeo inspect --format '{{.Digest}}' "$BRON" 2>/dev/null)" || exit 0
+# Even wachten op internet: net na het inloggen is de wifi vaak nog niet verbonden (U178).
+for _ in $(seq 24); do
+    [ "$(LC_ALL=C nmcli -t networking connectivity 2>/dev/null)" = full ] && break
+    command -v nmcli >/dev/null 2>&1 || break
+    sleep 5
+done
+# Lukt kijken niet? Zonder internet code 75: systemd probeert het een half uur later opnieuw. Met internet
+# (de bron is er niet, of de registry weigert) heeft opnieuw proberen geen zin: dan morgen weer (U192).
+# Met een tijdslimiet: zonder limiet op de dienst (U187) mag skopeo op een haperend netwerk niet eeuwig hangen (U202).
+if ! NIEUW="$(timeout 180 skopeo inspect --format '{{.Digest}}' "$BRON" 2>/dev/null)"; then
+    [ "$(LC_ALL=C nmcli -t networking connectivity 2>/dev/null)" = full ] && exit 0
+    exit 75
+fi
 [ -n "$NIEUW" ] && [ "$NIEUW" != "$NU" ] || exit 0
 
-KEUZE="$(notify-send --app-name=BugOS --icon=system-software-update --wait \
+# desktop-entry: dan blijft hij in de geschiedenis; --expire-time=0: de vraag verdwijnt niet vanzelf (U323).
+KEUZE="$(notify-send --app-name=BugOS --icon=system-software-update --hint=string:desktop-entry:bugos-settings \
+    --expire-time=0 --wait \
     --action=nu="$(t "Nu updaten" "Update now")" --action=later="$(t "Later" "Later")" \
     "$(t "Er is een nieuwe BugOS" "A new BugOS is available")" \
     "$(t "Wil je nu updaten? Je kunt gewoon doorwerken." "Do you want to update now? You can keep working.")" 2>/dev/null)"
 
 if [ "$KEUZE" = nu ]; then
-    if pkexec /usr/bin/bugos-updates nu; then
+    # Zeggen dat het loopt: anders zie je na het wachtwoord lang niets (U494). Met een nummer (-p), zodat de uitkomst
+    # deze melding vervangt en hij bij Annuleren weer weggaat (U505).
+    BEZIG_ID="$(notify-send -p --app-name=BugOS --icon=bugos-logo --hint=string:desktop-entry:bugos-settings \
+        "$(t "Bezig met updaten…" "Updating…")" "$(t "Je kunt gewoon doorwerken. Je krijgt een melding als het klaar is." \
+        "You can keep working. You get a notification when it is done.")" 2>/dev/null)"
+    bezig_weg() {
+        [ -n "$BEZIG_ID" ] && gdbus call --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications \
+            --method org.freedesktop.Notifications.CloseNotification "$BEZIG_ID" >/dev/null 2>&1
+        return 0   # lukt het sluiten niet, dan is dat geen fout (anders vroeg systemd het een half uur later opnieuw) (U516)
+    }
+    pkexec /usr/bin/bugos-updates nu
+    uitkomst=$?
+    if [ "$uitkomst" -eq 0 ]; then
+        # Net als 'Nu updaten' in Instellingen ook je eigen apps en je .rpm/.deb-programma's (als jezelf) (U488).
+        timeout 30m flatpak update --user --noninteractive --assumeyes >/dev/null 2>&1
+        [ -x /usr/bin/bugos-package ] && timeout 60m /usr/bin/bugos-package --bijwerken --nu >/dev/null 2>&1
+        bezig_weg
         melding "$(t "Update klaar ✅" "Update done ✅")" \
             "$(t "Start de computer opnieuw op wanneer het jou uitkomt." "Restart the computer whenever it suits you.")"
+    elif [ "$uitkomst" -eq 126 ] || [ "$uitkomst" -eq 127 ]; then
+        bezig_weg   # Annuleren bij het wachtwoord: niets gedaan, en dat is geen fout (zoals in Instellingen) (U194)
     else
+        bezig_weg
         fout "$(t "De update is niet gelukt. Er is niks veranderd; probeer het later opnieuw." \
             "The update did not work. Nothing has changed; try again later.")"
     fi

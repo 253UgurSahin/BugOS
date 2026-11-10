@@ -5,11 +5,12 @@ eigen systemd-groep (bijvoorbeeld app-org.mozilla.firefox-1234.scope). Zo hoort 
 Firefox bij elkaar, ook de losse tabbladen.
 
 Voor tests en foto's kan een nep-/proc gebruikt worden: BUGOS_PROC=/pad/naar/proc.
+
+Namen van apps en 'Opstarten' komen uit de .desktop-bestanden: dat staat in bugos_desktop.
 """
 
 from __future__ import annotations
 
-import configparser
 import json
 import os
 import re
@@ -19,6 +20,10 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from bugos_desktop import (  # noqa: F401  (doorgeven: Taakbeheer haalt dit uit bugos_tasks)
+    _APPS, ALLEEN_UIT, Opstart, app_info, app_mappen, config_thuis, lees_bureaublad, met_hidden, mooie_naam,
+    opstart_lijst, schrijf_veilig, systeem_autostart, vertaald, zet_opstart,
+)
 from bugos_drives import mooie_maat as maat
 from bugos_ui import t
 
@@ -134,28 +139,44 @@ def netwerk_tellers() -> tuple[int, int]:
 
 def temperatuur() -> float | None:
     """De temperatuur van de processor in graden, als de computer die doorgeeft."""
+    # De echte processorsensor eerst; acpitz (de moederbord-sensor) alleen als er niets anders is. De volgorde van
+    # hwmon0, hwmon1 ... verschilt per opstart, dus niet de eerste nemen die we tegenkomen (U400).
+    voorkeur = ("k10temp", "zenpower", "coretemp", "cpu_thermal", "acpitz")
+    gevonden: dict[str, float] = {}
     for map_ in sorted((sys_map() / "class" / "hwmon").glob("hwmon*")):
-        if lees(map_ / "name").strip() in ("k10temp", "coretemp", "zenpower", "cpu_thermal", "acpitz"):
+        naam = lees(map_ / "name").strip()
+        if naam in voorkeur and naam not in gevonden:
             waarde = lees(map_ / "temp1_input").strip()
             if waarde.lstrip("-").isdigit():
-                return int(waarde) / 1000
-    return None
+                gevonden[naam] = int(waarde) / 1000
+    return next((gevonden[n] for n in voorkeur if n in gevonden), None)
 
 
 def videokaart() -> float | None:
     """Hoe druk de videokaart is (0-100), als we dat kunnen zien (AMD via /sys, Nvidia via nvidia-smi)."""
+    # Alle kaarten bekijken en de drukste tonen: een laptop met AMD-processor en een Nvidia-kaart toonde anders altijd
+    # de ingebouwde AMD, ook tijdens een game op de Nvidia (U406).
+    waarden: list[float] = []
+    nvidia_wakker = None   # None: geen Nvidia-kaart in /sys gezien
     for kaart in sorted((sys_map() / "class" / "drm").glob("card[0-9]*")):
+        if "-" in kaart.name:
+            continue   # card0-HDMI-A-1 enz.: een aansluiting, geen kaart
         waarde = lees(kaart / "device" / "gpu_busy_percent").strip()
         if waarde.isdigit():
-            return float(waarde)
-    if os.environ.get("BUGOS_PROC") is None and Path("/usr/bin/nvidia-smi").exists():
+            waarden.append(float(waarde))
+        elif lees(kaart / "device" / "vendor").strip() == "0x10de":
+            # Een slapende Nvidia-kaart niet wakker maken met nvidia-smi (kost accu); slaapt hij, dan doet hij niets.
+            wakker = lees(kaart / "device" / "power" / "runtime_status").strip() != "suspended"
+            nvidia_wakker = wakker or bool(nvidia_wakker)
+    # Intel heeft geen gpu_busy_percent: dan ook geen nvidia-smi als de Nvidia-kaart slaapt (Optimus-laptop) (U421).
+    if (nvidia_wakker or (nvidia_wakker is None and not waarden)) and os.environ.get("BUGOS_PROC") is None and Path("/usr/bin/nvidia-smi").exists():
         try:
             uit = subprocess.run(["nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
                                  capture_output=True, text=True, timeout=3).stdout.split()
-            return float(uit[0]) if uit else None
+            waarden += [float(w) for w in uit if w.replace(".", "", 1).isdigit()]
         except (OSError, subprocess.SubprocessError, ValueError):
-            return None
-    return None
+            pass
+    return max(waarden) if waarden else None
 
 
 # ============================================================= processen ===
@@ -184,8 +205,11 @@ def processen() -> list[Proces]:
         rest = stat[stat.rfind(")") + 2:].split()
         if len(rest) < 22 or int(rest[6]) & PF_KTHREAD:
             continue
+        # Van wie is hij? De echte gebruiker (Uid: in status), niet de eigenaar van /proc/<pid>: die is root voor
+        # programma's met extra rechten (gamescope) en voor ssh-agent, ook al zijn ze van jou (U451).
+        uid = next((r.split()[1] for r in lees(map_ / "status").splitlines() if r.startswith("Uid:")), "")
         try:
-            eigen = map_.stat().st_uid == mijn
+            eigen = int(uid) == mijn if uid.isdigit() else map_.stat().st_uid == mijn
         except OSError:
             continue
         geheugen_ = 0
@@ -226,66 +250,6 @@ def soort_van(groep: str) -> tuple[str, str, str]:
                 return "app", ontsnap_terug(m.group("id")), deel
     eenheid = next((d for d in reversed(delen) if d.endswith((".service", ".scope"))), delen[-1])
     return "achtergrond", eenheid, eenheid
-
-
-# ================================================================ apps ===
-
-def app_mappen() -> list[Path]:
-    thuis = Path.home()
-    data = [Path(os.environ.get("XDG_DATA_HOME", thuis / ".local" / "share"))]
-    data += [Path(p) for p in os.environ.get("XDG_DATA_DIRS", "/usr/local/share:/usr/share").split(":") if p]
-    data += [thuis / ".local/share/flatpak/exports/share", Path("/var/lib/flatpak/exports/share")]
-    return [d / "applications" for d in data]
-
-
-_APPS: dict[str, tuple[str, str] | None] = {}
-
-
-def lees_bureaublad(pad: Path) -> configparser.RawConfigParser | None:
-    c = configparser.RawConfigParser(strict=False, interpolation=None)
-    c.optionxform = str
-    try:
-        c.read(pad, encoding="utf-8")
-    except (configparser.Error, UnicodeDecodeError):
-        return None
-    return c if c.has_section("Desktop Entry") else None
-
-
-def vertaald(sectie: configparser.SectionProxy, sleutel: str) -> str:
-    """Name[nl_NL], dan Name[nl], dan Name: in de taal van de gebruiker als dat er is."""
-    taal = os.environ.get("LC_ALL") or os.environ.get("LC_MESSAGES") or os.environ.get("LANG") or ""
-    code = taal.split(".")[0].split("@")[0]
-    kandidaten = [f"{sleutel}[{code}]", f"{sleutel}[{code.split('_')[0]}]"] if code else []
-    for k in kandidaten + [sleutel]:
-        if k in sectie:
-            return sectie.get(k, "")
-    return ""
-
-
-def app_info(app_id: str) -> tuple[str, str] | None:
-    """(naam, icoon) van een programma, uit zijn .desktop-bestand."""
-    if app_id in _APPS:
-        return _APPS[app_id]
-    gevonden = None
-    for naam in (app_id, app_id.lower()):
-        for map_ in app_mappen():
-            pad = map_ / f"{naam}.desktop"
-            if pad.is_file():
-                c = lees_bureaublad(pad)
-                if c is not None:
-                    s = c["Desktop Entry"]
-                    gevonden = (vertaald(s, "Name") or app_id, s.get("Icon", ""))
-                    break
-        if gevonden:
-            break
-    _APPS[app_id] = gevonden
-    return gevonden
-
-
-def mooie_naam(app_id: str) -> str:
-    """Geen .desktop gevonden? Dan 'org.example.Notities' -> 'Notities'."""
-    kort = app_id.rsplit(".", 1)[-1] if "." in app_id else app_id
-    return kort[:1].upper() + kort[1:]
 
 
 # ============================================================= groeperen ===
@@ -337,12 +301,24 @@ class Meter:
         return uitslag
 
 
+def _ander_account(groep: str) -> bool:
+    """Hoort dit proces bij de sessie van een ander account (user-<nummer>.slice)? Niet: 'niet van jou volgens /proc':
+    programma's met extra rechten (kwin_wayland) of ssh-agent zijn daar van root, maar wel van jou (U441)."""
+    m = re.search(r"/user-(\d+)\.slice(?:/|$)", groep)
+    return bool(m) and int(m.group(1)) != os.getuid()
+
+
 def groepeer(lijst: list[Proces], procent: dict[int, float]) -> list[Taak]:
     taken: dict[tuple[str, str], Taak] = {}
     eigen_pid = os.getpid()
     for p in lijst:
         soort, sleutel, eenheid = soort_van(p.groep)
-        if soort == "app":
+        if soort != "systeem" and _ander_account(p.groep):
+            # Van een ander account (snel wisselen): niet bij jouw Firefox optellen (dan kon je die niet sluiten),
+            # maar samen onder 'Andere accounts', bij wat van de computer is (U433).
+            soort, sleutel, eenheid = "systeem", "systeem:andere-accounts", "andere-accounts"
+            naam, icoon = t("Andere accounts", "Other accounts"), ""
+        elif soort == "app":
             info = app_info(sleutel)
             naam, icoon = info if info else (mooie_naam(sleutel), "")
         else:
@@ -355,7 +331,14 @@ def groepeer(lijst: list[Proces], procent: dict[int, float]) -> list[Taak]:
         taak.pids.append(p.pid)
         taak.processor += procent.get(p.pid, 0.0)
         taak.geheugen += p.geheugen
-        taak.eigen = taak.eigen and p.eigen
+        # Een 'sudo' of 'pkexec' in je eigen Konsole of Instellingen (van root) maakt die niet onsluitbaar (U451).
+        # Ook als de sudo eerder in de lijst staat dan Konsole: één proces van jou is genoeg (U463).
+        if soort == "systeem":
+            taak.eigen = taak.eigen and p.eigen
+        elif taak.pids == [p.pid]:
+            taak.eigen = p.eigen
+        else:
+            taak.eigen = taak.eigen or p.eigen
         if (p.naam[:15] in BESCHERMD_KORT or p.pid == eigen_pid or soort == "systeem"
                 or BESCHERMDE_EENHEID.match(eenheid)):
             taak.beschermd = True
@@ -401,107 +384,6 @@ def sluit_script(pids: list[int]) -> str:
             "for (const w of workspace.windowList()) {\n"
             "    if (pids.has(w.pid)) { w.closeWindow(); }\n"
             "}\n") % json.dumps(sorted(pids))
-
-
-# ============================================================== opstarten ===
-
-@dataclass
-class Opstart:
-    bestand: str        # bv. discord.desktop
-    naam: str
-    icoon: str
-    aan: bool
-    van_systeem: bool   # staat in /etc/xdg/autostart (anders alleen bij jou)
-
-
-def config_thuis() -> Path:
-    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
-
-
-def systeem_autostart() -> list[Path]:
-    return [Path(p) / "autostart" for p in os.environ.get("XDG_CONFIG_DIRS", "/etc/xdg").split(":") if p]
-
-
-def opstart_lijst() -> list[Opstart]:
-    """Programma's die vanzelf starten als je inlogt (zoals 'Opstarten' in Taakbeheer van Windows)."""
-    systeem: dict[str, Path] = {}
-    for map_ in reversed(systeem_autostart()):
-        for pad in sorted(map_.glob("*.desktop")):
-            systeem[pad.name] = pad
-    eigen = {p.name: p for p in sorted((config_thuis() / "autostart").glob("*.desktop"))}
-    lijst = []
-    for bestand in sorted(set(systeem) | set(eigen)):
-        basis = lees_bureaublad(systeem[bestand]) if bestand in systeem else None
-        eigen_c = lees_bureaublad(eigen[bestand]) if bestand in eigen else None
-        c = eigen_c if eigen_c is not None and eigen_c["Desktop Entry"].get("Name") else (basis or eigen_c)
-        if c is None:
-            continue
-        s = c["Desktop Entry"]
-        bron = basis["Desktop Entry"] if basis is not None else s
-        if bron.get("NoDisplay", "false").lower() == "true":
-            continue  # onderdelen van het systeem zelf
-        alleen = [x for x in bron.get("OnlyShowIn", "").split(";") if x]
-        niet = [x for x in bron.get("NotShowIn", "").split(";") if x]
-        if (alleen and "KDE" not in alleen) or "KDE" in niet:
-            continue
-        verborgen = eigen_c is not None and eigen_c["Desktop Entry"].get("Hidden", "false").lower() == "true"
-        if basis is not None and basis["Desktop Entry"].get("Hidden", "false").lower() == "true" and eigen_c is None:
-            verborgen = True
-        lijst.append(Opstart(bestand, vertaald(s, "Name") or vertaald(bron, "Name") or bestand.removesuffix(".desktop"),
-                             s.get("Icon", "") or bron.get("Icon", ""), not verborgen, bestand in systeem))
-    return sorted(lijst, key=lambda x: x.naam.lower())
-
-
-ALLEEN_UIT = "[Desktop Entry]\nHidden=true\n"  # wat wij neerzetten om een systeem-programma uit te zetten
-
-
-def met_hidden(tekst: str, waarde: str) -> str:
-    """Zet alleen de regel Hidden= in [Desktop Entry]; de rest (ook commentaar en eigen Exec) blijft precies zo."""
-    regels = tekst.splitlines()
-    groep, invoeg = "", None
-    for i, regel in enumerate(regels):
-        kaal = regel.strip()
-        if kaal.startswith("[") and kaal.endswith("]"):
-            groep = kaal
-            if groep == "[Desktop Entry]":
-                invoeg = i + 1
-            continue
-        if groep == "[Desktop Entry]" and kaal.split("=", 1)[0].strip() == "Hidden":
-            regels[i] = f"Hidden={waarde}"
-            return "\n".join(regels) + "\n"
-    if invoeg is None:
-        return f"[Desktop Entry]\nHidden={waarde}\n" + tekst
-    regels.insert(invoeg, f"Hidden={waarde}")
-    return "\n".join(regels) + "\n"
-
-
-def schrijf_veilig(pad: Path, tekst: str) -> None:
-    """Eerst naar een tijdelijk bestand, dan in één keer op zijn plek: nooit een half bestand."""
-    tijdelijk = pad.with_name(f".{pad.name}.bugos-nieuw")
-    tijdelijk.write_text(tekst, encoding="utf-8")
-    os.replace(tijdelijk, pad)
-
-
-def zet_opstart(item: Opstart, aan: bool) -> None:
-    """Aan of uit, alleen voor jou (in ~/.config/autostart). Het origineel blijft heel, en een eigen
-    aangepaste versie (andere opdracht, extra opties) ook: we veranderen alleen 'Hidden'."""
-    map_ = config_thuis() / "autostart"
-    map_.mkdir(parents=True, exist_ok=True)
-    pad = map_ / item.bestand
-    try:
-        eigen = pad.read_text(encoding="utf-8")
-    except OSError:
-        eigen = None
-    if item.van_systeem and eigen is None:
-        if not aan:
-            schrijf_veilig(pad, ALLEEN_UIT)
-        return
-    if item.van_systeem and aan and eigen.strip() == ALLEEN_UIT.strip():
-        pad.unlink(missing_ok=True)  # alleen ons eigen 'uit'-briefje: weg ermee, dan geldt het origineel weer
-        return
-    if eigen is None:
-        return
-    schrijf_veilig(pad, met_hidden(eigen, "false" if aan else "true"))
 
 
 # ================================================================ maten ===

@@ -79,7 +79,11 @@ PlasmoidItem {
         activeFocusOnTab: true
         Accessible.name: "Start"
         Accessible.role: Accessible.Button
-        onClicked: root.expanded = !root.expanded
+        // Bij het indrukken sluit Plasma een open menu al (de focus gaat weg): onthoud hoe het was, anders gaat het bij
+        // het loslaten meteen weer open en kun je het met de knop nooit sluiten (U203).
+        property bool wasOpen: false
+        onPressed: wasOpen = root.expanded
+        onClicked: root.expanded = !wasOpen
         Keys.onReturnPressed: root.expanded = !root.expanded
         Keys.onEnterPressed: root.expanded = !root.expanded
         Keys.onSpacePressed: root.expanded = !root.expanded
@@ -101,6 +105,8 @@ PlasmoidItem {
 
     fullRepresentation: StartMenu {
         id: menu
+        schaal: Kirigami.Theme.defaultFont.pointSize > 0
+            ? Math.min(1.5, Math.max(1, Kirigami.Theme.defaultFont.pointSize / 10)) : 1
         Layout.preferredWidth: Kirigami.Units.gridUnit * 36
         Layout.preferredHeight: Kirigami.Units.gridUnit * 34
         Layout.minimumWidth: Kirigami.Units.gridUnit * 24

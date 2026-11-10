@@ -14,52 +14,177 @@
 . /usr/share/bugos/lib.sh
 
 CONF=/etc/bugos/updates.conf
+# De keuze staat óók in /var: dat delen alle versies. /etc heeft elke versie apart, dus na 'terug naar de vorige
+# versie' zag die oudere versie anders nog 'vanzelf' en zette de nieuwe meteen weer klaar (U300).
+KEUZE=/var/lib/bugos/updates.conf
+# Iedereen moet de keuze kunnen lezen (bugos-updatecheck, Instellingen), ook als de beheerder umask 077 heeft (U247).
+umask 022
 
 # BugOS regelt updates zelf, met twee diensten (zie build_files/build.sh):
 #   rpm-ostreed-automatic.timer  -> het systeem (BugOS zelf)
 #   bugos-update-apps.timer   -> de apps (Flatpak)
 TIMERS=(rpm-ostreed-automatic.timer bugos-update-apps.timer)
+# Apps die per gebruiker staan (flatpak --user, bijv. VS Code): de user-timer van Universal Blue (U117).
+GEBRUIKER_TIMER=flatpak-user-update.timer
+gebruiker_timer() {
+    [ -e "${BUGOS_SYSTEMD_USER:-/usr/lib/systemd/user}/$GEBRUIKER_TIMER" ] || return 0
+    systemctl --global "$1" "$GEBRUIKER_TIMER" >/dev/null 2>&1 || true
+}
+
+zet_keuze() {
+    # Eerst een nieuw bestand, dan op zijn plek: bij een volle schijf blijft de oude keuze staan (geen leeg bestand,
+    # dat als 'auto' gelezen werd), en we zeggen dat het niet lukte (U413).
+    mkdir -p /etc/bugos /var/lib/bugos
+    { echo "UPDATES=$1" >"$KEUZE.nieuw" && mv -f "$KEUZE.nieuw" "$KEUZE"; } 2>/dev/null || { rm -f "$KEUZE.nieuw"; return 1; }
+    { echo "UPDATES=$1" >"$CONF.nieuw" && mv -f "$CONF.nieuw" "$CONF"; } 2>/dev/null || rm -f "$CONF.nieuw"
+    return 0
+}
+
+# Bij 'terug' is het terugzetten al gebeurd: niet stoppen, wel zeggen dat updates nog vanzelf kunnen gaan (U423).
+# Op stdout en als laatste regel: Instellingen toont de laatste regel (U431).
+niet_bewaard_terug() {
+    # Vaste zinnen (te vertalen); de waarschuwing als laatste (U442). Het merkje zegt Instellingen dat het een
+    # waarschuwing is, geen groen 'gelukt' (U490).
+    echo bugos-niet-bewaard
+    [ "${1:-}" = herstart ] && t "Start de computer opnieuw op om terug te gaan." "Restart the computer to go back."
+    t "Teruggezet, maar let op: de keuze 'zelf updaten' kon niet bewaard worden (is je computer vol?). Zet 'Updates vanzelf' uit in Instellingen > Updates en meer, anders kan de nieuwe versie terugkomen." \
+        "Rolled back, but note: the choice to update yourself could not be saved (is your computer full?). Turn off 'Automatic updates' in Settings > Updates and more, or the new version may come back."
+}
+
+niet_bewaard() {
+    t "Dat lukte niet: de keuze kon niet bewaard worden (is je computer vol?)." \
+        "That did not work: the choice could not be saved (is your computer full?)." >&2
+    exit 1
+}
+
+lees_keuze() {
+    local UPDATES=auto bestand="$CONF"
+    [ -f "$KEUZE" ] && bestand="$KEUZE"
+    # shellcheck source=/dev/null
+    [ -f "$bestand" ] && . "$bestand"
+    echo "${UPDATES:-auto}"
+}
 
 als_beheerder() {
     if [ "$(id -u)" -ne 0 ]; then
-        exec pkexec "$0" "$@"
+        # Altijd het echte programma: niet een gelijknamig bestand ergens anders op je PATH (U246).
+        exec pkexec /usr/bin/bugos-updates "$@"
     fi
 }
 
 case "${1:-status}" in
 auto)
     als_beheerder "$@"
-    mkdir -p /etc/bugos
-    echo "UPDATES=auto" >"$CONF"
+    zet_keuze auto || niet_bewaard
+    # Waren de nieuwe standaard-apps overgeslagen omdat je updates zelf deed? Dan bij de volgende start alsnog (U320).
+    if [ -f /var/lib/bugos/standaard-apps-overgeslagen ]; then
+        rm -f /var/lib/bugos/standaard-apps-overgeslagen /var/lib/bugos/standaard-apps-2
+    fi
     systemctl enable --now "${TIMERS[@]}"
+    gebruiker_timer unmask
     t "Updates gaan nu vanzelf." "Updates are now automatic."
     ;;
 hand)
     als_beheerder "$@"
-    mkdir -p /etc/bugos
-    echo "UPDATES=hand" >"$CONF"
+    zet_keuze hand || niet_bewaard
     systemctl disable --now "${TIMERS[@]}"
-    # De BugOS Winkel (Discover) blijft melden als er updates zijn.
-    t "Updates doe je nu zelf via de BugOS Winkel." "You now do updates yourself via the BugOS Store."
+    gebruiker_timer mask   # (gaat in bij de volgende keer inloggen)
+    # bugos-updatecheck meldt een nieuwe versie; bijwerken gaat via die melding of Instellingen > Updates en meer (U238).
+    t "Updates doe je nu zelf: BugOS meldt het als er een nieuwe versie is (Instellingen > Updates en meer)." \
+        "You now do updates yourself: BugOS tells you when a new version is available (Settings > Updates and more)."
     ;;
 nu)
     als_beheerder "$@"
-    rpm-ostree upgrade
+    # Lukt het systeem niet, dan toch de apps bijwerken, maar wel eerlijk "mislukt" teruggeven
+    # (bugos-updatecheck en Instellingen zeggen anders "klaar").
+    mislukt=0
+    # Stond er vóór deze update al een nieuwere versie klaar? (Dan is "No upgrade available" geen "al bij".)
+    klaar_voor="$(rpm-ostree status --json 2>/dev/null | jq -r '(.deployments[] | select(.booted) | .timestamp) as $nu
+        | .deployments[0] | (.booted == false and (.timestamp // 0) > ($nu // 0))' 2>/dev/null)"
+    rpm-ostree upgrade || mislukt=1
+    # Koos je eerder 'terug' en heb je nog niet opnieuw opgestart (er staat nog een oudere versie bovenaan)?
+    # Met 'Nu updaten' kies je weer voor nieuw: dat 'terug' ongedaan maken, anders ga je na de herstart toch terug.
+    # (Pas ná een gelukte update: lukt de update niet, bijv. zonder internet, dan blijft je 'terug' gewoon staan.)
+    if [ "$mislukt" = 0 ] && rpm-ostree status --json 2>/dev/null | jq -e '(.deployments[] | select(.booted)
+        | .timestamp) as $nu | .deployments[0] | (.booted == false and (.timestamp // 0) < ($nu // 0))' >/dev/null 2>&1; then
+        rpm-ostree rollback || mislukt=1
+    fi
     flatpak update --system --noninteractive --assumeyes || true
+    # Stond er al een nieuwere versie klaar (bijv. vannacht vanzelf opgehaald)? Dan zegt rpm-ostree
+    # "No upgrade available", maar moet je wel opnieuw opstarten. Dat geven we door aan Instellingen.
+    if [ "$mislukt" = 0 ] && [ "$klaar_voor" = true ]; then
+        echo "bugos-update-klaar"
+    fi
+    exit "$mislukt"
     ;;
 terug)
     als_beheerder "$@"
-    rpm-ostree rollback &&
+    STATUS="$(rpm-ostree status --json 2>/dev/null)"
+    # Staat er al een oudere versie bovenaan (je koos al 'terug')? Nog een keer zou weer vooruit gaan.
+    if echo "$STATUS" | jq -e '(.deployments[] | select(.booted) | .timestamp) as $nu
+        | .deployments[0] | (.booted == false and (.timestamp // 0) < ($nu // 0))' >/dev/null 2>&1; then
+        t "Dat staat al klaar. Start de computer opnieuw op om terug te gaan." \
+            "That is already set. Restart the computer to go back."
+        exit 0
+    fi
+    # Koos je bij het opstarten (Shift/Esc) de oudere versie, en staat de nieuwere nog als vaste keuze bovenaan? Dan maakt
+    # rollback déze (oudere) versie vast: precies wat 'terug' moet doen (U379).
+    VASTZETTEN=0
+    if echo "$STATUS" | jq -e '(.deployments[] | select(.booted) | .timestamp) as $nu
+        | [.deployments[] | select((.staged // false) | not)][0]
+        | (.booted == false and (.timestamp // 0) > ($nu // 0))' >/dev/null 2>&1; then
+        VASTZETTEN=1   # (niet een update die alleen klaarstaat: die ruimen we hieronder op)
+    fi
+    # Is er geen oudere versie dan deze (net geïnstalleerd, of je ging al terug en startte opnieuw op)?
+    # Dan zou rpm-ostree juist naar de nieuwere gaan: niet doen, en dat zeggen (code 3).
+    if [ "$VASTZETTEN" = 0 ] && [ -n "$STATUS" ] && ! echo "$STATUS" | jq -e '(.deployments[] | select(.booted) | .timestamp) as $nu
+        | any(.deployments[]; .booted == false and (.timestamp // 0) < ($nu // 0))' >/dev/null 2>&1; then
+        t "Er is geen oudere versie om naar terug te gaan." "There is no older version to go back to."
+        exit 3
+    fi
+    # Staat er een update klaar voor de volgende keer opstarten, dan weigert rpm-ostree terug te gaan:
+    # die update eerst weghalen (hij komt later gewoon weer).
+    # (Ook bij VASTZETTEN: een update die vanzelf weer klaarstond, eerst weg; dan maakt rollback deze versie vast) (U392)
+    if echo "$STATUS" | jq -e '.deployments[0] | (.booted == false and (.staged // false))' >/dev/null 2>&1; then
+        rpm-ostree cleanup -p || exit 1
+    fi
+    rpm-ostree rollback || exit 1
+    # Gaan updates vanzelf, dan zou BugOS de nieuwe versie (waar je net vanaf wilde) meteen weer klaarzetten.
+    # Daarom zetten we ze uit, en zeggen dat.
+    MODUS="$(lees_keuze)"
+    if [ "$MODUS" = auto ] && [ "$VASTZETTEN" = 1 ]; then
+        BEWAARD=1
+        zet_keuze hand || BEWAARD=0
+        systemctl disable --now "${TIMERS[@]}"
+        gebruiker_timer mask
+        # Je draait deze versie al: niet 'start opnieuw op' zeggen (U393).
+        if [ "$BEWAARD" != 1 ]; then niet_bewaard_terug; else t "Klaar. Deze versie blijft nu ook na opnieuw opstarten. Updates gaan niet meer vanzelf, anders komt de nieuwe versie terug; zet ze weer aan in Instellingen als het mag." \
+            "Done. This version now stays, also after a restart. Updates are no longer automatic, or the new version would come back; turn them on again in Settings when it is fine."; fi
+        echo bugos-blijft
+    elif [ "$MODUS" = auto ]; then
+        BEWAARD=1
+        zet_keuze hand || BEWAARD=0   # ook in /var, zodat de oudere versie het ziet (U300)
+        systemctl disable --now "${TIMERS[@]}"
+        gebruiker_timer mask
+        if [ "$BEWAARD" != 1 ]; then niet_bewaard_terug herstart; else t "Klaar. Start de computer opnieuw op om terug te gaan. Updates gaan nu niet meer vanzelf, anders komt de nieuwe versie terug; zet ze weer aan in Instellingen als het mag." \
+            "Done. Restart the computer to go back. Updates are no longer automatic, or the new version would come back; turn them on again in Settings when it is fine."; fi
+    elif [ "$VASTZETTEN" = 1 ]; then
+        t "Klaar. Deze versie blijft nu ook na opnieuw opstarten." "Done. This version now stays, also after a restart."
+        echo bugos-blijft
+    else
         t "Klaar. Start de computer opnieuw op om terug te gaan." "Done. Restart the computer to go back."
+    fi
     ;;
 status)
-    MODUS=auto
-    # shellcheck source=/dev/null
-    [ -f "$CONF" ] && . "$CONF" && MODUS="${UPDATES:-auto}"
-    echo "$MODUS"
+    lees_keuze
+    ;;
+mag-vanzelf)
+    # Voor de update-diensten (ExecCondition): alleen bij 'vanzelf' bijwerken. Zo is deze ene keuze de baas,
+    # wat er na een update of 'terug' ook aan timers aan staat (U300, U301).
+    [ "$(lees_keuze)" = auto ]
     ;;
 *)
-    echo "Gebruik: bugos-updates auto|hand|status|nu|terug" >&2
+    echo "Gebruik: bugos-updates auto|hand|status|nu|terug|mag-vanzelf" >&2
     exit 2
     ;;
 esac

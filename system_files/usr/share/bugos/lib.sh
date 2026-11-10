@@ -3,7 +3,15 @@
 
 # Taal van de gebruiker als twee letters, bijv. nl, en, de, tr.
 bugos_taal() {
-    local lang="${LC_ALL:-${LC_MESSAGES:-${LANG:-en}}}"
+    local lang="${LC_ALL:-${LC_MESSAGES:-${LANG:-en}}}" eerste
+    # De taal die je in KDE kiest staat in LANGUAGE (bijv. "nl:en_US"): die gaat voor, net als bij
+    # alle andere programma's. Behalve bij taal C: dan wil iemand bewust Engels.
+    eerste="${LANGUAGE#:}"
+    eerste="${eerste%%:*}"
+    case "$lang" in
+    C | C.* | POSIX) ;;
+    *) [ -n "$eerste" ] && lang="$eerste" ;;
+    esac
     lang="${lang%%.*}"
     lang="${lang%%_*}"
     echo "${lang,,}"
@@ -31,7 +39,8 @@ t() {
 
 # Kleine melding rechtsonder in beeld.
 melding() {
-    notify-send --app-name=BugOS --icon=bugos-logo "$1" "${2:-}" 2>/dev/null ||
+    # Met een desktop-entry: anders zet KDE het onder 'overig', en dat komt niet in de meldingengeschiedenis (U323).
+    notify-send --app-name=BugOS --icon=bugos-logo --hint=string:desktop-entry:bugos-settings "$1" "${2:-}" 2>/dev/null ||
         echo "$1: ${2:-}"
 }
 
@@ -83,24 +92,37 @@ niet_storen_uit() {
 }
 # Print "aan" als niet storen aanstaat (er staat een tot-tijd die nog niet voorbij is), anders "uit".
 niet_storen_status() {
-    local tot dag vandaag j m d
-    tot="$(kreadconfig6 --file plasmanotifyrc --group DoNotDisturb --key Until 2>/dev/null)"
+    # De hele tijd vergelijken, niet alleen de dag: "1 uur niet storen" van vanochtend is vanavond voorbij (U071).
+    # KDE schrijft "j,m,d,u,min,sec[.ms][,tijdzone]" of een ISO-tijd.
+    niet_storen_tot_status "$(kreadconfig6 --file plasmanotifyrc --group DoNotDisturb --key Until 2>/dev/null)"
+}
+# Zelfde, voor een 'tot'-waarde die je al hebt (bijv. bewaard door de game-modus).
+niet_storen_tot_status() {
+    local tot="$1" tot_s nu_s j m d u mi s zone
     if [ -z "$tot" ]; then
         echo uit
         return
     fi
-    vandaag="$(date +%Y%m%d)"
     case "$tot" in
     *,*)
-        IFS=, read -r j m d _ <<<"$tot"
-        dag="$(printf '%04d%02d%02d' "$j" "$m" "$d" 2>/dev/null)"
+        IFS=, read -r j m d u mi s zone _ <<<"$tot"
+        s="${s%%.*}"
+        tot="$(printf '%04d-%02d-%02d %02d:%02d:%02d' "$j" "$m" "$d" "${u:-0}" "${mi:-0}" "${s:-0}" 2>/dev/null)" || tot=""
+        # Een lege TZ betekent UTC: alleen zetten als KDE er een tijdzone bij schreef.
+        if [ -z "$tot" ]; then
+            tot_s=""
+        elif [ -n "$zone" ]; then
+            tot_s="$(TZ="$zone" date -d "$tot" +%s 2>/dev/null)"
+        else
+            tot_s="$(date -d "$tot" +%s 2>/dev/null)"
+        fi
         ;;
     *)
-        dag="${tot:0:10}"
-        dag="${dag//-/}"
+        tot_s="$(date -d "$tot" +%s 2>/dev/null)"
         ;;
     esac
-    if [ -n "$dag" ] && [ "$dag" -ge "$vandaag" ] 2>/dev/null; then echo aan; else echo uit; fi
+    nu_s="$(date +%s)"
+    if [ -n "$tot_s" ] && [ "$tot_s" -gt "$nu_s" ] 2>/dev/null; then echo aan; else echo uit; fi
 }
 
 # Plek waar BugOS onthoudt wat de gebruiker heeft gekozen.

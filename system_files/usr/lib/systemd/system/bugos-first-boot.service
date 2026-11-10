@@ -1,12 +1,14 @@
 [Unit]
 Description=BugOS: set up the default apps after installing
-Wants=network-online.target
-After=network-online.target
-ConditionPathExists=!/var/lib/bugos/eerste-start-klaar
+# Geen Wants/After network-online: dan wachtte elke keer opstarten (ook lang na de eerste keer) op het
+# netwerk. Het script wacht zelf even op internet (U312).
+ConditionPathExists=!/var/lib/bugos/standaard-apps-2
 ConditionKernelCommandLine=!rd.live.image
 
 [Service]
-Type=oneshot
+# exec, niet oneshot: dan is het opstarten klaar zodra dit begint, en wacht de computer niet op
+# het downloaden van de apps (of, zonder internet, op het steeds opnieuw proberen).
+Type=exec
 ExecStart=/usr/bin/bugos-first-boot
 Restart=on-failure
 RestartSec=5min

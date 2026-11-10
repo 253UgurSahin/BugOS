@@ -13,6 +13,10 @@ import QtQuick.Layouts
 
 Rectangle {
     id: menu
+    // 'Grote letters' (KDE: 10 punten gewoon, 12 groot): de letters hier groeien mee (U067).
+    // In Plasma zet main.qml dit via Kirigami.Theme (dat verandert meteen mee, Qt.application.font niet) (U084).
+    property real schaal: Qt.application.font.pointSize > 0
+        ? Math.min(1.5, Math.max(1, Qt.application.font.pointSize / 10)) : 1
 
     // Gegevens van bugos-start-data (apps, favorieten, recent, gebruiker).
     property var gegevens: ({ apps: [], favorieten: [], recent: [], gebruiker: { naam: "" } })
@@ -43,10 +47,15 @@ Rectangle {
     readonly property string display: o.kopLetter
 
     readonly property bool alleApps: stapel.currentIndex === 1
-    property string zoekTekst: zoekveld.text.trim().toLowerCase()
+    property string zoekTekst: zoeksleutel(zoekveld.text.trim())
     property string datumTekst: datum()
 
     function tr(nl, en) { return nederlands ? nl : en }
+    // Kleine letters zonder accenten: 'izleyici' vindt 'İzleyici', 'cafe' vindt 'café' (zoals bugos-start-data) (U268)
+    // Precies dezelfde regel als bugos-start-data (U280): NFKD, kleine letters, accenten weg, ß wordt ss, ς wordt σ
+    function zoeksleutel(t) {
+        return String(t).normalize("NFKD").toLowerCase().replace(/[\u0300-\u036f]/g, "").replace(/ß/g, "ss").replace(/ς/g, "σ")
+    }
     function groet() {
         const uur = new Date().getHours()
         if (uur < 6) return tr("Goedenacht", "Good night")
@@ -62,10 +71,24 @@ Rectangle {
         return new Date().toLocaleDateString(Qt.locale(nederlands ? "nl_NL" : Qt.locale().name), "dddd d MMMM")
     }
     // Zoeken vindt apps én de pagina's van Instellingen (soort "instelling").
+    // Beste eerst (Enter opent de eerste): de naam begint ermee, dan een woord in de naam, dan ergens in de naam,
+    // dan alleen in de zoekwoorden. Bij gelijke stand eerst BugOS zelf en de pagina's van Instellingen (U098).
+    function score(a, woorden) {
+        const naam = zoeksleutel(a.naam).replace(/-/g, "")   // "Wi-Fi" telt als "wifi"
+        const eerste = woorden[0].replace(/-/g, "")
+        let s = naam.indexOf(zoekTekst.replace(/-/g, "")) === 0 ? 0
+            : naam.split(/[\s\-()]+/).some(d => d.indexOf(eerste) === 0) ? 1
+            : naam.indexOf(eerste) >= 0 ? 2 : 3
+        const eigen = a.soort === "instelling" || String(a.id || "").indexOf("bugos-") === 0
+        return s * 2 + (eigen ? 0 : 1)
+    }
     function gevonden() {
         if (zoekTekst === "") return []
         const woorden = zoekTekst.split(/\s+/)
-        return gegevens.apps.filter(a => woorden.every(w => (a.zoek || a.naam.toLowerCase()).indexOf(w) >= 0))
+        return gegevens.apps.filter(a => woorden.every(w => (a.zoek || zoeksleutel(a.naam)).indexOf(w) >= 0))
+            .map((a, i) => ({ a: a, s: score(a, woorden), i: i }))
+            .sort((x, y) => x.s - y.s || x.i - y.i)
+            .map(x => x.a)
     }
     // "Alle apps" laat alleen echte programma's zien.
     function alleAppsLijst() {
@@ -74,6 +97,9 @@ Rectangle {
     }
     // Typ je verder terwijl de lijst de focus heeft, dan gaat de tekst gewoon in het zoekveld.
     function naarZoekveld(e) {
+        // Sneltoetsen (Ctrl+A, Alt+…) zijn geen zoektekst (U223)
+        if (e.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))
+            return
         if (e.key === Qt.Key_Backspace) {
             zoekveld.forceActiveFocus()
             zoekveld.text = zoekveld.text.slice(0, -1)
@@ -101,6 +127,8 @@ Rectangle {
     SystemPalette { id: palette; colorGroup: SystemPalette.Active }
 
     Keys.onEscapePressed: sluiten()
+    // Typen zoekt altijd, waar de focus ook staat (zoals het startmenu van Windows) (U205).
+    Keys.onPressed: event => menu.naarZoekveld(event)
 
     ColumnLayout {
         anchors.fill: parent
@@ -114,7 +142,7 @@ Rectangle {
             Label {
                 text: menu.groet() + (menu.voornaam() ? ", " + menu.voornaam() : "")
                 font.family: menu.display
-                font.pixelSize: o.letterHeld
+                font.pixelSize: Math.round(o.letterHeld * menu.schaal)
                 font.weight: Font.DemiBold
                 color: menu.tekst
                 Layout.fillWidth: true
@@ -123,7 +151,7 @@ Rectangle {
             Label {
                 text: menu.datumTekst
                 color: menu.tekst2
-                font.pixelSize: 13
+                font.pixelSize: Math.round(13 * menu.schaal)
             }
         }
 
@@ -133,7 +161,7 @@ Rectangle {
             objectName: "zoekveld"
             Layout.fillWidth: true
             Layout.preferredHeight: 50
-            font.pixelSize: 16
+            font.pixelSize: Math.round(16 * menu.schaal)
             leftPadding: 48
             color: menu.tekst
             placeholderText: menu.tr("Zoek een app of instelling…", "Search for an app or setting…")
@@ -141,6 +169,8 @@ Rectangle {
             focus: true
             Accessible.name: placeholderText
             onAccepted: menu.openEerste()
+            // Terug in het zoekveld: de markering weer op de eerste, die Enter opent (U349)
+            onActiveFocusChanged: if (activeFocus && zoekLijst.count > 0) zoekLijst.currentIndex = 0
             Keys.onDownPressed: event => {
                 if (zoekLijst.visible && zoekLijst.count > 0) { zoekLijst.currentIndex = 0; zoekLijst.forceActiveFocus() }
                 else event.accepted = false
@@ -187,7 +217,7 @@ Rectangle {
                 visible: zoekLijst.count === 0
                 text: menu.tr("Niks gevonden. Probeer een ander woord.", "Nothing found. Try another word.")
                 color: menu.tekst2
-                font.pixelSize: 15
+                font.pixelSize: Math.round(15 * menu.schaal)
             }
         }
 
@@ -217,7 +247,8 @@ Rectangle {
                         PilKnop {
                             tekst: menu.tr("Alle apps", "All apps")
                             pijl: "›"
-                            onGeklikt: stapel.currentIndex = 1
+                            // Daarna de focus op de lijst (niet op deze knop, die nu niet meer te zien is) (U204).
+                            onGeklikt: { stapel.currentIndex = 1; alleLijst.currentIndex = 0; alleLijst.forceActiveFocus() }
                         }
                     }
                     GridLayout {
@@ -265,7 +296,7 @@ Rectangle {
                         tekst: menu.tr("Terug", "Back")
                         pijl: "‹"
                         pijlVoor: true
-                        onGeklikt: stapel.currentIndex = 0
+                        onGeklikt: { stapel.currentIndex = 0; zoekveld.forceActiveFocus() }   // (U204)
                     }
                     Kopje { text: menu.tr("Alle apps", "All apps"); Layout.fillWidth: true; Layout.leftMargin: 6 }
                 }
@@ -283,7 +314,7 @@ Rectangle {
                         required property string section
                         text: section.toUpperCase()
                         color: menu.tekst2
-                        font.pixelSize: 12
+                        font.pixelSize: Math.round(12 * menu.schaal)
                         font.weight: Font.DemiBold
                         font.letterSpacing: 0.8
                         topPadding: 12
@@ -320,7 +351,7 @@ Rectangle {
                     color: "white"
                     font.family: menu.display
                     font.weight: Font.DemiBold
-                    font.pixelSize: 17
+                    font.pixelSize: Math.round(17 * menu.schaal)
                 }
                 // Eigen foto (als die er is): in een rond venstertje
                 Item {
@@ -330,7 +361,9 @@ Rectangle {
                     Image {
                         id: fotoBeeld
                         anchors.fill: parent
-                        source: avatar.foto === "" ? "" : "file://" + avatar.foto
+                        // De tijd erachter: een nieuwe foto onder dezelfde naam wordt dan echt opnieuw geladen (U112).
+                        source: avatar.foto === "" ? "" : "file://" + avatar.foto + "?" + (menu.gegevens.gebruiker.foto_tijd || 0)
+                        cache: false
                         fillMode: Image.PreserveAspectCrop
                         sourceSize.width: 76
                         sourceSize.height: 76
@@ -342,15 +375,15 @@ Rectangle {
             Label {
                 text: (menu.gegevens.gebruiker && menu.gegevens.gebruiker.naam) || ""
                 color: menu.tekst
-                font.pixelSize: 14
+                font.pixelSize: Math.round(14 * menu.schaal)
                 font.weight: Font.Medium
                 Layout.fillWidth: true
                 elide: Text.ElideRight
             }
             OnderKnop { icoon: "configure"; tekst: menu.tr("Instellingen", "Settings"); onGeklikt: { menu.start("/usr/share/applications/bugos-settings.desktop"); menu.sluiten() } }
             OnderKnop { icoon: "system-lock-screen"; tekst: menu.tr("Vergrendelen", "Lock"); onGeklikt: { menu.aanUit("slot"); menu.sluiten() } }
-            OnderKnop { icoon: "system-log-out"; tekst: menu.tr("Uitloggen", "Log out"); onGeklikt: { menu.aanUit("uitloggen"); menu.sluiten() } }
-            OnderKnop { icoon: "system-reboot"; tekst: menu.tr("Herstarten", "Restart"); onGeklikt: { menu.aanUit("herstarten"); menu.sluiten() } }
+            OnderKnop { icoon: "system-log-out"; tekst: menu.tr("Afmelden", "Log out"); onGeklikt: { menu.aanUit("uitloggen"); menu.sluiten() } }
+            OnderKnop { icoon: "system-reboot"; tekst: menu.tr("Opnieuw opstarten", "Restart"); onGeklikt: { menu.aanUit("herstarten"); menu.sluiten() } }
             OnderKnop { icoon: "system-shutdown"; tekst: menu.tr("Uitzetten", "Shut down"); rood: true; onGeklikt: { menu.aanUit("uitzetten"); menu.sluiten() } }
         }
     }
@@ -359,7 +392,7 @@ Rectangle {
 
     component Kopje: Label {
         color: menu.tekst
-        font.pixelSize: 15
+        font.pixelSize: Math.round(15 * menu.schaal)
         font.weight: Font.DemiBold
     }
 
@@ -379,14 +412,16 @@ Rectangle {
         background: Rectangle {
             radius: menu.o.rKnop
             color: pil.hovered || pil.activeFocus ? menu.zweef : menu.vlak
+            border.width: pil.activeFocus ? 2 : 0   // ook met het toetsenbord goed te zien (U135)
+            border.color: menu.rood
         }
         contentItem: Row {
             id: rij
             spacing: 6
             leftPadding: 12
-            Label { visible: pil.pijlVoor; text: pil.pijl; color: menu.tekst; font.pixelSize: 15; anchors.verticalCenter: parent.verticalCenter }
-            Label { text: pil.tekst; color: menu.tekst; font.pixelSize: 13; font.weight: Font.Medium; anchors.verticalCenter: parent.verticalCenter }
-            Label { visible: !pil.pijlVoor; text: pil.pijl; color: menu.tekst; font.pixelSize: 15; anchors.verticalCenter: parent.verticalCenter }
+            Label { visible: pil.pijlVoor; text: pil.pijl; color: menu.tekst; font.pixelSize: Math.round(15 * menu.schaal); anchors.verticalCenter: parent.verticalCenter }
+            Label { text: pil.tekst; color: menu.tekst; font.pixelSize: Math.round(13 * menu.schaal); font.weight: Font.Medium; anchors.verticalCenter: parent.verticalCenter }
+            Label { visible: !pil.pijlVoor; text: pil.pijl; color: menu.tekst; font.pixelSize: Math.round(15 * menu.schaal); anchors.verticalCenter: parent.verticalCenter }
         }
     }
 
@@ -402,6 +437,8 @@ Rectangle {
         background: Rectangle {
             radius: menu.o.rKnop
             color: tegel.hovered || tegel.activeFocus ? menu.zweef : "transparent"
+            border.width: tegel.activeFocus ? 2 : 0   // ook met het toetsenbord goed te zien (U135)
+            border.color: menu.rood
         }
         contentItem: ColumnLayout {
             spacing: 8
@@ -423,7 +460,7 @@ Rectangle {
                 maximumLineCount: 2
                 elide: Text.ElideRight
                 color: menu.tekst
-                font.pixelSize: 13
+                font.pixelSize: Math.round(13 * menu.schaal)
             }
         }
     }
@@ -438,9 +475,16 @@ Rectangle {
         onClicked: { menu.start(app.pad); menu.sluiten() }
         Keys.onReturnPressed: clicked()
         Keys.onEnterPressed: clicked()
+        // Met Tab naar een regel: dan wordt die ook de gekozen regel, zodat wat oplicht ook is wat Enter opent (U149).
+        onActiveFocusChanged: if (activeFocus && ListView.view) {
+            const i = ListView.view.indexAt(x + 1, y + 1)
+            if (i >= 0) ListView.view.currentIndex = i
+        }
         background: Rectangle {
             radius: menu.o.rKnop
-            color: regel.hovered || regel.gemarkeerd ? menu.zweef : "transparent"
+            color: regel.hovered || regel.gemarkeerd || regel.activeFocus ? menu.zweef : "transparent"
+            border.width: regel.activeFocus ? 2 : 0
+            border.color: menu.rood
         }
         contentItem: RowLayout {
             spacing: 12
@@ -454,12 +498,12 @@ Rectangle {
             ColumnLayout {
                 spacing: 0
                 Layout.fillWidth: true
-                Label { text: regel.app.naam; color: menu.tekst; font.pixelSize: 14; font.weight: Font.Medium; elide: Text.ElideRight; Layout.fillWidth: true }
+                Label { text: regel.app.naam; color: menu.tekst; font.pixelSize: Math.round(14 * menu.schaal); font.weight: Font.Medium; elide: Text.ElideRight; Layout.fillWidth: true }
                 Label {
                     text: regel.app.uitleg || ""
                     visible: text !== ""
                     color: menu.tekst2
-                    font.pixelSize: 12
+                    font.pixelSize: Math.round(12 * menu.schaal)
                     elide: Text.ElideRight
                     Layout.fillWidth: true
                 }
@@ -478,7 +522,9 @@ Rectangle {
         Keys.onEnterPressed: clicked()
         background: Rectangle {
             radius: menu.o.rKnop
-            color: bregel.hovered ? menu.zweef : "transparent"
+            color: bregel.hovered || bregel.activeFocus ? menu.zweef : "transparent"   // ook zichtbaar met het toetsenbord
+            border.width: bregel.activeFocus ? 2 : 0   // ook met het toetsenbord goed te zien (U135)
+            border.color: menu.rood
         }
         contentItem: RowLayout {
             spacing: 10
@@ -496,8 +542,8 @@ Rectangle {
             ColumnLayout {
                 spacing: 0
                 Layout.fillWidth: true
-                Label { text: bregel.bestand.naam; color: menu.tekst; font.pixelSize: 13; elide: Text.ElideMiddle; Layout.fillWidth: true }
-                Label { text: bregel.bestand.map; color: menu.tekst2; font.pixelSize: 12; elide: Text.ElideMiddle; Layout.fillWidth: true }
+                Label { text: bregel.bestand.naam; color: menu.tekst; font.pixelSize: Math.round(13 * menu.schaal); elide: Text.ElideMiddle; Layout.fillWidth: true }
+                Label { text: bregel.bestand.map; color: menu.tekst2; font.pixelSize: Math.round(12 * menu.schaal); elide: Text.ElideMiddle; Layout.fillWidth: true }
             }
         }
     }
@@ -520,6 +566,8 @@ Rectangle {
         background: Rectangle {
             radius: 20
             color: knop.hovered || knop.activeFocus ? (knop.rood ? menu.rood : menu.zweef) : menu.vlak
+            border.width: knop.activeFocus ? 2 : 0   // ook met het toetsenbord goed te zien (U135)
+            border.color: menu.rood
         }
         contentItem: Item {
             Loader {

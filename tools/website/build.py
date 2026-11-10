@@ -10,6 +10,8 @@ Gebruik: python3 tools/website/build.py
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import re
 import sys
 from pathlib import Path
@@ -72,10 +74,26 @@ def opbouw() -> str:
             f'{merk_variabel("opbouw")}{hulp}{maten}{merkers}</svg>')
 
 
+def csp(pagina: str) -> str:
+    """De Content-Security-Policy: alleen onze eigen scripts (op hun vingerafdruk), stijlen, plaatjes en
+    letters van de site zelf, en verder niets. De vingerafdrukken rekenen we hier uit, zodat ze altijd
+    kloppen met de scripts in de pagina."""
+    scripts = re.findall(r"<script>(.*?)</script>", pagina, flags=re.S)
+    assert scripts, "geen scripts gevonden"
+    hashes = " ".join("'sha256-" + base64.b64encode(hashlib.sha256(s.encode("utf-8")).digest()).decode() + "'"
+                      for s in scripts)
+    regels = ["default-src 'none'", f"script-src {hashes}",
+              "style-src 'self' 'unsafe-inline'",  # de pagina heeft style="..." op een paar plekken
+              "img-src 'self' data:", "font-src 'self'",
+              "base-uri 'none'", "form-action 'none'", "object-src 'none'"]
+    return f'<meta http-equiv="Content-Security-Policy" content="{"; ".join(regels)}">'
+
+
 def main() -> int:
     bron = (HIER / "page.html").read_text(encoding="utf-8")
     uit = re.sub(r"\{\{MERK:([a-z]+)\}\}", lambda m: merk_svg(m.group(1)), bron)
     uit = uit.replace("{{OPBOUW}}", opbouw())
+    uit = uit.replace("{{CSP}}", csp(uit))
     assert "{{" not in uit, "er staat nog een lege plek in de pagina"
     (ROOT / "website" / "index.html").write_text(uit, encoding="utf-8")
     print("website/index.html gebouwd")

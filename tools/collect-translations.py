@@ -19,7 +19,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BRONNEN = ROOT / "system_files" / "usr"
-DOEL = BRONNEN / "share" / "bugos" / "vertalingen"
+DOEL = BRONNEN / "share" / "bugos" / "translations"  # hier zoeken de apps (bugos_base.VERTALINGEN)
+
+
+OVERGESLAGEN = [0]  # t(..., f"...") met een stukje dat verandert: dat kan (nog) niet vertaald worden
 
 
 def uit_python(pad: Path) -> set[str]:
@@ -29,10 +32,12 @@ def uit_python(pad: Path) -> set[str]:
     except (SyntaxError, UnicodeDecodeError):
         return teksten
     for knoop in ast.walk(boom):
-        if (isinstance(knoop, ast.Call) and isinstance(knoop.func, ast.Name) and knoop.func.id == "t"
-                and len(knoop.args) == 2 and isinstance(knoop.args[1], ast.Constant)
-                and isinstance(knoop.args[1].value, str)):
-            teksten.add(knoop.args[1].value)
+        if isinstance(knoop, ast.Call) and isinstance(knoop.func, ast.Name) and knoop.func.id == "t" \
+                and len(knoop.args) == 2:
+            if isinstance(knoop.args[1], ast.Constant) and isinstance(knoop.args[1].value, str):
+                teksten.add(knoop.args[1].value)
+            elif isinstance(knoop.args[1], ast.JoinedStr):
+                OVERGESLAGEN[0] += 1
     return teksten
 
 
@@ -55,7 +60,7 @@ def main() -> int:
         elif pad.suffix == ".sh" or kop.startswith(b"#!/usr/bin/bash"):
             teksten |= uit_bash(pad)
 
-    naam = (sys.argv[1] if len(sys.argv) > 1 else "sjabloon") + ".json"
+    naam = (sys.argv[1] if len(sys.argv) > 1 else "template") + ".json"
     bestand = DOEL / naam
     oud = {}
     if bestand.exists():
@@ -65,6 +70,9 @@ def main() -> int:
     bestand.write_text(json.dumps(nieuw, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     klaar = sum(1 for v in nieuw.values() if v)
     print(f"{bestand.relative_to(ROOT)}: {len(nieuw)} teksten, {klaar} vertaald")
+    if OVERGESLAGEN[0]:
+        print(f"Let op: {OVERGESLAGEN[0]} teksten met een f-string (t(..., f\"...\")) kunnen nog niet vertaald worden; "
+              "zie docs/TRANSLATING.md.")
     return 0
 
 

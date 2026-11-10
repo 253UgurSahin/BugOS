@@ -34,5 +34,33 @@ nep wineboot 'mkdir -p "$WINEPREFIX"; exit 0'
 draai "$RAAR" >/dev/null
 klopt 'grep -qF "spel\\nieuw.exe" "$TMP/dialogen"' "rare naam (met \\n erin): staat precies zo in de melding, geen nieuwe regel"
 
+# U251: een naam met opmaak (<b>, <img>) wordt niet als opmaak gelezen.
+OPMAAK="$TMP/<h1>Gratis.exe"
+touch "$OPMAAK"
+: >"$TMP/dialogen"
+draai "$OPMAAK" >/dev/null
+klopt '! grep -q "<h1>" "$TMP/dialogen" && grep -q "‹h1›Gratis.exe" "$TMP/dialogen"' "U251: een naam met <opmaak> staat er als gewone tekst"
+
+# U082: Annuleren in een installatie is geen "werkt niet op BugOS".
+touch "$TMP/setup.msi" "$TMP/MijnSpel-setup.exe" "$TMP/spel.exe"
+nep wine 'exit 1602'
+: >"$TMP/dialogen"
+code="$(draai "$TMP/setup.msi")"
+klopt '[ "$code" = 0 ] && ! grep -q "werkt niet" "$TMP/dialogen"' "U082: msiexec Annuleren (1602): geen foutmelding"
+nep wine 'exit 2'
+: >"$TMP/dialogen"
+draai "$TMP/MijnSpel-setup.exe" >/dev/null
+klopt 'grep -q "Annuleren" "$TMP/dialogen" && ! grep -q "werkt niet op BugOS" "$TMP/dialogen"' \
+    "U082: installatie stopt meteen met 2: vraagt of je op Annuleren klikte"
+: >"$TMP/dialogen"
+draai "$TMP/spel.exe" >/dev/null
+klopt 'grep -q "werkt niet op BugOS" "$TMP/dialogen"' "U082: een gewoon programma dat meteen stopt: zoals eerst"
+
+# U190: 'ChatGPTSetup.exe' is geen Telegram; 'tsetup-x64.5.1.exe' wel.
+sed -n '/^zoek_alternatief()/,/^}/p' "$ROOT/system_files/usr/bin/bugos-exe" >"$TMP/zoek.sh"
+zoek() { NAAM="$1" ALTERNATIEVEN="$ROOT/system_files/usr/share/bugos/alternatives.txt" bash -c '. "$1"; zoek_alternatief' _ "$TMP/zoek.sh"; }
+klopt '[ "$(zoek tsetup-x64.5.1.exe)" = "Telegram|org.telegram.desktop" ] && [ -z "$(zoek ChatGPTSetup.exe)" ] && [ -z "$(zoek MinecraftSetup.exe)" ]' \
+    "U190: Telegram herkennen aan het begin van de naam, niet in ChatGPTSetup of MinecraftSetup"
+
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

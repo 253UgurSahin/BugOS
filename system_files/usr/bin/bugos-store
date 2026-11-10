@@ -19,12 +19,12 @@ sys.path.insert(0, "/usr/lib/bugos/python")
 
 from bugos_ui import (  # noqa: E402
     TAAL, ZIJBALK_BREEDTE, Banner, Chip, Kaart, Knop, Venster, Zoekveld, bestaat, draai, label, maak_app,
-    raster, start, t, uitvoeren,
+    raster, start, t, uitvoeren, zoeksleutel,
 )
-from PySide6.QtCore import QProcess, QSize, Qt  # noqa: E402
+from PySide6.QtCore import QProcess, QProcessEnvironment, QSize, Qt, QTimer  # noqa: E402
 from PySide6.QtGui import QIcon, QPixmap  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QFrame, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
+    QCheckBox, QFrame, QHBoxLayout, QLabel, QMessageBox, QScrollArea, QVBoxLayout, QWidget,
 )
 
 CATALOGUS = Path("/usr/share/bugos/store.json")
@@ -35,6 +35,11 @@ ICOON_MAPPEN = [
 ]
 if os.environ.get("BUGOS_APPICONEN"):
     ICOON_MAPPEN.insert(0, Path(os.environ["BUGOS_APPICONEN"]))
+
+
+def app_naam(app: dict) -> str:
+    """De naam van een app in jouw taal (de meeste zijn merknamen; 'Rekenmachine' heet in het Engels 'Calculator') (U209)."""
+    return app.get("naam_en", app["naam"]) if TAAL != "nl" else app["naam"]
 
 
 def lees_catalogus(pad: Path = CATALOGUS) -> dict:
@@ -48,6 +53,31 @@ def geinstalleerd() -> set[str]:
         return set()
     _, uit = draai("flatpak", "list", "--app", "--columns=application", timeout=20)
     return {regel.strip() for regel in uit.splitlines() if regel.strip()}
+
+
+# Waar gewone programma's (geen Flatpak) hun .desktop-bestand hebben. Firefox en Steam zitten
+# bijvoorbeeld al in BugOS zelf: die zijn er dus al, ook al staan ze niet in 'flatpak list'.
+APP_MAPPEN = [Path("/usr/share/applications"), Path("/usr/local/share/applications"),
+              Path.home() / ".local/share/applications"]
+# Sommige programma's heten als systeemprogramma anders dan in Flathub.
+SYSTEEM_NAMEN = {
+    "org.mozilla.firefox": ("org.mozilla.firefox", "firefox"),
+    "com.valvesoftware.Steam": ("steam",),
+}
+
+
+def systeem_apps(apps: list[dict]) -> dict[str, Path]:
+    """Apps uit de winkel die er al als gewoon programma op staan: app-id -> hun .desktop-bestand."""
+    if os.environ.get("BUGOS_GEINSTALLEERD") is not None:  # voor screenshots: alleen dat lijstje
+        return {}
+    gevonden = {}
+    for app in apps:
+        for naam in SYSTEEM_NAMEN.get(app["id"], (app["id"],)):
+            bestand = next((m / f"{naam}.desktop" for m in APP_MAPPEN if (m / f"{naam}.desktop").is_file()), None)
+            if bestand:
+                gevonden[app["id"]] = bestand
+                break
+    return gevonden
 
 
 def icoon_voor(app_id: str) -> QIcon:
@@ -64,8 +94,8 @@ def tekst(app: dict) -> str:
 
 
 def past(app: dict, zoek: str) -> bool:
-    hooi = f"{app['naam']} {app.get('nl', '')} {app.get('en', '')} {app['id']}".lower()
-    return all(w in hooi for w in zoek.lower().split())
+    hooi = zoeksleutel(f"{app['naam']} {app.get('naam_en', '')} {app.get('nl', '')} {app.get('en', '')} {app['id']}")
+    return all(w in hooi for w in zoeksleutel(zoek).split())   # (U268)
 
 
 class AppKaart(Kaart):
@@ -82,7 +112,7 @@ class AppKaart(Kaart):
         blok.setSpacing(4)
         kop_rij = QHBoxLayout()
         kop_rij.setSpacing(8)
-        kop_rij.addWidget(label(app["naam"], "kop3", wrap=False))
+        kop_rij.addWidget(label(app_naam(app), "kop3", wrap=False))   # (U175)
         self.chip = Chip(t("Geïnstalleerd", "Installed"), "goed")
         kop_rij.addWidget(self.chip)
         kop_rij.addStretch(1)
@@ -91,9 +121,15 @@ class AppKaart(Kaart):
         blok.addStretch(1)
         rij = QHBoxLayout()
         rij.addStretch(1)
+        # Een app die je uit de Winkel haalde, kun je hier ook weer weghalen (U464). Niet voor wat in BugOS zelf zit.
+        self.weg = Knop(t("Verwijderen", "Remove"), "stil")
+        self.weg.clicked.connect(lambda: self.winkel.vraag_verwijderen(self.app))
+        self.weg.setAccessibleDescription(app_naam(app))   # 'Verwijderen' van welke app? (U482)
+        rij.addWidget(self.weg)
         self.knop = Knop("", "hoofd")
         self.knop.setMinimumWidth(124)
         self.knop.clicked.connect(self.klik)
+        self.knop.setAccessibleDescription(app_naam(app))   # (U482)
         rij.addWidget(self.knop)
         blok.addLayout(rij)
         self.lay.addLayout(blok, 1)
@@ -103,6 +139,8 @@ class AppKaart(Kaart):
         bezig = self.winkel.bezig_met == self.app["id"]
         er_al = self.app["id"] in self.winkel.installed
         self.chip.setVisible(er_al and not bezig)
+        self.weg.setVisible(self.app["id"] in self.winkel.flatpaks and not bezig)
+        self.weg.setEnabled(self.winkel.bezig_met is None)
         if bezig:
             self.knop.setText(t("Bezig…", "Working…"))
             self.knop.setEnabled(False)
@@ -118,8 +156,14 @@ class AppKaart(Kaart):
         self.knop.style().polish(self.knop)
 
     def klik(self) -> None:
-        if self.app["id"] in self.winkel.installed:
+        if self.app["id"] in self.winkel.flatpaks:
             start("flatpak", "run", self.app["id"])
+        elif self.app["id"] in self.winkel.systeem:  # een gewoon programma (bijv. Firefox in BugOS zelf)
+            bestand = str(self.winkel.systeem[self.app["id"]])
+            if bestaat("kioclient"):
+                start("kioclient", "exec", bestand)
+            else:
+                start("gio", "launch", bestand)
         else:
             self.winkel.installeer(self.app)
 
@@ -129,7 +173,9 @@ class Winkel(Venster):
         scroll = QScrollArea()
         super().__init__(t("BugOS Winkel", "BugOS Store"), inhoud=scroll, maat=(1180, 800))
         self.cat = catalogus
-        self.installed = geinstalleerd()
+        self.systeem = systeem_apps(self.cat["apps"])
+        self.flatpaks = geinstalleerd()
+        self.installed = self.flatpaks | set(self.systeem)
         self.bezig_met: str | None = None
         self.kaarten: list[AppKaart] = []
         self.kolommen = 2
@@ -139,7 +185,7 @@ class Winkel(Venster):
         for c in self.cat["categorieen"]:
             self.lijst.voeg_toe(c["icoon"], c["nl" if TAAL == "nl" else "en"], c["id"])
         if self.installed:
-            self.lijst.voeg_toe("lijn:vink", t("Mijn apps", "My apps"), "_mijn")
+            self.mijn_apps_erbij()
         self.lijst.currentRowChanged.connect(lambda _: self.toon())
         self.onder_knop(t("Meer apps zoeken", "Search more apps"), "zoek", self.meer_apps,
                         tip=t("In de grote winkel (Discover), voor gevorderden", "In the big store (Discover), advanced"))
@@ -147,7 +193,8 @@ class Winkel(Venster):
         # Rechts: zoeken en de apps
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Past een kaart toch niet (grote letters): opzij kunnen schuiven, niets valt eraf (U482).
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         rechts_w = QWidget()
         rechts_w.setObjectName("pagina")
         rechts = QVBoxLayout(rechts_w)
@@ -163,8 +210,9 @@ class Winkel(Venster):
         hb.setContentsMargins(0, 6, 0, 0)
         hb.setSpacing(6)
         hb.addWidget(label(t("Apps voor alles wat je doet", "Apps for everything you do"), "titel"))
-        hb.addWidget(label(t("Bekende, veilige apps. Installeren met één klik, updates gaan vanzelf.",
-                             "Well-known, safe apps. Install with one click, updates are automatic."), "sub"))
+        # 'updates gaan vanzelf' klopte niet bij 'Ik kies zelf wanneer' (U361)
+        hb.addWidget(label(t("Bekende, veilige apps. Installeren met één klik, en ze worden bijgewerkt met de rest.",
+                             "Well-known, safe apps. Install with one click, and they are updated with everything else."), "sub"))
         rechts.addWidget(self.held)
 
         self.kop = label("", "kop2")
@@ -194,8 +242,26 @@ class Winkel(Venster):
         if begin_app:
             gevonden = next((a for a in self.cat["apps"] if a["id"] == begin_app), None)
             if gevonden:
-                self.zoek.setText(gevonden["naam"])
+                self.zoek.setText(app_naam(gevonden))
         self.lijst.setFocus()
+
+    def tweede_start(self, args: list[str]) -> None:
+        """De Winkel was al open en wordt opnieuw gestart, bijv. 'Uit de Winkel halen?' na een .exe (U222)."""
+        if getattr(self, "sluit_na", False) and self.proces.state() != QProcess.ProcessState.NotRunning:
+            # Weer geopend tijdens het installeren: de Winkel gaat daarna niet meer vanzelf dicht (U233).
+            naam = next((app_naam(a) for a in self.cat["apps"] if a["id"] == self.bezig_met), self.bezig_met)
+            self.melding.zet(self.bezig_tekst(naam), "bezig")
+        zoek, app_id = begin_uit(args)
+        if app_id:
+            app_id = echte_id(self.cat, app_id)
+            gevonden = next((a for a in self.cat["apps"] if a["id"] == app_id), None)
+            if gevonden is None:
+                start("plasma-discover", args[0])   # niet in onze selectie: de grote winkel op die app
+                return
+            zoek = app_naam(gevonden)
+        if zoek:
+            self.zoek.setText(zoek)
+            self.lijst.setFocus()
 
     # ------------------------------------------------------------------
     def toon(self) -> None:
@@ -226,38 +292,145 @@ class Winkel(Venster):
         if not apps:
             self.melding.zet(t("Niet in de BugOS-selectie. Druk op \"Meer apps zoeken\" om verder te zoeken.",
                                "Not in the BugOS selection. Press \"Search more apps\" to search further."), "info")
-        elif self.bezig_met is None and not self.melding.tekst.text().startswith("✅"):
+        elif self.bezig_met is not None and not getattr(self, "sluit_na", False):   # 'gaat vanzelf dicht' laten staan (U344)
+            # Wordt er iets geïnstalleerd? Dan die melding terug (een zoekopdracht zonder uitkomst verving hem) (U333).
+            naam = next((app_naam(a) for a in self.cat["apps"] if a["id"] == self.bezig_met), self.bezig_met)
+            self.melding.zet(self.bezig_tekst(naam), "bezig")
+        elif not self.melding.tekst.text().startswith("✅"):
             self.melding.zet("")
 
     def resizeEvent(self, e):  # noqa: N802
         super().resizeEvent(e)
-        nieuw = max(1, min(3, (self.width() - ZIJBALK_BREEDTE - 72) // 330))
+        # Zo breed als een kaart echt is (met 'Verwijderen' en 'Openen', grote letters), niet een vaste 330 (U482).
+        breed = max([330] + [k.minimumSizeHint().width() + 16 for k in self.kaarten[:3]])
+        nieuw = max(1, min(3, (self.width() - ZIJBALK_BREEDTE - 72) // breed))
         if nieuw != self.kolommen:
             self.kolommen = nieuw
             if self.kaarten:
                 self.toon()
 
-    def installeer(self, app: dict) -> None:
+    def closeEvent(self, e) -> None:  # noqa: N802
+        # Nooit midden in het installeren stoppen (dan breekt flatpak af): wachten, en daarna vanzelf dicht.
+        if self.proces.state() != QProcess.ProcessState.NotRunning:
+            self.sluit_na = True
+            naam = next((app_naam(a) for a in self.cat["apps"] if a["id"] == self.bezig_met), self.bezig_met)
+            self.melding.zet(t(f"Even wachten: {naam} wordt nog verwijderd. Daarna gaat de Winkel vanzelf dicht.",
+                               f"One moment: {naam} is still being removed. The Store closes by itself afterwards.")
+                             if getattr(self, "klus", "") == "verwijder" else
+                             t(f"Even wachten: {naam} wordt nog geïnstalleerd. Daarna gaat de Winkel vanzelf dicht.",
+                               f"One moment: {naam} is still being installed. The Store closes by itself afterwards."),
+                             "bezig")
+            e.ignore()
+            return
+        super().closeEvent(e)
+
+    def bezig_tekst(self, naam: str) -> str:
+        """Wat er nu gebeurt: installeren of verwijderen (U472)."""
+        if getattr(self, "klus", "") == "verwijder":
+            return t(f"{naam} wordt verwijderd…", f"Removing {naam}…")
+        return t(f"{naam} wordt geïnstalleerd…", f"Installing {naam}…")
+
+    def vraag_verwijderen(self, app: dict) -> None:
+        """Eerst vragen; je bestanden van de app (inloggen, instellingen) alleen weg als je dat aanvinkt (U464)."""
+        vraag = QMessageBox(QMessageBox.Icon.Question, t("Verwijderen?", "Remove?"),
+                            t(f"{app_naam(app)} van deze computer verwijderen?", f"Remove {app_naam(app)} from this computer?"),
+                            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel, self)
+        vraag.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        vraag.setCheckBox(QCheckBox(t("Ook de instellingen en bestanden van deze app weggooien",
+                                      "Also delete this app's settings and files")))
+        if vraag.exec() == QMessageBox.StandardButton.Yes:
+            self.verwijder(app, vraag.checkBox().isChecked())
+
+    def verwijder(self, app: dict, met_gegevens: bool) -> None:
         self.bezig_met = app["id"]
-        self.melding.zet(t(f"{app['naam']} wordt geïnstalleerd. Dit kan een paar minuten duren…",
-                           f"Installing {app['naam']}. This can take a few minutes…"), "bezig")
+        self.klus = "verwijder"
+        self.melding.zet(t(f"{app_naam(app)} wordt verwijderd…", f"Removing {app_naam(app)}…"), "bezig")
         for k in self.kaarten:
             k.ververs()
-        self.proces.start("flatpak", ["install", "-y", "--noninteractive", "flathub", app["id"]])
+        omgeving = QProcessEnvironment.systemEnvironment()
+        omgeving.insert("LC_ALL", "C.UTF-8")
+        self.proces.setProcessEnvironment(omgeving)
+        self.proces.start("flatpak", ["uninstall", "-y", app["id"]] + (["--delete-data"] if met_gegevens else []))
+
+    def klaar_verwijderen(self, code: int, uit: str, app_id: str, naam: str) -> None:
+        self.flatpaks = geinstalleerd() - ({app_id} if code == 0 else set())
+        self.installed = self.flatpaks | set(self.systeem)
+        # In 'Mijn apps': de lijst opnieuw, zonder de app die weg is (U472).
+        rij = self.lijst.currentRow()
+        if not self.zoek.text().strip() and rij >= 0 and self.lijst.sleutel(rij) == "_mijn":
+            self.toon()
+            self.zoek.setFocus()   # de kaart met de focus is weg: niet de focus kwijt (U482)
+        if code == 0:
+            self.melding.zet(t(f"✅ {naam} is verwijderd.", f"✅ {naam} has been removed."), "goed")
+        elif any(w in uit.lower() for w in ("not authorized", "not allowed", "authentication", "authoriz")):
+            self.melding.zet(t(f"{naam} verwijderen mag alleen met het wachtwoord van een beheerder.",
+                               f"Removing {naam} needs an administrator's password."), "fout")
+        else:
+            self.melding.zet(t(f"{naam} verwijderen lukte niet. Probeer het nog eens.",
+                               f"Removing {naam} did not work. Please try again."), "fout")
+        for k in self.kaarten:
+            k.ververs()
+
+    def installeer(self, app: dict) -> None:
+        self.klus = "installeer"
+        self.bezig_met = app["id"]
+        self.melding.zet(t(f"{app_naam(app)} wordt geïnstalleerd. Dit kan een paar minuten duren…",
+                           f"Installing {app_naam(app)}. This can take a few minutes…"), "bezig")
+        for k in self.kaarten:
+            k.ververs()
+        # Zonder --noninteractive: dan mag KDE om een wachtwoord vragen (een gezinslid dat geen beheerder is,
+        # krijgt anders nooit de vraag en het installeren mislukt stil). -y beantwoordt de rest.
+        omgeving = QProcessEnvironment.systemEnvironment()
+        omgeving.insert("LC_ALL", "C.UTF-8")   # we lezen flatpaks fout (bijv. "Not authorized"): in het Engels
+        self.proces.setProcessEnvironment(omgeving)
+        self.proces.start("flatpak", ["install", "-y", "flathub", app["id"]])
+
+    def mijn_apps_erbij(self) -> None:
+        """'Mijn apps' in de zijbalk, één keer (ook na je eerste app, zonder de Winkel opnieuw te openen) (U081)."""
+        if not any(self.lijst.item(i).data(Qt.ItemDataRole.UserRole) == "_mijn" for i in range(self.lijst.count())):
+            self.lijst.voeg_toe("lijn:vink", t("Mijn apps", "My apps"), "_mijn")
 
     def klaar(self, code: int, _status) -> None:
+        uit = bytes(self.proces.readAll()).decode(errors="ignore")
         app_id = self.bezig_met
-        naam = next((a["naam"] for a in self.cat["apps"] if a["id"] == app_id), app_id)
+        naam = next((app_naam(a) for a in self.cat["apps"] if a["id"] == app_id), app_id)
         self.bezig_met = None
-        self.installed = geinstalleerd() | ({app_id} if code == 0 else set())
+        if getattr(self, "klus", "") == "verwijder":
+            self.klus = ""
+            self.klaar_verwijderen(code, uit, app_id, naam)
+            if getattr(self, "sluit_na", False):
+                if code == 0:
+                    QTimer.singleShot(0, self.close)
+                else:
+                    self.sluit_na = False   # mislukt: open laten, zodat je de melding ziet (U472)
+            return
+        self.flatpaks = geinstalleerd() | ({app_id} if code == 0 else set())
+        self.installed = self.flatpaks | set(self.systeem)
         if code == 0:
+            self.mijn_apps_erbij()
             self.melding.zet(t(f"✅ {naam} is geïnstalleerd. Je vindt het in het startmenu.",
                                f"✅ {naam} is installed. You can find it in the start menu."), "goed")
+        elif any(w in uit.lower() for w in ("not authorized", "not allowed", "authentication", "authoriz")):
+            self.melding.zet(t(f"{naam} installeren mag alleen met het wachtwoord van een beheerder. "
+                               "Vraag het aan wie de computer beheert.",
+                               f"Installing {naam} needs an administrator's password. "
+                               "Ask the person who looks after this computer."), "fout")
+        elif any(w in uit.lower() for w in ("no space left on device", "not enough disk space", "not enough free space", "not enough space")):
+            # Een volle computer is geen 'heb je internet?' (U411).
+            self.melding.zet(t(f"{naam} installeren lukte niet: je computer is vol. Maak eerst ruimte (bijv. de "
+                               "prullenbak leegmaken in Bestanden) en probeer het dan opnieuw.",
+                               f"Installing {naam} failed: your computer is full. Make room first (for example empty "
+                               "the trash in Files) and try again."), "fout")
         else:
             self.melding.zet(t(f"{naam} installeren lukte niet. Heb je internet? Probeer het nog eens.",
                                f"Installing {naam} failed. Are you online? Please try again."), "fout")
         for k in self.kaarten:
             k.ververs()
+        if getattr(self, "sluit_na", False):
+            if code == 0:
+                QTimer.singleShot(0, self.close)   # je wilde al sluiten, en het is gelukt
+            else:
+                self.sluit_na = False   # mislukt: open laten, zodat je de melding ziet
 
     def meer_apps(self) -> None:
         zoek = self.zoek.text().strip()
@@ -267,20 +440,32 @@ class Winkel(Venster):
             start("plasma-discover")
 
 
+def begin_uit(args: list[str]) -> tuple[str, str]:
+    """(zoektekst, app-id) uit de opdracht: '--zoek <tekst>' of 'appstream://<id>'."""
+    if len(args) >= 2 and args[0] == "--zoek":
+        return " ".join(args[1:]), ""
+    if args and args[0].lower().startswith("appstream:"):
+        # Ook 'appstream:id' zonder // (U330).
+        return "", args[0][len("appstream:"):].lstrip("/").removesuffix(".desktop")
+    return "", ""
+
+
+def echte_id(catalogus: dict, app_id: str) -> str:
+    """Het id zoals het in onze catalogus staat. Via KDE komt een link soms in kleine letters binnen
+    ('org.videolan.vlc'): dan toch de goede app (U330)."""
+    return next((a["id"] for a in catalogus["apps"] if a["id"].lower() == app_id.lower()), app_id)
+
+
 def main() -> int:
     args = sys.argv[1:]
-    begin_zoek = ""
-    begin_app = ""
-    if len(args) >= 2 and args[0] == "--zoek":
-        begin_zoek = " ".join(args[1:])
-    elif args and args[0].startswith("appstream://"):
-        begin_app = args[0][len("appstream://"):].removesuffix(".desktop")
+    begin_zoek, begin_app = begin_uit(args)
     catalogus = lees_catalogus()
+    begin_app = echte_id(catalogus, begin_app) if begin_app else ""
     if begin_app and not any(a["id"] == begin_app for a in catalogus["apps"]):
         # Niet in onze selectie: open de grote winkel op die app.
         start("plasma-discover", args[0])
         return 0
-    app = maak_app("bugos-store", "bugos-store", sys.argv)
+    app = maak_app("bugos-store", "bugos-store", sys.argv, een_keer=True)   # (U208)
     return uitvoeren(app, Winkel(catalogus, begin_zoek, begin_app))
 
 

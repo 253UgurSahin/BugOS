@@ -23,6 +23,8 @@ param(
     [int] $KrimpGB = 0,
     [string] $IsoPad = '',
     [int] $SchijfNummer = -1,
+    # Welke schijf het precies moet zijn (gekozen in stap 4): na eruit halen/insteken kan een andere hetzelfde nummer krijgen (U370).
+    [string] $SchijfId = '',
     # Taal kiezen (nl of en). Leeg = de taal van Windows.
     [ValidateSet('', 'nl', 'en')] [string] $Taal = '',
     # Alleen voor de bouwstraat: plaatjes van elke pagina maken.
@@ -100,8 +102,11 @@ function Get-Controle {
     } catch { }
 
     $gpu = (Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name) -join ', '
-    if ($gpu -match 'NVIDIA') {
+    if (Test-NieuweNvidia $gpu) {
         Voeg (T 'Videokaart' 'Graphics') $true (T "Nvidia gevonden ($gpu). Kies de versie 'bugos-nvidia'." "Nvidia found ($gpu). Choose the 'bugos-nvidia' version.") $true
+    } elseif ($gpu -match 'NVIDIA') {
+        # Ouder dan GTX 16 / RTX: het Nvidia-stuurprogramma van BugOS kent die niet; de gewone versie werkt wel (U396).
+        Voeg (T 'Videokaart' 'Graphics') $true (T "Een oudere Nvidia-kaart ($gpu). Kies de gewone versie 'bugos': de Nvidia-versie werkt alleen met GTX 16 en RTX." "An older Nvidia card ($gpu). Choose the normal 'bugos' version: the Nvidia version only works with GTX 16 and RTX.")
     } else {
         Voeg (T 'Videokaart' 'Graphics') $true (T "$gpu. Kies de gewone versie 'bugos'." "$gpu. Choose the normal 'bugos' version.")
     }
@@ -145,14 +150,20 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
     New-Item -ItemType Directory -Force -Path $doel | Out-Null
     $stap = 0
     $aantal = $script:Mappen.Count + 2
+    # Mappen waar een paar bestanden niet mee konden (open in een programma, groter dan 4 GB op FAT32, alleen in
+    # OneDrive): de rest gaat gewoon door (U094).
+    $script:Deels = @()
     foreach ($m in $script:Mappen) {
         $stap++
         $bron = Get-BekendeMap $m.Sleutel
         & $Voortgang ([int](100 * $stap / $aantal)) (T "Kopiëren: $($m.Naam)..." "Copying: $($m.Naam)...")
         if ($bron -and (Test-Path $bron)) {
-            # /E alle submappen, /R:1 /W:1 niet eindeloos wachten, /XJ geen snelkoppel-lussen.
-            $null = robocopy $bron (Join-Path $doel $m.Naam) /E /R:1 /W:1 /XJ /NFL /NDL /NJH /NJS /NP
-            if ($LASTEXITCODE -ge 8) { throw (T "Kopiëren van $($m.Naam) lukte niet." "Copying $($m.Naam) failed.") }
+            # /E alle submappen, /R:1 /W:1 niet eindeloos wachten, /XJ geen snelkoppel-lussen,
+            # /XF geen Windows-hulpbestanden (die zie je anders in elke map in BugOS) (U096).
+            $null = robocopy $bron (Join-Path $doel $m.Naam) /E /R:1 /W:1 /XJ /NFL /NDL /NJH /NJS /NP /XF desktop.ini Thumbs.db
+            # robocopy: 8 = een paar bestanden niet, 16 = helemaal mislukt (bijv. de schijf is weg).
+            if ($LASTEXITCODE -ge 16) { throw (T "Kopiëren van $($m.Naam) lukte niet." "Copying $($m.Naam) failed.") }
+            if ($LASTEXITCODE -ge 8) { $script:Deels += $m.Naam }
         }
     }
 
@@ -187,6 +198,7 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
         computer   = $env:COMPUTERNAME
         taal       = (Get-Culture).Name
         mappen     = @($script:Mappen | ForEach-Object { $_.Naam })
+        deels      = @($script:Deels)
     }
     $info | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $doel 'bugos-switch.json') -Encoding UTF8
     & $Voortgang 100 (T 'Klaar!' 'Done!')
@@ -209,14 +221,43 @@ function Invoke-Krimp([int] $gb) {
 
 # ========================================================== 4. USB-STICK ==
 
+function Test-UsbLetter([object] $logisch) {
+    # Hangt deze schijfletter aan een USB-schijf? Eerst zoals stap 4 (Get-Disk: BusType USB, ook voor snelle
+    # USB-SSD's die zich als SCSI melden) (U296); lukt dat niet (geen beheerdersrechten), dan via WMI (U284).
+    try {
+        $bus = (Get-Partition -DriveLetter $logisch.DeviceID.Substring(0, 1) -ErrorAction Stop | Get-Disk -ErrorAction Stop).BusType
+        if ("$bus" -eq 'USB') { return $true }
+        if ($bus) { return $false }
+    } catch { }
+    try {
+        foreach ($deel in @(Get-CimAssociatedInstance -InputObject $logisch -ResultClassName Win32_DiskPartition -ErrorAction Stop)) {
+            foreach ($schijf in @(Get-CimAssociatedInstance -InputObject $deel -ResultClassName Win32_DiskDrive -ErrorAction Stop)) {
+                if ($schijf.InterfaceType -eq 'USB' -or "$($schijf.PNPDeviceID)" -like 'USBSTOR*' -or "$($schijf.MediaType)" -like 'External*') { return $true }
+            }
+        }
+    } catch { }
+    return $false
+}
+
 function Get-UsbSchijven {
     Get-Disk | Where-Object { $_.BusType -eq 'USB' -and $_.Size -gt 7GB -and -not $_.IsBoot -and -not $_.IsSystem }
 }
 
-function Write-IsoNaarSchijf([string] $iso, [int] $nummer, [scriptblock] $Voortgang) {
+function Test-SwitchBestanden([int] $nummer) {
+    # Heeft een partitie op deze schijf de map BugOS-Switch met bugos-switch.json (uit stap 2)?
+    foreach ($p in @(Get-Partition -DiskNumber $nummer -ErrorAction SilentlyContinue)) {
+        if ("$($p.DriveLetter)" -match '^[A-Za-z]$' -and (Test-Path -LiteralPath "$($p.DriveLetter):\BugOS-Switch\bugos-switch.json")) { return $true }
+    }
+    return $false
+}
+
+function Write-IsoNaarSchijf([string] $iso, [int] $nummer, [scriptblock] $Voortgang, [string] $id = '') {
     $schijf = Get-Disk -Number $nummer
     if ($schijf.BusType -ne 'USB' -or $schijf.IsBoot -or $schijf.IsSystem) {
         throw (T 'Veiligheidsstop: dit is geen USB-stick.' 'Safety stop: this is not a USB stick.')
+    }
+    if ($id -and "$($schijf.UniqueId)" -ne $id) {
+        throw (T 'Veiligheidsstop: dit is niet meer de USB-stick die je koos. Kies hem opnieuw.' 'Safety stop: this is no longer the USB stick you chose. Choose it again.')
     }
     $grootte = (Get-Item -LiteralPath $iso).Length
     if ($grootte -gt $schijf.Size) { throw (T 'De USB-stick is te klein.' 'The USB stick is too small.') }
@@ -255,9 +296,21 @@ function Write-IsoNaarSchijf([string] $iso, [int] $nummer, [scriptblock] $Voortg
 
 $script:Repo = '253UgurSahin/BugOS'
 
+function Test-NieuweNvidia([string] $gpu) {
+    # Het Nvidia-stuurprogramma van BugOS (de 'open' versie) werkt alleen met GTX 16, RTX, MX 450 en nieuwer, en de
+    # zakelijke T- en A-kaarten van die tijd. Oudere GeForce-kaarten (GTX 10, 9, 7, GT 710/1030, MX 110-350) niet (U396).
+    # Per kaart kijken: een Intel Arc A770 naast een oude GTX 1060 is geen nieuwe Nvidia (U408).
+    foreach ($naam in ($gpu -split ',\s*')) {
+        if ($naam -notmatch 'NVIDIA') { continue }
+        if ($naam -match 'RTX' -or $naam -match 'GTX\s*16\d\d' -or $naam -match 'MX\s*(4[5-9]\d|[5-9]\d\d)' -or
+            $naam -match '\bT(400|500|550|600|1000|1200|2000)\b' -or $naam -match '\bA\d{3,4}\b') { return $true }
+    }
+    return $false
+}
+
 function Get-IsoSoort {
-    $gpu = (Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name) -join ' '
-    if ($gpu -match 'NVIDIA') { 'nvidia' } else { 'main' }
+    $gpu = (Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name) -join ', '
+    if (Test-NieuweNvidia $gpu) { 'nvidia' } else { 'main' }
 }
 
 function Get-IsoInfo([string] $soort) {
@@ -280,6 +333,8 @@ function Save-BugOSIso([object] $gevonden, [string] $map, [scriptblock] $Voortga
     $doel = Join-Path $map $info.naam
     $totaal = [int64](($info.delen | Measure-Object grootte -Sum).Sum)
     $vrij = (Get-PSDrive (Split-Path $map -Qualifier).TrimEnd(':')).Free
+    # Een half bestand van een eerdere poging wordt overschreven: die ruimte telt mee (U287).
+    if (Test-Path -LiteralPath $doel) { $vrij += (Get-Item -LiteralPath $doel).Length }
     if ($vrij -lt $totaal + 1GB) { throw (T "Te weinig ruimte: er is $([math]::Round($totaal / 1GB, 1)) GB nodig." "Not enough space: $([math]::Round($totaal / 1GB, 1)) GB is needed.") }
 
     $client = New-Object System.Net.Http.HttpClient
@@ -289,6 +344,7 @@ function Save-BugOSIso([object] $gevonden, [string] $map, [scriptblock] $Voortga
     $buffer = New-Object byte[] (1MB)
     $klaar = 0L
     $laatste = [DateTime]::MinValue
+    $gelukt = $false
     try {
         foreach ($deel in $info.delen) {
             # Alle stukjes worden direct achter elkaar in één bestand geschreven.
@@ -306,9 +362,16 @@ function Save-BugOSIso([object] $gevonden, [string] $map, [scriptblock] $Voortga
                 }
             } finally { $stroom.Dispose() }
         }
+        $gelukt = $true
+    } catch {
+        # Een halve download is niets waard: weg ermee, en een gewone uitleg in plaats van een .NET-fout (U287).
+        # Met de echte reden erachter (bijv. 'schijf vol', of GitHub weigert even): 'opnieuw proberen' helpt niet altijd (U298).
+        $reden = if ($_.Exception.InnerException) { $_.Exception.InnerException.Message } else { $_.Exception.Message }
+        throw ((T 'Het downloaden is gestopt. Is de verbinding weggevallen, of is de schijf vol? Probeer het opnieuw.' 'The download stopped. Did the connection drop, or is the disk full? Please try again.') + "`n`n($reden)")
     } finally {
         $uit.Dispose()
         $client.Dispose()
+        if (-not $gelukt) { Remove-Item -LiteralPath $doel -Force -ErrorAction SilentlyContinue }
     }
 
     & $Voortgang 100 (T 'Controleren of alles goed is overgekomen...' 'Checking that everything arrived correctly...')
@@ -762,8 +825,23 @@ ovLUnl0L5eQZEbTp/9k=
 # ==================================================== beheerder-taken =====
 # Het programma start zichzelf opnieuw als beheerder voor stap 3 en 4.
 
+# Windows en BugOS naast elkaar: Windows houdt de klok van de pc in de lokale tijd, BugOS (zoals Linux) in UTC. Dan loopt
+# na elke wissel de klok aan een kant 1 of 2 uur verkeerd. Windows ook UTC laten gebruiken (U446). Bij 'Ruimte maken' en
+# bij het maken van de USB-stick (die stap doet iedereen, ook wie BugOS op een tweede schijf zet) (U453).
+# Onschuldig als Windows later alleen draait (Windows 10/11 kunnen dit gewoon).
+function Set-KlokUtc {
+    try { Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\TimeZoneInformation' -Name 'RealTimeIsUniversal' -Value 1 -Type DWord -ErrorAction Stop } catch { Write-Verbose 'Klok niet op UTC gezet.' }
+    # Windows 'Snel opstarten' uit: dan laat 'Afsluiten' de Windows-schijf half in slaap achter. BugOS opent die schijf, en
+    # wat je daar neerzet, kan bij de volgende Windows-start verdwijnen of de schijf beschadigen (U535).
+    try { Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power' -Name 'HiberbootEnabled' -Value 0 -Type DWord -ErrorAction Stop } catch { Write-Verbose 'Snel opstarten niet uitgezet.' }
+}
+
 if ($Taak -eq 'Krimp') {
-    try { Invoke-Krimp $KrimpGB; exit 0 } catch { Toon ((T 'Ruimte maken lukte niet: ' 'Making space failed: ') + $_.Exception.Message) 'Error'; exit 1 }
+    try {
+        Invoke-Krimp $KrimpGB
+        Set-KlokUtc
+        exit 0
+    } catch { Toon ((T 'Ruimte maken lukte niet: ' 'Making space failed: ') + $_.Exception.Message) 'Error'; exit 1 }
 }
 if ($Taak -eq 'Usb') {
     Maak-Letters
@@ -789,7 +867,8 @@ if ($Taak -eq 'Usb') {
     $bar = Nieuw-Balk 32 108 476 $form
     $form.Show(); [System.Windows.Forms.Application]::DoEvents()
     try {
-        Write-IsoNaarSchijf $IsoPad $SchijfNummer { param($p, $t) Zet-Balk $bar $p; $lbl.Text = $t; [System.Windows.Forms.Application]::DoEvents() }
+        Write-IsoNaarSchijf $IsoPad $SchijfNummer { param($p, $t) Zet-Balk $bar $p; $lbl.Text = $t; [System.Windows.Forms.Application]::DoEvents() } $SchijfId
+        Set-KlokUtc
         $form.Close(); exit 0
     } catch {
         $form.Close(); Toon ((T 'De USB-stick maken lukte niet: ' 'Making the USB stick failed: ') + $_.Exception.Message) 'Error'; exit 1
@@ -1015,11 +1094,13 @@ $Paginas += {
 $Paginas += {
     $kop.Text = (T 'Je bestanden meenemen' 'Take your files with you')
     $groot = [math]::Round((Get-MeeneemGrootte) / 1GB, 1)
-    $y = Nieuw-Tekst (T "Je documenten, foto's, muziek, video's, bureaublad, downloads, bladwijzers en achtergrond ($groot GB) gaan naar een USB-schijf. In BugOS zet je ze terug met één klik. Dit is ook meteen een back-up!" "Your documents, photos, music, videos, desktop, downloads, bookmarks and wallpaper ($groot GB) go to a USB drive. In BugOS you put them back with one click. This is also a backup!") 0
+    $y = Nieuw-Tekst (T "Je documenten, foto's, muziek, video's, bureaublad, downloads, bladwijzers en achtergrond ($groot GB) gaan naar een USB-schijf. In BugOS zet je ze terug met één klik. Dit is ook meteen een back-up! Gebruik een andere schijf dan de USB-stick voor BugOS (stap 4): die wordt gewist." "Your documents, photos, music, videos, desktop, downloads, bookmarks and wallpaper ($groot GB) go to a USB drive. In BugOS you put them back with one click. This is also a backup! Use a different drive than the USB stick for BugOS (step 4): that one is erased.") 0
     $y = Nieuw-Tekst (T 'Kies de USB-schijf:' 'Choose the USB drive:') ($y + 16) -Vet
     $script:W.schijf = Nieuw-Lijst ($y + 4) 400
     $lijst = $script:W.schijf
-    Get-CimInstance Win32_LogicalDisk | Where-Object { $_.DriveType -in 2, 3 -and $_.DeviceID -ne 'C:' } | ForEach-Object {
+    # Alleen schijven die je eruit haalt: een D:-schijf in de laptop gaat mee de prullenbak in als je straks
+    # bij het installeren de hele schijf kiest (U284). Een vaste (type 3) schijf telt alleen als hij via USB hangt.
+    Get-CimInstance Win32_LogicalDisk | Where-Object { $_.DeviceID -ne 'C:' -and ($_.DriveType -eq 2 -or ($_.DriveType -eq 3 -and (Test-UsbLetter $_))) } | ForEach-Object {
         [void]$lijst.Items.Add("$($_.DeviceID)  $($_.VolumeName)  ($([math]::Round($_.FreeSpace / 1GB)) GB $(T 'vrij' 'free'))")
     }
     if ($lijst.Items.Count -gt 0) { $lijst.SelectedIndex = 0 }
@@ -1031,12 +1112,26 @@ $Paginas += {
         if ($lijst.SelectedIndex -lt 0) { Toon (T 'Steek eerst een USB-schijf in en ga even terug en weer verder.' 'Plug in a USB drive first, then go back and forward again.'); return }
         $letter = ($lijst.SelectedItem -split '\s+')[0] + '\'
         $vrij = (Get-PSDrive $letter.Substring(0, 1)).Free
-        if ($vrij -lt (Get-MeeneemGrootte)) { Toon (T 'Er is niet genoeg ruimte op die schijf.' 'Not enough space on that drive.') 'Warning'; return }
+        # Wat er al in BugOS-Switch staat (een eerdere keer), hoeft er niet nog een keer bij (U286).
+        $al = 0L
+        if (Test-Path -LiteralPath "$($letter)BugOS-Switch") { $al = [int64](Get-ChildItem -LiteralPath "$($letter)BugOS-Switch" -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum }
+        if ($vrij + $al -lt (Get-MeeneemGrootte)) { Toon (T 'Er is niet genoeg ruimte op die schijf.' 'Not enough space on that drive.') 'Warning'; return }
         $knop.Enabled = $false; $verder.Enabled = $false
         try {
             Invoke-Meenemen $letter { param($p, $t) Zet-Balk $balk $p; $status.Text = $t; [System.Windows.Forms.Application]::DoEvents() }
-            $status.Text = (T 'Klaar! Je bestanden staan in de map BugOS-Switch op de schijf.' 'Done! Your files are in the BugOS-Switch folder on the drive.')
-            $status.ForeColor = $Goed
+            $nogVrij = (Get-PSDrive $letter.Substring(0, 1)).Free
+            if ($script:Deels.Count -gt 0 -and $nogVrij -lt 64MB) {
+                # Vol geraakt (kleine bestanden nemen op een grote stick meer ruimte in dan ze groot zijn) (U288).
+                $status.Text = (T 'De schijf is vol geraakt: niet alles kon mee. Gebruik een grotere schijf, of maak ruimte op deze en klik nog een keer.' 'The drive got full: not everything could be copied. Use a bigger drive, or make room on this one and click again.')
+                $status.ForeColor = $Fout
+            } elseif ($script:Deels.Count -gt 0) {
+                $welke = $script:Deels -join ', '
+                $status.Text = (T "Klaar, maar een paar bestanden uit $welke konden niet mee (bijv. open in een programma, groter dan 4 GB, of alleen in OneDrive). Sluit je programma's en klik nog een keer: wat er al staat, gaat sneller." "Done, but a few files from $welke could not be copied (e.g. open in a program, larger than 4 GB, or only in OneDrive). Close your programs and click again: what is already there goes faster.")
+                $status.ForeColor = $Grijs
+            } else {
+                $status.Text = (T 'Klaar! Je bestanden staan in de map BugOS-Switch op de schijf.' 'Done! Your files are in the BugOS-Switch folder on the drive.')
+                $status.ForeColor = $Goed
+            }
         } catch { Toon $_.Exception.Message 'Error'; $status.Text = '' }
         $knop.Enabled = $true; $verder.Enabled = $true
     })
@@ -1069,7 +1164,7 @@ $Paginas += {
         $getal = $script:W.getal
         if (-not (Vraag (T "Windows wordt $($getal.Value) GB kleiner. Je bestanden blijven gewoon staan.`n`nHeb je een back-up gemaakt (stap 2)? Doorgaan?" "Windows will shrink by $($getal.Value) GB. Your files stay where they are.`n`nDid you make a backup (step 2)? Continue?"))) { return }
         $code = Start-AlsBeheerder @('-Taak', 'Krimp', '-KrimpGB', [string][int]$getal.Value)
-        if ($code -eq 0) { Toon (T 'Gelukt! Er is ruimte voor BugOS. Kies straks bij het installeren "Automatisch".' 'Done! There is space for BugOS. When installing, choose "Automatic".') }
+        if ($code -eq 0) { Toon (T 'Gelukt! Er is ruimte voor BugOS. Kies straks bij het installeren "De schijf delen met Windows of een ander systeem" (niet "De hele schijf gebruiken": dan gaat Windows weg).' 'Done! There is space for BugOS. When installing, choose "Share disk with other operating systems" (not "Use entire disk": that removes Windows).') }
     })
 }
 
@@ -1129,8 +1224,13 @@ $Paginas += {
         if (-not $script:IsoGekozen) { Toon (T 'Kies eerst het BugOS .iso-bestand.' 'Choose the BugOS .iso file first.'); return }
         if ($sticks.Count -eq 0) { Toon (T 'Steek eerst een USB-stick in.' 'Plug in a USB stick first.'); return }
         $stick = $sticks[$lijst.SelectedIndex]
+        # Staan je bestanden uit stap 2 op deze stick? Dan niet wissen: die ben je anders kwijt (U095).
+        if (Test-SwitchBestanden $stick.Number) {
+            Toon (T "Op '$($stick.FriendlyName)' staan je bestanden uit stap 2 (de map BugOS-Switch). Die zou je kwijtraken. Gebruik een andere USB-stick voor BugOS, of zet je bestanden eerst ergens anders neer." "'$($stick.FriendlyName)' holds your files from step 2 (the BugOS-Switch folder). You would lose them. Use a different USB stick for BugOS, or put your files somewhere else first.") 'Warning'
+            return
+        }
         if (-not (Vraag (T "ALLES op '$($stick.FriendlyName)' ($([math]::Round($stick.Size / 1GB)) GB) wordt gewist. Weet je het zeker?" "EVERYTHING on '$($stick.FriendlyName)' ($([math]::Round($stick.Size / 1GB)) GB) will be erased. Are you sure?"))) { return }
-        $code = Start-AlsBeheerder @('-Taak', 'Usb', '-IsoPad', "`"$($script:IsoGekozen)`"", '-SchijfNummer', [string]$stick.Number)
+        $code = Start-AlsBeheerder @('-Taak', 'Usb', '-IsoPad', "`"$($script:IsoGekozen)`"", '-SchijfNummer', [string]$stick.Number, '-SchijfId', "`"$($stick.UniqueId)`"")
         if ($code -eq 0) {
             Toon (T "De USB-stick is klaar!`n`nZo ga je verder:`n1. Laat de stick erin zitten en start de computer opnieuw op.`n2. Druk tijdens het opstarten op F12, F11, F9 of Esc (verschilt per computer) en kies de USB-stick.`n3. Volg de stappen op het scherm." "The USB stick is ready!`n`nNext:`n1. Leave the stick in and restart the computer.`n2. While starting, press F12, F11, F9 or Esc (differs per computer) and choose the USB stick.`n3. Follow the steps on screen.")
         }

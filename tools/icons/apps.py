@@ -23,8 +23,8 @@ from __future__ import annotations
 
 import math
 
-import basis
-from basis import KLEUREN, LIJN, ROOD_VERLOOP, STIJLBLAD
+import base as basis
+from base import KLEUREN, LIJN, ROOD_VERLOOP, STIJLBLAD
 
 MAP = "apps/scalable"
 

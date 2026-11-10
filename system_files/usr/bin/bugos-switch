@@ -26,7 +26,8 @@ sys.path.insert(0, "/usr/lib/bugos/python")
 
 from bugos_ui import t  # noqa: E402
 
-MAP = "BugOS-Switch"
+# Mapnaam en infobestand van de Windows-overstap: de nieuwe en de oude (van voor de hernoeming).
+MAPPEN = (("BugOS-Switch", "bugos-switch.json"), ("BugOS-Overstap", "bugos-overstap.json"))
 
 # Windows-mapnaam -> xdg-naam van de BugOS-map
 KOPPELING = {
@@ -40,6 +41,10 @@ KOPPELING = {
 
 
 def gebruikersmap(xdg: str, standaard: str) -> Path:
+    # Alleen de vaste soorten: de naam gaat naar xdg-user-dir (een sh-script), en kan uit een bestand op een
+    # stick van iemand anders komen (U097).
+    if xdg not in {"DOCUMENTS", "PICTURES", "MUSIC", "VIDEOS", "DESKTOP", "DOWNLOAD"}:
+        return Path.home() / standaard
     try:
         uit = subprocess.run(["xdg-user-dir", xdg], capture_output=True, text=True, timeout=5).stdout.strip()
         if uit and Path(uit) != Path.home():
@@ -49,27 +54,43 @@ def gebruikersmap(xdg: str, standaard: str) -> Path:
     return Path.home() / standaard
 
 
+def _op_schijf(schijf: Path) -> list[Path]:
+    """De overstap-map op één schijf: BugOS-Switch, of anders BugOS-Overstap van de oude versie.
+    Staan ze er allebei (beide versies gebruikt), dan alleen de nieuwe: anders staat de stick er twee keer."""
+    for naam, bestand in MAPPEN:
+        if (schijf / naam / bestand).is_file():
+            return [schijf / naam]
+    return []
+
+
 def zoek_overstap() -> list[Path]:
-    """Zoek op alle aangesloten schijven naar de map BugOS-Switch."""
+    """Zoek op alle aangesloten schijven naar de map BugOS-Switch (of de oude BugOS-Overstap)."""
     if os.environ.get("BUGOS_SCHIJVEN"):  # voor tests en screenshots
-        return [Path(p) / MAP for p in os.environ["BUGOS_SCHIJVEN"].split(":")
-                if (Path(p) / MAP / "bugos-switch.json").is_file()]
+        return [m for p in os.environ["BUGOS_SCHIJVEN"].split(":") for m in _op_schijf(Path(p))]
+    # Een stick die er net in zit, is nog dicht (KDE opent hem niet vanzelf): eerst openzetten (U139).
+    try:
+        import bugos_drives
+        bugos_drives.losse_openen_op_achtergrond()
+    except Exception:  # noqa: BLE001  zonder udisks/lsblk gewoon kijken wat er al open is
+        pass
     gebruiker = getpass.getuser()
     gevonden = []
     for basis in (Path("/run/media") / gebruiker, Path("/media") / gebruiker, Path("/media")):
         if basis.is_dir():
             for schijf in basis.iterdir():
-                kandidaat = schijf / MAP
-                if (kandidaat / "bugos-switch.json").is_file():
-                    gevonden.append(kandidaat)
+                gevonden.extend(_op_schijf(schijf))
     return gevonden
 
 
 def info(map_: Path) -> dict:
-    try:
-        return json.loads((map_ / "bugos-switch.json").read_text(encoding="utf-8-sig"))
-    except (OSError, ValueError):
-        return {}
+    for _naam, bestand in MAPPEN:
+        try:
+            return json.loads((map_ / bestand).read_text(encoding="utf-8-sig"))
+        except FileNotFoundError:
+            continue
+        except (OSError, ValueError):
+            return {}
+    return {}
 
 
 # --------------------------------------------------------- bladwijzers ----
@@ -127,7 +148,7 @@ def stappen(bron: Path) -> list[tuple[str, list[str]]]:
         if (bron / win).is_dir():
             doel = gebruikersmap(xdg, win)
             # --ignore-existing: wat al op BugOS staat, wordt nooit overschreven.
-            lijst.append((t(f"{win} terugzetten...", f"Restoring {win}..."),
+            lijst.append((t(f"{mapnaam(win)} terugzetten...", f"Restoring {mapnaam(win)}..."),
                           ["rsync", "-rt", "--ignore-existing", "--modify-window=2", "--info=progress2",
                            "--no-inc-recursive", f"{bron / win}/", f"{doel}/"]))
     return lijst
@@ -184,7 +205,35 @@ def afronden(bron: Path) -> list[str]:
 GOED, DEELS = (0, 24), (23,)
 
 
+def uitslag(code: int, cmd: list[str], uitvoer: str = "") -> str:
+    """'goed', 'deels', 'vol' of 'weg' (de schijf of map waar het vandaan komt is er niet meer) of 'fout'.
+    rsync geeft ook 23 als de bronmap verdwenen is (stick eruit): dat is niet 'een paar bestanden' (U078)."""
+    if code not in GOED and "No space left on device" in uitvoer:
+        return "vol"
+    if code in GOED:
+        return "goed"
+    try:
+        weg = not Path(cmd[-2]).exists()
+    except OSError:   # een stick die eruit is, kan ook een leesfout geven
+        weg = True
+    if weg:
+        return "weg"
+    return "deels" if code in DEELS else "fout"
+
+
+# De Windows-mapnamen in je eigen taal, voor de meldingen (U150).
+MAP_NAAM = {"Documents": ("Documenten", "Documents"), "Pictures": ("Afbeeldingen", "Pictures"),
+            "Music": ("Muziek", "Music"), "Videos": ("Video's", "Videos"), "Desktop": ("Bureaublad", "Desktop"),
+            "Downloads": ("Downloads", "Downloads")}
+
+
+def mapnaam(win: str) -> str:
+    nl, en = MAP_NAAM.get(win, (win, win))
+    return t(nl, en)
+
+
 def deels_uitleg(mappen: list[str]) -> str:
+    mappen = [mapnaam(m) for m in mappen]
     return t(f"Een paar bestanden uit {', '.join(mappen)} konden niet mee. De rest staat er wel.",
              f"A few files from {', '.join(mappen)} could not be copied. Everything else is there.")
 
@@ -192,10 +241,14 @@ def deels_uitleg(mappen: list[str]) -> str:
 def zonder_venster(bron: Path) -> int:
     deels = []
     for _, cmd in stappen(bron):
-        code = subprocess.call(cmd, stdout=subprocess.DEVNULL)
-        if code in DEELS:
+        r = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, errors="replace")
+        sys.stderr.write(r.stderr)
+        soort = uitslag(r.returncode, cmd, r.stderr)
+        if soort == "deels":
             deels.append(Path(cmd[-2].rstrip("/")).name)
-        elif code not in GOED:
+        elif soort != "goed":
+            if soort == "vol":
+                print(t("Je computer is vol.", "Your computer is full."), file=sys.stderr)
             return 1
     for regel in afronden(bron):
         print(regel)
@@ -209,11 +262,11 @@ def zonder_venster(bron: Path) -> int:
 
 def venster() -> int:
     from bugos_ui import (
-        Banner, Groep, IcoonChip, Knop, SchijfKiezer, Voortgang, kop_met_icoon, label, maak_app, pagina, sectie,
-        uitvoeren,
+        Banner, Groep, IcoonChip, Knop, SchijfKiezer, Voortgang, kop_met_icoon, label, maak_app, pagina, schuifbaar,
+        sectie, uitvoeren,
     )
     from PySide6.QtCore import QProcess, QTimer
-    from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
+    from PySide6.QtWidgets import QHBoxLayout, QMessageBox, QVBoxLayout, QWidget
 
     class Overstap(QWidget):
         def __init__(self):
@@ -224,7 +277,7 @@ def venster() -> int:
             w, lay = pagina()
             buiten = QVBoxLayout(self)
             buiten.setContentsMargins(0, 0, 0, 0)
-            buiten.addWidget(w)
+            buiten.addWidget(schuifbaar(w))
             lay.addWidget(kop_met_icoon("lijn:download", "neutraal", t("Je bestanden van Windows", "Your files from Windows"),
                                         t("Heb je met \"BugOS Overstap\" je bestanden op een USB-schijf gezet? "
                                           "Steek die schijf in en druk op de knop.",
@@ -236,7 +289,8 @@ def venster() -> int:
                  t("Komen op de goede plek. Wat al op BugOS staat, wordt nooit overschreven.",
                    "Go to the right place. What's already on BugOS is never overwritten.")),
                 ("lijn:ster", "neutraal", t("Bladwijzers", "Bookmarks"),
-                 t("Van Chrome, Edge en Brave, klaar om in Firefox te zetten.", "From Chrome, Edge and Brave, ready for Firefox.")),
+                 t("Van Chrome, Edge, Brave en Firefox, klaar om in Firefox te zetten.",
+                   "From Chrome, Edge, Brave and Firefox, ready for Firefox.")),   # (U476)
                 ("lijn:foto", "neutraal", t("Je achtergrond", "Your wallpaper"),
                  t("Je oude Windows-achtergrond wordt ook je BugOS-achtergrond.",
                    "Your old Windows wallpaper becomes your BugOS wallpaper too.")),
@@ -277,6 +331,8 @@ def venster() -> int:
             self.nu: list[str] = []
             self.deels: list[str] = []
             self.bron: Path | None = None
+            self.sluit_na = False  # het venster ging dicht tijdens het terugzetten: sluiten zodra het klaar is
+            self.gestopt = False   # de gebruiker koos 'Nu stoppen'
             self.knop.clicked.connect(self.begin)
             self.kiezer.gewijzigd.connect(lambda: self.knop.setEnabled(self.kiezer.gekozen() is not None))
             self.timer = QTimer(self)
@@ -308,53 +364,124 @@ def venster() -> int:
                                        "Is je computer vol, of is de stick eruit? Probeer het opnieuw.",
                                        "Your files are there, but the bookmarks or wallpaper did not work. "
                                        "Is your computer full, or was the stick unplugged? Try again."), "fout")
-                    self.knop.setEnabled(True)
-                    self.kiezer.setEnabled(True)
+                    self.sluit_na = False  # de foutmelding moet je kunnen zien, ook na 'Eerst afmaken'
+                    self.vrij()
                     return
                 self.balk.setValue(100)
                 kop = (deels_uitleg(self.deels) if self.deels
                        else t("Klaar! Je bestanden staan op hun plek.", "Done! Your files are in place."))
                 self.melding.zet(kop + ("\n\n• " + "\n• ".join(gedaan) if gedaan else ""),
                                  "let_op" if self.deels else "goed")
-                self.knop.setEnabled(True)
-                self.kiezer.setEnabled(True)
+                if self.deels:
+                    self.sluit_na = False  # niet alles kon mee: dat moet je kunnen lezen, ook na 'Eerst afmaken'
+                self.vrij()
                 return
             tekst, cmd = self.wachtrij.pop(0)
             self.nu = cmd
+            self.uitvoer = ""
             self.melding.zet(tekst, "bezig")
             self.balk.setValue(0)
             self.proces.start(cmd[0], cmd[1:])
 
         def lees(self) -> None:
-            for stuk in bytes(self.proces.readAllStandardOutput()).decode(errors="ignore").replace("\r", "\n").split():
+            tekst = bytes(self.proces.readAllStandardOutput()).decode(errors="ignore")
+            self.uitvoer = (self.uitvoer + tekst)[-8000:]   # voor 'schijf vol' (U079)
+            for stuk in tekst.replace("\r", "\n").split():
                 if stuk.endswith("%") and stuk[:-1].isdigit():
                     self.balk.setValue(int(stuk[:-1]))
 
         def klaar(self, code: int, _s) -> None:
-            if code in DEELS:
+            if self.gestopt:
+                # Gestopt: zeg het, en de volgende keer begint gewoon opnieuw (ook als je het venster weer opende) (U241).
+                self.gestopt = False
+                self.wachtrij.clear()
+                self.melding.zet(t("Gestopt. Wat al teruggezet was, blijft staan.",
+                                   "Stopped. What was already restored stays."), "info")
+                self.balk.hide()
+                self.vrij()
+                return
+            soort = uitslag(code, self.nu, getattr(self, "uitvoer", ""))
+            if soort == "deels":
                 self.deels.append(Path(self.nu[-2].rstrip("/")).name)
-            elif code not in GOED:
-                self.melding.zet(t("Het lukte niet helemaal. Zit de schijf er nog in? Probeer het opnieuw.",
+            elif soort != "goed":
+                self.melding.zet(t("Je computer is vol. Maak eerst ruimte (bijv. de prullenbak leegmaken in Bestanden) "
+                                   "en probeer het dan opnieuw: wat er al staat, wordt niet opnieuw gekopieerd.",
+                                   "Your computer is full. Make room first (for example empty the trash in Files) "
+                                   "and try again: what is already there is not copied again.") if soort == "vol" else
+                                 t("Het lukte niet helemaal. Zit de schijf er nog in? Probeer het opnieuw.",
                                    "It did not fully work. Is the drive still plugged in? Try again."), "fout")
                 self.wachtrij.clear()
-                self.knop.setEnabled(True)
-                self.kiezer.setEnabled(True)
+                self.sluit_na = False  # ook na 'Eerst afmaken': de foutmelding moet je kunnen zien
+                self.vrij()
                 return
             self.volgende()
+
+        def vrij(self) -> None:
+            """Klaar (of gestopt): de knoppen doen het weer, en ging het venster dicht, dan nu echt."""
+            self.knop.setEnabled(True)
+            self.kiezer.setEnabled(True)
+            if self.sluit_na:
+                QTimer.singleShot(0, self.close)
+
+        def vraag_stoppen(self) -> bool:
+            """Het venster gaat dicht terwijl we bezig zijn: stoppen, of eerst afmaken?"""
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Icon.Question)
+            box.setWindowTitle(t("Nog bezig", "Still busy"))
+            box.setText(t("Je bestanden worden nog teruggezet.", "Your files are still being restored."))
+            box.setInformativeText(
+                t("Maak je het eerst af, dan gaat het venster daarna vanzelf dicht. Stop je nu, dan staat nog niet "
+                  "alles op je computer (wat er al staat, blijft gewoon staan).",
+                  "If you let it finish, the window closes by itself afterwards. If you stop now, not everything "
+                  "is on your computer yet (what is already there stays)."))
+            door = box.addButton(t("Eerst afmaken", "Finish first"), QMessageBox.ButtonRole.AcceptRole)
+            stop = box.addButton(t("Nu stoppen", "Stop now"), QMessageBox.ButtonRole.DestructiveRole)
+            box.setDefaultButton(door)
+            box.exec()
+            return box.clickedButton() is stop
+
+        def tweede_start(self, _args: list[str]) -> None:
+            """Weer geopend terwijl het venster wachtte om dicht te gaan: dat gaat niet meer door (U233)."""
+            if self.sluit_na and self.proces.state() != QProcess.ProcessState.NotRunning and not self.gestopt:
+                self.melding.zet(t("Nog even bezig…", "Still busy…"), "bezig")
+
+        def closeEvent(self, e) -> None:  # noqa: N802
+            if self.proces.state() == QProcess.ProcessState.NotRunning:
+                super().closeEvent(e)
+                return
+            # Nooit stilletjes midden in het terugzetten stoppen: vraag het, en sluit pas als het proces klaar is.
+            e.ignore()
+            if self.sluit_na:
+                return  # al gevraagd; we wachten
+            self.sluit_na = True
+            if self.vraag_stoppen():
+                self.gestopt = True
+                self.wachtrij.clear()
+                self.melding.zet(t("Bezig met stoppen…", "Stopping…"), "bezig")
+                self.proces.terminate()  # rsync ruimt zijn halve bestand zelf op
+            else:
+                self.melding.zet(t("Even wachten: het venster gaat vanzelf dicht als het klaar is.",
+                                   "One moment: the window closes by itself when it is done."), "bezig")
 
         def begin(self) -> None:
             gekozen = self.kiezer.gekozen()
             if not gekozen:
                 return
             self.bron = Path(gekozen)
+            self.gestopt = False
             self.deels = []
             self.wachtrij[:] = stappen(self.bron)
+            if not self.wachtrij:
+                # Stick eruit, of alleen het lijstje zonder mappen: niet 'Klaar!' zeggen (U140).
+                self.melding.zet(t("Er is niets om terug te zetten. Zit de schijf er nog in?",
+                                   "There is nothing to restore. Is the drive still plugged in?"), "fout")
+                return
             self.knop.setEnabled(False)
             self.kiezer.setEnabled(False)
             self.balk.show()
             self.volgende()
 
-    app = maak_app("bugos-switch", "bugos-switch", sys.argv)
+    app = maak_app("bugos-switch", "bugos-switch", sys.argv, een_keer=True)   # (U208)
     return uitvoeren(app, Overstap())
 
 

@@ -28,8 +28,8 @@ from __future__ import annotations
 
 import math
 
-import basis
-from basis import klein, lijn, symbolisch
+import base as basis
+from base import klein, lijn, symbolisch
 
 
 def _g(x: float) -> str:

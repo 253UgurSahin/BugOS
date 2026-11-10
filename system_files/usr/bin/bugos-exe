@@ -19,6 +19,9 @@ fi
 NAAM="$(basename "$BESTAND")"
 # De meldingen lezen \n als nieuwe regel (printf %b): een \ in de bestandsnaam moet dus dubbel.
 TOON="${NAAM//\\/\\\\}"
+# Een naam als "<b>…</b>" mag de tekst van de vraag niet opmaken of verbergen (kdialog leest < > als opmaak) (U251).
+TOON="${TOON//</‹}"
+TOON="${TOON//>/›}"
 ALTERNATIEVEN=/usr/share/bugos/alternatives.txt
 
 # Is er een beter, echt Linux-alternatief? Dan dat eerst aanbieden.
@@ -27,6 +30,13 @@ zoek_alternatief() {
     klein="$(echo "$NAAM" | tr '[:upper:]' '[:lower:]')"
     while IFS='|' read -r woord app id; do
         case "$woord" in '#'* | '') continue ;; esac
+        # Een woord dat met ^ begint, moet aan het begin van de naam staan ('^tsetup' is Telegram, maar
+        # 'ChatGPTSetup.exe' niet) (U190).
+        if [[ "$woord" == ^* ]]; then
+            [[ "$klein" == "${woord#^}"* ]] || continue
+            echo "$app|$id"
+            return 0
+        fi
         if [[ "$klein" == *"$woord"* ]]; then
             echo "$app|$id"
             return 0
@@ -87,6 +97,20 @@ esac
 CODE=$?
 DUUR=$(($(date +%s) - START))
 
+# Annuleren in een Windows-installatie (msiexec 1602, ERROR_CANCELLED 1223): niets aan de hand, niets zeggen (U082).
+# Linux houdt van een afsluitcode alleen de laatste 8 bits over: 1602 wordt 66, 1223 wordt 199.
+if [ "$CODE" -eq 199 ] || { [ "$CODE" -eq 66 ] && [[ "${NAAM,,}" == *.msi ]]; }; then
+    exit 0
+fi
+# Een installatieprogramma (NSIS, Inno) geeft bij Annuleren 1 of 2: dan niet stellig "werkt niet" zeggen.
+installatie=0
+case "${NAAM,,}" in *setup* | *install* | *.msi) installatie=1 ;; esac
+if [ "$CODE" -ne 0 ] && [ "$DUUR" -lt 10 ] && [ "$installatie" = 1 ] && { [ "$CODE" -eq 1 ] || [ "$CODE" -eq 2 ]; }; then
+    fout "$(t \
+        "\"$TOON\" stopte meteen.\n\nKlikte je op Annuleren? Dan is er niets aan de hand.\nAnders werkt het misschien niet op BugOS: kijk in de BugOS Winkel of er een versie voor BugOS is." \
+        "\"$TOON\" stopped right away.\n\nDid you click Cancel? Then nothing is wrong.\nOtherwise it may not work on BugOS: check the BugOS Store for a BugOS version.")"
+    exit 1
+fi
 # Stopte het programma meteen met een fout? Dan vriendelijk uitleggen.
 if [ "$CODE" -ne 0 ] && [ "$DUUR" -lt 10 ]; then
     fout "$(t \

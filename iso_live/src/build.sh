@@ -233,8 +233,8 @@ keyboard --vckeymap=us --xlayouts='us'
 
 %onerror
 tail -n 60 /tmp/anaconda.log | run0 --user=liveuser --setenv=WAYLAND_DISPLAY=wayland-0 --setenv=DISPLAY=:0 \\
-    yad --timeout=0 --text-info --no-buttons --width=640 --height=420 \\
-    --title=BugOS --text="Installing BugOS did not work. If this happened before copying started, nothing on your computer was changed. Take a photo of this screen and report it at github.com/253UgurSahin/BugOS/issues\n\nThat page is public: check the photo for your name, your computer's name or other personal details first."
+    yad --timeout=0 --text-info --no-buttons --width=680 --height=560 \\
+    --title=BugOS --text="Installing BugOS did not work. If this happened before copying started, nothing on your computer was changed. Take a photo of this screen and report it at github.com/253UgurSahin/BugOS/issues\nThat page is public: check the photo for your name, your computer's name or other personal details first.\n\nHet installeren van BugOS is niet gelukt. Gebeurde dit voordat het kopiëren begon, dan is er niets aan je computer veranderd. Maak een foto van dit scherm en meld het op github.com/253UgurSahin/BugOS/issues\nDie pagina is openbaar: kijk eerst of je naam, de naam van je computer of andere persoonlijke gegevens op de foto staan."
 %end
 
 # BugOS vanaf de stick zelf installeren (zie stap 1): geen internet nodig.
@@ -266,15 +266,17 @@ if [ "$BUGOS_VARIANT" = nvidia ]; then
     cat >>/usr/share/anaconda/post-scripts/bugos-updates.ks <<'EOF'
 %post --nochroot --log=/tmp/bugos_logs/secureboot.log
 if [ -d /sys/firmware/efi ] && mokutil --sb-state 2>/dev/null | grep -q enabled; then
+    # Zonder dit telt het blauwe scherm 10 seconden af en start de computer door: dan is de sleutel weg (U289).
+    mokutil --timeout -1 || true
     if printf 'bugos\nbugos\n' | mokutil --import /usr/share/bugos/sb_pubkey.der; then
         run0 --user=liveuser --setenv=WAYLAND_DISPLAY=wayland-0 --setenv=DISPLAY=:0 \
             yad --on-top --width=560 --title=BugOS --button=OK:0 \
-            --text="<b>One more step when the computer restarts</b>\n\nYour computer will show a blue screen (MOK Manager). Choose:\n  1. <b>Enroll MOK</b>\n  2. <b>Continue</b>\n  3. <b>Yes</b>\n  4. Type the password: <b>bugos</b>\n  5. <b>Reboot</b>\n\nThis is needed so your Nvidia graphics card works properly." || true
+            --text="<b>One more step when the computer restarts</b>\n\nYour computer will show a blue screen (MOK Manager). <b>Press a key</b> when it says 'Press any key'. Then choose:\n  1. <b>Enroll MOK</b>\n  2. <b>Continue</b>\n  3. <b>Yes</b>\n  4. Type the password: <b>bugos</b>\n  5. <b>Reboot</b>\n\nThis is needed so your Nvidia graphics card works properly.\n\n<b>Nog één stap als de computer opnieuw opstart</b>\n\nJe ziet een blauw scherm (MOK Manager). <b>Druk op een toets</b> als er 'Press any key' staat. Kies daarna:\n  1. <b>Enroll MOK</b>\n  2. <b>Continue</b>\n  3. <b>Yes</b>\n  4. Typ het wachtwoord: <b>bugos</b>\n  5. <b>Reboot</b>\n\nDit is nodig zodat je Nvidia-videokaart goed werkt." || true
     else
         echo "BugOS: mokutil --import lukte niet" >&2
         run0 --user=liveuser --setenv=WAYLAND_DISPLAY=wayland-0 --setenv=DISPLAY=:0 \
             yad --on-top --width=560 --title=BugOS --button=OK:0 \
-            --text="<b>The Nvidia key could not be added</b>\n\nBugOS is installed, but with Secure Boot on, the Nvidia driver may not start.\nTurn Secure Boot off in the BIOS/UEFI settings, or open 'Something is not working' after the restart." || true
+            --text="<b>The Nvidia key could not be added</b>\n\nBugOS is installed, but with Secure Boot on, the Nvidia driver may not start.\nTurn Secure Boot off in the BIOS/UEFI settings (search the internet for your computer's model and 'Secure Boot off').\n\n<b>De Nvidia-sleutel kon niet worden toegevoegd</b>\n\nBugOS is geïnstalleerd, maar met Secure Boot aan start het Nvidia-stuurprogramma misschien niet.\nZet Secure Boot uit in de BIOS/UEFI-instellingen (zoek op internet naar het type van je computer en 'Secure Boot uitzetten')." || true
     fi
 fi
 %end

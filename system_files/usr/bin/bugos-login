@@ -1,18 +1,38 @@
 #!/usr/bin/bash
-# BugOS: inloggen zonder wachtwoord aan- of uitzetten (het inlogscherm, SDDM).
+# BugOS: inloggen zonder wachtwoord aan- of uitzetten (het inlogscherm: Plasma Login, of anders SDDM).
 # Instellingen roept dit aan via pkexec; KDE vraagt dan één keer je wachtwoord.
 #
 # Gebruik:  bugos-login status <gebruiker>
 #           bugos-login aan <gebruiker>
 #           bugos-login uit <gebruiker>
 set -euo pipefail
+# Het inlogscherm moet het bestand kunnen lezen, ook als de beheerder umask 077 heeft (U247).
+umask 022
 
-BESTAND=/etc/sddm.conf.d/50-bugos-login.conf
+# Fedora 44 heeft Plasma Login (plasmalogin) in plaats van SDDM. Schrijf in de map van het inlogscherm
+# dat er echt is; alleen als Plasma Login er niet is, in die van SDDM.
+if [ -d /usr/lib/plasmalogin ]; then
+    MAP=/etc/plasmalogin.conf.d
+else
+    MAP=/etc/sddm.conf.d
+fi
+BESTAND="$MAP/50-bugos-login.conf"
 WAT="${1:-status}"
 GEBRUIKER="${2:-}"
 
-if ! [[ "$GEBRUIKER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || ! id "$GEBRUIKER" >/dev/null 2>&1; then
+# Een inlognaam zoals jan.jansen mag ook (punt erin), maar niet met een punt of streepje beginnen.
+if ! [[ "$GEBRUIKER" =~ ^[a-z_][a-z0-9_.-]{0,31}$ ]] || ! id "$GEBRUIKER" >/dev/null 2>&1; then
     echo "Geen geldige gebruiker: '$GEBRUIKER'" >&2
+    exit 2
+fi
+# Alleen echte mensen (geen root of systeemaccount) mogen vanzelf inloggen (U247).
+# Gewone gebruikers zitten tussen UID_MIN en UID_MAX van /etc/login.defs (Fedora: 1000-60000); 'nobody' en
+# systemd's eigen gebruikers daarboven niet (U258).
+MIN="$(awk '$1 == "UID_MIN" {print $2}' /etc/login.defs 2>/dev/null || true)"
+MAX="$(awk '$1 == "UID_MAX" {print $2}' /etc/login.defs 2>/dev/null || true)"
+NR="$(id -u "$GEBRUIKER")"
+if [ "$WAT" = aan ] && { [ "$NR" -lt "${MIN:-1000}" ] || [ "$NR" -gt "${MAX:-60000}" ]; }; then
+    echo "Geen gewone gebruiker: '$GEBRUIKER'" >&2
     exit 2
 fi
 
@@ -28,13 +48,20 @@ aan)
         EERSTE="$(find /usr/share/wayland-sessions -maxdepth 1 -name '*.desktop' 2>/dev/null | sort | head -1 || true)"
         [ -n "$EERSTE" ] && SESSIE="$(basename -s .desktop "$EERSTE")"
     fi
-    mkdir -p /etc/sddm.conf.d
-    printf '[Autologin]\nUser=%s\nSession=%s\nRelogin=false\n' "$GEBRUIKER" "$SESSIE" >"$BESTAND"
+    mkdir -p "$MAP"
+    # Lukt het schrijven niet (schijf vol), dan niet 'aan' zeggen (U413).
+    if ! { printf '[Autologin]\nUser=%s\nSession=%s\nRelogin=false\n' "$GEBRUIKER" "$SESSIE" >"$BESTAND.nieuw" &&
+        mv -f "$BESTAND.nieuw" "$BESTAND"; } 2>/dev/null; then
+        rm -f "$BESTAND.nieuw"
+        echo "Kon het bestand niet schrijven." >&2
+        exit 1
+    fi
     echo aan
     ;;
 uit)
     [ "$(id -u)" -eq 0 ] || { echo "Alleen als beheerder (via pkexec)." >&2; exit 1; }
-    rm -f "$BESTAND"
+    # Ook een oud bestand van SDDM weg (van vóór Plasma Login), zodat het nergens meer aan staat.
+    rm -f "$BESTAND" /etc/sddm.conf.d/50-bugos-login.conf
     echo uit
     ;;
 *)
