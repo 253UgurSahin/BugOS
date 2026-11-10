@@ -107,10 +107,11 @@ PlasmoidItem {
         id: menu
         schaal: Kirigami.Theme.defaultFont.pointSize > 0
             ? Math.min(1.5, Math.max(1, Kirigami.Theme.defaultFont.pointSize / 10)) : 1
+        // Verhouding zoals het startmenu van Windows 11: breed, en zo hoog als de inhoud (tussen 24 en 34 regels).
         Layout.preferredWidth: Kirigami.Units.gridUnit * 36
-        Layout.preferredHeight: Kirigami.Units.gridUnit * 34
+        Layout.preferredHeight: implicitHeight
         Layout.minimumWidth: Kirigami.Units.gridUnit * 24
-        Layout.minimumHeight: Kirigami.Units.gridUnit * 24
+        Layout.minimumHeight: 420
         gegevens: root.gegevens
         nederlands: root.nederlands
         color: "transparent"

@@ -122,7 +122,12 @@ Rectangle {
     }
 
     implicitWidth: 660
-    implicitHeight: 640
+    // Plasma maakt de pop-up zo hoog als dit: dus de echte hoogte van de inhoud, met een minimum en maximum.
+    implicitHeight: Math.max(420, Math.min(680, gewensteHoogte))
+    // Zo hoog als de beginpagina nodig heeft (vastgezet + recent), zoals Windows 11: geen groot leeg vlak
+    // onder twee rijen apps. main.qml houdt een minimum en een maximum aan (dan scrolt de beginpagina).
+    readonly property int gewensteHoogte: 22 * 2 + kopRij.implicitHeight + zoekveld.implicitHeight
+        + beginKolom.implicitHeight + 1 + onderRij.implicitHeight + 16 * 4
     color: palette.window
     SystemPalette { id: palette; colorGroup: SystemPalette.Active }
 
@@ -137,12 +142,13 @@ Rectangle {
 
         // --------------------------------------------------- begroeting ---
         RowLayout {
+            id: kopRij
             Layout.fillWidth: true
             spacing: 12
             Label {
                 text: menu.groet() + (menu.voornaam() ? ", " + menu.voornaam() : "")
                 font.family: menu.display
-                font.pixelSize: Math.round(o.letterHeld * menu.schaal)
+                font.pixelSize: Math.round(o.letterKop * menu.schaal)   // compact, zoals Windows 11
                 font.weight: Font.DemiBold
                 color: menu.tekst
                 Layout.fillWidth: true
@@ -151,7 +157,7 @@ Rectangle {
             Label {
                 text: menu.datumTekst
                 color: menu.tekst2
-                font.pixelSize: Math.round(13 * menu.schaal)
+                font.pixelSize: Math.round(12 * menu.schaal)
             }
         }
 
@@ -160,9 +166,9 @@ Rectangle {
             id: zoekveld
             objectName: "zoekveld"
             Layout.fillWidth: true
-            Layout.preferredHeight: 50
-            font.pixelSize: Math.round(16 * menu.schaal)
-            leftPadding: 48
+            Layout.preferredHeight: Math.round(40 * menu.schaal)
+            font.pixelSize: Math.round(14 * menu.schaal)
+            leftPadding: 42
             color: menu.tekst
             placeholderText: menu.tr("Zoek een app of instelling…", "Search for an app or setting…")
             placeholderTextColor: menu.tekst2
@@ -182,10 +188,10 @@ Rectangle {
                 border.color: zoekveld.activeFocus ? menu.rood : menu.lijnkleur
             }
             Loader {
-                x: 16
+                x: 14
                 anchors.verticalCenter: parent.verticalCenter
-                width: 20
-                height: 20
+                width: 18
+                height: 18
                 sourceComponent: menu.icoonTekenaar
                 onLoaded: item.naam = "edit-find"
                 opacity: 0.6
@@ -253,7 +259,7 @@ Rectangle {
                     }
                     GridLayout {
                         Layout.fillWidth: true
-                        columns: 5
+                        columns: 6   // zoals Windows 11: meer apps per rij, kleinere tegels
                         rowSpacing: 4
                         columnSpacing: 4
                         Repeater {
@@ -334,11 +340,12 @@ Rectangle {
             color: menu.lijnkleur
         }
         RowLayout {
+            id: onderRij
             Layout.fillWidth: true
             spacing: 8
             Rectangle {
                 id: avatar
-                width: 38; height: 38; radius: 19
+                width: 32; height: 32; radius: 16
                 readonly property string foto: (menu.gegevens.gebruiker && menu.gegevens.gebruiker.foto) ? menu.gegevens.gebruiker.foto : ""
                 gradient: Gradient {
                     GradientStop { position: 0.0; color: menu.o.verloopBegin }
@@ -351,7 +358,7 @@ Rectangle {
                     color: "white"
                     font.family: menu.display
                     font.weight: Font.DemiBold
-                    font.pixelSize: Math.round(17 * menu.schaal)
+                    font.pixelSize: Math.round(14 * menu.schaal)
                 }
                 // Eigen foto (als die er is): in een rond venstertje
                 Item {
@@ -428,7 +435,7 @@ Rectangle {
     component AppTegel: AbstractButton {
         id: tegel
         property var app
-        implicitHeight: 98
+        implicitHeight: Math.round(82 * menu.schaal)
         hoverEnabled: true
         Accessible.name: app.naam
         onClicked: { menu.start(app.pad); menu.sluiten() }
@@ -441,12 +448,12 @@ Rectangle {
             border.color: menu.rood
         }
         contentItem: ColumnLayout {
-            spacing: 8
+            spacing: 6
             Loader {
                 Layout.alignment: Qt.AlignHCenter
-                Layout.topMargin: 6
-                Layout.preferredWidth: 46
-                Layout.preferredHeight: 46
+                Layout.topMargin: 8
+                Layout.preferredWidth: Math.round(34 * menu.schaal)
+                Layout.preferredHeight: Math.round(34 * menu.schaal)
                 sourceComponent: menu.icoonTekenaar
                 onLoaded: item.naam = Qt.binding(() => tegel.app.icoon)
                 scale: tegel.pressed ? 0.92 : 1.0
@@ -460,7 +467,7 @@ Rectangle {
                 maximumLineCount: 2
                 elide: Text.ElideRight
                 color: menu.tekst
-                font.pixelSize: Math.round(13 * menu.schaal)
+                font.pixelSize: Math.round(12 * menu.schaal)
             }
         }
     }

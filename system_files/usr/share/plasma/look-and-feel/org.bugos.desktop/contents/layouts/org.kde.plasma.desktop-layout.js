@@ -4,9 +4,10 @@
 
 var panel = new Panel;
 panel.location = "bottom";
-panel.height = 2 * Math.floor(gridUnit * 2.6 / 2);
+// Zoals Windows 11: een strakke balk over de hele breedte (niet zwevend), ~48 px hoog.
+panel.height = 2 * Math.floor(gridUnit * 2.7 / 2);
 panel.hiding = "none";
-panel.floating = true;
+panel.floating = false;
 
 // Startknop: het BugOS-startmenu (het lieveheersbeestje). Alt+F1 opent het ook;
 // de Windows-toets werkt via Plasma zelf (het menu meldt zich als startmenu).
@@ -45,11 +46,10 @@ vakje.writeConfig("hiddenItems", ["org.kde.plasma.volume", "org.kde.plasma.netwo
     "org.kde.plasma.clipboard", "org.kde.plasma.keyboardlayout", "org.kde.plasma.keyboardindicator",
     "org.kde.plasma.manage-inputmethod", "org.kde.plasma.printmanager", "org.kde.kdeconnect",
     "org.kde.plasma.weather"]);
-var klok = panel.addWidget("org.kde.plasma.digitalclock");
-klok.currentConfigGroup = ["Appearance"];
-klok.writeConfig("showDate", true);
-klok.writeConfig("dateFormat", "shortDate");
-panel.addWidget("org.kde.plasma.showdesktop");
+// De BugOS-klok: klein, tijd en datum onder elkaar en even groot, zoals Windows 11 (de klok van KDE tekent
+// de datum kleiner en maakt alles zo groot als de taakbalk).
+panel.addWidget("org.bugos.clock");
+// Geen groot 'bureaublad tonen'-icoon rechts (Windows 11 heeft daar niets zichtbaars); Windows+D werkt gewoon.
 
 // Achtergrond van het bureaublad.
 var bureaubladen = desktopsForActivity(currentActivity());

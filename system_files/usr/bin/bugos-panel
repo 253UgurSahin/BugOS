@@ -196,6 +196,30 @@ function taakbalkruimte() {
     vervang("", "org.bugos.taskbar", "org.bugos.quickmenu");
     vervang("", "org.bugos.taskbar", "org.kde.plasma.systemtray");
 }
+// Verhouding zoals Windows 11: een strakke taakbalk (niet zwevend, ~48 px), de BugOS-klok (klein, tijd en
+// datum even groot onder elkaar) in plaats van die van KDE, en geen groot "bureaublad tonen"-icoon
+// (Windows+D werkt gewoon).
+function verhouding() {
+    vervang("org.kde.plasma.digitalclock", "org.bugos.clock", "");
+    var ps = panels();
+    for (var i = 0; i < ps.length; i++) {
+        var p = ps[i], ws = p.widgets(), taakbalk = false;
+        for (var j = 0; j < ws.length; j++) if (ws[j].type == "org.bugos.startmenu" || ws[j].type == "org.bugos.quickmenu") taakbalk = true;
+        if (!taakbalk) continue;
+        p.floating = false;
+        p.height = 2 * Math.floor(gridUnit * 2.7 / 2);
+        for (var k = 0; k < ws.length; k++) {
+            if (ws[k].type == "org.bugos.startmenu") {
+                // Plasma onthoudt de hoogte van de pop-up; die van het oude, hogere menu. 0 = zo hoog als de inhoud.
+                ws[k].currentConfigGroup = [];
+                ws[k].writeConfig("popupHeight", 0);
+                ws[k].writeConfig("popupWidth", 0);
+            } else if (ws[k].type == "org.kde.plasma.showdesktop") {
+                ws[k].remove();
+            }
+        }
+    }
+}
 function heeft(soort) {
     var ps = panels(), n = 0;
     for (var i = 0; i < ps.length; i++) {
@@ -272,7 +296,9 @@ standaard:*)
     # Stap 0: namen van vóór de Engelse namen omzetten (snelmenu, vastgezette apps) (U302). Vóór stap 3, die het
     # snelmenu zoekt.
     MARKER0="$BUGOS_CONFIG/paneel-hernoemd-1"
-    [ -f "$MARKER0" ] && [ -f "$MARKER" ] && [ -f "$MARKER2" ] && [ -f "$MARKER3" ] && exit 0
+    # Stap 4: de verhouding van Windows 11 (strakke taakbalk, kleine klok), ook voor wie al een taakbalk had.
+    MARKER4="$BUGOS_CONFIG/paneel-verhouding-1"
+    [ -f "$MARKER0" ] && [ -f "$MARKER" ] && [ -f "$MARKER2" ] && [ -f "$MARKER3" ] && [ -f "$MARKER4" ] && exit 0
     for _ in $(seq 1 30); do
         bureaublad_er && break
         sleep 2
@@ -303,6 +329,9 @@ standaard:*)
         # naast te zetten) de volgende keer opnieuw proberen, in plaats van nooit meer.
         plasma_script "$JS taakbalkruimte();" >/dev/null &&
             [ "$(status_van org.bugos.taskbar)" = aan ] && touch "$MARKER3"
+    fi
+    if [ ! -f "$MARKER4" ]; then
+        plasma_script "$JS verhouding();" >/dev/null && touch "$MARKER4"
     fi
     ;;
 *)
