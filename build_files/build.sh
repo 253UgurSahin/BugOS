@@ -24,6 +24,27 @@ chmod 0755 /usr/bin/bugos-* /usr/libexec/bugos-user-check
 find /usr/lib/bugos/python -name __pycache__ -prune -exec rm -rf {} +
 python3 -m compileall -q --invalidation-mode checked-hash /usr/lib/bugos/python
 
+# De pictogrammen van de apps in de BugOS Winkel meeleveren. Anders zie je op een vers systeem (de catalogus
+# van Flathub is dan nog niet opgehaald) en zonder internet bij Firefox, LibreOffice, Spotify en Steam alleen een
+# grijs bestandje. Lukt het ophalen niet (geen internet tijdens het bouwen), dan gaat de bouw gewoon door.
+python3 - <<'EOF' || true
+import json, pathlib, urllib.request
+uit = pathlib.Path("/usr/share/bugos/store-icons")
+uit.mkdir(parents=True, exist_ok=True)
+apps = [a["id"] for a in json.load(open("/usr/share/bugos/store.json", encoding="utf-8"))["apps"]]
+def haal(url):
+    return urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "bugos-build"}), timeout=20).read()
+for app_id in apps:
+    try:
+        icoon = json.loads(haal(f"https://flathub.org/api/v2/appstream/{app_id}")).get("icon") or ""
+        if icoon.startswith("https://dl.flathub.org/"):
+            (uit / f"{app_id}.png").write_bytes(haal(icoon))
+    except Exception as e:  # noqa: BLE001
+        print("BugOS Winkel: geen pictogram voor", app_id, e)
+print(len(list(uit.glob("*.png"))), "van", len(apps), "Winkel-pictogrammen")
+EOF
+chmod 0644 /usr/share/bugos/store-icons/* 2>/dev/null || true
+
 # 2. Extra programma's installeren.
 #    --skip-unavailable: als een pakket (even) niet bestaat, gaat de bouw
 #    gewoon door in plaats van te stoppen.

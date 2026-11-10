@@ -254,7 +254,9 @@ class Uiterlijk(Pagina):
             b.setContentsMargins(0, 0, 0, 0)
             b.setSpacing(12)
             plaat = QLabel()
-            plaat.setPixmap(voorbeeld(donker))
+            # Zo groot dat Licht en Donker naast elkaar passen, ook op een laptop van 1280 x 800 (anders viel
+            # Donker rechts buiten het venster, met een schuifbalk eronder).
+            plaat.setPixmap(voorbeeld(donker, 248, 146))
             b.addWidget(plaat)
             b.addWidget(label(naam, "kop3"))
             k = KeuzeKaart(binnen)
