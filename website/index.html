@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-abIgapM9Ut4OBPRAy+0NAdxsMSIhWGSrzWVTNdL2IBo=' 'sha256-r7hJJKNuBbFYwaWkqYJVg7cKS6fIao4spmvlQggauWg='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ezLhV05LGlo+tVvw+bpS+jxjrRTYSEvfjlFq97ruqnE=' 'sha256-r7hJJKNuBbFYwaWkqYJVg7cKS6fIao4spmvlQggauWg='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>BugOS</title>
 <meta name="description" content="BugOS is a free operating system that can't break, keeps itself up to date and collects nothing about you. Made for Bugie, and just as nice for gamers and developers.">
@@ -16,7 +16,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preload" href="fonts/funnel-display.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/atkinson-hyperlegible-next.woff2" as="font" type="font/woff2" crossorigin>
-<script>document.documentElement.classList.add("js");try{var t=localStorage.getItem("bugos-theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<script>document.documentElement.classList.add("js");try{var t=new URLSearchParams(location.search).get("theme")||localStorage.getItem("bugos-theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
 <style>
 /* Website v4. Eén verhaal van boven naar beneden:
    nacht-opening met de ringen van "Stip" -> het verhaal (tekst kleurt mee met scrollen)
@@ -472,7 +472,7 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
     </ul>
     <div class="apparaat">
       <div class="deksel" id="deksel">
-        <img src="assets/desktop-dark-1440.webp" srcset="assets/desktop-dark-1440.webp 1440w, assets/desktop-dark.webp 2880w" sizes="(max-width: 1100px) 100vw, 1060px" width="2880" height="1800" fetchpriority="high" alt="The BugOS desktop: the start menu with a 'Good evening' greeting and the BugOS Store, on the red Dot wallpaper.">
+        <img src="assets/desktop-dark-1440.webp" srcset="assets/desktop-dark-1440.webp 1440w, assets/desktop-dark.webp 2880w" sizes="(max-width: 1100px) 100vw, 1060px" width="2880" height="1800" fetchpriority="high" alt="The BugOS desktop: the start menu with a 'Good afternoon' greeting and pinned apps, next to the BugOS Store, on the red Dot wallpaper.">
       </div>
       <div class="voet"></div>
       <div class="zweef links" data-zweef="-0.06" aria-hidden="true"><img src="assets/quickmenu-dark.webp" width="840" height="800" alt=""></div>
@@ -575,12 +575,12 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
         <li class="moment">
           <time datetime="13:00">13:00</time>
           <h3>Getting an app.</h3><p>The BugOS Store has well-known, safe apps. One click on Install and you're done. Updates happen by themselves.</p><span class="wie">The BugOS Store</span>
-          <figure><div class="venster"><img loading="lazy" data-licht="assets/store-light.webp" data-donker="assets/store-dark.webp" src="assets/store-light.webp" width="2360" height="1600" alt="The BugOS Store with recommended apps like Firefox, VLC, LibreOffice, Spotify and Steam."></div></figure>
+          <figure><div class="venster"><img loading="lazy" data-licht="assets/store-light.webp" data-donker="assets/store-dark.webp" src="assets/store-light.webp" width="2360" height="1600" alt="The BugOS Store with recommended apps: Firefox, LibreOffice, Gwenview, VLC and Steam are installed, Spotify has an Install button."></div></figure>
         </li>
         <li class="moment smal-beeld">
           <time datetime="16:30">16:30</time>
           <h3>Time to game.</h3><p>Game mode on in the quick menu, plug in the controller, play. Steam is set up for you, and the Nvidia version of BugOS has the right driver built in.</p><span class="wie">For gamers</span>
-          <figure class="smal"><div class="venster" style="border-color:#1F2024"><img loading="lazy" src="assets/quickmenu-dark.webp" width="840" height="800" alt="The quick menu with big buttons: wifi, bluetooth, game mode and dark mode are on."></div></figure>
+          <figure class="smal"><div class="venster" style="border-color:#1F2024"><img loading="lazy" src="assets/quickmenu-dark.webp" width="840" height="800" alt="The quick menu with big buttons for Wi-Fi, Bluetooth, game mode, dark, do not disturb and mute, and a volume slider. Dark is on."></div></figure>
         </li>
         <li class="moment">
           <time datetime="21:00">21:00</time>
@@ -646,7 +646,7 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
       <li class="tegel half nacht beeld-midden rv" style="--d:.08s">
         <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/></svg></span>
         <h3>One search for everything</h3><p>Open the start menu and type what you're looking for: an app or a setting.</p>
-        <div class="beeld"><img loading="lazy" src="assets/startmenu-dark.webp" width="1320" height="1280" alt="The start menu: 'Good evening', a search box, pinned apps and recently opened files."></div>
+        <div class="beeld"><img loading="lazy" src="assets/startmenu-dark.webp" width="1320" height="1280" alt="The start menu: a greeting, a search box for apps and settings, pinned apps, and buttons to lock, sign out, restart and shut down."></div>
       </li>
       <li class="tegel klein rv">
         <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M3.5 8.5h17M7 6.5h.01M9.5 6.5h.01"/></svg></span>
@@ -668,7 +668,7 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
       <li class="tegel groot rv" style="--d:.08s">
         <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></span>
         <h3>Settings in plain words</h3><p>Everything in one place, in everyday words. The switches you use most are right at the top.</p>
-        <div class="beeld"><img loading="lazy" data-licht="assets/settings-light.webp" data-donker="assets/settings-dark.webp" src="assets/settings-light.webp" width="2240" height="1640" alt="Settings: big switches for wifi, bluetooth, night light and dark, a volume slider and a list of all settings with a short explanation each."></div>
+        <div class="beeld"><img loading="lazy" data-licht="assets/settings-light.webp" data-donker="assets/settings-dark.webp" src="assets/settings-light.webp" width="2240" height="1640" alt="Settings: ten groups in the sidebar, switches for night light and dark, a volume slider and a list of all settings with a short explanation each."></div>
       </li>
       <li class="tegel klein rv">
         <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.3 2.5 3.5 5.3 3.5 8.5s-1.2 6-3.5 8.5c-2.3-2.5-3.5-5.3-3.5-8.5s1.2-6 3.5-8.5z"/></svg></span>
