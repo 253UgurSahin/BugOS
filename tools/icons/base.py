@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ontwerp"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "design"))
 from tokens import KLEUREN, LIJN, MATEN, ROOD_VERLOOP, SYSTEM  # noqa: E402
 
 UIT = SYSTEM / "usr" / "share" / "icons" / "BugOS"

@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BRONNEN = ROOT / "system_files" / "usr"
-DOEL = BRONNEN / "share" / "bugos" / "vertalingen"
+DOEL = BRONNEN / "share" / "bugos" / "translations"
 
 
 def uit_python(pad: Path) -> set[str]:

@@ -28,10 +28,10 @@ from pathlib import Path
 HIER = Path(__file__).resolve().parent
 sys.path.insert(0, str(HIER))
 
-import basis  # noqa: E402
+import base as basis  # noqa: E402
 
-ONDERDELEN = ["apps", "status", "plaatsen", "instellingen"]
-LIJSTEN = HIER / "lijsten"
+ONDERDELEN = ["apps", "status", "places", "settings"]
+LIJSTEN = HIER / "lists"
 
 
 def _lijst(naam: str) -> Path:
