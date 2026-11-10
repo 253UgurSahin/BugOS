@@ -165,12 +165,12 @@ The most important idea: **BugOS can't break.**
 - [ ] Signing through SignPath, volunteers and a domain name (see above).
 
 ### Next: testing on real computers
-- [ ] **Switched to English, new base `kinoite-main`:** the docs and the default language are now English, the word "oma" has been replaced by "Bugie". The image builds (locally with Podman, 2026-11-04: `ID=bugos`, no Aurora left, Discover Flatpak-only, update timers on, `bootc container lint` passes). Not tested yet: the stick (ISO) in a VM, and the English screenshots (run `screenshots.yml` again).
-- [ ] **New stick not tested yet** (branch `claude/fix-iso-alleen-bugos`). BugOS now goes on the stick as an OCI folder; unpacking it into the container storage did not work (whiteouts: "open /etc/.wh.bazaar: invalid argument"). Next step: run `tools/iso-local.sh` (or iso.yml), boot the ISO in a VM, install without a network and check the installed system (no Aurora/Fedora; `stat /usr/libexec/utempter/utempter` must be `root:utmp`).
+- [x] **Switched to English, new base `kinoite-main`:** the docs and the default language are English, "oma" is "Bugie". Tested 2026-11-10 in a VM (QEMU, UEFI): the stick boots, BugOS installs, signs in and runs.
+- [x] **The stick installs BugOS** (tested 2026-11-10 in a VM with `tools/iso-local.sh`). Found and fixed: Fedora's KDE installer profile hid the Account and Date-and-time pages, so after installing there was no user and the clock was on New York time (now `hidden_webui_pages =` empty, plus `bugos-user-check.service` as a safety net). Still open: the installer's "Automatically set timezone" is ticked but BugOS does not look up your location, so it stays on New York unless you untick it; and the installing step shows no progress for 20-40 minutes.
 - [ ] Try the "try first" stick on a real PC
 - [x] Start menu and quick menu by default (tested outside Plasma: tools/qml-test.py, tools/test_start_data.py, tools/test_logout.py)
 - [ ] Check the start menu, quick menu and shutdown screen on a real PC (Windows key, picking Wi-Fi, shutting down) — see TESTING.md
-- [ ] Desktop photos from the real screen: the photo round (`tools/screenshots/desktop.sh`) starts KWin and plasmashell in the container, but the build computer has no graphics card; even with KWin's software renderer (KWIN_DRM_DEVICES), KWin 6.8 found no 'render device'. Next step: test on a real PC or a VM with a screen. Until then: photos from the photo studio.
+- [x] Desktop photos from the real screen: the website's hero, start menu, quick menu, Settings and Store images are screenshots of a real BugOS install in a VM (2880x1800 at 200%). `tools/website/og.py` makes og.png and the README banner from the site itself.
 - [ ] Try BugOS Switch on a real Windows PC (steps 3 and 4 on a spare PC first)
 
 ## Things to watch out for
