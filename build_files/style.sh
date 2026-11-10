@@ -265,8 +265,16 @@ for app in org.kde.discover.desktop org.kde.dolphin.desktop systemsettings.deskt
     org.freedesktop.MalcontentControl.desktop; do
     verberg "$app"
 done
+# Gezien in "Alle apps" op een verse installatie (2026-11-10): hulpjes die met een ander pakket meekomen en waar
+# Bugie niets mee kan. Ze werken gewoon, maar staan niet in het startmenu: de DOS-emulator van Wine, de firewall
+# (staat goed; instellen kan via de geavanceerde instellingen), KDE's zoekvenster (Bestanden zoekt zelf), scherm
+# delen via VNC, en het hulpprogramma van de vensterstijl.
+for app in org.dosbox-staging.dosbox-staging.desktop firewall-config.desktop org.kde.kfind.desktop     org.kde.krfb.desktop org.kde.krfb.virtualmonitor.desktop kvantummanager.desktop; do
+    verberg "$app"
+done
 hernoem org.kde.spectacle.desktop "Schermafbeelding" "Screenshot"
 hernoem org.kde.kate.desktop "Teksteditor" "Text editor"
+hernoem org.kde.kcharselect.desktop "Speciale tekens" "Special characters"
 
 # 4d. Eigen pictogramnamen voor KDE-programma's waarvan de standaardnaam ook in
 #     KDE Instellingen gebruikt wordt (daar is het een lijnicoon, hier een app-tegel).

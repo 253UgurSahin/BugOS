@@ -66,6 +66,16 @@ klopt '[ -f /usr/share/bugos/wine/licht.reg ] && [ -f /usr/share/bugos/wine/donk
 klopt '[ -f /usr/share/plasma/shells/org.kde.plasma.desktop/contents/logout/bugos-aftellen.js ] && [ -f /usr/share/plasma/look-and-feel/org.bugos.desktop/contents/logout/bugos-aftellen.js ]' "uitzetscherm: bugos-aftellen.js staat naast Logout.qml (U088)"
 klopt 'fc-list | grep -q "Inter" && fc-list | grep -q "JetBrains Mono"' "letters: Inter en JetBrains Mono geïnstalleerd"
 
+# 5b. Het startmenu toont alleen programma's met een gewone naam (style.sh: hernoemen en verbergen).
+#     Geen KDE-namen (KFind, Krfb, KCharSelect...), geen hulpjes voor gevorderden.
+apps="$(LANG=en_US.UTF-8 /usr/bin/bugos-start-data 2>/dev/null | python3 -c 'import json, sys
+for a in json.load(sys.stdin)["apps"]:
+    if a.get("soort") == "app":
+        print(a["naam"])' 2>/dev/null)"
+klopt '[ -n "$apps" ]' "startmenu: bugos-start-data geeft de apps"
+raar="$(echo "$apps" | grep -E '^K[A-Z]|^K[a-z]+[A-Z]|^Krfb|Kvantum|DOSBox|Firewall|KDE|Dolphin|Discover|Info Center|System Monitor|Menu Editor' | paste -sd, - || true)"
+klopt '[ -z "$raar" ]' "startmenu: geen KDE-namen of hulpjes voor gevorderden tussen de apps ${raar:+($raar)}"
+
 # 6. Alles laadt met de Qt, KDE en Python van het beeld zelf
 HOME="$(mktemp -d)"
 export QT_QPA_PLATFORM=offscreen PYTHONDONTWRITEBYTECODE=1 HOME
