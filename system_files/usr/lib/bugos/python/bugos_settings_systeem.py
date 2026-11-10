@@ -1,4 +1,4 @@
-"""BugOS Instellingen: de pagina's Updates en meer, en Over deze computer (met wat ze over het
+"""BugOS Instellingen: de pagina's Updates, Gamen en programmeren, en Over deze computer (met wat ze over het
 systeem vragen).
 """
 
@@ -90,14 +90,63 @@ def herstart() -> None:
 
 # ======================================================= updates en meer ===
 
-class UpdatesPagina(Blad):
+class Schakelaars:
+    """Schakelaars voor bugos-scripts (game-modus, lichte stand, startmenu, ...), voor elke pagina die ze toont."""
+
+    def schakel(self, script: str, *voor: str):
+        """Een schakelaar voor een bugos-script (game-modus, lichte stand, startmenu, ...). Tijdens het omzetten op
+        slot, en daarna opnieuw lezen wat er echt staat: lukte het niet (offline, Annuleren), dan springt hij terug,
+        en snel aan-uit loopt niet door elkaar (U126)."""
+        if not hasattr(self, "schakels"):
+            self.schakels = {}
+        schuif = schuifje(status_van(script, *voor), lambda aan: self.zet_schakel(script, voor, aan))
+        self.schakels[(script, voor)] = schuif
+        return schuif
+
+    def zet_schakel(self, script: str, voor: tuple, aan: bool) -> None:
+        if bi.VOORBEELD:
+            return
+        schuif = self.schakels[(script, voor)]
+        schuif.setEnabled(False)
+        # Los gestart (in een eigen draad die wacht), zodat sluiten van Instellingen bijvoorbeeld het klaarzetten
+        # van de ontwikkelaarsmodus (5-10 minuten) niet afbreekt.
+        sein = Sein(self)
+        sein.klaar.connect(lambda _c: op_achtergrond(
+            self, lambda: status_van(script, *voor), lambda stand: (schuif.zet_stil(stand is True), schuif.setEnabled(True))))
+
+        def wacht_op_script() -> None:
+            try:
+                code = subprocess.Popen([script, *voor, "aan" if aan else "uit"], stdout=subprocess.DEVNULL,
+                                        stderr=subprocess.DEVNULL, start_new_session=True).wait()
+            except OSError:
+                code = 127
+            try:
+                sein.klaar.emit(code)
+            except RuntimeError:   # Instellingen is al dicht
+                pass
+
+        threading.Thread(target=wacht_op_script, daemon=True).start()
+
+    def ververs_schakels(self) -> None:
+        """Bij het openen van de pagina: lezen wat er nu echt aan staat (ook als het buiten Instellingen veranderde)."""
+        schakels = dict(getattr(self, "schakels", {}))
+        if not schakels or bi.VOORBEELD:
+            return
+        op_achtergrond(self, lambda: {k: status_van(k[0], *k[1]) for k in schakels},
+                       lambda standen: [schakels[k].zet_stil(v is True) for k, v in (standen or {}).items()
+                                        if schakels[k].isEnabled()])
+
+    def ververs(self) -> None:
+        self.ververs_schakels()
+
+
+class UpdatesPagina(Schakelaars, Blad):
     sleutel, icoon = "updates", "verversen"
-    titel_nl, titel_en = "Updates en meer", "Updates and more"
-    uitleg_nl = "Zet dingen aan of uit met één tik. Je kunt het altijd terugdraaien."
-    uitleg_en = "Turn things on or off with one tap. You can always undo it."
-    zoekwoorden = ("taakbalk fps fps-teller snelmenu update bijwerken versie terug game spel modus ontwikkelaar programmeren lichte stand startmenu "
-                   "snelmenu updates update upgrade version roll back rollback game mode gaming developer coding "
-                   "programming light mode start menu quick menu taskbar")
+    titel_nl, titel_en = "Updates", "Updates"
+    uitleg_nl = "BugOS houdt zichzelf bij. Ging er iets mis? Dan ga je met één knop terug."
+    uitleg_en = "BugOS keeps itself up to date. Did something go wrong? One button takes you back."
+    zoekwoorden = ("update bijwerken versie terug vorige versie taakbeheer back-up hulp "
+                   "updates update upgrade version roll back rollback previous version task manager backup help")
 
     bezig = False   # loopt "Nu updaten" of "Terug" nog?
 
@@ -150,37 +199,8 @@ class UpdatesPagina(Blad):
             self.updates("terug")
 
     def bouw_rest(self) -> None:
-        """Alles onder de kaart Updates (spelen en werken, taakbalk, hulp)."""
-        g = self.kaart(t("Spelen en werken", "Play and work"))
-        for script, ic, (nl, en), (unl, uen) in (
-                ("bugos-game-mode", "spel", ("Game-modus", "Game mode"),
-                 ("Volle kracht, meldingen stil en een FPS-teller in games.",
-                  "Full power, quiet notifications and an FPS counter in games.")),
-                ("bugos-developer", "code", ("Ontwikkelaarsmodus", "Developer mode"),
-                 ("VS Code, containers en programmeertalen. Uitzetten gooit niets weg.",
-                  "VS Code, containers and programming languages. Turning off deletes nothing.")),
-                ("bugos-light-mode", "ster", ("Lichte stand", "Light mode"),
-                 ("Zware effecten uit, zodat een oudere computer vlot blijft.",
-                  "Heavy effects off, so an older computer stays fast."))):
-            g.voeg(Rij(ic, t(nl, en), t(unl, uen), self.schakel(script)))
-            if script == "bugos-game-mode":
-                # De FPS-teller meteen (MangoHud altijd verborgen klaar in games) of pas na opnieuw inloggen.
-                g.voeg(Rij("grafiek", t("FPS-teller meteen klaar", "FPS counter ready at once"),
-                           t("Aan: de teller gaat meteen aan en uit met game-modus; MangoHud draait dan verborgen mee "
-                             "in games. Uit: de teller komt pas na opnieuw inloggen.",
-                             "On: the counter turns on and off at once with game mode; MangoHud then runs hidden in "
-                             "games. Off: the counter only appears after you log in again."),
-                           self.schakel("bugos-game-mode", "fps")))
-        g = self.kaart(t("Taakbalk", "Taskbar"))
-        for onderdeel, ic, (nl, en), (unl, uen) in (
-                ("startmenu", "apps", ("BugOS-startmenu", "BugOS start menu"),
-                 ("Uit: het gewone KDE-menu. Alt+F1 of de Windows-toets opent het.",
-                  "Off: the regular KDE menu. Alt+F1 or the Windows key opens it.")),
-                ("snelmenu", "schakelaar", ("Snelmenu op de taakbalk", "Quick menu on the taskbar"),
-                 ("Grote knoppen voor wifi, bluetooth, game-modus, donker, niet storen en geluid.",
-                  "Big buttons for Wi-Fi, Bluetooth, game mode, dark, do not disturb and sound."))):   # (U476)
-            g.voeg(Rij(ic, t(nl, en), t(unl, uen), self.schakel("bugos-panel", onderdeel)))
-        g = self.kaart(t("Hulp", "Help"))
+        """Onder de kaart Updates: de handige hulpmiddelen."""
+        g = self.kaart(t("Handige hulpmiddelen", "Handy tools"))
         for programma, ic, (nl, en), (unl, uen) in (
                 ("bugos-task-manager", "grafiek", ("Taakbeheer", "Task Manager"),
                  ("Zien wat je computer doet, een programma sluiten dat vastzit.",
@@ -192,49 +212,6 @@ class UpdatesPagina(Blad):
             rij = Rij(ic, t(nl, en), t(unl, uen), klikbaar=True)
             rij.geklikt.connect(lambda p=programma: None if bi.VOORBEELD else start(p))
             g.voeg(rij)
-
-    def schakel(self, script: str, *voor: str):
-        """Een schakelaar voor een bugos-script (game-modus, lichte stand, startmenu, ...). Tijdens het omzetten op
-        slot, en daarna opnieuw lezen wat er echt staat: lukte het niet (offline, Annuleren), dan springt hij terug,
-        en snel aan-uit loopt niet door elkaar (U126)."""
-        if not hasattr(self, "schakels"):
-            self.schakels = {}
-        schuif = schuifje(status_van(script, *voor), lambda aan: self.zet_schakel(script, voor, aan))
-        self.schakels[(script, voor)] = schuif
-        return schuif
-
-    def zet_schakel(self, script: str, voor: tuple, aan: bool) -> None:
-        if bi.VOORBEELD:
-            return
-        schuif = self.schakels[(script, voor)]
-        schuif.setEnabled(False)
-        # Los gestart (in een eigen draad die wacht), zodat sluiten van Instellingen bijvoorbeeld het klaarzetten
-        # van de ontwikkelaarsmodus (5-10 minuten) niet afbreekt.
-        sein = Sein(self)
-        sein.klaar.connect(lambda _c: op_achtergrond(
-            self, lambda: status_van(script, *voor), lambda stand: (schuif.zet_stil(stand is True), schuif.setEnabled(True))))
-
-        def wacht_op_script() -> None:
-            try:
-                code = subprocess.Popen([script, *voor, "aan" if aan else "uit"], stdout=subprocess.DEVNULL,
-                                        stderr=subprocess.DEVNULL, start_new_session=True).wait()
-            except OSError:
-                code = 127
-            try:
-                sein.klaar.emit(code)
-            except RuntimeError:   # Instellingen is al dicht
-                pass
-
-        threading.Thread(target=wacht_op_script, daemon=True).start()
-
-    def ververs(self) -> None:
-        """Bij het openen van de pagina: lezen wat er nu echt aan staat (ook als het buiten Instellingen veranderde)."""
-        schakels = dict(getattr(self, "schakels", {}))
-        if not schakels or bi.VOORBEELD:
-            return
-        op_achtergrond(self, lambda: {k: status_van(k[0], *k[1]) for k in schakels},
-                       lambda standen: [schakels[k].zet_stil(v is True) for k, v in (standen or {}).items()
-                                        if schakels[k].isEnabled()])
 
     def updates(self, wat: str) -> None:
         """bugos-updates nu/terug/auto/hand als beheerder, zonder dat het venster vastloopt; daarna zeggen hoe
@@ -393,6 +370,38 @@ class UpdatesPagina(Blad):
 
 # ===================================================== over deze computer ===
 
+class SpelenPagina(Schakelaars, Blad):
+    sleutel, icoon = "spelen", "spel"
+    titel_nl, titel_en = "Gamen en programmeren", "Gaming and coding"
+    uitleg_nl = "Game-modus, ontwikkelaarsmodus en de lichte stand. Aan of uit met één tik; uitzetten gooit niets weg."
+    uitleg_en = "Game mode, developer mode and light mode. On or off with one tap; turning off deletes nothing."
+    zoekwoorden = ("game spel spelen gamen modus fps fps-teller steam ontwikkelaar ontwikkelaarsmodus programmeren code vs code "
+                   "containers lichte stand oude computer traag snel game mode gaming games fps counter developer "
+                   "developer mode coding programming vscode containers docker podman distrobox light mode old computer slow fast")
+
+    def bouw(self) -> None:
+        g = self.kaart(t("Spelen en werken", "Play and work"))
+        for script, ic, (nl, en), (unl, uen) in (
+                ("bugos-game-mode", "spel", ("Game-modus", "Game mode"),
+                 ("Volle kracht, meldingen stil en een FPS-teller in games.",
+                  "Full power, quiet notifications and an FPS counter in games.")),
+                ("bugos-developer", "code", ("Ontwikkelaarsmodus", "Developer mode"),
+                 ("VS Code, containers en programmeertalen. Uitzetten gooit niets weg.",
+                  "VS Code, containers and programming languages. Turning off deletes nothing.")),
+                ("bugos-light-mode", "ster", ("Lichte stand", "Light mode"),
+                 ("Zware effecten uit, zodat een oudere computer vlot blijft.",
+                  "Heavy effects off, so an older computer stays fast."))):
+            g.voeg(Rij(ic, t(nl, en), t(unl, uen), self.schakel(script)))
+            if script == "bugos-game-mode":
+                # De FPS-teller meteen (MangoHud altijd verborgen klaar in games) of pas na opnieuw inloggen.
+                g.voeg(Rij("grafiek", t("FPS-teller meteen klaar", "FPS counter ready at once"),
+                           t("Aan: de teller gaat meteen aan en uit met game-modus; MangoHud draait dan verborgen mee "
+                             "in games. Uit: de teller komt pas na opnieuw inloggen.",
+                             "On: the counter turns on and off at once with game mode; MangoHud then runs hidden in "
+                             "games. Off: the counter only appears after you log in again."),
+                           self.schakel("bugos-game-mode", "fps")))
+
+
 class OverPagina(Blad):
     sleutel, icoon = "over", "laptop"
     titel_nl, titel_en = "Over deze computer", "About this computer"
@@ -425,6 +434,13 @@ class OverPagina(Blad):
         kopieer = Knop(t("Gegevens kopiëren", "Copy details"), "gewoon", "lijn:kopieer")
         kopieer.clicked.connect(self.kopieer)
         self.lay.addWidget(kopieer, 0, Qt.AlignmentFlag.AlignLeft)
+        # De enige weg naar alle KDE-instellingen: voor wie meer wil, uit het zicht van de rest (Bugie-test).
+        g = self.kaart(t("Voor gevorderden", "For advanced users"))
+        meer = Rij("code", t("Geavanceerde instellingen", "Advanced settings"),
+                   t("Alle instellingen van KDE, het onderdeel waar BugOS op draait. Hier hoef je normaal niet te zijn.",
+                     "All settings of KDE, the part BugOS runs on. You normally never need to be here."), klikbaar=True)
+        meer.geklikt.connect(lambda: None if bi.VOORBEELD else start("systemsettings"))
+        g.voeg(meer)
 
     def kopieer(self) -> None:
         QApplication.clipboard().setText("\n".join(f"{k}: {v}" for k, v in self.info))

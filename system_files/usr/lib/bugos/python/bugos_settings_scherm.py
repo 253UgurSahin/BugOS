@@ -6,7 +6,8 @@ from pathlib import Path
 
 import bugos_config as bi
 from bugos_ui import Chip, KeuzeKaart, Knop, Rij, label, leeg_groep, lijn_icoon, sectie, t
-from bugos_settings_onderdelen import Blad, Keuzes, Regelaar, dichtstbij, op_achtergrond, schuifje
+from bugos_settings_onderdelen import Blad, Keuzes, Regelaar, dichtstbij, kde_instelling, op_achtergrond, schuifje
+from bugos_settings_systeem import Schakelaars
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QButtonGroup, QFileDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
@@ -33,10 +34,14 @@ class GeluidPagina(Blad):
                    self.stil))
         self.lijst = self.kaart(t("Waar komt het geluid uit? Klik om te kiezen.",
                                   "Where does the sound come from? Click to choose."))
-        # De microfoon kies je (nog) bij KDE: zeg waar, zodat zoeken op 'microfoon' ergens heen leidt (U166).
-        self.lay.addWidget(label(t("De microfoon kies en zet je bij 'Meer instellingen (voor gevorderden)' hieronder.",
-                                   "You choose and set the microphone under 'More settings (advanced)' below."),
-                                 "klein"))
+        # De microfoon kies je (nog) in het geluidscherm van KDE: een eigen regel, zodat zoeken op 'microfoon'
+        # ergens heen leidt (U166).
+        mic = self.kaart(t("Microfoon", "Microphone"))
+        mic_rij = Rij("geluid", t("Microfoon kiezen en instellen", "Choose and set the microphone"),
+                      t("Opent het geluidscherm met alle microfoons.", "Opens the sound screen with all microphones."),
+                      klikbaar=True)
+        mic_rij.geklikt.connect(lambda: None if bi.VOORBEELD else kde_instelling(self.kde))
+        mic.voeg(mic_rij)
 
     def ververs(self) -> None:
         op_achtergrond(self, bi.geluid, self.toon)
@@ -117,7 +122,7 @@ class SchermPagina(Blad):
         op_achtergrond(self, lambda: bi.zet_schaal(waarde), lambda ok: (setattr(self, "_schaal", waarde) if ok else self.ververs(), self.melding.toon(
             t("Klaar. Sommige programma's worden pas groter als je ze opnieuw opent.",
               "Done. Some programs only change after you open them again.") if ok else
-            t("Dat lukte niet. Probeer het bij 'Meer instellingen'.", "That did not work. Try 'More settings'."),
+            t("Dat lukte niet. Probeer een andere grootte.", "That did not work. Try another size."),
             "goed" if ok else "fout")))   # mislukt: opnieuw lezen, dan staat de echte grootte weer gekozen
 
 
@@ -262,13 +267,14 @@ class EnergiePagina(Blad):
 
 # ============================================================= uiterlijk ===
 
-class UiterlijkPagina(Blad):
+class UiterlijkPagina(Schakelaars, Blad):
     sleutel, icoon = "uiterlijk", "palet"
     titel_nl, titel_en = "Uiterlijk", "Appearance"
-    uitleg_nl = "Licht of donker, en de achtergrond van je bureaublad."
-    uitleg_en = "Light or dark, and your desktop background."
-    zoekwoorden = ("uiterlijk licht donker thema kleur achtergrond bureaublad foto wallpaper appearance light dark "
-                   "theme dark mode color colour background desktop wallpaper picture")
+    uitleg_nl = "Licht of donker, de achtergrond van je bureaublad, en de taakbalk."
+    uitleg_en = "Light or dark, your desktop background, and the taskbar."
+    zoekwoorden = ("uiterlijk licht donker thema kleur achtergrond bureaublad foto wallpaper taakbalk startmenu snelmenu "
+                   "appearance light dark theme dark mode color colour background desktop wallpaper picture taskbar "
+                   "start menu quick menu")
     kde = "kcm_colors"
 
     def bouw(self) -> None:
@@ -312,9 +318,19 @@ class UiterlijkPagina(Blad):
         plaatjes.addWidget(eigen, 0, Qt.AlignmentFlag.AlignVCenter)
         plaatjes.addStretch(1)
         self.lay.addLayout(plaatjes)
+        g = self.kaart(t("Taakbalk", "Taskbar"))
+        for onderdeel, ic, (nl, en), (unl, uen) in (
+                ("startmenu", "apps", ("BugOS-startmenu", "BugOS start menu"),
+                 ("De Windows-toets of Alt+F1 opent het. Uit: het eenvoudige menu van KDE.",
+                  "The Windows key or Alt+F1 opens it. Off: KDE's plain menu.")),
+                ("snelmenu", "schakelaar", ("Snelmenu op de taakbalk", "Quick menu on the taskbar"),
+                 ("Grote knoppen voor wifi, bluetooth, game-modus, donker, niet storen en geluid.",
+                  "Big buttons for Wi-Fi, Bluetooth, game mode, dark, do not disturb and sound."))):   # (U476)
+            g.voeg(Rij(ic, t(nl, en), t(unl, uen), self.schakel("bugos-panel", onderdeel)))
 
     def ververs(self) -> None:
         op_achtergrond(self, bi.donker, lambda d: self.thema[bool(d)].setChecked(True))
+        self.ververs_schakels()
 
     def zet_thema(self, donker: bool) -> None:
         def klaar(ok) -> None:

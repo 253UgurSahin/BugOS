@@ -36,7 +36,7 @@ Type this in the terminal:
 sudo bootc switch ghcr.io/253ugursahin/bugos:latest
 ```
 
-Then restart the computer. Want to go back? Use Settings > Updates and more, or hold Shift (or press Esc) while the computer starts and pick the previous version in the start-up menu.
+Then restart the computer. Want to go back? Use Settings > Updates, or hold Shift (or press Esc) while the computer starts and pick the previous version in the start-up menu.
 
 ## What should you test?
 
@@ -55,7 +55,7 @@ Then restart the computer. Want to go back? Use Settings > Updates and more, or 
 - [ ] The ladybug at the bottom left is the **BugOS start menu**: search for "wifi" and open the page; the Windows key opens the menu
 - [ ] The **quick menu** (two sliders, next to the system tray): turn Wi-Fi off and on; the little arrow next to Wi-Fi opens Settings
 - [ ] Shut down from the start menu: you see the **BugOS shutdown screen** with big tiles; "Cancel" takes you back
-- [ ] Rather have the KDE menu? Settings → Updates and more → Taskbar: turn the BugOS start menu off and on again
+- [ ] Rather have the KDE menu? Settings → Appearance → Taskbar: turn the BugOS start menu off and on again
 - [ ] Start the "try it first" stick: does the welcome screen appear with "Try first" and "Install BugOS"?
 - [ ] Is there no "Aurora" or "Fedora" anywhere on the stick (no "Welcome Center", one install button, English texts (or your chosen language))?
 - [ ] Install BugOS **without internet** (cable out, Wi-Fi off): does it work, and does BugOS start afterwards?

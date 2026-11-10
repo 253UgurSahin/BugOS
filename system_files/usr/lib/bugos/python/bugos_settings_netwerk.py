@@ -117,9 +117,9 @@ class WifiPagina(Blad):
             # School- of werkwifi (eduroam): daar hoort ook een gebruikersnaam bij, en dat kan alleen KDE's eigen
             # netwerkscherm (U495).
             self.melding.toon(t(f"'{n.naam}' is een netwerk van school of werk: daar hoort ook een gebruikersnaam bij. "
-                                "Dat stel je in bij 'Meer instellingen' (we openen het voor je).",
+                                "Dat stel je in het netwerkscherm in; we openen het voor je.",
                                 f"'{n.naam}' is a school or work network: it also needs a user name. You set that up "
-                                "under 'More settings' (we open it for you)."), "let_op", seconden=0)
+                                "in the network screen; we open it for you."), "let_op", seconden=0)
             kde_instelling("kcm_networkmanagement")
             return
         if n.beveiligd and not bekend:

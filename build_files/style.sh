@@ -10,6 +10,20 @@ kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key ColorScheme BugOS
 # Dubbelklik om te openen, net als in Windows.
 kwriteconfig6 --file /etc/xdg/kdeglobals --group KDE --key SingleClick false
 
+# Zo min mogelijk KDE zien (een echt BugOS-gevoel). Kiosk-regels van KDE voor iedereen:
+#  - geen "Over KDE", "Fout melden bij KDE", "Doneren" en "Taal van dit programma" in de Help-menu's;
+#  - geen KRunner (Alt+spatie, Alt+F2): het BugOS-startmenu zoekt apps, bestanden en instellingen al.
+for actie in help_about_kde help_report_bug help_donate switch_application_language run_command; do
+    kwriteconfig6 --file /etc/xdg/kdeglobals --group "KDE Action Restrictions" --key "action/$actie" false
+done
+# Geen Overzicht van KDE als je per ongeluk de muis linksboven in de hoek duwt (net als Windows: daar gebeurt niets).
+kwriteconfig6 --file /etc/xdg/kwinrc --group Effect-overview --key BorderActivate 9
+# KDE Connect (koppelen met je telefoon) start niet vanzelf: het gaf meldingen met "KDE Connect" die niemand vroeg.
+# (Starten met de hand kan nog: kdeconnectd.)
+if [ -f /etc/xdg/autostart/org.kde.kdeconnect.daemon.desktop ]; then
+    printf '%s\n' '[Desktop Entry]' 'Hidden=true' >/etc/xdg/autostart/org.kde.kdeconnect.daemon.desktop
+fi
+
 # De vensterbalk (titelbalk) in BugOS-stijl. We gebruiken de Breeze-rand van
 # KDE (goede schaduwen en ronde hoeken, volgt vanzelf licht en donker) met:
 #  - de kleur van de bovenkant van het venster (BugOS-kleurenschema), zonder
@@ -211,6 +225,12 @@ hernoem org.kde.konsole.desktop "Terminal" "Terminal"
 # KDE-instellingen: hun eigen sneltoetsen eraf (U322).
 sed -i 's/^X-KDE-Shortcuts=Meta+E$//' /usr/share/applications/org.kde.dolphin.desktop
 sed -i 's/^X-KDE-Shortcuts=Tools,Meta+I$/X-KDE-Shortcuts=Tools/; s/^X-KDE-Shortcuts=Meta+I$//' /usr/share/applications/systemsettings.desktop
+# KDE leest de standaard-sneltoets (X-KDE-Shortcuts) van een app alleen uit /usr/share/kglobalaccel/. Zonder die
+# koppeling deden Ctrl+Shift+Esc (Taakbeheer), Windows+E (Bestanden) en Windows+I (Instellingen) niets.
+mkdir -p /usr/share/kglobalaccel
+for app in bugos-task-manager bugos-files bugos-settings; do
+    ln -sf "../applications/$app.desktop" "/usr/share/kglobalaccel/$app.desktop"
+done
 
 # 4c. Het startmenu rustig houden (de Bugie-test): hulpjes voor gevorderden en
 #     losse onderdelen van Wine (Kladblok, Regedit, Mijnenveger...) verbergen.
@@ -233,6 +253,20 @@ for app in kdesystemsettings.desktop htop.desktop nvtop.desktop org.kde.kdebugse
     org.kde.drkonqi.coredump.gui.desktop org.kde.kjournaldbrowser.desktop; do
     verberg "$app"
 done
+# Een echt BugOS-gevoel: de KDE-programma's waar BugOS een eigen app (of knop) voor heeft, staan niet in het
+# startmenu. Ze werken gewoon, en de BugOS-apps openen ze waar nodig ("Meer apps" in de Winkel, "Schijfbeheer"
+# in Bestanden, "Geavanceerde instellingen" onder Over deze computer).
+for app in org.kde.discover.desktop org.kde.dolphin.desktop systemsettings.desktop \
+    org.kde.partitionmanager.desktop org.kde.plasma-systemmonitor.desktop org.kde.kinfocenter.desktop \
+    org.kde.kwalletmanager.desktop org.kde.kwalletmanager5.desktop org.kde.kmenuedit.desktop \
+    org.kde.kdeconnect.app.desktop org.kde.kdeconnect.sms.desktop org.kde.kdeconnect_open.desktop \
+    org.kde.kdeconnect-settings.desktop org.kde.kdeconnect.nonplasma.desktop org.kde.plasma.emojier.desktop \
+    winetricks.desktop org.kde.kwrite.desktop org.kde.khelpcenter.desktop org.kde.plasma-welcome.desktop \
+    org.freedesktop.MalcontentControl.desktop; do
+    verberg "$app"
+done
+hernoem org.kde.spectacle.desktop "Schermafbeelding" "Screenshot"
+hernoem org.kde.kate.desktop "Teksteditor" "Text editor"
 
 # 4d. Eigen pictogramnamen voor KDE-programma's waarvan de standaardnaam ook in
 #     KDE Instellingen gebruikt wordt (daar is het een lijnicoon, hier een app-tegel).

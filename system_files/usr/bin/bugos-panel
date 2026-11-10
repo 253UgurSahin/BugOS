@@ -8,7 +8,7 @@
 #
 # Jip-en-Janneke: de startknop linksonder (het lieveheersbeestje) is het
 # BugOS-menu. "uit" zet het gewone KDE-menu terug, precies zoals BugOS het
-# had ingesteld. Alles is terug te draaien in Instellingen → Updates en meer → Taakbalk.
+# had ingesteld. Alles is terug te draaien in Instellingen → Uiterlijk → Taakbalk.
 
 # shellcheck source=system_files/usr/share/bugos/lib.sh
 . /usr/share/bugos/lib.sh
@@ -299,7 +299,10 @@ standaard:*)
         [ "$gelukt" = 1 ] && touch "$MARKER2"
     fi
     if [ ! -f "$MARKER3" ]; then
-        plasma_script "$JS taakbalkruimte();" >/dev/null && touch "$MARKER3"
+        # Alleen onthouden als de taakbalkruimte er echt staat: anders (nog geen systeemvak of snelmenu om hem
+        # naast te zetten) de volgende keer opnieuw proberen, in plaats van nooit meer.
+        plasma_script "$JS taakbalkruimte();" >/dev/null &&
+            [ "$(status_van org.bugos.taskbar)" = aan ] && touch "$MARKER3"
     fi
     ;;
 *)

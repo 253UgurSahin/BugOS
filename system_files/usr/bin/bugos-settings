@@ -31,7 +31,7 @@ from bugos_settings_onderdelen import (  # noqa: E402,F401  (KiesDialoog en Wach
     Blad, KiesDialoog, Regelaar, WachtwoordDialoog, op_achtergrond, stijl,
 )
 from bugos_settings_scherm import EnergiePagina, GeluidPagina, SchermPagina, UiterlijkPagina  # noqa: E402
-from bugos_settings_systeem import OverPagina, UpdatesPagina  # noqa: E402
+from bugos_settings_systeem import OverPagina, SpelenPagina, UpdatesPagina  # noqa: E402
 from bugos_settings_zien import MuisPagina, ZienPagina  # noqa: E402
 from PySide6.QtCore import QEvent, QSize, QTimer  # noqa: E402
 from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout  # noqa: E402
@@ -148,15 +148,14 @@ class StartPagina(Blad):
                     gevonden += 1
             if not gevonden:
                 self.zoek_kaart.voeg(Rij("kruis", t("Niks gevonden", "Nothing found"),
-                                         t("Probeer een ander woord, of kies 'Meer instellingen'.",
-                                           "Try another word, or choose 'More settings'.")))
+                                         t("Probeer een ander woord.", "Try another word.")))
         self.zoek_kop.setVisible(bool(woorden))
         self.zoek_kaart.setVisible(bool(woorden))
 
 
 PAGINAS: list[type[Blad]] = [StartPagina, WifiPagina, BluetoothPagina, PrintersPagina, GeluidPagina, SchermPagina,
                              EnergiePagina, UiterlijkPagina, MeldingenPagina, MuisPagina, ZienPagina, TijdPagina,
-                             InloggenPagina, ProgrammasPagina, UpdatesPagina, OverPagina]
+                             InloggenPagina, ProgrammasPagina, SpelenPagina, UpdatesPagina, OverPagina]
 OUDE_NAMEN = {"schakelaars": "updates"}
 
 
@@ -172,8 +171,6 @@ class Instellingen(Venster):
                              t("Start", "Home") if klasse is StartPagina else klasse.naam(), klasse(self))
         for i in range(self.nav.count()):  # veel onderdelen: de regels iets dichter op elkaar
             self.nav.item(i).setSizeHint(QSize(0, 40))
-        self.onder_knop(t("Meer instellingen", "More settings"), "code", lambda: start("systemsettings"),
-                        tip=t("Alle KDE-instellingen (voor gevorderden)", "All KDE settings (advanced)"))
         self.zoekveld.textChanged.connect(self.zoeken)
         begin = OUDE_NAMEN.get(begin, begin)
         self.ga_naar(begin if begin in self.paginas else "start")

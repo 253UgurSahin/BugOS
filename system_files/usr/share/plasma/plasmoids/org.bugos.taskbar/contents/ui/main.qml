@@ -17,6 +17,7 @@ import QtQuick.Layouts
 import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasma5support as P5Support
+import org.kde.kirigami as Kirigami
 
 PlasmoidItem {
     id: root
@@ -34,10 +35,13 @@ PlasmoidItem {
     preferredRepresentation: fullRepresentation
 
     // Uitrekken in de richting van de taakbalk; de andere kant volgt het paneel.
+    // Altijd minstens een duimbreed: ook met veel open vensters blijft er een leeg stuk om rechts op te klikken
+    // (anders kromp hij naar 0 en kon je Taakbeheer niet meer vanaf de taakbalk openen).
+    readonly property int minimaal: Kirigami.Units.gridUnit * 3
     Layout.fillWidth: liggend
     Layout.fillHeight: !liggend
-    Layout.minimumWidth: liggend ? 1 : -1
-    Layout.minimumHeight: liggend ? -1 : 1
+    Layout.minimumWidth: liggend ? minimaal : -1
+    Layout.minimumHeight: liggend ? -1 : minimaal
 
     // Een programma los starten, via dezelfde helper als het startmenu
     // (bugos-start-data --start kent .desktop-bestanden en 'instelling:<pagina>').
@@ -61,8 +65,8 @@ PlasmoidItem {
         PlasmaCore.Action {
             text: root.tr("Taakbalkinstellingen", "Taskbar settings")
             icon.name: "configure"
-            // De taakbalk-schakelaars staan in Instellingen op de pagina "Updates en meer".
-            onTriggered: root.voerUit("bugos-start-data --start instelling:updates")
+            // De taakbalk-schakelaars staan in Instellingen op de pagina "Uiterlijk".
+            onTriggered: root.voerUit("bugos-start-data --start instelling:uiterlijk")
         }
     ]
 
@@ -70,7 +74,7 @@ PlasmoidItem {
     fullRepresentation: Item {
         Layout.fillWidth: root.liggend
         Layout.fillHeight: !root.liggend
-        Layout.minimumWidth: root.liggend ? 1 : -1
-        Layout.minimumHeight: root.liggend ? -1 : 1
+        Layout.minimumWidth: root.liggend ? root.minimaal : -1
+        Layout.minimumHeight: root.liggend ? -1 : root.minimaal
     }
 }
