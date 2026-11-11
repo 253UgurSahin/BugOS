@@ -8,8 +8,12 @@ application/x-redhat-package-manager=bugos-package.desktop
 application/vnd.debian.binary-package=bugos-package.desktop
 application/x-deb=bugos-package.desktop
 inode/directory=bugos-files.desktop
-# Een "Installeren"-link van Flathub opent de BugOS Winkel (die geeft het door aan Discover als hij hem niet kent) (U326).
+# Een "Installeren"-link of -bestand van Flathub opent de BugOS Winkel, die de app zelf laat zien (U326; geen KDE Discover meer).
 x-scheme-handler/appstream=bugos-store.desktop
+x-scheme-handler/flatpak+https=bugos-store.desktop
+application/vnd.flatpak.ref=bugos-store.desktop
+application/vnd.flatpak.repo=bugos-store.desktop
+application/vnd.flatpak=bugos-store.desktop
 image/jpeg=org.kde.gwenview.desktop
 image/png=org.kde.gwenview.desktop
 image/gif=org.kde.gwenview.desktop

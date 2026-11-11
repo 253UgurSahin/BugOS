@@ -368,6 +368,64 @@ klopt(_g == {"app/x.y.Z/x86_64/stable": (5_500_000, 12_300_000, "org.gnome.Platf
 klopt(winkel.grootte_tekst(1_200_000_000) == "1,2 GB" and winkel.grootte_tekst(12_300_000) == "12 MB"
       and winkel.grootte_tekst(300_000) == "1 MB", "F3: groottes in het Nederlands met een komma (U237)")
 
+# ============================================================== 7. links en bestanden ===
+o = winkel.opdracht_uit
+D = TMP / "downloads met spatie"
+D.mkdir()
+ZOOM = ("[Flatpak Ref]\nName=us.zoom.Zoom\nBranch=stable\nTitle=us.zoom.Zoom from flathub\nIsRuntime=false\n"
+        "Url=https://dl.flathub.org/repo/\nSuggestRemoteName=flathub\nGPGKey=mQINBFlD2sABEADsiUZUOYBg1UdDaWkEdJYkTSZD\n"
+        "RuntimeRepo=https://dl.flathub.org/repo/flathub.flatpakrepo\n")
+
+
+def bestand(naam: str, inhoud: str | bytes) -> str:
+    (D / naam).write_bytes(inhoud if isinstance(inhoud, bytes) else inhoud.encode())
+    return str(D / naam)
+
+
+klopt(o(["--zoek", "foto", "bewerken"]) == ("foto bewerken", "", "") and o(["appstream://org.voorbeeld.Radio"]) ==
+      ("", "org.voorbeeld.Radio", "") and o(["appstream:org.voorbeeld.radio.desktop"]) == ("", "org.voorbeeld.radio", ""),
+      "7: --zoek en appstream-links (ook zonder // en met .desktop)")
+klopt(o(["flatpak+https://dl.flathub.org/repo/appstream/org.voorbeeld.Radio.flatpakref"]) == ("", "org.voorbeeld.Radio", "")
+      and o(["https://dl.flathub.org/repo/appstream/org.voorbeeld.Radio.flatpakref"]) == ("", "org.voorbeeld.Radio", "")
+      and o(["flatpak+https://dl.flathub.org/repo/elders/org.voorbeeld.Radio.flatpakref"])[2] == "andere_bron"
+      and o(["https://evil.example/repo/appstream/x.y.z.flatpakref"])[2] == "andere_bron"
+      and o(["flatpak+https://dl.flathub.org/repo/appstream/-rf.y.z.flatpakref"])[2] == "andere_bron",
+      "7: een Flathub-link geeft de app (zonder iets te downloaden); elke andere link wordt geweigerd")
+klopt(o(["https://dl.flathub.org/beta-repo/appstream/org.voorbeeld.Radio.flatpakref"]) == ("Radio", "", "test_versie"),
+      "7/I10: een link naar Flathub Beta: 'testversie', niet 'een andere appwinkel'")
+klopt(o([bestand("us.zoom.Zoom.flatpakref", ZOOM)]) == ("", "us.zoom.Zoom", ""),
+      "7: het echte .flatpakref-bestand van Zoom (de knop 'Install' op flathub.org) geeft Zoom")
+klopt(o([bestand("ander.flatpakref", ZOOM.replace("https://dl.flathub.org/repo/", "https://example.org/repo/"))])
+      == ("Zoom", "", "andere_bron")
+      and o([bestand("beta.flatpakref", ZOOM.replace("/repo/", "/beta-repo/"))]) == ("Zoom", "", "test_versie")
+      and o([bestand("rt.flatpakref", ZOOM.replace("IsRuntime=false", "IsRuntime=true"))])[2] == "onderdeel"
+      and o([bestand("rf.flatpakref", ZOOM.replace("Name=us.zoom.Zoom", "Name=-rf"))])[2] == "kapot",
+      "7: een ander adres: geweigerd met een zoektekst; Beta: testversie; een onderdeel; een rare naam: kapot")
+_pad = bestand("Zoom installeren.flatpakref", ZOOM)
+klopt(o(["file://" + _pad.replace(" ", "%20")]) == ("", "us.zoom.Zoom", ""), "7: een file://-adres met %20 erin")
+klopt(o([bestand("flathub.flatpakrepo", "[Flatpak Repo]\nUrl=https://dl.flathub.org/repo/\n")])[2] == "flathub_al"
+      and o([bestand("x.flatpakrepo", "[Flatpak Repo]\nUrl=https://apps.example.org/repo/\n")])[2] == "andere_winkel"
+      and o([bestand("Mijn_app-1.2.flatpak", b"\x00\x01")]) == ("Mijn app 1.2", "", "bundel"),
+      "7: een andere appwinkel toevoegen en losse app-bestanden: geweigerd, met uitleg")
+klopt(o([bestand("leeg.flatpakref", "")])[2] == "kapot" and o([bestand("bin.flatpakref", bytes(range(256)) * 4)])[2] == "kapot"
+      and o([str(D / "weg.flatpakref")])[2] == "kapot" and o([bestand("halve.flatpakrepo", "[Flatpak")])[2] == "kapot",
+      "7: leeg, binair, half of weg: 'kan dit bestand niet lezen'")
+os.mkfifo(D / "pijp.flatpakref")
+klopt(o([str(D / "pijp.flatpakref")])[2] == "kapot", "7/I10: een pijp met die naam laat de Winkel niet hangen")
+klopt(o(["--onbekend"]) == ("", "", "") and o([]) == ("", "", "") and o(["foto.png"]) == ("", "", ""),
+      "7: iets anders: gewoon de Winkel")
+_cwd = os.getcwd()
+os.chdir(D)
+klopt(winkel.absolute_args(["us.zoom.Zoom.flatpakref"]) == [str(D / "us.zoom.Zoom.flatpakref")]
+      and winkel.absolute_args(["appstream://a.b.C"]) == ["appstream://a.b.C"]
+      and winkel.absolute_args(["--zoek", "x"]) == ["--zoek", "x"]
+      and winkel.absolute_args(["flatpak+https://x/y"]) == ["flatpak+https://x/y"],
+      "7/I10: een bestand wordt een volledig pad voordat de opdracht naar een open Winkel gaat")
+os.chdir(_cwd)
+for _code in ("andere_bron", "test_versie", "andere_winkel", "flathub_al", "bundel", "onderdeel", "terminal", "kapot"):
+    _tekst, _soort = winkel.weiger_tekst(_code)
+    klopt(_tekst and _soort in ("info", "let_op", "fout") and "Discover" not in _tekst, f"7: uitleg voor '{_code}'")
+
 # ============================================================== 8. het venster: zoeken en de app-pagina ===
 from PySide6.QtWidgets import QLabel  # noqa: E402
 
@@ -468,6 +526,16 @@ w.pagina.open_knop.click()
 klopt(gestart and gestart[0][-1].endswith("org.kde.kclock.desktop"), f"I1: ... en dat opent zijn eigen .desktop ({gestart})")
 w.tweede_start(["appstream://org.example.NietBijOns"])
 klopt(w.pagina.soort == "niet_gevonden", "F3: een id dat nergens is: 'staat niet in Flathub', met zoeken")
+w.tweede_start([bestand("radio.flatpakref", ZOOM.replace("us.zoom.Zoom", "org.voorbeeld.Radio"))])
+klopt(w.stapel.currentIndex() == 1 and w.pagina_id == "org.voorbeeld.Radio",
+      "F6: een .flatpakref van Flathub opent de pagina van die app in de Winkel")
+w.tweede_start([str(D / "x.flatpakrepo")])
+klopt(w.stapel.currentIndex() == 0 and "andere appwinkel toevoegen" in w.opdracht_melding.tekst.text(),
+      "F6: een .flatpakrepo van een andere appwinkel: de lijst, met uitleg waarom niet")
+w.tweede_start([str(D / "ander.flatpakref")])
+klopt(w.zoek.text() == "Zoom" and "andere appwinkel dan Flathub" in w.opdracht_melding.tekst.text(),
+      "F6: een app uit een andere appwinkel: uitleg, en zoeken op zijn naam")
+w.zoek.clear()
 
 # installeren, verwijderen vanaf de pagina
 w.toon_app("org.voorbeeld.Radio")

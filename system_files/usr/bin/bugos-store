@@ -10,6 +10,10 @@ Alles gebeurt in de Winkel zelf; er gaat geen ander programma open.
   bugos-store                       -> de winkel
   bugos-store appstream://<id>      -> meteen naar die app
   bugos-store --zoek <tekst>        -> meteen zoeken
+  bugos-store <x>.flatpakref        -> de app van dat bestand (de knop 'Install' op flathub.org), alleen van Flathub
+  bugos-store flatpak+https://...   -> idem, als link
+  bugos-store <x>.flatpakrepo       -> uitleg: de Winkel voegt geen andere appwinkel toe
+  bugos-store <x>.flatpak           -> uitleg: geen losse app-bestanden
 """
 
 import json
@@ -1779,12 +1783,106 @@ def echte_id(catalogus: dict, app_id: str) -> str:
     return next((a["id"] for a in catalogus["apps"] if a["id"].lower() == app_id.lower()), app_id)
 
 
+# Flathub zelf (de gewone versie). De Winkel voegt nooit een andere appwinkel toe.
+FLATHUB_URLS = {"https://dl.flathub.org/repo", "https://flathub.org/repo"}
+FLATHUB_BETA = {"https://dl.flathub.org/beta-repo", "https://flathub.org/beta-repo"}
+MAX_BESTAND = 64 * 1024   # een .flatpakref is een paar kB (met de sleutel); meer lezen we niet
+
+
+def _laatste_deel(app_id: str) -> str:
+    return app_id.rsplit(".", 1)[-1] if APP_ID.match(app_id or "") else ""
+
+
+def _lees_ini(pad: Path, sectie: str) -> dict[str, str] | None:
+    """Eén sectie uit een klein ini-bestand (.flatpakref, .flatpakrepo); None als het niet te lezen is.
+    Alleen een gewoon bestand: een 'bestand' dat eigenlijk een pijp is, zou de Winkel voor altijd laten wachten."""
+    import configparser
+    try:
+        if not pad.is_file():
+            return None
+        with open(pad, "rb") as f:
+            tekst_ = f.read(MAX_BESTAND).decode("utf-8", errors="replace")
+        ini = configparser.ConfigParser(interpolation=None, strict=False)
+        ini.read_string(tekst_)
+        if not ini.has_section(sectie):
+            return None
+        return {k: v.strip() for k, v in ini.items(sectie)}
+    except (OSError, ValueError, configparser.Error):
+        return None
+
+
+def _flathub_link(url: str) -> tuple[str, str, str]:
+    """Een link naar een .flatpakref op Flathub (flatpak+https:// of https://). De Winkel downloadt hem nooit:
+    het id staat al in de link."""
+    from urllib.parse import urlsplit
+    try:
+        delen = urlsplit(url)
+        host, pad = (delen.hostname or "").lower(), delen.path
+    except ValueError:
+        return "", "", "kapot"
+    m = re.fullmatch(r"/(repo|beta-repo)/appstream/([^/]+)\.flatpakref", pad)
+    if host in ("dl.flathub.org", "flathub.org") and m and APP_ID.match(m.group(2)):
+        if m.group(1) == "beta-repo":
+            return _laatste_deel(m.group(2)), "", "test_versie"
+        return "", m.group(2), ""
+    return "", "", "andere_bron"
+
+
+def _bestand(pad: Path) -> tuple[str, str, str]:
+    naam = pad.name.lower()
+    if naam.endswith(".flatpakref"):
+        ref = _lees_ini(pad, "Flatpak Ref")
+        if ref is None:
+            return "", "", "kapot"
+        app_id, url = ref.get("name", ""), ref.get("url", "").rstrip("/")
+        if ref.get("isruntime", "").lower() == "true":
+            return "", "", "onderdeel"
+        if url in FLATHUB_URLS:
+            return ("", app_id, "") if APP_ID.match(app_id) else ("", "", "kapot")
+        if url in FLATHUB_BETA:
+            return _laatste_deel(app_id), "", "test_versie"
+        return _laatste_deel(app_id), "", "andere_bron"
+    if naam.endswith(".flatpakrepo"):
+        repo = _lees_ini(pad, "Flatpak Repo")
+        if repo is None:
+            return "", "", "kapot"
+        return "", "", "flathub_al" if repo.get("url", "").rstrip("/") in FLATHUB_URLS else "andere_winkel"
+    if naam.endswith(".flatpak"):
+        return " ".join(re.sub(r"[-_]+", " ", pad.stem).split()), "", "bundel"
+    return "", "", ""
+
+
 def opdracht_uit(args: list[str]) -> tuple[str, str, str]:
-    """(zoektekst, app-id, weigering) uit de opdracht. De weigering is een code voor weiger_tekst()."""
+    """(zoektekst, app-id, weigering) uit de opdracht. De weigering is een code voor weiger_tekst().
+
+      --zoek <woorden>                      -> zoeken
+      appstream://<id>, appstream:<id>      -> die app
+      flatpak+https://dl.flathub.org/repo/appstream/<id>.flatpakref (of https://) -> die app
+      <bestand>.flatpakref (of file://...)  -> die app, als hij van Flathub komt
+      <bestand>.flatpakrepo / .flatpak      -> uitleg waarom de Winkel dat niet doet
+    Alleen args[0] telt (zoals altijd)."""
     zoek, app_id = begin_uit(args)
-    if app_id and not APP_ID.match(app_id):
+    if zoek:
+        return zoek, "", ""
+    if args and args[0].lower().startswith("appstream:"):
+        return ("", app_id, "") if APP_ID.match(app_id) else ("", "", "")
+    if not args:
         return "", "", ""
-    return zoek, app_id, ""
+    eerste = args[0]
+    laag = eerste.lower()
+    if laag.startswith(("flatpak+https://", "https://", "http://")):
+        return _flathub_link(eerste)
+    if laag.startswith("file://"):
+        from urllib.parse import unquote, urlsplit
+        try:
+            eerste = unquote(urlsplit(eerste).path)
+        except ValueError:
+            return "", "", "kapot"
+        if not eerste:
+            return "", "", "kapot"
+    elif eerste.startswith("-"):
+        return "", "", ""   # een onbekende optie: gewoon de Winkel
+    return _bestand(Path(eerste))
 
 
 def weiger_tekst(code: str) -> tuple[str, str]:
@@ -1825,10 +1923,18 @@ def weiger_tekst(code: str) -> tuple[str, str]:
     }.get(code, (t("De Winkel kan dit niet openen.", "The Store cannot open this."), "let_op"))
 
 
+def absolute_args(args: list[str]) -> list[str]:
+    """Een bestand als 'Downloads/x.flatpakref' wordt een volledig pad: staat de Winkel al open, dan krijgt die de
+    opdracht door, en die zit in een andere map."""
+    if args and args[0] != "--zoek" and ":" not in args[0].split("/", 1)[0] and not args[0].startswith("-"):
+        return [os.path.abspath(args[0])] + args[1:]
+    return list(args)
+
+
 def main() -> int:
-    args = sys.argv[1:]
+    args = absolute_args(sys.argv[1:])
     catalogus = lees_catalogus()
-    app = maak_app("bugos-store", "bugos-store", sys.argv, een_keer=True)   # (U208)
+    app = maak_app("bugos-store", "bugos-store", [sys.argv[0]] + args, een_keer=True)   # (U208)
     return uitvoeren(app, Winkel(catalogus, opdracht=args))
 
 
