@@ -16,6 +16,10 @@ kwriteconfig6 --file /etc/xdg/kdeglobals --group KDE --key SingleClick false
 for actie in help_about_kde help_report_bug help_donate switch_application_language run_command; do
     kwriteconfig6 --file /etc/xdg/kdeglobals --group "KDE Action Restrictions" --key "action/$actie" false
 done
+#  - geen "Configureren..." in de rechtermuismenu's van taakbalk, startknop en apps zolang ze op slot staan
+#    (bugos-panel zet taakbalk en bureaublad op slot). Zonder slot doet deze regel niets. NOOIT de sleutel
+#    plasma/plasmashell/unlockedDesktop gebruiken: dan weigert Plasma de scripts van bugos-panel.
+kwriteconfig6 --file /etc/xdg/kdeglobals --group "KDE Action Restrictions" --key plasma/allow_configure_when_locked false
 # Geen Overzicht van KDE als je per ongeluk de muis linksboven in de hoek duwt (net als Windows: daar gebeurt niets).
 kwriteconfig6 --file /etc/xdg/kwinrc --group Effect-overview --key BorderActivate 9
 # KDE Connect (koppelen met je telefoon) start niet vanzelf: het gaf meldingen met "KDE Connect" die niemand vroeg.

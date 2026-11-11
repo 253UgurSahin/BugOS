@@ -59,3 +59,8 @@ for (var i = 0; i < bureaubladen.length; i++) {
     d.currentConfigGroup = ["Wallpaper", "org.kde.image", "General"];
     d.writeConfig("Image", "file:///usr/share/wallpapers/bugos/");
 }
+
+// Op slot: geen KDE-bewerkmodus per ongeluk en geen KDE-regels in de rechtermuismenu's.
+// bugos-panel haalt het slot er even af als het iets verandert (Instellingen > Uiterlijk > Taakbalk), en zet het
+// bij elk inloggen opnieuw. Als laatste: een indeling op slot weigert addWidget.
+if (typeof __AppInterface != "undefined") __AppInterface.locked = true;
