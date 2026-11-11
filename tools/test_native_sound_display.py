@@ -178,6 +178,92 @@ _opd, _ok = vang(bi.pas_toe, ["output.Virtual-1.scale.1.1"], antwoord=ks_fake(co
 klopt(_ok is False and _opd == [], "I2: 110 % mag niet als keuze (alleen als herstel)")
 
 
+# ================================================================================ schermen: één scherm ===
+# 19: resoluties en verversingen
+_r = bi.resoluties(_s)
+klopt(_r[0] == (2880, 1800, True) and len(_r) == len({(b, h) for b, h, _a in _r}) == 23
+      and [b * h for b, h, _a in _r] == sorted((b * h for b, h, _a in _r), reverse=True)
+      and sum(1 for *_x, a in _r if a) == 1, f"19: resoluties: uniek, de grootste eerst, 'aanbevolen' bij de voorkeur ({_r[:3]})")
+klopt(bi.verversingen(_s, 1920, 1200) == [("12", 60), ("10", 75)], f"19: verversingen bij 1920x1200 ({bi.verversingen(_s, 1920, 1200)})")
+_tv = [x for x in bi.lees_beeldschermen(ks(TWEE)) if x.naam == "HDMI-A-1"][0]
+klopt(bi.verversingen(_tv, 3840, 2160) == [("11", 30), ("12", 60)], "19: 4K-tv: 30 en 60 Hz (59,94 heet 60)")
+_veel = copy.deepcopy(_tv)
+_veel.standen = [bi.Stand(i, 1920, 1080, hz) for i, hz in (("a", 60.0), ("b", 59.94), ("c", 50.0), ("d", 30.0),
+                                                           ("e", 24.0), ("f", 120.0), ("g", 144.0))]
+_veel.stand_id = "e"
+_v = bi.verversingen(_veel, 1920, 1080)
+klopt(_v == [("e", 24), ("c", 50), ("a", 60), ("f", 120), ("g", 144)],
+      f"19: 59,94 en 60 zijn één knop (de hoogste telt); meer dan 4: de 4 hoogste en die van nu ({_v})")
+klopt(bi.stand_voor(_s, 1920, 1080) == "13" and bi.stand_voor(_s, 1920, 1200, 75) == "10"
+      and bi.stand_voor(_s, 2880, 1800) == "2" and bi.stand_voor(_s, 999, 1) == "",
+      "19: stand_voor: de Hz van nu als het kan, anders de hoogste; een onbekende resolutie: niets")
+
+# 22: terugzetten precies zoals in de VM getest (één opdracht, 144 ms, niets veranderd)
+_h = bi.stappen_herstel(_vm)
+klopt(_h == ["output.Virtual-1.enable", "output.Virtual-1.mode.12", "output.Virtual-1.rotation.none",
+             "output.Virtual-1.scale.1.25", "output.Virtual-1.position.0,0", "output.Virtual-1.mirror.none",
+             "output.Virtual-1.primary"] and all(bi.geldige_herstel(x) for x in _h), f"22: herstel-stappen voor de VM ({_h})")
+_110 = copy.deepcopy(VM_KSCREEN)
+_110["outputs"][0]["scale"] = 1.1
+_h110 = bi.stappen_herstel(bi.lees_beeldschermen(ks(_110)))
+klopt("output.Virtual-1.scale.1.1" in _h110 and all(bi.geldige_herstel(x) for x in _h110),
+      "I2: een grootte van 110 % (uit KDE) kan terug")
+
+# 25: het vangnet van systemd
+_opd, _e = vang(bi.vangnet_aan, _h)
+_c = _opd[0] if _opd else ()
+klopt(_e and _e.startswith("bugos-scherm-terug-") and _c[:4] == ("systemd-run", "--user", "--quiet", f"--unit={_e}")
+      and "--on-active=60" in _c and _c[_c.index("--") + 1].endswith("kscreen-doctor") and list(_c[_c.index("--") + 2:]) == _h,
+      f"25: vangnet: systemd-run --user … --on-active=60 -- kscreen-doctor <herstel> ({_c[:6]})")
+_opd, _e2 = vang(bi.vangnet_aan, _h)
+klopt(_e2 != _e, "25: elk vangnet heeft een eigen naam (ook binnen dezelfde seconde)")
+klopt(vang(bi.vangnet_aan, _h, antwoord=lambda c: (1, ""))[1] is None, "25: systemd-run lukt niet: geen vangnet (None)")
+_opd, _ = vang(bi.vangnet_aan, _h + ["output.x.scale.0.1"])
+klopt(_ == None and _opd == [], "I2c: het vangnet zet alleen geldige herstel-stappen")  # noqa: E711
+_opd, _ok = vang(bi.vangnet_uit, "bugos-scherm-terug-1-2-3")
+klopt(_ok and _opd == [("systemctl", "--user", "stop", "bugos-scherm-terug-1-2-3.timer")], "25: vangnet uit: systemctl --user stop ….timer")
+klopt(vang(bi.vangnet_uit, None)[1] is True and vang(bi.vangnet_uit, "x; rm")[0] == [], "25: geen vangnet: niets; een rare naam: niets")
+# I3: als de vraag opengaat een verse timer (eerst de nieuwe, dan de oude uit)
+_opd, _n = vang(bi.vangnet_opnieuw, "bugos-scherm-terug-1-2-3", _h, 30)
+klopt(_n and _n != "bugos-scherm-terug-1-2-3" and _opd[0][0] == "systemd-run" and "--on-active=30" in _opd[0]
+      and _opd[1] == ("systemctl", "--user", "stop", "bugos-scherm-terug-1-2-3.timer"),
+      "I3: de vraag gaat open: eerst een nieuwe timer (30 s), dan de oude uit")
+_opd, _n = vang(bi.vangnet_opnieuw, "bugos-scherm-terug-1-2-3", _h, 30, antwoord=lambda c: (1, ""))
+klopt(_n == "bugos-scherm-terug-1-2-3" and not any(c[0] == "systemctl" for c in _opd), "I3: lukt de nieuwe niet, dan blijft de oude")
+
+# 26: een verandering die niet lukt
+_staat = copy.deepcopy(VM_KSCREEN)
+
+
+def _mislukt_dan_herstel(cmd):
+    if cmd[0] == "kscreen-doctor" and cmd[1:] == ("-j",):
+        return 0, ks(_staat)
+    if cmd[0] == "kscreen-doctor" and "output.Virtual-1.mode.21" in cmd:
+        return 0, "applying config failed!\n"
+    return 0, ""
+
+
+_opd, _w = vang(bi.scherm_wijzigen, ["output.Virtual-1.mode.21"], antwoord=_mislukt_dan_herstel)
+_na = [c for c in _opd if c[1:] != ("-j",)]
+klopt(_w.gelukt is False and _w.terug and _w.vangnet is None and _na[0][0] == "systemd-run"
+      and _na[1] == ("kscreen-doctor", "output.Virtual-1.mode.21") and _na[2] == ("kscreen-doctor", *_h)
+      and _na[3][:3] == ("systemctl", "--user", "stop"),
+      f"26: mislukt: vangnet aan, de stap, terugzetten, en dan pas het vangnet uit ({[c[:2] for c in _na]})")
+_opd, _w = vang(bi.scherm_wijzigen, ["output.Virtual-1.mode.21"],
+                antwoord=lambda c: (0, ks(_staat)) if c[1:] == ("-j",) else (0, "failed\n") if c[0] == "kscreen-doctor" else (0, ""))
+klopt(_w.gelukt is False and not _w.terug and _w.vangnet and not any(c[0] == "systemctl" for c in _opd),
+      "I2: mislukt en terugzetten lukt ook niet: het vangnet blijft staan (geen systemctl stop)")
+_opd, _w = vang(bi.scherm_wijzigen, ["output.Virtual-1.primary"], antwoord=ks_fake(copy.deepcopy(VM_KSCREEN)))
+klopt(_w.gelukt and not _w.risico and not any(c[0] == "systemd-run" for c in _opd), "26: hoofdscherm kiezen is geen risico: geen vangnet")
+_staat = copy.deepcopy(VM_KSCREEN)
+_opd, _w = vang(bi.scherm_wijzigen, ["output.Virtual-1.rotation.left"], antwoord=ks_fake(_staat))
+klopt(_w.gelukt and _w.risico and _w.vangnet and _staat["outputs"][0]["rotation"] == 2
+      and _staat["outputs"][0]["size"] == {"width": 1200, "height": 1920}, "26: draaien lukt (met vangnet); breedte en hoogte wisselen")
+_opd, _ok = vang(bi.scherm_terug, _w.herstel, _w.vangnet, antwoord=ks_fake(_staat))
+klopt(_ok and _staat["outputs"][0]["rotation"] == 1 and _opd[-1][:3] == ("systemctl", "--user", "stop"),
+      "26: 'Terugzetten': weer gewoon, en het vangnet uit")
+
+
 # ========================================================================================= microfoon ===
 # pactl -f json list sources uit de VM (PipeWire 1.6.11): de 'monitor' van de luidspreker en de echte ingang.
 VM_BRONNEN = [
@@ -428,6 +514,92 @@ wacht_ms(200)
 gp.mic_uit.setChecked(True)
 klopt(not gp.test_bezig, "A: 'Microfoon uit' tijdens de test: de test stopt")
 gp.mic_uit.setChecked(False)
+wacht()
+
+# 27, 28 (één scherm), 29: de pagina Scherm
+venster.ga_naar("scherm")
+wacht()
+sp = venster.paginas["scherm"]
+klopt("1920 × 1200" in sp.resolutie_rij.uitleg.text() and sp.hz_rij.isVisibleTo(sp)
+      and sorted(sp.hz.inhoud.knoppen) == [48, 60] and sp.hz.inhoud.knoppen[60].isChecked()
+      and len(sp.draai.knoppen) == 4 and sp.draai.knoppen[1].isChecked() and sp.beeld_kop.text() == "Beeld",
+      f"27: één scherm: resolutie 'nu 1920 × 1200', 48 en 60 Hz, vier knoppen om te draaien ({sp.resolutie_rij.uitleg.text()!r})")
+
+
+def houden_klikken(knop: str, na_ms: int = 300) -> None:
+    """Klik straks op een knop van 'Beeld houden?' (die opent in een eigen lus, binnen een terugroep)."""
+    def doe():
+        for w in QApplication.topLevelWidgets():
+            if isinstance(w, ss.HoudenDialoog) and w.isVisible():
+                getattr(w, knop).click()
+                return
+        QTimer.singleShot(100, doe)   # nog niet open
+    QTimer.singleShot(na_ms, doe)
+
+
+def kscreen_vb() -> dict:
+    return {o["name"]: o for o in bi._VB["kscreen"]["outputs"]}
+
+
+houden_klikken("houden")
+sp.draai.knoppen[2].click()
+wacht()
+wacht()
+klopt(kscreen_vb()["eDP-1"]["rotation"] == 2 and "blijft" in sp.melding.tekst.text() and not sp.bezig,
+      f"28: draaien naar links en 'Houden': het blijft ({sp.melding.tekst.text()!r})")
+ss.TERUG_NA = 1
+sp.draai.knoppen[8].click()
+wacht()
+wacht_ms(1600)
+wacht()
+klopt(kscreen_vb()["eDP-1"]["rotation"] == 2 and "zoals het was" in sp.melding.tekst.text(),
+      f"28: draaien naar rechts en niets doen: na de tijd weer zoals het was ({sp.melding.tekst.text()!r})")
+_oud_uit = bi.vangnet_uit
+bi.vangnet_uit = lambda e: False
+houden_klikken("houden")
+sp.draai.knoppen[1].click()
+wacht()
+wacht()
+bi.vangnet_uit = _oud_uit
+klopt(kscreen_vb()["eDP-1"]["rotation"] == 1 and "misschien" in sp.melding.tekst.text(),
+      f"I3: 'Houden', maar de timer stopt niet: 'blijft misschien niet' ({sp.melding.tekst.text()!r})")
+ss.TERUG_NA = 15
+
+
+class NepKies:
+    gekozen = (1280, 800)
+
+    def __init__(self, ouder, titel, items, huidig=None, zoek_hint=""):
+        NepKies.items, NepKies.huidig = items, huidig
+
+    def exec(self):
+        return 1
+
+
+_oud_kies = ss.KiesDialoog
+ss.KiesDialoog = NepKies
+houden_klikken("terug")
+sp.kies_resolutie()
+wacht()
+wacht()
+ss.KiesDialoog = _oud_kies
+klopt(NepKies.huidig == (1920, 1200) and NepKies.items[0] == ((1920, 1200), "1920 × 1200 (aanbevolen)")
+      and kscreen_vb()["eDP-1"]["currentModeId"] == "1" and "zoals het was" in sp.melding.tekst.text(),
+      f"28: resolutie kiezen (1280 × 800) en 'Terugzetten': weer 1920 × 1200 ({NepKies.items[:1]})")
+# 29: de vraag zelf: Esc gaat terug, Enter ook (Terugzetten is de standaardknop)
+from PySide6.QtCore import Qt as _Qt  # noqa: E402
+from PySide6.QtTest import QTest  # noqa: E402
+
+_d = ss.HoudenDialoog(sp)
+_d.show()
+QTest.keyClick(_d, _Qt.Key.Key_Escape)
+klopt(_d.result() == ss.QDialog.DialogCode.Rejected and not _d.isVisible(), "29: Esc: terugzetten")
+_d = ss.HoudenDialoog(sp)
+klopt(_d.terug.isDefault() and not _d.houden.isDefault() and _d.terug.text() == "Terugzetten"
+      and "15 seconden" in _d.teller.text(), "29: 'Terugzetten' is de standaardknop (Enter); 'Terug over 15 seconden'")
+_d.close()
+klopt(_d.result() == ss.QDialog.DialogCode.Rejected, "29: het kruisje: terugzetten")
+sp.verander([])   # niets te doen: geen fout
 wacht()
 print(f"\n{fouten} fout(en).")
 venster.close()

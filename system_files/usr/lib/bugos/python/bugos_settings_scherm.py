@@ -7,12 +7,14 @@ from pathlib import Path
 
 import bugos_config as bi
 import bugos_ui
-from bugos_ui import Chip, Groep, KeuzeKaart, Knop, Rij, Voortgang, label, leeg_groep, lijn_icoon, sectie, t
-from bugos_settings_onderdelen import Blad, Keuzes, Regelaar, dichtstbij, op_achtergrond, schuifje
+from bugos_ui import (Chip, Groep, KeuzeKaart, Knop, Rij, Voortgang, label, leeg_groep, lijn_icoon, schermmaat, sectie,
+                      t)
+from bugos_settings_onderdelen import Blad, Keuzes, KiesDialoog, Regelaar, dichtstbij, op_achtergrond, schuifje
 from bugos_settings_systeem import Schakelaars
 from PySide6.QtCore import QProcess, QSize, Qt, QTimer
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QButtonGroup, QFileDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (QButtonGroup, QDialog, QFileDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout,
+                               QWidget)
 
 MIC = "microfoon" if "microfoon" in bugos_ui.LIJN else "geluid"
 TEST_SECONDEN = 20              # de microfoontest stopt vanzelf
@@ -312,17 +314,116 @@ class GeluidPagina(Blad):
 
 # ================================================================ scherm ===
 
+TERUG_NA = 15   # s: zo lang wacht 'Beeld houden?' op een klik, dan gaat het vanzelf terug (tests: 1)
+
+
+class Wissel(QWidget):
+    """Een plekje voor één onderdeel dat per scherm anders is (bv. de keuzes voor de verversing)."""
+
+    def __init__(self, inhoud: QWidget):
+        super().__init__()
+        self._lay = QHBoxLayout(self)
+        self._lay.setContentsMargins(0, 0, 0, 0)
+        self.inhoud = inhoud
+        self._lay.addWidget(inhoud)
+
+    def zet(self, inhoud: QWidget) -> None:
+        oud, self.inhoud = self.inhoud, inhoud
+        self._lay.removeWidget(oud)
+        oud.hide()
+        oud.deleteLater()
+        self._lay.addWidget(inhoud)
+        self.updateGeometry()
+
+
+def keuzes_voor(opties: list, titel: str, gekozen) -> Keuzes:
+    """Keuzes met de titel van de regel erbij voor de schermlezer (zoals Rij dat bij het bouwen doet)."""
+    k = Keuzes(opties)
+    for knop in k.knoppen.values():
+        knop.setAccessibleDescription(titel)
+    k.gekozen.connect(gekozen)
+    return k
+
+
+def niets_gekozen(k: Keuzes) -> None:
+    k.groep.setExclusive(False)
+    for knop in k.knoppen.values():
+        knop.setChecked(False)
+    k.groep.setExclusive(True)
+
+
+class HoudenDialoog(QDialog):
+    """'Beeld houden?': na een verandering die het scherm zwart kan maken. Klik je niet, dan gaat het vanzelf terug.
+    Enter, Esc en het kruisje zijn allemaal 'Terugzetten' (de veilige kant)."""
+
+    def __init__(self, ouder: QWidget):
+        super().__init__(ouder)
+        self.setWindowTitle(t("Beeld houden?", "Keep this display?"))
+        self.setModal(True)
+        breed = schermmaat((bugos_ui.px(460), 0))[0][0]
+        self.setMinimumWidth(breed)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(24, 22, 24, 20)
+        lay.setSpacing(12)
+        lay.addWidget(label(t("Is alles goed te zien?", "Can you see everything?"), "kop2"))
+        lay.addWidget(label(t("Klik op Houden als het beeld goed is. Anders gaat het vanzelf terug.",
+                              "Click Keep if the picture looks right. Otherwise it goes back by itself."), "klein"))
+        self.rest = TERUG_NA
+        self.teller = label("", "sub")
+        lay.addWidget(self.teller)
+        lay.addSpacing(4)
+        knoppen = QHBoxLayout()
+        knoppen.setSpacing(8)
+        knoppen.addStretch(1)
+        self.terug = Knop(t("Terugzetten", "Go back"), "stil")
+        self.terug.clicked.connect(self.reject)
+        self.houden = Knop(t("Houden", "Keep"), "hoofd")
+        self.houden.clicked.connect(self.accept)
+        knoppen.addWidget(self.terug)
+        knoppen.addWidget(self.houden)
+        lay.addLayout(knoppen)
+        self.terug.setDefault(True)   # een Enter uit gewoonte gaat terug
+        self.terug.setFocus()
+        self.klok = QTimer(self)
+        self.klok.setInterval(1000)
+        self.klok.timeout.connect(self.tik)
+        self.zet_teller()
+        self.klok.start()
+
+    def zet_teller(self) -> None:
+        self.teller.setText(t("Terug over {n} seconden", "Going back in {n} seconds").format(n=self.rest))
+
+    def tik(self) -> None:
+        self.rest -= 1
+        if self.rest <= 0:
+            self.klok.stop()
+            self.reject()
+            return
+        self.zet_teller()
+
+    def done(self, r: int) -> None:
+        self.klok.stop()
+        super().done(r)
+
+    def closeEvent(self, e) -> None:  # noqa: N802
+        e.ignore()
+        self.reject()
+
+
 class SchermPagina(Blad):
     sleutel, icoon = "scherm", "computer"
     titel_nl, titel_en = "Scherm", "Display"
     uitleg_nl = "Helderheid, warm licht voor de avond, en hoe groot alles is."
     uitleg_en = "Brightness, warm light for the evening, and how big everything is."
     zoekwoorden = ("scherm beeldscherm monitor helderheid nachtlicht nachtlampje groot groter klein schaal tekst "
+                   "resolutie verversing hz draaien kantelen staand tweede scherm tv beamer projector "
                    "display screen monitor brightness night light night color blue light size bigger smaller scale "
-                   "scaling text")
+                   "scaling text resolution refresh rate rotate rotation portrait second screen tv projector")
     kde = "kcm_kscreen"
 
     def bouw(self) -> None:
+        self.bezig = False
+        self._schermen = None
         g = self.kaart()
         self.helder = Regelaar(70)
         self.helder.veranderd.connect(lambda w: op_achtergrond(self, lambda: bi.zet_helderheid(w), lambda _u: None))
@@ -332,11 +433,31 @@ class SchermPagina(Blad):
         g.voeg(Rij("maan", t("Nachtlicht", "Night light"),
                    t("'s Avonds warmer licht, prettiger voor je ogen", "Warmer light in the evening, easier on your eyes"),
                    self.nacht))
-        g2 = self.kaart(t("Grootte", "Size"))
-        self.grootte = Keuzes([(1.0, "100%"), (1.25, "125%"), (1.5, "150%"), (1.75, "175%"), (2.0, "200%")])
+        # Het beeld van het scherm. Zonder gegevens van kscreen-doctor alleen de grootte, zoals vroeger.
+        self.beeld_kop = sectie(t("Grootte", "Size"))
+        self.lay.addWidget(self.beeld_kop)
+        self.beeld_kaart = kaart_zonder_kop(self.lay)
+        self.resolutie_rij = Rij("computer", t("Resolutie", "Resolution"), "", klikbaar=True)
+        self.resolutie_rij.geklikt.connect(self.kies_resolutie)
+        self.beeld_kaart.voeg(self.resolutie_rij)
+        titel_hz = t("Verversing", "Refresh rate")
+        self.hz = Wissel(keuzes_voor([(60, "60 Hz")], titel_hz, self.zet_hz))
+        self.hz_rij = Rij("klok", titel_hz, t("Hoe vaak per seconde het beeld ververst. Hoger is vloeiender.",
+                                              "How often per second the picture refreshes. Higher is smoother."), self.hz)
+        self.beeld_kaart.voeg(self.hz_rij)
+        titel_draai = t("Draaien", "Rotation")
+        self.draai = keuzes_voor([(1, t("Gewoon", "Normal")), (2, t("Links", "Left")), (8, t("Rechts", "Right")),
+                                  (4, t("Omgekeerd", "Upside down"))], titel_draai, self.zet_draai)
+        self.draai_rij = Rij("verversen", titel_draai, t("Voor een scherm dat op zijn kant staat",
+                                                         "For a screen that stands on its side"), self.draai)
+        self.beeld_kaart.voeg(self.draai_rij)
+        self.grootte = Keuzes([(w, f"{w:.0%}") for w in bi.SCHALEN])
         self.grootte.gekozen.connect(self.zet_grootte)
-        g2.voeg(Rij("computer", t("Alles groter of kleiner", "Make everything bigger or smaller"),
-                    t("Tekst, knoppen en vensters", "Text, buttons and windows"), self.grootte))
+        self.grootte_rij = Rij("computer", t("Alles groter of kleiner", "Make everything bigger or smaller"),
+                               t("Tekst, knoppen en vensters", "Text, buttons and windows"), self.grootte)
+        self.beeld_kaart.voeg(self.grootte_rij)
+        for r in (self.resolutie_rij, self.hz_rij, self.draai_rij):
+            r.hide()
 
     def ververs(self) -> None:
         def lees():
@@ -349,13 +470,17 @@ class SchermPagina(Blad):
         if not uitkomst:
             return
         helder, nacht, schaal, *rest = uitkomst
-        # Zonder schermen (oude vorm, of kscreen-doctor werkt niet): de grens van Qt, zoals vroeger (U397).
+        # Zonder schermen (oude vorm, of kscreen-doctor werkt niet): de grens van Qt, zoals vroeger (U397, I13).
         self._schermen = rest[0] if rest else None
-        self._schaal = schaal   # onthouden: bij een klik niet opnieuw kscreen-doctor vragen (dat houdt het venster op) (U407)
         self.helder_rij.setVisible(helder is not None)
         if helder is not None:
             self.helder.zet(helder)
         self.nacht.zet_stil(nacht)
+        s = self.gekozen_scherm()
+        if s is not None:
+            schaal = s.schaal
+        self._schaal = schaal   # onthouden: bij een klik niet opnieuw kscreen-doctor vragen (dat houdt het venster op) (U407)
+        self.toon_beeld(s)
         self.grootte.zet(min(bi.SCHALEN, key=lambda w: abs(w - schaal)))
         # Op een klein scherm (1366×768) is 200% maar 683×384: dan past niets meer, ook de knop terug niet. Alleen
         # groottes aanbieden waarbij minstens 1024×700 overblijft (de huidige blijft altijd te kiezen) (U397).
@@ -363,16 +488,72 @@ class SchermPagina(Blad):
         for waarde, knop in self.grootte.knoppen.items():
             knop.setEnabled(waarde <= max(grens, schaal + 0.01))
 
-    def grens(self) -> float:
-        """De grootste grootte voor het gekozen scherm: uit de echte beeldpunten als we die weten (P2)."""
-        s = self.gekozen_scherm()
-        return bi.grootste_schaal(s) if s is not None else groot_genoeg()
+    def toon_beeld(self, s) -> None:
+        """Resolutie, verversing en draaien van het gekozen scherm."""
+        if s is None:
+            self.beeld_kop.setText(t("Grootte", "Size"))
+            for r in (self.resolutie_rij, self.hz_rij, self.draai_rij):
+                r.hide()
+            return
+        self.beeld_kop.setText(t("Beeld", "Picture"))
+        b, h = bi.huidige_resolutie(s)
+        self.resolutie_rij.zet_uitleg(t("Hoe scherp het beeld is: nu {b} × {h}",
+                                        "How sharp the picture is: now {b} × {h}").format(b=b, h=h))
+        self.resolutie_rij.setVisible(bool(s.standen))
+        opties = bi.verversingen(s, b, h)
+        if [hz for _i, hz in opties] != list(self.hz.inhoud.knoppen):
+            self.hz.zet(keuzes_voor([(hz, f"{hz} Hz") for _i, hz in opties] or [(0, "")],
+                                    self.hz_rij.titel.text(), self.zet_hz))
+        nu = s.stand()
+        if nu is not None and round(nu.hz) in self.hz.inhoud.knoppen:
+            self.hz.inhoud.zet(round(nu.hz))
+        else:
+            niets_gekozen(self.hz.inhoud)
+        self.hz_rij.setVisible(len(opties) > 1)
+        if s.draai in self.draai.knoppen:
+            self.draai.zet(s.draai)
+        else:
+            niets_gekozen(self.draai)   # gespiegeld (uit KDE): geen van de vier
+        self.draai_rij.show()
 
     def gekozen_scherm(self):
         schermen = getattr(self, "_schermen", None)
         if not schermen:
             return None
         return next((s for s in schermen if s.hoofd), schermen[0])
+
+    def grens(self) -> float:
+        """De grootste grootte voor het gekozen scherm: uit de echte beeldpunten als we die weten (P2)."""
+        s = self.gekozen_scherm()
+        return bi.grootste_schaal(s) if s is not None else groot_genoeg()
+
+    # ------------------------------------------------------------ veranderen ---
+
+    def kies_resolutie(self) -> None:
+        s = self.gekozen_scherm()
+        if s is None or self.bezig:
+            return
+        nu = bi.huidige_resolutie(s)
+        items = [((b, h), t("{b} × {h} (aanbevolen)", "{b} × {h} (recommended)").format(b=b, h=h) if beste
+                  else f"{b} × {h}") for b, h, beste in bi.resoluties(s)]
+        d = KiesDialoog(self, t("Kies een resolutie", "Choose a resolution"), items, huidig=nu)
+        if d.exec() and d.gekozen and tuple(d.gekozen) != nu:
+            b, h = d.gekozen
+            self.verander(bi.stappen_stand(s.naam, bi.stand_voor(s, b, h)))
+
+    def zet_hz(self, hz: int) -> None:
+        s = self.gekozen_scherm()
+        nu = s.stand() if s is not None else None
+        if s is None or (nu is not None and round(nu.hz) == hz):
+            return
+        b, h = bi.huidige_resolutie(s)
+        self.verander(bi.stappen_stand(s.naam, bi.stand_voor(s, b, h, hz)))
+
+    def zet_draai(self, code: int) -> None:
+        s = self.gekozen_scherm()
+        if s is None or s.draai == code:
+            return
+        self.verander(bi.stappen_draai(s.naam, code))
 
     def zet_grootte(self, waarde: float) -> None:
         if waarde > max(self.grens(), getattr(self, "_schaal", 1.0) + 0.01):   # (U397, U407)
@@ -386,6 +567,62 @@ class SchermPagina(Blad):
               "Done. Some programs only change after you open them again.") if ok else
             t("Dat lukte niet. Probeer een andere grootte.", "That did not work. Try another size."),
             "goed" if ok else "fout")))   # mislukt: opnieuw lezen, dan staat de echte grootte weer gekozen
+
+    def verander(self, stappen: list[str]) -> None:
+        """Iets aan de schermen veranderen. Kan het beeld zwart worden, dan daarna 'Beeld houden?' (C3)."""
+        if self.bezig or not stappen:
+            self.ververs()   # de knoppen weer zoals het echt staat
+            return
+        self.bezig = True
+        self.beeld_kaart.setEnabled(False)
+        self.melding.toon(t("Even geduld…", "One moment…"), seconden=0)
+        op_achtergrond(self, lambda: bi.scherm_wijzigen(stappen), self.na_wijzigen)
+
+    def klaar_met_wijzigen(self) -> None:
+        self.bezig = False
+        self.beeld_kaart.setEnabled(True)
+        self.ververs()
+
+    def na_wijzigen(self, w) -> None:
+        if w is None or not w.gelukt:
+            if w is not None and not w.terug:
+                self.melding.toon(t("Dat lukte niet. BugOS zet je scherm zo vanzelf terug zoals het was.",
+                                    "That did not work. BugOS puts your screen back as it was in a moment."), "fout")
+            else:
+                self.melding.toon(t("Dat lukte niet. Je scherm staat weer zoals het was.",
+                                    "That did not work. Your screen is back as it was."), "fout")
+            self.klaar_met_wijzigen()
+            return
+        if not w.risico:
+            self.melding.toon(t("Klaar.", "Done."), "goed")
+            self.klaar_met_wijzigen()
+            return
+        # De vraag gaat open: een verse timer die pas na de vraag afgaat (review I3).
+        op_achtergrond(self, lambda: bi.vangnet_opnieuw(w.vangnet, w.herstel, TERUG_NA + 15),
+                       lambda nieuw: self.vraag_houden(w, nieuw if nieuw is not None else w.vangnet))
+
+    def vraag_houden(self, w, vangnet) -> None:
+        self.melding.hide()
+        houden = HoudenDialoog(self).exec() == QDialog.DialogCode.Accepted
+        if houden:
+            def gehouden(ok) -> None:
+                if ok:
+                    self.melding.toon(t("Klaar. Het nieuwe beeld blijft.", "Done. The new display stays."), "goed")
+                else:   # de timer liep nog: misschien springt het toch terug (review I3)
+                    self.melding.toon(t("Het nieuwe beeld blijft misschien niet. Springt het terug, kies het dan nog "
+                                        "een keer.", "The new display may not stay. If it switches back, choose it "
+                                        "again."), "let_op")
+                self.klaar_met_wijzigen()
+            op_achtergrond(self, lambda: bi.vangnet_uit(vangnet), gehouden)
+        else:
+            def terug(ok) -> None:
+                if ok:
+                    self.melding.toon(t("Het beeld staat weer zoals het was.", "The display is back as it was."), "info")
+                else:
+                    self.melding.toon(t("Terugzetten lukte niet. BugOS probeert het zo nog een keer.",
+                                        "Going back did not work. BugOS tries again in a moment."), "fout")
+                self.klaar_met_wijzigen()
+            op_achtergrond(self, lambda: bi.scherm_terug(w.herstel, vangnet), terug)
 
 
 def groot_genoeg() -> float:
