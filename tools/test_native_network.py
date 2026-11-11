@@ -572,6 +572,9 @@ zd.wachtwoord.setText("x")
 klopt(not zd.domein.hasFocus(), "school/werk: de focus springt niet naar het domeinveld (dan typ je daar je wachtwoord)")
 klopt(zd.meer.isChecked() and not zd.opties.isHidden() and not zd.hint.isHidden() and not zd.ok.isEnabled(),
       "school/werk: 'CORP\\jdoe': Meer opties klapt open, met de reden boven de knoppen (N9)")
+wacht()
+klopt(zd.height() <= sn.vrije_hoogte(zd), f"school/werk: met de reden erbij past het venster nog op het scherm "
+      f"({zd.height()} <= {sn.vrije_hoogte(zd)})")
 zd.reject()
 wacht()
 

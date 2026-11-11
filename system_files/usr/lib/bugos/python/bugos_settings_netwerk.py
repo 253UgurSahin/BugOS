@@ -49,14 +49,16 @@ def hoogte_zonder(lay: QVBoxLayout, breedte: int, behalve: QWidget) -> int:
     for i in range(lay.count()):
         it = lay.itemAt(i)
         w = it.widget()
-        if w is behalve or (w is not None and w.isHidden()):
+        if w is not None and w.isHidden():
+            continue
+        zichtbaar += 1   # ook het schuifvlak en een spacer: tussen elk paar staat 'spacing'
+        if w is behalve:
             continue
         if it.spacerItem() is not None:
             totaal += it.sizeHint().height()
             continue
         totaal += it.heightForWidth(binnen) if it.hasHeightForWidth() else it.sizeHint().height()
-        zichtbaar += 1
-    return totaal + lay.spacing() * zichtbaar
+    return totaal + lay.spacing() * max(0, zichtbaar - 1)
 
 
 def fout_regel() -> tuple[QWidget, QLabel]:
@@ -1281,7 +1283,7 @@ class KoppelDialoog(QDialog):
         breed = min(520, max(360, schermmaat((99999, 0), scherm=ouder.screen())[0][0] - 40))
         self.setMinimumWidth(breed)
         # Een venster mag de vrije hoogte gebruiken: anders zag je bij 150 % maar anderhalf apparaat (N10).
-        self.resize(breed, max(300, min(560, vrije_hoogte(ouder))))
+        self.resize(breed, max(300, min(500, vrije_hoogte(ouder))))
         lay = QVBoxLayout(self)
         lay.setContentsMargins(24, 22, 24, 20)
         lay.setSpacing(10)
@@ -1314,6 +1316,7 @@ class KoppelDialoog(QDialog):
         kl = QVBoxLayout(kp)
         kl.setContentsMargins(0, 0, 0, 0)
         kl.setSpacing(10)
+        kl.addStretch(1)   # alles in het midden, niet bovenin met een leeg vlak eronder
         self.banner = Banner()
         kl.addWidget(self.banner)
         self.vraag_label = label("", "sub")
