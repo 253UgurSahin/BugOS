@@ -258,6 +258,71 @@ klopt(bi.pauzeer_printer("HP_LaserJet") == "ok" and bi.printers()[0].gepauzeerd
 bi._VB["printers"] = None
 
 
+# ================================================= 2. instellingen van een printer (stap 2) ===
+
+# Test 18: de keuzes van drie echte soorten wachtrijen (hpcups, brlaser, IPP Everywhere). Uit het onderzoekslog.
+HPCUPS = ("PageSize/Media Size: Card3x5 L L.FB Hagaki A6 A5 A5.FB A5.Duplex Photo4x6 Letter Letter.FB Letter.Duplex "
+          "*A4 A4.FB A4.Duplex 8.5x13 Legal EnvA2 EnvDL Env10 Custom.WIDTHxHEIGHT\n"
+          "Duplex/Double-Sided Printing: DuplexNoTumble DuplexTumble *None\n"
+          "ColorModel/Output Mode: *RGB CMYGray KGray\n"
+          "OutputMode/Print Quality: *Normal Draft Best Photo\n"
+          "MediaType/Media Type: *Plain Glossy TransparencyFilm\n"
+          "OptionDuplex/Duplexer Installed: *False True\n")
+BRLASER = ("PageSize/Media Size: *A4 A5 A6 B5 B6 EnvC5 EnvMonarch EnvDL Executive Legal Letter\n"
+           "Duplex/2-Sided Printing: *None DuplexNoTumble DuplexTumble\n")
+EVERYWHERE = ("ColorModel/Output Mode: Gray *RGB\nDuplex/Duplex: *None DuplexNoTumble DuplexTumble\n"
+              "cupsPrintQuality/cupsPrintQuality: Draft *Normal\n"
+              "PageSize/Media Size: (null).Borderless 100x150mm.Borderless 100x150mm *A4 A4.Borderless Letter\n")
+o = bi.printer_keuzes(bi.lees_lpoptions_l(HPCUPS))
+klopt(o is not None and [k for k, _ in o.papieren] == ["A4", "A5", "A6", "Letter", "Legal", "Photo4x6", "EnvDL", "Env10"]
+      and o.papier == "A4" and o.zijden is None and o.kleur == "kleur" and o.kleur_waarde == {"kleur": "RGB", "zw": "KGray"},
+      f"test 18: hpcups: papier in vaste volgorde zonder .FB/.Duplex, geen twee kanten zonder duplex-eenheid, "
+      f"kleur RGB / zwart-wit KGray ({o})")
+o = bi.printer_keuzes(bi.lees_lpoptions_l(BRLASER))
+klopt(o is not None and o.papier == "A4" and [k for k, _ in o.papieren] == ["A4", "A5", "A6", "Letter", "Legal", "EnvDL"]
+      and o.zijden == "een" and o.zijden_waarde == {"een": "None", "twee": "DuplexNoTumble"} and o.kleur is None,
+      f"test 18: brlaser: A4, twee kanten mogelijk, geen kleurkeuze; 'B5' (de Japanse maat) niet (review R19) ({o})")
+o = bi.printer_keuzes(bi.lees_lpoptions_l(EVERYWHERE))
+klopt(o is not None and [k for k, _ in o.papieren] == ["A4", "Letter", "100x150mm"] and o.kleur == "kleur"
+      and o.kleur_waarde == {"kleur": "RGB", "zw": "Gray"} and o.zijden == "een",
+      f"test 18: IPP Everywhere: '(null).Borderless' telt niet, foto 10 x 15 = 100x150mm, Gray/RGB ({o})")
+o = bi.printer_keuzes(bi.lees_lpoptions_l("Duplex/2-Sided: None *DuplexTumble DuplexNoTumble\n"
+                                          "PageSize/Media: *Folio A4\n"))
+klopt(o.zijden == "twee" and o.zijden_waarde["twee"] == "DuplexTumble" and o.papieren[-1] == ("Folio", "Folio"),
+      "test 18: korte kant (DuplexTumble) blijft zo; een papier dat BugOS niet kent maar wel gekozen is, staat erbij")
+klopt(bi.lees_lpoptions_l("lpoptions: Unable to get PPD file for nope: No such file or directory\n") == {}
+      and bi.printer_keuzes({}) is None, "test 18: 'Unable to get PPD file' (met code 0!) = niets te kiezen")
+
+# Test 19: bewaren: alleen wat veranderd is; een beheerder voor iedereen, anderen alleen voor zichzelf.
+(TMP / ".cups").mkdir(exist_ok=True)
+(TMP / ".cups" / "lpoptions").write_text("Default Q\nDest Q Duplex=None PageSize=Letter\nDest R ColorModel=Gray\n")
+
+
+def lees_hp(c):
+    return (0, HPCUPS) if c[:2] == ("lpoptions", "-p") and "-l" in c else (0, "")
+
+
+vang_cups(bi.printer_opties, "Q", antwoord=lambda c: (0, BRLASER) if "-l" in c else (0, ""))
+opd, _, uit = vang_cups(bi.zet_printer_opties, "Q", {"PageSize": "A4", "Duplex": "DuplexNoTumble"})
+klopt(opd == [("lpadmin", "-p", "Q", "-o", "Duplex=DuplexNoTumble"), ("lpoptions", "-p", "Q", "-r", "Duplex")]
+      and uit == "ok",
+      f"test 19: beheerder: alleen Duplex (A4 stond al), en je eigen oude keuze 'Duplex=None' weg ({opd})")
+opd, _, uit = vang_cups(bi.zet_printer_opties, "Q", {"Duplex": "Nonsense"})
+klopt(not opd and uit == "anders", "test 19: een waarde die de printer niet kent: niets doorgegeven (lpadmin slikt hem stil)")
+opd, _, uit = vang_cups(bi.zet_printer_opties, "Q", {"Duplex": "DuplexNoTumble", "PageSize": "A5"}, "Printer in de gang",
+                        beheerder=False)
+klopt(opd == [("lpoptions", "-p", "Q", "-o", "Duplex=DuplexNoTumble", "-o", "PageSize=A5")] and uit == "ok",
+      f"test 19: geen beheerder: lpoptions -o (alleen voor jou), geen lpadmin, geen pkexec, geen naam ({opd})")
+opd, _, uit = vang_cups(bi.zet_printer_opties, "Q", {}, "Printer\tin de gang")
+klopt(opd == [("lpadmin", "-p", "Q", "-D", "Printer in de gang")], f"test 19: een nieuwe naam (-D), zonder tab ({opd})")
+opd, _, uit = vang_cups(bi.zet_printer_opties, "Onbekend", {"Duplex": "None"})
+klopt(not opd and uit == "anders", "test 19: een printer die nog niet gelezen is: niets")
+vang_cups(bi.printer_opties, "Q", antwoord=lees_hp)
+opd, _, uit = vang_cups(bi.zet_printer_opties, "Q", {"ColorModel": "KGray"}, None, antwoord=lambda c: (1, "lpadmin: Forbidden"))
+klopt([c[0] for c in opd] == ["lpadmin", "pkexec"] and uit == "verboden" and not any(c[0] == "lpoptions" for c in opd),
+      "test 19: lukt het niet, dan blijven je eigen keuzes staan")
+
+
 # =========================================================================== 9. het venster ===
 
 lader = importlib.machinery.SourceFileLoader("instellingen", str(BIN / "bugos-settings"))
@@ -342,6 +407,52 @@ wacht()
 klopt(not pp.taak_rijen and pp.wacht_rij.titel.text() == "Niets staat te wachten" and not pp.leeg_knop.isVisible(),
       "wachtrij: 'Alles annuleren' maakt hem leeg")
 bi._VB.pop("taken", None)
+
+# Printerinstellingen (test 27): de HP in de voorbeeldstand.
+bi._VB["printers"] = None
+bi._VB.pop("printer_opties", None)
+pp.ververs()
+wacht()
+hp = bi.printers()[0]
+d = sm.PrinterInstellingen(pp, hp, True)
+wacht()
+klopt(d.papier_knop.text() == "A4" and d.zijden.knoppen["een"].isChecked() and d.kleur.knoppen["kleur"].isChecked()
+      and not d.papier_rij.isHidden() and not d.banner.isVisibleTo(d) and d.bewaar.isEnabled(),
+      "instellingen: papier A4, één kant, kleur; geen melding meer na het laden")
+_bewaard: list = []
+_echt_zet = bi.zet_printer_opties
+bi.zet_printer_opties = lambda naam, w, b=None: (_bewaard.append((naam, w, b)), "ok")[1]
+d.kleur.knoppen["zw"].click()
+d.bewaar.click()
+wacht()
+bi.zet_printer_opties = _echt_zet
+klopt(_bewaard == [("HP_LaserJet", {"ColorModel": "Gray"}, None)] and d.uitkomst == "ok",
+      f"instellingen: zwart-wit kiezen en bewaren geeft alleen ColorModel=Gray door ({_bewaard})")
+d2 = sm.PrinterInstellingen(pp, bi.printers()[1], False)
+wacht()
+klopt(d2.zijden_rij.isHidden() and d2.kleur.knoppen["kleur"].isChecked() and d2.naam_veld is None and d2.weg is None
+      and "alleen voor jou" in d2.uitleg.text(),
+      "instellingen zonder beheerder: geen naam, geen verwijderen, 'alleen voor jou'; geen twee kanten zonder duplex-eenheid")
+bi.zet_printer_opties = lambda naam, w, b=None: "verboden"
+d2.kleur.knoppen["zw"].click()
+d2.bewaar.click()
+wacht()
+bi.zet_printer_opties = _echt_zet
+klopt(d2.result() == 0 and d2.banner.isVisibleTo(d2) and "beheerder" in d2.banner.tekst.text() and d2.bewaar.isEnabled()
+      and d2.uitleg.isHidden(), "instellingen: lukt het niet, dan blijft het venster open met de melding in gewone woorden")
+_echt_opties = bi.printer_opties
+bi.printer_opties = lambda naam: None
+d3 = sm.PrinterInstellingen(pp, hp, True)
+wacht()
+bi.printer_opties = _echt_opties
+klopt(d3.papier_rij.isHidden() and "printvenster" in d3.banner.tekst.text() and d3.weg.isEnabled(),
+      "instellingen die BugOS niet kan lezen: dat zeggen, en de naam en verwijderen blijven")
+_echt_exec = sm.PrinterInstellingen.exec
+sm.PrinterInstellingen.exec = lambda self: (self.klaar("ok"), 1)[1]
+pp.instellingen(hp)
+klopt(pp.melding.tekst.text() == "Bewaard.", "instellingen: na bewaren zegt de pagina 'Bewaard.'")
+sm.PrinterInstellingen.exec = _echt_exec
+bi._VB.pop("printer_opties", None)
 
 print(f"\n{fouten} fout(en).")
 sys.exit(1 if fouten else 0)

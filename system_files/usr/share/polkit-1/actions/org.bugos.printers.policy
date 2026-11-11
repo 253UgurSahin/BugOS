@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- BugOS Instellingen > Printers: wie geen beheerder is, voegt een printer toe of verandert hem met het wachtwoord van
+     een beheerder (pkexec /usr/bin/lpadmin), en zoekt printers met een kabel (pkexec /usr/bin/lpinfo). Zonder dit
+     bestand toont pkexec de hele opdrachtregel in het venster. auth_admin, geen _keep: Instellingen vraagt één keer per
+     handeling, en anders mag elk programma van die gebruiker vijf minuten lang lpadmin als root draaien (review R3).
+     /usr/bin: in Fedora is /usr/sbin een link naar bin, en pkexec zoekt de actie bij het echte pad. -->
+<policyconfig>
+  <vendor>BugOS</vendor>
+  <action id="org.bugos.printers">
+    <description>Add or change a printer</description>
+    <description xml:lang="nl">Een printer toevoegen of veranderen</description>
+    <message>Enter an administrator's password to add or change a printer</message>
+    <message xml:lang="nl">Typ het wachtwoord van een beheerder om een printer toe te voegen of te veranderen</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/lpadmin</annotate>
+  </action>
+  <action id="org.bugos.printers.zoeken">
+    <description>Look for printers with a cable</description>
+    <description xml:lang="nl">Printers met een kabel zoeken</description>
+    <message>Enter an administrator's password to look for printers that are plugged into this computer</message>
+    <message xml:lang="nl">Typ het wachtwoord van een beheerder om printers te zoeken die met een kabel aan deze computer zitten</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/lpinfo</annotate>
+  </action>
+</policyconfig>

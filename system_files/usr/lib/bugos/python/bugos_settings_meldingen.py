@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import bugos_config as bi
-from bugos_ui import TAAL, Chip, Knop, Rij, kde_instelling, leeg_groep, sectie, start, t, vraag_ja
-from bugos_settings_onderdelen import Blad, meer_knop, op_achtergrond, schuifje
+from bugos_ui import (TAAL, Banner, Chip, Groep, Knop, Rij, kde_instelling, label, leeg_groep, px, schermmaat, sectie,
+                      start, t, vraag_ja)
+from bugos_settings_onderdelen import Blad, Keuzes, meer_knop, menu_bij, op_achtergrond, schuifje
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QHBoxLayout, QWidget
+from PySide6.QtWidgets import QDialog, QHBoxLayout, QLineEdit, QVBoxLayout, QWidget
 
 
 # =============================================================== meldingen ===
@@ -141,6 +142,173 @@ def printer_staat(p: bi.Printer) -> str:
     return f"{tekst} · {p.locatie}" if p.locatie else tekst
 
 
+def dialoog_opzet(d: QDialog, titel_tekst: str, breed: int = 560) -> QVBoxLayout:
+    """Zoals KiesDialoog en de vragen: een kop, ruime marges. Nooit breder dan het scherm (150 % op 1280x800)."""
+    d.setWindowTitle(titel_tekst)
+    d.setMinimumWidth(schermmaat((px(breed), 0))[0][0])
+    lay = QVBoxLayout(d)
+    lay.setContentsMargins(24, 22, 24, 20)
+    lay.setSpacing(12)
+    return lay
+
+
+class PrinterInstellingen(QDialog):
+    """Papier, één of twee kanten, kleur of zwart-wit, en (voor een beheerder) de naam. uitkomst na afloop:
+    'ok' (bewaard), 'verwijder' (de knop Printer verwijderen), een foutsoort, of '' (Annuleren)."""
+
+    def __init__(self, ouder: QWidget, p: bi.Printer, beheerder: bool):
+        super().__init__(ouder)
+        self.p, self.beheerder = p, beheerder
+        self.uitkomst = ""
+        self.laden, self.bezig = True, False   # bezig: aan het bewaren
+        self.opties: bi.Opties | None = None
+        self.gekozen: dict[str, str | None] = {}
+        lay = dialoog_opzet(self, t("Printerinstellingen", "Printer settings"))
+        lay.addWidget(label(p.omschrijving, "kop2"))
+        # De uitleg en de melding staan op dezelfde plek: nooit allebei, dan blijft het venster laag (review R4).
+        self.uitleg = label(t("Deze keuzes gelden elke keer dat iemand op deze computer print. In het printvenster kun je "
+                              "ze per keer nog veranderen.",
+                              "These choices are used every time anyone on this computer prints. You can still change "
+                              "them in the print window.") if beheerder else
+                            t("Deze keuzes gelden alleen voor jou, in de meeste programma's. In het printvenster kun je "
+                              "ze per keer nog veranderen.",
+                              "These choices are only for you, in most programs. You can still change them in the "
+                              "print window."), "klein")
+        lay.addWidget(self.uitleg)
+        self.banner = Banner("", "bezig")
+        lay.addWidget(self.banner)
+        self.groep = Groep()
+        self.papier_knop = Knop("…", "gewoon", "lijn:onder")
+        self.papier_knop.setLayoutDirection(Qt.LayoutDirection.RightToLeft)   # het pijltje rechts, zoals een keuzelijst
+        self.papier_knop.clicked.connect(self.kies_papier)
+        self.papier_rij = Rij("document", t("Papierformaat", "Paper size"), "", self.papier_knop)
+        self.zijden = Keuzes([("een", t("Eén kant", "One side")), ("twee", t("Beide kanten", "Both sides"))])
+        self.zijden.gekozen.connect(lambda w: self.gekozen.__setitem__("zijden", w))
+        self.zijden_rij = Rij("kopieer", t("Printen op", "Print on"), "", self.zijden)
+        self.kleur = Keuzes([("kleur", t("Kleur", "Colour")), ("zw", t("Zwart-wit", "Black and white"))])
+        self.kleur.gekozen.connect(lambda w: self.gekozen.__setitem__("kleur", w))
+        self.kleur_rij = Rij("palet", t("Kleuren", "Colours"), "", self.kleur)
+        for r in (self.papier_rij, self.zijden_rij, self.kleur_rij):
+            r.hide()
+            self.groep.voeg(r)
+        self.naam_veld: QLineEdit | None = None
+        if beheerder:
+            self.naam_veld = QLineEdit(p.omschrijving)
+            self.naam_veld.setMaxLength(127)
+            self.naam_veld.setMinimumWidth(220)
+            self.naam_veld.setAccessibleName(t("Naam", "Name"))
+            self.naam_veld.textChanged.connect(lambda _x: self.knoppen_bijwerken())
+            self.groep.voeg(Rij("potlood", t("Naam", "Name"), "", self.naam_veld))
+        lay.addWidget(self.groep)
+        knoppen = QHBoxLayout()
+        knoppen.setSpacing(8)
+        self.weg: Knop | None = None
+        if beheerder:
+            self.weg = Knop(t("Printer verwijderen", "Remove printer"), "stil", "lijn:prullenbak")
+            self.weg.setAutoDefault(False)
+            self.weg.clicked.connect(lambda _c=False: self.klaar("verwijder"))
+            knoppen.addWidget(self.weg)
+        knoppen.addStretch(1)
+        self.annuleer = Knop(t("Annuleren", "Cancel"), "stil")
+        self.annuleer.clicked.connect(self.reject)
+        self.bewaar = Knop(t("Bewaren", "Save"), "hoofd")
+        self.bewaar.setDefault(True)
+        self.bewaar.clicked.connect(self.bewaren)
+        knoppen.addWidget(self.annuleer)
+        knoppen.addWidget(self.bewaar)
+        lay.addLayout(knoppen)
+        self.toon_banner(t("Instellingen ophalen...", "Getting the settings..."), "bezig")
+        self.knoppen_bijwerken()
+        op_achtergrond(self, lambda: bi.printer_opties(p.naam), self.toon)
+
+    def toon_banner(self, tekst: str, soort: str = "info") -> None:
+        self.banner.zet(tekst, soort)
+        self.uitleg.setVisible(not tekst)
+
+    def knoppen_bijwerken(self) -> None:
+        rustig = not self.laden and not self.bezig
+        self.bewaar.setEnabled(rustig and (self.opties is not None or self.naam_veld is not None)
+                               and (self.naam_veld is None or bool(self.naam_veld.text().strip())))
+        if self.weg is not None:
+            self.weg.setEnabled(rustig)
+        self.annuleer.setEnabled(not self.bezig)
+        self.groep.setEnabled(rustig)
+
+    def toon(self, opties) -> None:
+        self.laden = False
+        self.opties = opties
+        if opties is None:
+            self.toon_banner(t("BugOS kan de instellingen van deze printer niet lezen. Kies ze dan in het printvenster "
+                               "van je programma.", "BugOS cannot read this printer's settings. Choose them in your "
+                               "program's print window instead."), "let_op")
+        else:
+            self.toon_banner("")
+            self.gekozen = {"papier": opties.papier, "zijden": opties.zijden, "kleur": opties.kleur}
+            if opties.papieren:
+                self.papier_knop.setText(dict(opties.papieren).get(opties.papier or "", opties.papier or "…"))
+                self.papier_rij.show()
+            if opties.zijden:
+                self.zijden.zet(opties.zijden)
+                self.zijden_rij.show()
+            if opties.kleur:
+                self.kleur.zet(opties.kleur)
+                self.kleur_rij.show()
+        self.knoppen_bijwerken()
+        (self.bewaar if self.bewaar.isEnabled() else self.annuleer).setFocus()   # geen rode rand om 'A4' bij het openen
+        self.adjustSize()
+
+    def kies_papier(self) -> None:
+        if self.opties is None:
+            return
+        menu_bij(self.papier_knop, [("vink" if k == self.gekozen.get("papier") else "document", tekst,
+                                     (lambda k=k, tekst=tekst: (self.gekozen.__setitem__("papier", k),
+                                                                self.papier_knop.setText(tekst))))
+                                    for k, tekst in self.opties.papieren])
+
+    def wijzigingen(self) -> dict[str, str]:
+        """Alleen wat je veranderd hebt (zo blijft een keuze die BugOS niet kent, zoals DuplexTumble, staan)."""
+        o, g, uit = self.opties, self.gekozen, {}
+        if o is None:
+            return uit
+        if o.papier is not None and g.get("papier") and g["papier"] != o.papier:
+            uit["PageSize"] = g["papier"]
+        if o.zijden and g.get("zijden") in o.zijden_waarde and g["zijden"] != o.zijden:
+            uit["Duplex"] = o.zijden_waarde[g["zijden"]]
+        if o.kleur and g.get("kleur") in o.kleur_waarde and g["kleur"] != o.kleur:
+            uit["ColorModel"] = o.kleur_waarde[g["kleur"]]
+        return uit
+
+    def bewaren(self) -> None:
+        if self.bezig or self.laden:
+            return
+        naam = self.naam_veld.text().strip() if self.naam_veld is not None else ""
+        beschrijving = naam if naam and naam != self.p.omschrijving else None
+        wijzigingen = self.wijzigingen()
+        self.bezig = True
+        self.knoppen_bijwerken()
+        self.toon_banner(t("Bewaren...", "Saving..."), "bezig")
+
+        def af(soort) -> None:
+            self.bezig = False
+            soort = soort or "anders"
+            if soort in ("ok", "bestaat_niet"):
+                self.klaar(soort)
+                return
+            self.toon_banner(fout_tekst(soort), "info" if soort == "geweigerd" else "fout")
+            self.knoppen_bijwerken()
+        op_achtergrond(self, lambda: bi.zet_printer_opties(self.p.naam, wijzigingen, beschrijving), af)
+
+    def klaar(self, uitkomst: str) -> None:
+        self.uitkomst = uitkomst
+        self.bezig = False
+        super().accept()
+
+    def reject(self) -> None:  # noqa: D102
+        if self.bezig:   # tijdens het bewaren niet weg (het gebeurt toch)
+            return
+        super().reject()
+
+
 class PrintersPagina(Blad):
     sleutel, icoon = "printers", "printer"
     titel_nl, titel_en = "Printers en scannen", "Printers and scanning"
@@ -240,8 +408,7 @@ class PrintersPagina(Blad):
         items.append(("document", t("Testpagina printen", "Print a test page"), lambda: self.testpagina(p.naam)))
         if not bi.NAAM_RE.match(p.naam):   # een naam die BugOS niet zelf maakte en niet vertrouwt: alleen de testpagina
             return items
-        items.append(("code", t("Instellingen van deze printer (voor gevorderden)", "Printer settings (advanced)"),
-                      lambda: kde_instelling("kcm_printer_manager")))
+        items.append(("palet", t("Instellingen van deze printer", "Printer settings"), lambda: self.instellingen(p)))
         if p.staat == "gestopt":
             items.append(("aan", t("Verder printen", "Resume printing"), lambda: self.doe(
                 lambda: bi.hervat_printer(p.naam), t("Even geduld...", "One moment..."),
@@ -251,6 +418,18 @@ class PrintersPagina(Blad):
                 lambda: bi.pauzeer_printer(p.naam), t("Even geduld...", "One moment..."), t("Gepauzeerd.", "Paused."))))
         items.append(("prullenbak", t("Printer verwijderen", "Remove printer"), lambda: self.verwijder(p)))
         return items
+
+    def instellingen(self, p: bi.Printer) -> None:
+        d = PrinterInstellingen(self, p, self.beheerder)
+        d.exec()
+        if d.uitkomst == "verwijder":
+            self.verwijder(p)
+        elif d.uitkomst == "ok":
+            self.melding.toon(t("Bewaard.", "Saved."), "goed")
+            self.ververs()
+        elif d.uitkomst:
+            self.melding.toon(fout_tekst(d.uitkomst), "fout")
+            self.ververs()
 
     def testpagina(self, naam: str) -> None:
         op_achtergrond(self, lambda: bi.testpagina(naam), lambda ok: self.melding.toon(

@@ -461,6 +461,160 @@ def verwijder_printer(naam: str) -> str:
     return soort
 
 
+# ------------------------------------------------------------- instellingen van een printer ---
+# Papier, één of twee kanten, kleur of zwart-wit: de PPD-namen (PageSize, Duplex, ColorModel) werken voor elke
+# wachtrij, ook voor IPP Everywhere (lpadmin zet daar ook print-color-mode mee).
+
+def lees_lpoptions_l(uitvoer: str) -> dict[str, tuple[list[str], str]]:
+    """Uit: lpoptions -p Q -l -> {sleutel: ([keuzes], huidige)}. Elke regel 'Sleutel/Naam: a *b c'. Een foutregel
+    ('lpoptions: Unable to get PPD file for nope: ...', met code 0!) heeft geen '/' voor de ':' en telt niet mee."""
+    uit: dict[str, tuple[list[str], str]] = {}
+    for regel in uitvoer.splitlines():
+        kop, dubbelepunt, rest = regel.partition(":")
+        if not dubbelepunt or "/" not in kop:
+            continue
+        sleutel = kop.split("/", 1)[0].strip()
+        if not re.match(r"^[A-Za-z][A-Za-z0-9_-]*$", sleutel):
+            continue
+        keuzes, huidig = [], ""
+        for k in rest.split():
+            if k.startswith("*"):
+                k = k[1:]
+                huidig = k
+            if k:
+                keuzes.append(k)
+        if keuzes:
+            uit[sleutel] = (keuzes, huidig)
+    return uit
+
+
+@dataclass
+class Opties:
+    papier: str | None                  # wat er nu gekozen is (PageSize), None: geen regel
+    papieren: list[tuple[str, str]]     # [(PageSize-keuze, wat je ziet)]
+    zijden: str | None                  # 'een' of 'twee'; None: deze printer kan geen twee kanten
+    zijden_waarde: dict[str, str]       # {'een': 'None', 'twee': 'DuplexNoTumble'}
+    kleur: str | None                   # 'kleur' of 'zw'; None: geen keuze (een zwart-witprinter)
+    kleur_waarde: dict[str, str]        # {'kleur': 'RGB', 'zw': 'Gray'}
+
+
+_FOTO = ("4x6", "Photo4x6", "Card4x6", "100x150mm")
+_GRIJS = ("KGray", "Gray", "Grayscale", "Black", "Mono", "Monochrome", "CMYGray")
+_KLEUR = ("RGB", "CMYK", "Color", "CMY", "RGBW")
+
+
+def _papier_namen() -> list[tuple[tuple[str, ...], str]]:
+    # 'B5' is in CUPS de Japanse maat (JIS); de gewone B5 heet ISOB5 (review R19).
+    return [(("A4",), "A4"), (("A5",), "A5"), (("A3",), "A3"), (("A6",), "A6"), (("ISOB5",), "B5"),
+            (("Letter",), t("Letter (VS)", "Letter (US)")), (("Legal",), t("Legal (VS)", "Legal (US)")),
+            (_FOTO, t("Foto 10 x 15 cm", "Photo 10 x 15 cm")), (("EnvDL",), t("Envelop DL", "Envelope DL")),
+            (("Env10",), t("Envelop #10", "Envelope #10"))]
+
+
+def printer_keuzes(ruw: dict[str, tuple[list[str], str]]) -> Opties | None:
+    """Van de ruwe keuzes (lees_lpoptions_l) naar wat Bugie kiest: papier, kanten, kleur."""
+    if not ruw:
+        return None
+    papier, papieren = None, []
+    if "PageSize" in ruw:
+        keuzes, papier = ruw["PageSize"]
+        gewoon = [k for k in keuzes if "." not in k and not k.startswith("(") and not k.startswith("Custom")]
+        for namen, tekst in _papier_namen():
+            k = next((n for n in namen if n in gewoon), None)
+            if k and len(papieren) < 8:
+                papieren.append((k, tekst))
+        if papier and papier not in [k for k, _ in papieren]:
+            papieren.append((papier, papier))
+    zijden, zijden_waarde = None, {}
+    if "Duplex" in ruw:
+        keuzes, nu = ruw["Duplex"]
+        geen_eenheid = "OptionDuplex" in ruw and ruw["OptionDuplex"][1] == "False"   # 'Duplexer Installed: *False'
+        if "None" in keuzes and "DuplexNoTumble" in keuzes and not geen_eenheid:
+            zijden = "een" if nu == "None" else "twee"
+            zijden_waarde = {"een": "None", "twee": nu if nu in ("DuplexNoTumble", "DuplexTumble") else "DuplexNoTumble"}
+    kleur, kleur_waarde = None, {}
+    if "ColorModel" in ruw:
+        keuzes, nu = ruw["ColorModel"]
+        grijs = next((k for k in _GRIJS if k in keuzes), None)
+        kleurig = nu if nu in keuzes and nu not in _GRIJS else next((k for k in _KLEUR if k in keuzes), None)
+        if grijs and kleurig:
+            kleur = "zw" if nu in _GRIJS else "kleur"
+            kleur_waarde = {"kleur": kleurig, "zw": grijs}
+    return Opties(papier, papieren, zijden, zijden_waarde, kleur, kleur_waarde)
+
+
+_GELEZEN: dict[str, dict[str, tuple[list[str], str]]] = {}   # wat printer_opties het laatst las: om mee te controleren
+
+
+def _vb_opties() -> dict:
+    brlaser = {"PageSize": (["A4", "A5", "A6", "B5", "B6", "EnvC5", "EnvMonarch", "EnvDL", "Executive", "Legal",
+                             "Letter"], "A4"),
+               "Duplex": (["None", "DuplexNoTumble", "DuplexTumble"], "None"), "ColorModel": (["Gray", "RGB"], "RGB")}
+    hpcups = {"PageSize": (["Card3x5", "L", "L.FB", "Hagaki", "A6", "A5", "A5.FB", "A5.Duplex", "Photo4x6",
+                            "Letter", "Letter.FB", "Letter.Duplex", "A4", "A4.FB", "A4.Duplex", "8.5x13", "Legal",
+                            "EnvA2", "EnvDL", "Env10", "Custom.WIDTHxHEIGHT"], "A4"),
+              "Duplex": (["DuplexNoTumble", "DuplexTumble", "None"], "None"),
+              "ColorModel": (["RGB", "CMYGray", "KGray"], "RGB"), "OptionDuplex": (["False", "True"], "False")}
+    return _c._VB.setdefault("printer_opties", {"HP_LaserJet": brlaser, "Canon_PIXMA": hpcups})
+
+
+def printer_opties(naam: str) -> Opties | None:
+    """De keuzes van deze printer, of None als BugOS ze niet kan lezen (dan in het printvenster van je programma)."""
+    if not NAAM_RE.match(naam):
+        return None
+    if _c.VOORBEELD:
+        ruw = {k: (list(v[0]), v[1]) for k, v in _vb_opties().get(naam, {}).items()}
+    else:
+        ruw = lees_lpoptions_l(_c.cups_draai("lpoptions", "-p", naam, "-l", timeout=8, fout=False)[1])
+    _GELEZEN[naam] = ruw
+    return printer_keuzes(ruw)
+
+
+def zet_printer_opties(naam: str, wijzigingen: dict[str, str], beschrijving: str | None = None) -> str:
+    """Bewaar de keuzes. Een beheerder voor iedereen (lpadmin -o, en -D voor de naam), anders alleen voor jou
+    (lpoptions -o, zonder wachtwoord). Elke waarde moet een keuze zijn die printer_opties net las."""
+    ruw = _GELEZEN.get(naam)
+    if not NAAM_RE.match(naam) or ruw is None:
+        return "anders"
+    for sleutel, waarde in wijzigingen.items():
+        if sleutel not in ruw or waarde not in ruw[sleutel][0]:
+            return "anders"   # lpadmin slikt een onzinwaarde zonder iets te zeggen: dus zelf weigeren
+    nieuw = {k: v for k, v in wijzigingen.items() if ruw[k][1] != v}
+    beheerder = _c.ben_beheerder()
+    if beschrijving is not None:
+        beschrijving = schone_tekst(beschrijving)
+        if not beschrijving or not beheerder:
+            beschrijving = None
+    if not nieuw and beschrijving is None:
+        return "ok"
+    if _c.VOORBEELD:
+        for k, v in nieuw.items():
+            _vb_opties()[naam][k] = (_vb_opties()[naam][k][0], v)
+        if beschrijving:
+            p = _vb_printer(naam)
+            if p:
+                p.omschrijving = beschrijving
+        return "ok"
+    o = [x for k, v in nieuw.items() for x in ("-o", f"{k}={v}")]
+    if not beheerder:
+        code, uit = _c.cups_draai("lpoptions", "-p", naam, *o, timeout=8)
+        return cups_fout(code, uit)
+    soort = _c.als_beheerder("lpadmin", "-p", naam, *o, *(("-D", beschrijving) if beschrijving else ()), timeout=15)[0]
+    if soort == "ok" and nieuw:
+        # Had je zelf eerder iets gekozen (~/.cups/lpoptions), dan zou dat de nieuwe keuze verbergen: weg ermee.
+        try:
+            eigen = (Path.home() / ".cups" / "lpoptions").read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            eigen = ""
+        for regel in eigen.splitlines():
+            d = regel.split()
+            if len(d) >= 2 and d[0] in ("Dest", "Default") and d[1] == naam:
+                for k in nieuw:
+                    if any(x.startswith(k + "=") for x in d[2:]):
+                        _c.cups_draai("lpoptions", "-p", naam, "-r", k, timeout=8)
+    return soort
+
+
 @dataclass
 class Taak:
     printer: str
