@@ -46,6 +46,16 @@ edit mode=false
 manage activities=false
 remove=false
 EOF
+# Het rechtermuismenu op een bestand of map (bureaublad, Dolphin): zonder KDE-onderdelen die BugOS niet gebruikt:
+# "Activiteiten >" (Meta+Q gaat ook uit: bugos-panel), "Tags toekennen >", "Via KDE Connect versturen" (KDE Connect
+# start niet vanzelf, zie hieronder) en de kluis (Plasma Vault). /etc/xdg wordt hiervoor wel gelezen (KConfig);
+# de sleutel is de bestandsnaam van de plug-in in /usr/lib64/qt6/plugins/kf6/kfileitemaction (zonder .so).
+# Wat blijft (KDE, met reden): "Eigenschappen" (het KDE-venster met grootte en rechten; BugOS heeft er nog geen eigen
+# venster voor) en "Openen met <programma>" (de echte naam van het programma).
+for plugin in kactivitymanagerd_fileitem_linking_plugin tagsfileitemaction kdeconnectfileitemaction \
+    plasmavaultfileitemaction; do
+    kwriteconfig6 --file /etc/xdg/kservicemenurc --group Show --key "$plugin" false
+done
 # Geen Overzicht van KDE als je per ongeluk de muis linksboven in de hoek duwt (net als Windows: daar gebeurt niets).
 kwriteconfig6 --file /etc/xdg/kwinrc --group Effect-overview --key BorderActivate 9
 # KDE Connect (koppelen met je telefoon) start niet vanzelf: het gaf meldingen met "KDE Connect" die niemand vroeg.

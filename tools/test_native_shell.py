@@ -6,7 +6,7 @@ Wat er getest wordt, zonder Plasma en zonder node:
      het bureaubladmenu, het systeemvak;
   B. bugos-panel zelf (bash) met nep-programma's (gdbus, qdbus6, notify-send): wat hij naar Plasma stuurt;
   C. de functie bureaubladmenu uit build_files/style.sh op nagemaakte KDE-bestanden;
-  D. style.sh: de kiosk-sleutel, het bestand voor nieuwe gebruikers;
+  D. style.sh: de kiosk-sleutel, het bestand voor nieuwe gebruikers, het menu op bestanden (kservicemenurc);
   E. de QML: de eigen regels in de rechtermuismenu's (bureaublad, klok, snelmenu);
   F. de indeling voor nieuwe gebruikers (look-and-feel) in een nagebootst Plasma.
 Er verandert niets aan je computer: alles gebeurt in een tijdelijke map.
@@ -475,6 +475,27 @@ klopt("Schijfbeheer\" in Bestanden" not in STYLE_TEKST and "\"Meer apps\" in de 
 klopt(re.search(r"^bureaubladmenu /usr/share/plasma/plasmoids/org\.kde\.desktopcontainment/contents/ui \\\n"
                 r" +/usr/share/plasma/plasmoids/org\.bugos\.taskbar/contents/ui/BureaubladActies\.qml$", STYLE_TEKST, re.M)
       is not None, "D4: style.sh past de mapweergave van KDE aan (org.kde.desktopcontainment) met BureaubladActies.qml")
+
+# D6 (review 1): het menu op een bestand of map op het bureaublad zonder "Activiteiten >", tags, KDE Connect en de
+# kluis. De lus echt draaien met een nagemaakte kwriteconfig6 die opschrijft wat hij krijgt.
+BESTANDMENU_UIT = ["kactivitymanagerd_fileitem_linking_plugin", "tagsfileitemaction", "kdeconnectfileitemaction",
+                   "plasmavaultfileitemaction"]
+_lus = re.search(r"^for plugin in (.*?); do\n    kwriteconfig6 (.*?)\ndone\n", STYLE_TEKST, re.S | re.M)
+_gekregen: list[list[str]] = []
+if _lus:
+    with tempfile.TemporaryDirectory() as _d:
+        _nep = Path(_d) / "kwriteconfig6"
+        _nep.write_text('#!/bin/bash\nprintf "%s|" "$@" >>"$NEP_LOG"; echo >>"$NEP_LOG"\n', encoding="utf-8", newline="\n")
+        _nep.chmod(0o755)
+        _log = Path(_d) / "log"
+        subprocess.run(["bash", "-c", "set -euo pipefail\n" + _lus.group(0)], check=False, capture_output=True,
+                       env={**os.environ, "PATH": f"{_d}:{os.environ.get('PATH', '')}", "NEP_LOG": str(_log)})
+        if _log.exists():
+            _gekregen = [r.rstrip("|").split("|") for r in _log.read_text(encoding="utf-8").splitlines() if r]
+klopt(_gekregen == [["--file", "/etc/xdg/kservicemenurc", "--group", "Show", "--key", p, "false"] for p in BESTANDMENU_UIT],
+      f"D6: style.sh zet in /etc/xdg/kservicemenurc [Show] precies de vier KDE-onderdelen van het bestandsmenu uit ({_gekregen})")
+klopt(not any(p in STYLE_TEKST for p in ("sharefileitemaction", "compressfileitemaction", "extractfileitemaction")),
+      "D6: Delen, Inpakken en Uitpakken blijven in het bestandsmenu")
 
 
 # --- C. style.sh: bureaubladmenu op nagemaakte KDE-bestanden ----------------------------------------------------
