@@ -124,26 +124,39 @@ class Rij(QFrame):
         bediening = (QAbstractButton, QAbstractSlider)
         return isinstance(r, bediening) or any(r.findChildren(b) for b in bediening)
 
+    def _titel_breedte(self) -> int:
+        """Hoe breed de titel op één regel is. Gemeten met de letter zelf, dus hetzelfde of hij nu afbreekt of niet
+        (anders springt de regel heen en weer)."""
+        self.titel.ensurePolished()
+        return self.titel.fontMetrics().horizontalAdvance(self.titel.text()) + 2
+
     def minimumSizeHint(self) -> QSize:  # noqa: N802
-        """Zo smal kan de regel: het schuifje, de knoppen of de keuzes kunnen onder de tekst (zie resizeEvent)."""
+        """Zo smal kan de regel: het schuifje, de knoppen of de keuzes kunnen onder de tekst, en een lange titel
+        breekt af (zie resizeEvent)."""
         if not self._kan_stapelen():
             return super().minimumSizeHint()
         m = self.layout().contentsMargins()
-        tekst = min(self.titel.sizeHint().width(), bugos_ui.px(200))
+        tekst = min(self._titel_breedte(), bugos_ui.px(200))
         breed = m.left() + m.right() + 24 + 14 + max(tekst, self.rechts.minimumSizeHint().width())
         return QSize(breed, super().minimumSizeHint().height())
 
     def resizeEvent(self, e) -> None:  # noqa: N802
         """Te smal? Dan gaat wat rechts staat onder de tekst, zoals in Windows 11. Weer breed genoeg: terug naar
-        rechts. Het blijft hetzelfde onderdeel van de regel, dus de Tab-volgorde en de schermlezer veranderen niet."""
+        rechts. Het blijft hetzelfde onderdeel van de regel, dus de Tab-volgorde en de schermlezer veranderen niet.
+        Is zelfs de titel te lang voor de regel, dan breekt hij af (nooit afgeknipt)."""
         super().resizeEvent(e)
         if not hasattr(self, "_gestapeld") or not self._kan_stapelen():
             return
         lay = self.layout()
         m = lay.contentsMargins()
-        nodig = (m.left() + m.right() + 24 + 2 * 14 + min(self.titel.sizeHint().width(), bugos_ui.px(240))
-                 + self.rechts.sizeHint().width() + (30 if self.pijl else 0))
-        stapel = self.width() < nodig
+        titel = self._titel_breedte()
+        vast = m.left() + m.right() + 24 + 14
+        rechts = 14 + self.rechts.sizeHint().width() + (30 if self.pijl else 0)
+        stapel = self.width() < vast + min(titel, bugos_ui.px(240)) + rechts
+        # De titel breekt af als hij niet op één regel past: naast wat rechts staat, of (gestapeld) over de hele regel.
+        afbreken = self.width() < vast + titel + (0 if stapel else rechts)
+        if afbreken != self.titel.wordWrap():
+            self.titel.setWordWrap(afbreken)
         if stapel == self._gestapeld:
             return
         self._gestapeld = stapel

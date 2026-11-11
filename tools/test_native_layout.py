@@ -404,6 +404,17 @@ klopt(_rij.layout().itemAt(1).layout().count() == 2, "D03: na vaak heen en weer 
 _rijhouder.resize(320, 400)
 verwerk(5)
 klopt(not _schuifrij._gestapeld, "D03: een regel met alleen een schuifje stapelt niet (ook niet bij 320 px)")
+# Een titel die zelfs gestapeld niet op één regel past (grote letters, 150 %): hij breekt af, nooit afgeknipt.
+_lang = Rij("muis", "Lost the pointer? Shake the mouse quickly and it grows for a moment", "", Schuif(False))
+_rg.voeg(_lang)
+_rijhouder.resize(340, 500)
+verwerk(5)
+klopt(_lang.titel.wordWrap() and _lang.titel.height() >= _lang.titel.heightForWidth(_lang.titel.width()) - 1
+      and _lang.titel.geometry().right() <= _lang.width(),
+      f"R10: een te lange titel breekt af in plaats van afgeknipt te worden ({_lang.titel.width()} px breed)")
+_rijhouder.resize(1000, 500)
+verwerk(5)
+klopt(not _lang.titel.wordWrap() and not _lang._gestapeld, "R10: weer breed genoeg: de titel staat weer op één regel")
 
 
 class _NooitStapel(Rij):
