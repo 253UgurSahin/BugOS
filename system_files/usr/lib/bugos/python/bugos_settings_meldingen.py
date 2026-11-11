@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import bugos_config as bi
-from bugos_ui import (TAAL, Banner, Chip, Groep, Knop, Rij, label, leeg_groep, px, schermmaat, sectie_met_knop, start,
-                      t, vraag_ja, vraag_tekst)
+from bugos_ui import (TAAL, Banner, Chip, Groep, Knop, Rij, label, leeg_groep, px, schermmaat, sectie, sectie_met_knop,
+                      start, t, vraag_ja, vraag_tekst)
 from bugos_settings_onderdelen import Blad, KiesDialoog, Keuzes, meer_knop, menu_bij, op_achtergrond, schuifje
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QDialog, QFileDialog, QFrame, QHBoxLayout, QLineEdit, QScrollArea, QVBoxLayout, QWidget
@@ -40,15 +40,44 @@ class MeldingenPagina(Blad):
             t("Hallo van BugOS", "Hello from BugOS"),
             t("Zo ziet een melding eruit. Klik erop, of veeg hem weg.", "This is what a notification looks like. Click it, or swipe it away.")))
         g2.voeg(Rij("bel", t("Zo ziet een melding eruit", "See what a notification looks like"), "", proef))
+        # Per app aan of uit (zoals Windows op dezelfde pagina); alleen apps die al eens een melding gaven.
+        self.apps_kop = sectie(t("Meldingen van apps", "Notifications from apps"))
+        self.lay.addWidget(self.apps_kop)
+        self.apps_uitleg = label(t("Zet een app uit als je zijn berichtjes niet meer wilt zien.",
+                                   "Turn an app off if you no longer want to see its messages."), "klein")
+        self.lay.addWidget(self.apps_uitleg)
+        self.apps = self.kaart()
+        self.app_schuifjes: dict[str, object] = {}
+        for w in (self.apps_kop, self.apps_uitleg, self.apps):
+            w.hide()
 
     def ververs(self) -> None:
-        op_achtergrond(self, lambda: (bi.niet_storen(), bi.stil_bij_games(), bi.meldingsgeluid()), self.toon)
+        op_achtergrond(self, lambda: (bi.niet_storen(), bi.stil_bij_games(), bi.meldingsgeluid(),
+                                      bi.app_meldingen(TAAL)), self.toon)
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:
             return
-        for schuif, aan in zip((self.storen, self.games, self.geluidje), uitkomst):
+        for schuif, aan in zip((self.storen, self.games, self.geluidje), uitkomst[:3]):
             schuif.zet_stil(bool(aan))
+        apps = uitkomst[3] or []
+        leeg_groep(self.apps)
+        self.app_schuifjes = {}
+        for app, naam, aan in apps:
+            s = schuifje(aan, lambda nu, a=app: self.zet_app(a, nu))
+            rij = Rij("bel", naam, self.app_uitleg(aan), s)
+            s.toggled.connect(lambda nu, r=rij: r.zet_uitleg(self.app_uitleg(nu)))
+            self.apps.voeg(rij)
+            self.app_schuifjes[app] = s
+        for w in (self.apps_kop, self.apps_uitleg, self.apps):
+            w.setVisible(bool(apps))
+
+    @staticmethod
+    def app_uitleg(aan: bool) -> str:
+        return "" if aan else t("Uit · je vindt ze nog wel in de lijst", "Off · you still find them in the list")
+
+    def zet_app(self, app: str, aan: bool) -> None:
+        op_achtergrond(self, lambda: bi.zet_app_meldingen(app, aan), lambda _u: None)
 
     def zet(self, werk, aan: bool) -> None:
         op_achtergrond(self, lambda: werk(aan), lambda _u: None)
@@ -666,8 +695,8 @@ class PrintersPagina(Blad):
         self.wachtrij_rijen(wacht, taken, namen)
         self.scanprogramma = scan
         self.scan_rij.zet_uitleg(t("Opent het scanprogramma", "Opens the scanning program") if scan else
-                                 t("Geen scanprogramma gevonden. Zoek 'Skanpage' in de BugOS Winkel.",
-                                   "No scanning program found. Search 'Skanpage' in the BugOS Store."))
+                                 t("Geen scanprogramma gevonden. Klik om Skanpage in de BugOS Winkel te zoeken.",
+                                   "No scanning program found. Click to find Skanpage in the BugOS Store."))
 
     def wachtrij_rijen(self, wacht: int, taken: list, namen: dict | None = None) -> None:
         """De wachtrij: hoeveel er wacht ('Alles annuleren'), en daaronder je eigen documenten, elk met 'Annuleren'."""
@@ -780,4 +809,4 @@ class PrintersPagina(Blad):
             else:
                 start(self.scanprogramma)
         elif not self.scanprogramma:
-            start("bugos-store")
+            start("bugos-store", "--zoek", "Skanpage")   # de Winkel zoekt meteen (niet de voorpagina)

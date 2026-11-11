@@ -636,6 +636,64 @@ for _m, _a in (("inode/directory", "a.desktop"), ("application/x-msi", "a.deskto
 klopt(not _geweigerd, f"test 24 / R14: mappen, .msi, links, Flatpak-bestanden en rare namen: nooit ({_geweigerd})")
 
 
+# ======================================================= 6. meldingen per app, en niets draait in de voorbeeldstand ===
+
+# Test 25: welke apps al eens een melding gaven (plasmanotifyrc), en hun schakelaar (kwriteconfig6). BugOS zelf niet (R21).
+(TMP / ".config").mkdir(exist_ok=True)
+(TMP / ".config" / "plasmanotifyrc").write_text(
+    "[Applications][bugos-settings]\nSeen=true\n\n[Applications][firefox]\nSeen=true\n\n"
+    "[Applications][org.mozilla.Thunderbird]\nSeen=true\nShowPopups=false\n\n[Applications][onbekend]\nSeen=true\n\n"
+    "[DoNotDisturb]\nWhenFullscreen=true\n", encoding="utf-8")
+_apps_map = TMP / ".local" / "share" / "applications"
+_apps_map.mkdir(parents=True, exist_ok=True)
+for _id, _naam in (("firefox", "Firefox"), ("org.mozilla.Thunderbird", "Thunderbird"), ("bugos-settings", "Instellingen")):
+    (_apps_map / f"{_id}.desktop").write_text(f"[Desktop Entry]\nType=Application\nName={_naam}\nExec=x\n", encoding="utf-8")
+_, _, am = vang_cups(bi.app_meldingen, "nl", antwoord=lambda c: (0, "false\n") if "org.mozilla.Thunderbird" in c
+                     else (0, "true\n"))
+klopt(am == [("firefox", "Firefox", True), ("org.mozilla.Thunderbird", "Thunderbird", False)],
+      f"test 25 / R21: twee apps met een schakelaar (Thunderbird uit); BugOS zelf en apps zonder naam niet ({am})")
+opd, _, _ = vang_cups(bi.zet_app_meldingen, "firefox", False)
+opd2, _, _ = vang_cups(bi.zet_app_meldingen, "firefox", True)
+opd3, _, ok3 = vang_cups(bi.zet_app_meldingen, "bugos-updates", False)
+klopt(opd == [("kwriteconfig6", "--file", "plasmanotifyrc", "--group", "Applications", "--group", "firefox", "--key",
+               "ShowPopups", "--notify", "false")] and opd2[0][-1] == "--delete" and not opd3 and not ok3,
+      f"test 25: uit = ShowPopups=false (in de lijst blijven ze), aan = weer weg; BugOS zelf niet uit te zetten ({opd})")
+
+# Test 28: in de voorbeeldstand (foto's, tests) draait BugOS niets: geen lpadmin, geen xdg-mime, geen pkexec.
+_gedraaid28: list = []
+_oud28 = (bi.draai, bi.cups_draai, subprocess.run, subprocess.Popen)
+bi.draai = bi.cups_draai = lambda *c, **k: (_gedraaid28.append(c), (0, ""))[1]
+subprocess.run = lambda *a, **k: _gedraaid28.append(a)
+subprocess.Popen = lambda *a, **k: _gedraaid28.append(a)
+bi.VOORBEELD = True
+for _k in ("printers", "taken", "gevonden", "printer_opties", "soort_apps", "app_meldingen"):
+    bi._VB.pop(_k, None)
+bi._VB["printers"] = None
+try:
+    _g = bi.gevonden_printers()
+    bi.gevonden_printers(True)
+    _m = bi.modellen("Brother HL-L2300D") + (bi.modellen("") or [])
+    for _f, _a in ((bi.printers, ()), (bi.wachtrij, ()), (bi.taken, ()), (bi.ben_beheerder, ()), (bi.scanprogramma, ()),
+                   (bi.printer_toevoegen, (_g[0],)), (bi.printer_toevoegen_adres, ("192.168.1.20",)),
+                   (bi.printer_toevoegen_model, (_g[-1].uri, "B", "Brother", _m[0][0])),
+                   (bi.printer_opties, ("HP_LaserJet",)), (bi.zet_printer_opties, ("HP_LaserJet", {"ColorModel": "Gray"})),
+                   (bi.hervat_printer, ("Canon_PIXMA",)), (bi.pauzeer_printer, ("HP_LaserJet",)),
+                   (bi.annuleer_taak, ("HP_LaserJet", 12)), (bi.wachtrij_leegmaken, ()), (bi.testpagina, ("HP_LaserJet",)),
+                   (bi.zet_standaard_printer, ("HP_LaserJet",)), (bi.verwijder_printer, ("HP_LaserJet",)),
+                   (bi.bestandssoort, ("/x/boek.epub",)), (bi.soort_naam, ("application/epub+zip",)),
+                   (bi.apps_voor_soort, ("application/epub+zip",)), (bi.alle_apps, ()),
+                   (bi.standaard_voor_soort, ("application/epub+zip",)),
+                   (bi.zet_standaard_voor_soort, ("application/epub+zip", "org.kde.okular.desktop")),
+                   (bi.app_meldingen, ()), (bi.zet_app_meldingen, ("firefox", False))):
+        _f(*_a)
+finally:
+    bi.draai, bi.cups_draai, subprocess.run, subprocess.Popen = _oud28
+klopt(not _gedraaid28, f"test 28: in de voorbeeldstand draait geen enkel programma ({_gedraaid28[:3]})")
+for _k in ("printers", "taken", "gevonden", "printer_opties", "soort_apps", "app_meldingen"):
+    bi._VB.pop(_k, None)
+bi._VB["printers"] = None
+
+
 # =========================================================================== 9. het venster ===
 
 lader = importlib.machinery.SourceFileLoader("instellingen", str(BIN / "bugos-settings"))
@@ -940,6 +998,42 @@ klopt(bi.standaard_voor_soort("application/epub+zip") == "org.kde.okular.desktop
       "programma's: de knop: een bestand kiezen, dan het programma")
 bi._VB.pop("soort_apps", None)
 so.KiesDialoog.exec = kies_exec
+
+# Meldingen (test 27): per app een schakelaar; uit = 'je vindt ze nog in de lijst'.
+mp = venster.paginas["meldingen"]
+venster.ga_naar("meldingen")
+wacht()
+_sch = mp.app_schuifjes
+klopt(list(_sch) == ["firefox", "org.mozilla.Thunderbird", "org.telegram.desktop"] and mp.apps.isVisibleTo(mp)
+      and _sch["firefox"].isChecked() and not _sch["org.telegram.desktop"].isChecked()
+      and mp.apps_kop.text() == "Meldingen van apps",
+      f"meldingen: drie apps met een schakelaar onder 'Meldingen van apps' ({list(_sch)})")
+_tel = _sch["org.telegram.desktop"].parent()
+klopt(_tel.uitleg.text() == "Uit · je vindt ze nog wel in de lijst", "meldingen: een app die uit staat: 'je vindt ze nog in de lijst'")
+_sch["org.telegram.desktop"].click()
+wacht()
+klopt(("org.telegram.desktop", "Telegram", True) in bi.app_meldingen() and _tel.uitleg.isHidden(),
+      "meldingen: aanzetten bewaart het en haalt de 'uit'-regel weg")
+_oud_am = bi.app_meldingen
+bi.app_meldingen = lambda taal="nl": []
+mp.ververs()
+wacht()
+bi.app_meldingen = _oud_am
+klopt(mp.apps.isHidden() and mp.apps_kop.isHidden() and mp.apps_uitleg.isHidden(),
+      "meldingen: nog geen enkele app gaf een melding: dan geen kop en geen lege kaart")
+bi._VB.pop("app_meldingen", None)
+# Scannen: geen scanprogramma -> de Winkel zoekt meteen naar Skanpage (niet de voorpagina).
+_gestart: list = []
+_echt_start = sm.start
+sm.start = lambda *c: _gestart.append(c)
+pp.scanprogramma = None
+pp.scan()
+sm.start = _echt_start
+klopt(_gestart == [("bugos-store", "--zoek", "Skanpage")], f"scannen: de Winkel zoekt meteen naar Skanpage ({_gestart})")
+_bron = (PY / "bugos_settings_meldingen.py").read_text(encoding="utf-8")
+klopt("kcm_" not in _bron and "kde_instelling" not in _bron
+      and sm.MeldingenPagina.kde == sm.ProgrammasPagina.kde == sm.PrintersPagina.kde == "",
+      "geen KDE meer op deze drie pagina's: geen kcm_, geen kde_instelling, geen kde-attribuut (spec 2.8)")
 
 bi._VB["printers"] = None
 bi._VB.pop("gevonden", None)
