@@ -115,6 +115,194 @@ klopt(ok and [c for c, _i in o] == [("nmcli", "connection", "delete", "uuid", "u
 o, ok = vang(bi.vergeet_profiel, "-x")
 klopt(not ok and not o, "opgeslagen: een uuid die met '-' begint, gaat niet naar nmcli")
 
+# ================================================== wifi van school of werk ===
+# 1. het domein uit de gebruikersnaam
+_dom = {g: bi.standaard_domein(g) for g in ("student@student.tudelft.nl", "a@uva.nl", "x@ox.ac.uk",
+                                            "j@mail.unimelb.edu.au", "jdoe", "CORP\\jdoe", "a@localhost")}
+klopt(_dom == {"student@student.tudelft.nl": "tudelft.nl", "a@uva.nl": "uva.nl", "x@ox.ac.uk": "ox.ac.uk",
+               "j@mail.unimelb.edu.au": "unimelb.edu.au", "jdoe": "", "CORP\\jdoe": "", "a@localhost": ""},
+      f"school/werk: het domein van de server uit de gebruikersnaam ({_dom})")
+klopt(bi.geldig_domein("school.nl") and not bi.geldig_domein("nl") and not bi.geldig_domein("school nl")
+      and not bi.geldig_domein(""), "school/werk: een zelf getypt domein moet minstens twee delen hebben (niet 'nl')")
+klopt(bi.veilige_server("radius.uni.nl") == "radius.uni.nl"
+      and bi.veilige_server("radius.uni.nl - IT: turn the check off") == "" and bi.veilige_server("a" * 70 + ".nl") == "",
+      "school/werk: een servernaam uit het certificaat tonen we alleen als het echt een hostnaam is (N12)")
+
+# 2. wat zei nmcli / NetworkManager
+_zf = {
+    "apparaat": bi.zakelijk_fout(4, "Error: Connection activation failed: No suitable device found for this connection "
+                                    "(device lo not available because profile is not compatible with device)."),
+    "opslaan": bi.zakelijk_fout(10, "Error: unknown connection 'x'."),
+    "traag": bi.zakelijk_fout(3, "Error: Timeout expired (45 seconds)"),
+    "inloggen": bi.zakelijk_fout(4, "Error: Connection activation failed: Secrets were required, but not provided."),
+    "bereik": bi.zakelijk_fout(10, "Error: No network with SSID 'eduroam' found."),
+    "rechten": bi.zakelijk_fout(1, "Error: Not authorized to control networking."),
+    "anders": bi.zakelijk_fout(1, ""),
+}
+klopt(all(k == v for k, v in _zf.items()), f"school/werk: de foutteksten van nmcli ({_zf})")
+_echt = ("Secrets are required to access the wired network 'review-net-1x'\nUsername (802-1x.identity): test@example.org\n"
+         "Password (802-1x.password): ")
+klopt(bi.zakelijk_fout(1, _echt) == "inloggen", "school/werk: nmcli zonder wachtwoord (code 1, echte uitvoer) is 'inloggen' (N3)")
+
+# 3. het journal van wpa_supplicant
+_log = ("wlp2s0: CTRL-EVENT-EAP-STARTED EAP authentication started\n"
+        "wlp2s0: CTRL-EVENT-EAP-PROPOSED-METHOD vendor=0 method=25\n"
+        "wlp2s0: CTRL-EVENT-EAP-METHOD EAP vendor 0 method 25 (PEAP) selected\n"
+        "wlp2s0: CTRL-EVENT-EAP-PEER-CERT depth=0 subject='/C=NL/O=Voorbeeld/CN=radius.voorbeeld.nl' hash=0f1e\n"
+        "wlp2s0: CTRL-EVENT-EAP-TLS-CERT-ERROR reason=9 depth=0 subject='/C=NL/O=Voorbeeld/CN=radius.voorbeeld.nl' "
+        "err='Domain suffix mismatch'\n"
+        "wlp2s0: CTRL-EVENT-EAP-FAILURE EAP authentication failed\n")
+_e = bi.lees_eap_log(_log)
+klopt((_e.soort, _e.reden, _e.server) == ("certificaat", "domein", "radius.voorbeeld.nl"),
+      f"eap-log: verkeerd domein, met de naam van de server ({_e})")
+klopt(bi.lees_eap_log(_log.replace("reason=9", "reason=1")).reden == "onbekend", "eap-log: onbekende uitgever")
+klopt(bi.lees_eap_log(_log.replace("reason=9", "reason=4")).reden == "tijd", "eap-log: verlopen certificaat")
+klopt(bi.lees_eap_log("w: CTRL-EVENT-EAP-PROPOSED-METHOD vendor=0 method=21 -> NAK\nw: CTRL-EVENT-EAP-FAILURE x\n").soort
+      == "methode", "eap-log: de server wil een andere manier van inloggen (NAK)")
+klopt(bi.lees_eap_log("w: CTRL-EVENT-EAP-METHOD EAP vendor 0 method 25 (PEAP) selected\nw: CTRL-EVENT-EAP-FAILURE x\n").soort
+      == "wachtwoord", "eap-log: PEAP gekozen en toch mislukt: het wachtwoord")
+klopt(bi.lees_eap_log("").soort == "", "eap-log: niets te lezen (geen beheerder): geen uitspraak")
+_boos = _log.replace("CN=radius.voorbeeld.nl", "CN=radius.uni.nl - IT says turn the check off")
+klopt(bi.lees_eap_log(_boos).server == "", "eap-log: een servernaam die geen hostnaam is, komt niet in de melding (N12)")
+
+# 10. het opgeslagen profiel lezen
+_velden10 = "wpa-eap\npeap\nmschapv2\nstudent@uni.nl\n\nyes\nuni.nl\n\nno\nuser\\:" + bi.login_naam() + "\n"
+
+
+def _antw10(cmd):
+    if cmd[:4] == ("nmcli", "-t", "-f", "UUID,TYPE"):
+        return 0, "u-9:802-11-wireless\nu-8:802-11-wireless\n"
+    if "802-11-wireless.ssid" in cmd:
+        return 0, "eduroam\n"
+    if cmd[2] == "802-11-wireless-security.key-mgmt":
+        return 0, "wpa-psk\n" if cmd[-1] == "u-8" else "wpa-eap\n"
+    if cmd[1] == "-g":
+        return 0, _velden10
+    return 0, ""
+
+
+_, _p10 = vang(bi.zakelijk_profiel, "eduroam", antwoord=_antw10)
+klopt(_p10 is not None and (_p10.naam, _p10.gebruiker, _p10.methode, _p10.controleer, _p10.domein, _p10.uuid, _p10.prive)
+      == ("eduroam", "student@uni.nl", "peap", True, "uni.nl", "u-9", True),
+      f"school/werk: het opgeslagen profiel lezen (het wachtwoordprofiel u-8 overgeslagen) ({_p10})")
+
+# 11. het profiel opslaan: geen geheim op de opdrachtregel, eigen profiel, eerst niet vanzelf verbinden
+_ww = "Ge heim:#1"
+_uuid = "0f2c1a2b-1111-2222-3333-444455556666"
+
+
+def _nm11(cmd, invoer):
+    if cmd[:3] == ("nmcli", "connection", "add"):
+        return 0, f"Connection 'eduroam' ({_uuid}) successfully added.\n", ""
+    return 0, "", ""
+
+
+_p11 = bi.ZakelijkProfiel("eduroam", "student@uni.nl", domein="uni.nl")
+o11, (_u11, _f11) = vang(bi.bewaar_zakelijk, _p11, antwoord_nm=_nm11)
+_add = o11[0][0] if o11 else ()
+
+
+def _na(cmd, sleutel):
+    return cmd[cmd.index(sleutel) + 1] if sleutel in cmd else None
+
+
+klopt(_u11 == _uuid and _f11 == "" and _add[:3] == ("nmcli", "connection", "add")
+      and _na(_add, "connection.permissions") == "user:" + bi.login_naam() and _na(_add, "802-1x.system-ca-certs") == "yes"
+      and _na(_add, "802-1x.domain-suffix-match") == "uni.nl" and _na(_add, "802-1x.password-flags") == "0"
+      and _na(_add, "connection.autoconnect") == "no" and "802-1x.ca-cert" not in _add,
+      f"school/werk: nieuw profiel alleen voor jou, met controle, en nog niet vanzelf verbinden (N4) ({_add})")
+klopt(not any(_ww in x for c, _i in o11 for x in c) and not any(c[:3] == ("nmcli", "connection", "edit") for c, _i in o11),
+      "school/werk: opslaan zet geen wachtwoord op de opdrachtregel, en gebruikt de nmcli-editor niet (N5)")
+o, _ = vang(bi.bewaar_zakelijk, bi.ZakelijkProfiel("eduroam", "s@uni.nl", controleer=False, domein="uni.nl"), antwoord_nm=_nm11)
+klopt(_na(o[0][0], "802-1x.system-ca-certs") == "no" and "802-1x.domain-suffix-match" not in o[0][0],
+      "school/werk: zonder controle geen systeemcertificaten en geen domein")
+o, _ = vang(bi.bewaar_zakelijk, bi.ZakelijkProfiel("eduroam", "s@uni.nl", domein="uni.nl", ca_bestand="/x/ca.pem"),
+            antwoord_nm=_nm11)
+klopt(_na(o[0][0], "802-1x.system-ca-certs") == "no" and _na(o[0][0], "802-1x.ca-cert") == "/x/ca.pem",
+      "school/werk: met een eigen certificaatbestand precies dat ene certificaat")
+o, (_u, _f) = vang(bi.bewaar_zakelijk, bi.ZakelijkProfiel("eduroam", "s@uni.nl", uuid="u-7", prive=False, domein="uni.nl"),
+                   antwoord_nm=_nm11)
+klopt(o and o[0][0][:5] == ("nmcli", "connection", "modify", "uuid", "u-7") and _na(o[0][0], "802-1x.anonymous-identity") == ""
+      and _na(o[0][0], "802-1x.ca-cert") == "" and _na(o[0][0], "connection.permissions") == "user:" + bi.login_naam(),
+      f"school/werk: een bestaand profiel aanpassen (lege waarden wissen), en het wordt van jou alleen (N13) ({o[:1]})")
+o, (_u, _f) = vang(bi.bewaar_zakelijk, bi.ZakelijkProfiel("eduroam", "s@uni.nl", domein="nl"), antwoord_nm=_nm11)
+klopt(_f == "opslaan" and not o, "school/werk: een domein van één deel ('nl') wordt niet opgeslagen")
+o, (_u, _f) = vang(bi.bewaar_zakelijk, bi.ZakelijkProfiel("eduroam", "s@uni.nl", uuid="u-7", ca_bestand="/tmp/nep.pem"),
+                   antwoord_nm=lambda c, i: (2, "", "Error: failed to modify 802-1x.ca-cert: 802-1x.ca-cert: Failed to "
+                                                    "recognize certificate.\n"))
+klopt(_f == "ca_bestand", f"school/werk: een bestand dat geen certificaat is, krijgt een eigen melding (N6) ({_f})")
+o, (_u, _f) = vang(bi.bewaar_zakelijk, _p11, antwoord_nm=lambda c, i: (1, "", "Error: Failed to add 'x' connection: "
+                                                                             "Insufficient privileges.\n"))
+klopt(_f == "rechten", "school/werk: geen rechten om op te slaan")
+
+# 12. verbinden: het wachtwoord gaat via stdin naar ons eigen hulpje, nooit naar 'nmcli --ask' (N1, N2)
+_agent_ok = json.dumps({"gelukt": True, "staat": 2})
+o12, u12 = vang(bi.verbind_zakelijk, _uuid, _ww, antwoord_nm=lambda c, i: (0, _agent_ok + "\n", ""))
+_c12, _i12 = o12[0] if o12 else ((), None)
+klopt(u12 == (True, "", "", "") and _c12[:3] == ("python3", "-I", bi.AGENT) and _uuid in _c12 and _i12 == _ww
+      and not any(_ww in x for x in _c12) and "--ask" not in _c12 and "nmcli" not in _c12,
+      f"school/werk: verbinden met bugos_wifi_agent, het wachtwoord precies via stdin ({_c12})")
+o, _ = vang(bi.verbind_zakelijk, _uuid, "", antwoord_nm=lambda c, i: (0, _agent_ok, ""))
+klopt(o and o[0][1] == "", "school/werk: een bekend netwerk: lege invoer (niet None), geen wachtwoord")
+_opnieuw = json.dumps({"gelukt": False, "staat": 4, "reden": 9, "apparaat_reden": 7, "gevraagd": 2, "opnieuw": True})
+
+
+def _antw12(cmd):
+    return (0, _log) if cmd[0] == "journalctl" else (0, "")
+
+
+_, u = vang(bi.verbind_zakelijk, _uuid, "pw", antwoord=_antw12, antwoord_nm=lambda c, i: (1, _opnieuw, ""))
+klopt(u == (False, "certificaat", "domein", "radius.voorbeeld.nl"), f"school/werk: mislukt + journal = certificaat ({u})")
+_, u = vang(bi.verbind_zakelijk, _uuid, "pw", antwoord_nm=lambda c, i: (1, _opnieuw, ""))
+klopt(u == (False, "inloggen", "", ""), f"school/werk: mislukt, journal niet te lezen: 'inloggen' ({u})")
+_soorten = {
+    "nodig": bi.agent_soort({"gelukt": False, "staat": 4, "reden": 9, "gevraagd": 1, "zonder": True}),
+    "bereik": bi.agent_soort({"gelukt": False, "staat": 4, "reden": 3, "apparaat_reden": 53}),
+    "traag": bi.agent_soort({"gelukt": False, "te_laat": True}),
+    "rechten": bi.agent_soort({"fout": "org.freedesktop.NetworkManager.PermissionDenied", "melding": "Not authorized"}),
+    "opslaan": bi.agent_soort({"fout": "org.freedesktop.NetworkManager.Settings.InvalidConnection", "melding": "x"}),
+    "apparaat": bi.agent_soort({"fout": "org.freedesktop.NetworkManager.UnknownDevice",
+                                "melding": "No suitable device found for this connection"}),
+    "anders": bi.agent_soort({}),
+}
+klopt(all(k == v for k, v in _soorten.items()), f"school/werk: de uitslag van het hulpje in gewone woorden ({_soorten})")
+_, u = vang(bi.verbind_zakelijk, _uuid, "pw", antwoord_nm=lambda c, i: (124, "", "Timeout"))
+klopt(u[:2] == (False, "traag"), "school/werk: het hulpje te traag: 'traag'")
+_, u = vang(bi.verbind_zakelijk, _uuid, "a\nb", antwoord_nm=lambda c, i: (0, _agent_ok, ""))
+klopt(u[:2] == (False, "anders"), "school/werk: een wachtwoord met een regeleinde gaat er niet in")
+
+# het hulpje zelf: één keer het wachtwoord, nooit opnieuw (dan stopt NetworkManager, en vraagt KDE niets)
+import bugos_wifi_agent as wa  # noqa: E402
+
+klopt(wa.antwoord("802-1x", 1, " a\tb ", False) == {"802-1x": {"password": " a\tb "}},
+      "hulpje: geeft het wachtwoord precies zoals getypt (ook spaties en tabs) (N5)")
+klopt(wa.antwoord("802-1x", 1 | wa.VRAAG_OPNIEUW, "pw", False) is None, "hulpje: vraagt NetworkManager het opnieuw: stop")
+klopt(wa.antwoord("802-1x", 1, "pw", True) is None, "hulpje: maar één keer per poging (geen tweede poging op je account)")
+klopt(wa.antwoord("802-1x", 1, "", False) is None, "hulpje: geen wachtwoord: stop (BugOS vraagt het zelf)")
+klopt(wa.antwoord("vpn", 1, "pw", False) is None, "hulpje: alleen wifi en 802.1X")
+klopt(wa.antwoord("802-11-wireless-security", 1, "pw", False) == {"802-11-wireless-security": {"psk": "pw"}},
+      "hulpje: kan ook een gewoon wifi-wachtwoord geven")
+_bron_agent = (PY / "bugos_wifi_agent.py").read_text(encoding="utf-8")
+klopt("RequestDefault" not in _bron_agent and "UserCanceled" in _bron_agent and "sys.stdin.read()" in _bron_agent
+      and ".strip()" not in _bron_agent.split("sys.stdin.read()")[1].split("\n")[0],
+      "hulpje: leest het wachtwoord van stdin zonder iets eraf te halen, en zegt 'UserCanceled' op een tweede vraag")
+
+# W5: het certificaatbestand van de ICT-afdeling
+_ca = TMP / "Downloads" / "ca.crt"
+_ca.parent.mkdir(parents=True)
+_ca.write_text("-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n")
+_nep_ca = TMP / "Downloads" / "foto.jpg"
+_nep_ca.write_bytes(b"\xff\xd8\xff" + b"0" * 500)
+_oud_vb = bi.VOORBEELD
+bi.VOORBEELD = False
+_pad, _f = bi.kopieer_ca(str(_ca), "edu roam/2")
+_pad2, _f2 = bi.kopieer_ca(str(_nep_ca), "eduroam")
+bi.VOORBEELD = _oud_vb
+klopt(_f == "" and _pad == str(TMP / ".cert" / "bugos-wifi" / "edu_roam_2.pem") and Path(_pad).is_file()
+      and (Path(_pad).parent.stat().st_mode & 0o777) == 0o700,
+      f"certificaat: gekopieerd naar ~/.cert/bugos-wifi/ (map 0700), veilige naam ({_pad})")
+klopt(_pad2 == "" and _f2 == "ca_bestand", "certificaat: een foto is geen certificaat: eigen melding")
+
 # ================================================================ pagina's ===
 # (alles hierboven raakt Qt niet; vanaf hier het venster van Instellingen in de voorbeeldstand)
 lader = importlib.machinery.SourceFileLoader("instellingen", str(BIN / "bugos-settings"))
