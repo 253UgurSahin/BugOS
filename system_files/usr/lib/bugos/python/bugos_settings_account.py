@@ -398,8 +398,8 @@ class TijdPagina(Blad):
         def klaar(ok) -> None:
             if ok:
                 time.tzset()   # anders blijft dit programma de oude tijdzone gebruiken (en de klok bovenaan de oude tijd)
-            self.melding.toon(t(f"De klok staat nu op {bi.mooie_zone(zone, nl)}.",
-                                f"The clock is now set to {bi.mooie_zone(zone, nl)}.") if ok else
+            self.melding.toon(t("De klok staat nu op {zone}.", "The clock is now set to {zone}.").format(
+                zone=bi.mooie_zone(zone, nl)) if ok else
                               t("Dat lukte niet.", "That did not work."), "goed" if ok else "fout")
             self.ververs()
 
@@ -708,7 +708,7 @@ class InloggenPagina(Blad):
         g, slot, slaap = uitkomst[:3]
         self.gebruiker = g
         self.ik.titel.setText(g.volledige_naam)
-        self.ik.zet_uitleg(t(f"Inlognaam: {g.naam}", f"Login name: {g.naam}") +
+        self.ik.zet_uitleg(t("Inlognaam: {naam}", "Login name: {naam}").format(naam=g.naam) +
                            (t(" · beheerder", " · administrator") if g.beheerder else ""))
         self.ik.zet_icoon(_foto_icoon(getattr(g, "foto", "")) or "persoon")
         self.auto.zet_stil(g.auto_inloggen)

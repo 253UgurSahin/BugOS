@@ -232,12 +232,12 @@ _v5 = {
     "!!!": bi.inlognaam_voor("!!!", lambda n: False),
     "2B": bi.inlognaam_voor("2B", lambda n: False),
     "Huiswerk 2": bi.inlognaam_voor("Huiswerk 2", lambda n: False),
-    "Łódź Ørsted": bi.inlognaam_voor("Łódź Ørsted", lambda n: False),
+    "Łódź Øresund": bi.inlognaam_voor("Łódź Øresund", lambda n: False),
     "Straße": bi.inlognaam_voor("Straße", lambda n: False),
 }
 klopt(_v5 == {"Gast": "gast", "Crème Brûlée": "creme", "creme bezet": "creme.brulee", "beide bezet": "creme2",
               "!!!": "", "2B": "u2b", "Huiswerk 2": "huiswerk",
-              "Łódź Ørsted": "lodz", "Straße": "strasse"}, f"5: een inlognaam bij een naam ({_v5})")
+              "Łódź Øresund": "lodz", "Straße": "strasse"}, f"5: een inlognaam bij een naam ({_v5})")
 _lang = "Abcdefghijklmnopqrstuvwxyzabcdefghijklmn"   # 40 letters
 _v5b = bi.inlognaam_voor(_lang, lambda n: n == _lang.lower()[:32])
 klopt(len(_v5b) <= 32 and _v5b != _lang.lower()[:32] and _v5b.endswith("2") and bi.inlognaam_fout(_v5b, lambda n: False) == "",
