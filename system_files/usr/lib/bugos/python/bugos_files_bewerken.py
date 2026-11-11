@@ -411,6 +411,7 @@ class Bewerken:
             if self.in_prullenbak:
                 self.open_prullenbak(geschiedenis=False)
             elif self.in_computer:
+                self.grootste_tijd = -1e9   # de prullenbak in 'Wat de meeste ruimte inneemt' opnieuw tellen
                 self.vul_computer()
             if mislukt:
                 self.melding.toon(t(f"{mislukt} {'ding kon' if mislukt == 1 else 'dingen konden'} niet weg. "
