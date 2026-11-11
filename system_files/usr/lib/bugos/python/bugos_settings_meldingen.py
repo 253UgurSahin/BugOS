@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import bugos_config as bi
-from bugos_ui import (TAAL, Banner, Chip, Groep, Knop, Rij, kde_instelling, label, leeg_groep, px, schermmaat,
-                      sectie_met_knop, start, t, vraag_ja, vraag_tekst)
+from bugos_ui import (TAAL, Banner, Chip, Groep, Knop, Rij, label, leeg_groep, px, schermmaat, sectie_met_knop, start,
+                      t, vraag_ja, vraag_tekst)
 from bugos_settings_onderdelen import Blad, KiesDialoog, Keuzes, meer_knop, menu_bij, op_achtergrond, schuifje
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import QDialog, QFrame, QHBoxLayout, QLineEdit, QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QDialog, QFileDialog, QFrame, QHBoxLayout, QLineEdit, QScrollArea, QVBoxLayout, QWidget
 
 
 # =============================================================== meldingen ===
@@ -70,9 +72,9 @@ class ProgrammasPagina(Blad):
             rij = Rij(ic, t(nl, en), "…", meer_knop(lambda s=sleutel: self.keuzes(s)))
             self.lijst.voeg(rij)
             self.rijen[sleutel] = rij
-        alle = Knop(t("Alle bestandstypes (voor gevorderden)", "All file types (advanced)"), "stil", "lijn:code")
-        alle.clicked.connect(lambda _c=False: kde_instelling("kcm_filetypes"))
-        self.lay.addWidget(alle, 0, Qt.AlignmentFlag.AlignLeft)
+        self.ander = Knop(t("Een ander soort bestand...", "Another kind of file..."), "stil", "lijn:map")
+        self.ander.clicked.connect(lambda _c=False: self.kies_bestand())
+        self.lay.addWidget(self.ander, 0, Qt.AlignmentFlag.AlignLeft)
 
     def ververs(self) -> None:
         def lees() -> dict[str, str]:
@@ -101,6 +103,44 @@ class ProgrammasPagina(Blad):
         op_achtergrond(self, lambda: bi.zet_standaard_app(sleutel, app), lambda ok: (
             self.melding.toon(t("Klaar.", "Done.") if ok else t("Dat lukte niet.", "That did not work."),
                               "goed" if ok else "fout"), self.ververs()))
+
+    # ----------------------------------------------------- een ander soort bestand ---
+    def kies_bestand(self) -> None:
+        """Kies een bestand van die soort; BugOS zegt wat het is en laat je het programma kiezen (geen KDE)."""
+        pad, _filter = QFileDialog.getOpenFileName(self, t("Kies een bestand van die soort", "Choose a file of that kind"),
+                                                   str(Path.home()))
+        if pad:
+            op_achtergrond(self, lambda: bi.bestandssoort(pad), lambda mime: self.kies_soort(mime or ""))
+
+    def kies_soort(self, mime: str) -> None:
+        if not mime or mime == "application/octet-stream":
+            self.melding.toon(t("BugOS weet niet wat voor bestand dit is.", "BugOS does not know what kind of file this is."))
+            return
+        if not bi.mag_soort_zetten(mime):
+            self.melding.toon(t("Dit soort bestand regelt BugOS zelf.", "BugOS takes care of this kind of file itself."))
+            return
+        op_achtergrond(self, lambda: (bi.soort_naam(mime, TAAL), bi.apps_voor_soort(mime, TAAL),
+                                      bi.standaard_voor_soort(mime)),
+                       lambda uitkomst: self.kies_programma(mime, *(uitkomst or (mime, [], ""))))
+
+    def kies_programma(self, mime: str, naam: str, apps: list, huidig: str) -> None:
+        items = list(apps) + [("__alle__", t("Een ander programma...", "Another program..."))]
+        d = KiesDialoog(self, t("Waarmee open je {naam}?", "What opens {naam}?").format(naam=naam), items,
+                        huidig if any(a == huidig for a, _n in apps) else None)
+        if d.exec() != QDialog.DialogCode.Accepted or not d.gekozen:
+            return
+        app = d.gekozen
+        if app == "__alle__":
+            alle = bi.alle_apps(TAAL)
+            d = KiesDialoog(self, t("Waarmee open je {naam}?", "What opens {naam}?").format(naam=naam), alle,
+                            huidig, t("Zoek een programma", "Search for a program"))
+            if d.exec() != QDialog.DialogCode.Accepted or not d.gekozen:
+                return
+            app, apps = d.gekozen, alle
+        app_tekst = dict(apps).get(app, app)
+        op_achtergrond(self, lambda: bi.zet_standaard_voor_soort(mime, app), lambda ok: self.melding.toon(
+            t("{naam} opent voortaan met {app}.", "{naam} now opens with {app}.").format(naam=naam, app=app_tekst)
+            if ok else t("Dat lukte niet.", "That did not work."), "goed" if ok else "fout"))
 
 
 # ================================================================ printers ===

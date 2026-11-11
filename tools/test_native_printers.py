@@ -576,6 +576,66 @@ klopt([c[0] for c in opd].count("pkexec") == 1 and "ipptool" not in [c[0] for c 
       "test 15: zonder beheerder: één wachtwoordvenster (een usb-printer kun je niet eerst proberen)")
 
 
+# ============================================= 5. standaardprogramma's: een ander soort bestand ===
+
+# Test 23: de soort van een bestand, zijn naam, waar hij een vorm van is, en welke programma's hem openen.
+deel = TMP / "share"
+(deel / "mime" / "application").mkdir(parents=True)
+(deel / "mime" / "application" / "x-test.xml").write_text(
+    '<?xml version="1.0" encoding="utf-8"?>\n<mime-type xmlns="http://www.freedesktop.org/standards/shared-mime-info" '
+    'type="application/x-test">\n  <comment>Test document</comment>\n  <comment xml:lang="de">Testdokument</comment>\n'
+    '  <comment xml:lang="nl">Testdocument</comment>\n</mime-type>\n', encoding="utf-8")
+(deel / "mime" / "subclasses").write_text("application/x-test application/zip\napplication/x-test text/plain\n"
+                                          "application/zip application/octet-stream\n", encoding="utf-8")
+(deel / "applications").mkdir()
+(deel / "applications" / "mimeinfo.cache").write_text(
+    "[MIME Cache]\napplication/x-test=testlezer.desktop;\napplication/zip=org.kde.ark.desktop;\n"
+    "text/plain=org.kde.kate.desktop;../kwaad.desktop;\n", encoding="utf-8")
+for _naam, _inhoud in (("testlezer", "Name=Testlezer\nExec=testlezer %f"), ("org.kde.ark", "Name=Ark\nExec=ark %U"),
+                       ("org.kde.kate", "Name=Kate\nExec=kate %U"), ("verborgen", "Name=Weg\nNoDisplay=true\nExec=x %f"),
+                       ("zonder", "Name=Zonder bestand\nExec=zonder")):
+    (deel / "applications" / f"{_naam}.desktop").write_text(f"[Desktop Entry]\nType=Application\n{_inhoud}\n",
+                                                           encoding="utf-8")
+_oud_xdg = os.environ.get("XDG_DATA_DIRS")
+os.environ["XDG_DATA_DIRS"] = str(deel)
+opd, _, s1 = vang_cups(bi.bestandssoort, "/home/bugie/boek.epub", antwoord=lambda c: (0, "application/epub+zip\n"))
+_, _, s2 = vang_cups(bi.bestandssoort, "/home/bugie/x", antwoord=lambda c: (0, "xdg-mime: rare uitvoer; rm -rf\n"))
+opd3, _, s3 = vang_cups(bi.bestandssoort, "-x")
+klopt(opd == [("xdg-mime", "query", "filetype", "/home/bugie/boek.epub")] and s1 == "application/epub+zip"
+      and s2 is None and s3 is None and not opd3,
+      "test 23: bestandssoort = xdg-mime query filetype; rare uitvoer of een pad dat geen pad is: niets")
+_, _, n_nl = vang_cups(bi.soort_naam, "application/x-test", "nl")
+_, _, n_en = vang_cups(bi.soort_naam, "application/x-test", "en")
+_, _, n_x = vang_cups(bi.soort_naam, "application/x-onbekend", "nl")
+klopt((n_nl, n_en, n_x) == ("Testdocument", "Test document", "application/x-onbekend"),
+      f"test 23: de naam van de soort uit shared-mime-info, in je eigen taal ({n_nl}, {n_en}, {n_x})")
+klopt(bi.ouders("application/x-test") == ["application/zip", "text/plain", "application/octet-stream"],
+      f"test 23: ouders uit subclasses, tot drie stappen ({bi.ouders('application/x-test')})")
+_, _, aps = vang_cups(bi.apps_voor_soort, "application/x-test", "nl")
+klopt(aps == [("testlezer.desktop", "Testlezer"), ("org.kde.kate.desktop", "Kate")],
+      f"test 23 / R15: eerst de programma's voor precies deze soort, dan de ouders, maar geen Ark via zip ({aps})")
+_, _, alle_ = vang_cups(bi.alle_apps, "nl")
+klopt([a for a, _n in alle_ if a in ("testlezer.desktop", "org.kde.ark.desktop", "verborgen.desktop", "zonder.desktop")]
+      == ["org.kde.ark.desktop", "testlezer.desktop"],
+      f"test 23: 'Een ander programma': alleen programma's die een bestand kunnen openen, niets verborgens ({alle_})")
+if _oud_xdg is None:
+    os.environ.pop("XDG_DATA_DIRS", None)
+else:
+    os.environ["XDG_DATA_DIRS"] = _oud_xdg
+# Test 24: voortaan openen met ... (xdg-mime default); wat BugOS zelf regelt niet (R14).
+opd, _, ok = vang_cups(bi.zet_standaard_voor_soort, "application/epub+zip", "org.kde.okular.desktop")
+klopt(opd == [("xdg-mime", "default", "org.kde.okular.desktop", "application/epub+zip")] and ok,
+      "test 24: xdg-mime default org.kde.okular.desktop application/epub+zip")
+_geweigerd = []
+for _m, _a in (("inode/directory", "a.desktop"), ("application/x-msi", "a.desktop"), ("x-scheme-handler/http", "a.desktop"),
+               ("application/vnd.flatpak.ref", "a.desktop"), ("application/epub+zip", "../x.desktop"),
+               ("application/epub+zip", "-x.desktop"), ("../etc/passwd", "a.desktop"), ("application/pdf", "a.sh")):
+    o, _, ok = vang_cups(bi.zet_standaard_voor_soort, _m, _a)
+    if o or ok:
+        _geweigerd.append((_m, _a))
+klopt(not _geweigerd, f"test 24 / R14: mappen, .msi, links, Flatpak-bestanden en rare namen: nooit ({_geweigerd})")
+
+
 # =========================================================================== 9. het venster ===
 
 lader = importlib.machinery.SourceFileLoader("instellingen", str(BIN / "bugos-settings"))
@@ -825,6 +885,62 @@ sm.PrinterToevoegen.exec = _echt_exec_t
 wacht()
 klopt(pp.melding.tekst.text() == "Kantoorprinter is toegevoegd." and pp.melding.knop.text() == "Testpagina printen",
       "toevoegen: 'Kantoorprinter is toegevoegd.' met de knop 'Testpagina printen'")
+# Standaardprogramma's (test 27): tien soorten, en 'Een ander soort bestand...' in plaats van KDE's bestandstypes.
+pg = venster.paginas["programmas"]
+venster.ga_naar("programmas")
+wacht()
+klopt(len(pg.rijen) == 10 and list(pg.rijen)[5:9] == ["pdf", "kantoor", "rekenen", "zip"]
+      and pg.rijen["kantoor"].uitleg.text() == "LibreOffice Writer" and pg.rijen["zip"].uitleg.text() == "Ark"
+      and pg.ander.text() == "Een ander soort bestand...",
+      f"programma's: tien soorten (ook Word, Excel en zip) en 'Een ander soort bestand...' "
+      f"({[(k, r.uitleg.text()) for k, r in pg.rijen.items()]})")
+_keuzes_rij: list = []
+
+
+def kies_rij_exec(self):
+    _gekozen_lijsten.append([self.lijst.item(i).data(sm.Qt.ItemDataRole.UserRole) for i in range(self.lijst.count())])
+    if not _keuzes_rij:
+        return QDialog.DialogCode.Rejected
+    self.gekozen = _keuzes_rij.pop(0)
+    return QDialog.DialogCode.Accepted
+
+
+so.KiesDialoog.exec = kies_rij_exec
+_keuzes_rij[:] = ["org.kde.kate.desktop"]
+pg.kies_soort("application/epub+zip")
+wacht()
+klopt(_gekozen_lijsten[-1] == ["org.kde.okular.desktop", "org.kde.kate.desktop", "__alle__"]
+      and bi.standaard_voor_soort("application/epub+zip") == "org.kde.kate.desktop"
+      and pg.melding.tekst.text() == "EPUB-e-boek opent voortaan met Kate (tekst).",
+      f"programma's: een EPUB: de programma's ervoor, en 'Een ander programma...' ({pg.melding.tekst.text()!r})")
+_keuzes_rij[:] = ["__alle__", "firefox.desktop"]
+pg.kies_soort("application/epub+zip")
+wacht()
+klopt(_gekozen_lijsten[-1] == ["org.kde.okular.desktop", "org.kde.kate.desktop", "firefox.desktop", "org.kde.ark.desktop"]
+      and bi.standaard_voor_soort("application/epub+zip") == "firefox.desktop"
+      and pg.melding.tekst.text() == "EPUB-e-boek opent voortaan met Firefox.",
+      "programma's: 'Een ander programma...' laat alle programma's zien")
+_keuzes_rij[:] = []
+pg.kies_soort("application/epub+zip")
+wacht()
+klopt(bi.standaard_voor_soort("application/epub+zip") == "firefox.desktop", "programma's: Annuleren verandert niets")
+pg.kies_soort("application/x-msi")
+klopt(pg.melding.tekst.text() == "Dit soort bestand regelt BugOS zelf.", "programma's: een .msi regelt BugOS zelf")
+pg.kies_soort("application/octet-stream")
+klopt(pg.melding.tekst.text() == "BugOS weet niet wat voor bestand dit is.",
+      "programma's: een onbekende soort: dat zeggen, niet een lijst met alles")
+_echt_fd = sm.QFileDialog.getOpenFileName
+sm.QFileDialog.getOpenFileName = staticmethod(lambda *a, **k: (str(TMP / "boek.epub"), ""))
+_keuzes_rij[:] = ["org.kde.okular.desktop"]
+pg.ander.click()
+wacht()
+sm.QFileDialog.getOpenFileName = _echt_fd
+klopt(bi.standaard_voor_soort("application/epub+zip") == "org.kde.okular.desktop"
+      and "opent voortaan met Okular" in pg.melding.tekst.text(),
+      "programma's: de knop: een bestand kiezen, dan het programma")
+bi._VB.pop("soort_apps", None)
+so.KiesDialoog.exec = kies_exec
+
 bi._VB["printers"] = None
 bi._VB.pop("gevonden", None)
 klopt(not kde_open, f"nergens KDE geopend ({kde_open})")

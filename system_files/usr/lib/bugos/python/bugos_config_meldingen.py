@@ -111,6 +111,15 @@ SOORTEN = [
     ("videos", "film", ("Video's", "Videos"), ["video/mp4", "video/x-matroska", "video/webm", "video/x-msvideo",
                                                "video/quicktime"]),
     ("pdf", "document", ("PDF-bestanden", "PDF files"), ["application/pdf"]),
+    ("kantoor", "document", ("Documenten (Word)", "Documents (Word)"),
+     ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.oasis.opendocument.text",
+      "application/msword", "application/rtf"]),
+    ("rekenen", "grafiek", ("Rekenbladen (Excel)", "Spreadsheets (Excel)"),
+     ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.oasis.opendocument.spreadsheet",
+      "application/vnd.ms-excel", "text/csv"]),
+    ("zip", "map", ("Zip-bestanden", "Zip files"),
+     ["application/zip", "application/x-7z-compressed", "application/vnd.rar", "application/x-compressed-tar",
+      "application/x-tar"]),
     ("tekst", "potlood", ("Tekstbestanden", "Text files"), ["text/plain"]),
 ]
 
@@ -124,6 +133,12 @@ _VB_APPS = {"internet": ("firefox.desktop", [("firefox.desktop", "Firefox"), ("o
             "videos": ("org.kde.haruna.desktop", [("org.kde.haruna.desktop", "Haruna (video)"), ("vlc.desktop", "VLC")]),
             "pdf": ("org.kde.okular.desktop", [("org.kde.okular.desktop", t("Okular (documenten)", "Okular (documents)")),
                                                ("firefox.desktop", "Firefox")]),
+            "kantoor": ("org.libreoffice.LibreOffice.writer.desktop",
+                        [("org.libreoffice.LibreOffice.writer.desktop", "LibreOffice Writer")]),
+            "rekenen": ("org.libreoffice.LibreOffice.calc.desktop",
+                        [("org.libreoffice.LibreOffice.calc.desktop",
+                          t("LibreOffice Calc (rekenbladen)", "LibreOffice Calc (spreadsheets)"))]),
+            "zip": ("org.kde.ark.desktop", [("org.kde.ark.desktop", "Ark")]),
             "tekst": ("org.kde.kate.desktop", [("org.kde.kate.desktop", t("Kate (tekst)", "Kate (text)")),
                                                ("org.kde.kwrite.desktop", "KWrite")])}
 
@@ -219,6 +234,208 @@ def zet_standaard_app(sleutel: str, desktop_id: str) -> bool:
     if sleutel == "internet":
         _c.draai("xdg-settings", "set", "default-web-browser", desktop_id, timeout=10)
     return goed
+
+
+# ------------------------------------------------- 'Een ander soort bestand...' ---
+# Kies een bestand; BugOS zegt wat voor soort het is en laat je het programma kiezen (xdg-mime, net als KDE en GTK).
+
+MIME_RE = re.compile(r"^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+_-]*$")
+DESKTOP_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9._-]*\.desktop$")
+# Wat BugOS zelf regelt (programma's voor Windows, pakketten, mappen, de Winkel): niet om te zetten. Deels uit
+# /etc/xdg/kde-mimeapps.list, deels een eigen keuze (review R14).
+EIGEN_SOORTEN = {
+    "application/x-ms-dos-executable", "application/x-msdownload", "application/x-msi",
+    "application/vnd.microsoft.portable-executable", "application/x-rpm", "application/x-redhat-package-manager",
+    "application/vnd.debian.binary-package", "application/x-deb", "inode/directory", "application/x-desktop",
+    "application/x-executable", "application/x-sharedlib", "application/vnd.flatpak.ref",
+    "application/vnd.flatpak.repo", "application/vnd.flatpak",
+}
+# Een ouder als zip (Word, EPUB) of 'een rij bytes' zegt niets: Ark is geen goed programma voor een Word-bestand (R15).
+_LEGE_OUDERS = {"application/zip", "application/octet-stream"}
+
+
+def mime_mappen() -> list[Path]:
+    mappen = [Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share") / "mime"]
+    for d in (os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share").split(":"):
+        if d:
+            mappen.append(Path(d) / "mime")
+    return mappen
+
+
+def bestandssoort(pad: str) -> str | None:
+    """Wat voor soort bestand is dit (application/epub+zip)? Alleen de soort wordt gelezen, het bestand niet geopend."""
+    if _c.VOORBEELD:
+        return "application/epub+zip"
+    if not os.path.isabs(pad):
+        return None
+    soort = _c.draai("xdg-mime", "query", "filetype", pad, timeout=5)[1].strip()
+    return soort if MIME_RE.match(soort) else None
+
+
+def soort_naam(mime: str, taalcode: str = "nl") -> str:
+    """'application/epub+zip' -> 'EPUB e-book' (of in het Nederlands), uit shared-mime-info. Anders de soort zelf."""
+    if _c.VOORBEELD:
+        return t("EPUB-e-boek", "EPUB e-book") if mime == "application/epub+zip" else mime
+    if not MIME_RE.match(mime):
+        return mime
+    import xml.etree.ElementTree as ET
+    ns = "{http://www.freedesktop.org/standards/shared-mime-info}"
+    taal_sleutel = "{http://www.w3.org/XML/1998/namespace}lang"
+    for m in mime_mappen():
+        pad = m / (mime + ".xml")
+        try:
+            wortel = ET.parse(pad).getroot()
+        except (OSError, ET.ParseError):
+            continue
+        gewoon, eigen = "", ""
+        for c in wortel.iter(ns + "comment"):
+            if c.get(taal_sleutel) == taalcode:
+                eigen = (c.text or "").strip()
+            elif c.get(taal_sleutel) is None:
+                gewoon = (c.text or "").strip()
+        naam = schone_tekst(eigen or gewoon, 80)
+        if naam:
+            return naam
+    return mime
+
+
+def ouders(mime: str, diepte: int = 3) -> list[str]:
+    """De soorten waar deze soort een vorm van is (/usr/share/mime/subclasses), tot drie stappen ver."""
+    tabel: dict[str, list[str]] = {}
+    for m in mime_mappen():
+        try:
+            tekst = (m / "subclasses").read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for regel in tekst.splitlines():
+            d = regel.split()
+            if len(d) == 2:
+                tabel.setdefault(d[0], []).append(d[1])
+    uit: list[str] = []
+    rij = [mime]
+    for _ in range(diepte):
+        volgende = []
+        for s in rij:
+            for o in tabel.get(s, []):
+                if o not in uit and o != mime:
+                    uit.append(o)
+                    volgende.append(o)
+        rij = volgende
+    return uit
+
+
+def _apps_voor_mimes(mimes: list[str], taalcode: str) -> list[tuple[str, str]]:
+    gezien: dict[str, str] = {}
+    for map_ in app_mappen():
+        try:
+            cache = lees_mimeinfo((map_ / "mimeinfo.cache").read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            continue
+        for soort in mimes:
+            for app in cache.get(soort, []):
+                if app not in gezien and DESKTOP_RE.match(app):
+                    naam = app_naam(app, taalcode)
+                    if naam:
+                        gezien[app] = naam
+    return sorted(gezien.items(), key=lambda x: x[1].lower())
+
+
+def apps_voor_soort(mime: str, taalcode: str = "nl") -> list[tuple[str, str]]:
+    """Programma's voor precies deze soort, dan die voor de soorten waar hij een vorm van is (niet zip: R15)."""
+    if _c.VOORBEELD:
+        return [("org.kde.okular.desktop", "Okular"), ("org.kde.kate.desktop", t("Kate (tekst)", "Kate (text)"))]
+    eerst = _apps_voor_mimes([mime], taalcode)
+    dan = _apps_voor_mimes([o for o in ouders(mime) if o not in _LEGE_OUDERS], taalcode)
+    return eerst + [a for a in dan if a[0] not in dict(eerst)]
+
+
+def alle_apps(taalcode: str = "nl") -> list[tuple[str, str]]:
+    """Elk programma dat bestanden kan openen (Exec met %f, %F, %u of %U), voor 'Een ander programma...'."""
+    if _c.VOORBEELD:
+        return [("org.kde.okular.desktop", "Okular"), ("org.kde.kate.desktop", "Kate"), ("firefox.desktop", "Firefox"),
+                ("org.kde.ark.desktop", "Ark")]
+    gezien: dict[str, str] = {}
+    for map_ in app_mappen():
+        try:
+            bestanden = sorted(map_.glob("*.desktop"))
+        except OSError:
+            continue
+        for pad in bestanden:
+            if pad.name in gezien or not DESKTOP_RE.match(pad.name):
+                continue
+            try:
+                tekst = pad.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            hoofd = tekst.split("\n[", 1)[0]
+            if not re.search(r"^Type\s*=\s*Application\s*$", hoofd, re.M) or \
+                    not re.search(r"^Exec\s*=.*%[fFuU]", hoofd, re.M):
+                continue
+            naam = lees_desktop_naam(tekst, taalcode)
+            if naam:
+                gezien[pad.name] = naam
+    return sorted(gezien.items(), key=lambda x: x[1].lower())
+
+
+def standaard_voor_soort(mime: str) -> str:
+    if _c.VOORBEELD:
+        return _c._VB.setdefault("soort_apps", {}).get(mime, "org.kde.okular.desktop")
+    if not MIME_RE.match(mime):
+        return ""
+    return _c.draai("xdg-mime", "query", "default", mime, timeout=5)[1].strip()
+
+
+def mag_soort_zetten(mime: str) -> bool:
+    return bool(MIME_RE.match(mime)) and mime not in EIGEN_SOORTEN and not mime.startswith("x-scheme-handler/") \
+        and not mime.startswith("inode/")
+
+
+def zet_standaard_voor_soort(mime: str, desktop_id: str) -> bool:
+    """Open deze soort voortaan met dit programma (~/.config/mimeapps.list, voor KDE en GTK)."""
+    if not mag_soort_zetten(mime) or not DESKTOP_RE.match(desktop_id):
+        return False
+    if _c.VOORBEELD:
+        _c._VB.setdefault("soort_apps", {})[mime] = desktop_id
+        return True
+    return _c.draai("xdg-mime", "default", desktop_id, mime, timeout=10)[0] == 0
+
+
+# ------------------------------------------------------------------- meldingen per app ---
+
+def app_meldingen(taalcode: str = "nl") -> list[tuple[str, str, bool]]:
+    """[(app, naam, aan)] voor elke app die al eens een melding gaf (plasmanotifyrc [Applications][app]).
+    BugOS zelf niet: updates en 'opnieuw opstarten' moet je blijven zien (review R21)."""
+    if _c.VOORBEELD:
+        return _c._VB.setdefault("app_meldingen", [("firefox", "Firefox", True),
+                                                   ("org.mozilla.Thunderbird", "Thunderbird", True),
+                                                   ("org.telegram.desktop", "Telegram", False)])
+    pad = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "plasmanotifyrc"
+    try:
+        tekst = pad.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    uit = []
+    for m in re.finditer(r"^\[Applications\]\[([^\]\n]+)\]\s*$", tekst, re.M):
+        app = m.group(1)
+        if app.startswith(("bugos", "org.bugos")) or not re.match(r"^[A-Za-z0-9._-]+$", app) or \
+                any(a == app for a, _n, _x in uit):
+            continue
+        naam = app_naam(f"{app}.desktop", taalcode)
+        if not naam:
+            continue
+        aan = _c.kde_lees_groepen("plasmanotifyrc", ["Applications", app], "ShowPopups", "true") != "false"
+        uit.append((app, naam, aan))
+    return sorted(uit, key=lambda x: x[1].lower())
+
+
+def zet_app_meldingen(app: str, aan: bool) -> bool:
+    """Berichtjes van deze app wel of niet in beeld (ze komen nog wel in de lijst: ShowInHistory blijft)."""
+    if not re.match(r"^[A-Za-z0-9._-]+$", app) or app.startswith(("bugos", "org.bugos")):
+        return False
+    if _c.VOORBEELD:
+        _c._VB["app_meldingen"] = [(a, n, aan if a == app else x) for a, n, x in app_meldingen()]
+        return True
+    return _c.kde_schrijf("plasmanotifyrc", ["Applications", app], "ShowPopups", None if aan else "false")
 
 
 # ================================================================ printers ===
