@@ -469,15 +469,46 @@ klopt(_weg.text() == "Stop" and not _weg.toolTip(), "D04: weer breed: het nieuwe
 _venster.hide()
 
 # ---------------------------------------------------------------------------------- D09 gekozen keuze ---
+def _streep(knop) -> tuple[bool, bool]:
+    """Teken een gekozen StreepKnop: is er onderaan in het midden een rode streep, en zijn de hoeken onderaan vrij
+    (een korte rechte streep, geen rand die in de ronde hoeken omhoog buigt)?"""
+    beeld = knop.grab().toImage()
+    rood = QColor(K["accent"])
+
+    def is_rood(x, y) -> bool:
+        c = beeld.pixelColor(x, y)
+        return abs(c.red() - rood.red()) < 40 and abs(c.green() - rood.green()) < 40 and abs(c.blue() - rood.blue()) < 40
+
+    h = beeld.height()
+    midden = any(is_rood(beeld.width() // 2, y) for y in range(h - 7, h))
+    # Een rand onderaan buigt in de ronde hoeken omhoog (tot ~12 px hoog); daar staat nooit tekst.
+    hoeken = any(is_rood(x, y) for x in list(range(0, 12)) + list(range(beeld.width() - 12, beeld.width()))
+                 for y in range(h - 12, h))
+    return midden, not hoeken
+
+
 for _thema in ("licht", "donker"):
     K.clear()
     K.update(KLEUREN[_thema])
     _st = stijl()
     _regel = next((r for r in _st.split("}") if "QPushButton#keus:checked" in r), "")
-    klopt(K["accent_gekozen"] in _regel and f"border-bottom: 3px solid {K['accent']}" in _regel,
-          f"D09 ({_thema}): de gekozen keuze heeft rode letters en een rode streep eronder")
-    klopt(contrast(K["accent"], K["knop"]) >= 3.0,
-          f"D09 ({_thema}): de streep haalt 3:1 tegen de grijze baan ({contrast(K['accent'], K['knop']):.2f}:1, WCAG 1.4.11)")
+    klopt(K["accent_gekozen"] in _regel and K["accent_zacht"] in _regel and "border-bottom" not in _regel,
+          f"D09 ({_thema}): de gekozen keuze is zacht rood met rode letters (zoals de zijbalk), geen gebogen rand")
+    klopt(contrast(K["accent_gekozen"], K["accent_zacht"]) >= 4.5,
+          f"D09 ({_thema}): de rode letters halen 4,5:1 op het zachtrode vlak "
+          f"({contrast(K['accent_gekozen'], K['accent_zacht']):.2f}:1)")
+    klopt(contrast(K["accent"], K["accent_zacht"]) >= 3.0,
+          f"D09 ({_thema}): de streep haalt 3:1 tegen het zachtrode vlak "
+          f"({contrast(K['accent'], K['accent_zacht']):.2f}:1, WCAG 1.4.11)")
+    _kz = Keuzes([(1, "5 min"), (2, "10 min")])
+    _kz.setStyleSheet(_st)
+    _kz.zet(2)
+    _k2 = _kz.knoppen[2]
+    klopt(isinstance(_k2, bugos_ui.StreepKnop), f"D09 ({_thema}): elke keuze is een StreepKnop")
+    _mid, _vrij = _streep(_k2)
+    klopt(_mid and _vrij, f"D09 ({_thema}): gekozen = een korte rechte streep onderaan in het midden, de hoeken vrij")
+    _mid, _ = _streep(_kz.knoppen[1])
+    klopt(not _mid, f"D09 ({_thema}): een keuze die niet gekozen is, heeft geen streep")
 K.clear()
 K.update(KLEUREN["licht"])
 
@@ -605,8 +636,11 @@ verwerk()
 klopt(w.height() <= _vrij.height() - bugos_ui.TITELBALK, f"R09: Instellingen laat ruimte voor zijn titelbalk ({w.height()})")
 _tabs = [k for g in w.groepen.values() for k in g.tabs.values()]
 _ts = inst.tab_stijl()
-klopt(K["accent_zacht"] in _ts and K["accent_gekozen"] in _ts and f"border-bottom: 3px solid {K['accent']}" in _ts
-      and "background: transparent" in _ts, "D12: stille tabjes: gekozen = zacht rood met rode letters en een streep eronder")
+klopt(K["accent_zacht"] in _ts and K["accent_gekozen"] in _ts and "border-bottom" not in _ts
+      and "background: transparent" in _ts and all(isinstance(k, bugos_ui.StreepKnop) for k in _tabs),
+      "D12: stille tabjes: gekozen = zacht rood met rode letters en een korte streep eronder (StreepKnop)")
+_mid, _vrij = _streep(next(k for k in _tabs if k.isChecked()))
+klopt(_mid and _vrij, "D12: de streep onder het gekozen tabje is kort en recht, in het midden")
 K.clear()
 K.update(KLEUREN["donker"])
 _ts_donker = inst.tab_stijl()
@@ -617,6 +651,16 @@ klopt("#DE2F3E" not in _ts_donker and KLEUREN["donker"]["accent_gekozen"] in _ts
 klopt(all(k.minimumHeight() == px(32) and k.objectName() == "tab" and k.isCheckable() for k in _tabs),
       "D12/P09: elk tabje is 32 px hoog")
 klopt(contrast(K["accent"], K["achter"]) >= 3.0, "D12: de streep onder het gekozen tabje haalt 3:1 tegen de achtergrond")
+_dl = w.groepen["apparaten"].layout().itemAt(0).layout()
+_breed, _smal = _dl.heightForWidth(2000), _dl.heightForWidth(px(300))
+_dl.setGeometry(QRect(0, 0, px(300), _smal))
+_ab = list(w.groepen["apparaten"].tabs.values())
+klopt(isinstance(_dl, inst.Doorloop) and _smal > _breed
+      and all(k.width() >= k.sizeHint().width() and k.geometry().right() < px(300) for k in _ab),
+      f"R07: passen de tabjes niet naast elkaar (grote letters, 150 %), dan gaan ze naar een tweede regel, heel "
+      f"({_breed} -> {_smal} px hoog)")
+_dl.setGeometry(QRect(0, 0, 2000, _breed))
+klopt(len({k.y() for k in _ab}) == 1, "R07: met ruimte staan alle tabjes op één regel")
 w.ga_naar("wifi")
 verwerk()
 _enkel = w.paginas["wifi"].titel.mapTo(w, QPoint(0, 0)).y()

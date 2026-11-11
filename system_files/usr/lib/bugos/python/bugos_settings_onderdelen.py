@@ -4,7 +4,7 @@ onderdelen (keuzes, schuifbalken, menu's), Blad (een pagina) en de dialogen om i
 
 from __future__ import annotations
 
-from bugos_ui import (K, Knop, Pagina, Schuif, Venster, Zoekveld, kde_instelling, label, lijn_icoon, ronde_knop,
+from bugos_ui import (K, Knop, Pagina, Schuif, StreepKnop, Venster, Zoekveld, kde_instelling, label, lijn_icoon, ronde_knop,
                       px, schaal_css, schermmaat, t, zoeksleutel)
 from PySide6.QtCore import QObject, QRunnable, QSize, Qt, QThreadPool, QTimer, Signal
 from PySide6.QtWidgets import (
@@ -50,8 +50,7 @@ QFrame#snel {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-ra
 QPushButton#keus {{ background: transparent; border: none; border-radius: 9px; padding: 8px 14px; font-size: 14px;
     font-weight: 600; color: {K['tekst2']}; }}
 QPushButton#keus:hover {{ color: {K['tekst']}; }}
-QPushButton#keus:checked {{ background: {K['vlak']}; color: {K['accent_gekozen']}; border-bottom: 3px solid {K['accent']};
-    padding-bottom: 5px; }}
+QPushButton#keus:checked {{ background: {K['accent_zacht']}; color: {K['accent_gekozen']}; }}
 QPushButton#keus:focus {{ border: 2px solid {K['accent']}; padding: 6px 12px; }}
 QFrame#keuzes {{ background: {K['knop']}; border-radius: 12px; }}
 QPushButton#plaatje {{ background: transparent; border: 2px solid transparent; border-radius: 16px; padding: 3px; }}
@@ -80,10 +79,8 @@ class Keuzes(QFrame):
         self.groep = QButtonGroup(self)
         self.knoppen: dict[object, QPushButton] = {}
         for waarde, tekst in opties:
-            k = QPushButton(tekst)
-            k.setObjectName("keus")
-            k.setCheckable(True)
-            k.setCursor(Qt.CursorShape.PointingHandCursor)
+            # Gekozen: zacht rood met rode letters (zoals de zijbalk en de tabjes) en een korte rode streep eronder.
+            k = StreepKnop(tekst, "keus")
             k.clicked.connect(lambda _c=False, w=waarde: self.gekozen.emit(w))
             self.groep.addButton(k)
             self.knoppen[waarde] = k

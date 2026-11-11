@@ -418,7 +418,8 @@ class OverPagina(Blad):
         boven.lay.addWidget(logo)
         blok = QVBoxLayout()
         blok.setSpacing(2)
-        blok.addWidget(label(f"BugOS {versie()}".strip(), "groot", wrap=False))
+        # Mag afbreken ('BugOS' / '44.20261110'): met grote letters op een smal scherm schoof de pagina anders opzij.
+        blok.addWidget(label(f"BugOS {versie()}".strip(), "groot"))
         blok.addWidget(label(t("Gratis, veilig en open. Gebouwd op Fedora en KDE.",
                                "Free, safe and open. Built on Fedora and KDE."), "sub"))
         boven.lay.addLayout(blok, 1)

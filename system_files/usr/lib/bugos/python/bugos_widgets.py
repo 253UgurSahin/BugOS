@@ -101,6 +101,34 @@ class Knop(GeenDubbel, QPushButton):
         self.setMinimumHeight(bugos_ui.px(KNOP_GROOT if groot else KNOP_HOOGTE))
 
 
+class StreepKnop(QPushButton):
+    """Een keuze of tabje (checkable). Gekozen: een korte, ronde rode streep onderaan in het midden, zoals de tabjes
+    in Windows 11. (Een rand onderaan in CSS buigt bij ronde hoeken mee omhoog, een 'glimlach'.) De streep haalt
+    3:1 tegen het zachtrode vlak, dus je ziet de keuze ook zonder kleur te zien."""
+
+    STREEP = (20, 3)   # breedte en hoogte in px
+
+    def __init__(self, tekst: str = "", naam: str = ""):
+        super().__init__(tekst)
+        if naam:
+            self.setObjectName(naam)
+        self.setCheckable(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def paintEvent(self, e) -> None:  # noqa: N802
+        super().paintEvent(e)
+        if not self.isChecked():
+            return
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(K["accent"]))
+        b, h = self.STREEP
+        b = min(b, max(8, self.width() - 16))
+        p.drawRoundedRect(QRectF((self.width() - b) / 2, self.height() - h - 2, b, h), h / 2, h / 2)
+        p.end()
+
+
 def hoofdknop(tekst: str) -> Knop:
     return Knop(tekst, "hoofd", groot=True)
 

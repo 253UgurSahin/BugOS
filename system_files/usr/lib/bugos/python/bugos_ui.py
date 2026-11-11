@@ -623,8 +623,8 @@ def icoon(naam: str) -> QIcon:
 # Pas hier, onderaan: deze bestanden gebruiken zelf de kleuren en iconen hierboven.
 
 from bugos_widgets import (  # noqa: E402, F401  (doorgeven: apps halen dit uit bugos_ui)
-    Banner, Chip, Groep, IcoonChip, Kaart, KeuzeKaart, Knop, SchakelRij, Schakelaar, Schuif, Tegel, gewone_knop,
-    hoofdknop, label, lettertype, lijn, titel, uitleg, wit_icoon,
+    Banner, Chip, Groep, IcoonChip, Kaart, KeuzeKaart, Knop, SchakelRij, Schakelaar, Schuif, StreepKnop, Tegel,
+    gewone_knop, hoofdknop, label, lettertype, lijn, titel, uitleg, wit_icoon,
 )
 from bugos_pages import (  # noqa: E402, F401
     Held, SchijfKiezer, Voortgang, Zijbalk, Zoekveld, achtergrond_pad, kader, kop, kop_met_icoon, logo_icoon,

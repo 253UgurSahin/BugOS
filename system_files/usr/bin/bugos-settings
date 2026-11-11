@@ -22,8 +22,8 @@ sys.path.insert(0, "/usr/lib/bugos/python")
 
 import bugos_config as bi  # noqa: E402
 from bugos_ui import (  # noqa: E402
-    K, Groep, Rij, Schuif, Venster, label, leeg_groep, lijn_icoon, maak_app, px, schaal_css, sectie, start, t,
-    uitvoeren, zoeksleutel,
+    K, Groep, Rij, Schuif, StreepKnop, Venster, label, leeg_groep, lijn_icoon, maak_app, px, schaal_css, sectie, start,
+    t, uitvoeren, zoeksleutel,
 )
 from bugos_settings_account import InloggenPagina, TijdPagina  # noqa: E402
 from bugos_settings_meldingen import MeldingenPagina, PrintersPagina, ProgrammasPagina  # noqa: E402
@@ -34,9 +34,10 @@ from bugos_settings_onderdelen import (  # noqa: E402,F401  (KiesDialoog en Wach
 from bugos_settings_scherm import EnergiePagina, GeluidPagina, SchermPagina, UiterlijkPagina  # noqa: E402
 from bugos_settings_systeem import OverPagina, SpelenPagina, UpdatesPagina  # noqa: E402
 from bugos_settings_zien import MuisPagina, ZienPagina  # noqa: E402
-from PySide6.QtCore import QEvent, QSize, Qt, QTimer  # noqa: E402
+from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QTimer  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
+    QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QLabel, QLayout, QPushButton, QStackedWidget, QVBoxLayout,
+    QWidget,
 )
 
 
@@ -210,6 +211,72 @@ GROEPEN: list[Indeling] = [
 GROEP_VAN = {k.sleutel: g for g in GROEPEN for k in g.paginas}
 
 
+class Doorloop(QLayout):
+    """Onderdelen naast elkaar, links uitgelijnd; wat niet meer past, gaat naar de volgende regel (zoals tekst)."""
+
+    def __init__(self, ruimte: int = 4):
+        super().__init__()
+        self._items: list = []
+        self.setSpacing(ruimte)
+
+    def addItem(self, item) -> None:  # noqa: N802
+        self._items.append(item)
+
+    def count(self) -> int:
+        return len(self._items)
+
+    def itemAt(self, i: int):  # noqa: N802
+        return self._items[i] if 0 <= i < len(self._items) else None
+
+    def takeAt(self, i: int):  # noqa: N802
+        return self._items.pop(i) if 0 <= i < len(self._items) else None
+
+    def expandingDirections(self) -> Qt.Orientation:  # noqa: N802
+        return Qt.Orientation(0)
+
+    def hasHeightForWidth(self) -> bool:  # noqa: N802
+        return True
+
+    def heightForWidth(self, breed: int) -> int:  # noqa: N802
+        return self._leg(QRect(0, 0, breed, 0), alleen_meten=True)
+
+    def setGeometry(self, r: QRect) -> None:  # noqa: N802
+        super().setGeometry(r)
+        self._leg(r)
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        """Alles op één regel."""
+        m = self.contentsMargins()
+        zichtbaar = [i.sizeHint() for i in self._items if not i.isEmpty()]
+        breed = sum(z.width() for z in zichtbaar) + self.spacing() * max(0, len(zichtbaar) - 1)
+        hoog = max((z.height() for z in zichtbaar), default=0)
+        return QSize(breed + m.left() + m.right(), hoog + m.top() + m.bottom())
+
+    def minimumSize(self) -> QSize:  # noqa: N802
+        """Zo smal als het breedste onderdeel: de rest kan eronder."""
+        m = self.contentsMargins()
+        z = QSize()
+        for i in self._items:
+            z = z.expandedTo(i.minimumSize())
+        return QSize(z.width() + m.left() + m.right(), z.height() + m.top() + m.bottom())
+
+    def _leg(self, r: QRect, alleen_meten: bool = False) -> int:
+        m = self.contentsMargins()
+        links, rechts = r.x() + m.left(), r.right() - m.right()
+        x, y, regel = links, r.y() + m.top(), 0
+        for item in self._items:
+            if item.isEmpty():
+                continue
+            z = item.sizeHint()
+            if x > links and x + z.width() - 1 > rechts:   # past niet meer: volgende regel
+                x, y, regel = links, y + regel + self.spacing(), 0
+            if not alleen_meten:
+                item.setGeometry(QRect(QPoint(x, y), QSize(min(z.width(), rechts - links + 1), z.height())))
+            x += z.width() + self.spacing()
+            regel = max(regel, z.height())
+        return y + regel + m.bottom() - r.y()
+
+
 class GroepPagina(QWidget):
     """Meer pagina's onder één onderdeel van de zijbalk, met tabjes bovenaan (zoals Windows)."""
 
@@ -220,23 +287,19 @@ class GroepPagina(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
-        rij = QHBoxLayout()
+        # Naast elkaar; passen ze niet (grote letters, 150 %), dan gaat een tabje naar een tweede regel.
+        rij = Doorloop(4)
         rij.setContentsMargins(*TABS_MARGE)
-        rij.setSpacing(4)
         self.tabs: dict[str, QPushButton] = {}
         knoppen = QButtonGroup(self)
         for b in bladen:
             # Stille tabjes zoals in Windows 11: geen tweede rode knop naast de rode hoofdknop van de pagina.
-            k = QPushButton(b.naam())
-            k.setObjectName("tab")
-            k.setCheckable(True)
-            k.setCursor(Qt.CursorShape.PointingHandCursor)
+            k = StreepKnop(b.naam(), "tab")
             k.setMinimumHeight(px(TAB_HOOGTE))
             k.clicked.connect(lambda _c=False, s=b.sleutel: self.toon(s))
             knoppen.addButton(k)
             rij.addWidget(k)
             self.tabs[b.sleutel] = k
-        rij.addStretch(1)
         lay.addLayout(rij)
         self.stapel = QStackedWidget()
         for b in bladen:
@@ -271,13 +334,13 @@ BLAD_ONDER_TABS = 14            # de bovenmarge van een pagina onder de tabjes (
 
 def tab_stijl() -> str:
     """Tabjes zoals in Windows 11: stil (geen rand, geen rood vlak). Het gekozen tabje heeft rode letters op een
-    zacht rood vlak (zoals in de zijbalk) en een rode streep eronder, die je ook zonder kleur goed ziet (3:1)."""
+    zacht rood vlak (zoals in de zijbalk) en een korte rode streep eronder (StreepKnop tekent die), die je ook
+    zonder kleur goed ziet (3:1)."""
     return schaal_css(f"""
 QPushButton#tab {{ border: none; border-radius: 12px; padding: 5px 14px; background: transparent;
                   color: {K['tekst2']}; font-size: 14px; font-weight: 600; }}
 QPushButton#tab:hover {{ background: {K['knop']}; color: {K['tekst']}; }}
-QPushButton#tab:checked {{ background: {K['accent_zacht']}; color: {K['accent_gekozen']};
-                          border-bottom: 3px solid {K['accent']}; padding-bottom: 2px; }}
+QPushButton#tab:checked {{ background: {K['accent_zacht']}; color: {K['accent_gekozen']}; }}
 QPushButton#tab:focus {{ border: 2px solid {K['accent']}; padding: 3px 12px; }}
 """)
 
