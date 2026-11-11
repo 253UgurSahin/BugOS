@@ -255,6 +255,20 @@ function verhouding() {
         }
     }
 }
+// Het rechtermuismenu van het bureaublad zonder KDE-regels (bewerkmodus, terminal, KDE-achtergrondvenster...).
+// Alleen groep 0 (bureaublad); NOOIT groep 1 (paneel): dan verdwijnt het hele taakbalkmenu, ook Taakbeheer
+// (getest). Plasma leest dit bij het opstarten: het werkt vanaf de volgende keer inloggen.
+var BUREAUBLAD_UIT = ["_add panel", "_display_settings", "_lock_screen", "_logout", "_open_terminal", "_run_command",
+    "_wallpaper", "add widgets", "configure", "configure shortcuts", "desktop edit mode", "edit mode",
+    "manage activities", "remove"];
+function bureaubladmenu() {
+    var a = ConfigFile("plasma-org.kde.plasma.desktop-appletsrc", "ActionPlugins");
+    var b = ConfigFile(a, "0");
+    b.writeEntry("RightButton;NoModifier", "org.kde.contextmenu");   // zonder deze regel: helemaal geen menu
+    var c = ConfigFile(b, "RightButton;NoModifier");
+    for (var i = 0; i < BUREAUBLAD_UIT.length; i++) c.writeEntry(BUREAUBLAD_UIT[i], false);
+    print(BUREAUBLAD_UIT.length);
+}
 function heeft(soort) {
     var ps = panels(), n = 0;
     for (var i = 0; i < ps.length; i++) {
@@ -341,6 +355,8 @@ standaard:*)
     MARKER0="$BUGOS_CONFIG/paneel-hernoemd-1"
     # Stap 4: de verhouding van Windows 11 (strakke taakbalk, kleine klok), ook voor wie al een taakbalk had.
     MARKER4="$BUGOS_CONFIG/paneel-verhouding-1"
+    # Stap 5: het rechtermuismenu van het bureaublad zonder KDE-regels (zichtbaar na de volgende keer inloggen).
+    MARKER5="$BUGOS_CONFIG/paneel-bureaubladmenu-1"
     for _ in $(seq 1 30); do
         bureaublad_er && break
         sleep 2
@@ -374,6 +390,10 @@ standaard:*)
     fi
     if [ ! -f "$MARKER4" ]; then
         plasma_wijzig "verhouding();" >/dev/null && touch "$MARKER4"
+    fi
+    if [ ! -f "$MARKER5" ]; then
+        # 14 = alle KDE-regels zijn uitgezet; anders de volgende keer opnieuw.
+        [ "$(plasma_wijzig "bureaubladmenu();")" = 14 ] && touch "$MARKER5"
     fi
     # Altijd: het slot erop (goedkoop). Herstelt ook een slot dat KDE's unlock_widgets.js of iets anders eraf haalde.
     plasma_script "$JS slot($(slot_na));" >/dev/null || true

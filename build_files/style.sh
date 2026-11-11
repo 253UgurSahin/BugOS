@@ -20,6 +20,32 @@ done
 #    (bugos-panel zet taakbalk en bureaublad op slot). Zonder slot doet deze regel niets. NOOIT de sleutel
 #    plasma/plasmashell/unlockedDesktop gebruiken: dan weigert Plasma de scripts van bugos-panel.
 kwriteconfig6 --file /etc/xdg/kdeglobals --group "KDE Action Restrictions" --key plasma/allow_configure_when_locked false
+# Het rechtermuismenu van het bureaublad voor nieuwe gebruikers: zonder "Bewerkmodus", "Terminal openen",
+# "Scherm vergrendelen", KDE's "Bureaublad en achtergrond" enz. (bestaande gebruikers: bugos-panel standaard).
+# Plasma leest dit bestand niet uit /etc/xdg, dus via /etc/skel. Alleen groep 0 (bureaublad), NOOIT groep 1
+# (paneel): dan verdwijnt het hele taakbalkmenu. De regel "RightButton;NoModifier=org.kde.contextmenu" moet erin,
+# anders heeft het bureaublad helemaal geen menu.
+mkdir -p /etc/skel/.config
+cat >/etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc <<'EOF'
+[ActionPlugins][0]
+RightButton;NoModifier=org.kde.contextmenu
+
+[ActionPlugins][0][RightButton;NoModifier]
+_add panel=false
+_display_settings=false
+_lock_screen=false
+_logout=false
+_open_terminal=false
+_run_command=false
+_wallpaper=false
+add widgets=false
+configure=false
+configure shortcuts=false
+desktop edit mode=false
+edit mode=false
+manage activities=false
+remove=false
+EOF
 # Geen Overzicht van KDE als je per ongeluk de muis linksboven in de hoek duwt (net als Windows: daar gebeurt niets).
 kwriteconfig6 --file /etc/xdg/kwinrc --group Effect-overview --key BorderActivate 9
 # KDE Connect (koppelen met je telefoon) start niet vanzelf: het gaf meldingen met "KDE Connect" die niemand vroeg.

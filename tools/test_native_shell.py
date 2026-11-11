@@ -172,6 +172,21 @@ klopt(r["fout"] is not None and r["u"] is True,
 r = draai_js(wijzig("weg(\"org.bugos.clock\");", na="false"), "__AppInterface.locked")
 klopt(r["u"] is False, "A9: met 'bewerken aan' (slot_na = false) blijft het slot eraf")
 
+BUREAUBLAD_UIT = ["_add panel", "_display_settings", "_lock_screen", "_logout", "_open_terminal", "_run_command",
+                  "_wallpaper", "add widgets", "configure", "configure shortcuts", "desktop edit mode", "edit mode",
+                  "manage activities", "remove"]
+r = draai_js("__AppInterface.locked = true; bureaubladmenu();", "bestanden")
+_b = r["u"] or {}
+_groep0 = _b.get("plasma-org.kde.plasma.desktop-appletsrc/ActionPlugins/0", {})
+_menu0 = _b.get("plasma-org.kde.plasma.desktop-appletsrc/ActionPlugins/0/RightButton;NoModifier", {})
+klopt(r["gedrukt"] == ["14"] and _groep0 == {"RightButton;NoModifier": "org.kde.contextmenu"}
+      and _menu0 == {k: False for k in BUREAUBLAD_UIT},
+      f"A6: bureaubladmenu() zet de 14 KDE-regels van het bureaublad uit, en houdt het menu zelf aan ({r['gedrukt']}, {sorted(_menu0)})")
+klopt(not any("/ActionPlugins/1" in k for k in _b) and set(_b) <= {
+      "plasma-org.kde.plasma.desktop-appletsrc/ActionPlugins/0",
+      "plasma-org.kde.plasma.desktop-appletsrc/ActionPlugins/0/RightButton;NoModifier"},
+      f"A6: bureaubladmenu() schrijft NIETS in groep 1 (het paneel: dan verdwijnt het hele taakbalkmenu) ({sorted(_b)})")
+
 r = draai_js("slot(false); slot(true);", "1")
 klopt(r["gedrukt"] == [], f"A8: slot() print niets (anders klopt de 0/1 van vervang niet meer) ({r['gedrukt']})")
 
@@ -269,7 +284,7 @@ class Paneel:
 
 
 ALLE_MERKEN = ["paneel-hernoemd-1", "paneel-standaard-1", "paneel-systeemvak-1", "paneel-taakbalkruimte-1",
-               "paneel-verhouding-1"]
+               "paneel-verhouding-1", "paneel-bureaubladmenu-1"]
 
 if shutil.which("bash"):
     # Het echte BugOS heeft geen qdbus6 (alleen qdbus-qt6): dan praat bugos-panel via gdbus. Allebei proberen.
@@ -299,6 +314,20 @@ if shutil.which("bash"):
         sc = p.scripts()
         klopt(sc == [" slot(true);"],
               f"B4: standaard met alle stappen al gedaan: toch elke keer het slot erop, en verder niets ({sc})")
+        for m in ALLE_MERKEN:
+            (p.merk / m).unlink()
+        p.antwoorden({"regels": [["bureaubladmenu();", "14"]]})
+        p.draai("standaard")
+        sc = p.scripts()
+        _bm = [x for x in sc if "bureaubladmenu();" in x]
+        klopt((p.merk / "paneel-bureaubladmenu-1").exists() and len(_bm) == 1 and "slot(false);" in _bm[0]
+              and sc[-1] == " slot(true);",
+              f"B5: standaard (nieuwe gebruiker): het bureaubladmenu wordt één keer aangepast en onthouden ({_bm})")
+        (p.merk / "paneel-bureaubladmenu-1").unlink()
+        p.antwoorden({"regels": [["bureaubladmenu();", "0"]]})
+        p.draai("standaard")
+        klopt(not (p.merk / "paneel-bureaubladmenu-1").exists(),
+              "B7: lukt het bureaubladmenu niet (Plasma geeft 0), dan de volgende keer opnieuw (geen merkteken)")
         p.antwoorden({"plasma": False})
         uit = p.draai("standaard")
         klopt(uit.returncode == 0, f"B4: antwoordt Plasma niet, dan stopt standaard netjes (code {uit.returncode})")
@@ -312,6 +341,17 @@ _code = "\n".join(r for r in STYLE_TEKST.split("\n") if not r.lstrip().startswit
 klopt("unlockedDesktop" not in _code, "D2: style.sh gebruikt plasma/plasmashell/unlockedDesktop niet (breekt bugos-panel)")
 _code = "\n".join(r for r in PANEEL_TEKST.split("\n") if not r.lstrip().startswith("#"))
 klopt("unlockedDesktop" not in _code, "D2: bugos-panel gebruikt unlockedDesktop niet")
+
+
+_skel = re.search(r"cat >/etc/skel/\.config/plasma-org\.kde\.plasma\.desktop-appletsrc <<'EOF'\n(.*?)\nEOF\n", STYLE_TEKST, re.S)
+_regels = _skel.group(1).split("\n") if _skel else []
+klopt(bool(_skel) and _regels[:2] == ["[ActionPlugins][0]", "RightButton;NoModifier=org.kde.contextmenu"]
+      and "[ActionPlugins][0][RightButton;NoModifier]" in _regels
+      and sorted(r for r in _regels if r.endswith("=false")) == sorted(f"{k}=false" for k in BUREAUBLAD_UIT)
+      and not any("[ActionPlugins][1]" in r for r in _regels),
+      "D3: nieuwe gebruikers krijgen het bureaubladmenu zonder de 14 KDE-regels (/etc/skel), en niets voor het paneel")
+klopt(bool(_skel) and STYLE_TEKST.index("mkdir -p /etc/skel/.config") < _skel.start(),
+      "D3: style.sh maakt /etc/skel/.config eerst")
 
 
 # --- E. QML: de eigen regels in de rechtermuismenu's ------------------------------------------------------------
