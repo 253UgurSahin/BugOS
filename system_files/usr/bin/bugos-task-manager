@@ -27,8 +27,8 @@ sys.path.insert(0, "/usr/lib/bugos/python")
 
 import bugos_tasks as bt  # noqa: E402
 from bugos_tasks_ui import (  # noqa: E402
-    GESCHIEDENIS, KOLOM_GEHEUGEN, KOLOM_PROCESSOR, REGEL_ROL, Klusdraad, Meetdraad, MeetKaart, OpstartRij, ProcesFilter,
-    ProcesModel, ProcesTabel, Status, TaakRij, stijl,
+    GESCHIEDENIS, KOLOM_GEHEUGEN, KOLOM_PROCESSOR, REGEL_ROL, Klusdraad, Meetdraad, MeetKaart, OpstartRij, Plooi,
+    ProcesFilter, ProcesModel, ProcesTabel, Status, TaakRij, stijl,
 )
 from bugos_ui import (  # noqa: E402
     ActieBalk, Kaart, Knop, Pagina, Schuif, Venster, Zoekveld, label, lijn, lijn_icoon, maak_app, px, sectie, t,
@@ -37,7 +37,7 @@ from bugos_ui import (  # noqa: E402
 from PySide6.QtCore import QEvent, Qt, QTimer  # noqa: E402
 from PySide6.QtGui import QFontMetrics, QKeySequence, QShortcut  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QApplication, QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget,
+    QApplication, QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget,
 )
 
 
@@ -116,28 +116,43 @@ class Taakbeheer(Venster):
         self.status_regel(p)
         self.programmas = p
         # samenvatting: vier getallen op een rij
+        # Vier getallen op een rij; past dat niet (150 %, grote letters), dan twee rijen van twee (R13).
         samen = Kaart(marge=20, ruimte=0, richting="h")
         self.kort: dict[str, QLabel] = {}
-        for i, (sleutel, naam) in enumerate((("processor", t("Processor", "Processor")),
-                                             ("geheugen", t("Geheugen", "Memory")),
-                                             ("schijf", t("Schijf", "Disk")),
-                                             ("internet", t("Internet", "Internet")))):
-            if i:
-                streep = QFrame()
-                streep.setObjectName("streep")
-                samen.lay.addWidget(streep)
-            blok = QVBoxLayout()
-            blok.setContentsMargins(14 if i else 4, 0, 4, 0)
-            blok.setSpacing(2)
-            blok.addWidget(label(naam, "klein", wrap=False))
+        blokken = []
+        for sleutel, naam in (("processor", t("Processor", "Processor")), ("geheugen", t("Geheugen", "Memory")),
+                              ("schijf", t("Schijf", "Disk")), ("internet", t("Internet", "Internet"))):
+            blok = QWidget()
+            rij = QHBoxLayout(blok)
+            rij.setContentsMargins(0, 0, 0, 0)
+            rij.setSpacing(0)
+            streep = QFrame()
+            streep.setObjectName("streep")
+            rij.addWidget(streep)
+            tekst = QVBoxLayout()
+            tekst.setSpacing(2)
+            tekst.addWidget(label(naam, "klein", wrap=False))
             self.kort[sleutel] = label("–", "kop2", wrap=False)
-            blok.addWidget(self.kort[sleutel])
-            samen.lay.addLayout(blok, 1)
+            tekst.addWidget(self.kort[sleutel])
+            rij.addLayout(tekst, 1)
+            blok.streep, blok.tekst = streep, tekst
+            blokken.append(blok)
+
+        def bij_kolom(blok: QWidget, kolom: int) -> None:
+            blok.streep.setVisible(kolom > 0)   # een streep alleen tussen twee getallen, niet aan het begin
+            blok.tekst.setContentsMargins(14 if kolom else 4, 0, 4, 0)
+
+        self.samen_plooi = Plooi(blokken, 4, ruimte=0, bij_kolom=bij_kolom)
+        self.samen_plooi.rooster.setVerticalSpacing(12)
+        samen.lay.addWidget(self.samen_plooi)
         p.lay.addWidget(samen)
         kop = QHBoxLayout()
         kop.setContentsMargins(4 + 14, 6, 4 + 12, 0)  # dezelfde marges als de regels in de kaart
         kop.setSpacing(14)
-        kop.addWidget(sectie(t("Open programma's. Klik om te kiezen.", "Open programs. Click to choose.")), 1)
+        uitleg = sectie(t("Open programma's. Klik om te kiezen.", "Open programs. Click to choose."))
+        uitleg.setWordWrap(True)          # met grote letters liever twee regels dan een pagina die opzij schuift (R13)
+        uitleg.setMinimumWidth(px(120))
+        kop.addWidget(uitleg, 1, Qt.AlignmentFlag.AlignBottom)
         for tekst, breedte in ((t("Processor", "Processor"), KOLOM_PROCESSOR),
                                (t("Geheugen", "Memory"), KOLOM_GEHEUGEN)):
             k = sectie(tekst)
@@ -163,20 +178,16 @@ class Taakbeheer(Venster):
     def maak_prestaties(self) -> Pagina:
         p = Pagina(t("Prestaties", "Performance"), breedte=1100)
         self.status_regel(p)
-        rooster = QGridLayout()
-        rooster.setSpacing(14)
         self.kaart_processor = MeetKaart(t("Processor", "Processor"))
         self.kaart_geheugen = MeetKaart(t("Geheugen", "Memory"))
         self.kaart_schijf = MeetKaart(t("Schijf", "Disk"), None)
         self.kaart_internet = MeetKaart(t("Internet", "Internet"), None)
         self.kaart_video = MeetKaart(t("Videokaart", "Graphics card"))
         self.kaart_video.hide()
-        for i, k in enumerate((self.kaart_processor, self.kaart_geheugen, self.kaart_schijf, self.kaart_internet,
-                               self.kaart_video)):
-            rooster.addWidget(k, i // 3, i % 3)
-        for kolom in range(3):
-            rooster.setColumnStretch(kolom, 1)
-        p.lay.addLayout(rooster)
+        # Drie kaarten op een rij; past dat niet (150 %, grote letters), dan twee (R13).
+        self.meet_plooi = Plooi([self.kaart_processor, self.kaart_geheugen, self.kaart_schijf, self.kaart_internet,
+                                 self.kaart_video], 3)
+        p.lay.addWidget(self.meet_plooi)
         p.klaar()
         return p
 
@@ -450,8 +461,12 @@ class Taakbeheer(Venster):
                                 if m["buiten"] >= 1000 else t("↑ niets verstuurd", "↑ nothing sent"),   # niet 'rustig verstuurd
                                 m["binnen"] + m["buiten"])
         if m.get("videokaart") is not None:
-            self.kaart_video.show()
+            if self.kaart_video.isHidden():
+                self.kaart_video.show()
+                self.meet_plooi.herschik()
             self.kaart_video.zet(f"{m['videokaart']:.0f}%", t("bezig", "busy"), m["videokaart"])
+        self.samen_plooi.bijwerken()
+        self.meet_plooi.bijwerken()
         # programma's
         self.werk_lijst_bij(self.apps_lay, self.rijen, [x for x in taken if x.soort == "app"], self.geen_apps)
         achter = sorted([x for x in taken if x.soort != "app"],

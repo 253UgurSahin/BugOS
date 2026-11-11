@@ -23,7 +23,7 @@ from PySide6.QtCore import (  # noqa: E402
 )
 from PySide6.QtGui import QColor, QFont, QIcon, QLinearGradient, QPainter, QPainterPath, QPen  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QAbstractItemView, QHBoxLayout, QHeaderView, QLabel, QTreeView, QWidget,
+    QAbstractItemView, QGridLayout, QHBoxLayout, QHeaderView, QLabel, QLayout, QTreeView, QWidget,
 )
 
 GESCHIEDENIS = 60      # hoeveel metingen de grafiekjes laten zien (2 minuten)
@@ -261,6 +261,68 @@ class MeetKaart(Kaart):
         self.waarde.setText(waarde)
         self.uitleg.setText(uitleg)
         self.grafiek.voeg_toe(punt)
+
+
+class Plooi(QWidget):
+    """Kaarten of blokjes naast elkaar, net zoveel als er passen (hoogstens 'hoogstens' per rij). Bij 150 % of met
+    'Grote letters' gaan ze naar een volgende rij in plaats van dat de pagina opzij schuift (R13).
+    bij_kolom(deel, kolom) hoort na elke nieuwe indeling (bijv. om een scheidingsstreep links te verbergen)."""
+
+    def __init__(self, delen: list[QWidget], hoogstens: int, ruimte: int = 14, bij_kolom=None):
+        super().__init__()
+        self.delen, self.hoogstens, self.ruimte, self.bij_kolom = list(delen), hoogstens, ruimte, bij_kolom
+        self.rooster = QGridLayout(self)
+        self.rooster.setContentsMargins(0, 0, 0, 0)
+        self.rooster.setSpacing(ruimte)
+        # De breedte bepaalt dit vlak zelf (minimumSizeHint): anders hield de indeling van nu de pagina breed.
+        self.rooster.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)
+        self.kolommen = 0
+        self.deel_in(hoogstens)
+
+    def nodig(self, n: int) -> int:
+        """Hoe breed het minstens is met n naast elkaar: per kolom het breedste deel, plus de ruimte ertussen."""
+        breed = [max(d.minimumSizeHint().width(), d.minimumWidth()) for d in self.delen if not d.isHidden()]
+        return sum(max(breed[k::n], default=0) for k in range(n)) + (n - 1) * self.ruimte
+
+    def past(self) -> int:
+        """Hoeveel er naast elkaar passen. Naar méér per rij pas met wat speling: de getallen veranderen elke twee
+        seconden een beetje van breedte, en dan moet de indeling niet heen en weer springen."""
+        return next((k for k in range(self.hoogstens, 0, -1)
+                     if self.nodig(k) + (12 if k > self.kolommen else 0) <= self.width()), 1)
+
+    def deel_in(self, n: int, opnieuw: bool = False) -> None:
+        if n == self.kolommen and not opnieuw:
+            return
+        while self.rooster.count():
+            self.rooster.takeAt(0)
+        zichtbaar = [d for d in self.delen if not d.isHidden()]
+        for i, d in enumerate(zichtbaar + [d for d in self.delen if d.isHidden()]):   # verborgen achteraan
+            self.rooster.addWidget(d, i // n, i % n)
+            if self.bij_kolom and i < len(zichtbaar):
+                self.bij_kolom(d, i % n)
+        for k in range(self.hoogstens):
+            self.rooster.setColumnStretch(k, 1 if k < n else 0)
+        self.kolommen = n
+        self.updateGeometry()
+
+    def herschik(self) -> None:
+        """Opnieuw indelen, na het tonen of verbergen van een deel."""
+        self.deel_in(self.past() if self.width() > 1 else self.hoogstens, opnieuw=True)
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        return QSize(self.nodig(1), self.rooster.minimumSize().height())
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        return QSize(self.nodig(self.kolommen or 1), self.rooster.sizeHint().height())
+
+    def resizeEvent(self, e) -> None:  # noqa: N802
+        super().resizeEvent(e)
+        self.deel_in(self.past())
+
+    def bijwerken(self) -> None:
+        """Na nieuwe getallen (ze kunnen breder zijn geworden)."""
+        if self.width() > 1:
+            self.deel_in(self.past())
 
 
 class Getallen(QWidget):

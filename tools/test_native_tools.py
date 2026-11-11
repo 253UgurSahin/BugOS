@@ -425,6 +425,15 @@ _stand = v3.computer.verticalScrollBar().value()
 sys.argv.remove("computer:/ruimte")
 klopt(_stand > 0 and v3.computer.verticalScrollBar().maximum() > 0,
       f"review 9: vanuit Hulp schuift Deze computer naar 'Wat de meeste ruimte inneemt' ({_stand})")
+v3.resize(1280, 720)
+verwerk(80)
+_lg = v3.legenda
+_drie = (_lg.kolommen, _lg.nodig(3))
+_lg.resize(_lg.nodig(3) - 10, _lg.height())
+_twee = _lg.kolommen
+klopt(_drie[0] == 3 and _twee < 3 and _lg.minimumSizeHint().width() < _drie[1],
+      f"Deze computer: past de legenda niet in drie kolommen (150 %, grote letters), dan in minder; de pagina hoeft "
+      f"niet opzij te schuiven ({_drie} -> {_twee})")
 for _v in (v2, v3):
     _v.hide()
 os.environ.pop("BUGOS_RUIMTE", None)
@@ -746,6 +755,30 @@ tv.resize(1400, 800)
 verwerk(60)
 klopt(_smal and not tv.tabel.isColumnHidden(3) and not tv.tabel.isColumnHidden(2),
       f"Details: smal venster: 'Hoort bij' verborgen; breed: alles te zien (viewport {tv.tabel.viewport().width()})")
+# R13: met weinig ruimte (150 %, grote letters) gaan de kaarten en getallen naar een volgende rij; de pagina schuift
+# niet opzij.
+def _kolommen() -> tuple[tuple[int, int], dict[str, int]]:
+    """(kaarten op Prestaties, getallen op Programma's) en hoeveel elke pagina opzij schuift; een verborgen pagina
+    krijgt zijn nieuwe breedte pas als je hem opent, dus elke pagina even openen."""
+    schuift = {}
+    for pg in ("prestaties", "programmas"):
+        tv.ga_naar(pg)
+        verwerk(80)
+        schuift[pg] = tv.paginas[pg].horizontalScrollBar().maximum()
+    return (tv.meet_plooi.kolommen, tv.samen_plooi.kolommen), schuift
+
+
+_breed, _ = _kolommen()
+tv.resize(760, 600)
+_smal, _smalle = _kolommen()
+_strepen = [b.streep.isVisible() for b in tv.samen_plooi.delen]
+klopt(_breed == (3, 4) and _smal[0] < 3 and _smal[1] < 4 and not any(_smalle.values()),
+      f"R13: smal: minder kaarten en getallen per rij, niets schuift opzij ({_breed} -> {_smal}, {_smalle})")
+klopt(_strepen == [False, True, False, True], f"R13: een streep alleen tussen twee getallen op één rij ({_strepen})")
+tv.resize(1400, 800)
+klopt(_kolommen()[0] == (3, 4), "R13: weer breed: drie kaarten en vier getallen")
+tv.ga_naar("details")
+verwerk(20)
 tv.stop_meten()
 tv.close()
 verwerk(20)

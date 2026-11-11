@@ -30,7 +30,7 @@ from bugos_files_onderdelen import RuimteBalk, SchijfRij, stip_icoon
 from PySide6.QtCore import QObject, QRunnable, QSize, Qt, QThreadPool, QTimer, Signal
 from PySide6.QtGui import QColor, QIcon, QTransform
 from PySide6.QtWidgets import (
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QMenu, QProgressBar, QPushButton, QVBoxLayout,
+    QFrame, QGridLayout, QHBoxLayout, QLabel, QLayout, QMenu, QProgressBar, QPushButton, QVBoxLayout, QWidget,
 )
 
 ZICHTBAAR, HOOGSTENS = 5, 12   # zoveel regels eerst, en na 'Meer tonen'
@@ -421,6 +421,61 @@ class GrootsteTeller(QRunnable):
             pass
 
 
+# ================================================================== legenda ===
+
+class Legenda(QWidget):
+    """De legenda onder de balk (Afbeeldingen 38 GB, Video's 52 GB, ...): drie naast elkaar, of twee of één als dat
+    niet past (150 %, grote letters). Anders schoof de hele pagina opzij."""
+
+    def __init__(self):
+        super().__init__()
+        self.rooster = QGridLayout(self)
+        self.rooster.setContentsMargins(0, 0, 0, 0)
+        self.rooster.setHorizontalSpacing(4)
+        self.rooster.setVerticalSpacing(0)
+        self.rooster.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)   # de breedte bepaalt dit vlak zelf
+        self.items: list[QWidget] = []
+        self.kolommen = 0
+
+    def zet(self, items: list[QWidget]) -> None:
+        for w in self.items:
+            self.rooster.removeWidget(w)
+            w.deleteLater()
+        self.items = list(items)
+        self.kolommen = 0
+        self.deel_in()
+
+    def hoogstens(self) -> int:
+        return 3 if len(self.items) > 4 else max(len(self.items), 1)
+
+    def nodig(self, n: int) -> int:
+        breed = [w.sizeHint().width() for w in self.items]
+        kolommen = [max(breed[k::n], default=0) for k in range(n)]
+        return sum(kolommen) + (n - 1) * self.rooster.horizontalSpacing()
+
+    def deel_in(self) -> None:
+        breedte = self.width() if self.width() > 1 else 10**6
+        n = next((k for k in range(self.hoogstens(), 0, -1) if self.nodig(k) <= breedte), 1)
+        if n == self.kolommen:
+            return
+        for w in self.items:
+            self.rooster.removeWidget(w)
+        for i, w in enumerate(self.items):
+            self.rooster.addWidget(w, i // n, i % n)
+        self.kolommen = n
+        self.updateGeometry()
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        return QSize(self.nodig(1), self.rooster.minimumSize().height())
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        return QSize(self.nodig(self.kolommen or 1), self.rooster.sizeHint().height())
+
+    def resizeEvent(self, e) -> None:  # noqa: N802
+        super().resizeEvent(e)
+        self.deel_in()
+
+
 # ================================================================ één regel ===
 
 class RuimteRij(QFrame):
@@ -546,10 +601,8 @@ class Computer:
         self.ruimte_balk = RuimteBalk()
         binnen.addWidget(self.ruimte_balk)
         binnen.addSpacing(8)
-        self.legenda = QGridLayout()
-        self.legenda.setHorizontalSpacing(4)
-        self.legenda.setVerticalSpacing(0)
-        binnen.addLayout(self.legenda)
+        self.legenda = Legenda()
+        binnen.addWidget(self.legenda)
         lay.addWidget(kaart)
         self.ruimte_totaal, self.ruimte_vrij = totaal, vrij
         self.toon_ruimte()
@@ -595,9 +648,14 @@ class Computer:
                 rijen.addWidget(streep)
             rijen.addWidget(self.schijf_rij(x))
         if not self.lijst_schijven:
-            rijen.addWidget(SchijfRij("usb", t("Nog niets aangesloten", "Nothing plugged in yet"),
-                                      t("Steek een USB-stick in, dan staat hij hier.",
-                                        "Plug in a USB stick and it shows up here."), leeg=True))
+            tip = t("Steek een USB-stick in, dan staat hij hier.", "Plug in a USB stick and it shows up here.")
+            leeg = SchijfRij("usb", t("Nog niets aangesloten", "Nothing plugged in yet"), tip, leeg=True)
+            for uitleg in leeg.findChildren(QLabel):
+                if uitleg.text() == tip:   # met grote letters liever twee regels dan een pagina die opzij schuift
+                    uitleg.setWordWrap(True)
+                    uitleg.setMinimumWidth(px(160))
+                    uitleg.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            rijen.addWidget(leeg)
         lay.addWidget(lijst_kaart)
         lay.addStretch(1)
 
@@ -729,10 +787,6 @@ class Computer:
         if totaal <= 0:
             return
         gebruikt = max(totaal - vrij, 0)
-        while self.legenda.count():
-            w = self.legenda.takeAt(0).widget()
-            if w:
-                w.deleteLater()
         namen = {sl: (naam, pad) for sl, naam, _i, pad in plekken()}
         delen: list[tuple[float, QColor]] = []
         items: list[tuple[QColor, str, Path | None]] = []
@@ -756,8 +810,8 @@ class Computer:
             items.append((grijs, t(f"In gebruik  {mooie_maat(gebruikt)}  (bezig met tellen…)",
                                    f"In use  {mooie_maat(gebruikt)}  (counting…)"), None))
         self.ruimte_balk.zet(delen)
-        kolommen = 3 if len(items) > 4 else max(len(items), 1)
-        for i, (kleur_, tekst, pad) in enumerate(items):
+        knoppen = []
+        for kleur_, tekst, pad in items:
             k = QPushButton(tekst.replace("&", "&&"))   # (U210)
             k.setObjectName("legenda")
             k.setIcon(stip_icoon(kleur_, hol=pad == "vrij"))
@@ -768,7 +822,8 @@ class Computer:
                 k.clicked.connect(lambda _c=False, d=pad: self.ga_naar(d))
             else:
                 k.setEnabled(False)
-            self.legenda.addWidget(k, i // kolommen, i % kolommen)
+            knoppen.append(k)
+        self.legenda.zet(knoppen)
 
     def _geteld(self, uitslag: dict) -> None:
         self.tellen_bezig = False
