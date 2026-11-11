@@ -70,6 +70,45 @@ Then restart the computer. Want to go back? Use Settings > Updates and info, or 
 - [ ] Lock the screen (Windows key + L): do you see the Stip background?
 - [ ] BugOS Switch on Windows: is the window sharp, also when Windows is set to 125% or 150%?
 
+### On real hardware (a virtual PC can't do this)
+
+A virtual PC has no graphics card, Wi-Fi, Bluetooth, printer or second screen. These checks need a real computer.
+Write down what you see; a photo of the screen helps when something is wrong.
+
+**Graphics card and installing**
+- [ ] Nvidia version on a PC with Secure Boot: after installing, the blue **MOK Manager** screen appears; with the password `bugos` BugOS starts, and games use the Nvidia card (Steam > a game > FPS counter in game mode)
+- [ ] Install from a real USB stick: the installer shows a percentage that goes up, and the time it says ("20 to 40 minutes") is about right. Note how long it really took and whether it was a USB 2 or USB 3 stick
+- [ ] The time zone is already right for your language (Dutch: Europe/Amsterdam); after the restart the clock shows the right time
+- [ ] At the end you get a BugOS window with **Restart now**, in the language you chose
+- [ ] A PC with a Windows drive that uses **BitLocker**: BugOS warns you before installing, and Enter means "Stop"
+
+**Screens**
+- [ ] Laptop with a TV or monitor on HDMI: Settings > Display and appearance > Display: **Extend**, **Duplicate**, **Only screen 1**, **Only screen 2**
+- [ ] Choose something that gives a black screen (for example the TV on the wrong input) and touch nothing: after 15 seconds everything goes back by itself
+- [ ] Choose the **main screen**: the taskbar moves along; "where is this screen" (left/right/above/below) matches where the mouse goes across
+- [ ] A 4K TV or a 144 Hz monitor: the resolution and refresh rate you pick stay after a restart
+- [ ] Pull out the cable while only the TV is on: the laptop screen comes back by itself
+- [ ] Windows key + P still switches between screens
+
+**Wi-Fi and Bluetooth**
+- [ ] A normal Wi-Fi network: connect with the password, and once with a wrong password (you get a clear message, no KDE window)
+- [ ] A school or work network (**eduroam**), if you have one: user name and password, connects; after signing out and in it connects again by itself, without asking anything
+- [ ] Unplug the network cable on a PC without Wi-Fi: Settings > Wi-Fi and internet says so, and **Connect** works after plugging it back in
+- [ ] Bluetooth: Settings > Devices > **Add a device**: pair a phone (you see "Do you see this code?") and headphones; afterwards they connect by themselves
+- [ ] Bluetooth off with a hardware switch or key on a laptop: Settings says to switch it back on first
+
+**Printer, sound and laptop keys**
+- [ ] Settings > Devices > Printers > **Add a printer**: a network printer is found by itself; a test page prints
+- [ ] A printer plugged in with USB shows up; a printer added by IP address works; a wrong address gives a clear message
+- [ ] Printer settings (paper, two-sided, black and white) are kept for the next print
+- [ ] Settings > Sound > **Microphone**: choose a USB headset, a webcam and a Bluetooth headset; the bar moves when you talk
+- [ ] Laptop: the keys for brightness and volume show the small on-screen indicator; a nearly empty battery gives a warning
+- [ ] Laptop: closing the lid and the power button do what Settings > Power says
+
+**Task Manager and help**
+- [ ] With a browser and a game open: Task Manager > Details stays calm (Task Manager itself uses little) and **End task** works
+- [ ] "Something is not working" on a nearly full disk: the storage check says so, and **What takes up the most space** shows your biggest folders
+
 ## Downloading BugOS Switch (for Windows)
 
 - Go to **Actions**, then **Windows-overstap**, pick the latest green run and download **BugOS-Switch** at the bottom.
