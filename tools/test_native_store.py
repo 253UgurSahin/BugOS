@@ -176,8 +176,10 @@ w.meer_apps()
 klopt(gestart == [] and w.focusWidget() is w.zoek and "Typ hierboven" in w.opdracht_melding.tekst.text(),
       f"1: 'Alle apps doorzoeken' start niets, maar zet je in het zoekveld ({w.opdracht_melding.tekst.text()!r})")
 w.zoek.setText("qqqzzz")
-klopt("Niets gevonden voor \"qqqzzz\"" in w.melding.tekst.text(),
-      "1: niets gevonden: een gewone zin met een voorbeeld, geen verwijzing naar een ander programma")
+w.zoek_meer()
+klopt("is er nog niet" in w.meer_status.text() and w.meer_knop_ophalen.isVisibleTo(w) and "Niets gevonden" not in
+      w.melding.tekst.text(),
+      "1: nog geen lijst van Flathub: dat zegt de Winkel (met 'Nu ophalen'), niet 'niets gevonden'")
 w.close()
 klopt(not (TMP / "discover-gestart").exists(), "1: KDE Discover is nooit gestart")
 

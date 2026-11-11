@@ -639,7 +639,7 @@ VOORBEELD_FLATHUB = [
     {"id": "com.mastermindzh.tidal-hifi", "naam": "TIDAL Hi-Fi", "naam_nl": "",
      "kort": "The web version of listen.tidal.com with Hi-Fi (High and Max) support", "kort_nl": "",
      "maker": "Rick van Lieshout", "echt": True, "echt_site": "mastermindzh.com",
-     "oars": {"social-info": "mild"},   # voorbeeld: verzonnen, zodat de foto's een leeftijd laten zien
+     "oars": {"social-info": "moderate"},   # voorbeeld: verzonnen, zodat de foto's een leeftijd laten zien
      "site": "https://github.com/Mastermindzh/tidal-hifi", "icoon": "", "woorden": "music muziek", "uitleg": "",
      "uitleg_nl": "", "grootte": 373_700_000, "onderdeel": 670_700_000},
     {"id": "org.gnome.Podcasts", "naam": "Podcasts", "naam_nl": "Podcasts", "kort": "Listen to your favorite shows",
@@ -742,11 +742,14 @@ class FlathubKaart(AppKaart):
         blok.setSpacing(4)
         kop_rij = QHBoxLayout()
         kop_rij.setSpacing(8)
-        kop_rij.addWidget(label(naam, "kop3"), 1)   # een lange naam mag afbreken: de kaart blijft even breed
+        kop_rij.addWidget(label(naam, "kop3"))   # een lange naam mag afbreken: de kaart blijft even breed
         self.chip = Chip(t("Geïnstalleerd", "Installed"), "goed")
-        kop_rij.addWidget(self.chip, 0, Qt.AlignmentFlag.AlignTop)
+        kop_rij.addWidget(self.chip, 0, Qt.AlignmentFlag.AlignTop)   # naast de naam, zoals bij de BugOS-apps
+        kop_rij.addStretch(1)
         blok.addLayout(kop_rij)
-        blok.addWidget(label(kort_in_taal(entry), "klein"))
+        kort = label(kort_in_taal(entry), "klein")
+        kort.setVisible(bool(kort_in_taal(entry)))   # geen lege regel tussen naam en maker
+        blok.addWidget(kort)
         maker_rij = QHBoxLayout()
         maker_rij.setSpacing(4)
         maker = entry.get("maker") or t("Maker onbekend", "Maker unknown")
@@ -894,14 +897,14 @@ class AppPagina(QWidget):
         self.lay.addStretch(1)
         self.ververs()
 
-    def feit(self, kaart: Kaart, kopje: str, waarde: QWidget) -> QWidget:
+    def feit(self, kaart: Kaart, kopje: str, waarde: QWidget, midden: bool = False) -> QWidget:
         rij_w = QWidget()
         rij = QHBoxLayout(rij_w)
         rij.setContentsMargins(0, 0, 0, 0)
         rij.setSpacing(12)
         k = label(kopje, "klein")
         k.setFixedWidth(px(110))
-        rij.addWidget(k, 0, Qt.AlignmentFlag.AlignTop)
+        rij.addWidget(k, 0, Qt.AlignmentFlag.AlignVCenter if midden else Qt.AlignmentFlag.AlignTop)
         rij.addWidget(waarde, 1)
         kaart.lay.addWidget(rij_w)
         return rij_w
@@ -947,9 +950,11 @@ class AppPagina(QWidget):
             houder = QWidget()
             hl = QHBoxLayout(houder)
             hl.setContentsMargins(0, 0, 0, 0)
+            # Het pictogram op één lijn met de andere feiten (een stille knop heeft anders 16 px ruimte links).
+            knop.setStyleSheet("QPushButton { padding-left: 2px; padding-right: 10px; }")
             hl.addWidget(knop)
             hl.addStretch(1)
-            self.feit(feiten, t("Website", "Website"), houder)
+            self.feit(feiten, t("Website", "Website"), houder, midden=True)
         self.lay.addWidget(feiten)
         uitleg_ = (e.get("uitleg_nl") if TAAL == "nl" else "") or e.get("uitleg") or ""
         if uitleg_:
@@ -1255,7 +1260,8 @@ class Winkel(Venster):
         else:
             self.meer_hint.hide()
         # Helemaal niets, ook niet bij Flathub: pas nu zeggen (niet al tijdens het laden of typen).
-        if not picks and not resultaten and self.flathub is not None:
+        # (Is de lijst van Flathub er nog niet, dan zegt het blok hieronder dat, met 'Nu ophalen': geen 'niets gevonden'.)
+        if not picks and not resultaten and self.flathub is not None and self.flathub["apps"]:
             self.melding.zet(self.niets_tekst(zoek), "info")
             self._niets_voor = zoek
 
@@ -1593,11 +1599,7 @@ class Winkel(Venster):
             self.meer_timer.stop()
             self.meer_blok.hide()
             self.meer_hint.hide()
-        if zoek and not apps and self.flathub is not None and not self.flathub["apps"]:
-            # Geen lijst van Flathub om in te zoeken: meteen zeggen dat er niets is.
-            self.melding.zet(self.niets_tekst(zoek), "info")
-            self._niets_voor = zoek
-        elif zoek and not apps and self._niets_voor == zoek:
+        if zoek and not apps and self._niets_voor == zoek:
             pass   # zoek_meer zei al 'niets gevonden' voor precies deze tekst
         elif self.bezig_met is not None and not getattr(self, "sluit_na", False):   # 'gaat vanzelf dicht' laten staan (U344)
             # Wordt er iets geïnstalleerd? Dan die melding terug (een zoekopdracht zonder uitkomst verving hem) (U333).
