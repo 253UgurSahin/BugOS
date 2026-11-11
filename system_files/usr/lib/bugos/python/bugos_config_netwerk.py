@@ -753,6 +753,9 @@ def bt_apparaten() -> list[Apparaat]:
         lijst = [Apparaat("AA:BB:CC:DD:EE:01", "Bugie's headphones", "audio-headset", False, 80),
                  Apparaat("AA:BB:CC:DD:EE:02", t("Muis", "Mouse"), "input-mouse", False, None),
                  Apparaat("AA:BB:CC:DD:EE:03", t("Telefoon", "Phone"), "phone", False, None)]
+        # Wat je in de voorbeeldstand net gekoppeld hebt (Apparaat toevoegen), staat er ook bij.
+        lijst += [Apparaat(g.adres, g.naam, g.soort, False, None) for g in VB_BT_GEVONDEN
+                  if g.adres in VB_NET["bt_gekoppeld"]]
         for a in lijst:
             a.verbonden = a.adres in _c._VB["bt_verbonden"]
         return lijst
@@ -774,5 +777,196 @@ def bt_verbind(adres: str, aan: bool) -> bool:
 
 def bt_vergeet(adres: str) -> bool:
     if _c.VOORBEELD:
+        VB_NET["bt_gekoppeld"].discard(adres)
         return True
     return _c.draai("bluetoothctl", "remove", adres, timeout=10)[0] == 0
+
+
+# ------------------------------------------------- een nieuw apparaat koppelen ---
+# Zoeken en koppelen doet de pagina zelf via D-Bus (BlueZ, met ons eigen 'agent' voor de codes). Wat BlueZ weet, lezen we
+# hier in één keer met busctl (PySide6 kan de eigenschappen van BlueZ niet uitpakken).
+
+@dataclass
+class BtGevonden:
+    pad: str                 # /org/bluez/hci0/dev_AA_BB_CC_DD_EE_FF
+    adres: str
+    naam: str                # "" = geen naam (dan tonen we hem niet, zoals Windows)
+    soort: str               # het icoon van BlueZ: audio-headset, input-keyboard, phone ...
+    gekoppeld: bool
+    verbonden: bool
+    sterkte: int | None      # RSSI (dBm), hoger is dichterbij
+    batterij: int | None
+
+
+@dataclass
+class BtStand:
+    adapter: str = ""        # "" = geen bluetooth (meer)
+    aan: bool = False
+    stroom: str = ""         # PowerState: on, off, off-enabling, on-disabling, off-blocked
+    apparaten: list[BtGevonden] = field(default_factory=list)
+
+
+VB_BT_GEVONDEN = [   # de voorbeeldstand: wat 'zoeken' vindt
+    BtGevonden("/org/bluez/hci0/dev_AA_BB_CC_DD_EE_10", "AA:BB:CC:DD:EE:10", "Galaxy Buds2", "audio-headset",
+               False, False, -48, None),
+    BtGevonden("/org/bluez/hci0/dev_AA_BB_CC_DD_EE_11", "AA:BB:CC:DD:EE:11", "Keyboard K380", "input-keyboard",
+               False, False, -60, None),
+    BtGevonden("/org/bluez/hci0/dev_AA_BB_CC_DD_EE_12", "AA:BB:CC:DD:EE:12", "Galaxy A54", "phone", False, False, -66,
+               None),
+    BtGevonden("/org/bluez/hci0/dev_AA_BB_CC_DD_EE_13", "AA:BB:CC:DD:EE:13", "Xbox Wireless Controller",
+               "input-gaming", False, False, -75, None),
+    BtGevonden("/org/bluez/hci0/dev_AA_BB_CC_DD_EE_14", "AA:BB:CC:DD:EE:14", "", "", False, False, -80, None),
+]
+
+_ADRES_ALIAS = re.compile(r"([0-9A-Fa-f]{2}[-:]){5}[0-9A-Fa-f]{2}")
+_BT_PAD = re.compile(r"/org/bluez/hci[0-9]+/dev_[0-9A-Fa-f]{2}(_[0-9A-Fa-f]{2}){5}")
+
+
+def geldig_bt_pad(pad: str) -> bool:
+    return bool(_BT_PAD.fullmatch(pad or ""))
+
+
+def lees_bt_objecten(tekst: str) -> BtStand:
+    """Uit: busctl --json=short call org.bluez / org.freedesktop.DBus.ObjectManager GetManagedObjects."""
+    try:
+        data = json.loads(tekst)
+        objecten = data["data"][0]
+        if not isinstance(objecten, dict):
+            return BtStand()
+    except (ValueError, KeyError, IndexError, TypeError):
+        return BtStand()
+
+    def waarde(ifaces: dict, iface: str, naam: str, anders=None):
+        try:
+            return ifaces[iface][naam]["data"]
+        except (KeyError, TypeError):
+            return anders
+
+    adapter = next((p for p in sorted(objecten) if isinstance(objecten[p], dict) and "org.bluez.Adapter1" in objecten[p]),
+                   "")
+    if not adapter:
+        return BtStand()
+    a = objecten[adapter]
+    stand = BtStand(adapter, bool(waarde(a, "org.bluez.Adapter1", "Powered", False)),
+                    str(waarde(a, "org.bluez.Adapter1", "PowerState", "") or ""))
+    for pad in sorted(objecten):
+        ifaces = objecten[pad]
+        if not isinstance(ifaces, dict) or "org.bluez.Device1" not in ifaces:
+            continue
+        if waarde(ifaces, "org.bluez.Device1", "Adapter") != adapter:
+            continue
+        naam = waarde(ifaces, "org.bluez.Device1", "Name")
+        if not naam:
+            alias = str(waarde(ifaces, "org.bluez.Device1", "Alias", "") or "")
+            naam = "" if _ADRES_ALIAS.fullmatch(alias) else alias
+        rssi = waarde(ifaces, "org.bluez.Device1", "RSSI")
+        batterij = waarde(ifaces, "org.bluez.Battery1", "Percentage")
+        stand.apparaten.append(BtGevonden(
+            pad, str(waarde(ifaces, "org.bluez.Device1", "Address", "") or ""), str(naam or ""),
+            str(waarde(ifaces, "org.bluez.Device1", "Icon", "") or ""),
+            bool(waarde(ifaces, "org.bluez.Device1", "Paired", False)),
+            bool(waarde(ifaces, "org.bluez.Device1", "Connected", False)),
+            int(rssi) if isinstance(rssi, int) else None, int(batterij) if isinstance(batterij, int) else None))
+    return stand
+
+
+def bt_objecten() -> BtStand:
+    """Wat BlueZ nu weet: de bluetooth-kaart en de apparaten in de buurt."""
+    if _c.VOORBEELD:
+        apparaten = [BtGevonden(**{**g.__dict__, "gekoppeld": g.adres in VB_NET["bt_gekoppeld"]})
+                     for g in VB_BT_GEVONDEN]
+        return BtStand("/org/bluez/hci0", _c._VB["bt"], "on" if _c._VB["bt"] else "off", apparaten)
+    code, uit = _c.draai("busctl", "--system", "--json=short", "--timeout=5", "call", "org.bluez", "/",
+                         "org.freedesktop.DBus.ObjectManager", "GetManagedObjects", timeout=8)
+    return lees_bt_objecten(uit) if code == 0 else BtStand()
+
+
+def bt_nieuw(stand: BtStand) -> list[BtGevonden]:
+    """De apparaten om te koppelen: nog niet gekoppeld en met een naam, de dichtstbijzijnde eerst."""
+    return sorted((g for g in stand.apparaten if not g.gekoppeld and g.naam),
+                  key=lambda g: (-(g.sterkte if g.sterkte is not None else -999), g.naam.lower()))
+
+
+def bt_soort(icoon: str) -> str:
+    """Wat voor apparaat (een sleutel; de pagina maakt er een icoon en gewone woorden van)."""
+    icoon = (icoon or "").strip()
+    if icoon.startswith("audio-") or icoon == "multimedia-player":
+        return "geluid"
+    return {"input-mouse": "muis", "input-keyboard": "toetsenbord", "input-gaming": "spel", "input-tablet": "tablet",
+            "phone": "telefoon", "computer": "computer", "printer": "printer", "camera-photo": "camera",
+            "camera-video": "camera"}.get(icoon, "apparaat")
+
+
+def code_tekst(n) -> str:
+    """284913 -> '284 913' (zoals een telefoon het laat zien); een pincode (tekst) blijft zoals hij is."""
+    if isinstance(n, str):
+        return n
+    s = f"{int(n):06d}"
+    return s[:3] + " " + s[3:]
+
+
+_KOPPEL_FOUT = {
+    "org.bluez.Error.AuthenticationFailed": "codes",
+    "org.bluez.Error.AuthenticationCanceled": "gestopt",
+    "org.bluez.Error.AuthenticationRejected": "geweigerd",
+    "org.bluez.Error.AuthenticationTimeout": "traag",
+    "org.freedesktop.DBus.Error.NoReply": "traag",
+    "org.freedesktop.DBus.Error.Timeout": "traag",
+    "org.bluez.Error.ConnectionAttemptFailed": "bereik",
+    "org.bluez.Error.Failed": "bereik",
+    "org.bluez.Error.NotAvailable": "bereik",
+    "org.bluez.Error.AlreadyExists": "al",
+    "org.bluez.Error.InProgress": "bezig",
+    "org.bluez.Error.NotReady": "uit",
+    "org.freedesktop.DBus.Error.NameHasNoOwner": "geen",
+    "org.freedesktop.DBus.Error.ServiceUnknown": "geen",
+    "org.freedesktop.DBus.Error.UnknownObject": "geen",
+    "org.freedesktop.DBus.Error.UnknownMethod": "geen",
+}
+
+
+def bt_koppel_fout(naam: str, apparaat: bool = False) -> str:
+    """De D-Bus-fout van BlueZ in een soort (voor de melding). apparaat=True: de fout kwam bij het koppelen van één
+    apparaat; is dat apparaat-object weg (BlueZ ruimt apparaten op die je niet koppelde), dan 'weg' (opnieuw zoeken),
+    niet 'bluetooth doet het niet'."""
+    if apparaat and naam == "org.freedesktop.DBus.Error.UnknownObject":
+        return "weg"
+    return _KOPPEL_FOUT.get(naam, "anders")
+
+
+def bt_vertrouw(pad: str, aan: bool = True) -> bool:
+    """Vertrouw het apparaat (vóór het koppelen): dan vraagt BlueZ KDE's agent niet om toestemming als je koptelefoon
+    meteen na het koppelen zijn geluid aanzet (N8). busctl heeft een betrouwbare exitcode, bluetoothctl niet."""
+    if _c.VOORBEELD:
+        return True
+    if not geldig_bt_pad(pad):
+        return False
+    return _c.draai("busctl", "--system", "--timeout=5", "set-property", "org.bluez", pad, "org.bluez.Device1",
+                    "Trusted", "b", "true" if aan else "false", timeout=8)[0] == 0
+
+
+def bt_vertrouw_en_verbind(pad: str, adres: str = "") -> tuple[bool, bool]:
+    """Na het koppelen: vertrouwen (dan verbindt het later vanzelf) en verbinden. Geeft (vertrouwd, verbonden)."""
+    if _c.VOORBEELD:
+        VB_NET["bt_gekoppeld"].add(adres)
+        _c._VB["bt_verbonden"].add(adres)
+        return True, True
+    if not geldig_bt_pad(pad):
+        return False, False
+    vertrouwd = bt_vertrouw(pad, True)
+    code, _uit, fout = _c.draai_nm("busctl", "--system", "--timeout=20", "call", "org.bluez", pad, "org.bluez.Device1",
+                                   "Connect", timeout=25)
+    return vertrouwd, code == 0 or "alreadyconnected" in fout.lower().replace(" ", "")
+
+
+def bt_hard_uit() -> bool:
+    """Staat bluetooth uit met een knop of schakelaar op de computer (rfkill 'hard')? Dan kan BugOS hem niet aanzetten."""
+    sys_ = Path(os.environ.get("BUGOS_SYS", "/sys"))
+    try:
+        for r in (sys_ / "class" / "rfkill").iterdir():
+            if (r / "type").read_text().strip() == "bluetooth" and (r / "hard").exists() \
+                    and (r / "hard").read_text().strip() == "1":
+                return True
+    except OSError:
+        return False
+    return False
