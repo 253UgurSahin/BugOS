@@ -24,8 +24,8 @@ import re
 from collections.abc import Sequence
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, Qt
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QIcon, QPainter, QPalette, QPixmap
+from PySide6.QtCore import QByteArray, QRect, Qt
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QGuiApplication, QIcon, QPainter, QPalette, QPixmap
 from PySide6.QtWidgets import QApplication, QWidget
 
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "bugos"
@@ -149,12 +149,12 @@ QWidget {{ color: {k['tekst']}; font-size: 14px; }}
 QWidget#venster, QWidget#pagina, QScrollArea, QScrollArea > QWidget > QWidget#pagina {{ background: {k['achter']}; }}
 QScrollArea {{ border: none; }}
 QLabel {{ background: transparent; }}
-QLabel[rol="titel"] {{ font-family: "{DISPLAY}"; font-size: 30px; font-weight: 600; letter-spacing: -0.5px; }}
+QLabel[rol="titel"] {{ font-family: "{DISPLAY}"; font-size: 28px; font-weight: 600; letter-spacing: -0.5px; }}
 QLabel[rol="groot"] {{ font-family: "{DISPLAY}"; font-size: 40px; font-weight: 600; letter-spacing: -0.8px; }}
 QLabel[rol="kop2"] {{ font-family: "{DISPLAY}"; font-size: 19px; font-weight: 600; }}
 QLabel[rol="kop3"] {{ font-size: 15px; font-weight: 600; }}
 QLabel[rol="rij"] {{ font-size: 15px; font-weight: 500; }}
-QLabel[rol="sub"] {{ color: {k['tekst2']}; font-size: 15px; }}
+QLabel[rol="sub"] {{ color: {k['tekst2']}; font-size: 14px; }}
 QLabel[rol="klein"] {{ color: {k['tekst2']}; font-size: 13px; }}
 QLabel[rol="sectie"] {{ color: {k['tekst2']}; font-size: 13px; font-weight: 600; }}
 QLabel[rol="appnaam"] {{ font-family: "{DISPLAY}"; font-size: 20px; font-weight: 600; letter-spacing: -0.3px; }}
@@ -164,9 +164,9 @@ QFrame[kaart="accent"] {{ background: {k['accent_zacht']}; border: 1px solid {k[
 QFrame#lijn {{ background: {k['rand']}; max-height: 1px; min-height: 1px; border: none; }}
 
 QPushButton {{ background: {k['knop']}; color: {k['tekst']}; border: 1px solid transparent; border-radius: 12px;
-  padding: 10px 18px; font-size: 14px; font-weight: 600; }}
+  padding: 6px 16px; font-size: 14px; font-weight: 600; }}
 QPushButton:hover {{ background: {k['knop_hover']}; }}
-QPushButton:focus {{ border: 2px solid {k['accent']}; padding: 9px 17px; }}
+QPushButton:focus {{ border: 2px solid {k['accent']}; padding: 5px 15px; }}
 QPushButton:disabled {{ color: {k['tekst3']}; }}
 QPushButton[soort="hoofd"] {{ background: {k['knop_hoofd']}; color: {k['accent_tekst']}; }}
 QPushButton[soort="hoofd"]:hover {{ background: {k['knop_hoofd_hover']}; }}
@@ -176,9 +176,11 @@ QPushButton[soort="stil"] {{ background: transparent; color: {k['tekst2']}; }}
 QPushButton[soort="stil"]:hover {{ background: {k['knop']}; color: {k['tekst']}; }}
 QPushButton[soort="rand"] {{ background: transparent; border: 1px solid {k['rand_sterk']}; }}
 QPushButton[soort="rand"]:hover {{ background: {k['knop']}; }}
-QPushButton[soort="rand"]:focus {{ border: 2px solid {k['accent']}; padding: 9px 17px; }}
-QPushButton[groot="true"] {{ padding: 13px 24px; font-size: 15px; border-radius: 12px; }}
-QPushButton[groot="true"]:focus {{ padding: 12px 23px; }}
+QPushButton[soort="rand"]:focus {{ border: 2px solid {k['accent']}; padding: 5px 15px; }}
+QPushButton[groot="true"] {{ padding: 10px 22px; font-size: 15px; border-radius: 12px; }}
+QPushButton[groot="true"]:focus {{ padding: 9px 21px; }}
+QPushButton[klein="true"] {{ padding: 4px 8px; }}
+QPushButton[klein="true"]:focus {{ padding: 3px 7px; }}
 
 QPushButton#tegel {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 16px; padding: 0; text-align: left; }}
 QPushButton#tegel:hover {{ background: {k['vlak_hover']}; border: 1px solid {k['rand_sterk']}; }}
@@ -188,18 +190,18 @@ QPushButton#keuze:hover {{ border: 2px solid {k['rand_sterk']}; }}
 QPushButton#keuze:focus {{ border: 2px dashed {k['accent']}; }}
 QPushButton#keuze:checked {{ border: 2px solid {k['accent']}; background: {k['vlak']}; }}
 
-QLineEdit {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 12px; padding: 11px 14px;
-  font-size: 15px; selection-background-color: {k['accent']}; }}
-QLineEdit:focus {{ border: 2px solid {k['accent']}; padding: 10px 13px; }}
+QLineEdit {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 12px; padding: 7px 12px;
+  font-size: 14px; selection-background-color: {k['accent']}; }}
+QLineEdit:focus {{ border: 2px solid {k['accent']}; padding: 6px 11px; }}
 
-QComboBox {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 12px; padding: 10px 14px; font-size: 14px; }}
-QComboBox:focus {{ border: 2px solid {k['accent']}; }}
+QComboBox {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 12px; padding: 6px 12px; font-size: 14px; }}
+QComboBox:focus {{ border: 2px solid {k['accent']}; padding: 5px 11px; }}
 QComboBox::drop-down {{ border: none; width: 28px; }}
 QComboBox QAbstractItemView {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 12px;
   selection-background-color: {k['accent_zacht']}; selection-color: {k['tekst']}; padding: 4px; }}
 
 QListWidget#zijbalk {{ background: transparent; border: none; outline: 0; font-size: 14px; }}
-QListWidget#zijbalk::item {{ padding: 10px 12px; border-radius: 12px; margin: 1px 0; color: {k['tekst']}; }}
+QListWidget#zijbalk::item {{ padding: 8px 12px; border-radius: 12px; margin: 1px 0; color: {k['tekst']}; }}
 QListWidget#zijbalk::item:hover {{ background: {k['knop']}; }}
 QListWidget#zijbalk::item:selected {{ background: {k['accent_zacht']}; color: {k['accent_gekozen']}; font-weight: 600; }}
 QWidget#zijkant {{ background: {k['zijbalk']}; border: none; }}
@@ -214,12 +216,12 @@ QProgressBar#dun[vol="true"]::chunk {{ background: {k['let_op']}; }}
 QFrame#rij {{ background: transparent; border-radius: 12px; }}
 QFrame#rij[klikbaar="true"]:hover {{ background: {k['knop']}; }}
 QFrame#rij[klikbaar="true"]:focus {{ background: {k['knop']}; border: 2px solid {k['accent']}; }}
-QPushButton#rond {{ min-width: 42px; max-width: 42px; min-height: 42px; max-height: 42px; border-radius: 21px;
+QPushButton#rond {{ min-width: 36px; max-width: 36px; min-height: 36px; max-height: 36px; border-radius: 18px;
   background: {k['knop']}; border: none; padding: 0; }}
 QPushButton#rond:hover {{ background: {k['knop_hover']}; }}
 QPushButton#rond:focus {{ border: 2px solid {k['accent']}; }}
 QPushButton#rond:disabled {{ background: transparent; }}
-QPushButton#rond_klein {{ min-width: 36px; max-width: 36px; min-height: 36px; max-height: 36px; border-radius: 18px;
+QPushButton#rond_klein {{ min-width: 32px; max-width: 32px; min-height: 32px; max-height: 32px; border-radius: 16px;
   background: transparent; border: none; padding: 0; }}
 QPushButton#rond_klein:hover {{ background: {k['knop_hover']}; }}
 QPushButton#rond_klein:focus {{ border: 2px solid {k['accent']}; }}
@@ -435,6 +437,55 @@ def maak_app(naam: str, bureaublad_bestand: str, args: Sequence[str], een_keer: 
     return app
 
 
+# ========================================================= op het scherm ===
+# Een venster mag nooit groter zijn dan het scherm: op een laptop van 1280x800 bij 150 % is er maar 853 x 485 vrij.
+# Valt de onderkant eraf, dan zie je de knop 'Volgende' niet meer en kom je niet verder (Bugie-test).
+
+TAAKBALK = 48    # de BugOS-taakbalk onderin (logische px, zie de plasma-indeling: 2 * floor(gridUnit * 2.7 / 2))
+TITELBALK = 40   # ruimte voor de titelbalk die KWin boven het venster zet (Breeze, zonder randen: ~30 px)
+
+
+def vrije_ruimte(scherm=None) -> QRect | None:
+    """Waar een venster mag staan: het scherm zonder de taakbalk. Onder Wayland weet Qt niet waar de taakbalk staat
+    (availableGeometry is dan het hele scherm): dan trekken we hem er zelf af."""
+    scherm = scherm or QGuiApplication.primaryScreen()
+    if scherm is None:
+        return None
+    vrij = scherm.availableGeometry()
+    if vrij.width() <= 0 or vrij.height() <= 0:
+        return None
+    if vrij == scherm.geometry():
+        vrij = vrij.adjusted(0, 0, 0, -min(TAAKBALK, vrij.height() // 4))
+    return vrij
+
+
+def schermmaat(maat: tuple[int, int], minimum: tuple[int, int] | None = None, scherm=None
+               ) -> tuple[tuple[int, int], tuple[int, int] | None]:
+    """(maat, minimum) van een venster, ingekort tot wat er op het scherm vrij is (met de titelbalk erbij)."""
+    vrij = vrije_ruimte(scherm)
+    if vrij is None:
+        return maat, minimum
+    b, h = vrij.width(), max(200, vrij.height() - TITELBALK)
+    maat = (min(maat[0], b), min(maat[1], h))
+    if minimum is not None:
+        minimum = (min(minimum[0], b), min(minimum[1], h))
+    return maat, minimum
+
+
+def pas_in_scherm(venster: QWidget) -> None:
+    """Maak een venster dat te groot is (Welkom 1000x680, Hulp 880x760 ...) zo groot als er op het scherm vrij is.
+    Een venster zonder eigen maat laat Qt zelf passen (adjustSize)."""
+    if not venster.isWindow() or venster.windowState() & (Qt.WindowState.WindowMaximized | Qt.WindowState.WindowFullScreen):
+        return
+    scherm = venster.screen() if hasattr(venster, "screen") else None
+    (b, h), minimum = schermmaat((venster.width(), venster.height()),
+                                 (venster.minimumWidth(), venster.minimumHeight()), scherm)
+    if minimum is not None and minimum != (venster.minimumWidth(), venster.minimumHeight()):
+        venster.setMinimumSize(*minimum)
+    if venster.testAttribute(Qt.WidgetAttribute.WA_Resized) and (b, h) != (venster.width(), venster.height()):
+        venster.resize(b, h)
+
+
 def uitvoeren(app: QApplication, venster: QWidget) -> int:
     """Toon het venster, wacht tot de gebruiker klaar is en ruim netjes op.
 
@@ -442,6 +493,7 @@ def uitvoeren(app: QApplication, venster: QWidget) -> int:
     het afsluiten. Geef daarom het venster direct mee: uitvoeren(app, Venster())."""
     if app.property("bugos_een_keer"):
         luister(str(app.property("bugos_een_keer")), venster)
+    pas_in_scherm(venster)   # elk venster past op het scherm, met zijn titelbalk erbij (U133)
     venster.show()
     code = app.exec()
     server = getattr(venster, "_een_server", None)
@@ -529,6 +581,8 @@ LIJN = {
     "toetsenbord": '<rect x="2.5" y="6.5" width="19" height="11" rx="2"/><path d="M6 10h.01M9.5 10h.01M13 10h.01'
                    'M16.5 10h.01M6 13.5h.01M9.5 13.5h3.5M16.5 13.5h.01"/>',
     "letter": '<path d="M5 19 12 4.5 19 19M7.6 13.5h8.8"/>',
+    "telefoon": '<rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M10.5 18.5h3"/>',
+    "microfoon": '<rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5M9 20.5h6"/>',
 }
 
 
@@ -574,8 +628,9 @@ from bugos_widgets import (  # noqa: E402, F401  (doorgeven: apps halen dit uit 
 )
 from bugos_pages import (  # noqa: E402, F401
     Held, SchijfKiezer, Voortgang, Zijbalk, Zoekveld, achtergrond_pad, kader, kop, kop_met_icoon, logo_icoon,
-    merk_label, pagina, raster, ronde_pixmap, schijf_info, schuifbaar, sectie,
+    merk_label, pagina, raster, ronde_pixmap, schijf_info, schuifbaar, sectie, sectie_met_knop,
 )
 from bugos_shell import (  # noqa: E402, F401
-    LEESBREEDTE, ZIJBALK_BREEDTE, ActieBalk, Melding, Pagina, Rij, Venster, app_kop, leeg_groep, ronde_knop,
+    LEESBREEDTE, ZIJBALK_BREEDTE, ActieBalk, Melding, Pagina, Rij, Venster, app_kop, leeg_groep, ronde_knop, vraag_ja,
+    vraag_tekst,
 )

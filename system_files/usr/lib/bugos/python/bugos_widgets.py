@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PySide6.QtCore import Property, QEasingCurve, QPointF, QPropertyAnimation, QRectF, QSize, Qt, Signal
+from PySide6.QtCore import Property, QEasingCurve, QEvent, QObject, QPointF, QPropertyAnimation, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QIcon, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QAbstractButton, QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
@@ -18,6 +18,10 @@ from bugos_ui import K, TINTEN, lijn_icoon, lijn_pixmap, zoeksleutel
 
 
 # ============================================================= bouwstenen ===
+
+KNOP_HOOGTE = 36      # een gewone knop (Windows 11: 32)
+KNOP_GROOT = 44       # de grote hoofdknop van Welkom, Back-up en Overstap
+SCHUIF_MAAT = (44, 24)  # het aan/uit-schuifje (Windows 11: 40 x 20)
 
 def lettertype(punten: int, vet: bool = False) -> QFont:
     f = QFont()
@@ -92,7 +96,9 @@ class Knop(GeenDubbel, QPushButton):
             self.setIcon(wit_icoon(ic, 18) if soort == "hoofd" else ic)
             self.setIconSize(QSize(18, 18))
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setMinimumHeight(48 if groot else 42)
+        # Rustig en compact zoals Windows 11, maar ruim boven de 24 px die je minstens moet kunnen raken. Met
+        # 'Grote letters' groeit de knop mee (px), anders zat de grote letter klem.
+        self.setMinimumHeight(bugos_ui.px(KNOP_GROOT if groot else KNOP_HOOGTE))
 
 
 def hoofdknop(tekst: str) -> Knop:
@@ -276,7 +282,7 @@ class Schuif(GeenDubbel, QAbstractButton):
         self.setCheckable(True)
         self.setChecked(aan)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedSize(52, 30)
+        self.setFixedSize(*SCHUIF_MAAT)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._stand = 1.0 if aan else 0.0
         self._anim = QPropertyAnimation(self, b"stand", self)
@@ -319,7 +325,7 @@ class Schuif(GeenDubbel, QAbstractButton):
         self._set(1.0 if aan else 0.0)
 
     def sizeHint(self) -> QSize:  # noqa: N802
-        return QSize(52, 30)
+        return QSize(*SCHUIF_MAAT)
 
     def paintEvent(self, _e):  # noqa: N802
         p = QPainter(self)
@@ -382,17 +388,54 @@ class Schakelaar(SchakelRij):
         self.schuif.zet_stil(aan)
 
 
+class _LijnWacht(QObject):
+    """Ziet een regel in een Groep verschijnen of verdwijnen, en zet dan de lijntjes goed."""
+
+    def eventFilter(self, obj, e):  # noqa: N802
+        if e.type() in (QEvent.Type.ShowToParent, QEvent.Type.HideToParent):
+            groep = obj.parentWidget()
+            if isinstance(groep, Groep):
+                groep.lijnen_bijwerken()
+        return False
+
+
+_WACHT: _LijnWacht | None = None
+
+
 class Groep(Kaart):
-    """Een kaart met regels onder elkaar, gescheiden door dunne lijntjes."""
+    """Een kaart met regels onder elkaar, gescheiden door dunne lijntjes. Een lijntje staat er alleen tussen twee
+    regels die je ziet: een verborgen regel (bijv. 'Kabel' zonder kabel) laat geen lege strook met een streep achter."""
 
     def __init__(self):
         super().__init__(marge=0, ruimte=0)
 
     def voeg(self, w: QWidget) -> QWidget:
+        global _WACHT
+        if _WACHT is None:
+            _WACHT = _LijnWacht()
         if self.lay.count():
             self.lay.addWidget(lijn())
         self.lay.addWidget(w)
+        w.installEventFilter(_WACHT)
+        self.lijnen_bijwerken()
         return w
+
+    def lijnen_bijwerken(self) -> None:
+        eerder = False          # staat er boven dit punt al een zichtbare regel?
+        wachtend = None         # het laatste lijntje sinds die regel
+        for i in range(self.lay.count()):
+            w = self.lay.itemAt(i).widget()
+            if w is None:
+                continue
+            if w.objectName() == "lijn":
+                w.setVisible(False)
+                wachtend = w
+                continue
+            if w.isHidden():
+                continue
+            if eerder and wachtend is not None:
+                wachtend.setVisible(True)
+            eerder, wachtend = True, None
 
 
 class Tegel(GeenDubbel, QPushButton):
@@ -438,6 +481,8 @@ class KeuzeKaart(GeenDubbel, QPushButton):
         self.setObjectName("keuze")
         self.setCheckable(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        # Kaarten naast elkaar worden even hoog (de hoogste wint).
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(14, 14, 14, 14)
         lay.setSizeConstraint(QVBoxLayout.SizeConstraint.SetMinimumSize)
@@ -449,3 +494,17 @@ class KeuzeKaart(GeenDubbel, QPushButton):
         if teksten:
             self.setAccessibleName(teksten[0])
             self.setAccessibleDescription(" · ".join(teksten[1:]))
+
+    def resizeEvent(self, e) -> None:  # noqa: N802
+        """De hoogte volgt de breedte: een uitleg van twee of drie regels past er altijd in (ook bij 150 %).
+        (Een QPushButton geeft de hoogte van een afgebroken tekst niet door aan zijn ouder.)"""
+        super().resizeEvent(e)
+        lay = self.layout()
+        if lay is None or not lay.hasHeightForWidth():
+            return
+        if not hasattr(self, "_eigen_min"):
+            self._eigen_min = self.minimumHeight()          # bijv. 112 uit keuze_kaart()
+            lay.setSizeConstraint(QVBoxLayout.SizeConstraint.SetNoConstraint)
+        nodig = max(self._eigen_min, lay.totalHeightForWidth(self.width()))
+        if nodig != self.minimumHeight():
+            self.setMinimumHeight(nodig)
