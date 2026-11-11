@@ -323,6 +323,259 @@ klopt([c[0] for c in opd] == ["lpadmin", "pkexec"] and uit == "verboden" and not
       "test 19: lukt het niet, dan blijven je eigen keuzes staan")
 
 
+# ===================================================== 3. printer toevoegen (stap 3 en 4) ===
+
+def ippfind_uit(*regels) -> str:
+    """Zoals printf '%s\\0' x 9 het schrijft: elk veld eindigt op een NUL (review R5)."""
+    return "".join("".join(v + "\0" for v in r) for r in regels)
+
+
+UUID = "1c852a4d-b800-1f08-abcd-a1b2c3d4e5f6"
+HP_IPP = ("HP OfficeJet Pro 8010 [A1B2C3]", "=ipp", "bugos.local", "631", "ipp/print", "HP OfficeJet Pro 8010 series",
+          "Kamer boven", UUID, "application/pdf,image/pwg-raster,image/urf")
+OUD = ("Oude printer", "=ipp", "bugos.local", "631", "ipp", "Samsung ML-1640", "", "",
+       "application/vnd.hp-PCL,application/octet-stream")
+HP_IPPS = ("HP OfficeJet Pro 8010 [A1B2C3]", "=ipps", "bugos.local", "443", "ipp/print", "HP OfficeJet Pro 8010 series",
+           "Kamer boven", UUID, "application/pdf,image/pwg-raster,image/urf")
+HP_URI_IPP = "ipp://HP%20OfficeJet%20Pro%208010%20%5BA1B2C3%5D._ipp._tcp.local/"   # letterlijk uit lpstat -l -e
+HP_URI_IPPS = "ipps://HP%20OfficeJet%20Pro%208010%20%5BA1B2C3%5D._ipps._tcp.local/"
+
+# Test 1 en 3: de drie echte regels uit het onderzoek (nep-adverteringen in de VM).
+gv = bi.lees_ippfind(ippfind_uit(HP_IPP, OUD, HP_IPPS), "andere-pc")
+hp_g = gv[0] if gv else None
+klopt(len(gv) == 2 and hp_g.uri == HP_URI_IPPS and hp_g.reserve_uri == HP_URI_IPP and hp_g.locatie == "Kamer boven"
+      and hp_g.driverless and hp_g.naam == "HP OfficeJet Pro 8010 series" and hp_g.soort == "netwerk"
+      and hp_g.proef_uri == "ipps://bugos.local:443/ipp/print" and hp_g.reserve_proef == "ipp://bugos.local:631/ipp/print",
+      f"test 1+3: ipp en ipps van dezelfde printer worden één (ipps eerst, ipp als reserve); '=ipp' gelezen ({gv})")
+klopt(len(gv) == 2 and not gv[1].driverless and gv[1].naam == "Samsung ML-1640",
+      "test 1: een printer die alleen PCL kan, heeft software van de maker nodig")
+gv = bi.lees_ippfind(ippfind_uit(HP_IPP, OUD, HP_IPPS,
+                                 ("Canon TS5300 series", "=ipp", "localhost", "60000", "ipp/print", "Canon TS5300 series",
+                                  "", "", "image/urf"),
+                                 ("Epson", "=ipp", "localhost.", "60001", "ipp/print", "", "", "", "image/pwg-raster")),
+                     "bugos")
+klopt([(g.naam, g.soort) for g in gv] == [("HP OfficeJet Pro 8010 series", "netwerk"),
+                                          ("Canon TS5300 series", "kabel"), ("Epson", "kabel")]
+      and gv[0].reserve_uri == "",
+      f"test 2: wat deze computer zelf deelt (poort 631) niet; ipp-usb op localhost:60000 = met een kabel (R8) ({gv})")
+# R5: een TXT-waarde met een regeleinde en tabs maakt geen nep-printer meer.
+kwaad = ("Review Evil [ABCD]", "=ipp", "bugos.local", "9", "", "Evil",
+         "a\nFake Printer\t=ipp\tevil.example\t631\tipp/print\tFake\t\t\timage/urf", "x", "a")
+gv = bi.lees_ippfind(ippfind_uit(kwaad), "andere-pc")
+klopt(len(gv) == 1 and gv[0].naam == "Evil" and "\t" not in gv[0].locatie and "\n" not in gv[0].locatie,
+      f"R5: tabs en regeleindes uit het netwerk maken geen extra printer en staan niet in de plek ({gv})")
+klopt(bi.lees_ippfind("lpadmin: rommel op stderr\n" + ippfind_uit(("x",) * 3), "a") == [],
+      "R5: half werk of rommel geeft geen printer")
+# Test 4: al toegevoegd? (lpstat -v), alleen blijvende wachtrijen tellen (lpstat -l -e, R1).
+app_ = bi.lees_lpstat_v(f"device for HP_OfficeJet_Pro_8010_A1B2C3: {HP_URI_IPPS}\ndevice for USB: usb://HP/LaserJet%201020?serial=FN0000\n")
+hp_g = bi.lees_ippfind(ippfind_uit(HP_IPP, HP_IPPS), "andere-pc")[0]
+usb_g = bi.Gevonden("HP LaserJet 1020", "", "usb://HP/LaserJet%201020?serial=XX", "", "usb", False, False, "")
+klopt(bi.al_toegevoegd(hp_g, app_) and bi.al_toegevoegd(usb_g, app_)
+      and not bi.al_toegevoegd(bi.lees_ippfind(ippfind_uit(OUD), "andere-pc")[0], app_),
+      "test 4: een printer die er al is, ziet BugOS (ook via de DNS-SD-naam, en usb zonder serienummer)")
+klopt(bi.lees_lpstat_e("HP_OfficeJet_Pro_8010_A1B2C3 network none " + HP_URI_IPP + "cups\n"
+                       "printers_test permanent ipp://localhost/printers/printers_test ipp://localhost:631/x\n"
+                       "Tijdelijk temporary ipp://localhost/printers/Tijdelijk ipp://x/\n") == {"printers_test"},
+      "R1: alleen 'permanent' is een bezette naam; wat CUPS zelf tijdelijk maakt niet")
+# Test 5: oude printers met een kabel (de vorm uit de documentatie van CUPS; de VM heeft er geen).
+usb = bi.lees_lpinfo_usb("Device: uri = usb://HP/LaserJet%201020?serial=FN0000\n        class = direct\n"
+                         "        info = HP LaserJet 1020\n        make-and-model = HP LaserJet 1020\n"
+                         "        device-id = MFG:Hewlett-Packard;CMD:ZJS;MDL:HP LaserJet 1020;\n        location = \n"
+                         "Device: uri = hp\n        class = direct\n        info = HP\n")
+klopt(len(usb) == 1 and usb[0].uri == "usb://HP/LaserJet%201020?serial=FN0000" and usb[0].soort == "usb"
+      and not usb[0].driverless and usb[0].model_hint == "HP LaserJet 1020",
+      f"test 5: lpinfo -l: één printer met een kabel, met merk en model; 'hp' zonder usb:// niet ({usb})")
+# Test 6: de wachtrij-naam is die van CUPS zelf (R1).
+klopt(bi.wachtrij_naam("HP OfficeJet Pro 8010 [A1B2C3]", set()) == "HP_OfficeJet_Pro_8010_A1B2C3"
+      and bi.wachtrij_naam("Canon TS5300 series", set()) == "Canon_TS5300_series"
+      and bi.wachtrij_naam("Printer_192.168.1.20", set()) == "Printer_192_168_1_20",
+      "test 6 / R1: de naam is precies de tijdelijke naam van CUPS (dan staat hij maar één keer in een printvenster)")
+_n = [bi.wachtrij_naam("HP OfficeJet Pro 8010 [A1B2C3]", {"hp_officejet_pro_8010_a1b2c3"}),
+      bi.wachtrij_naam("-x; rm -rf /", set()), bi.wachtrij_naam("é" * 300, set()), bi.wachtrij_naam("a" * 300, set())]
+klopt(_n[0] == "HP_OfficeJet_Pro_8010_A1B2C3_2" and all(bi.NAAM_RE.match(x) and not x.startswith("-") for x in _n)
+      and len(_n[3]) <= 127, f"test 6: bezet = _2; rare tekens en lange namen geven een veilige naam ({_n})")
+# Test 7: een getypt adres.
+goed_ = {"192.168.1.20": ["ipp://192.168.1.20/ipp/print", "ipps://192.168.1.20/ipp/print"],
+         "printer.local": ["ipp://printer.local/ipp/print", "ipps://printer.local/ipp/print"],
+         "ipps://10.0.0.5:631/ipp/print": ["ipps://10.0.0.5:631/ipp/print"],
+         "[fe80::1]": ["ipp://[fe80::1]/ipp/print", "ipps://[fe80::1]/ipp/print"], " 10.0.0.9 ": None}
+klopt(all(bi.adres_kandidaten(k) == (v or bi.adres_kandidaten(k.strip())) for k, v in goed_.items())
+      and len(bi.adres_kandidaten(" 10.0.0.9 ")) == 2,
+      "test 7: 192.168.1.20, printer.local, [fe80::1] en een ipps://-link zijn adressen")
+klopt(not any(bi.adres_kandidaten(x) for x in ("", "a b", "http://x", "x;reboot", "999.1.1.1", "-p", "1.2.3",
+                                               "printer.local/../x", "ipp://x/$(reboot)")),
+      "test 7: '', 'a b', 'http://x', 'x;reboot', '999.1.1.1', '-p' zijn geen adres")
+klopt(bi.adres_vervolg("192.168.1.20") == ("Printer_192_168_1_20", "ipp://192.168.1.20/ipp/print",
+                                           "socket://192.168.1.20:9100")
+      and bi.adres_vervolg("[fe80::1]")[2] == "socket://[fe80::1]:9100"
+      and bi.adres_vervolg("ipp://10.0.0.5:631/ipp/print")[2] == "socket://10.0.0.5:9100",
+      "test 7: na een getypt adres: de naam, en de adressen voor software van de maker (ipp, poort 9100)")
+
+
+def cups_antwoord(lpadmin=(0, ""), lpstat_d="system default destination: Oud", ipptool=(0, ""), pkexec=None,
+                  blijvend=""):
+    """Een nep-CUPS: lpadmin (een functie van de opdracht of een vast antwoord), lpstat -d, ipptool, pkexec."""
+    def antwoord(c):
+        if c[0] == "lpadmin":
+            return lpadmin(c) if callable(lpadmin) else lpadmin
+        if c[0] == "pkexec":
+            return pkexec(c) if callable(pkexec) else pkexec or (lpadmin(c) if callable(lpadmin) else lpadmin)
+        if c[0] == "ipptool":
+            return ipptool(c) if callable(ipptool) else ipptool
+        if c[:3] == ("lpstat", "-l", "-e"):
+            return 0, blijvend
+        if c[:2] == ("lpstat", "-d"):
+            return 0, lpstat_d
+        return 0, ""
+    return antwoord
+
+
+HP_ADD = ("lpadmin", "-p", "HP_OfficeJet_Pro_8010_A1B2C3", "-E", "-v", HP_URI_IPPS, "-m", "everywhere", "-D",
+          "HP OfficeJet Pro 8010 series", "-L", "Kamer boven")
+# Test 9: als beheerder (wheel): lpadmin -m everywhere, zonder wachtwoord.
+opd, tijd, uit = vang_cups(bi.printer_toevoegen, hp_g, antwoord=cups_antwoord())
+klopt(HP_ADD in opd and tijd[opd.index(HP_ADD)] == 45 and uit == ("ok", "HP_OfficeJet_Pro_8010_A1B2C3")
+      and not any(c[0] in ("pkexec", "ipptool") for c in opd),
+      f"test 9: beheerder: lpadmin -p <naam van CUPS> -E -v ipps://... -m everywhere -D -L, 45 s ({opd})")
+# Test 10: geen beheerder: eerst zonder wachtwoord kijken welk adres antwoordt, dan precies één pkexec (R3).
+opd, _, uit = vang_cups(bi.printer_toevoegen, hp_g, beheerder=False, antwoord=cups_antwoord())
+_pk = [c for c in opd if c[0] == "pkexec"]
+klopt(_pk == [("pkexec", "/usr/bin/lpadmin") + HP_ADD[1:]] and opd.index(_pk[0]) > [c[0] for c in opd].index("ipptool")
+      and ("lpoptions", "-d", "HP_OfficeJet_Pro_8010_A1B2C3") not in opd and uit[0] == "ok",
+      f"test 10 / R3: geen beheerder: eerst ipptool (zonder wachtwoord), dan één keer pkexec lpadmin ({opd})")
+opd, _, uit = vang_cups(bi.printer_toevoegen, hp_g, beheerder=False, antwoord=cups_antwoord(
+    ipptool=lambda c: (0, "") if c[3].startswith("ipp://") else (1, "ipptool: Unable to connect to bugos.local on port 443")))
+_pk = [c for c in opd if c[0] == "pkexec"]
+klopt(len(_pk) == 1 and _pk[0][6] == HP_URI_IPP and [c[3] for c in opd if c[0] == "ipptool"]
+      == ["ipps://bugos.local:443/ipp/print", "ipp://bugos.local:631/ipp/print"] and uit[0] == "ok",
+      f"test 10 / R3: ipps antwoordt niet, ipp wel: één pkexec met ipp:// ({_pk})")
+opd, _, uit = vang_cups(bi.printer_toevoegen, hp_g, beheerder=False, antwoord=cups_antwoord(
+    ipptool=(1, "ipptool: Unable to connect to bugos.local on port 443 - Host is down\n")))
+klopt(not any(c[0] == "pkexec" for c in opd) and uit == ("onbereikbaar", ""),
+      "R3: antwoordt geen enkel adres: geen wachtwoordvenster, maar 'kan de printer niet bereiken'")
+opd, _, uit = vang_cups(bi.printer_toevoegen, hp_g, beheerder=False,
+                        antwoord=cups_antwoord(pkexec=(126, "Error executing command as another user: Request dismissed")))
+klopt(uit == ("geweigerd", "") and len([c for c in opd if c[0] == "pkexec"]) == 1,
+      "test 10: Annuleren in het wachtwoordvenster: 'niets gedaan', geen tweede venster")
+# Test 12: als beheerder: ipps lukt niet, dan ipp (geen wachtwoord, dus mag het nog eens).
+opd, _, uit = vang_cups(bi.printer_toevoegen, hp_g, antwoord=cups_antwoord(
+    lpadmin=lambda c: (1, "lpadmin: Unable to connect to bugos.local:443: Connection refused\n") if HP_URI_IPPS in c
+    else (0, "")))
+_lp = [c for c in opd if c[0] == "lpadmin"]
+klopt(len(_lp) == 2 and _lp[1][5] == HP_URI_IPP and uit[0] == "ok", f"test 12: ipps lukt niet: dan ipp ({_lp})")
+# Test 13: geen IPP Everywhere: 'geen_driverless', niet nog eens en niet via pkexec.
+opd, _, uit = vang_cups(bi.printer_toevoegen, hp_g, antwoord=cups_antwoord(lpadmin=(
+    1, "lpadmin: Unable to create PPD: Printer does not support required IPP attributes or document formats.\n")))
+klopt(uit == ("geen_driverless", "") and [c[0] for c in opd].count("lpadmin") == 1 and "pkexec" not in [c[0] for c in opd],
+      "test 13: 'Unable to create PPD': software van de maker kiezen, geen tweede poging, geen pkexec")
+# Test 14 / R20: de eerste printer wordt de standaard: voor iedereen (beheerder), anders alleen voor jou.
+opd, _, uit = vang_cups(bi.printer_toevoegen, hp_g, antwoord=cups_antwoord(lpstat_d="no system default destination\n"))
+klopt(("lpadmin", "-d", "HP_OfficeJet_Pro_8010_A1B2C3") in opd and not any(c[:2] == ("lpoptions", "-d") for c in opd),
+      "test 14 / R20: eerste printer van een beheerder: standaard voor iedereen (lpadmin -d)")
+opd, _, uit = vang_cups(bi.printer_toevoegen, hp_g, beheerder=False,
+                        antwoord=cups_antwoord(lpstat_d="no system default destination\n"))
+klopt(("lpoptions", "-d", "HP_OfficeJet_Pro_8010_A1B2C3") in opd and len([c for c in opd if c[0] == "pkexec"]) == 1,
+      "test 14: zonder beheerder: standaard alleen voor jou (lpoptions -d), geen tweede wachtwoordvenster")
+opd, _, uit = vang_cups(bi.printer_toevoegen, hp_g, antwoord=cups_antwoord())
+klopt(not any(c[1:2] == ("-d",) and c[0] in ("lpadmin", "lpoptions") for c in opd),
+      "test 14: is er al een standaard, dan blijft die")
+# R12: de tijd was om, maar lpadmin maakte de wachtrij toch: dat is gelukt.
+_na_lpadmin: list = []
+
+
+def antwoord_traag(c):
+    if c[0] == "lpadmin":
+        _na_lpadmin.append(c)
+        return 124, ""
+    if c[:3] == ("lpstat", "-l", "-e") and _na_lpadmin:
+        return 0, "HP_OfficeJet_Pro_8010_A1B2C3 permanent ipp://localhost/printers/x ipps://x/\n"
+    return cups_antwoord()(c)
+
+
+opd, _, uit = vang_cups(bi.printer_toevoegen, hp_g, antwoord=antwoord_traag)
+klopt(uit == ("ok", "HP_OfficeJet_Pro_8010_A1B2C3") and [c[0] for c in opd].count("lpadmin") == 1,
+      f"R12: tijd om, maar de wachtrij is er: gelukt (geen tweede poging met een andere naam) ({uit})")
+# R1: de tijdelijke wachtrij van CUPS met dezelfde naam is niet 'bezet'.
+opd, _, uit = vang_cups(bi.printer_toevoegen, hp_g, antwoord=cups_antwoord(
+    blijvend="HP_OfficeJet_Pro_8010_A1B2C3 network none ipp://x/ ipp://y/\n"))
+klopt(uit == ("ok", "HP_OfficeJet_Pro_8010_A1B2C3"), "R1: de tijdelijke printer van CUPS maakt de naam niet bezet (geen _2)")
+# Een getypt adres.
+opd, _, uit = vang_cups(bi.printer_toevoegen_adres, "192.168.1.20", antwoord=cups_antwoord(
+    lpadmin=(1, "lpadmin: Unable to connect to 192.168.1.20:631: Host is down\n")))
+klopt(uit == ("onbereikbaar", "") and [c[0] for c in opd].count("lpadmin") == 1
+      and ("-D", "192.168.1.20") == next(c for c in opd if c[0] == "lpadmin")[8:10],
+      "adres: onbereikbaar: niet nog een halve minuut met ipps:// op hetzelfde adres")
+opd, _, uit = vang_cups(bi.printer_toevoegen_adres, "192.168.1.20", antwoord=cups_antwoord(
+    lpadmin=(1, "lpadmin: Bad device-uri\n")))
+klopt(uit == ("geen_antwoord", "") and [c[5] for c in opd if c[0] == "lpadmin"]
+      == ["ipp://192.168.1.20/ipp/print", "ipps://192.168.1.20/ipp/print"],
+      "adres: ipp en ipps lukken niet (geen IPP): 'geen_antwoord' (dan merk en model, poort 9100)")
+opd, _, uit = vang_cups(bi.printer_toevoegen_adres, "x;reboot")
+klopt(not opd and uit == ("geen_adres", ""), "adres: geen adres, dan ook geen opdracht")
+opd, _, uit = vang_cups(bi.printer_toevoegen_adres, "192.168.1.20", beheerder=False, antwoord=cups_antwoord(
+    ipptool=lambda c: (1, "ipptool: Unable to connect to 192.168.1.20 on port 631 - Host is down")))
+klopt(uit == ("onbereikbaar", "") and [c[0] for c in opd].count("ipptool") == 1 and "pkexec" not in [c[0] for c in opd],
+      "adres zonder beheerder: antwoordt hij niet, dan geen wachtwoordvenster en geen tweede halve minuut")
+# Ontdekken: zonder beheerder geen lpinfo (alleen een beheerder mag dat), met de kabelknop één pkexec lpinfo (R7).
+opd, _, _ = vang_cups(bi.gevonden_printers, beheerder=False)
+klopt(opd[0][:2] == ("ippfind", "-T") and "%s\\0" * 9 in opd[0] and not any(c[0] in ("lpinfo", "pkexec") for c in opd),
+      f"ontdekken: ippfind met NUL tussen de velden (R5); zonder beheerder geen lpinfo ({opd[0][:8]})")
+opd, _, _ = vang_cups(bi.gevonden_printers, True, beheerder=False)
+klopt(("pkexec", "/usr/bin/lpinfo", "-l", "--include-schemes", "usb", "-v") in opd,
+      "R7: 'Printer met een kabel?': één keer pkexec lpinfo (alleen lezen)")
+opd, _, gv = vang_cups(bi.gevonden_printers, antwoord=lambda c: (0, ippfind_uit(OUD, HP_IPP, HP_IPPS)) if c[0] == "ippfind"
+                       else (0, f"device for X: {HP_URI_IPP}\n") if c[:2] == ("lpstat", "-v")
+                       else (0, "X permanent ipp://localhost/printers/X ipp://y/\n") if c[:2] == ("lpstat", "-l") else (0, ""))
+klopt(("lpinfo", "-l", "--include-schemes", "usb", "-v") in opd and [g.al_toegevoegd for g in gv] == [False, True]
+      and gv[0].naam == "Samsung ML-1640",
+      f"ontdekken als beheerder: ook usb; wat er al is, staat onderaan ({[(g.naam, g.al_toegevoegd) for g in gv]})")
+
+# Test 15: printersoftware van de maker (lpinfo -m), echte regels uit de VM.
+LPINFO_M = ("drv:///hp/hpcups.drv/hp-officejet_pro_8000_a809.ppd HP Officejet Pro 8000 a809, hpcups 3.26.6\n"
+            "drv:///hp/hpijs.drv/hp-officejet_pro_8000_a809-hpijs.ppd HP Officejet Pro 8000 a809 hpijs, 3.26.6\n"
+            "lsb/usr/HP/hp-officejet_pro_8000_a809.ppd.gz HP Officejet Pro 8000 a809, hpcups 3.26.6\n"
+            "drv:///brlaser.drv/br2300d.ppd Brother HL-L2300D series, using brlaser v6\n"
+            "everywhere IPP Everywhere\n"
+            "drv:///cupsfilters.drv/pwgrast.ppd Generic IPP Everywhere Printer\n"
+            "driverless:ipp://x/ipp/print HP x\n"
+            "raw Raw Queue\n"
+            "drv:///hp/hpijs.drv/hp-laserjet_1020-hpijs.ppd HP LaserJet 1020 hpijs, 3.26.6, requires proprietary plugin\n"
+            "drv:///hp/hpcups.drv/hp-laserjet_1020.ppd HP LaserJet 1020, hpcups 3.26.6, requires proprietary plugin\n"
+            "lsb/usr/HP/hp-laserjet_1020.ppd.gz HP LaserJet 1020, hpcups 3.26.6, requires proprietary plugin\n"
+            "gutenprint.5.3://escp2-r220/expert Epson Stylus Photo R220 - CUPS+Gutenprint v5.3.5\n"
+            "gutenprint.5.3://escp2-r220/simple Epson Stylus Photo R220 - CUPS+Gutenprint v5.3.5 Simplified\n")
+ml = bi.lees_lpinfo_m(LPINFO_M)
+klopt(ml == [("drv:///brlaser.drv/br2300d.ppd", "Brother HL-L2300D series"),
+             ("gutenprint.5.3://escp2-r220/simple", "Epson Stylus Photo R220"),
+             ("drv:///hp/hpcups.drv/hp-officejet_pro_8000_a809.ppd", "HP Officejet Pro 8000 a809")],
+      f"test 15 / R2: elk model één keer (hpcups, Simplified), zonder everywhere/raw/driverless en zonder "
+      f"'requires proprietary plugin' ({ml})")
+import bugos_config_meldingen as bcm  # noqa: E402
+
+bcm._MODELLEN.clear()
+opd, _, uit = vang_cups(bi.printer_toevoegen_model, "usb://HP/LaserJet%201020?serial=FN0000", "HP LaserJet 1020",
+                        "HP LaserJet 1020", "lsb/usr/HP/hp-laserjet_1020.ppd.gz")
+klopt(not opd and uit == ("anders", ""), "test 15: een model dat niet uit lpinfo -m kwam, wordt nooit doorgegeven")
+opd, tijd, ml = vang_cups(bi.modellen, "HP Officejet Pro 8000 a809 series",
+                          antwoord=lambda c: (0, LPINFO_M) if c[0] == "lpinfo" else (0, ""))
+klopt(opd == [("lpinfo", "--make-and-model", "HP Officejet Pro 8000", "-m")] and tijd == [40]
+      and ml == [("drv:///hp/hpcups.drv/hp-officejet_pro_8000_a809.ppd", "HP Officejet Pro 8000 a809")],
+      f"R2: eerst alleen wat bij merk en model past (een paar tellen, niet de hele lijst) ({opd}, {ml})")
+opd, _, ml = vang_cups(bi.modellen, "Canon iP4000 (x)+ series",
+                       antwoord=lambda c: (1, "") if c[0] == "lpinfo" else (0, ""))
+klopt(opd and opd[0][2] == "Canon iP4000 \\(x\\)\\+" and ml == [],
+      f"R2: merk en model zijn voor CUPS een reguliere expressie: tekens als ( en + letterlijk ({opd})")
+opd, _, uit = vang_cups(bi.printer_toevoegen_model, "usb://HP/x", "HP Officejet", "HP Officejet Pro 8000",
+                        "drv:///hp/hpcups.drv/hp-officejet_pro_8000_a809.ppd", antwoord=cups_antwoord())
+klopt(("lpadmin", "-p", "HP_Officejet", "-E", "-v", "usb://HP/x", "-m",
+       "drv:///hp/hpcups.drv/hp-officejet_pro_8000_a809.ppd", "-D", "HP Officejet Pro 8000") in opd and uit[0] == "ok",
+      "test 15: met een gekozen model: lpadmin -m <dat model>")
+opd, _, uit = vang_cups(bi.printer_toevoegen_model, "usb://HP/x", "HP Officejet", "HP Officejet",
+                        "drv:///hp/hpcups.drv/hp-officejet_pro_8000_a809.ppd", beheerder=False, antwoord=cups_antwoord())
+klopt([c[0] for c in opd].count("pkexec") == 1 and "ipptool" not in [c[0] for c in opd],
+      "test 15: zonder beheerder: één wachtwoordvenster (een usb-printer kun je niet eerst proberen)")
+
+
 # =========================================================================== 9. het venster ===
 
 lader = importlib.machinery.SourceFileLoader("instellingen", str(BIN / "bugos-settings"))
@@ -455,6 +708,126 @@ pp.instellingen(hp)
 klopt(pp.melding.tekst.text() == "Bewaard.", "instellingen: na bewaren zegt de pagina 'Bewaard.'")
 sm.PrinterInstellingen.exec = _echt_exec
 bi._VB.pop("printer_opties", None)
+
+# Printer toevoegen (test 27): de knop opent geen KDE meer maar het eigen venster.
+import bugos_settings_onderdelen as so  # noqa: E402
+
+klopt(pp.nieuw.text() == "Printer toevoegen" and pp.nieuw.parent().objectName() == "sectie_met_knop",
+      "toevoegen: 'Printer toevoegen' staat rechts naast het kopje (sectie_met_knop, layout D10)")
+bi._VB["printers"] = None
+bi._VB.pop("gevonden", None)
+dt = sm.PrinterToevoegen(pp, True)
+wacht()
+_rijen_t = dt.lijst.findChildren(mod.Rij)
+_per_titel = {r.titel.text(): r for r in _rijen_t}
+klopt(len(_rijen_t) == 3 and sum("software van de maker" in r.uitleg.text() for r in _rijen_t) == 1
+      and _per_titel["HP OfficeJet Pro 8010 series"].uitleg.text() == "Op je netwerk · Boven"
+      and _per_titel["Canon TS5300 series"].uitleg.text() == "Met een kabel aangesloten"
+      and _rijen_t[-1].titel.text() == "Brother HL-L2300D series"
+      and not dt.status.isVisibleTo(dt) and dt.uitleg.isVisibleTo(dt) and dt.opnieuw.isEnabled(),
+      f"toevoegen: drie gevonden printers, wie software van de maker nodig heeft onderaan "
+      f"({[(r.titel.text(), r.uitleg.text()) for r in _rijen_t]})")
+klopt(dt.vlak.maximumHeight() >= dt.lijst.sizeHint().height() and dt.kabel is None,
+      "toevoegen: drie printers staan er helemaal (geen schuifbalk); een beheerder ziet alle kabelprinters al")
+dt.toon_gevonden(bi.gevonden_printers() * 2)
+klopt(dt.lijst.sizeHint().height() > dt.vlak.maximumHeight() <= sm.px(4 * sm.PrinterToevoegen.RIJ)
+      and dt.vlak.maximumHeight() >= 3 * 60,
+      f"toevoegen: zes printers: drie en een half in beeld, de rest schuift (review R4) ({dt.vlak.maximumHeight()})")
+dt.toon_gevonden(bi.gevonden_printers())
+_per_titel["HP OfficeJet Pro 8010 series"].rechts.click()
+wacht()
+klopt(dt.result() == QDialog.DialogCode.Accepted and dt.toegevoegd == ("HP_OfficeJet_Pro_8010_A1B2C3",
+                                                                      "HP OfficeJet Pro 8010 series")
+      and "HP_OfficeJet_Pro_8010_A1B2C3" in [p.naam for p in bi.printers()],
+      f"toevoegen: 'Toevoegen' voegt hem toe onder de naam van CUPS en sluit het venster ({dt.toegevoegd})")
+# Een oude printer met een kabel: merk en model kiezen (KiesDialoog), eerst wat past.
+dt = sm.PrinterToevoegen(pp, True)
+wacht()
+_gekozen_lijsten: list = []
+
+
+def kies_exec(self, keuze=[None]):
+    _gekozen_lijsten.append([self.lijst.item(i).data(sm.Qt.ItemDataRole.UserRole) for i in range(self.lijst.count())])
+    self.gekozen = keuze[0] if keuze[0] is not None else self.gekozen
+    return QDialog.DialogCode.Accepted if keuze[0] else QDialog.DialogCode.Rejected
+
+
+so.KiesDialoog.exec = kies_exec
+_usb_rij = next(r for r in dt.lijst.findChildren(mod.Rij) if "software" in r.uitleg.text())
+kies_exec.__defaults__[0][0] = None
+_usb_rij.rechts.click()
+wacht()
+klopt(_gekozen_lijsten and _gekozen_lijsten[-1] == ["drv:///brlaser.drv/br2300d.ppd", "__alle__"]
+      and dt.status.isVisibleTo(dt) and "geen software" in dt.status.tekst.text() and dt.result() == 0
+      and dt.sluit.isEnabled(),
+      f"model: eerst wat bij 'Brother HL-L2300D' past, dan 'ander merk'; Annuleren = eerlijk 'geen software' "
+      f"({_gekozen_lijsten[-1:]}, {dt.status.tekst.text()[:40]!r})")
+kies_exec.__defaults__[0][0] = "drv:///brlaser.drv/br2300d.ppd"
+_usb_rij.rechts.click()
+wacht()
+klopt(dt.result() == QDialog.DialogCode.Accepted and dt.toegevoegd
+      and dt.toegevoegd[0] == "Brother_HL_L2300D_series",
+      f"model: kiezen en toevoegen ({dt.toegevoegd})")
+# Een adres typen: eerst een fout adres (de vraag zegt het), dan een goed.
+dt = sm.PrinterToevoegen(pp, False)
+wacht()
+klopt(dt.kabel is not None and "wachtwoord van een beheerder" in dt.uitleg.text(),
+      "toevoegen zonder beheerder: 'Printer met een kabel?' en vooraf: BugOS vraagt het wachtwoord van een beheerder")
+_teksten = ["x;reboot", "192.168.1.20"]
+_vragen: list = []
+
+
+def adres_exec(self):
+    _vragen.append(self.uitleg.text())
+    if self.veld is not None and _teksten:
+        self.veld.setText(_teksten.pop(0))
+    return QDialog.DialogCode.Accepted
+
+
+bugos_shell.VraagDialoog.exec = adres_exec
+dt.ander.click()
+wacht()
+bugos_shell.VraagDialoog.exec = nep_exec
+klopt(len(_vragen) == 2 and "geen printeradres" in _vragen[1] and dt.toegevoegd == ("Printer_192_168_1_20", "192.168.1.20"),
+      f"adres: 'x;reboot' is geen adres (de vraag zegt het), 192.168.1.20 wel ({dt.toegevoegd})")
+# Geen IPP Everywhere op dat adres: door naar merk en model met ipp://adres; antwoordt hij helemaal niet als IPP: poort 9100.
+_modellen_uri: list = []
+_echt_adres, _echt_model = bi.printer_toevoegen_adres, bi.printer_toevoegen_model
+for _soort, _uri in (("geen_driverless", "ipp://10.0.0.7/ipp/print"), ("geen_antwoord", "socket://10.0.0.7:9100")):
+    bi.printer_toevoegen_adres = lambda tekst, s=_soort: (s, "")
+    bi.printer_toevoegen_model = lambda uri, basis, naam, model: (_modellen_uri.append((uri, basis)), ("ok", "Q"))[1]
+    kies_exec.__defaults__[0][0] = "drv:///brlaser.drv/br2300d.ppd"
+    _teksten[:] = ["10.0.0.7"]
+    dt = sm.PrinterToevoegen(pp, True)
+    wacht()
+    bugos_shell.VraagDialoog.exec = adres_exec
+    dt.ander.click()
+    wacht()
+    bugos_shell.VraagDialoog.exec = nep_exec
+bi.printer_toevoegen_adres, bi.printer_toevoegen_model = _echt_adres, _echt_model
+klopt(_modellen_uri == [("ipp://10.0.0.7/ipp/print", "Printer_10_0_0_7"), ("socket://10.0.0.7:9100", "Printer_10_0_0_7")]
+      and "__alle__" not in _gekozen_lijsten[-1] and len(_gekozen_lijsten[-1]) >= 6,
+      f"adres: geen IPP Everywhere -> merk en model op ipp://; geen IPP -> poort 9100; zonder merk de hele lijst "
+      f"({_modellen_uri})")
+# Tijdens het toevoegen kun je het venster niet sluiten (het gebeurt toch).
+dt = sm.PrinterToevoegen(pp, True)
+wacht()
+dt.zet_bezig(True)
+dt.reject()
+klopt(dt.result() == 0 and not dt.sluit.isEnabled(), "toevoegen: tijdens het toevoegen gaat het venster niet dicht")
+dt.zet_bezig(False)
+dt.reject()
+# Na het toevoegen: de pagina zegt het, met 'Testpagina printen'.
+_echt_exec_t = sm.PrinterToevoegen.exec
+sm.PrinterToevoegen.exec = lambda self: (setattr(self, "toegevoegd", ("Q", "Kantoorprinter")), 1)[1]
+pp.toevoegen()
+sm.PrinterToevoegen.exec = _echt_exec_t
+wacht()
+klopt(pp.melding.tekst.text() == "Kantoorprinter is toegevoegd." and pp.melding.knop.text() == "Testpagina printen",
+      "toevoegen: 'Kantoorprinter is toegevoegd.' met de knop 'Testpagina printen'")
+bi._VB["printers"] = None
+bi._VB.pop("gevonden", None)
+klopt(not kde_open, f"nergens KDE geopend ({kde_open})")
 
 print(f"\n{fouten} fout(en).")
 sys.exit(1 if fouten else 0)

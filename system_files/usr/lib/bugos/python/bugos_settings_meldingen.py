@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import bugos_config as bi
-from bugos_ui import (TAAL, Banner, Chip, Groep, Knop, Rij, kde_instelling, label, leeg_groep, px, schermmaat, sectie,
-                      start, t, vraag_ja)
-from bugos_settings_onderdelen import Blad, Keuzes, meer_knop, menu_bij, op_achtergrond, schuifje
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDialog, QHBoxLayout, QLineEdit, QVBoxLayout, QWidget
+from bugos_ui import (TAAL, Banner, Chip, Groep, Knop, Rij, kde_instelling, label, leeg_groep, px, schermmaat,
+                      sectie_met_knop, start, t, vraag_ja, vraag_tekst)
+from bugos_settings_onderdelen import Blad, KiesDialoog, Keuzes, meer_knop, menu_bij, op_achtergrond, schuifje
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import QDialog, QFrame, QHBoxLayout, QLineEdit, QScrollArea, QVBoxLayout, QWidget
 
 
 # =============================================================== meldingen ===
@@ -309,6 +309,271 @@ class PrinterInstellingen(QDialog):
         super().reject()
 
 
+GEEN_SOFTWARE = ("BugOS heeft geen software voor deze printer. Printers van na ongeveer 2015 werken meestal zonder; "
+                 "deze heeft software van de maker nodig, en die kan BugOS nog niet installeren. Kijk op de website "
+                 "van de maker of de printer met Linux werkt, of vraag hulp op het BugOS-forum.",
+                 "BugOS has no software for this printer. Printers made after about 2015 usually work without it; this "
+                 "one needs software from its maker, and BugOS cannot install that yet. Look on the maker's website "
+                 "whether the printer works with Linux, or ask for help on the BugOS forum.")
+
+
+def plek_tekst(g: bi.Gevonden) -> str:
+    """De regel onder een gevonden printer: waar hij is, of hij software nodig heeft, en of hij er al is."""
+    if g.soort == "netwerk":
+        tekst = t("Op je netwerk", "On your network")
+    else:
+        tekst = t("Met een kabel aangesloten", "Plugged in with a cable")
+    if not g.driverless:
+        tekst += t(" · heeft software van de maker nodig", " · needs software from its maker")
+    if g.locatie:
+        tekst += " · " + g.locatie
+    if g.al_toegevoegd:
+        tekst += t(" · al toegevoegd", " · already added")
+    return tekst
+
+
+class PrinterToevoegen(QDialog):
+    """Printer toevoegen: BugOS zoekt printers op je wifi en met een kabel; 'Toevoegen' en hij is er. Kan hij niet
+    zonder software van de maker, dan kies je merk en model. Staat hij er niet bij: het adres typen.
+    Na afloop: self.toegevoegd = (wachtrij, naam) of None."""
+
+    RIJ = 62
+
+    def __init__(self, ouder: QWidget, beheerder: bool):
+        super().__init__(ouder)
+        self.beheerder = beheerder
+        self.bezig = False
+        self.toegevoegd: tuple[str, str] | None = None
+        self.adres = ""
+        lay = dialoog_opzet(self, t("Printer toevoegen", "Add a printer"))
+        lay.addWidget(label(t("Printer toevoegen", "Add a printer"), "kop2"))
+        uitleg = t("Zet de printer aan. Printers op je wifi, of met een kabel aan deze computer, verschijnen hier.",
+                   "Turn the printer on. Printers on your Wi-Fi, or plugged into this computer with a cable, show up here.")
+        if not beheerder:
+            uitleg += " " + t("Om een printer toe te voegen vraagt BugOS het wachtwoord van een beheerder.",
+                              "To add a printer, BugOS asks for an administrator's password.")
+        # De uitleg en een melding staan op dezelfde plek, nooit allebei: zo past het venster op 1280x800 bij 150 % (R4).
+        self.uitleg = label(uitleg, "klein")
+        lay.addWidget(self.uitleg)
+        self.status = Banner("", "bezig")
+        lay.addWidget(self.status)
+        self.lijst = Groep()
+        self.lijst.lay.setContentsMargins(4, 4, 4, 4)
+        self.vlak = QScrollArea()
+        self.vlak.setFrameShape(QFrame.Shape.NoFrame)
+        self.vlak.setWidgetResizable(True)
+        self.vlak.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.vlak.setWidget(self.lijst)
+        lay.addWidget(self.vlak)
+        anders = QHBoxLayout()
+        anders.setSpacing(8)
+        self.ander = Knop(t("Mijn printer staat er niet bij", "My printer is not in the list"), "stil", "lijn:zoek")
+        self.ander.setAutoDefault(False)
+        self.ander.clicked.connect(self.vraag_adres)
+        anders.addWidget(self.ander)
+        self.kabel: Knop | None = None
+        if not beheerder:   # oude printers met een kabel ziet alleen een beheerder (lpinfo, review R7)
+            self.kabel = Knop(t("Printer met een kabel?", "Printer with a cable?"), "stil", "lijn:printer")
+            self.kabel.setToolTip(t("Zoek met het wachtwoord van een beheerder", "Look with an administrator's password"))
+            self.kabel.setAutoDefault(False)
+            self.kabel.clicked.connect(lambda _c=False: self.zoek(met_kabel=True))
+            anders.addWidget(self.kabel)
+        anders.addStretch(1)
+        lay.addLayout(anders)
+        knoppen = QHBoxLayout()
+        knoppen.setSpacing(8)
+        self.opnieuw = Knop(t("Opnieuw zoeken", "Search again"), "stil", "lijn:verversen")
+        self.opnieuw.setAutoDefault(False)
+        self.opnieuw.clicked.connect(lambda _c=False: self.zoek())
+        knoppen.addWidget(self.opnieuw)
+        knoppen.addStretch(1)
+        self.sluit = Knop(t("Sluiten", "Close"), "gewoon")
+        self.sluit.clicked.connect(self.reject)
+        knoppen.addWidget(self.sluit)
+        lay.addLayout(knoppen)
+        self.zoek()
+
+    # ---------------------------------------------------------------- staat ---
+    def toon_status(self, tekst: str, soort: str = "bezig") -> None:
+        self.status.zet(tekst, soort)
+        self.uitleg.setVisible(not tekst)
+        self.pas_hoogte()
+        # Nieuwe regels in een zichtbaar venster laat Qt pas in de volgende ronde zien (en meet ze dan pas mee).
+        QTimer.singleShot(0, self.pas_hoogte)
+
+    def pas_hoogte(self) -> None:
+        """Hooguit drie printers in beeld (de rest schuift), en nooit hoger dan het scherm (review R4)."""
+        lay = self.layout()
+        m = lay.contentsMargins()
+        breed = max(self.width(), self.minimumWidth()) - m.left() - m.right()
+        rest, n = m.top() + m.bottom(), 0
+        for i in range(lay.count()):
+            it = lay.itemAt(i)
+            w = it.widget()
+            if w is self.vlak:
+                n += 1
+                continue
+            if w is not None and w.isHidden():
+                continue
+            n += 1
+            rest += it.heightForWidth(breed) if it.hasHeightForWidth() else it.sizeHint().height()
+        rest += lay.spacing() * max(0, n - 1)
+        vrij = schermmaat((0, 9999))[0][1]
+        inhoud = self.lijst.sizeHint().height()
+        # Uit de layout, niet findChildren: oude regels (leeg_groep) bestaan nog tot de volgende ronde van Qt.
+        rijen = [w for w in (self.lijst.lay.itemAt(i).widget() for i in range(self.lijst.lay.count()))
+                 if isinstance(w, Rij)]
+        lm = self.lijst.lay.contentsMargins()
+        per = (inhoud - lm.top() - lm.bottom()) / max(1, len(rijen))
+        drie = inhoud if len(rijen) <= 3 else int(lm.top() + 3.5 * per)   # de 4e half: dan zie je dat er meer is
+        self.vlak.setFixedHeight(max(px(self.RIJ), min(inhoud, drie, vrij - rest)))
+        self.adjustSize()
+
+    def zet_bezig(self, bezig: bool) -> None:
+        self.bezig = bezig
+        for k in (self.ander, self.kabel, self.opnieuw, self.sluit, *self.lijst.findChildren(Knop)):
+            if k is not None:
+                k.setEnabled(not bezig)
+
+    def reject(self) -> None:  # noqa: D102
+        if self.bezig:   # tijdens het toevoegen niet weg: het gebeurt toch
+            return
+        super().reject()
+
+    # ---------------------------------------------------------------- zoeken ---
+    def zoek(self, met_kabel: bool | None = None) -> None:
+        self.toon_status(t("Printers zoeken... dit duurt een paar tellen.", "Looking for printers... this takes a few seconds."))
+        self.vlak.hide()
+        self.opnieuw.setEnabled(False)
+        if self.kabel is not None:
+            self.kabel.setEnabled(False)
+        op_achtergrond(self, lambda: bi.gevonden_printers(met_kabel), self.toon_gevonden)
+
+    def toon_gevonden(self, gevonden) -> None:
+        leeg_groep(self.lijst)
+        for g in gevonden or []:
+            if g.al_toegevoegd:
+                rechts = Chip(t("Toegevoegd", "Added"), "goed")
+            else:
+                rechts = Knop(t("Toevoegen", "Add"), "gewoon")
+                rechts.clicked.connect(lambda _c=False, x=g: self.voeg_toe(x))
+            self.lijst.voeg(Rij("printer", g.naam, plek_tekst(g), rechts))
+        if not gevonden:
+            self.lijst.voeg(Rij("printer", t("Geen printer gevonden", "No printer found"),
+                                t("Staat de printer aan en zit hij op dezelfde wifi? Of zit de kabel erin? Zoek dan "
+                                  "opnieuw, of kies 'Mijn printer staat er niet bij'.",
+                                  "Is the printer on and on the same Wi-Fi? Or is the cable plugged in? Then search "
+                                  "again, or choose 'My printer is not in the list'.")))
+        self.opnieuw.setEnabled(True)
+        if self.kabel is not None:
+            self.kabel.setEnabled(True)
+        self.vlak.show()
+        self.toon_status("")
+
+    # ------------------------------------------------------------- toevoegen ---
+    def voeg_toe(self, g: bi.Gevonden) -> None:
+        if not g.driverless:   # een oude printer met een kabel, of een die geen IPP Everywhere kan
+            self.kies_model(g.uri, g.dienst or g.naam, g.naam, g.model_hint)
+            return
+        # Geen IPP Everywhere (Unable to create PPD): dezelfde ipp://-link werkt met software van de maker.
+        self.doe(lambda: bi.printer_toevoegen(g), g.naam,
+                 t("{naam} toevoegen... dit kan een halve minuut duren.",
+                   "Adding {naam}... this can take half a minute.").format(naam=g.naam),
+                 lambda _soort: self.kies_model(g.reserve_uri or g.uri, g.dienst or g.naam, g.naam, g.model_hint))
+
+    def doe(self, werk, naam: str, bezig_tekst: str, zonder=None) -> None:
+        """Toevoegen op de achtergrond. zonder(soort): wat er gebeurt als de printer software van de maker nodig heeft."""
+        self.zet_bezig(True)
+        self.toon_status(bezig_tekst)
+
+        def af(uitkomst) -> None:
+            self.zet_bezig(False)
+            soort, wachtrij = uitkomst if uitkomst else ("anders", "")
+            if soort == "ok":
+                self.toegevoegd = (wachtrij, naam)
+                self.accept()
+            elif soort in ("geen_driverless", "geen_antwoord") and zonder is not None:
+                zonder(soort)
+            else:
+                self.toon_status(fout_tekst(soort), "info" if soort == "geweigerd" else "fout")
+        op_achtergrond(self, werk, af)
+
+    def vraag_adres(self) -> None:
+        uitleg = t("Het adres staat op het schermpje van de printer, of op een pagina met zijn instellingen die hij kan "
+                   "printen (bijvoorbeeld 192.168.1.20).", "You find the address on the printer's screen, or on a page "
+                   "with its settings that it can print (for example 192.168.1.20).")
+        vraag = uitleg
+        while True:
+            tekst = vraag_tekst(self, t("Adres van de printer", "Printer address"), vraag, self.adres,
+                                t("Printer toevoegen", "Add printer"))
+            if tekst is None:
+                return
+            self.adres = tekst.strip()
+            if bi.adres_kandidaten(self.adres):
+                break
+            vraag = t("Dat lijkt geen printeradres. Het ziet eruit als 192.168.1.20 of printer.local.",
+                      "That does not look like a printer address. It looks like 192.168.1.20 or printer.local.")
+        adres = self.adres
+        basis, ipp_uri, socket_uri = bi.adres_vervolg(adres)
+
+        def zonder(soort: str) -> None:
+            if soort == "geen_antwoord":   # geen IPP: klassieke netwerkprinters luisteren op poort 9100
+                self.kies_model(socket_uri, basis, adres, "",
+                                t("De printer antwoordt niet op de gewone manier. Kies het merk en model.",
+                                  "The printer does not answer in the usual way. Choose its brand and model."))
+            else:
+                self.kies_model(ipp_uri, basis, adres, "")
+        self.doe(lambda: bi.printer_toevoegen_adres(adres), adres,
+                 t("Contact zoeken met de printer... dit kan een halve minuut duren.",
+                   "Contacting the printer... this can take half a minute."), zonder)
+
+    # ------------------------------------------------- software van de maker ---
+    def kies_model(self, uri: str, basis: str, naam: str, hint: str, eerst: str = "", alles: bool = False) -> None:
+        """Merk en model kiezen (hplip, gutenprint, brlaser ...). Eerst wat bij de printer past (een paar tellen), en
+        pas als je dat vraagt, of als niets past, de hele lijst (soms een minuut, review R2)."""
+        woorden = [] if alles else bi.model_woorden(hint)
+        alles = alles or not woorden
+        self.toon_status(eerst or (t("Alle printers opzoeken... dat duurt soms een minuut.",
+                                     "Looking up all printers... this sometimes takes a minute.") if alles else
+                                   t("Software voor deze printer opzoeken... dat duurt een paar tellen.",
+                                     "Looking up software for this printer... this takes a few seconds.")))
+        self.zet_bezig(True)
+
+        def gevonden(lijst) -> None:
+            self.zet_bezig(False)
+            if lijst is None:
+                self.toon_status(t("De lijst met printers kon niet geladen worden. Probeer het nog eens.",
+                                   "The list of printers could not be loaded. Try again."), "fout")
+                return
+            if not lijst and not alles:   # niets past bij merk en model: dan de hele lijst, al gefilterd
+                self.kies_model(uri, basis, naam, hint, alles=True)
+                return
+            if not lijst:
+                self.toon_status(t(*GEEN_SOFTWARE), "info")
+                return
+            items = list(lijst) if alles else \
+                list(lijst) + [("__alle__", t("Een ander merk of model...", "Another brand or model..."))]
+            d = KiesDialoog(self, t("Welk merk en model?", "Which brand and model?"), items, lijst[0][0],
+                            t("Typ merk en model, bijvoorbeeld LaserJet 1020", "Type brand and model, for example LaserJet 1020"))
+            if alles and hint and d.zoekveld is not None:
+                d.zoekveld.setText(" ".join(bi.model_woorden(hint)[:2]))
+            if d.exec() != QDialog.DialogCode.Accepted or not d.gekozen:
+                self.toon_status(t(*GEEN_SOFTWARE), "info")
+                return
+            if d.gekozen == "__alle__":
+                self.kies_model(uri, basis, naam, hint, alles=True)
+                return
+            model = d.gekozen
+            self.doe(lambda: bi.printer_toevoegen_model(uri, basis, naam, model), naam,
+                     t("{naam} toevoegen... dit kan een halve minuut duren.",
+                       "Adding {naam}... this can take half a minute.").format(naam=naam))
+        op_achtergrond(self, lambda: bi.modellen(" ".join(woorden)), gevonden)
+
+    def accept(self) -> None:  # noqa: D102
+        self.bezig = False
+        super().accept()
+
+
 class PrintersPagina(Blad):
     sleutel, icoon = "printers", "printer"
     titel_nl, titel_en = "Printers en scannen", "Printers and scanning"
@@ -319,12 +584,9 @@ class PrintersPagina(Blad):
     MAX_TAKEN = 5
 
     def bouw(self) -> None:
-        kop = QHBoxLayout()
-        kop.addWidget(sectie(t("Printers", "Printers")), 1)
-        nieuw = Knop(t("Printer toevoegen", "Add a printer"), "stil", "lijn:map-plus")
-        nieuw.clicked.connect(lambda _c=False: kde_instelling("kcm_printer_manager"))
-        kop.addWidget(nieuw)
-        self.lay.addLayout(kop)
+        self.nieuw = Knop(t("Printer toevoegen", "Add a printer"), "stil", "lijn:printer")
+        self.nieuw.clicked.connect(lambda _c=False: self.toevoegen())
+        self.lay.addWidget(sectie_met_knop(t("Printers", "Printers"), self.nieuw))
         self.lijst = self.kaart()
         self.wacht_kaart = self.kaart(t("Wachtrij", "Queue"))
         self.wacht_rij: Rij | None = None
@@ -419,6 +681,16 @@ class PrintersPagina(Blad):
                 lambda: bi.pauzeer_printer(p.naam), t("Even geduld...", "One moment..."), t("Gepauzeerd.", "Paused."))))
         items.append(("prullenbak", t("Printer verwijderen", "Remove printer"), lambda: self.verwijder(p)))
         return items
+
+    def toevoegen(self) -> None:
+        d = PrinterToevoegen(self, self.beheerder)
+        d.exec()
+        if d.toegevoegd:
+            wachtrij, naam = d.toegevoegd
+            self.melding.toon(t("{naam} is toegevoegd.", "{naam} has been added.").format(naam=naam), "goed",
+                              knop=t("Testpagina printen", "Print a test page"),
+                              actie=lambda: self.testpagina(wachtrij), seconden=12)
+        self.ververs()
 
     def instellingen(self, p: bi.Printer) -> None:
         d = PrinterInstellingen(self, p, self.beheerder)

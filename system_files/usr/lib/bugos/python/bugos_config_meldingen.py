@@ -13,6 +13,7 @@ import pwd
 import re
 import shutil
 import subprocess
+import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -676,6 +677,411 @@ def wachtrij_leegmaken() -> bool:
         if TAAK_RE.match(taak):
             goed = _c.draai("cancel", taak, timeout=8)[0] == 0 and goed
     return goed
+
+
+# ------------------------------------------------------------------------------ printer toevoegen ---
+# Printers op je wifi (en via ipp-usb die met een kabel) melden zich met DNS-SD; ippfind vindt ze. Bijna elke printer
+# van na ongeveer 2015 werkt zonder eigen software ('driverless', IPP Everywhere / AirPrint): lpadmin -m everywhere.
+
+URI_RE = re.compile(r"^(ipps?|socket|usb|dnssd)://[^\s'\"\\]+$")
+_HOST_RE = re.compile(r"^(?=.{1,253}$)[A-Za-z0-9]([A-Za-z0-9-]{0,62}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,62}[A-Za-z0-9])?)*\.?$")
+_PAD_RE = re.compile(r"^[A-Za-z0-9._~/%-]*$")
+_DRIVERLESS = ("image/pwg-raster", "image/urf", "application/pdf")
+_IPPFIND_VELDEN = ("{service_name}", "{service_scheme}", "{service_hostname}", "{service_port}", "{txt_rp}",
+                   "{txt_ty}", "{txt_note}", "{txt_UUID}", "{txt_pdl}")
+IPPTOOL_TEST = "/usr/share/cups/ipptool/get-printer-attributes.test"
+
+
+@dataclass
+class Gevonden:
+    naam: str            # wat je ziet: "HP OfficeJet Pro 8010 series"
+    dienst: str          # de DNS-SD-naam "HP OfficeJet Pro 8010 [A1B2C3]" ('' bij usb): daar komt de wachtrij-naam van
+    uri: str             # wat lpadmin -v krijgt
+    locatie: str         # de plek uit de printer zelf (TXT note), of ''
+    soort: str           # 'netwerk', 'kabel' (ipp-usb) of 'usb' (een oude printer met een kabel)
+    driverless: bool     # werkt zonder eigen software van de maker
+    al_toegevoegd: bool
+    model_hint: str      # merk en model, om de lijst met printersoftware alvast te filteren
+    reserve_uri: str = ""    # ipp:// als uri ipps:// is
+    proef_uri: str = ""      # ipps://host:poort/pad: om zonder wachtwoord te kijken of hij antwoordt (review R3)
+    reserve_proef: str = ""
+
+
+def _eigen_host() -> str:
+    import socket
+    return socket.gethostname().split(".")[0].lower()
+
+
+def lees_ippfind(uitvoer: str, eigen_host: str) -> list[Gevonden]:
+    """Uit: ippfind --exec printf '%s\\0' x 9. Elk veld eindigt op een NUL (die kan niet in een naam of TXT-waarde van
+    het netwerk staan, een tab of regeleinde wel: review R5). Printers met een ipp- én een ipps-ingang worden één."""
+    velden = uitvoer.split("\0")
+    per: dict[str, dict[str, list[str]]] = {}
+    volgorde: list[str] = []
+    for i in range(0, len(velden) - 8, 9):
+        dienst, schema, host, poort, rp, ty, notitie, uuid, pdl = velden[i:i + 9]
+        schema = schema.lstrip("=")          # ippfind schrijft '=ipp' en '=ipps'
+        host_l = host.lower().rstrip(".")
+        if schema not in ("ipp", "ipps") or not poort.isdigit() or not dienst.strip() or len(dienst) > 63:
+            continue
+        eigen = host_l in ("localhost", "127.0.0.1", "::1") or host_l in (eigen_host, eigen_host + ".local")
+        if eigen and int(poort) == 631:      # een printer die deze computer zelf deelt
+            continue
+        sleutel = uuid.strip().lower() or dienst
+        if sleutel not in per:
+            per[sleutel] = {}
+            volgorde.append(sleutel)
+        per[sleutel][schema] = [dienst, host, poort, rp, ty, notitie, pdl,
+                                "kabel" if eigen and 60000 <= int(poort) <= 65535 else "netwerk"]
+    uit: list[Gevonden] = []
+    for sleutel in volgorde:
+        ingangen = per[sleutel]
+        schema = "ipps" if "ipps" in ingangen else "ipp"
+        dienst, host, poort, rp, ty, notitie, pdl, soort = ingangen[schema]
+
+        def maak(sch: str) -> tuple[str, str]:
+            d, h, p, r = ingangen[sch][:4]
+            uri = f"{sch}://{urllib.parse.quote(d, safe='')}._{sch}._tcp.local/"
+            proef = f"{sch}://{h.rstrip('.')}:{p}/{r}" if _HOST_RE.match(h) and _PAD_RE.match(r) else ""
+            return uri, proef
+        uri, proef = maak(schema)
+        reserve, reserve_proef = maak("ipp") if schema == "ipps" and "ipp" in ingangen else ("", "")
+        naam = schone_tekst(ty) or schone_tekst(re.sub(r"\s*\[[0-9A-Fa-f]{4,}\]$", "", dienst)) or t("Printer", "Printer")
+        uit.append(Gevonden(naam, dienst, uri, schone_tekst(notitie), soort,
+                            any(x in pdl for x in _DRIVERLESS), False, schone_tekst(ty, 60), reserve, proef,
+                            reserve_proef))
+    return uit
+
+
+def lees_lpinfo_usb(uitvoer: str) -> list[Gevonden]:
+    """Uit: lpinfo -l --include-schemes usb -v. Blokken 'Device: uri = usb://...' met 'info =' en 'make-and-model ='."""
+    uit: list[Gevonden] = []
+    huidig: dict[str, str] | None = None
+
+    def klaar() -> None:
+        if huidig and URI_RE.match(huidig.get("uri", "")) and huidig["uri"].startswith("usb://"):
+            mm = schone_tekst(huidig.get("make-and-model", ""))
+            naam = schone_tekst(huidig.get("info", "")) or mm or t("Printer met een kabel", "Printer with a cable")
+            uit.append(Gevonden(naam, "", huidig["uri"], "", "usb", False, False, mm if mm.lower() != "unknown" else naam))
+    for regel in uitvoer.splitlines():
+        m = re.match(r"^Device:\s*uri\s*=\s*(\S+)\s*$", regel)
+        if m:
+            klaar()
+            huidig = {"uri": m.group(1)}
+            continue
+        m = re.match(r"^\s+([a-z-]+)\s*=\s*(.*)$", regel)
+        if m and huidig is not None:
+            huidig[m.group(1)] = m.group(2)
+    klaar()
+    return uit
+
+
+def lees_lpstat_v(uitvoer: str) -> dict[str, str]:
+    """Uit: lpstat -v -> {wachtrij: apparaat-uri}."""
+    uit = {}
+    for regel in uitvoer.splitlines():
+        m = re.match(r"^device for (\S+):\s*(\S+)", regel)
+        if m:
+            uit[m.group(1)] = m.group(2)
+    return uit
+
+
+def lees_lpstat_e(uitvoer: str) -> set[str]:
+    """Uit: lpstat -l -e -> de namen van de echte (blijvende) wachtrijen. 'network' is een printer die CUPS alleen op
+    het netwerk ziet, 'temporary' een tijdelijke wachtrij die CUPS zelf maakt om er één keer op te printen: die
+    namen zijn niet 'bezet' (review R1)."""
+    return {d[0] for d in (r.split() for r in uitvoer.splitlines()) if len(d) >= 2 and d[1] == "permanent"}
+
+
+def _blijvende_wachtrijen() -> set[str]:
+    return lees_lpstat_e(_c.draai("lpstat", "-l", "-e", timeout=8)[1])
+
+
+def al_toegevoegd(g: Gevonden, apparaten: dict[str, str]) -> bool:
+    for uri in apparaten.values():
+        los = urllib.parse.unquote(uri)
+        if uri == g.uri or (g.reserve_uri and uri == g.reserve_uri):
+            return True
+        if g.dienst and (g.dienst + "._ipp" in los):    # ook ._ipps
+            return True
+        if g.soort == "usb" and uri.split("?")[0] == g.uri.split("?")[0]:
+            return True
+    return False
+
+
+def _vb_gevonden() -> list[Gevonden]:
+    return _c._VB.setdefault("gevonden", [
+        Gevonden("HP OfficeJet Pro 8010 series", "HP OfficeJet Pro 8010 [A1B2C3]",
+                 "ipps://HP%20OfficeJet%20Pro%208010%20%5BA1B2C3%5D._ipps._tcp.local/", t("Boven", "Upstairs"),
+                 "netwerk", True, False, "HP OfficeJet Pro 8010 series",
+                 "ipp://HP%20OfficeJet%20Pro%208010%20%5BA1B2C3%5D._ipp._tcp.local/"),
+        Gevonden("Canon TS5300 series", "Canon TS5300 series", "ipp://Canon%20TS5300%20series._ipp._tcp.local/", "",
+                 "kabel", True, False, "Canon TS5300 series"),
+        # Een oude laserprinter met alleen een kabel: werkt met brlaser (de HP LaserJet 1020 uit de spec kan nooit:
+        # die heeft de 'proprietary plugin' van HP nodig, review R2).
+        Gevonden("Brother HL-L2300D series", "", "usb://Brother/HL-L2300D%20series?serial=E00000A0", "", "usb", False,
+                 False, "Brother HL-L2300D series"),
+    ])
+
+
+def gevonden_printers(met_kabel: bool | None = None) -> list[Gevonden]:
+    """Printers die BugOS kan toevoegen: op je netwerk, met een kabel (ipp-usb), en voor een beheerder ook oude
+    printers met een kabel (lpinfo mag alleen een beheerder). met_kabel=True: ook zonder beheerder, met het
+    wachtwoord van een beheerder (één keer pkexec lpinfo, review R7)."""
+    if _c.VOORBEELD:
+        lijst = [Gevonden(**vars(g)) for g in _vb_gevonden()]
+        namen = {p.naam for p in printers()}
+        for g in lijst:
+            g.al_toegevoegd = wachtrij_naam(g.dienst or g.naam, set()) in namen
+    else:
+        cmd = ["ippfind", "-T", "5", "_ipp._tcp", "_ipps._tcp", "--exec", "/usr/bin/printf",
+               "%s\\0" * len(_IPPFIND_VELDEN), *_IPPFIND_VELDEN, ";"]
+        lijst = lees_ippfind(_c.cups_draai(*cmd, timeout=15, fout=False)[1], _eigen_host())
+        if met_kabel or (met_kabel is None and _c.ben_beheerder()):
+            if _c.ben_beheerder():
+                uit = _c.cups_draai("lpinfo", "-l", "--include-schemes", "usb", "-v", timeout=25, fout=False)[1]
+            else:
+                soort, uit = _c.als_beheerder("lpinfo", "-l", "--include-schemes", "usb", "-v", timeout=25)
+                if soort != "ok":
+                    uit = ""
+            lijst += lees_lpinfo_usb(uit)
+        apparaten = lees_lpstat_v(_c.draai("lpstat", "-v", timeout=8)[1])
+        blijvend = _blijvende_wachtrijen()
+        apparaten = {q: u for q, u in apparaten.items() if q in blijvend or not blijvend}
+        for g in lijst:
+            g.al_toegevoegd = al_toegevoegd(g, apparaten)
+    return sorted(lijst, key=lambda g: (g.al_toegevoegd, not g.driverless, g.naam.lower()))
+
+
+def wachtrij_naam(tekst: str, bezet: set[str]) -> str:
+    """De naam van de wachtrij, precies zoals CUPS hem zelf maakt van de DNS-SD-naam (cups_queue_name in dest.c:
+    alleen letters en cijfers, de rest één '_', geen '_' aan het eind). Dan staat de printer in een printvenster maar
+    één keer, en niet ook nog eens als tijdelijke printer van CUPS (review R1). Bezet: _2, _3 ..."""
+    naam = ""
+    for c in tekst:
+        if c.isascii() and c.isalnum():
+            naam += c
+        elif not naam or naam[-1] != "_":
+            naam += "_"
+    if len(naam) > 1 and naam.endswith("_"):
+        naam = naam[:-1]
+    naam = naam[:100]
+    if not naam.strip("_"):
+        naam = "Printer"
+    if not NAAM_RE.match(naam):
+        naam = "Printer_" + naam
+    laag = {b.lower() for b in bezet}
+    basis, n = naam, 2
+    while naam.lower() in laag:
+        naam, n = f"{basis}_{n}", n + 1
+    return naam
+
+
+def antwoordt(uri: str) -> str:
+    """Kijk zonder wachtwoord of de printer op dit adres antwoordt (ipptool, als jezelf). 'ok', 'onbereikbaar' of
+    'anders' (hij antwoordt, maar niet als een gewone printer)."""
+    code, uit = _c.cups_draai("ipptool", "-T", "10", uri, IPPTOOL_TEST, timeout=20)
+    if code == 0:
+        return "ok"
+    soort = cups_fout(code, uit)
+    return "onbereikbaar" if soort in ("onbereikbaar", "bestaat_niet") or code == 127 else "anders"
+
+
+def _voeg_toe(basis: str, paren: list[tuple[str, str]], model: str, omschrijving: str, locatie: str) -> tuple[str, str]:
+    """Voeg een wachtrij toe. paren: [(uri, proef-uri)], de beste eerst. Een beheerder probeert ze om de beurt
+    (zonder wachtwoord). Wie geen beheerder is, krijgt maar één wachtwoordvenster: eerst zonder wachtwoord kijken
+    welk adres antwoordt (ipptool), dan één keer pkexec lpadmin (review R3)."""
+    paren = [(u, p) for u, p in paren if URI_RE.match(u)]
+    omschrijving = schone_tekst(omschrijving) or t("Printer", "Printer")
+    locatie = schone_tekst(locatie)
+    if not paren or (model != "everywhere" and model not in _MODELLEN):
+        return "anders", ""
+    naam = wachtrij_naam(basis, _blijvende_wachtrijen())
+    if not _c.ben_beheerder():
+        proeven = [(u, p) for u, p in paren if p]
+        if proeven:
+            gekozen, laatste = None, "onbereikbaar"
+            for uri, proef in proeven:
+                laatste = _c.antwoordt(proef)
+                if laatste == "ok":
+                    gekozen = uri
+                    break
+                if laatste == "onbereikbaar" and len(proeven) > 1 and adres_host(proef) == adres_host(proeven[-1][1]):
+                    break   # hetzelfde adres: een tweede poging duurt weer een halve minuut
+            if gekozen is None:
+                return laatste, ""
+            paren = [(gekozen, "")]
+        else:
+            paren = paren[:1]
+    soort = "anders"
+    for i, (uri, _proef) in enumerate(paren):
+        soort, uit = _c.als_beheerder("lpadmin", "-p", naam, "-E", "-v", uri, "-m", model, "-D", omschrijving,
+                                      *(("-L", locatie) if locatie else ()), timeout=45)
+        if soort == "onbereikbaar" and not uit and naam in _blijvende_wachtrijen():
+            soort = "ok"   # de tijd was om, maar lpadmin (als root) maakte hem toch (review R12)
+        if soort not in ("onbereikbaar", "anders"):
+            break
+        volgende = paren[i + 1][0] if i + 1 < len(paren) else ""
+        if soort == "onbereikbaar" and volgende and adres_host(volgende) == adres_host(uri):
+            break   # hetzelfde adres (ipp en ipps op 192.168.1.20): niet nog een halve minuut wachten
+    if soort != "ok":
+        return soort, ""
+    if "no system default" in _c.draai("lpstat", "-d", timeout=8)[1]:
+        # De eerste printer wordt de standaard: voor iedereen als een beheerder hem toevoegt (review R20).
+        if not _c.ben_beheerder() or _c.als_beheerder("lpadmin", "-d", naam, timeout=15)[0] != "ok":
+            zet_standaard_printer(naam)
+    return "ok", naam
+
+
+def _vb_voeg_toe(basis: str, omschrijving: str, locatie: str) -> tuple[str, str]:
+    naam = wachtrij_naam(basis, {p.naam for p in printers()})
+    printers().append(Printer(naam, schone_tekst(omschrijving), "klaar", not printers(), locatie=schone_tekst(locatie)))
+    return "ok", naam
+
+
+def printer_toevoegen(g: Gevonden) -> tuple[str, str]:
+    """Een gevonden printer toevoegen, zonder eigen software (IPP Everywhere). ('ok', wachtrij) of (foutsoort, '');
+    'geen_driverless': hij heeft software van de maker nodig (dan kies je merk en model)."""
+    if _c.VOORBEELD:
+        return _vb_voeg_toe(g.dienst or g.naam, g.naam, g.locatie)
+    paren = [(g.uri, g.proef_uri)] + ([(g.reserve_uri, g.reserve_proef)] if g.reserve_uri else [])
+    return _voeg_toe(g.dienst or g.naam, paren, "everywhere", g.naam, g.locatie)
+
+
+def adres_kandidaten(tekst: str) -> list[str]:
+    """Wat je typt (192.168.1.20, printer.local, [fe80::1] of een hele ipp://-link) -> de adressen om te proberen."""
+    tekst = tekst.strip()
+    if re.match(r"^(ipps?)://[A-Za-z0-9.\-\[\]:]+(:\d{1,5})?(/[A-Za-z0-9._~/%-]*)?$", tekst):
+        return [tekst]
+    delen = tekst.split(".")
+    ipv4 = len(delen) == 4 and all(d.isdigit() and len(d) <= 3 and int(d) <= 255 for d in delen)
+    ipv6 = bool(re.match(r"^\[[0-9A-Fa-f:]{2,39}\]$", tekst)) and tekst.count(":") >= 2
+    naam = bool(_HOST_RE.match(tekst)) and not tekst.endswith(".") and not all(d.isdigit() for d in delen)
+    if ipv4 or ipv6 or naam:
+        return [f"ipp://{tekst}/ipp/print", f"ipps://{tekst}/ipp/print"]
+    return []
+
+
+def adres_host(uri: str) -> str:
+    """Het stuk tussen // en het pad: '192.168.1.20', '[fe80::1]' of 'printer.local:631'."""
+    return uri.split("://", 1)[-1].split("/", 1)[0]
+
+
+def adres_vervolg(tekst: str) -> tuple[str, str, str]:
+    """Voor een getypt adres: (basis van de wachtrij-naam, ipp://host/ipp/print, socket://host:9100). De laatste twee
+    zijn voor software van de maker: een IPP-printer zonder IPP Everywhere, of een die alleen poort 9100 kent."""
+    kandidaten = adres_kandidaten(tekst)
+    host = adres_host(kandidaten[0]) if kandidaten else ""
+    kaal = host[:host.index("]") + 1] if host.startswith("[") and "]" in host else host.split(":")[0]
+    return wachtrij_naam("Printer_" + kaal.strip("[]"), set()), f"ipp://{host}/ipp/print", f"socket://{kaal}:9100"
+
+
+def printer_toevoegen_adres(tekst: str) -> tuple[str, str]:
+    """Een printer op een adres dat je typt. ('ok', wachtrij), of een foutsoort ('geen_driverless': kies merk en model;
+    'geen_antwoord': hij antwoordt niet als een gewone printer, probeer het met software van de maker)."""
+    kandidaten = adres_kandidaten(tekst)
+    if not kandidaten:
+        return "geen_adres", ""
+    basis = adres_vervolg(tekst)[0]
+    if _c.VOORBEELD:
+        return _vb_voeg_toe(basis, tekst.strip(), "")
+    soort, naam = _voeg_toe(basis, [(u, u) for u in kandidaten], "everywhere", tekst.strip(), "")
+    return ("geen_antwoord" if soort == "anders" else soort), naam
+
+
+# Printersoftware van de maker (hplip, gutenprint, brlaser, splix): alleen voor printers die niet zonder kunnen.
+_MODELLEN: dict[str, str] = {}   # wat lpinfo -m deze keer gaf: alleen die mag lpadmin -m krijgen (geen eigen bestanden)
+_GEEN_MODEL = ("everywhere", "raw")
+
+
+def _model_sleutel(tekst: str) -> str:
+    """'HP LaserJet 1020, hpcups 3.26.6' en 'HP LaserJet 1020 hpijs, 3.26.6' -> 'hp laserjet 1020'."""
+    kort = re.split(r",| - |\s+using\s+", tekst, maxsplit=1)[0]
+    kort = re.sub(r"\s+(hpijs|pcl3|Foomatic.*|CUPS\+Gutenprint.*)$", "", kort, flags=re.I)
+    return " ".join(kort.lower().split())
+
+
+def _model_voorkeur(uri: str, tekst: str) -> int:
+    if uri.startswith("drv:///hp/hpcups") or "simplified" in tekst.lower():
+        return 0
+    if "hpijs" in uri or "hpijs" in tekst.lower():
+        return 2
+    if uri.startswith("lsb/"):
+        return 3
+    return 1
+
+
+def lees_lpinfo_m(uitvoer: str) -> list[tuple[str, str]]:
+    """Uit: lpinfo -m -> [(model-uri, merk en model)], elk model één keer, met de beste software. Weg: wat zonder
+    software werkt (everywhere, driverless), en wat 'requires proprietary plugin' zegt: dat kan BugOS niet
+    installeren, die printer zou nooit printen (review R2)."""
+    beste: dict[str, tuple[int, str, str]] = {}
+    for regel in uitvoer.splitlines():
+        uri, _, tekst = regel.strip().partition(" ")
+        tekst = schone_tekst(tekst, 200)
+        if not uri or not tekst or uri in _GEEN_MODEL or uri.startswith("driverless:") or "pwgrast.ppd" in uri:
+            continue
+        if "requires proprietary plugin" in tekst.lower() or not re.match(r"^[A-Za-z0-9:/._+%=-]+$", uri):
+            continue
+        sleutel = _model_sleutel(tekst)
+        kandidaat = (_model_voorkeur(uri, tekst), uri, re.split(r",| - |\s+using\s+", tekst, maxsplit=1)[0].strip())
+        if sleutel and (sleutel not in beste or kandidaat < beste[sleutel]):
+            beste[sleutel] = kandidaat
+    return sorted(((uri, naam) for _v, uri, naam in beste.values()), key=lambda x: x[1].lower())
+
+
+def model_woorden(hint: str) -> list[str]:
+    """'HP OfficeJet Pro 8010 series' -> ['HP', 'OfficeJet', 'Pro', '8010'] (CUPS zet 'series' er zelden bij)."""
+    return [w for w in schone_tekst(hint, 80).split() if w.lower() != "series"][:4]
+
+
+def _regex_letterlijk(tekst: str) -> str:
+    """cups-driverd leest --make-and-model als een reguliere expressie: tekens als + en ( letterlijk maken."""
+    return "".join("\\" + c if c in ".[]()*+?{}|^$\\" else c for c in tekst)
+
+
+def modellen(hint: str = "") -> list[tuple[str, str]] | None:
+    """De printersoftware in BugOS voor dit merk en model (hint, een paar tellen), of voor alles (hint '', soms een
+    minuut: 10 000 regels). None als CUPS de lijst niet gaf."""
+    woorden = model_woorden(hint)
+    if _c.VOORBEELD:
+        hint = " ".join(woorden)
+        lijst = _c._VB.setdefault("modellen", [
+            ("drv:///hp/hpcups.drv/hp-laserjet_p1505.ppd", "HP LaserJet P1505"),
+            ("drv:///hp/hpcups.drv/hp-deskjet_2130_series.ppd", "HP DeskJet 2130 Series"),
+            ("drv:///brlaser.drv/br2300d.ppd", "Brother HL-L2300D series"),
+            ("gutenprint.5.3://escp2-r220/expert", "Epson Stylus Photo R220"),
+            ("drv:///splix-samsung.drv/ml1640.ppd", "Samsung ML-1640"),
+            ("gutenprint.5.3://bjc-PIXMA-iP4000/expert", "Canon PIXMA iP4000")])
+        lijst = [m for m in lijst if not hint or all(w.lower() in m[1].lower() for w in hint.split())]
+        lijst = [m for m in lijst if not hint or any(all(w.lower() in m[1].lower() for w in p)
+                                                    for p in (woorden, woorden[:2]))]
+    elif woorden:
+        lijst = []
+        for proef in ([woorden, woorden[:2]] if len(woorden) > 2 else [woorden]):
+            code, uit = _c.cups_draai("lpinfo", "--make-and-model", _regex_letterlijk(" ".join(proef)), "-m",
+                                      timeout=40, fout=False)
+            if code not in (0, 1) and not uit.strip():
+                return None
+            lijst = [m for m in lees_lpinfo_m(uit) if all(w.lower() in m[1].lower() for w in proef)]
+            if lijst:
+                break
+    else:
+        code, uit = _c.cups_draai("lpinfo", "-m", timeout=120, fout=False)
+        if code != 0 and not uit.strip():
+            return None
+        lijst = lees_lpinfo_m(uit)
+    _MODELLEN.update(lijst)
+    return lijst
+
+
+def printer_toevoegen_model(uri: str, basis: str, omschrijving: str, model: str) -> tuple[str, str]:
+    """Een printer met software van de maker: model moet uit modellen() komen (nooit een eigen bestand)."""
+    if model not in _MODELLEN or not URI_RE.match(uri):
+        return "anders", ""
+    if _c.VOORBEELD:
+        return _vb_voeg_toe(basis, omschrijving, "")
+    return _voeg_toe(basis, [(uri, "")], model, omschrijving, "")
 
 
 def scanprogramma() -> str | None:
