@@ -95,30 +95,48 @@ class SchermPagina(Blad):
                     t("Tekst, knoppen en vensters", "Text, buttons and windows"), self.grootte))
 
     def ververs(self) -> None:
-        op_achtergrond(self, lambda: (bi.helderheid(), bi.nachtlicht(), bi.schaal()), self.toon)
+        def lees():
+            schermen = bi.beeldschermen()   # één keer kscreen-doctor (de grootte staat erin)
+            hoofd = next((s for s in schermen or [] if s.hoofd), None)
+            return bi.helderheid(), bi.nachtlicht(), hoofd.schaal if hoofd else bi.schaal(), schermen
+        op_achtergrond(self, lees, self.toon)
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:
             return
-        helder, nacht, schaal = uitkomst
+        helder, nacht, schaal, *rest = uitkomst
+        # Zonder schermen (oude vorm, of kscreen-doctor werkt niet): de grens van Qt, zoals vroeger (U397).
+        self._schermen = rest[0] if rest else None
         self._schaal = schaal   # onthouden: bij een klik niet opnieuw kscreen-doctor vragen (dat houdt het venster op) (U407)
         self.helder_rij.setVisible(helder is not None)
         if helder is not None:
             self.helder.zet(helder)
         self.nacht.zet_stil(nacht)
-        self.grootte.zet(min((1.0, 1.25, 1.5, 1.75, 2.0), key=lambda w: abs(w - schaal)))
+        self.grootte.zet(min(bi.SCHALEN, key=lambda w: abs(w - schaal)))
         # Op een klein scherm (1366×768) is 200% maar 683×384: dan past niets meer, ook de knop terug niet. Alleen
         # groottes aanbieden waarbij minstens 1024×700 overblijft (de huidige blijft altijd te kiezen) (U397).
+        grens = self.grens()
         for waarde, knop in self.grootte.knoppen.items():
-            knop.setEnabled(waarde <= max(groot_genoeg(), schaal + 0.01))
+            knop.setEnabled(waarde <= max(grens, schaal + 0.01))
+
+    def grens(self) -> float:
+        """De grootste grootte voor het gekozen scherm: uit de echte beeldpunten als we die weten (P2)."""
+        s = self.gekozen_scherm()
+        return bi.grootste_schaal(s) if s is not None else groot_genoeg()
+
+    def gekozen_scherm(self):
+        schermen = getattr(self, "_schermen", None)
+        if not schermen:
+            return None
+        return next((s for s in schermen if s.hoofd), schermen[0])
 
     def zet_grootte(self, waarde: float) -> None:
-        if waarde > max(groot_genoeg(), getattr(self, "_schaal", 1.0) + 0.01):   # (U397, U407)
+        if waarde > max(self.grens(), getattr(self, "_schaal", 1.0) + 0.01):   # (U397, U407)
             self.melding.toon(t("Dat is te groot voor dit scherm: dan past niets meer.",
                                 "That is too big for this screen: nothing would fit any more."), "let_op")
             self.ververs()
             return
-        self.melding.toon(t(f"Grootte {waarde:.0%} wordt ingesteld…", f"Setting size to {waarde:.0%}…"))
+        self.melding.toon(t("Grootte {p} wordt ingesteld…", "Setting size to {p}…").format(p=f"{waarde:.0%}"))
         op_achtergrond(self, lambda: bi.zet_schaal(waarde), lambda ok: (setattr(self, "_schaal", waarde) if ok else self.ververs(), self.melding.toon(
             t("Klaar. Sommige programma's worden pas groter als je ze opnieuw opent.",
               "Done. Some programs only change after you open them again.") if ok else
