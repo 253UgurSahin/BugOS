@@ -110,19 +110,25 @@ def app_mappen() -> list[Path]:
     return uit
 
 
-# Programma's die een gewone naam krijgen in het startmenu (Flatpaks kun je bij het bouwen niet aanpassen).
-# De oude naam blijft vindbaar met zoeken.
+# Programma's die een gewone naam krijgen in het startmenu (Flatpaks kun je bij het bouwen niet aanpassen), met
+# een uitleg in gewone woorden eronder. De oude naam blijft vindbaar met zoeken.
 EIGEN_NAMEN = {
-    "org.kde.gwenview.desktop": ("Foto's", "Photos"),
-    "org.kde.okular.desktop": ("Documenten bekijken", "Document viewer"),
-    "org.kde.spectacle.desktop": ("Schermafbeelding", "Screenshot"),
-    "org.kde.konsole.desktop": ("Terminal", "Terminal"),
-    "org.kde.kate.desktop": ("Teksteditor", "Text editor"),
-    "org.kde.kcalc.desktop": ("Rekenmachine", "Calculator"),
-    "org.kde.ark.desktop": ("Uitpakken", "Archives"),
-    "org.kde.elisa.desktop": ("Muziek", "Music"),
-    "org.kde.haruna.desktop": ("Video's", "Videos"),
-    "org.kde.filelight.desktop": ("Wat neemt ruimte in", "What uses space"),
+    "org.kde.gwenview.desktop": ("Foto's", "Photos", "Je foto's bekijken", "Look at your photos"),
+    "org.kde.okular.desktop": ("Documenten bekijken", "Document viewer", "PDF's en andere documenten lezen",
+                               "Read PDFs and other documents"),
+    "org.kde.spectacle.desktop": ("Schermafbeelding", "Screenshot", "Een foto van je scherm maken",
+                                  "Take a picture of your screen"),
+    "org.kde.konsole.desktop": ("Terminal", "Terminal", "Opdrachten typen (voor gevorderden)",
+                                "Type commands (for advanced users)"),
+    "org.kde.kate.desktop": ("Teksteditor", "Text editor", "Platte tekst en code schrijven", "Write plain text and code"),
+    "org.kde.kcalc.desktop": ("Rekenmachine", "Calculator", "Rekenen", "Do sums"),
+    "org.kde.ark.desktop": ("Uitpakken", "Archives", "Zip-bestanden openen en maken", "Open and make zip files"),
+    "org.kde.elisa.desktop": ("Muziek", "Music", "Je muziek afspelen", "Play your music"),
+    "org.kde.haruna.desktop": ("Video's", "Videos", "Video's afspelen", "Play videos"),
+    "org.kde.filelight.desktop": ("Wat neemt ruimte in", "What uses space", "Zien welke mappen het grootst zijn",
+                                  "See which folders are the biggest"),
+    "org.kde.kcharselect.desktop": ("Speciale tekens", "Special characters", "Tekens als é, ß of ©",
+                                    "Characters like é, ß or ©"),
 }
 
 
@@ -153,15 +159,20 @@ def lees_desktop(pad: Path) -> dict | None:
     if not naam:
         return None
     oude_naam = ""
+    uitleg = lokaal("GenericName") or lokaal("Comment")
+    # Geen uitleg die alleen de naam herhaalt ("Terminal / Terminal", "Document Viewer").
+    if uitleg.strip().lower() == naam.strip().lower():
+        uitleg = lokaal("Comment") if lokaal("Comment").strip().lower() != naam.strip().lower() else ""
     if pad.name in EIGEN_NAMEN:
-        oude_naam, naam = naam, t(*EIGEN_NAMEN[pad.name])
+        nl, en, unl, uen = EIGEN_NAMEN[pad.name]
+        oude_naam, naam, uitleg = naam, t(nl, en), t(unl, uen)
     cats = [c for c in d.get("Categories", "").split(";") if c]
     groep = next((t(nl, en) for c, nl, en in CATEGORIE if c in cats), t("Overig", "Other"))
     return {
         "id": pad.name,
         "pad": str(pad),
         "naam": naam,
-        "uitleg": lokaal("GenericName") or lokaal("Comment"),
+        "uitleg": uitleg,
         "icoon": d.get("Icon", "application-x-executable"),
         "groep": groep,
         "zoek": zoeksleutel(" ".join([naam, oude_naam, lokaal("GenericName"), lokaal("Comment"), lokaal("Keywords"), d.get("Keywords", "")])),

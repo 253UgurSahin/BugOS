@@ -284,6 +284,9 @@ class Meter:
 
     def __init__(self):
         self.vorige: dict | None = None
+        # De getallen van de laatste echte meting (voor een meting die te kort na de vorige komt).
+        self.procent: dict[int, float] = {}
+        self.snelheid = {"processor": 0.0, "schijf": 0.0, "schijf_bezig": 0.0, "binnen": 0.0, "buiten": 0.0}
 
     def meet(self) -> dict:
         nu = time.monotonic()
@@ -297,18 +300,34 @@ class Meter:
         v = self.vorige or gezien
         dt = max(nu - v["tijd"], 1e-6)
         d_totaal = max(totaal - v["totaal"], 1)
-        proc_procent = {p.pid: max(p.tijd - v["proc"].get(p.pid, p.tijd), 0) / d_totaal * 100 for p in lijst}
+        # Twee metingen vlak na elkaar (het venster komt net in beeld, en meet dan meteen opnieuw): dan zijn er te
+        # weinig tikjes om eerlijk te delen, en kwam er bijvoorbeeld '300%' uit voor Taakbeheer zelf. Dan houden we
+        # de getallen van de vorige meting, en meten we de volgende keer verder vanaf de oude (langere) basis.
+        te_kort = self.vorige is not None and d_totaal < 10 * aantal_kernen()
+        if te_kort:
+            proc_procent = {p.pid: self.procent.get(p.pid, 0.0) for p in lijst}
+            snel = dict(self.snelheid)
+        else:
+            # Nooit meer dan de hele computer (100%), en nooit minder dan niets.
+            proc_procent = {p.pid: min(max(p.tijd - v["proc"].get(p.pid, p.tijd), 0) / d_totaal * 100, 100.0)
+                            for p in lijst}
+            snel = {
+                "processor": min(max((bezig - v["bezig"]) / d_totaal * 100, 0.0), 100.0) if self.vorige else 0.0,
+                "schijf": max(((lezen - v["lezen"]) + (schrijven - v["schrijven"])) / dt, 0.0),
+                "schijf_bezig": min(max((schijf_ms - v["schijf_ms"]) / (dt * 1000) * 100, 0.0), 100.0)
+                if self.vorige else 0.0,
+                "binnen": max((binnen - v["binnen"]) / dt, 0.0), "buiten": max((buiten - v["buiten"]) / dt, 0.0),
+            }
         mem_totaal, mem_vrij = geheugen()
         uitslag = {
-            "processor": (bezig - v["bezig"]) / d_totaal * 100 if self.vorige else 0.0,
+            **snel,
             "geheugen_totaal": mem_totaal, "geheugen_gebruikt": max(mem_totaal - mem_vrij, 0),
-            "schijf": ((lezen - v["lezen"]) + (schrijven - v["schrijven"])) / dt,
-            "schijf_bezig": min((schijf_ms - v["schijf_ms"]) / (dt * 1000) * 100, 100) if self.vorige else 0.0,
-            "binnen": (binnen - v["binnen"]) / dt, "buiten": (buiten - v["buiten"]) / dt,
             "temperatuur": temperatuur(), "videokaart": videokaart(),
             "taken": groepeer(lijst, proc_procent),
         }
-        self.vorige = gezien
+        if not te_kort:
+            self.vorige = gezien
+            self.procent, self.snelheid = proc_procent, snel
         return uitslag
 
 

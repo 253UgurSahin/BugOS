@@ -321,7 +321,9 @@ def venster() -> int:
             rij.addStretch(1)
             self.knop = Knop(t("Zet mijn bestanden terug", "Restore my files"), "hoofd", "lijn:download", groot=True)
             rij.addWidget(self.knop)
-            lay.addLayout(rij)
+            # Onder het schuifvlak, niet erin: de knop blijft altijd in beeld, ook bij 150 % (R03).
+            rij.setContentsMargins(40, 12, 40, 20)
+            buiten.addLayout(rij)
 
             self.proces = QProcess(self)
             self.proces.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)

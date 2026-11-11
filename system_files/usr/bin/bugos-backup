@@ -471,7 +471,9 @@ def venster() -> int:
             rij.addWidget(self.terugzetten)
             rij.addStretch(1)
             rij.addWidget(self.maak)
-            lay.addLayout(rij)
+            # Onder het schuifvlak, niet erin: de knoppen blijven altijd in beeld, ook bij 150 % met een melding (R03).
+            rij.setContentsMargins(40, 12, 40, 20)
+            buiten.addLayout(rij)
 
             self.wachtrij: list[list[str]] = []
             self.nu: list[str] = []     # de opdracht die nu loopt

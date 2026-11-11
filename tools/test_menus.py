@@ -199,8 +199,14 @@ import re  # noqa: E402
 
 import PySide6  # noqa: E402
 
+from PySide6.QtCore import QLibraryInfo  # noqa: E402
+
+# Waar de QML-modules van Qt staan: in de pip-versie van PySide6 zitten ze in het pakket zelf (PySide6/Qt/qml), in
+# BugOS (Fedora) bij de Qt van het systeem (/usr/lib64/qt6/qml). Vraag het Qt zelf, anders vond de test in het
+# gebouwde beeld niets en meldde hij elk type (Timer, Rectangle...) als 'bestaat niet'.
+_qml_mappen = {Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.QmlImportsPath)), Path(PySide6.__file__).parent / "Qt" / "qml"}
 _qt_types = set()
-for _f in (Path(PySide6.__file__).parent / "Qt" / "qml").rglob("*.qmltypes"):
+for _f in (f for _m in _qml_mappen if _m.is_dir() for f in _m.rglob("*.qmltypes")):
     _qt_types.update(re.findall(r'exports: \[[^\]]*?"[\w./]+/(\w+) ', _f.read_text(errors="replace")))
     _qt_types.update(re.findall(r'"[\w./]+/(\w+) \d', _f.read_text(errors="replace")))
 _plasma = {"PlasmoidItem"}   # van org.kde.plasma.plasmoid (niet in Qt zelf)

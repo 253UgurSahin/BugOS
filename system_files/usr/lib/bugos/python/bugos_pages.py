@@ -12,8 +12,8 @@ from pathlib import Path
 from PySide6.QtCore import QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QIcon, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QProgressBar, QScrollArea,
-    QVBoxLayout, QWidget,
+    QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QProgressBar, QPushButton,
+    QScrollArea, QVBoxLayout, QWidget,
 )
 
 import bugos_ui  # DONKER via de module lezen: maak_app zet hem pas als de app start
@@ -73,7 +73,9 @@ class SchijfKiezer(QWidget):
             r = QHBoxLayout(binnen)
             r.setContentsMargins(4, 2, 4, 2)
             r.setSpacing(14)
-            r.addWidget(IcoonChip("drive-removable-media-usb", "turkoois", 44))
+            # Een lijnicoon op een rustig grijs tegeltje, zoals overal (BRAND: geen gekleurde tegeltjes meer). Ons
+            # eigen lijnicoon volgt de tekstkleur, ook in het donker (het thema-icoon is altijd donker getekend).
+            r.addWidget(IcoonChip("lijn:usb", "neutraal", 44, vol=False))
             b = QVBoxLayout()
             b.setSpacing(2)
             naam_l, extra_l = label(naam, "kop3"), label(extra, "klein")
@@ -137,13 +139,17 @@ def kop_met_icoon(icoon: str, tint: str, titel_tekst: str, sub: str) -> QWidget:
     return w
 
 
+VELD_HOOGTE = 36        # een zoek- of invoerveld (Windows 11: 32-36)
+ZIJBALK_REGEL = 40      # een regel in de zijbalk (Windows 11: 36-40)
+
+
 class Zoekveld(QLineEdit):
     def __init__(self, hint: str):
         super().__init__()
         self.setPlaceholderText(hint)
         self.setClearButtonEnabled(True)
         self.addAction(lijn_icoon("zoek", "tekst3", 18, gekozen=None), QLineEdit.ActionPosition.LeadingPosition)
-        self.setMinimumHeight(48)
+        self.setMinimumHeight(bugos_ui.px(VELD_HOOGTE))
 
 
 class Zijbalk(QListWidget):
@@ -158,7 +164,7 @@ class Zijbalk(QListWidget):
     def voeg_toe(self, icoon_naam: str, tekst: str, sleutel: str) -> QListWidgetItem:
         it = QListWidgetItem(icoon(icoon_naam), tekst)
         it.setData(Qt.ItemDataRole.UserRole, sleutel)
-        it.setSizeHint(QSize(0, 44))
+        it.setSizeHint(QSize(0, bugos_ui.px(ZIJBALK_REGEL)))   # groeit mee met grote letters
         self.addItem(it)
         return it
 
@@ -269,6 +275,34 @@ def sectie(tekst: str) -> QLabel:
     lab = label(tekst, "sectie", wrap=False)
     lab.setContentsMargins(4, 6, 0, 0)
     return lab
+
+
+KOP_KNOP = 32   # de stille knop naast een kopje: even hoog als het kopje, niet als een gewone knop
+
+
+def sectie_met_knop(tekst: str, knop: QPushButton) -> QWidget:
+    """Een kopje boven een kaart met rechts één stille knop ('Opnieuw zoeken', 'Printer toevoegen').
+    Even hoog als een gewoon kopje, en de knoptekst eindigt recht boven de rand van de kaart.
+
+        self.lay.addWidget(sectie_met_knop(t("Netwerken in de buurt", "Networks nearby"), self.zoek_knop))
+    """
+    w = QWidget()
+    w.setObjectName("sectie_met_knop")
+    r = QHBoxLayout(w)
+    r.setContentsMargins(0, 0, 0, 0)
+    r.setSpacing(8)
+    r.addWidget(sectie(tekst), 1, Qt.AlignmentFlag.AlignBottom)
+    knop.setProperty("klein", "true")
+    if not knop.property("soort"):
+        knop.setProperty("soort", "stil")
+    knop.style().unpolish(knop)
+    knop.style().polish(knop)
+    hoogte = bugos_ui.px(KOP_KNOP)   # met 'Grote letters' groeit hij mee, anders zat de tekst klem
+    knop.setMinimumHeight(hoogte)
+    knop.setMaximumHeight(hoogte)
+    r.addWidget(knop, 0, Qt.AlignmentFlag.AlignBottom)
+    w.setFixedHeight(hoogte)
+    return w
 
 
 def kop(titel_tekst: str, sub: str = "") -> QWidget:

@@ -157,6 +157,23 @@ klopt(taken["Bureaublad (Plasma)"].beschermd and taken["Bureaublad (Plasma)"].so
       "groeperen: het bureaublad heeft een gewone naam en kan niet per ongeluk dicht")
 klopt(taken["Netwerk"].soort == "systeem" and taken["Netwerk"].beschermd, "groeperen: systeem (Netwerk) beschermd")
 klopt(next(x for x in m["taken"]).soort == "app", "volgorde: eerst de programma's")
+# Twee metingen vlak na elkaar (het venster komt in beeld en meet meteen opnieuw): 2 tikjes voor de hele computer, maar
+# Firefox kreeg er 6 bij. Dat gaf '300%' (gezien op een verse installatie). Nu: de vorige getallen, en nooit boven 100%.
+_m2 = bt.Meter()
+_m2.meet()
+processor(1501, 9501)
+proces(100, "firefox", FIREFOX, tijd=306, pss_kb=200_000)
+_kort = _m2.meet()
+_ff_kort = next((x for x in _kort["taken"] if x.naam == "Firefox webbrowser"), None)
+klopt(_ff_kort is not None and _ff_kort.processor <= 100 and _kort["processor"] <= 100,
+      f"meting vlak na de vorige: nooit meer dan 100% ({_ff_kort.processor if _ff_kort else None}%)")
+processor(2001, 10001)
+_lang = _m2.meet()
+_ff_lang = next((x for x in _lang["taken"] if x.naam == "Firefox webbrowser"), None)
+klopt(_ff_lang is not None and abs(_ff_lang.processor - 0.6) < 0.01 and abs(_lang["processor"] - 50.0) < 0.5,
+      f"de meting daarna telt vanaf de oude basis: Firefox 0,6% en de computer 50% ({_ff_lang.processor if _ff_lang else None}, {_lang['processor']})")
+processor(1500, 9500)
+proces(100, "firefox", FIREFOX, tijd=300, pss_kb=200_000)
 # Lange namen kort de kernel in tot 15 tekens; die moeten toch beschermd zijn.
 SESSIE = f"{GEBRUIKER}/session.slice"
 lang = [bt.Proces(400, "xdg-desktop-por", 1, 1, 1, True, f"{SESSIE}/xdg-desktop-portal-kde.service"),

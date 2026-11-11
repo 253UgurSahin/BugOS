@@ -256,7 +256,13 @@ class Uiterlijk(Pagina):
             plaat = QLabel()
             # Zo groot dat Licht en Donker naast elkaar passen, ook op een laptop van 1280 x 800 (anders viel
             # Donker rechts buiten het venster, met een schuifbalk eronder).
-            plaat.setPixmap(voorbeeld(donker, 248, 146))
+            # Op een smal scherm (1280 x 800 bij 150 %: 853 px) verkleind, anders schoof de stap opzij (D13).
+            pm = voorbeeld(donker, 248, 146)
+            if bugos_ui.schermmaat((9999, 0))[0][0] < 1000:
+                dpr = pm.devicePixelRatio()
+                pm = pm.scaledToWidth(round(168 * dpr), Qt.TransformationMode.SmoothTransformation)
+                pm.setDevicePixelRatio(dpr)
+            plaat.setPixmap(pm)
             b.addWidget(plaat)
             b.addWidget(label(naam, "kop3"))
             k = KeuzeKaart(binnen)
