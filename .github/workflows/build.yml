@@ -112,6 +112,18 @@ jobs:
         run: python3 tools/test_backup.py
       - name: Opmaak testen (Windows 11-maten, elk venster past op 1280x800 van 75 tot 150 procent)
         run: QT_QPA_PLATFORM=offscreen python3 tools/test_native_layout.py
+      # The native packages (BugOS's own pages instead of KDE's). Each branch brought its own test file but none
+      # added it here; tools/test_edges.py (F10-H1) wants every tools/test_* file to be run by this workflow.
+      - name: Native account testen (klok met de hand, andere mensen, eigen foto, toetsenborden; met nagedane D-Bus)
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_native_account.py
+      - name: Native installer testen (stick en installatieprogramma; met nep-programma's)
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_native_installer.py
+      - name: Native netwerk testen (wifi van school of werk, opgeslagen netwerken, kabel, bluetooth koppelen)
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_native_network.py
+      - name: Native printers testen (toevoegen, instellen, wachtrij, standaardprogramma's, meldingen per app)
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_native_printers.py
+      - name: Native geluid en scherm testen (microfoon, schermen, 'Beeld houden?', batterijtijd)
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_native_sound_display.py
       - name: Uitzetscherm testen (laadt het, en kloppen de knoppen per situatie)
         run: |
           if [ -f tools/test_logout.py ]; then
