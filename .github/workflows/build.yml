@@ -110,6 +110,8 @@ jobs:
         run: bash tools/test_signed.sh
       - name: Back-up testen (ruimte, maken en terugzetten; met tijdelijke mappen)
         run: python3 tools/test_backup.py
+      - name: Opmaak testen (Windows 11-maten, elk venster past op 1280x800 van 75 tot 150 procent)
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_native_layout.py
       - name: Uitzetscherm testen (laadt het, en kloppen de knoppen per situatie)
         run: |
           if [ -f tools/test_logout.py ]; then
