@@ -303,6 +303,97 @@ klopt(_f == "" and _pad == str(TMP / ".cert" / "bugos-wifi" / "edu_roam_2.pem") 
       f"certificaat: gekopieerd naar ~/.cert/bugos-wifi/ (map 0700), veilige naam ({_pad})")
 klopt(_pad2 == "" and _f2 == "ca_bestand", "certificaat: een foto is geen certificaat: eigen melding")
 
+# =============================================================== bluetooth ===
+# 4. wat BlueZ weet (busctl --json=short ... GetManagedObjects)
+_BT_JSON = json.dumps({"type": "a{oa{sa{sv}}}", "data": [{
+    "/org/bluez": {"org.bluez.AgentManager1": {}, "org.bluez.ProfileManager1": {}},
+    "/org/bluez/hci0": {"org.bluez.Adapter1": {
+        "Address": {"type": "s", "data": "00:1A:7D:DA:71:13"}, "Name": {"type": "s", "data": "bugos"},
+        "Powered": {"type": "b", "data": True}, "PowerState": {"type": "s", "data": "on"},
+        "Discovering": {"type": "b", "data": True}}},
+    "/org/bluez/hci0/dev_AA_BB_CC_DD_EE_10": {"org.bluez.Device1": {
+        "Address": {"type": "s", "data": "AA:BB:CC:DD:EE:10"}, "Name": {"type": "s", "data": "Galaxy Buds2"},
+        "Alias": {"type": "s", "data": "Galaxy Buds2"}, "Icon": {"type": "s", "data": "audio-headset"},
+        "Paired": {"type": "b", "data": False}, "Connected": {"type": "b", "data": False},
+        "RSSI": {"type": "n", "data": -48}, "Adapter": {"type": "o", "data": "/org/bluez/hci0"}}},
+    "/org/bluez/hci0/dev_AA_BB_CC_DD_EE_14": {"org.bluez.Device1": {
+        "Address": {"type": "s", "data": "AA:BB:CC:DD:EE:14"}, "Alias": {"type": "s", "data": "AA-BB-CC-DD-EE-14"},
+        "Paired": {"type": "b", "data": False}, "Connected": {"type": "b", "data": False},
+        "RSSI": {"type": "n", "data": -80}, "Adapter": {"type": "o", "data": "/org/bluez/hci0"}}},
+    "/org/bluez/hci0/dev_AA_BB_CC_DD_EE_01": {"org.bluez.Device1": {
+        "Address": {"type": "s", "data": "AA:BB:CC:DD:EE:01"}, "Name": {"type": "s", "data": "Bugie's headphones"},
+        "Icon": {"type": "s", "data": "audio-headset"}, "Paired": {"type": "b", "data": True},
+        "Connected": {"type": "b", "data": True}, "Adapter": {"type": "o", "data": "/org/bluez/hci0"}},
+        "org.bluez.Battery1": {"Percentage": {"type": "y", "data": 80}}},
+}]})
+_bs = bi.lees_bt_objecten(_BT_JSON)
+_bp = {g.adres: g for g in _bs.apparaten}
+klopt((_bs.adapter, _bs.aan, _bs.stroom, len(_bs.apparaten)) == ("/org/bluez/hci0", True, "on", 3)
+      and _bp["AA:BB:CC:DD:EE:14"].naam == "" and _bp["AA:BB:CC:DD:EE:01"].batterij == 80
+      and _bp["AA:BB:CC:DD:EE:10"].sterkte == -48 and _bp["AA:BB:CC:DD:EE:01"].gekoppeld,
+      f"bluetooth: wat BlueZ weet lezen (kaart aan, 3 apparaten, naamloos = '', batterij) ({_bs})")
+klopt([g.naam for g in bi.bt_nieuw(_bs)] == ["Galaxy Buds2"],
+      "bluetooth: te koppelen = niet gekoppeld en met een naam")
+klopt(bi.lees_bt_objecten("Call failed: Could not activate remote peer 'org.bluez': unit failed") == bi.BtStand()
+      and bi.lees_bt_objecten('{"type":"x","data":[]}') == bi.BtStand() and bi.lees_bt_objecten('{"data":[[]]}')
+      == bi.BtStand(), "bluetooth: rommel of geen bluetooth: een lege stand, geen fout")
+_o, _st = vang(bi.bt_objecten, antwoord=lambda c: (1, ""))
+klopt(_st == bi.BtStand() and _o and _o[0][0][:4] == ("busctl", "--system", "--json=short", "--timeout=5"),
+      f"bluetooth: lezen met busctl; lukt het niet, dan een lege stand ({_o[:1]})")
+# 5. wat voor apparaat
+_soorten_bt = {i: bi.bt_soort(i) for i in ("audio-headset", "audio-card", "input-mouse", "input-keyboard", "input-gaming",
+                                           "phone", "computer", "", "iets-anders")}
+klopt(_soorten_bt == {"audio-headset": "geluid", "audio-card": "geluid", "input-mouse": "muis",
+                      "input-keyboard": "toetsenbord", "input-gaming": "spel", "phone": "telefoon",
+                      "computer": "computer", "": "apparaat", "iets-anders": "apparaat"},
+      f"bluetooth: soort apparaat uit het icoon van BlueZ ({_soorten_bt})")
+# 6. de code
+klopt(bi.code_tekst(284913) == "284 913" and bi.code_tekst(7) == "000 007" and bi.code_tekst("0000") == "0000",
+      "bluetooth: de code in twee groepjes van drie, zoals op een telefoon")
+# 7. fouten van BlueZ in gewone woorden
+_kf = {
+    "org.bluez.Error.AuthenticationFailed": "codes", "org.bluez.Error.AuthenticationCanceled": "gestopt",
+    "org.bluez.Error.AuthenticationRejected": "geweigerd", "org.bluez.Error.AuthenticationTimeout": "traag",
+    "org.freedesktop.DBus.Error.NoReply": "traag", "org.freedesktop.DBus.Error.Timeout": "traag",
+    "org.bluez.Error.ConnectionAttemptFailed": "bereik", "org.bluez.Error.Failed": "bereik",
+    "org.bluez.Error.NotAvailable": "bereik", "org.bluez.Error.AlreadyExists": "al", "org.bluez.Error.InProgress": "bezig",
+    "org.bluez.Error.NotReady": "uit", "org.freedesktop.DBus.Error.NameHasNoOwner": "geen",
+    "org.freedesktop.DBus.Error.ServiceUnknown": "geen", "org.freedesktop.DBus.Error.UnknownObject": "geen",
+    "org.freedesktop.DBus.Error.UnknownMethod": "geen", "org.example.Iets": "anders",
+}
+_kf_fout = {n: bi.bt_koppel_fout(n) for n, s in _kf.items() if bi.bt_koppel_fout(n) != s}
+klopt(not _kf_fout, f"bluetooth: elke fout van BlueZ heeft een soort ({_kf_fout})")
+klopt(bi.bt_koppel_fout("org.freedesktop.DBus.Error.UnknownObject", apparaat=True) == "weg",
+      "bluetooth: een apparaat dat BlueZ al opruimde: 'opnieuw zoeken', niet 'bluetooth doet het niet' (N14)")
+# vertrouwen vóór het koppelen (N8) en daarna verbinden, met busctl (betrouwbare exitcode)
+_pad = "/org/bluez/hci0/dev_AA_BB_CC_DD_EE_10"
+_o, _ok = vang(bi.bt_vertrouw, _pad, True)
+klopt(_ok and _o and _o[0][0] == ("busctl", "--system", "--timeout=5", "set-property", "org.bluez", _pad,
+                                  "org.bluez.Device1", "Trusted", "b", "true"),
+      f"bluetooth: vertrouwen met busctl set-property ... Trusted b true ({_o[:1]})")
+_o, _ok = vang(bi.bt_vertrouw, "/org/bluez/hci0/dev_AA; rm -rf", True)
+klopt(not _ok and not _o, "bluetooth: een vreemd pad gaat niet naar busctl")
+_o, _uit = vang(bi.bt_vertrouw_en_verbind, _pad, "AA:BB:CC:DD:EE:10",
+                antwoord_nm=lambda c, i: (1, "", "Call failed: Already Connected\n"))
+klopt(_uit == (True, True) and any(c[0][-2:] == ("org.bluez.Device1", "Connect") for c in _o),
+      f"bluetooth: na het koppelen verbinden; 'al verbonden' is ook goed ({_o})")
+_o, _uit = vang(bi.bt_vertrouw_en_verbind, _pad, "AA:BB:CC:DD:EE:10",
+                antwoord_nm=lambda c, i: (1, "", "Call failed: Software caused connection abort\n"))
+klopt(_uit == (True, False), "bluetooth: verbinden lukt niet: dat weten we")
+# 14. uit met een knop op de computer (rfkill hard)
+_rf = TMP / "sys" / "class" / "rfkill" / "rfkill0"
+_rf.mkdir(parents=True)
+(_rf / "type").write_text("bluetooth\n")
+(_rf / "hard").write_text("1\n")
+(_rf / "soft").write_text("0\n")
+_hard1 = bi.bt_hard_uit()
+(_rf / "hard").write_text("0\n")
+(_rf / "soft").write_text("1\n")
+_hard0 = bi.bt_hard_uit()
+shutil.rmtree(TMP / "sys")
+klopt(_hard1 is True and _hard0 is False and bi.bt_hard_uit() is False,
+      "bluetooth: 'hard' uit (vliegtuigknop) gezien; 'soft' uit en geen rfkill niet")
+
 # ================================================================ pagina's ===
 # (alles hierboven raakt Qt niet; vanaf hier het venster van Instellingen in de voorbeeldstand)
 lader = importlib.machinery.SourceFileLoader("instellingen", str(BIN / "bugos-settings"))
@@ -395,9 +486,19 @@ wacht()
 
 # ---- wifi van school of werk: het eigen venster (geen KDE)
 _kde = []
-_oud_kde = (sn.kde_instelling, sn.start)
-sn.kde_instelling = lambda *a, **k: _kde.append(a)
-sn.start = lambda *a, **k: _kde.append(a)
+import subprocess  # noqa: E402
+
+_oud_popen = subprocess.Popen
+
+
+class _NepPopen:
+    """Elk programma dat de pagina's los starten (KDE-instellingen, de koppel-wizard van KDE): opgevangen."""
+
+    def __init__(self, cmd, *a, **k):  # noqa: ARG002
+        _kde.append(cmd)
+
+
+subprocess.Popen = _NepPopen
 _netten = bi.netwerken()
 _edu = next((n for n in _netten if n.naam == "eduroam"), None)
 klopt(_edu is not None and _edu.zakelijk, "school/werk: de voorbeeldlijst heeft eduroam (school of werk)")
@@ -552,7 +653,7 @@ wifi.toon((True, [], False, False))
 klopt(wifi.school.isHidden(), "school/werk: zonder wifi in de computer ook geen knop 'Netwerk van school of werk…' (N15)")
 wifi.ververs()
 wacht()
-sn.kde_instelling, sn.start = _oud_kde
+subprocess.Popen = _oud_popen
 klopt(not _kde, f"school/werk: nergens een KDE-venster ({_kde})")
 _bron_pag = (PY / "bugos_settings_netwerk.py").read_text(encoding="utf-8")
 klopt("kcm_networkmanagement" not in _bron_pag and sn.WifiPagina.kde == "",
@@ -598,6 +699,202 @@ _bron_cfg = (PY / "bugos_config_netwerk.py").read_text(encoding="utf-8")
 klopt('t("Buren", "Neighbours")' in _bron_cfg and 't("Telefoon", "Phone")' in _bron_cfg and 't("Muis", "Mouse")' in _bron_cfg,
       "voorbeeldstand: de namen van buren, muis en telefoon zijn er ook in het Engels")
 klopt(sn.apparaat_icoon("phone") == "telefoon", "bluetooth: een telefoon heeft het telefoon-icoon (geen tekstballon)")
+
+# ================================================================ bluetooth: apparaat toevoegen ===
+from PySide6.QtCore import QObject, QTimer, Signal  # noqa: E402
+
+venster.ga_naar("bluetooth")
+wacht()
+bt = venster.paginas["bluetooth"]
+_kde.clear()
+subprocess.Popen = _NepPopen
+
+
+def open_koppel(ms: int = 2000):
+    bt.koppel_nieuw()
+    wacht()
+    d = getattr(bt, "koppel_dialoog", None)
+    if d is not None:
+        wacht_ms(ms)
+    return d
+
+
+bi._VB["bt"] = True
+kd = open_koppel()
+_rij_namen = list(kd.rijen) if kd is not None else []
+klopt(kd is not None and kd.isVisible() and isinstance(kd.koppelaar, sn.NepKoppelaar) and not _kde,
+      "bluetooth: 'Nieuw apparaat koppelen' opent BugOS' eigen venster (geen KDE-wizard)")
+klopt(_rij_namen[:1] == ["Galaxy Buds2"] and set(_rij_namen) == {"Galaxy Buds2", "Keyboard K380", "Galaxy A54",
+                                                                    "Xbox Wireless Controller"},
+      f"bluetooth: na het zoeken 4 apparaten (zonder naam niet), de dichtstbijzijnde eerst ({_rij_namen})")
+klopt(kd.rijen["Galaxy A54"].uitleg.text() == "Telefoon" and kd.rijen["Galaxy Buds2"].uitleg.text() == "Koptelefoon of speaker",
+      "bluetooth: elk apparaat zegt in gewone woorden wat het is")
+klopt(kd.height() <= sn.vrije_hoogte(kd) and kd.weg_knop.isVisible(), "bluetooth: het venster past op het scherm")
+
+# de telefoon: 'Nee, ze zijn anders' -> codes; opnieuw -> 'Ja, koppelen' -> gekoppeld
+kd.rijen["Galaxy A54"].geklikt.emit()
+wacht_ms(700)
+klopt(kd.staat == "vergelijk" and kd.code.text() == "284 913" and kd.ja_knop.text() == "Ja, koppelen"
+      and kd.nee_knop.text() == "Nee, ze zijn anders" and kd.code.accessibleName() == "2 8 4 9 1 3",
+      f"bluetooth: telefoon: 'Zie je deze code ook?' met 284 913 ({kd.staat}, {kd.code.text()!r})")
+kd.nee_knop.click()
+wacht_ms(600)
+klopt(kd.staat == "fout" and "codes kwamen niet overeen" in kd.banner.tekst.text()
+      and kd.nee_knop.text() == "Terug naar de lijst" and kd.ja_knop.text() == "Opnieuw proberen",
+      f"bluetooth: 'Nee' -> de codes kwamen niet overeen, met 'Terug naar de lijst' en 'Opnieuw proberen' ({kd.banner.tekst.text()!r})")
+kd.ja_knop.click()
+wacht_ms(700)
+klopt(kd.staat == "vergelijk", "bluetooth: 'Opnieuw proberen' koppelt hetzelfde apparaat nog eens")
+kd.ja_knop.click()
+wacht_ms(800)
+wacht()
+klopt(not kd.isVisible() and "Galaxy A54" in bt.melding.tekst.text() and "gekoppeld" in bt.melding.tekst.text()
+      and any(a.naam == "Galaxy A54" for a in bi.bt_apparaten()),
+      f"bluetooth: 'Ja, koppelen' -> gekoppeld, het venster dicht, de telefoon in de lijst ({bt.melding.tekst.text()!r})")
+wacht()
+klopt(any(r.titel.text() == "Galaxy A54" for r in bt.lijst.findChildren(sn.Rij)),
+      "bluetooth: de nieuwe telefoon staat op de pagina")
+
+# het toetsenbord: de code typen, met hoeveel cijfers er al getypt zijn
+kd = open_koppel()
+klopt("Galaxy A54" not in kd.rijen, "bluetooth: een gekoppeld apparaat staat niet meer in de lijst om te koppelen")
+kd.rijen["Keyboard K380"].geklikt.emit()
+wacht_ms(500)
+klopt(kd.staat == "typ" and kd.code.text() == "503 172" and "Typ deze code op Keyboard K380" in kd.vraag_label.text(),
+      f"bluetooth: toetsenbord: 'Typ deze code' met 503 172 ({kd.code.text()!r})")
+wacht_ms(500)
+klopt("2 van de 6 cijfers getypt" in kd.code_onder.text(), f"bluetooth: je ziet hoeveel cijfers getypt zijn ({kd.code_onder.text()!r})")
+wacht_ms(1600)
+wacht()
+klopt(not kd.isVisible() and "Keyboard K380 is gekoppeld en verbonden" in bt.melding.tekst.text(),
+      f"bluetooth: toetsenbord gekoppeld en verbonden ({bt.melding.tekst.text()!r})")
+
+# een oud apparaat met een pincode
+kd = open_koppel()
+kd.koppelaar.pin_voor = "Galaxy Buds2"
+kd.rijen["Galaxy Buds2"].geklikt.emit()
+wacht_ms(600)
+klopt(kd.staat == "pin" and kd.invoer.isVisible() and kd.invoer.text() == "0000" and kd.ja_knop.isEnabled()
+      and "0000 of 1234" in kd.invoer_uitleg.text(), "bluetooth: pincode: het veld met 0000, en waar je hem vindt")
+kd.invoer.setText("")
+klopt(not kd.ja_knop.isEnabled(), "bluetooth: pincode: leeg kan niet")
+# Annuleren tijdens het koppelen: terug naar de lijst, en de late uitslag doet niets meer
+kd.weg_knop.click()
+wacht_ms(500)
+klopt(kd.isVisible() and kd.staat == "lijst" and kd.stapel.currentIndex() == 0,
+      "bluetooth: Annuleren tijdens het koppelen gaat terug naar de lijst")
+# geluid dat koppelt maar (nog) niet verbindt: dat zeggen, niet 'gelukt'
+_oud_vv = bi.bt_vertrouw_en_verbind
+bi.bt_vertrouw_en_verbind = lambda pad, adres="": (True, False)
+kd.koppelaar.pin_voor = ""
+kd.rijen["Galaxy Buds2"].geklikt.emit()
+wacht_ms(1100)
+wacht()
+bi.bt_vertrouw_en_verbind = _oud_vv
+klopt(not kd.isVisible() and "Verbinden lukte nog niet" in bt.melding.tekst.text(),
+      f"bluetooth: gekoppeld maar niet verbonden: 'klik erop in de lijst' ({bt.melding.tekst.text()!r})")
+wacht()
+
+# niets gevonden, bluetooth uit tijdens het zoeken, de kaart weg
+kd = sn.KoppelDialoog(bt, sn.NepKoppelaar())
+kd.koppelaar.stop_klokken()
+kd.open()
+kd.niets.stop()
+kd.toon_lijst_inhoud()
+_titels = [r.titel.text() for r in kd.groep.findChildren(sn.Rij)]
+klopt(_titels == ["Nog niets gevonden"], f"bluetooth: na een tijdje niets gevonden: dat zeggen, met wat je kunt doen ({_titels})")
+kd.koppelaar.gevonden.emit(bi.BtStand("/org/bluez/hci0", False, "off", []))
+klopt("Bluetooth staat uit" in kd.zoek_banner.tekst.text(), "bluetooth: uitgezet tijdens het zoeken: 'Bluetooth staat uit'")
+kd.koppelaar.gevonden.emit(bi.BtStand())
+klopt("doet het nu niet" in kd.zoek_banner.tekst.text(), "bluetooth: de kaart is weg: 'Bluetooth doet het nu niet'")
+kd.reject()
+klopt(kd.koppelaar.gesloten, "bluetooth: dicht = stoppen met zoeken")
+wacht()
+
+# bluetooth uit: eerst aanzetten; uit met een knop op de computer: zeggen wat je moet doen
+bi._VB["bt"] = False
+kd = open_koppel(300)
+klopt(bi._VB["bt"] and kd is not None and kd.isVisible(), "bluetooth: staat bluetooth uit, dan zet 'koppelen' hem eerst aan")
+kd.reject()
+wacht()
+bt.koppel_dialoog = None
+_oud_hard = bi.bt_hard_uit
+bi.bt_hard_uit = lambda: True
+bt.koppel_nieuw()
+wacht()
+klopt(getattr(bt, "koppel_dialoog", None) is None and "vliegtuigstand" in bt.melding.tekst.text(),
+      f"bluetooth: uit met een knop op de computer: geen venster, maar wat je moet doen ({bt.melding.tekst.text()!r})")
+bt.toon((False, [], True, True))
+klopt("vliegtuigstand" in bt.hoofd.uitleg.text(), "bluetooth: ook de regel bovenaan zegt dat de knop op de computer uit staat (N15)")
+bi.bt_hard_uit = _oud_hard
+subprocess.Popen = _oud_popen
+klopt(not _kde, f"bluetooth: nergens een KDE-venster ({_kde})")
+klopt("bluedevil" not in _bron_pag and "kcm_" not in (PY / "bugos_settings_netwerk.py").read_text(encoding="utf-8")
+      and sn.BluetoothPagina.kde == "" and not hasattr(sn, "kde_instelling"),
+      "bluetooth: de pagina verwijst niet meer naar KDE (bluedevil, kcm_bluetooth)")
+klopt(sn.apparaat_icoon("input-mouse") == "muis" and sn.apparaat_icoon("audio-headset") == "geluid",
+      "bluetooth: een gekoppelde muis heeft een muis-icoon (niet het bluetooth-teken)")
+
+# 27. ons BlueZ-agent, zonder bus: met een nep-bericht
+from PySide6.QtDBus import QDBusObjectPath  # noqa: E402
+
+
+class NepBericht:
+    def __init__(self):
+        self.later = False
+
+    def setDelayedReply(self, v):  # noqa: N802
+        self.later = v
+
+    def createReply(self, *a):  # noqa: N802, ARG002
+        return ("antwoord",)
+
+    def createErrorReply(self, naam, tekst):  # noqa: N802, ARG002
+        return ("fout", naam)
+
+
+class NepK(QObject):
+    vraag = Signal(str, str, object)
+
+
+agent = sn.BluetoothAgent()
+verstuurd: list = []
+agent.stuur = verstuurd.append
+nk = NepK()
+nk.pad = "/org/bluez/hci0/dev_X"
+agent.koppelaar = nk
+vragen: list = []
+nk.vraag.connect(lambda *a: vragen.append(a))
+_m = NepBericht()
+agent.RequestConfirmation(QDBusObjectPath(nk.pad), 123456, _m)
+klopt(_m.later and vragen == [("vergelijk", nk.pad, 123456)] and not verstuurd,
+      "agent: 'zie je deze code?' wacht op jouw klik (geen antwoord vanzelf)")
+agent.antwoord(True)
+klopt(verstuurd == [("antwoord",)], "agent: 'Ja' stuurt het antwoord aan BlueZ")
+_m2 = NepBericht()
+agent.RequestConfirmation(QDBusObjectPath("/org/bluez/hci0/dev_ANDER"), 1, _m2)
+klopt(verstuurd[-1] == ("fout", "org.bluez.Error.Rejected") and len(vragen) == 1,
+      "agent: een vraag over een ander apparaat wordt meteen geweigerd")
+_m3 = NepBericht()
+agent.AuthorizeService(QDBusObjectPath(nk.pad), "0000110b-0000-1000-8000-00805f9b34fb", _m3)
+_m4 = NepBericht()
+agent.AuthorizeService(QDBusObjectPath("/org/bluez/hci0/dev_ANDER"), "x", _m4)
+klopt(verstuurd[-2:] == [("antwoord",), ("fout", "org.bluez.Error.Rejected")],
+      "agent: toestemming alleen voor het apparaat dat je koppelt")
+QTimer.singleShot(0, lambda: agent.geef(42))
+klopt(agent.RequestPasskey(QDBusObjectPath(nk.pad)) == 42 and vragen[-1][0] == "passkey",
+      "agent: de code die je typt, gaat als getal terug (wachtlus)")
+QTimer.singleShot(0, agent.Cancel)
+klopt(agent.RequestPinCode(QDBusObjectPath(nk.pad)) == "" and vragen[-1][0] == "stop",
+      "agent: BlueZ stopt (Cancel) tijdens een vraag: de wachtlus stopt, het venster hoort het")
+agent.DisplayPasskey(QDBusObjectPath(nk.pad), 503172, 3)
+klopt(vragen[-1] == ("typ", nk.pad, (503172, 3)), "agent: de code om te typen, met hoeveel er getypt zijn")
+_m5 = NepBericht()
+agent.RequestConfirmation(QDBusObjectPath(nk.pad), 7, _m5)
+_n = len(verstuurd)
+agent.annuleer()
+klopt(verstuurd[_n:] == [("fout", "org.bluez.Error.Canceled")], "agent: venster dicht tijdens een vraag: 'Canceled'")
+agent.koppelaar = None
 
 # ==================================================================== eind ===
 venster.close()

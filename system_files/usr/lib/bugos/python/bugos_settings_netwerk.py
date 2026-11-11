@@ -5,12 +5,18 @@ from __future__ import annotations
 from pathlib import Path
 
 import bugos_config as bi
-from bugos_ui import (K, Banner, Groep, Knop, Rij, bestaat, kde_instelling, label, leeg_groep, lijn_icoon, schermmaat,
-                      schuifbaar, sectie_met_knop, start, t, vraag_tekst)  # kde_instelling: tot bluetooth (stap B2)
+from bugos_ui import (K, Banner, Groep, Knop, Rij, label, leeg_groep, lijn_icoon, schermmaat, schuifbaar,
+                      sectie_met_knop, t, vraag_tekst)
 from bugos_settings_onderdelen import Blad, Keuzes, meer_knop, op_achtergrond, schuifje
-from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtWidgets import (QDialog, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QVBoxLayout,
-                               QWidget)
+from PySide6.QtCore import ClassInfo, QEventLoop, QObject, Qt, QTimer, Signal, Slot
+from PySide6.QtGui import QIntValidator
+from PySide6.QtWidgets import (QDialog, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QStackedWidget,
+                               QVBoxLayout, QWidget)
+
+try:   # D-Bus (BlueZ): zit in PySide6 in de image; zonder zegt 'Apparaat toevoegen' dat bluetooth het niet doet
+    from PySide6.QtDBus import QDBusConnection, QDBusMessage, QDBusObjectPath, QDBusPendingCallWatcher
+except ImportError:  # pragma: no cover
+    QDBusConnection = QDBusMessage = QDBusObjectPath = QDBusPendingCallWatcher = None
 
 
 def vrije_hoogte(w: QWidget | None = None) -> int:
@@ -862,16 +868,758 @@ class WifiPagina(Blad):
         op_achtergrond(self, lambda: bi.vergeet_netwerk(n.naam), klaar)
 
 
+
+
 # ============================================================= bluetooth ===
 
+# Wat voor apparaat (bi.bt_soort) -> het lijn-icoon en de woorden eronder.
+BT_ICOON = {"geluid": "geluid", "muis": "muis", "toetsenbord": "toetsenbord", "spel": "spel", "tablet": "potlood",
+            "telefoon": "telefoon", "computer": "computer", "printer": "printer", "camera": "foto",
+            "apparaat": "bluetooth"}
+
+
+def bt_woord(soort: str) -> str:
+    return {
+        "geluid": t("Koptelefoon of speaker", "Headphones or speaker"), "muis": t("Muis", "Mouse"),
+        "toetsenbord": t("Toetsenbord", "Keyboard"), "telefoon": t("Telefoon", "Phone"),
+        "spel": t("Spelcontroller", "Game controller"), "computer": t("Computer", "Computer"),
+        "tablet": t("Tablet of pen", "Tablet or pen"), "printer": t("Printer", "Printer"),
+        "camera": t("Camera", "Camera"),
+    }.get(soort, t("Apparaat", "Device"))
+
+
 def apparaat_icoon(soort: str) -> str:
-    if soort.startswith("audio"):
-        return "geluid"
-    if soort.startswith("input-gaming"):
-        return "spel"
-    if soort == "phone":
-        return "telefoon"
-    return "bluetooth"
+    """Het icoon voor een apparaat (soort = het icoon van BlueZ): een muis is een muis, niet het bluetooth-teken."""
+    return BT_ICOON.get(bi.bt_soort(soort), "bluetooth")
+
+
+AGENT_PAD = "/org/bugos/BluetoothAgent"
+_AGENT = None
+
+if QDBusConnection is not None:
+    @ClassInfo({"D-Bus Interface": "org.bluez.Agent1"})
+    class BluetoothAgent(QObject):
+        """Ons eigen BlueZ-'agent': BlueZ vraagt hem de codes bij het koppelen dat WIJ starten (Device1.Pair vanaf
+        dezelfde D-Bus-verbinding). Alleen root (bluetoothd) mag hem aanroepen. We nemen niet de standaard-agent van
+        KDE over: koppelen dat een telefoon zelf start, blijft via KDE gaan (zie de spec, deel 6).
+
+        Zonder waarde antwoorden (bevestigen, toestaan): later, met msg.setDelayedReply + createReply.
+        Met een waarde (pincode, code): synchroon, met een eigen wachtlus tot de gebruiker antwoordt. Nooit
+        QDBusContext gebruiken (dat liet het proces vallen in de VM) en nooit createReply([waarde]) (verkeerd type)."""
+
+        def __init__(self):
+            super().__init__()
+            self.koppelaar = None    # de koppelaar van het open venster (met .pad en het signaal .vraag)
+            self.stuur = None        # in tests: een lijst.append; anders de systeembus
+            self.wacht = None        # een vraag (QDBusMessage) die op ja/nee wacht
+            self.lus: QEventLoop | None = None
+            self.waarde = None
+
+        def verstuur(self, m) -> None:
+            (self.stuur or QDBusConnection.systemBus().send)(m)
+
+        def van_ons(self, dev) -> bool:
+            k = self.koppelaar
+            return k is not None and bool(getattr(k, "pad", "")) and dev.path() == k.pad
+
+        def later(self, msg, ja: bool) -> None:
+            msg.setDelayedReply(True)
+            self.verstuur(msg.createReply() if ja else msg.createErrorReply("org.bluez.Error.Rejected", "Rejected"))
+
+        @Slot(QDBusObjectPath, "uint", QDBusMessage)
+        def RequestConfirmation(self, dev, passkey, msg):  # noqa: N802
+            if not self.van_ons(dev):
+                self.later(msg, False)
+                return
+            self.annuleer()
+            msg.setDelayedReply(True)
+            self.wacht = msg
+            self.koppelaar.vraag.emit("vergelijk", dev.path(), int(passkey))
+
+        @Slot(QDBusObjectPath, QDBusMessage)
+        def RequestAuthorization(self, dev, msg):  # noqa: N802
+            self.later(msg, self.van_ons(dev))
+
+        @Slot(QDBusObjectPath, str, QDBusMessage)
+        def AuthorizeService(self, dev, uuid, msg):  # noqa: N802, ARG002
+            self.later(msg, self.van_ons(dev))
+
+        @Slot(QDBusObjectPath, result=str)
+        def RequestPinCode(self, dev):  # noqa: N802
+            if not self.van_ons(dev):
+                return ""
+            self.koppelaar.vraag.emit("pin", dev.path(), None)
+            w = self.wacht_op_antwoord()
+            return str(w) if w is not None else ""
+
+        @Slot(QDBusObjectPath, result="uint")
+        def RequestPasskey(self, dev):  # noqa: N802
+            if not self.van_ons(dev):
+                return 0
+            self.koppelaar.vraag.emit("passkey", dev.path(), None)
+            w = self.wacht_op_antwoord()
+            try:
+                return max(0, min(999999, int(w))) if w is not None else 0
+            except (TypeError, ValueError):
+                return 0
+
+        @Slot(QDBusObjectPath, "uint", "ushort")
+        def DisplayPasskey(self, dev, passkey, getypt):  # noqa: N802
+            if self.van_ons(dev):
+                self.koppelaar.vraag.emit("typ", dev.path(), (int(passkey), int(getypt)))
+
+        @Slot(QDBusObjectPath, str)
+        def DisplayPinCode(self, dev, pin):  # noqa: N802
+            if self.van_ons(dev):
+                self.koppelaar.vraag.emit("typ", dev.path(), (str(pin), -1))
+
+        @Slot()
+        def Cancel(self):  # noqa: N802
+            """BlueZ geeft het op (te laat, of het apparaat stopte): de vraag in het venster weg."""
+            had = self.wacht is not None or self.lus is not None
+            self.wacht = None   # BlueZ wacht er niet meer op
+            self.stop_lus()
+            if had and self.koppelaar is not None:
+                self.koppelaar.vraag.emit("stop", getattr(self.koppelaar, "pad", ""), None)
+
+        @Slot()
+        def Release(self):  # noqa: N802
+            self.annuleer()
+
+        # ---- de kant van BugOS
+        def antwoord(self, ja: bool, waarde=None) -> None:
+            if self.wacht is not None:
+                msg, self.wacht = self.wacht, None
+                self.verstuur(msg.createReply() if ja else msg.createErrorReply("org.bluez.Error.Rejected", "No"))
+            if self.lus is not None:
+                self.waarde = waarde if ja else None
+                self.lus.quit()
+
+        def geef(self, waarde) -> None:
+            self.antwoord(True, waarde)
+
+        def annuleer(self) -> None:
+            if self.wacht is not None:
+                msg, self.wacht = self.wacht, None
+                self.verstuur(msg.createErrorReply("org.bluez.Error.Canceled", "Canceled"))
+            self.stop_lus()
+
+        def stop_lus(self) -> None:
+            if self.lus is not None:
+                self.waarde = None
+                self.lus.quit()
+
+        def wacht_op_antwoord(self, ms: int = 55000):
+            self.stop_lus()
+            lus = self.lus = QEventLoop()
+            self.waarde = None
+            QTimer.singleShot(ms, lus.quit)
+            lus.exec()
+            if self.lus is lus:
+                self.lus = None
+            return self.waarde
+else:  # pragma: no cover
+    BluetoothAgent = None
+
+
+def bluetooth_agent():
+    """Eén agent per programma (een tweede registerObject op hetzelfde pad lukt niet)."""
+    global _AGENT
+    if _AGENT is None and BluetoothAgent is not None:
+        bus = QDBusConnection.systemBus()
+        if not bus.isConnected():
+            return None
+        a = BluetoothAgent()
+        if not bus.registerObject(AGENT_PAD, a, QDBusConnection.RegisterOption.ExportAllSlots):
+            return None
+        _AGENT = a
+    return _AGENT
+
+
+class BluezKoppelaar(QObject):
+    """Zoeken en koppelen met BlueZ (D-Bus). Dezelfde vorm als NepKoppelaar, zodat het venster niet weet welke het is."""
+
+    gevonden = Signal(object)          # bi.BtStand (elke 2 s)
+    vraag = Signal(str, str, object)   # (soort: vergelijk | typ | pin | passkey | stop, pad, waarde)
+    gekoppeld = Signal(str, str)       # (pad, D-Bus-foutnaam); "" = gelukt
+    probleem = Signal(str)             # een D-Bus-fout bij het zoeken (bluetooth uit, weg)
+
+    def __init__(self, ouder: QObject | None = None):
+        super().__init__(ouder)
+        self.pad = ""
+        self.adapter = ""
+        self.wil_zoeken = False
+        self.zoekt = False
+        self.peilt = False
+        self.gesloten = False
+        self.agent = None
+        self.wachters: list = []
+        self.klok = QTimer(self)
+        self.klok.setInterval(2000)
+        self.klok.timeout.connect(self.peil)
+
+    def roep(self, pad: str, iface: str, methode: str, args=(), ms: int = 5000, klaar=None) -> None:
+        """Een D-Bus-aanroep naar BlueZ zonder te wachten; klaar(foutnaam) ('' = gelukt)."""
+        if QDBusConnection is None:
+            if klaar is not None:
+                klaar("org.freedesktop.DBus.Error.ServiceUnknown")
+            return
+        msg = QDBusMessage.createMethodCall("org.bluez", pad, iface, methode)
+        if args:
+            msg.setArguments(list(args))
+        w = QDBusPendingCallWatcher(QDBusConnection.systemBus().asyncCall(msg, ms), self)
+        self.wachters.append(w)
+
+        def af(w_) -> None:
+            fout = w_.error().name() if w_.isError() else ""
+            if w_ in self.wachters:
+                self.wachters.remove(w_)
+            w_.deleteLater()
+            if klaar is not None and not self.gesloten:
+                klaar(fout)
+
+        w.finished.connect(af)
+
+    def start(self) -> None:
+        self.agent = bluetooth_agent()
+        if self.agent is None:
+            self.probleem.emit("org.freedesktop.DBus.Error.ServiceUnknown")
+            return
+        self.agent.koppelaar = self
+        # Alleen voor ons eigen koppelen; niet RequestDefaultAgent (KDE blijft de standaard voor een telefoon die zelf
+        # begint). 'AlreadyExists' = al geregistreerd: goed.
+        self.roep("/org/bluez", "org.bluez.AgentManager1", "RegisterAgent",
+                  [QDBusObjectPath(AGENT_PAD), "KeyboardDisplay"],
+                  klaar=lambda f: f and f != "org.bluez.Error.AlreadyExists" and self.probleem.emit(f))
+        self.wil_zoeken = True
+        self.peil()
+        self.klok.start()
+
+    def peil(self) -> None:
+        if self.peilt or self.gesloten:
+            return
+        self.peilt = True
+        op_achtergrond(self, bi.bt_objecten, self.gepeild)
+
+    def gepeild(self, stand) -> None:
+        self.peilt = False
+        if self.gesloten or stand is None:
+            return
+        if stand.adapter != self.adapter or not stand.aan:
+            self.adapter, self.zoekt = stand.adapter, False   # een andere (of geen) kaart, of uitgezet
+        if self.adapter and stand.aan and self.wil_zoeken and not self.zoekt:
+            self.zoek_aan()
+        self.gevonden.emit(stand)
+
+    def zoek_aan(self) -> None:
+        self.zoekt = True
+
+        def klaar(fout: str) -> None:
+            if fout in ("", "org.bluez.Error.InProgress"):   # InProgress: iemand anders zoekt al, ook goed
+                return
+            self.zoekt = False
+            self.probleem.emit(fout)
+
+        self.roep(self.adapter, "org.bluez.Adapter1", "StartDiscovery", klaar=klaar)
+
+    def zoek(self, aan: bool) -> None:
+        """Zoeken zolang de lijst open is (zoals Windows): BlueZ ruimt anders apparaten op die je nog wilt kiezen."""
+        self.wil_zoeken = aan
+        if aan and self.adapter and not self.zoekt:
+            self.zoek_aan()
+        elif not aan and self.zoekt and self.adapter:
+            self.zoekt = False
+            self.roep(self.adapter, "org.bluez.Adapter1", "StopDiscovery")
+
+    def koppel(self, pad: str) -> None:
+        self.pad = pad
+        self.zoek(False)   # niet zoeken tijdens het koppelen (dat maakt koppelen onbetrouwbaar)
+
+        def vertrouwd(_ok) -> None:
+            if self.gesloten or self.pad != pad:
+                return
+            self.roep(pad, "org.bluez.Device1", "Pair", ms=90000, klaar=lambda f: self.na_koppelen(pad, f))
+
+        # Eerst vertrouwen: een koptelefoon zet meteen na het koppelen zijn geluid aan, en dan vroeg BlueZ anders KDE's
+        # agent om toestemming (een KDE-melding midden in ons koppelen) (N8).
+        op_achtergrond(self, lambda: bi.bt_vertrouw(pad, True), vertrouwd)
+
+    def na_koppelen(self, pad: str, fout: str) -> None:
+        if fout and fout != "org.bluez.Error.AlreadyExists":
+            op_achtergrond(self, lambda: bi.bt_vertrouw(pad, False), lambda _u: None)   # weer niet vertrouwd
+        self.gekoppeld.emit(pad, fout)
+
+    def antwoord(self, ja: bool, waarde=None) -> None:
+        if self.agent is not None:
+            self.agent.antwoord(ja, waarde)
+
+    def stop_koppelen(self) -> None:
+        if self.pad:
+            self.roep(self.pad, "org.bluez.Device1", "CancelPairing")
+        if self.agent is not None:
+            self.agent.annuleer()
+
+    def sluit(self) -> None:
+        if self.gesloten:
+            return
+        self.klok.stop()
+        if self.agent is not None:
+            self.agent.annuleer()
+            if self.agent.koppelaar is self:
+                self.agent.koppelaar = None
+        if self.zoekt and self.adapter:
+            self.roep(self.adapter, "org.bluez.Adapter1", "StopDiscovery")
+        if self.agent is not None:
+            self.roep("/org/bluez", "org.bluez.AgentManager1", "UnregisterAgent", [QDBusObjectPath(AGENT_PAD)])
+        self.gesloten = True
+        self.zoekt = False
+
+
+class NepKoppelaar(QObject):
+    """De voorbeeldstand (foto's en tests): vindt na een tijdje vier apparaten; een telefoon vraagt of de code klopt,
+    een toetsenbord laat een code typen, oortjes en een controller koppelen zo."""
+
+    gevonden = Signal(object)
+    vraag = Signal(str, str, object)
+    gekoppeld = Signal(str, str)
+    probleem = Signal(str)
+
+    def __init__(self, ouder: QObject | None = None):
+        super().__init__(ouder)
+        self.pad = ""
+        self.wacht_soort = ""
+        self.pin_voor = ""        # foto's/tests: dit apparaat vraagt een pincode
+        self.gesloten = False
+        self.klokken: list[QTimer] = []
+        self.getoond = 0
+
+    def na(self, ms: int, f) -> None:
+        k = QTimer(self)
+        k.setSingleShot(True)
+        k.timeout.connect(f)
+        k.start(ms)
+        self.klokken.append(k)
+
+    def stop_klokken(self) -> None:
+        for k in self.klokken:
+            k.stop()
+        self.klokken = []
+
+    def toon(self, n: int) -> None:
+        if self.gesloten:
+            return
+        self.getoond = max(self.getoond, n)
+        stand = bi.bt_objecten()
+        zichtbaar = {g.adres for g in bi.VB_BT_GEVONDEN[:self.getoond]} | {bi.VB_BT_GEVONDEN[-1].adres}
+        stand.apparaten = [g for g in stand.apparaten if g.adres in zichtbaar]
+        self.gevonden.emit(stand)
+
+    def start(self) -> None:
+        for ms, n in ((300, 1), (900, 3), (1500, 4)):
+            self.na(ms, lambda n=n: self.toon(n))
+
+    def zoek(self, aan: bool) -> None:
+        if aan and self.getoond:
+            self.na(50, lambda: self.toon(self.getoond))
+
+    def koppel(self, pad: str) -> None:
+        self.pad = pad
+        g = next((x for x in bi.VB_BT_GEVONDEN if x.pad == pad), None)
+        soort = bi.bt_soort(g.soort) if g is not None else ""
+        if g is not None and g.naam == self.pin_voor:
+            self.wacht_soort = "pin"
+            self.na(400, lambda: self.vraag.emit("pin", pad, None))
+        elif soort == "telefoon":
+            self.wacht_soort = "vergelijk"
+            self.na(400, lambda: self.vraag.emit("vergelijk", pad, 284913))
+        elif soort == "toetsenbord":
+            self.wacht_soort = ""
+            self.na(300, lambda: self.vraag.emit("typ", pad, (503172, 0)))
+            for i, n in enumerate((2, 4, 6)):
+                self.na(700 + 400 * i, lambda n=n: self.vraag.emit("typ", pad, (503172, n)))
+            self.na(2100, lambda: self.gekoppeld.emit(pad, ""))
+        else:
+            self.na(800, lambda: self.gekoppeld.emit(pad, ""))
+
+    def antwoord(self, ja: bool, waarde=None) -> None:  # noqa: ARG002
+        if not self.wacht_soort:
+            return
+        self.wacht_soort = ""
+        pad = self.pad
+        self.na(300, lambda: self.gekoppeld.emit(pad, "" if ja else "org.bluez.Error.AuthenticationFailed"))
+
+    def stop_koppelen(self) -> None:
+        pad, self.wacht_soort = self.pad, ""
+        self.stop_klokken()
+        self.na(100, lambda: self.gekoppeld.emit(pad, "org.bluez.Error.AuthenticationCanceled"))
+
+    def sluit(self) -> None:
+        self.gesloten = True
+        self.stop_klokken()
+
+
+class KoppelDialoog(QDialog):
+    """Apparaat toevoegen: zoeken, kiezen, koppelen (met de code als het apparaat dat vraagt), vertrouwen en verbinden.
+    Opent met open(); zegt het met klaar(tekst, soort) voor de melding op de pagina."""
+
+    klaar = Signal(str, str)
+
+    def __init__(self, ouder: QWidget, koppelaar):
+        super().__init__(ouder)
+        self.koppelaar = koppelaar
+        koppelaar.setParent(self)
+        self.staat = "lijst"
+        self.pad = self.naam = self.adres = self.soort = ""
+        self.door_mij_gestopt = False
+        self.nee_gezegd = False
+        self.gekozen = None
+        self.fout_soort = ""
+        self.rijen: dict[str, Rij] = {}
+        self.inhoud_sleutel: tuple = ()
+        self.gesloten = False
+        self.setWindowTitle(t("Apparaat toevoegen", "Add a device"))
+        breed = min(520, max(360, schermmaat((99999, 0), scherm=ouder.screen())[0][0] - 40))
+        self.setMinimumWidth(breed)
+        # Een venster mag de vrije hoogte gebruiken: anders zag je bij 150 % maar anderhalf apparaat (N10).
+        self.resize(breed, max(300, min(560, vrije_hoogte(ouder))))
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(24, 22, 24, 20)
+        lay.setSpacing(10)
+        self.kop = label(t("Apparaat toevoegen", "Add a device"), "kop2")
+        lay.addWidget(self.kop)
+        self.stapel = QStackedWidget()
+        lay.addWidget(self.stapel, 1)
+
+        # ---- de lijst
+        lijst = QWidget()
+        ll = QVBoxLayout(lijst)
+        ll.setContentsMargins(0, 0, 0, 0)
+        ll.setSpacing(10)
+        ll.addWidget(label(t("Zet je apparaat in koppelstand.", "Put your device in pairing mode."), "klein"))
+        self.zoek_banner = Banner(t("Apparaten zoeken…", "Looking for devices…"), "bezig")
+        ll.addWidget(self.zoek_banner)
+        binnen = QWidget()
+        bl = QVBoxLayout(binnen)
+        bl.setContentsMargins(0, 0, 0, 0)
+        self.groep = Groep()
+        self.groep.lay.setContentsMargins(4, 4, 4, 4)
+        self.groep.hide()
+        bl.addWidget(self.groep)
+        bl.addStretch(1)
+        ll.addWidget(schuifbaar(binnen), 1)
+        self.stapel.addWidget(lijst)
+
+        # ---- koppelen
+        kp = QWidget()
+        kl = QVBoxLayout(kp)
+        kl.setContentsMargins(0, 0, 0, 0)
+        kl.setSpacing(10)
+        self.banner = Banner()
+        kl.addWidget(self.banner)
+        self.vraag_label = label("", "sub")
+        kl.addWidget(self.vraag_label)
+        self.code = label("", "titel", wrap=False)
+        self.code.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.code.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        kl.addWidget(self.code)
+        self.code_onder = label("", "klein")
+        self.code_onder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        kl.addWidget(self.code_onder)
+        self.invoer = QLineEdit()
+        self.invoer.setMinimumHeight(36)
+        self.invoer.textChanged.connect(lambda _t: self.werk_knoppen_bij())
+        kl.addWidget(self.invoer)
+        self.invoer_uitleg = label("", "klein")
+        kl.addWidget(self.invoer_uitleg)
+        kl.addStretch(1)
+        self.stapel.addWidget(kp)
+
+        # ---- knoppen (welke je ziet, hangt van de stand af)
+        lay.addSpacing(4)
+        self.weg_knop = Knop(t("Annuleren", "Cancel"), "stil")
+        self.weg_knop.clicked.connect(self.annuleer)
+        self.nee_knop = Knop("", "stil")
+        self.nee_knop.clicked.connect(self.nee)
+        self.ja_knop = Knop("", "hoofd")
+        self.ja_knop.clicked.connect(self.ja)
+        lay.addLayout(knoppenrij(self.weg_knop, self.nee_knop, self.ja_knop))
+
+        koppelaar.gevonden.connect(self.bij_gevonden)
+        koppelaar.vraag.connect(self.bij_vraag)
+        koppelaar.gekoppeld.connect(self.bij_gekoppeld)
+        koppelaar.probleem.connect(self.bij_probleem)
+        self.niets = QTimer(self)
+        self.niets.setSingleShot(True)
+        self.niets.timeout.connect(self.toon_lijst_inhoud)
+        self.laatste = None
+        self.toon_lijst(zoeken=False)
+        koppelaar.start()
+
+    # ---------------------------------------------------------------- standen
+    def knoppen(self, weg: bool = False, nee: str = "", ja: str = "") -> None:
+        self.weg_knop.setVisible(weg)
+        self.nee_knop.setText(nee)
+        self.nee_knop.setVisible(bool(nee))
+        self.ja_knop.setText(ja)
+        self.ja_knop.setVisible(bool(ja))
+        self.ja_knop.setDefault(bool(ja) and self.staat in ("pin", "passkey"))
+        self.werk_knoppen_bij()
+
+    def werk_knoppen_bij(self) -> None:
+        if self.staat in ("pin", "passkey"):
+            self.ja_knop.setEnabled(bool(self.invoer.text().strip()))
+        else:
+            self.ja_knop.setEnabled(True)
+
+    def toon_lijst(self, zoeken: bool = True) -> None:
+        self.staat = "lijst"
+        self.pad = ""
+        self.kop.setText(t("Apparaat toevoegen", "Add a device"))
+        self.setWindowTitle(self.kop.text())
+        self.stapel.setCurrentIndex(0)
+        self.knoppen(weg=True)
+        if zoeken:
+            self.koppelaar.zoek(True)
+        self.niets.start(15000)
+        self.toon_lijst_inhoud()
+
+    def koppel_blad(self, kop: str) -> None:
+        self.stapel.setCurrentIndex(1)
+        self.kop.setText(kop)
+        self.setWindowTitle(kop)
+        for w in (self.vraag_label, self.code, self.code_onder, self.invoer, self.invoer_uitleg):
+            w.hide()
+
+    def toon_bezig(self, tekst: str = "") -> None:
+        self.staat = "bezig"
+        self.koppel_blad(t("Koppelen met {naam}", "Pairing with {naam}").format(naam=self.naam))
+        self.banner.zet(tekst or t("Even geduld… Kies op het apparaat 'Koppelen' als het dat vraagt.",
+                                   "One moment… Choose 'Pair' on the device if it asks."), "bezig")
+        self.knoppen(weg=True)
+
+    # ---------------------------------------------------------------- de lijst
+    def bij_gevonden(self, stand) -> None:
+        if self.gesloten:
+            return
+        self.laatste = stand
+        if self.staat == "lijst":
+            self.toon_lijst_inhoud()
+
+    def toon_lijst_inhoud(self) -> None:
+        if self.staat != "lijst":
+            return
+        stand = self.laatste
+        if stand is not None and not stand.adapter:
+            self.zoek_banner.zet(t("Bluetooth doet het nu niet. Zet Bluetooth uit en weer aan.",
+                                   "Bluetooth is not working right now. Turn Bluetooth off and on."), "fout")
+        elif stand is not None and not stand.aan:
+            self.zoek_banner.zet(t("Bluetooth staat uit. Zet Bluetooth aan en probeer het opnieuw.",
+                                   "Bluetooth is off. Turn Bluetooth on and try again."), "fout")
+        elif self.zoek_banner.tekst.text() != t("Apparaten zoeken…", "Looking for devices…"):
+            self.zoek_banner.zet(t("Apparaten zoeken…", "Looking for devices…"), "bezig")
+        nieuw = bi.bt_nieuw(stand) if stand is not None and stand.aan else []
+        lang_genoeg = not self.niets.isActive()
+        sleutel = tuple((g.pad, g.naam, g.soort) for g in nieuw) + ((("niets",),) if lang_genoeg and not nieuw else ())
+        if sleutel == self.inhoud_sleutel:
+            return
+        self.inhoud_sleutel = sleutel
+        leeg_groep(self.groep)
+        self.rijen = {}
+        for g in nieuw:
+            soort = bi.bt_soort(g.soort)
+            rij = Rij(BT_ICOON.get(soort, "bluetooth"), g.naam, bt_woord(soort), klikbaar=True, pijl=False)
+            rij.geklikt.connect(lambda x=g: self.koppel(x))
+            self.rijen[g.naam] = rij
+            self.groep.voeg(rij)
+        if not nieuw and lang_genoeg:
+            self.groep.voeg(Rij("bluetooth", t("Nog niets gevonden", "Nothing found yet"),
+                                t("Staat het apparaat aan, dichtbij en in koppelstand? Vaak houd je de aan-knop of de "
+                                  "bluetooth-knop een paar seconden ingedrukt. Op een telefoon open je de "
+                                  "bluetooth-instellingen.",
+                                  "Is the device on, nearby and in pairing mode? Often you hold its power or Bluetooth "
+                                  "button for a few seconds. On a phone, open its Bluetooth settings.")))
+        self.groep.setVisible(bool(nieuw) or lang_genoeg)
+
+    def bij_probleem(self, fout: str) -> None:
+        if self.gesloten:
+            return
+        soort = bi.bt_koppel_fout(fout)
+        if self.staat == "lijst" and soort in ("uit", "geen"):
+            self.zoek_banner.zet(t("Bluetooth staat uit. Zet Bluetooth aan en probeer het opnieuw.",
+                                   "Bluetooth is off. Turn Bluetooth on and try again.") if soort == "uit" else
+                                 t("Bluetooth doet het nu niet. Zet Bluetooth uit en weer aan.",
+                                   "Bluetooth is not working right now. Turn Bluetooth off and on."), "fout")
+
+    # ---------------------------------------------------------------- koppelen
+    def koppel(self, g) -> None:
+        if self.staat not in ("lijst", "fout"):
+            return
+        self.gekozen = g
+        self.pad, self.naam, self.adres, self.soort = g.pad, g.naam, g.adres, bi.bt_soort(g.soort)
+        self.door_mij_gestopt = self.nee_gezegd = False
+        self.niets.stop()
+        self.toon_bezig()
+        self.koppelaar.koppel(g.pad)
+
+    def bij_vraag(self, soort: str, pad: str, waarde) -> None:
+        if self.gesloten or pad != self.pad or self.staat in ("lijst", "fout", "klaar"):
+            return
+        if soort == "stop":
+            self.toon_bezig()
+            return
+        self.koppel_blad(t("Koppelen met {naam}", "Pairing with {naam}").format(naam=self.naam))
+        self.banner.zet("")
+        if soort == "vergelijk":
+            self.staat = "vergelijk"
+            self.vraag_label.setText(t("Zie je deze code ook op {naam}?", "Do you see this code on {naam} too?")
+                                     .format(naam=self.naam))
+            self.zet_code(int(waarde))
+            self.code_onder.setText(t("Kies dan op beide apparaten 'Koppelen'.", "Then choose 'Pair' on both devices."))
+            self.code_onder.show()
+            self.knoppen(nee=t("Nee, ze zijn anders", "No, they're different"), ja=t("Ja, koppelen", "Yes, pair"))
+        elif soort == "typ":
+            self.staat = "typ"
+            code, getypt = waarde if isinstance(waarde, tuple) else (waarde, 0)
+            self.vraag_label.setText(t("Typ deze code op {naam} en druk op Enter:",
+                                       "Type this code on {naam} and press Enter:").format(naam=self.naam))
+            self.zet_code(code)
+            if isinstance(code, int) and getypt > 0:
+                self.code_onder.setText(t("{n} van de 6 cijfers getypt", "{n} of 6 digits typed").format(n=getypt))
+                self.code_onder.show()
+            self.knoppen(weg=True)
+        elif soort in ("pin", "passkey"):
+            self.staat = soort
+            self.vraag_label.setText((t("Typ de pincode van {naam}", "Type the PIN of {naam}") if soort == "pin" else
+                                      t("Typ de code die {naam} laat zien", "Type the code {naam} shows"))
+                                     .format(naam=self.naam))
+            self.vraag_label.show()
+            self.invoer.setValidator(None if soort == "pin" else QIntValidator(0, 999999, self.invoer))
+            self.invoer.setMaxLength(16 if soort == "pin" else 6)
+            self.invoer.setText("0000" if soort == "pin" else "")
+            self.invoer.setAccessibleName(self.vraag_label.text())
+            self.invoer.show()
+            self.invoer.selectAll()
+            self.invoer.setFocus()
+            if soort == "pin":
+                self.invoer_uitleg.setText(t("Staat vaak in de handleiding. Meestal is het 0000 of 1234.",
+                                             "Often in the manual. Usually it is 0000 or 1234."))
+                self.invoer_uitleg.show()
+            self.knoppen(weg=True, ja=t("Koppelen", "Pair"))
+
+    def zet_code(self, code) -> None:
+        tekst = bi.code_tekst(code)
+        self.code.setText(tekst)
+        # De schermlezer leest de cijfers één voor één.
+        self.code.setAccessibleName(" ".join(c for c in tekst if not c.isspace()))
+        self.vraag_label.show()
+        self.code.show()
+
+    def ja(self) -> None:
+        if self.staat == "vergelijk":
+            self.koppelaar.antwoord(True)
+            self.toon_bezig()
+        elif self.staat in ("pin", "passkey"):
+            w = self.invoer.text().strip()
+            if not w:
+                return
+            self.koppelaar.antwoord(True, w if self.staat == "pin" else int(w))
+            self.toon_bezig()
+        elif self.staat == "fout" and self.fout_soort == "weg":
+            self.toon_lijst()
+        elif self.staat == "fout" and self.gekozen is not None:
+            self.koppel(self.gekozen)   # opnieuw proberen
+
+    def nee(self) -> None:
+        if self.staat == "vergelijk":
+            self.nee_gezegd = True
+            self.koppelaar.antwoord(False)
+            self.toon_bezig()
+        elif self.staat == "fout":
+            self.toon_lijst()
+
+    def annuleer(self) -> None:
+        if self.staat == "lijst":
+            self.reject()
+            return
+        # Tijdens het koppelen: stoppen en terug naar de lijst (de uitslag van BlueZ telt dan niet meer).
+        self.door_mij_gestopt = True
+        if self.staat in ("pin", "passkey"):
+            self.koppelaar.antwoord(False)
+        self.koppelaar.stop_koppelen()
+        self.toon_lijst()
+
+    def bij_gekoppeld(self, pad: str, fout: str) -> None:
+        if self.gesloten or pad != self.pad or self.staat in ("lijst", "klaar"):
+            return
+        soort = bi.bt_koppel_fout(fout, apparaat=True) if fout else ""
+        if soort in ("", "al"):
+            self.staat = "klaar"
+            self.toon_bezig(t("Verbinden met {naam}…", "Connecting to {naam}…").format(naam=self.naam))
+            self.staat = "klaar"
+            self.knoppen()
+            pad_, adres = self.pad, self.adres
+            op_achtergrond(self, lambda: bi.bt_vertrouw_en_verbind(pad_, adres), self.verbonden)
+            return
+        if self.nee_gezegd and soort in ("geweigerd", "gestopt", "anders"):
+            soort = "codes"   # 'Nee, ze zijn anders' eindigt bij BlueZ als geweigerd
+        self.toon_fout(soort)
+
+    def verbonden(self, uitkomst) -> None:
+        if self.gesloten:
+            return
+        _vertrouwd, verbonden = uitkomst or (False, False)
+        if verbonden:
+            tekst, soort = t("{naam} is gekoppeld en verbonden.", "{naam} is paired and connected."), "goed"
+        elif self.soort in ("telefoon", "computer", "tablet"):
+            # Een telefoon of computer heeft meestal niets om mee te 'verbinden': gekoppeld is dan klaar (N14).
+            tekst, soort = t("{naam} is gekoppeld.", "{naam} is paired."), "goed"
+        else:
+            tekst, soort = t("{naam} is gekoppeld. Verbinden lukte nog niet: klik erop in de lijst.",
+                             "{naam} is paired. Connecting did not work yet: click it in the list."), "let_op"
+        self.klaar.emit(tekst.format(naam=self.naam), soort)
+        self.accept()
+
+    def toon_fout(self, soort: str) -> None:
+        self.staat = "fout"
+        self.fout_soort = soort
+        self.koppel_blad(t("Koppelen met {naam}", "Pairing with {naam}").format(naam=self.naam))
+        teksten = {
+            "codes": t("De codes kwamen niet overeen, of {naam} weigerde. Probeer het nog eens.",
+                       "The codes did not match, or {naam} refused. Try again."),
+            "gestopt": t("Het koppelen is gestopt.", "Pairing was stopped."),
+            "geweigerd": t("{naam} wilde niet koppelen. Kies op het apparaat 'Koppelen' of 'Toestaan'.",
+                           "{naam} did not want to pair. Choose 'Pair' or 'Allow' on the device."),
+            "traag": t("Het duurde te lang. Zet {naam} opnieuw in koppelstand en probeer het nog eens.",
+                       "It took too long. Put {naam} in pairing mode again and try again."),
+            "bereik": t("{naam} antwoordt niet. Staat het aan, dichtbij en in koppelstand?",
+                        "{naam} does not answer. Is it on, nearby and in pairing mode?"),
+            "bezig": t("BugOS is al met {naam} bezig. Wacht even en probeer het opnieuw.",
+                       "BugOS is already busy with {naam}. Wait a moment and try again."),
+            "uit": t("Bluetooth staat uit. Zet Bluetooth aan en probeer het opnieuw.",
+                     "Bluetooth is off. Turn Bluetooth on and try again."),
+            "geen": t("Bluetooth doet het nu niet. Zet Bluetooth uit en weer aan.",
+                      "Bluetooth is not working right now. Turn Bluetooth off and on."),
+            "weg": t("{naam} is niet meer te vinden. Ga terug naar de lijst; zet het apparaat zo nodig opnieuw in "
+                     "koppelstand.",
+                     "{naam} cannot be found any more. Go back to the list; put the device in pairing mode again if "
+                     "needed."),
+        }
+        self.banner.zet(teksten.get(soort, t("Koppelen lukte niet. Probeer het nog eens.", "Pairing did not work. "
+                                             "Try again.")).format(naam=self.naam), "fout")
+        if soort == "weg":   # dat apparaat is er niet meer: alleen terug naar de lijst
+            self.knoppen(ja=t("Terug naar de lijst", "Back to the list"))
+        else:
+            self.knoppen(nee=t("Terug naar de lijst", "Back to the list"), ja=t("Opnieuw proberen", "Try again"))
+
+    # ---------------------------------------------------------------- sluiten
+    def done(self, r: int) -> None:  # noqa: D102
+        if not self.gesloten:
+            self.gesloten = True
+            self.niets.stop()
+            if self.staat in ("bezig", "vergelijk", "typ", "pin", "passkey"):
+                self.koppelaar.stop_koppelen()
+            self.koppelaar.sluit()
+        super().done(r)
 
 
 class BluetoothPagina(Blad):
@@ -882,25 +1630,29 @@ class BluetoothPagina(Blad):
     zoekwoorden = ("bluetooth koptelefoon oortjes muis toetsenbord telefoon koppelen draadloos bluetooth headphones "
                    "earbuds mouse keyboard phone pair pairing wireless")
 
+    HARD_UIT = ("Bluetooth staat uit met een knop of schakelaar op de computer (vliegtuigstand). Zet die eerst om.",
+                "Bluetooth is turned off with a switch or key on the computer (airplane mode). Switch it back first.")
+
     def bouw(self) -> None:
         g = self.kaart()
         self.schakel = schuifje(True, self.zet_bt)
         self.hoofd = Rij("bluetooth", "Bluetooth", "", self.schakel)
         g.voeg(self.hoofd)
         nieuw = self.nieuw = Knop(t("Nieuw apparaat koppelen", "Pair a new device"), "stil", "lijn:map-plus")
-        nieuw.clicked.connect(lambda _c=False: start("bluedevil-wizard") if bestaat("bluedevil-wizard")
-                              else kde_instelling("kcm_bluetooth"))
+        nieuw.clicked.connect(lambda _c=False: self.koppel_nieuw())
         self.lay.addWidget(sectie_met_knop(t("Jouw apparaten", "Your devices"), nieuw))
         self.lijst = self.kaart()
 
     def ververs(self) -> None:
-        op_achtergrond(self, lambda: (bi.bt_aan(), bi.bt_apparaten(), bi.VOORBEELD or bi.bt_hardware()), self.toon)
+        op_achtergrond(self, lambda: (bi.bt_aan(), bi.bt_apparaten(), bi.VOORBEELD or bi.bt_hardware(),
+                                      bi.bt_hard_uit()), self.toon)
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:
             return
         aan, apparaten, *rest = uitkomst
         heeft = rest[0] if rest else True
+        hard = bool(rest[1]) if len(rest) > 1 else False
         # Geen bluetooth in de computer: dat zeggen, geen schakelaar en knop die niets doen (U157).
         for w in (self.schakel, self.nieuw, self.lijst):
             w.setVisible(heeft)
@@ -909,8 +1661,13 @@ class BluetoothPagina(Blad):
             return
         self.schakel.zet_stil(aan)
         verbonden = sum(1 for a in apparaten if a.verbonden)
-        self.hoofd.zet_uitleg((t(f"Aan · {verbonden} verbonden", f"On · {verbonden} connected") if verbonden
-                               else t("Aan", "On")) if aan else t("Uit", "Off"))
+        if not aan and hard:
+            # Met een knop op de computer uitgezet: dan helpt het schuifje niet, en dat zeggen we (N15).
+            self.hoofd.zet_uitleg(t("Uit met een knop of schakelaar op de computer (vliegtuigstand)",
+                                    "Off with a switch or key on the computer (airplane mode)"))
+        else:
+            self.hoofd.zet_uitleg((t(f"Aan · {verbonden} verbonden", f"On · {verbonden} connected") if verbonden
+                                   else t("Aan", "On")) if aan else t("Uit", "Off"))
         leeg_groep(self.lijst)
         for a in apparaten:
             batterij = t(f" · batterij {a.batterij}%", f" · battery {a.batterij}%") if a.batterij is not None else ""
@@ -931,7 +1688,52 @@ class BluetoothPagina(Blad):
                                   "Choose 'Pair a new device' and put your device in pairing mode.")))
 
     def zet_bt(self, aan: bool) -> None:
-        op_achtergrond(self, lambda: bi.zet_bt(aan), lambda _u: QTimer.singleShot(800, self.ververs))
+        def klaar(uitkomst) -> None:
+            ok, hard = uitkomst or (False, False)
+            if aan and not ok:   # niet stil laten mislukken (N15)
+                self.melding.toon(t(*self.HARD_UIT) if hard else
+                                  t("Bluetooth aanzetten lukte niet.", "Turning on Bluetooth did not work."),
+                                  "let_op" if hard else "fout", seconden=0 if hard else 8)
+            QTimer.singleShot(800, self.ververs)
+
+        op_achtergrond(self, lambda: (bi.zet_bt(aan), bi.bt_hard_uit()), klaar)
+
+    # ---------------------------------------------------------------- koppelen
+    def koppel_nieuw(self) -> None:
+        """Nieuw apparaat koppelen, in BugOS zelf (niet met de wizard van KDE). Staat bluetooth uit, dan eerst aan."""
+        self.nieuw.setEnabled(False)
+
+        def klaar(uitkomst) -> None:
+            self.nieuw.setEnabled(True)
+            hard, aan = uitkomst or (False, False)
+            if hard:
+                self.melding.toon(t(*self.HARD_UIT), "let_op", seconden=0)
+                return
+            if aan:
+                self.open_koppelen()
+                return
+            self.melding.toon(t("Bluetooth aanzetten…", "Turning on Bluetooth…"), seconden=15)
+            op_achtergrond(self, lambda: bi.zet_bt(True), self.aangezet)
+
+        op_achtergrond(self, lambda: (bi.bt_hard_uit(), bi.bt_aan()), klaar)
+
+    def aangezet(self, ok) -> None:
+        if not ok:
+            self.melding.toon(t("Bluetooth aanzetten lukte niet.", "Turning on Bluetooth did not work."), "fout")
+            return
+        self.melding.hide()
+        self.ververs()
+        self.open_koppelen()
+
+    def open_koppelen(self) -> None:
+        oud = getattr(self, "koppel_dialoog", None)
+        if oud is not None and not oud.isVisible():
+            oud.deleteLater()
+        koppelaar = NepKoppelaar() if bi.VOORBEELD else BluezKoppelaar()
+        d = self.koppel_dialoog = KoppelDialoog(self, koppelaar)
+        d.klaar.connect(lambda tekst, soort: self.melding.toon(tekst, soort))
+        d.finished.connect(lambda _r: self.ververs())
+        d.open()
 
     def verbind(self, a: bi.Apparaat) -> None:
         self.melding.toon(t(f"{a.naam}: even geduld…", f"{a.naam}: one moment…"), seconden=20)
