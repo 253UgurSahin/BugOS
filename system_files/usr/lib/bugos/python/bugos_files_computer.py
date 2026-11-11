@@ -11,7 +11,9 @@ venster (Bestanden in bugos_files_venster.py erft het).
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import stat as _stat
 import subprocess
 import sys
@@ -19,14 +21,14 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from bugos_ui import K, Knop, label, lijn, lijn_icoon, platte_tip, px, sectie, sectie_met_knop, start, t
+from bugos_ui import K, Knop, label, lijn, lijn_icoon, lijn_pixmap, platte_tip, px, sectie, sectie_met_knop, start, t
 from bugos_desktop import app_info, mooie_naam
 from bugos_drives import mooie_maat
 from bugos_files_plekken import RUIMTE_SOORTEN, STOP, eigen_ruimte, plekken, thuis, voorbeeld_ruimte
 from bugos_files_acties import prullenbak, prullenbak_inhoud
 from bugos_files_onderdelen import RuimteBalk, SchijfRij, stip_icoon
 from PySide6.QtCore import QObject, QRunnable, QSize, Qt, QThreadPool, QTimer, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QIcon, QTransform
 from PySide6.QtWidgets import (
     QFrame, QGridLayout, QHBoxLayout, QLabel, QMenu, QProgressBar, QPushButton, QVBoxLayout,
 )
@@ -34,6 +36,7 @@ from PySide6.QtWidgets import (
 ZICHTBAAR, HOOGSTENS = 5, 12   # zoveel regels eerst, en na 'Meer tonen'
 OPNIEUW_TELLEN = 600           # seconden: zolang geldt een telling (opnieuw bij 'Zien wat ruimte inneemt' of vanuit Hulp)
 MIN_GROOTTE = 100 * 10**6      # kleiner dan 100 MB: niet de moeite van een eigen regel
+WINKEL = Path("/usr/share/bugos/store.json")   # de apps die de BugOS Winkel zelf laat zien
 
 
 # ============================================================ ruimte tellen ===
@@ -97,16 +100,20 @@ def bekende_data() -> dict[str, tuple[str, str, str]]:
     }
 
 
-def tel_map(pad: Path | str, apparaat: int, gezien: set[tuple[int, int]], max_items: int = 500_000) -> int:
+def tel_map(pad: Path | str, apparaat: int, gezien: set[tuple[int, int]], max_items: int = 500_000,
+            koppel: frozenset[str] | set[str] = frozenset()) -> int:
     """Hoeveel ruimte een map echt gebruikt (zoals 'du'). Blijft op het apparaat 'apparaat' (geen andere schijf of
     netwerkmap die er toevallig in hangt, review 4), volgt geen snelkoppelingen, en telt een bestand met meer namen
-    (hardlinks, zoals in Flatpak) maar één keer (review 10). Stopt als het venster dichtgaat."""
+    (hardlinks, zoals in Flatpak) maar één keer (review 10). Een map in 'koppel' (daar hangt een andere schijf of
+    netwerkmap aan) wordt niet eens aangeraakt. Stopt als het venster dichtgaat."""
     totaal, rij, n = 0, [str(pad)], 0
     while rij and n < max_items and not STOP.is_set():
         try:
             with os.scandir(rij.pop()) as inhoud:
                 for e in inhoud:
                     n += 1
+                    if e.path in koppel:
+                        continue
                     try:
                         st = e.stat(follow_symlinks=False)
                     except OSError:
@@ -126,6 +133,32 @@ def tel_map(pad: Path | str, apparaat: int, gezien: set[tuple[int, int]], max_it
         except OSError:
             continue
     return totaal
+
+
+def _koppelpunten() -> set[str]:
+    """Waar een andere schijf of netwerkmap aan hangt (uit /proc/self/mountinfo). Zo'n map wordt niet eens geopend:
+    een netwerkmap die niet meer antwoordt, laat 'stat' anders hangen, en dan stopt het tellen nooit (review 4)."""
+    try:
+        tekst = Path("/proc/self/mountinfo").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return set()
+    plekken_: set[str] = set()
+    for regel in tekst.splitlines():
+        d = regel.split()
+        if len(d) > 4:   # veld 5 is de plek; een spatie staat er als \040
+            plekken_.add(re.sub(r"\\([0-7]{3})", lambda m: chr(int(m.group(1), 8)), d[4]))
+    return plekken_
+
+
+def _koppel_in(thuis_: Path) -> frozenset[str]:
+    """De koppelpunten in je thuismap, geschreven zoals de thuismap zelf (/home/x of /var/home/x)."""
+    echt = os.path.realpath(thuis_)
+    uit = set()
+    for m in _koppelpunten():
+        if m != echt and m.startswith(echt.rstrip("/") + "/"):
+            uit.add(str(thuis_).rstrip("/") + m[len(echt.rstrip("/")):])
+            uit.add(m)
+    return frozenset(uit)
 
 
 def _apparaat_van(pad: Path) -> int:
@@ -154,17 +187,20 @@ def tel_thuis(thuis_: Path | None = None) -> tuple[list[Ruimtegebruik], dict[str
     plek_van = {p: (sl, naam, ic) for sl, naam, ic, p in plekken() if sl != "thuis"}
     bak = prullenbak()
     bekend = bekende_data()
+    koppel = _koppel_in(thuis_)
     overig = losse = 0
 
     def map_grootte(p: Path) -> int:
         """Een map met een andere schijf erin (een tweede schijf, een netwerkmap): die telt niet mee."""
+        if str(p) in koppel:
+            return 0
         try:
             st = os.stat(p, follow_symlinks=False)
             if _apparaat_van(p) != apparaat or not _stat.S_ISDIR(st.st_mode):
                 return 0
         except OSError:
             return 0
-        return tel_map(p, apparaat, gezien) + st.st_blocks * 512
+        return tel_map(p, apparaat, gezien, koppel=koppel) + st.st_blocks * 512
 
     def kinderen(p: Path):
         try:
@@ -180,6 +216,8 @@ def tel_thuis(thuis_: Path | None = None) -> tuple[list[Ruimtegebruik], dict[str
     for e in bovenste:
         if STOP.is_set():
             break
+        if e.path in koppel:
+            continue   # een andere schijf of netwerkmap in je thuismap: niet aanraken, telt niet mee
         try:
             st = e.stat(follow_symlinks=False)
             if _stat.S_ISLNK(st.st_mode) or _apparaat_van(Path(e.path)) != apparaat:
@@ -348,6 +386,16 @@ def voorbeeld_grootste(nep: list[int]) -> tuple[list[Ruimtegebruik], dict[str, i
     ruimte = dict(zip([sl for sl, _k in RUIMTE_SOORTEN], nep[2:]))
     ruimte["prullenbak"] = int(0.8 * gb)
     return rijen, ruimte, [("org.libreoffice.LibreOffice", int(0.8 * gb))]
+
+
+def in_winkel(app_id: str) -> bool:
+    """Staat deze app in de BugOS Winkel? Een app die er niet in staat, opent bugos-store in Discover van KDE: dan
+    openen we liever de Winkel zelf (daar staan ook je geïnstalleerde apps)."""
+    try:
+        apps = json.loads(WINKEL.read_text(encoding="utf-8"))["apps"]
+        return any(str(a.get("id", "")).lower() == app_id.lower() for a in apps)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return False
 
 
 class Grootsein(QObject):
@@ -627,7 +675,8 @@ class Computer:
         if meer > 0:
             self.meer_knop.setText(t("Minder tonen", "Show less") if alles
                                    else t("Meer tonen", "Show more") + f" ({meer})")
-            self.meer_knop.setIcon(lijn_icoon("onder" if not alles else "rechts", "tekst2", 18, gekozen=None))
+            pijl = lijn_pixmap("onder", "tekst2", 36)
+            self.meer_knop.setIcon(QIcon(pijl.transformed(QTransform().rotate(180)) if alles else pijl))
             self.meer_knop.show()
         else:
             self.meer_knop.hide()
@@ -651,10 +700,11 @@ class Computer:
         """Waar je iets aan een regel doet: de map openen, de prullenbak, of de app in de Winkel."""
         if r.soort == "prullenbak":
             self.open_prullenbak()
-        elif r.soort in ("app", "systeemapp") and r.app_id:
-            start("bugos-store", f"appstream://{r.app_id}")
-        elif r.soort in ("apps", "systeem"):
-            start("bugos-store")
+        elif r.soort in ("app", "systeemapp", "apps", "systeem"):
+            if r.app_id and in_winkel(r.app_id):
+                start("bugos-store", f"appstream://{r.app_id}")
+            else:
+                start("bugos-store")   # nooit Discover van KDE
         elif r.pad is not None and r.pad.is_dir():
             self.ga_naar(r.pad)
 

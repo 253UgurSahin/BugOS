@@ -117,7 +117,7 @@ import bugos_ui  # noqa: E402
 
 app = bugos_ui.maak_app("bugos-test", "bugos-test", [sys.argv[0]])
 from PySide6.QtCore import QPoint, Qt  # noqa: E402
-from PySide6.QtWidgets import QApplication, QDialog, QMenu, QPushButton  # noqa: E402
+from PySide6.QtWidgets import QApplication, QDialog, QLabel, QMenu, QPushButton  # noqa: E402
 
 import bugos_shell  # noqa: E402
 
@@ -266,6 +266,169 @@ klopt(len(_beheerd) == 1 and _beheerd[0][0] == "/dev/sdb" and _st[0].startswith(
       f"review 8: Alles wissen: eerst dicht, dan nieuwe indeling en ext4 op sdb, nooit op de Windows-schijf ({_st})")
 os.environ["BUGOS_LSBLK"] = ""
 venster.vul_zijbalk()
+
+# ===================================== Bestanden: 'Wat de meeste ruimte inneemt' ===
+# Echte bytes (een 'sparse' bestand neemt geen ruimte in). Sluit hier nooit een Bestanden-venster: dan gaat STOP
+# aan en telt alles daarna 0 (review 14).
+klopt(wacht_tot(lambda: not getattr(venster, "grootste_bezig", False), 10), "ruimte: de eerste telling is klaar")
+MB = 10**6
+
+
+def vol(pad: Path, grootte: int) -> None:
+    pad.parent.mkdir(parents=True, exist_ok=True)
+    with open(pad, "wb") as f:
+        f.write(b"\1" * grootte)
+
+
+vol(THUIS / "Videos" / "a.bin", 3 * MB)
+vol(THUIS / "Documenten" / "b.txt", 1 * MB)
+vol(THUIS / ".var" / "app" / "com.valvesoftware.Steam" / "x", 5 * MB)
+schrijf(TMP / "share" / "applications" / "com.valvesoftware.Steam.desktop",
+        "[Desktop Entry]\nType=Application\nName=Steam\nIcon=steam\nExec=steam\n")
+vol(THUIS / ".var" / "app" / "org.oud.Weggehaald" / "y", 1 * MB)          # app is weg, gegevens niet
+vol(THUIS / ".local" / "share" / "Steam" / "y", 2 * MB)
+vol(THUIS / ".local" / "share" / "containers" / "z", int(1.5 * MB))
+vol(THUIS / ".local" / "share" / "raar-ding" / "q", 1 * MB)
+vol(THUIS / ".local" / "share" / "Trash" / "files" / "z", 4 * MB)
+vol(THUIS / ".local" / "share" / "flatpak" / "repo" / "a", 2 * MB)
+os.link(THUIS / ".local" / "share" / "flatpak" / "repo" / "a", THUIS / ".local" / "share" / "flatpak" / "b")
+vol(THUIS / ".cache" / "c", 1 * MB)
+vol(THUIS / ".config" / "k", 512 * 1024)
+vol(THUIS / "losse.iso", 2 * MB)
+vol(THUIS / "NAS" / "film.mkv", 3 * MB)      # een netwerkmap in je thuismap
+vol(THUIS / "Games" / "spel.bin", 3 * MB)    # een tweede schijf in je thuismap
+os.symlink("/usr", THUIS / "link")
+_echt_koppel, _echt_apparaat = bfc._koppelpunten, bfc._apparaat_van
+bfc._koppelpunten = lambda: {str(THUIS / "NAS"), "/", "/proc"}
+bfc._apparaat_van = lambda p: 999999 if Path(p).name == "Games" else _echt_apparaat(p)
+_rijen = bfc.grootste_mappen(THUIS, min_grootte=0)
+_per = {(r.soort, r.naam): r for r in _rijen}
+_namen_rijen = [(r.soort, r.naam, r.grootte // 1000) for r in _rijen]
+klopt(_rijen and _rijen[0].soort == "app" and _rijen[0].naam == "Steam" and 5 * MB <= _rijen[0].grootte < 6 * MB
+      and _rijen[0].app_id == "com.valvesoftware.Steam",
+      f"ruimte: de grootste eerst: Steam (gegevens van de app in ~/.var/app) ({_namen_rijen[:3]})")
+_video = _per.get(("map", "Video's"))
+klopt(_video is not None and _video.pad == THUIS / "Videos" and _video.grootte >= 3 * MB,
+      "ruimte: Video's is een map-regel met zijn pad (klik = openen)")
+klopt(("prullenbak", "Prullenbak") in _per and 4 * MB <= _per[("prullenbak", "Prullenbak")].grootte < 5 * MB
+      and not any(r.naam == "Trash" for r in _rijen) and ("losse", "Losse bestanden in Thuis") in _per,
+      "ruimte: de prullenbak is één regel (geen 'Trash'-app), losse bestanden in Thuis ook")
+klopt(not any("NAS" in r.naam or "Games" in r.naam or r.naam == "link" for r in _rijen)
+      and sum(r.grootte for r in _rijen) < 40 * MB,
+      f"review 4: een netwerkmap of tweede schijf in je thuismap en een snelkoppeling naar /usr tellen niet mee "
+      f"({sum(r.grootte for r in _rijen) // MB} MB)")
+_flat = _per.get(("apps", "Apps die alleen voor jou zijn geïnstalleerd"))
+klopt(_flat is not None and 2 * MB <= _flat.grootte < 3 * MB,
+      f"review 10: een bestand met twee namen (hardlink, zoals in Flatpak) telt één keer ({_flat and _flat.grootte})")
+_wees = next((r for r in _rijen if r.app_id == "org.oud.Weggehaald"), None)
+klopt(_wees is not None and _wees.soort == "wees" and "niet meer geïnstalleerd" in _wees.uitleg
+      and "Winkel" not in _wees.uitleg, "review 3: gegevens van een app die weg is: 'niet meer geïnstalleerd'")
+_box = _per.get(("appdata", "Boxen (containers)"))
+_overig = _per.get(("overig", "Instellingen en gegevens van apps"))
+klopt(_box is not None and "Winkel" not in _box.uitleg and ("appdata", "Steam") in _per
+      and not any(r.naam in ("containers", "raar-ding") for r in _rijen)
+      and _overig is not None and _overig.grootte >= int(1.5 * MB),
+      "review 3: 'containers' heet 'Boxen', Steam (zonder Flatpak) heet Steam; een onbekende map telt bij "
+      "'Instellingen en gegevens van apps' (met .config)")
+_cache = _per.get(("cache", "Tijdelijke bestanden"))
+klopt(_cache is not None and _cache.grootte >= 1 * MB, "ruimte: ~/.cache heet 'Tijdelijke bestanden'")
+_rijen2, _ruimte = bfc.tel_thuis(THUIS)
+klopt(_ruimte.get("videos", 0) >= 3 * MB and _ruimte.get("documenten", 0) >= 1 * MB
+      and 4 * MB <= _ruimte.get("prullenbak", 0) < 5 * MB,
+      "review 17: één telling geeft ook de gekleurde balk (Video's, Documenten) en de prullenbak")
+klopt(bfc.grootste_mappen(THUIS) == [], "ruimte: met de gewone grens (100 MB) is hier niets groot")
+klopt(bfc._koppel_in(THUIS) >= {str(THUIS / "NAS")} and str(THUIS) not in bfc._koppel_in(THUIS),
+      "review 4: koppelpunten in je thuismap worden herkend (niet je thuismap zelf)")
+bfc._koppelpunten = _echt_koppel
+klopt(all(isinstance(x, str) for x in bfc._koppelpunten()), "review 4: /proc/self/mountinfo lezen gaat (of geeft niets)")
+
+# Apps voor iedereen (Flatpak, systeem) en de rest: samen precies wat er in gebruik is (review 2).
+klopt(bfc.lees_maat("803.9 MB") == 803_900_000 and bfc.lees_maat("1,2 GB") == 1_200_000_000
+      and bfc.lees_maat("12 bytes") == 12 and bfc.lees_maat("onzin") == 0, "review 2: maten van flatpak lezen")
+schrijf(BIN / "flatpak", "#!/bin/sh\nprintf 'org.libreoffice.LibreOffice\\t803.9 MB\\norg.kde.Klein\\t12.0 kB\\n'\n")
+(BIN / "flatpak").chmod(0o755)
+klopt(bfc.systeem_apps() == [("org.libreoffice.LibreOffice", 803_900_000), ("org.kde.Klein", 12_000)],
+      f"review 2: de apps voor iedereen en hun grootte ({bfc.systeem_apps()})")
+GB = 10**9
+_lijst = bfc.ruimte_lijst([bfc.Ruimtegebruik("map", "Video's", "", "film", None, 30 * GB),
+                           bfc.Ruimtegebruik("cache", "Tijdelijke bestanden", "", "klok", None, 50 * MB)],
+                          100 * GB, [("org.libreoffice.LibreOffice", 20 * GB), ("org.kde.Klein", 12_000)])
+_soorten = [(r.soort, r.grootte // GB) for r in _lijst]
+klopt(_soorten == [("systeem", 49), ("map", 30), ("systeemapp", 20)]
+      and sum(r.grootte for r in _lijst) + 50 * MB == 100 * GB and _lijst[0].naam == "BugOS en apps voor iedereen",
+      f"review 2: met 'BugOS en apps voor iedereen' klopt het totaal met wat er in gebruik is ({_soorten})")
+
+# Deze computer zonder iets groots: geen doodlopende weg (review 2).
+_gestart_b: list = []
+_echt_start_b = bfc.start
+bfc.start = lambda *a: (_gestart_b.append(a), True)[1]
+venster.grootste, venster.grootste_tijd = None, -1e9
+venster.open_computer()
+klopt(wacht_tot(lambda: not venster.grootste_bezig and venster.grootste is not None, 10),
+      "ruimte: Deze computer telt op de achtergrond")
+verwerk(30)
+_teksten = [x.text() for x in venster.grootste_kaart.findChildren(QLabel)]
+_knop_apps = [k for k in venster.grootste_kop.findChildren(QPushButton) if "Apps verwijderen" in k.text()]
+klopt(any(x.startswith("Er staat niets groots in je eigen mappen") for x in _teksten) and _knop_apps,
+      f"review 2: niets groots in je eigen mappen: dat staat er, met 'Apps verwijderen die je niet gebruikt' ({_teksten[:2]})")
+if _knop_apps:
+    _knop_apps[0].click()
+klopt(_gestart_b[-1:] == [("bugos-store",)], f"review 2: die knop opent de Winkel ({_gestart_b[-1:]})")
+_eerste_actie = [a.text() for a in venster.ruimte_menu().actions() if a.text()]
+klopt(_eerste_actie[:1] == ["Zien wat ruimte inneemt"],
+      f"ruimte: 'Ruimte maken' begint met 'Zien wat ruimte inneemt' ({_eerste_actie})")
+
+# Voorbeeldstand (voor foto's): vaste regels, 5 eerst, 'Meer tonen' (spec 26, 27).
+os.environ["BUGOS_RUIMTE"] = "512000000000,61000000000,38000000000,52000000000,9000000000,14000000000,21000000000"
+v2 = bf.Bestanden()
+v2.resize(1080, 720)
+v2.show()
+v2.open_computer()
+verwerk(30)
+_schijfrijen = len(v2.computer.widget().findChildren(bfc.SchijfRij))
+_zichtbaar = [r for r in v2.ruimte_rijen if r.isVisibleTo(v2)]
+klopt(len(_zichtbaar) == 5 and _zichtbaar[0].gebruik.naam == "Steam" and v2.meer_knop.isVisibleTo(v2)
+      and v2.meer_knop.text() == "Meer tonen (7)",
+      f"ruimte: eerst 5 regels, Steam bovenaan, en 'Meer tonen (7)' ({len(_zichtbaar)}, {v2.meer_knop.text()!r})")
+v2.meer_knop.click()
+verwerk(30)
+_alle_rijen = [r.gebruik for r in v2.ruimte_rijen if r.isVisibleTo(v2)]
+klopt(len(_alle_rijen) == 12 and v2.meer_knop.text() == "Minder tonen"
+      and _alle_rijen[-1].soort in ("systeemapp", "prullenbak") and any(r.soort == "systeem" for r in _alle_rijen),
+      f"ruimte: 'Meer tonen' laat alles zien (12), met 'BugOS en apps voor iedereen' ({len(_alle_rijen)})")
+klopt(_schijfrijen == 1, f"ruimte: de nieuwe regels zijn geen schijf-regels (test_files telt die) ({_schijfrijen})")
+_bron_rij = {r.gebruik.soort: r for r in v2.ruimte_rijen}
+klopt(_bron_rij["cache"].focusPolicy() == Qt.FocusPolicy.NoFocus
+      and _bron_rij["map"].focusPolicy() == Qt.FocusPolicy.StrongFocus
+      and _bron_rij["map"].accessibleName() == _bron_rij["map"].gebruik.naam,
+      "ruimte: wat je niet kunt openen, krijgt geen focus; een map wel, met zijn naam voor de schermlezer")
+bfc.WINKEL = ROOT / "system_files" / "usr" / "share" / "bugos" / "store.json"
+_gestart_b.clear()
+next(r for r in v2.ruimte_rijen if r.gebruik.naam == "Steam").geklikt.emit()
+v2.open_ruimte(bfc.Ruimtegebruik("systeemapp", "Iets", "", "apps", None, GB, "org.kde.NietInDeWinkel"))
+v2.open_ruimte(next(r.gebruik for r in v2.ruimte_rijen if r.gebruik.soort == "systeem"))
+klopt(_gestart_b == [("bugos-store", "appstream://com.valvesoftware.Steam"), ("bugos-store",), ("bugos-store",)],
+      f"review 2: een app opent in de Winkel; staat hij er niet in, dan de Winkel zelf (nooit Discover) ({_gestart_b})")
+_video_rij = next(r for r in v2.ruimte_rijen if r.gebruik.soort == "map" and r.gebruik.naam == "Video's")
+_video_rij.geklikt.emit()
+verwerk(30)
+klopt(v2.huidig == THUIS / "Videos" and not v2.in_computer, "ruimte: klik op Video's opent die map")
+bfc.start = _echt_start_b
+# Vanuit Hulp (computer:/ruimte): meteen naar de lijst schuiven, ook op een klein scherm (review 9).
+sys.argv.append("computer:/ruimte")
+v3 = bf.Bestanden()
+v3.resize(853, 533)
+v3.show()
+v3.open_computer()
+verwerk(100)
+_stand = v3.computer.verticalScrollBar().value()
+sys.argv.remove("computer:/ruimte")
+klopt(_stand > 0 and v3.computer.verticalScrollBar().maximum() > 0,
+      f"review 9: vanuit Hulp schuift Deze computer naar 'Wat de meeste ruimte inneemt' ({_stand})")
+for _v in (v2, v3):
+    _v.hide()
+os.environ.pop("BUGOS_RUIMTE", None)
+bfc._apparaat_van = _echt_apparaat
 
 
 # ======================================================= Taakbeheer: gegevens ===
