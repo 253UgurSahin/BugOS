@@ -11,7 +11,12 @@ BUGOS_VARIANT="${BUGOS_VARIANT:-main}"
 BUGOS_VERSION="${BUGOS_VERSION:-dev}"
 
 # 1. Onze eigen bestanden (scripts, stijl, logo, instellingen) neerleggen.
-cp -avf /ctx/system_files/. /
+# --remove-destination: eerst het bestaande bestand weghalen en dan een nieuw bestand schrijven, in plaats van
+# het bestaande bestand te overschrijven. Overschrijven ging in een lokale bouw (podman in Docker Desktop) mis
+# bij bestanden die al in de fundering stonden en groter werden (/etc/xdg/user-dirs.defaults,
+# /etc/xdg/PlasmaDiscoverUpdates): de nieuwe lengte bleef, maar de oude inhoud kwam terug met nul-bytes erachter.
+# Weghalen en opnieuw schrijven is in elke bouwomgeving goed.
+cp -av --remove-destination /ctx/system_files/. /
 # Vaste rechten, wat de bouwmap ook zegt (vanaf Windows is alles 0777, en dan
 # klaagt systemd over "world-writable" diensten): bestanden 0644, mappen 0755,
 # alleen de programma's in /usr/bin uitvoerbaar.

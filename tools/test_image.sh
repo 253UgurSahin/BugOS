@@ -21,6 +21,20 @@ klopt '[ -n "${VARIANT_ID:-}" ] && [ -n "${VERSION_ID:-}" ]' "os-release: VARIAN
 klopt '[ -s /usr/share/icons/hicolor/scalable/apps/bugos-logo.svg ] && [ -s /usr/share/pixmaps/bugos-logo.svg ]' "logo: bugos-logo staat in hicolor en pixmaps"
 klopt 'grep -q "\"image-name\"" /usr/share/ublue-os/image-info.json' "image-info.json: geschreven"
 
+# 1b. Elk bestand uit system_files staat er precies zo in (build.sh, stap 1). Een lokale bouw liet ooit bestanden die
+#     al in de fundering stonden half staan: de oude inhoud met nul-bytes erachter. Alleen bestanden die de bouw
+#     daarna niet zelf nog aanpast (AANGEPAST: de vooraf vertaalde Python-bestanden).
+AANGEPAST='^usr/lib/bugos/python/__pycache__/'
+anders=""
+if [ -d "$REPO/system_files" ]; then
+    while IFS= read -r -d '' f; do
+        rel="${f#"$REPO"/system_files/}"
+        [[ "$rel" =~ $AANGEPAST ]] && continue
+        cmp -s "$f" "/$rel" || anders="$anders /$rel"
+    done < <(find "$REPO/system_files" -type f -print0)
+fi
+klopt '[ -z "$anders" ]' "bestanden: alles uit system_files staat er ongeschonden in${anders:0:300}"
+
 # 2. Rechten (build.sh): programma's uitvoerbaar, de rest niet, geen wereld-schrijfbare bestanden
 slecht="$(find /usr/bin -maxdepth 1 -name 'bugos-*' ! -perm 0755 | head -5)"
 klopt '[ -z "$slecht" ]' "rechten: elk /usr/bin/bugos-* is 0755 ${slecht}"
