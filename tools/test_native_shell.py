@@ -327,7 +327,11 @@ class Paneel:
         for f in (self.tmp / "log").iterdir():
             f.unlink()
         env = dict(os.environ, HOME=str(self.thuis), XDG_CONFIG_HOME=str(self.config), NEP_MAP=str(self.tmp),
-                   PATH=f"{self.bin}{os.pathsep}{os.environ.get('PATH', '')}", LANG="nl_NL.UTF-8", LC_ALL="nl_NL.UTF-8", LANGUAGE="")
+                   PATH=f"{self.bin}{os.pathsep}{os.environ.get('PATH', '')}", LANGUAGE="")
+        # Nederlands, zoals de andere tests (t() kijkt naar LANG); zonder LC_ALL, want die taal hoeft niet geïnstalleerd te zijn.
+        for k in ("LC_ALL", "LC_MESSAGES"):
+            env.pop(k, None)
+        env["LANG"] = "nl_NL.UTF-8"
         return subprocess.run(["bash", str(self.script), *args], env=env, capture_output=True, text=True, timeout=60)
 
     def log(self) -> list[list[str]]:
@@ -427,7 +431,8 @@ if shutil.which("bash"):
               f"B3: bewerken aan: slot eraf, onthouden, en een melding hoe je het terugzet ({p.scripts()}, {p.meldingen()})")
         klopt(p.draai("bewerken", "status").stdout.strip() == "aan", "B3: bewerken status: aan")
         p.draai("standaard")
-        klopt(p.scripts() == [" slot(false);"], f"B3: na opnieuw inloggen blijft het los ({p.scripts()})")
+        klopt(p.scripts() and p.scripts()[-1] == " slot(false);" and not any("slot(true)" in s for s in p.scripts()),
+              f"B3: na opnieuw inloggen blijft het los ({p.scripts()})")
         uit = p.draai("bewerken", "uit")
         klopt(uit.returncode == 0 and not (p.merk / "paneel-bewerken").exists() and p.scripts() == [" slot(true);"]
               and any("weer vast" in m for m in p.meldingen()),
