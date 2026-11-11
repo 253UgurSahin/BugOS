@@ -3,9 +3,11 @@
 
 import subprocess
 import sys
+import time
 
 sys.path.insert(0, "/usr/lib/bugos/python")
 
+from bugos_settings_onderdelen import op_achtergrond  # noqa: E402
 from bugos_ui import Chip, Knop, achtergrond_pad, draai, label, maak_app, t, uitvoeren  # noqa: E402
 from PySide6.QtCore import QRectF, QTimer  # noqa: E402
 from PySide6.QtGui import QColor, QIcon, QLinearGradient, QPainter, QPixmap  # noqa: E402
@@ -23,6 +25,25 @@ def geheugen_gb() -> float:
         pass
     # Weten we het niet, dan liever geen onnodige waarschuwing.
     return 99.0
+
+
+# Hoe vaak we opnieuw vragen of er een wifi-kaart is (een USB-wifistokje kan er later in).
+WIFI_OPNIEUW = 30.0
+
+
+def net_toestand(vraag_wifi: bool) -> tuple[bool, bool | None]:
+    """(online, heeft_wifi). Draait op de achtergrond: nmcli kan blijven hangen, en dan mag het venster niet vastlopen.
+
+    heeft_wifi is None als we het niet gevraagd hebben (online, of kort geleden al gevraagd). Zelfde regel als
+    bi.heeft_wifi() (U111): 'nmcli radio' zegt ook 'enabled' zonder wifi-kaart, dus we kijken naar de apparaten.
+    Lukt nmcli niet, dan nemen we aan dat er wifi is: dan staat de knop er, en Instellingen legt het verder uit."""
+    code, uit = draai("nmcli", "-t", "-f", "CONNECTIVITY", "general", timeout=5)
+    # draai() geeft ook wat nmcli op stderr zegt (bijv. een waarschuwing over versies): kijk per regel.
+    online = code == 0 and any(r.strip() == "full" for r in uit.splitlines())
+    if online or not vraag_wifi:
+        return online, None
+    code, uit = draai("nmcli", "-t", "-f", "TYPE", "device", timeout=5)
+    return online, code != 0 or any(r.strip() == "wifi" for r in uit.splitlines())
 
 
 class Live(QWidget):
@@ -57,8 +78,10 @@ class Live(QWidget):
         self.wifi = Knop(t("Wifi kiezen", "Choose Wi-Fi"), "rand", "network-wireless")
         self.wifi.setStyleSheet("QPushButton{color:#FFFFFF;border:1px solid rgba(255,255,255,0.35);background:transparent;}"
                                 "QPushButton:hover{background:rgba(255,255,255,0.10);}")
-        self.wifi.clicked.connect(lambda: subprocess.Popen(["systemsettings", "kcm_networkmanagement"],
-                                                           start_new_session=True))
+        # Naar de wifi-pagina van BugOS Instellingen (niet naar KDE). Op de stick mag de live-gebruiker zonder
+        # wachtwoord verbinden (hij zit in 'wheel'; regel van NetworkManager).
+        self.wifi.clicked.connect(self.kies_wifi)
+        self.wifi.hide()   # pas tonen als we weten dat er wifi is
         net_rij.addWidget(self.wifi)
         net_rij.addStretch(1)
         lay.addLayout(net_rij)
@@ -87,6 +110,10 @@ class Live(QWidget):
         rij.addStretch(1)
         lay.addLayout(rij)
 
+        self._heeft_wifi: bool | None = None
+        self._wifi_gevraagd = float("-inf")
+        self._bezig = False
+        self.toon_net(False)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.kijk_internet)
         self.timer.start(3000)
@@ -99,15 +126,37 @@ class Live(QWidget):
         nodig. Internet is alleen handig om alvast rond te kijken (websites,
         apps uit de Winkel). Daarom blijft de knop "BugOS installeren" altijd
         aan, en is "Wifi kiezen" er alleen voor het gemak.
+        nmcli draait op de achtergrond; de wifi-kaart vragen we hooguit elke 30 s.
         """
-        code, uit = draai("nmcli", "-t", "-f", "CONNECTIVITY", "general", timeout=5)
-        online = code == 0 and uit.strip() == "full"
-        self.wifi.setVisible(not online)
+        if self._bezig:
+            return
+        self._bezig = True
+        vraag_wifi = time.monotonic() - self._wifi_gevraagd >= WIFI_OPNIEUW
+        op_achtergrond(self, lambda: net_toestand(vraag_wifi), self._net_bekend)
+
+    def _net_bekend(self, uitkomst) -> None:
+        self._bezig = False
+        online, wifi = uitkomst if uitkomst else (False, None)
+        if wifi is not None:
+            self._heeft_wifi = wifi
+            self._wifi_gevraagd = time.monotonic()
+        self.toon_net(online)
+
+    def toon_net(self, online: bool) -> None:
+        # Geen wifi-kaart (een pc met een kabel): geen knop die nergens heen leidt.
+        self.wifi.setVisible(not online and self._heeft_wifi is not False)
         self.chip.setText(t("✓  Je hebt internet", "✓  You are online") if online
                           else t("Geen internet? Geen probleem: BugOS installeert vanaf de stick",
                                  "No internet? No problem: BugOS installs from the stick"))
         # Allebei "goed": zonder internet is er niets mis.
         self.chip.setStyleSheet(Chip("", "goed").styleSheet())
+
+    def kies_wifi(self) -> None:
+        try:
+            subprocess.Popen(["bugos-settings", "wifi"], start_new_session=True)
+        except OSError:
+            self.chip.setText(t("Instellingen gaan niet open. Kies wifi met het netwerk-icoon rechtsonder.",
+                                "Settings did not open. Choose Wi-Fi with the network icon at the bottom right."))
 
     def installeer(self) -> None:
         # Via ons startertje: dat waarschuwt eerst bij een BitLocker-schijf.
