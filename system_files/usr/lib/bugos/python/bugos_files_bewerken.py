@@ -221,7 +221,7 @@ class Bewerken:
 
     # ------------------------------------------------------------ vragen
     def vraag_tekst(self, titel: str, vraag: str, tekst: str, ok: str = "", kies_tot: int | None = None) -> str | None:
-        """De gedeelde BugOS-vraag (geen QInputDialog). kies_tot: alleen het begin kiezen (de naam zonder .odt),
+        """De gedeelde BugOS-vraag (bugos_ui.vraag_tekst). kies_tot: alleen het begin kiezen (de naam zonder .odt),
         zoals in Windows (U507). None als je annuleert."""
         antwoord = _vraag_tekst(self, titel, vraag, tekst, ok=ok or t("OK", "OK"), kies_tot=kies_tot)
         return antwoord.strip() if antwoord is not None else None
