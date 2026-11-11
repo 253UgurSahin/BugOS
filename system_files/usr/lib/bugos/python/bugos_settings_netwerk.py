@@ -22,15 +22,21 @@ class WifiPagina(Blad):
     uitleg_en = "Click a network to connect. BugOS remembers the password."
     zoekwoorden = ("wifi wlan internet netwerk draadloos wachtwoord kabel ethernet verbinding wifi wi-fi wlan "
                    "internet network wireless password cable ethernet connection")
-    kde = "kcm_networkmanagement"
 
     def bouw(self) -> None:
         g = self.kaart()
         self.schakel = schuifje(True, self.zet_wifi)
         self.hoofd = Rij("wifi", t("Wifi", "Wi-Fi"), "", self.schakel)
         g.voeg(self.hoofd)
-        self.kabel = Rij("computer", t("Kabel", "Cable"), t("Verbonden met een netwerkkabel", "Connected by cable"))
+        # De netwerkkabel: altijd te zien als de computer een netwerkpoort heeft (Help stuurt je hierheen als er geen
+        # wifi is). 'Verbinden' alleen als de kabel erin zit maar niet verbonden is.
+        self.kabel_knop = Knop(t("Verbinden", "Connect"), "stil")
+        self.kabel_knop.clicked.connect(lambda _c=False: self.verbind_kabel())
+        self.kabel_knop.hide()
+        self.kabel = Rij("computer", t("Kabel", "Cable"), t("Verbonden met een netwerkkabel", "Connected by cable"),
+                         self.kabel_knop)
         self.kabel.hide()
+        self.kabel_apparaat = ""
         g.voeg(self.kabel)
         kop = QHBoxLayout()
         kop.addWidget(sectie(t("Netwerken in de buurt", "Networks nearby")), 1)
@@ -46,15 +52,31 @@ class WifiPagina(Blad):
 
     def ververs(self, opnieuw: bool = False) -> None:
         self.hoofd.zet_uitleg(t("Even zoeken…", "Searching…"))
-        op_achtergrond(self, lambda: (bi.wifi_aan(), bi.netwerken(opnieuw), bi.kabel_verbonden(), bi.heeft_wifi()),
-                       self.toon)
+        op_achtergrond(self, lambda: (bi.wifi_aan(), bi.netwerken(opnieuw), bi.kabel(), bi.heeft_wifi()), self.toon)
+
+    def toon_kabel(self, kabel) -> None:
+        """kabel: (stand, apparaat) uit bi.kabel(), of (oud) True = verbonden, False = niet te zien."""
+        if isinstance(kabel, tuple):
+            stand, self.kabel_apparaat = kabel
+        else:
+            stand, self.kabel_apparaat = ("verbonden" if kabel else ""), ""
+        teksten = {
+            "verbonden": t("Verbonden met een netwerkkabel", "Connected by cable"),
+            "bezig": t("Bezig met verbinden…", "Connecting…"),
+            "los": t("Niet aangesloten · steek de netwerkkabel in de computer",
+                     "Not plugged in · plug the network cable into the computer"),
+            "uit": t("De kabel zit erin, maar is niet verbonden", "Cable plugged in, but not connected"),
+        }
+        self.kabel.setVisible(stand in teksten)
+        self.kabel.zet_uitleg(teksten.get(stand, ""))
+        self.kabel_knop.setVisible(stand == "uit" and bool(self.kabel_apparaat))
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:
             return
         aan, netwerken, kabel, wifi = uitkomst
         self.schakel.zet_stil(aan)
-        self.kabel.setVisible(kabel)
+        self.toon_kabel(kabel)
         # Zonder wifi in de computer: dat zeggen, en geen schakelaar of lijst die niets doen (U111).
         for w in (self.schakel, self.zoek_knop, self.lijst, self.ander):
             w.setVisible(wifi)
@@ -81,6 +103,21 @@ class WifiPagina(Blad):
             self.lijst.voeg(Rij("wifi", t("Geen netwerken gevonden", "No networks found") if aan else
                                 t("Wifi staat uit", "Wi-Fi is off"),
                                 t("Zet wifi aan of zoek opnieuw.", "Turn on Wi-Fi or search again.")))
+
+    def verbind_kabel(self) -> None:
+        apparaat = self.kabel_apparaat
+        self.kabel_knop.setEnabled(False)
+        self.melding.toon(t("Verbinden via de kabel…", "Connecting by cable…"), seconden=25)
+
+        def klaar(ok) -> None:
+            self.kabel_knop.setEnabled(True)
+            if ok:
+                self.melding.hide()
+            else:
+                self.melding.toon(t("Verbinden via de kabel lukte niet.", "Connecting by cable did not work."), "fout")
+            self.ververs()
+
+        op_achtergrond(self, lambda: bi.kabel_verbind(apparaat), klaar)
 
     def zet_wifi(self, aan: bool) -> None:
         op_achtergrond(self, lambda: bi.zet_wifi(aan), lambda _u: QTimer.singleShot(1500, self.ververs))
@@ -233,7 +270,6 @@ class BluetoothPagina(Blad):
     uitleg_en = "Headphones, mice, keyboards and phones without a cable. Click a device to connect."
     zoekwoorden = ("bluetooth koptelefoon oortjes muis toetsenbord telefoon koppelen draadloos bluetooth headphones "
                    "earbuds mouse keyboard phone pair pairing wireless")
-    kde = "kcm_bluetooth"
 
     def bouw(self) -> None:
         g = self.kaart()

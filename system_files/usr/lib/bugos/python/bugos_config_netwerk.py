@@ -6,13 +6,43 @@ bugos_config (_c.draai), zodat een test die bi.draai of bi.VOORBEELD vervangt da
 
 from __future__ import annotations
 
+import json
 import os
+import pwd
 import re
 import shutil
-from dataclasses import dataclass
+import subprocess
+import time
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import bugos_config as _c
+from bugos_base import t
+
+
+# Nieuwe voorbeeldstand van dit onderdeel (de gedeelde _c._VB blijft voor wifi, verbonden, bt en bt_verbonden).
+# Tests en foto's zetten hier iets in; het moet een publieke naam zijn (bugos_config doet 'import *').
+VB_NET = {
+    "kabel": "",                 # "" (geen netwerkpoort), "verbonden", "bezig", "los", "uit"
+    "opgeslagen": ["Home", "Home-5G", "eduroam", "Hotel Zonneveld"],
+    "zakelijk": {},              # ssid -> ZakelijkProfiel, opgeslagen in de voorbeeldstand
+    "bt_gekoppeld": set(),       # adressen die in de voorbeeldstand gekoppeld zijn
+}
+
+
+def draai_nm(*cmd: str, invoer: str | None = None, timeout: int = 15) -> tuple[int, str, str]:
+    """Zoals draai, maar met de foutuitvoer erbij: (code, uitvoer, fouten). nmcli zet elke 'Error: ...' op stderr,
+    en daar hangt van af wat we tegen je zeggen. Nooit via een shell; het wachtwoord gaat alleen via de invoer."""
+    if not shutil.which(cmd[0]):
+        return 127, "", ""
+    try:
+        r = subprocess.run(list(cmd), input=invoer, capture_output=True, text=True, timeout=timeout,
+                           env=_c.omgeving(cmd[0]))
+        return r.returncode, r.stdout, r.stderr
+    except subprocess.TimeoutExpired:
+        return 124, "", "Timeout"
+    except (OSError, subprocess.SubprocessError):
+        return 1, "", ""
 
 
 # ==================================================================== wifi ===
@@ -196,6 +226,40 @@ def kabel_verbonden() -> bool:
         return False
     _, uit = _c.draai("nmcli", "-t", "-f", "TYPE,STATE", "device")
     return any(splits_nmcli(r)[:2] == ["ethernet", "connected"] for r in uit.splitlines())
+
+
+_KABEL_RANG = {"verbonden": 4, "bezig": 3, "uit": 2, "los": 1}
+
+
+def kabel() -> tuple[str, str]:
+    """Hoe staat de netwerkkabel: (stand, apparaat). stand: 'verbonden', 'bezig', 'uit' (de kabel zit erin, maar niet
+    verbonden), 'los' (niet aangesloten) of '' (geen netwerkpoort). Bij meer poorten telt de beste."""
+    if _c.VOORBEELD:
+        return VB_NET["kabel"], "enp3s0" if VB_NET["kabel"] else ""
+    code, uit = _c.draai("nmcli", "-t", "-f", "TYPE,STATE,DEVICE", "device")
+    beste = ("", "")
+    if code != 0:
+        return beste
+    for regel in uit.splitlines():
+        d = splits_nmcli(regel)
+        if len(d) < 3 or d[0] != "ethernet":
+            continue
+        staat = d[1].strip()
+        stand = ("verbonden" if staat == "connected" else "bezig" if staat.startswith("connecting") else
+                 "los" if staat == "unavailable" else "uit" if staat == "disconnected" else "")
+        if stand and _KABEL_RANG[stand] > _KABEL_RANG.get(beste[0], 0):
+            beste = (stand, d[2])
+    return beste
+
+
+def kabel_verbind(apparaat: str) -> bool:
+    """Verbind via de kabel (de kabel zit erin, maar NetworkManager deed niets)."""
+    if _c.VOORBEELD:
+        VB_NET["kabel"] = "verbonden"
+        return True
+    if not apparaat or apparaat.startswith("-"):
+        return False
+    return _c.draai("nmcli", "--wait", "20", "device", "connect", apparaat, timeout=25)[0] == 0
 
 
 # =============================================================== bluetooth ===
