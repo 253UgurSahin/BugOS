@@ -219,11 +219,15 @@ PY
 if zcat /usr/share/cockpit/anaconda-webui/po.nl.js.gz | grep -q '\[null, "[^"]*Fedora'; then
     echo "Let op: er staat nog 'Fedora' in de Nederlandse teksten van het installatieprogramma" >&2
 fi
-# Gewone woorden in het installatieprogramma, Engels en Nederlands: "Password" in plaats van "Passphrase",
-# "Use the whole disk", "Finish" ... (iso_live/src/bugos_webui.py). Engels krijgt een eigen woordenboek
-# (po.en_US.js.gz en de andere Engelse talen van Anaconda); Nederlands komt achteraan in po.nl.js.gz, na de
-# regels hierboven, zodat onze woorden winnen. Klopt de vorm van een bestand niet meer (nieuwe versie van het
-# installatieprogramma), dan stopt het bouwen hier.
+# iso_live/src/bugos_webui.py:
+# - Tijdzone: het vinkje "Automatically set timezone" deed niets (er wordt niets op internet gevraagd) en zette
+#   de keuzelijsten vast op New York. Het start nu uit (de CSS hieronder verbergt het), en het installatieprogramma
+#   raadt de zone uit het land van de gekozen taal (Nederlands (Nederland) -> Europe/Amsterdam). Kies je zelf een
+#   zone, dan blijft die staan.
+# - Gewone woorden, Engels en Nederlands: "Password" in plaats van "Passphrase", "Use the whole disk", "Finish" ...
+#   Engels krijgt een eigen woordenboek (po.en_US.js.gz en de andere Engelse talen van Anaconda); Nederlands komt
+#   achteraan in po.nl.js.gz, na de regels hierboven, zodat onze woorden winnen.
+# Klopt de vorm van een bestand niet meer (nieuwe versie van het installatieprogramma), dan stopt het bouwen hier.
 python3 "$SRC/bugos_webui.py" /usr/share/cockpit/anaconda-webui
 
 # Waarschuwing voor BitLocker, vóórdat het installatieprogramma opent.
@@ -416,6 +420,32 @@ cat >"$BRANDING/branding.css" <<'EOF'
 }
 .anaconda .pf-v6-c-form__section:has(#anaconda-screen-accounts-root-account-enable-root-account) {
     display: none;
+}
+
+/* Datum en tijd. Geen vinkje 'tijdzone automatisch': BugOS vraagt nooit waar je bent (geen plaatsbepaling),
+   dus het vinkje deed niets en hield de keuzelijsten vast (bugos_webui.py zet het uit). De hele regel weg,
+   anders blijft er een lege strook staan. */
+.anaconda .pf-v6-l-stack__item:has(> .pf-v6-l-flex > * > .pf-v6-c-check > #anaconda-screen-date-time-auto-timezone) {
+    display: none;
+}
+/* De keuzelijsten sprongen in onder dat vinkje; nu staan ze gewoon onder de kop 'Tijdzone'. */
+.anaconda .anaconda-screen-date-time__indent:has(#anaconda-screen-date-time-region-toggle) {
+    margin-inline-start: 0;
+}
+/* Altijd even laten nakijken: in het Engels staat er New York tot je zelf kiest. Alleen Engels en Nederlands
+   (BugOS' eigen talen); de pagina zet zijn taal in <html lang>. */
+html:lang(en) .anaconda .anaconda-screen-date-time__indent:has(#anaconda-screen-date-time-region-toggle)::after,
+html:lang(nl) .anaconda .anaconda-screen-date-time__indent:has(#anaconda-screen-date-time-region-toggle)::after {
+    flex-basis: 100%;
+    color: var(--pf-t--global--text--color--subtle);
+    content: "Is this where you live? If not, choose your region and city.";
+}
+html:lang(nl) .anaconda .anaconda-screen-date-time__indent:has(#anaconda-screen-date-time-region-toggle)::after {
+    content: "Woon je hier? Zo niet, kies dan je regio en je stad.";
+}
+/* Zelf tijdservers kiezen is iets voor kenners (kan later via Instellingen > Geavanceerd). */
+#anaconda-screen-date-time-configure-ntp {
+    display: none !important;
 }
 
 /* Onze letters (zitten in BugOS). */

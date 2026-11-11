@@ -277,6 +277,86 @@ def test_woorden() -> None:
           "14: build.sh zet de woorden na de bestaande Nederlandse regels")
 
 
+# =================================================================================== tijdzone (bugos_webui.py) ===
+# Echte stukjes uit index.js van anaconda-webui 68 (letterlijk overgenomen).
+JS_ZET = 'LU=()=>o0("Timezone"),lx=({timezone:t})=>pb("SetTimezoneWithPriority",[t,90]);var ZU=()=>pb("GetAllValidTimezones");'
+JS_VAK = ('var yg=Y.gettext,na="anaconda-screen-date-time",y3=({locale:t,setSectionValid:e,setTimezoneLabel:o})=>{'
+          'let[r,l]=(0,oe.useState)(!0),[a,n]=(0,oe.useState)(!1),[i,c]=(0,oe.useState)(!1);return null};')
+ZONE_TAB = ("# tzdb timezone descriptions\n#\n"
+            "NL\t+5222+00454\tEurope/Amsterdam\n"
+            "DE\t+5230+01322\tEurope/Berlin\tmost of Germany\n"
+            "DE\t+4742+00841\tEurope/Busingen\tBusingen\n"
+            "ES\t+4024-00341\tEurope/Madrid\tSpain (mainland)\n"
+            "ES\t+2806-01524\tAtlantic/Canary\tCanary Islands\n"
+            "kapotte regel zonder tabs\n"
+            "XX\tgeen\n")
+VERSCHUIVING = {"Europe/Amsterdam": (1, 2), "Europe/Berlin": (1, 2), "Europe/Busingen": (1, 2),
+                "Europe/Madrid": (1, 2), "Atlantic/Canary": (0, 1)}
+
+
+def test_tijdzone() -> None:
+    import json
+    import re
+
+    w = sys.modules.get("bugos_webui") or laad("bugos_webui", SRC / "bugos_webui.py")
+    fixture = JS_ZET + JS_VAK
+    # 7. Het vinkje start uit, er komt één gok bij elke taal, de rest blijft heel.
+    uit = w.tijdzone(fixture, {"NL": "Europe/Amsterdam"})
+    klopt("useState)(!1),bugosTzKlaar=(0,oe.useEffect)(()=>{bugosTzGok(t)},[t]),[a,n]" in uit,
+          "7: het vinkje 'automatisch' start uit, en de gok draait bij elke taal (zelfde hook-volgorde)")
+    klopt('pb("SetTimezoneWithPriority",[z,30])' in uit and uit.count("[t,90]") == 1,
+          "7: de gok gebruikt de D-Bus-aanroep van de pagina met prioriteit 30; jouw eigen keuze (90) blijft")
+    klopt('{"NL":"Europe/Amsterdam"}' in uit and 'o0("Timezone")' in uit and "useState)(!0),[a,n]" not in uit,
+          "7: de tabel staat erin, de D-Bus-naam 'Timezone' is niet aangeraakt, niets meer op (!0)")
+    # 8. Twee keer, of een andere versie van het installatieprogramma: het bouwen stopt.
+    for naam, js in (("twee keer", uit), ("zonder SetTimezone", JS_VAK), ("zonder het vak", JS_ZET),
+                     ("SetTimezone twee keer", JS_ZET + JS_ZET + JS_VAK)):
+        try:
+            w.tijdzone(js, {"NL": "Europe/Amsterdam"})
+            klopt(False, f"8: {naam}: het bouwen stopt (AssertionError)")
+        except AssertionError:
+            klopt(True, f"8: {naam}: het bouwen stopt (AssertionError)")
+    # 9. Alleen landen waar elke zone dezelfde tijd heeft.
+    landen = w.landen_met_een_zone(ZONE_TAB, verschuiving=lambda z: VERSCHUIVING[z])
+    klopt(landen == {"DE": "Europe/Berlin", "NL": "Europe/Amsterdam"},
+          f"9: NL en DE (Berlin en Busingen lopen gelijk) wel, ES (Canarische eilanden) niet ({landen})")
+    tabel = w.tijdzone_tabel(ZONE_TAB, geldig={"Europe/Amsterdam", "Europe/Madrid"}, verschuiving=lambda z: VERSCHUIVING[z])
+    klopt(tabel == {"ES": "Europe/Madrid", "NL": "Europe/Amsterdam"},
+          f"9 (I9): Spanje krijgt het vasteland; wat Anaconda niet kent valt eruit ({tabel})")
+    klopt(set(w.VOORKEUR) == {"ES", "PT", "NZ", "UA", "CN", "CL", "EC"} and not {"US", "CA", "AU", "BR", "RU", "MX", "ID"} & set(w.VOORKEUR),
+          "9 (I9): geen gok voor landen zonder een zone die voor bijna iedereen klopt (VS, Canada, ...)")
+    # 10. Niets uit de tabel kan uit de JavaScript-string breken.
+    try:
+        w.tijdzone(fixture, {"NL": 'Europe/A"});alert(1);//'})
+        klopt(False, "10: een rare zone in de tabel wordt geweigerd")
+    except AssertionError:
+        klopt(True, "10: een rare zone in de tabel wordt geweigerd")
+    stuk = uit[uit.index("bugosTzLanden=") + len("bugosTzLanden="):uit.index(";function bugosTzGok")]
+    klopt(json.loads(stuk) == {"NL": "Europe/Amsterdam"} and "</" not in uit, "10: de tabel is gewone JSON")
+    gok = re.search(r"/\^\[a-z\]\{2,3\}-\(\[a-z\]\{2\}\)\(\?!\[a-z0-9\]\)/", uit)
+    klopt(gok is not None, "10: alleen het land na de taal telt ('nl-nl' -> NL; 'en' of 'de' -> geen gok)")
+    # De taal -> land-regel, nagedaan in Python (dezelfde reguliere expressie als in de JavaScript).
+    regel = re.compile(r"^[a-z]{2,3}-([a-z]{2})(?![a-z0-9])")
+    land = {x: (regel.match(x).group(1).upper() if regel.match(x) else None)
+            for x in ("nl-nl", "en-us", "en", "de", "sr-rs@latin", "zh-cn", "ast-es", "nl-nlx")}
+    klopt(land == {"nl-nl": "NL", "en-us": "US", "en": None, "de": None, "sr-rs@latin": "RS", "zh-cn": "CN",
+                   "ast-es": "ES", "nl-nlx": None}, f"10: taal -> land ({land})")
+
+    # CSS in build.sh: het vinkje en 'NTP' weg, de lijsten niet meer ingesprongen, en een zin om het na te kijken.
+    bouw = bron("build.sh")
+    css = bouw[bouw.index('cat >"$BRANDING/branding.css"'):]
+    css = css[:css.index("\nEOF")]
+    klopt("#anaconda-screen-date-time-auto-timezone" in css and "#anaconda-screen-date-time-configure-ntp" in css,
+          "A: CSS verbergt het vinkje 'tijdzone automatisch' en 'Configure NTP servers'")
+    klopt(re.search(r"__indent:has\(#anaconda-screen-date-time-region-toggle\) \{\s*margin-inline-start: 0;", css) is not None,
+          "A (I8): de keuzelijsten springen niet meer in onder een verborgen vinkje")
+    klopt("Is this where you live?" in css and "Woon je hier?" in css and "html:lang(nl)" in css,
+          "A (I2): onder de keuzelijsten staat in het Engels en Nederlands dat je het moet nakijken")
+    klopt("use_geolocation = False" in bouw and "geolocation_provider =\n" in bouw.replace("\r\n", "\n"),
+          "A: plaatsbepaling blijft uit (niets wordt op internet gevraagd)")
+    klopt(css.count("{") == css.count("}"), "A: de CSS is heel (evenveel { als })")
+
+
 # =================================================================== --beeld: in de echte live-image (geen ISO nodig) ===
 WEBUI = Path("/usr/share/cockpit/anaconda-webui")
 
@@ -307,12 +387,150 @@ def beeld_woorden(w) -> None:
     shutil.rmtree(kopie, ignore_errors=True)
 
 
+def eerste_pixel(png: Path) -> tuple[int, int, int] | None:
+    """De kleur van het eerste pixel van een PNG, in gewone Python (geen Pillow in de image). Voor elk PNG-filter is
+    het eerste pixel van de eerste rij gewoon de echte kleur (links en boven is nul)."""
+    import struct
+    import zlib
+    try:
+        data = png.read_bytes()
+    except OSError:
+        return None
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        return None
+    i, idat, kleur_type = 8, b"", None
+    while i < len(data):
+        lengte, soort = struct.unpack(">I4s", data[i:i + 8])
+        stuk = data[i + 8:i + 8 + lengte]
+        if soort == b"IHDR":
+            kleur_type = stuk[9]
+        elif soort == b"IDAT":
+            idat += stuk
+        i += 12 + lengte
+    ruw = zlib.decompressobj().decompress(idat, 8)
+    if kleur_type not in (2, 6) or len(ruw) < 4:
+        return None
+    return ruw[1], ruw[2], ruw[3]
+
+
+def firefox(html: str, naam: str) -> tuple[tuple[int, int, int] | None, Path]:
+    """Open een pagina in Firefox zonder scherm en maak een foto (de manier die in de live-image werkt)."""
+    m = Path("/tmp/installer-t")
+    (m / "home").mkdir(parents=True, exist_ok=True)
+    (m / f"{naam}.html").write_text(html, encoding="utf-8")
+    png = m / f"{naam}.png"
+    png.unlink(missing_ok=True)
+    env = dict(os.environ, MOZ_HEADLESS="1", HOME=str(m / "home"))
+    subprocess.run(["timeout", "90", "firefox", "--headless", "--window-size=1100,560", "--screenshot", str(png),
+                    f"file://{m / naam}.html"], env=env, capture_output=True, check=False)
+    return eerste_pixel(png), png
+
+
+GROEN, ROOD = (0, 255, 0), (255, 0, 0)
+
+
+def syntax_pagina(js: str) -> str:
+    import json
+    s = json.dumps(js).replace("</", "<\\/")
+    return ('<!doctype html><body style="margin:0"><script>var s=' + s + ';try{new Function(s);'
+            'document.body.style.background="#00ff00"}catch(e){document.body.style.background="#ff0000"}</script>')
+
+
+def beeld_tijdzone(w) -> None:
+    import gzip
+    import json
+
+    js = gzip.open(WEBUI / "index.js.gz", "rt", encoding="utf-8").read()
+    klopt(len(w.R_ZET.findall(js)) == 1 and len(w.R_VAK.findall(js)) == 1, "beeld: beide ankers staan precies één keer in index.js")
+    zone_tab = Path("/usr/share/zoneinfo/zone.tab").read_text(encoding="utf-8")
+    geldig = w.geldige_zones()
+    tabel = w.tijdzone_tabel(zone_tab, geldig)
+    klopt(len(tabel) >= 200 and tabel.get("NL") == "Europe/Amsterdam" and tabel.get("BE") == "Europe/Brussels"
+          and tabel.get("DE") == "Europe/Berlin" and tabel.get("ES") == "Europe/Madrid" and "US" not in tabel,
+          f"beeld: echte zone.tab: {len(tabel)} landen, NL Amsterdam, BE Brussel, DE Berlijn, ES Madrid, VS niet")
+    klopt(all(z in geldig for z in tabel.values()) and all(z in geldig for z in w.VOORKEUR.values()),
+          "beeld: elke zone uit de tabel staat in de keuzelijsten van Anaconda (ook Europe/Kyiv)")
+    uit = w.tijdzone(js, tabel)
+    print(f"      (index.js +{len(uit) - len(js)} tekens)")
+    kleur, _ = firefox(syntax_pagina(uit), "syntax")
+    klopt(kleur == GROEN, f"beeld: Firefox leest de aangepaste index.js zonder fout ({kleur})")
+    kleur, _ = firefox(syntax_pagina(uit + "let let;"), "syntax-kapot")
+    klopt(kleur == ROOD, f"beeld: tegenproef: een kapotte index.js geeft rood ({kleur})")
+
+    # Draait de gok echt? De aangepaste stukjes met een nep-D-Bus (pb) en een nep-React (oe), in Firefox.
+    proef = w.tijdzone("var Y={gettext:0};var roep=[];var pb=(m,a)=>{roep.push(a);return Promise.reject(1)};"
+                       + JS_ZET + JS_VAK.replace("return null", "return r"), tabel)
+    test = ("var oe={useState:(v)=>[v,()=>0],useEffect:(f,d)=>{f();return void 0}};var uit=[];"
+            "for(const t of ['nl-nl','en-us','en','de-de','sr-rs@latin']){roep=[];var vink=y3({locale:t});"
+            "uit.push(t+'='+(roep.length?roep[0][0]+'@'+roep[0][1]:'-')+(vink?'+vink':''));}"
+            "var goed=uit.join(' ')==" + json.dumps("nl-nl=Europe/Amsterdam@30 en-us=- en=- de-de=Europe/Berlin@30 "
+                                                     "sr-rs@latin=Europe/Belgrade@30") + ";")
+    html = ('<!doctype html><body style="margin:0"><script>try{' + proof_js(proef, test) + '}catch(e){'
+            'document.body.style.background="#ff0000";document.body.textContent=String(e)}</script>')
+    kleur, _ = firefox(html, "gok")
+    klopt(kleur == GROEN, f"beeld: in Firefox: nl-nl -> Amsterdam (30), de-de -> Berlijn, en-us -> niets, vinkje uit ({kleur})")
+
+    # De CSS: het echte index.css van het installatieprogramma + onze branding.css, op dezelfde opbouw als de pagina.
+    bouw = bron("build.sh").replace("\r\n", "\n")
+    css = bouw[bouw.index("<<'EOF'\n", bouw.index('cat >"$BRANDING/branding.css"')) + 8:]
+    css = css[:css.index("\nEOF\n")]
+    m = Path("/tmp/installer-t")
+    (m / "index.css").write_text(gzip.open(WEBUI / "index.css.gz", "rt", encoding="utf-8").read(), encoding="utf-8")
+    (m / "branding.css").write_text(css, encoding="utf-8")
+    html = CSS_PAGINA.replace("@VERWACHT@", json.dumps({
+        "en": ["none", "0px", "Is this where you live? If not, choose your region and city.", "none"],
+        "nl": ["none", "0px", "Woon je hier? Zo niet, kies dan je regio en je stad.", "none"],
+        "de": ["none", "0px", "", "none"]}))
+    kleur, png = firefox(html, "css")
+    klopt(kleur == GROEN, f"beeld: CSS: vinkje en NTP weg, lijsten niet ingesprongen, de zin in en/nl, niet in de ({kleur}, {png})")
+
+
+def proof_js(proef: str, test: str) -> str:
+    return (proef + test + 'document.body.style.background=goed?"#00ff00":"#ff0000";'
+            'document.body.textContent=uit.join(" ");')
+
+
+# Dezelfde opbouw als de pagina 'Datum en tijd' (Timezone.jsx + PatternFly: StackItem > Flex > FlexItem > Checkbox).
+CSS_PAGINA = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+<link rel="stylesheet" href="index.css"><link rel="stylesheet" href="branding.css"></head>
+<body style="margin:0"><div id="kleur" style="height:24px"></div><div class="anaconda" style="padding:24px">
+<h2>Time zone</h2>
+<div class="pf-v6-l-stack pf-m-gutter">
+ <div class="pf-v6-l-stack__item" id="vinkrij"><div class="pf-v6-l-flex pf-m-align-items-center"><div>
+  <div class="pf-v6-c-check"><input class="pf-v6-c-check__input" type="checkbox" id="anaconda-screen-date-time-auto-timezone">
+  <label class="pf-v6-c-check__label">Automatically set timezone</label></div></div></div></div>
+ <div class="pf-v6-l-stack__item"><div class="pf-v6-l-flex pf-m-align-items-center anaconda-screen-date-time__indent" id="rij">
+  <div><button class="pf-v6-c-menu-toggle" id="anaconda-screen-date-time-region-toggle">Europe</button></div>
+  <div><button class="pf-v6-c-menu-toggle" id="anaconda-screen-date-time-city-toggle">Amsterdam</button></div>
+  <div><span class="anaconda-screen-date-time__timezone-label">CET, UTC+1</span></div></div></div>
+</div>
+<div class="pf-v6-l-flex"><div><button class="pf-v6-c-button pf-m-link" id="anaconda-screen-date-time-configure-ntp">Configure NTP servers</button></div></div>
+<p id="uitslag"></p></div>
+<script>
+var verwacht=@VERWACHT@, uit=[], goed=true;
+for (const taal of ["en","nl","de"]) {
+  document.documentElement.lang = taal;
+  const na = getComputedStyle(document.getElementById("rij"), "::after").content;
+  const tekst = (na === "none" || na === "normal") ? "" : JSON.parse(na);
+  const r = [getComputedStyle(document.getElementById("vinkrij")).display,
+             getComputedStyle(document.getElementById("rij")).marginInlineStart, tekst,
+             getComputedStyle(document.getElementById("anaconda-screen-date-time-configure-ntp")).display];
+  uit.push(taal + ": " + JSON.stringify(r));
+  if (JSON.stringify(r) !== JSON.stringify(verwacht[taal])) goed = false;
+}
+document.documentElement.lang = "en";
+document.getElementById("kleur").style.background = goed ? "#00ff00" : "#ff0000";
+document.getElementById("uitslag").textContent = uit.join(" | ");
+</script></body></html>"""
+
+
 def beeld() -> int:
     if not WEBUI.is_dir():
         print("--beeld draait alleen in de live-image (localhost/bugos-live:lokaal)")
         return 2
     w = laad("bugos_webui", SRC / "bugos_webui.py")
     beeld_woorden(w)
+    beeld_tijdzone(w)
     print()
     print("Alles goed." if not fouten else f"{fouten} fout(en).")
     return 1 if fouten else 0
@@ -323,6 +541,7 @@ def main() -> int:
         return beeld()
     os.environ["PATH"] = str(NEP) + os.pathsep + schoon_pad()
     test_woorden()
+    test_tijdzone()
     test_live()
     shutil.rmtree(TMP, ignore_errors=True)
     print()

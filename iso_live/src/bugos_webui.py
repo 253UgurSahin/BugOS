@@ -6,8 +6,14 @@ disk"). We zetten er een po.en_US.js.gz naast (en een kopie voor elke andere Eng
 Nederlandse zinnen achteraan in po.nl.js.gz (de laatste regel telt). index.js zelf veranderen we NIET voor woorden: daar
 staat bijvoorbeeld "Timezone" ook als naam van een D-Bus-eigenschap.
 
-Gebruik (build.sh):  python3 bugos_webui.py /usr/share/cockpit/anaconda-webui [--locales en_US,en_GB,...]
-Zonder --locales vraagt het de Engelse talen aan Anaconda zelf (pyanaconda.localization).
+Tijdzone: het vinkje "Automatically set timezone" deed niets (BugOS vraagt nooit waar je bent) en hield de keuzelijsten
+op America/New_York vast. tijdzone() zet het vinkje standaard uit (de CSS in build.sh verbergt het) en laat het
+installatieprogramma de tijdzone raden uit het land van de gekozen taal (nl_NL -> Europe/Amsterdam), alleen als dat land
+er één heeft. Dat gebeurt met prioriteit 30 ('taal' in Anaconda); kies je zelf een zone, dan is dat 90, en die wint.
+
+Gebruik (build.sh):  python3 bugos_webui.py /usr/share/cockpit/anaconda-webui [--zone-tab PAD] [--locales en_US,...]
+Zonder --locales vraagt het de Engelse talen aan Anaconda zelf (pyanaconda.localization) en kijkt het de tijdzones bij
+Anaconda na (pyanaconda.timezone), zodat de keuzelijsten de gok altijd kunnen tonen.
 Python 3.12+ (de CI-test draait 3.12); alleen de standaardbibliotheek.
 """
 
@@ -94,6 +100,111 @@ WOORDEN: dict[str, tuple[str, str]] = {
 
 KOP = {"": {"language": "en_US", "language-direction": "ltr"}}
 WEBUI = "/usr/share/cockpit/anaconda-webui"
+ZONE_TAB = "/usr/share/zoneinfo/zone.tab"
+
+
+# ================================================================================================ tijdzone ===
+# Het stukje in index.js (anaconda-webui 68) dat de tijdzone zet als jij kiest: lx=({timezone:t})=>pb("Set...",[t,90]);
+# Groep 3 (pb) is de D-Bus-aanroep van de Timezone-module. Precies één keer, anders stopt het bouwen.
+R_ZET = re.compile(r'([\w$]+)=\(\{timezone:([\w$]+)\}\)=>([\w$]+)\("SetTimezoneWithPriority",\[\2,90\]\);')
+# Het begin van het tijdzonevak: ({locale:t,setSectionValid:e,setTimezoneLabel:o})=>{let[r,l]=(0,oe.useState)(!0)
+# (r = het vinkje 'automatisch', standaard aan). Ook precies één keer.
+R_VAK = re.compile(r'\(\{locale:([\w$]+),setSectionValid:([\w$]+),setTimezoneLabel:([\w$]+)\}\)=>\{'
+                   r'let\[([\w$]+),([\w$]+)\]=\(0,([\w$]+)\.useState\)\(!0\)')
+
+# Landen met meer zones, waar één zone toch bijna iedereen heeft (review I9): het vasteland. Wie op de Canarische
+# eilanden of de Azoren woont, kiest zelf (de pagina vraagt altijd om het na te kijken). De VS, Canada, Australië,
+# Brazilië, Rusland, Mexico en Indonesië niet: daar is geen zone die voor bijna iedereen klopt.
+VOORKEUR = {"ES": "Europe/Madrid", "PT": "Europe/Lisbon", "NZ": "Pacific/Auckland", "UA": "Europe/Kyiv",
+            "CN": "Asia/Shanghai", "CL": "America/Santiago", "EC": "America/Guayaquil"}
+_ZONE = re.compile(r"[A-Za-z_]+(/[A-Za-z0-9_+\-]+)+")
+
+
+def _verschuiving(zone: str) -> tuple:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    return tuple(datetime(2026, m, 15, 12, tzinfo=ZoneInfo(zone)).utcoffset() for m in (1, 7))
+
+
+def landen_met_een_zone(zone_tab: str, verschuiving=_verschuiving) -> dict[str, str]:
+    """Land -> tijdzone, alleen als elke zone van dat land op 15 januari en 15 juli dezelfde UTC-tijd heeft
+    (Duitsland: Berlin en Busingen, dus wel). De zone is de eerste van dat land in zone.tab.
+    Niet langtable: die geeft voor Indonesië alleen Asia/Jayapura."""
+    rijen: dict[str, list[str]] = {}
+    for regel in zone_tab.splitlines():
+        if not regel or regel.startswith("#"):
+            continue
+        d = regel.split("\t")
+        if len(d) >= 3 and re.fullmatch(r"[A-Z]{2}", d[0]) and _ZONE.fullmatch(d[2]):
+            rijen.setdefault(d[0], []).append(d[2])
+    uit = {}
+    for land, zones in sorted(rijen.items()):
+        try:
+            if len({verschuiving(z) for z in zones}) == 1:
+                uit[land] = zones[0]
+        except (ValueError, KeyError, OSError):   # een zone die zoneinfo niet kent: dat land niet raden
+            continue
+    return uit
+
+
+def tijdzone_tabel(zone_tab: str, geldig=None, verschuiving=_verschuiving) -> dict[str, str]:
+    """De tabel voor het installatieprogramma: landen met één zone, plus VOORKEUR (alleen landen uit zone.tab).
+    geldig: de zones die Anaconda kent (None = niet nakijken); de rest valt eruit, met een waarschuwing."""
+    uit = landen_met_een_zone(zone_tab, verschuiving)
+    bekend = {r.split("\t")[0] for r in zone_tab.splitlines() if r and not r.startswith("#")}
+    uit.update({land: zone for land, zone in VOORKEUR.items() if land in bekend})
+    if geldig is not None:
+        weg = sorted(land for land, zone in uit.items() if zone not in geldig)
+        if weg:
+            print(f"bugos_webui: let op, Anaconda kent de zone van deze landen niet, die raden we niet: {weg}",
+                  file=sys.stderr)
+        uit = {land: zone for land, zone in uit.items() if land not in weg}
+    return dict(sorted(uit.items()))
+
+
+def tijdzone(js: str, landen: dict[str, str]) -> str:
+    """Zet het vinkje 'automatisch' standaard uit en raad de tijdzone uit de taal (prioriteit 30)."""
+    assert "bugosTzGok" not in js, "index.js is al aangepast (bugos_webui.py twee keer gedraaid?)"
+    assert all(re.fullmatch(r"[A-Z]{2}", k) and _ZONE.fullmatch(v) for k, v in landen.items()), "rare tijdzonetabel"
+    m = list(R_ZET.finditer(js))
+    assert len(m) == 1, f"SetTimezoneWithPriority: {len(m)} plekken in index.js (anaconda-webui bijgewerkt?)"
+    roep = m[0].group(3)
+    # json.dumps: niets uit de tabel kan uit de string breken; '<' als < voor de zekerheid.
+    tabel = json.dumps(landen, separators=(",", ":"), sort_keys=True).replace("<", "\\u003c")
+    # "nl-nl" -> NL; "sr-rs@latin" -> RS; "en" of "de" (geen land) -> niets. Lukt de aanroep niet: niets (geen fout).
+    gok = ("var bugosTzLanden=" + tabel + ";"
+           "function bugosTzGok(t){try{var m=/^[a-z]{2,3}-([a-z]{2})(?![a-z0-9])/.exec(String(t||\"\"));"
+           "var l=m&&m[1].toUpperCase();"
+           "var z=l&&Object.prototype.hasOwnProperty.call(bugosTzLanden,l)&&bugosTzLanden[l];if(!z)return;"
+           "var p=" + roep + "(\"SetTimezoneWithPriority\",[z,30]);"
+           "p&&p.catch&&p.catch(function(){})}catch(e){}}")
+    js = js[:m[0].end()] + gok + js[m[0].end():]
+    v = list(R_VAK.finditer(js))
+    assert len(v) == 1, f"tijdzonevak: {len(v)} plekken in index.js (anaconda-webui bijgewerkt?)"
+    loc, react = v[0].group(1), v[0].group(6)
+    # Het vinkje start uit (!1), en bij elke taal één gok. De extra naam staat in dezelfde 'let'-lijst, dus de
+    # volgorde van de React-hooks blijft vast. (Niet naar latere namen zoals allValidTimezones verwijzen.)
+    nieuw = (v[0].group(0)[:-len("(!0)")] + "(!1),bugosTzKlaar=(0," + react + ".useEffect)(()=>{bugosTzGok("
+             + loc + ")},[" + loc + "])")
+    return js[:v[0].start()] + nieuw + js[v[0].end():]
+
+
+def geldige_zones() -> set[str]:
+    """De zones die de keuzelijsten van Anaconda kennen ('Europe/Amsterdam', ...)."""
+    from pyanaconda.timezone import get_all_regions_and_timezones
+    return {f"{regio}/{stad}" for regio, steden in get_all_regions_and_timezones().items() for stad in steden}
+
+
+def patch_index(map_: str, landen: dict[str, str]) -> int:
+    """Pas index.js.gz aan; geeft het aantal tekens dat erbij kwam."""
+    pad = os.path.join(map_, "index.js.gz")
+    oud = _lees(pad)
+    nieuw = tijdzone(oud, landen)
+    _schrijf_gz(pad, nieuw)
+    return len(nieuw) - len(oud)
+
+
+# ================================================================================================= woorden ===
 
 
 def po_engels(taal: str = "en_US") -> str:
@@ -152,16 +263,27 @@ def engelse_locales() -> list[str]:
     return uit
 
 
+def _optie(args: list[str], naam: str) -> str | None:
+    if naam not in args:
+        return None
+    i = args.index(naam)
+    waarde = args[i + 1]
+    del args[i:i + 2]
+    return waarde
+
+
 def main(argv: list[str]) -> int:
     args = list(argv)
-    locales = None
-    if "--locales" in args:
-        i = args.index("--locales")
-        locales = [x for x in args[i + 1].split(",") if x]
-        del args[i:i + 2]
+    lijst = _optie(args, "--locales")
+    zone_tab = _optie(args, "--zone-tab") or ZONE_TAB
     map_ = args[0] if args else WEBUI
-    if locales is None:
-        locales = engelse_locales()
+    # Zonder --locales draaien we in de image: dan komen de talen en de geldige zones van Anaconda zelf.
+    locales = [x for x in lijst.split(",") if x] if lijst is not None else engelse_locales()
+    geldig = geldige_zones() if lijst is None else None
+    with open(zone_tab, encoding="utf-8") as f:
+        landen = tijdzone_tabel(f.read(), geldig)
+    erbij = patch_index(map_, landen)
+    print(f"bugos_webui: tijdzone uit de taal voor {len(landen)} landen (index.js +{erbij} tekens)")
     gedaan = schrijf(map_, locales)
     print(f"bugos_webui: woorden in {len(gedaan)} bestanden ({', '.join(gedaan[:3])} ...)")
     return 0
