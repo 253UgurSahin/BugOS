@@ -369,8 +369,10 @@ rijen = pp.lijst.findChildren(mod.Rij)
 klopt(rijen[0].uitleg.text() == "Klaar om te printen · Studeerkamer" and rijen[1].uitleg.text().startswith("Gestopt"),
       f"venster: klaar met de plek erbij; de Canon is gestopt ({[r.uitleg.text() for r in rijen]})")
 klopt(len(pp.taak_rijen) == 1 and pp.taak_rijen[0].titel.text() == "Brief aan de bank.pdf"
-      and pp.taak_rijen[0].rechts.text() == "Annuleren" and "wordt nu geprint" in pp.taak_rijen[0].uitleg.text(),
-      "wachtrij: je document met zijn naam en een knop 'Annuleren' (test 27)")
+      and pp.taak_rijen[0].rechts.text() == "Annuleren" and "wordt nu geprint" in pp.taak_rijen[0].uitleg.text()
+      and pp.taak_rijen[0].rechts.accessibleName() in ("", "Annuleren")
+      and pp.taak_rijen[0].rechts.accessibleDescription() == "Brief aan de bank.pdf",
+      "wachtrij: je document met zijn naam en een knop 'Annuleren'; de schermlezer hoort welk document (U039, test 27)")
 menu_hp = [x[1] for x in pp.menu(bi.printers()[0])]
 menu_canon = [x[1] for x in pp.menu(bi.printers()[1])]
 klopt("Printen pauzeren" in menu_hp and "Verder printen" not in menu_hp and "Printer verwijderen" in menu_hp,

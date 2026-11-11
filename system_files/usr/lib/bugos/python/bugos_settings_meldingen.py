@@ -387,7 +387,8 @@ class PrintersPagina(Blad):
             plek = (namen or {}).get(taak.printer, taak.printer.replace("_", " "))
             uitleg = f"{plek} · " + (t("wordt nu geprint", "printing now") if taak.actief else t("wacht", "waiting"))
             rij = Rij("document", taak.titel or t("Document", "Document"), uitleg, weg)
-            weg.setAccessibleName(t("{titel} annuleren", "Cancel {titel}").format(titel=rij.titel.text()))
+            # De knop heet zoals zijn tekst (U039); welk document het is, hoort de schermlezer als beschrijving.
+            weg.setAccessibleDescription(rij.titel.text())
             self.wacht_kaart.voeg(rij)
             self.taak_rijen.append(rij)
         if len(taken) > self.MAX_TAKEN:
