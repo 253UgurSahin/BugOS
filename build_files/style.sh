@@ -50,12 +50,16 @@ EOF
 # "Activiteiten >" (Meta+Q gaat ook uit: bugos-panel), "Tags toekennen >", "Via KDE Connect versturen" (KDE Connect
 # start niet vanzelf, zie hieronder) en de kluis (Plasma Vault). /etc/xdg wordt hiervoor wel gelezen (KConfig);
 # de sleutel is de bestandsnaam van de plug-in in /usr/lib64/qt6/plugins/kf6/kfileitemaction (zonder .so).
+# Ook "Openen als beheerder" (kio-admin: Dolphin met beheerdersrechten, een KDE-venster).
 # Wat blijft (KDE, met reden): "Eigenschappen" (het KDE-venster met grootte en rechten; BugOS heeft er nog geen eigen
 # venster voor) en "Openen met <programma>" (de echte naam van het programma).
 for plugin in kactivitymanagerd_fileitem_linking_plugin tagsfileitemaction kdeconnectfileitemaction \
-    plasmavaultfileitemaction; do
+    plasmavaultfileitemaction kio-admin; do
     kwriteconfig6 --file /etc/xdg/kservicemenurc --group Show --key "$plugin" false
 done
+# "Gebruiksstatistieken van schijven bekijken" op elke map opent Filelight (KDE; verborgen, zie 4c: Bestanden laat
+# zelf zien wat de meeste ruimte inneemt). Het is een los servicemenu-bestand van het pakket filelight.
+rm -f /usr/share/kio/servicemenus/filelight.desktop
 # Geen Overzicht van KDE als je per ongeluk de muis linksboven in de hoek duwt (net als Windows: daar gebeurt niets).
 kwriteconfig6 --file /etc/xdg/kwinrc --group Effect-overview --key BorderActivate 9
 # KDE Connect (koppelen met je telefoon) start niet vanzelf: het gaf meldingen met "KDE Connect" die niemand vroeg.
@@ -328,8 +332,9 @@ done
 # Een echt BugOS-gevoel: de KDE-programma's waar BugOS een eigen app (of knop) voor heeft, staan niet in het
 # startmenu. Ze blijven geïnstalleerd en werken gewoon, maar BugOS opent er nog maar één zelf: KDE Instellingen
 # ("Geavanceerde instellingen" onder Over deze computer). Bestanden laat zelf zien wat de meeste ruimte inneemt
-# (dus geen Filelight) en opent geen Dolphin of Schijfbeheer meer. (Discover zit niet meer in het beeld: de Winkel.)
-for app in org.kde.dolphin.desktop systemsettings.desktop org.kde.filelight.desktop \
+# (dus geen Filelight) en opent geen Dolphin of Schijfbeheer meer. Discover (de Winkel doet dit) blijft verborgen
+# zolang build.sh het nog installeert; haalt de bouw het weg, dan doet verberg hier niets.
+for app in org.kde.discover.desktop org.kde.dolphin.desktop systemsettings.desktop org.kde.filelight.desktop \
     org.kde.partitionmanager.desktop org.kde.plasma-systemmonitor.desktop org.kde.kinfocenter.desktop \
     org.kde.kwalletmanager.desktop org.kde.kwalletmanager5.desktop org.kde.kmenuedit.desktop \
     org.kde.kdeconnect.app.desktop org.kde.kdeconnect.sms.desktop org.kde.kdeconnect_open.desktop \

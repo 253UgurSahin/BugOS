@@ -181,6 +181,8 @@ var RUSTIG_VROEGER = RUSTIG.concat(["org.kde.plasma.keyboardlayout"]);
 // powerdevil; het scherm-OSD van KWin), dus de volume- en helderheidstoetsen, wifi-wachtwoorden en Meta+P blijven
 // werken. Ze komen terug als je het snelmenu uitzet. Wat aan blijft (verborgen achter het pijltje): meldingen,
 // klembord (Meta+V), apparaten (USB-stick veilig verwijderen), printers, toetsenbord, camera, media, klikhulp.
+// Wat alleen in deze KDE-onderdelen zat en dus mee weggaat (snelmenu uit brengt ze terug): VPN aan/uit en de
+// wifi-hotspot (netwerk), slaapstand en schermvergrendeling even tegenhouden (batterij), presentatiemodus (kscreen).
 var UIT = ["org.kde.plasma.volume", "org.kde.plasma.networkmanagement", "org.kde.plasma.bluetooth",
     "org.kde.plasma.battery", "org.kde.plasma.brightness", "org.kde.plasma.manage-inputmethod",
     "org.kde.kdeconnect", "org.kde.plasma.weather", "org.kde.plasma.vault", "org.kde.kscreen"];
@@ -247,6 +249,49 @@ function systeemvak(rustig) {
             vak.writeConfig("hiddenItems", nieuw);
             vak.writeConfig("bugosHidden", erbij.length ? erbij : [""]);
             vakUit(vak, rustig);
+            vak.reloadConfig();
+            n++;
+        }
+    }
+    print(n);
+}
+// Eenmalig na de update (stap 6 van standaard), alleen met het snelmenu aan: de UIT-onderdelen uitzetten en de
+// toetsenbordindeling weer laten zien als BugOS die verborg. Verder blijft hiddenItems zoals het is: wat je zelf
+// weer zichtbaar maakte (bijv. het klembord of de printers), verbergt BugOS niet opnieuw. (systeemvak(true) zou
+// de hele RUSTIG-lijst weer verbergen.)
+function systeemvakNaUpdate() {
+    var ps = panels(), n = 0, kl = "org.kde.plasma.keyboardlayout";
+    for (var i = 0; i < ps.length; i++) {
+        var ws = ps[i].widgets();
+        for (var j = 0; j < ws.length; j++) {
+            if (ws[j].type != "org.kde.plasma.systemtray") continue;
+            var vak = ws[j];
+            vak.currentConfigGroup = ["General"];
+            var oud = vak.readConfig("hiddenItems", []);
+            if (typeof oud == "string") oud = oud === "" ? [] : oud.split(",");
+            var vorig = vak.readConfig("bugosHidden", ["-"]);
+            if (typeof vorig == "string") vorig = vorig.split(",");
+            var nooit = vorig.length == 1 && vorig[0] == "-";
+            var vanOns = vorig;
+            if (nooit) {
+                // Zoals in systeemvak(): staat de hele oude lijst er, dan was die van een oudere BugOS.
+                var alles = true;
+                for (var a = 0; a < RUSTIG_VROEGER.length; a++) if (oud.indexOf(RUSTIG_VROEGER[a]) < 0) alles = false;
+                vanOns = alles ? RUSTIG_VROEGER : [];
+            }
+            if (vanOns.indexOf(kl) >= 0 && oud.indexOf(kl) >= 0) {
+                var nieuw = [];
+                for (var k = 0; k < oud.length; k++) if (oud[k] != kl) nieuw.push(oud[k]);
+                vak.writeConfig("hiddenItems", nieuw);
+            }
+            if (!nooit) {
+                var erbij = [];
+                for (var m = 0; m < vorig.length; m++) if (vorig[m] !== "" && vorig[m] != kl) erbij.push(vorig[m]);
+                vak.writeConfig("bugosHidden", erbij.length ? erbij : [""]);
+            } else if (vanOns.length) {
+                vak.writeConfig("bugosHidden", RUSTIG);
+            }
+            vakUit(vak, true);
             vak.reloadConfig();
             n++;
         }
@@ -404,7 +449,8 @@ standaard:*)
     # Stap 5: het rechtermuismenu van het bureaublad zonder KDE-regels (zichtbaar na de volgende keer inloggen).
     MARKER5="$BUGOS_CONFIG/paneel-bureaubladmenu-1"
     # Stap 6: de KDE-onderdelen in het systeemvak die het snelmenu vervangt echt uitzetten (niet alleen verbergen),
-    # en de toetsenbordindeling weer laten zien. Alleen als het snelmenu er staat.
+    # en de toetsenbordindeling weer laten zien. Alleen als het snelmenu er staat. Wat je zelf weer zichtbaar
+    # maakte, blijft zichtbaar (systeemvakNaUpdate, niet systeemvak(true)).
     MARKER6="$BUGOS_CONFIG/paneel-systeemvak-2"
     # Stap 7: Meta+Q opent niet meer het zijpaneel "Activiteiten" van KDE (alleen als het nog de standaard is).
     MARKER7="$BUGOS_CONFIG/paneel-sneltoets-1"
@@ -449,7 +495,7 @@ standaard:*)
     if [ ! -f "$MARKER6" ]; then
         gelukt=1
         if [ "$(status_van org.bugos.quickmenu)" = aan ]; then
-            plasma_wijzig "systeemvak(true);" >/dev/null || gelukt=0
+            plasma_wijzig "systeemvakNaUpdate();" >/dev/null || gelukt=0
         fi
         [ "$gelukt" = 1 ] && touch "$MARKER6"
     fi
