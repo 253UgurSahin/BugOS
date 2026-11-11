@@ -1164,6 +1164,42 @@ def batterij() -> Batterij | None:
                     not laadt and not leeg_loopt and _aan_stroom_kaal())
 
 
+UPOWER = ("org.freedesktop.UPower", "/org/freedesktop/UPower/devices/DisplayDevice", "org.freedesktop.UPower.Device")
+_c._VB.setdefault("accu_tijd", (12000, 0))
+
+
+def lees_busctl_getallen(uit: str) -> list[int]:
+    """'x 12000\\nx 0' (busctl get-property met twee eigenschappen) wordt [12000, 0]."""
+    getallen = []
+    for regel in (uit or "").splitlines():
+        delen = regel.split()
+        if len(delen) == 2 and delen[0] == "x" and delen[1].lstrip("-").isdigit():
+            getallen.append(int(delen[1]))
+    return getallen
+
+
+def batterij_tijd() -> tuple[int, int]:
+    """(seconden tot leeg, seconden tot vol) volgens UPower; (0, 0) als het niet bekend is."""
+    if _c.VOORBEELD:
+        return tuple(_c._VB["accu_tijd"])
+    code, uit = _c.draai("busctl", "--system", "get-property", *UPOWER, "TimeToEmpty", "TimeToFull", timeout=5)
+    getallen = lees_busctl_getallen(uit) if code == 0 else []
+    if len(getallen) != 2:
+        return 0, 0
+    return max(getallen[0], 0), max(getallen[1], 0)
+
+
+def duur_tekst(seconden: int) -> str:
+    """'3 u 20 min', '45 min', '2 u': op 5 minuten afgerond (eerst alles samen, dus nooit '60 min': review I8)."""
+    vijf = max(1, round(seconden / 300))
+    uren, minuten = divmod(vijf * 5, 60)
+    if not uren:
+        return t("{m} min", "{m} min").format(m=minuten)
+    if not minuten:
+        return t("{u} u", "{u} h").format(u=uren)
+    return t("{u} u {m} min", "{u} h {m} min").format(u=uren, m=minuten)
+
+
 # =============================================================== uiterlijk ===
 
 def donker() -> bool:

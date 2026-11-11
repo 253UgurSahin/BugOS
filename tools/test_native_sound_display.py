@@ -359,6 +359,23 @@ klopt(_h2[-2:] == ["output.HDMI-A-1.disable", "output.eDP-1.primary"] and all(bi
       f"22: terugzetten met een scherm dat uit staat: dat gaat weer uit, en het hoofdscherm blijft ({_h2[-2:]})")
 
 
+# =========================================================================================== energie ===
+# 31: hoe lang de batterij nog gaat (UPower; in de VM zonder batterij 'x 0' en 'x 0')
+klopt(bi.lees_busctl_getallen("x 12000\nx 0\n") == [12000, 0] and bi.lees_busctl_getallen("rommel\nx\nx 5 6\n") == [],
+      "31: busctl-getallen lezen ('x 12000'); rommel telt niet")
+_opd, _bt = vang(bi.batterij_tijd, antwoord=lambda c: (0, "x 12000\nx 0\n"))
+klopt(_opd == [("busctl", "--system", "get-property", "org.freedesktop.UPower",
+                "/org/freedesktop/UPower/devices/DisplayDevice", "org.freedesktop.UPower.Device", "TimeToEmpty",
+                "TimeToFull")] and _bt == (12000, 0), "31: batterij_tijd vraagt UPower TimeToEmpty en TimeToFull")
+klopt(vang(bi.batterij_tijd, antwoord=lambda c: (0, "x 5\n"))[1] == (0, 0)
+      and vang(bi.batterij_tijd, antwoord=lambda c: (1, "x 5\nx 6\n"))[1] == (0, 0),
+      "31: één getal, of busctl mislukt: (0, 0), dan zeggen we niets over de tijd")
+# 32 en I8: afronden op 5 minuten, eerst alles samen (nooit '60 min' of '1 u 60 min')
+_d = {s: bi.duur_tekst(s) for s in (12000, 2700, 7200, 3500, 7100, 3300, 61, 100)}
+klopt(_d == {12000: "3 u 20 min", 2700: "45 min", 7200: "2 u", 3500: "1 u", 7100: "2 u", 3300: "55 min", 61: "5 min",
+             100: "5 min"}, f"32/I8: duur_tekst ({_d})")
+
+
 # ========================================================================================= microfoon ===
 # pactl -f json list sources uit de VM (PipeWire 1.6.11): de 'monitor' van de luidspreker en de echte ingang.
 VM_BRONNEN = [
@@ -487,7 +504,7 @@ spec = importlib.util.spec_from_loader("instellingen", lader)
 mod = importlib.util.module_from_spec(spec)
 sys.modules["instellingen"] = mod
 lader.exec_module(mod)
-from PySide6.QtCore import QThreadPool, QTimer  # noqa: E402
+from PySide6.QtCore import QPoint, QThreadPool, QTimer  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 app = mod.maak_app("bugos-settings", "bugos-settings", ["test"])
@@ -609,6 +626,29 @@ wacht_ms(200)
 gp.mic_uit.setChecked(True)
 klopt(not gp.test_bezig, "A: 'Microfoon uit' tijdens de test: de test stopt")
 gp.mic_uit.setChecked(False)
+wacht()
+
+# 33: de pagina Energie (voorbeeld: 76 %, op de batterij, 12000 s)
+venster.ga_naar("energie")
+wacht()
+ep = venster.paginas["energie"]
+klopt(ep.batterij.uitleg.text() == "76% · op batterij · nog ongeveer 3 u 20 min",
+      f"33: Energie: 'nog ongeveer 3 u 20 min' ({ep.batterij.uitleg.text()!r})")
+ep.toon((bi.Batterij(50, True, False), None, 300, 600, bi.KNOP_VRAGEN, bi.KNOP_SLAPEN, "AC", (0, 2700)))
+klopt(ep.batterij.uitleg.text() == "50% · wordt opgeladen · vol over ongeveer 45 min",
+      f"33: aan de lader: 'vol over ongeveer 45 min' ({ep.batterij.uitleg.text()!r})")
+ep.toon((bi.Batterij(50, False, False), None, 300, 600, bi.KNOP_VRAGEN, bi.KNOP_SLAPEN, "Battery", (30, 0)))
+_u1 = ep.batterij.uitleg.text()
+ep.toon((bi.Batterij(50, False, False), None, 300, 600, bi.KNOP_VRAGEN, bi.KNOP_SLAPEN, "Battery", (60 * 3600, 0)))
+_u2 = ep.batterij.uitleg.text()
+ep.toon((bi.Batterij(50, False, False), None, 300, 600, bi.KNOP_VRAGEN, bi.KNOP_SLAPEN, "Battery"))
+klopt(_u1 == _u2 == ep.batterij.uitleg.text() == "50% · op batterij",
+      "33: een tijd die niet kan (30 s, 60 uur) of de oude vorm zonder tijd: geen tijd erbij")
+_titel_x = ep.titel.mapTo(ep.widget(), QPoint(0, 0)).x()
+_kaart_x = ep.profielen["balanced"].parentWidget().mapTo(ep.widget(), QPoint(0, 0)).x() + \
+    min(k.x() for k in ep.profielen.values())
+klopt(_kaart_x == _titel_x, f"D06: de drie profielkaarten beginnen op de lijn van de titel ({_kaart_x} en {_titel_x})")
+ep.ververs()
 wacht()
 
 # 27, 28 (één scherm), 29: de pagina Scherm

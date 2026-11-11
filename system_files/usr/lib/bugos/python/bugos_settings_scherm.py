@@ -870,6 +870,7 @@ class EnergiePagina(Blad):
         self.lay.addWidget(sectie(t("Hoe moet je computer werken?", "How should your computer work?")))
         rij = QHBoxLayout()
         rij.setSpacing(12)
+        rij.setContentsMargins(0, 0, 0, 0)   # op één lijn met de titel en de andere kaarten (D06)
         self.profielen: dict[str, KeuzeKaart] = {}
         groep = QButtonGroup(self)
         for profiel in bi.PROFIELEN:
@@ -912,13 +913,14 @@ class EnergiePagina(Blad):
 
     def ververs(self) -> None:
         op_achtergrond(self, lambda: (bi.batterij(), bi.energieprofiel(), bi.scherm_uit_na(), bi.slaap_na(),
-                                      bi.aanuit_knop(), bi.deksel(), bi.tijden_profiel()), self.toon)
+                                      bi.aanuit_knop(), bi.deksel(), bi.tijden_profiel(), bi.batterij_tijd()), self.toon)
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:
             return
         bat, profiel, scherm_uit, slaap, aanuit, deksel, *rest = uitkomst
         stand = rest[0] if rest else "AC"
+        leeg, vol = rest[1] if len(rest) > 1 and rest[1] else (0, 0)   # (de oude vorm zonder tijd werkt nog)
         self.scherm_uit.zet(dichtstbij(bi.SCHERM_UIT_KEUZES, scherm_uit))
         self.slaap.zet(dichtstbij(bi.SLAAP_KEUZES, slaap))
         self.aanuit.zet(aanuit if aanuit in (bi.KNOP_VRAGEN, bi.KNOP_SLAPEN, bi.KNOP_UIT) else bi.KNOP_VRAGEN)
@@ -940,7 +942,13 @@ class EnergiePagina(Blad):
         if bat is not None:
             staat = t("vol", "full") if bat.vol else t("wordt opgeladen", "charging") if bat.laadt else \
                 t("aan de lader, laadt niet", "plugged in, not charging") if bat.aan_lader else t("op batterij", "on battery")
-            self.batterij.zet_uitleg(f"{bat.procent}% · {staat}")
+            tijd = ""
+            # Hoe lang nog: alleen als UPower een redelijke tijd weet (net na het in- of uitpluggen zegt hij 0).
+            if not bat.laadt and not bat.vol and not bat.aan_lader and 60 <= leeg <= 48 * 3600:
+                tijd = " · " + t("nog ongeveer {tijd}", "about {tijd} left").format(tijd=bi.duur_tekst(leeg))
+            elif bat.laadt and 60 <= vol <= 24 * 3600:
+                tijd = " · " + t("vol over ongeveer {tijd}", "full in about {tijd}").format(tijd=bi.duur_tekst(vol))
+            self.batterij.zet_uitleg(f"{bat.procent}% · {staat}{tijd}")
         self.profiel_rij.setVisible(profiel is not None)
         self.geen_profiel.setVisible(profiel is None)
         if profiel in self.profielen:
