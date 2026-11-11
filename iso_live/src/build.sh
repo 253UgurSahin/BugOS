@@ -91,6 +91,16 @@ dnf install -qy --allowerasing firefox anaconda-live anaconda-webui \
     libblockdev-btrfs libblockdev-lvm libblockdev-dm yad jq
 mkdir -p /var/lib/rpm-state
 
+# Echte voortgang tijdens het kopiëren van BugOS (20 tot 40 minuten). Anaconda liet al die tijd alleen
+# "Deployment starting: /var/lib/bugos-stick/bugos" zien, omdat ostree zelf niets zegt. bugos_voortgang.py telt
+# de lagen die al binnen zijn: "Copying BugOS: 37% done (12 minutes so far)". Heeft installation.py een andere
+# vorm (Anaconda bijgewerkt), dan stopt het bouwen hier.
+ANA="$(python3 -c 'import os, pyanaconda; print(os.path.dirname(pyanaconda.__file__))')"
+OSTREE_PY="$ANA/modules/payloads/payload/rpm_ostree"
+install -Dm0644 "$SRC/bugos_voortgang.py" "$OSTREE_PY/bugos_voortgang.py"
+python3 "$SRC/bugos_voortgang.py" patch "$OSTREE_PY/installation.py"
+python3 -m py_compile "$OSTREE_PY/installation.py" "$OSTREE_PY/bugos_voortgang.py"
+
 # shellcheck source=/dev/null
 . /etc/os-release
 mkdir -p /etc/anaconda/profile.d
@@ -219,6 +229,16 @@ PY
 if zcat /usr/share/cockpit/anaconda-webui/po.nl.js.gz | grep -q '\[null, "[^"]*Fedora'; then
     echo "Let op: er staat nog 'Fedora' in de Nederlandse teksten van het installatieprogramma" >&2
 fi
+# iso_live/src/bugos_webui.py:
+# - Tijdzone: het vinkje "Automatically set timezone" deed niets (er wordt niets op internet gevraagd) en zette
+#   de keuzelijsten vast op New York. Het start nu uit (de CSS hieronder verbergt het), en het installatieprogramma
+#   raadt de zone uit het land van de gekozen taal (Nederlands (Nederland) -> Europe/Amsterdam). Kies je zelf een
+#   zone, dan blijft die staan.
+# - Gewone woorden, Engels en Nederlands: "Password" in plaats van "Passphrase", "Use the whole disk", "Finish" ...
+#   Engels krijgt een eigen woordenboek (po.en_US.js.gz en de andere Engelse talen van Anaconda); Nederlands komt
+#   achteraan in po.nl.js.gz, na de regels hierboven, zodat onze woorden winnen.
+# Klopt de vorm van een bestand niet meer (nieuwe versie van het installatieprogramma), dan stopt het bouwen hier.
+python3 "$SRC/bugos_webui.py" /usr/share/cockpit/anaconda-webui
 
 # Waarschuwing voor BitLocker, vóórdat het installatieprogramma opent.
 # Dit zat eerst in de kickstart, maar daar kwam het venster niet op het
@@ -227,6 +247,8 @@ fi
 install -Dm0755 "$SRC/bugos-install" /usr/bin/bugos-install
 
 # Wat het installatieprogramma doet.
+# Nooit 'timezone' of 'timesource' in deze kickstart (of in bugos-updates.ks): dan zet Anaconda de zone met voorrang 70,
+# en wint onze gok op basis van de taal (voorrang 30, zie bugos_webui.py) nooit meer. tools/test_native_installer.py let erop.
 mkdir -p /usr/share/anaconda/post-scripts
 cat >>/usr/share/anaconda/interactive-defaults.ks <<EOF
 
@@ -248,6 +270,19 @@ tail -n 60 /tmp/anaconda.log | run0 --user=liveuser --setenv=WAYLAND_DISPLAY=way
 # BugOS vanaf de stick zelf installeren (zie stap 1): geen internet nodig.
 ostreecontainer --url=/var/lib/bugos-stick/bugos --transport=oci --no-signature-verification
 %include /usr/share/anaconda/post-scripts/bugos-updates.ks
+
+# Merkteken voor bugos-install: het installeren is gelukt. Dit is de laatste echte stap (daarna kopieert Anaconda
+# alleen nog zijn logboeken en zet het de SELinux-labels); ging er eerder iets mis, dan komt Anaconda hier niet.
+# Regel 1 = seconden sinds het opstarten (de klok kan tijdens het installeren verzetten), regel 2 = de gekozen taal.
+# Anaconda schrijft LANG="nl_NL.UTF-8" (met aanhalingstekens); lukt dat lezen niet, dan de taal van Anaconda zelf.
+# Leesbaar voor de live-gebruiker (0644), wat de umask ook is.
+%post --nochroot
+install -d -m 0755 /run/bugos-install
+taal="\$(sed -n 's/^LANG=//p' "\${ANA_INSTALL_PATH:-/mnt/sysroot}/etc/locale.conf" 2>/dev/null | tr -d '"' | head -n 1)"
+[ -n "\$taal" ] || taal="\${LANG:-}"
+printf '%s\n%s\n' "\$(cut -d. -f1 /proc/uptime)" "\$taal" >/run/bugos-install/gelukt
+chmod 0644 /run/bugos-install/gelukt
+%end
 EOF
 
 # Na het installeren: updates voortaan van GitHub halen. BugOS kwam van de
@@ -297,6 +332,20 @@ fi
 # Welkomstscherm met "Proberen" of "Installeren".
 install -Dm0644 "$SRC/bugos-live.desktop" /etc/xdg/autostart/bugos-live.desktop
 install -Dm0755 "$SRC/bugos-live" /usr/bin/bugos-live
+# bugos-live gebruikt onderdelen van BugOS zelf (bugos_ui.vraag_ja, op_achtergrond, ...). Is BASE_IMAGE een oudere
+# BugOS zonder die onderdelen, dan zou het welkomstscherm op de stick zonder melding niet opengaan. Dan liever hier
+# stoppen: laad het programma (zonder het te starten), dan zijn alle imports nagekeken.
+QT_QPA_PLATFORM=offscreen python3 - <<'PY'
+import importlib.machinery
+import importlib.util
+
+lader = importlib.machinery.SourceFileLoader("bugos_live", "/usr/bin/bugos-live")
+spec = importlib.util.spec_from_loader("bugos_live", lader)
+try:
+    lader.exec_module(importlib.util.module_from_spec(spec))
+except ImportError as e:
+    raise SystemExit(f"bugos-live past niet bij deze BugOS (BASE_IMAGE te oud?): {e}") from e
+PY
 
 # Precies één installeer-knop, en die heet BugOS.
 # De live-scripts van Fedora (livesys-kde) zetten liveinst.desktop
@@ -410,6 +459,32 @@ cat >"$BRANDING/branding.css" <<'EOF'
 }
 .anaconda .pf-v6-c-form__section:has(#anaconda-screen-accounts-root-account-enable-root-account) {
     display: none;
+}
+
+/* Datum en tijd. Geen vinkje 'tijdzone automatisch': BugOS vraagt nooit waar je bent (geen plaatsbepaling),
+   dus het vinkje deed niets en hield de keuzelijsten vast (bugos_webui.py zet het uit). De hele regel weg,
+   anders blijft er een lege strook staan. */
+.anaconda .pf-v6-l-stack__item:has(> .pf-v6-l-flex > * > .pf-v6-c-check > #anaconda-screen-date-time-auto-timezone) {
+    display: none;
+}
+/* De keuzelijsten sprongen in onder dat vinkje; nu staan ze gewoon onder de kop 'Tijdzone'. */
+.anaconda .anaconda-screen-date-time__indent:has(#anaconda-screen-date-time-region-toggle) {
+    margin-inline-start: 0;
+}
+/* Altijd even laten nakijken: in het Engels staat er New York tot je zelf kiest. Alleen Engels en Nederlands
+   (BugOS' eigen talen); de pagina zet zijn taal in <html lang>. */
+html:lang(en) .anaconda .anaconda-screen-date-time__indent:has(#anaconda-screen-date-time-region-toggle)::after,
+html:lang(nl) .anaconda .anaconda-screen-date-time__indent:has(#anaconda-screen-date-time-region-toggle)::after {
+    flex-basis: 100%;
+    color: var(--pf-t--global--text--color--subtle);
+    content: "Is this where you live? If not, choose your region and city.";
+}
+html:lang(nl) .anaconda .anaconda-screen-date-time__indent:has(#anaconda-screen-date-time-region-toggle)::after {
+    content: "Woon je hier? Zo niet, kies dan je regio en je stad.";
+}
+/* Zelf tijdservers kiezen is iets voor kenners (kan later via Instellingen > Geavanceerd). */
+#anaconda-screen-date-time-configure-ntp {
+    display: none !important;
 }
 
 /* Onze letters (zitten in BugOS). */

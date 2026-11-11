@@ -1,13 +1,21 @@
 #!/usr/bin/python3
-"""BugOS Live - eerste scherm op de USB-stick: proberen of installeren?"""
+"""BugOS Live - de vensters van de USB-stick.
 
+    bugos-live          eerste scherm op de stick: proberen of installeren?
+    bugos-live klaar    na het installeren (bugos-install): "BugOS staat op je computer" met "Nu opnieuw opstarten"
+    bugos-live bitlocker  vóór het installeren (bugos-install), bij een BitLocker-schijf: doorgaan (0) of stoppen (10)
+"""
+
+import os
 import subprocess
 import sys
+import time
 
 sys.path.insert(0, "/usr/lib/bugos/python")
 
-from bugos_ui import Chip, Knop, achtergrond_pad, draai, label, maak_app, t, uitvoeren  # noqa: E402
-from PySide6.QtCore import QRectF, QTimer  # noqa: E402
+from bugos_settings_onderdelen import op_achtergrond  # noqa: E402
+from bugos_ui import Chip, Knop, achtergrond_pad, draai, label, maak_app, t, uitvoeren, vraag_ja  # noqa: E402
+from PySide6.QtCore import QProcess, QRectF, QTimer  # noqa: E402
 from PySide6.QtGui import QColor, QIcon, QLinearGradient, QPainter, QPixmap  # noqa: E402
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget  # noqa: E402
 
@@ -25,12 +33,62 @@ def geheugen_gb() -> float:
     return 99.0
 
 
-class Live(QWidget):
+# Hoe vaak we opnieuw vragen of er een wifi-kaart is (een USB-wifistokje kan er later in).
+WIFI_OPNIEUW = 30.0
+
+
+def net_toestand(vraag_wifi: bool) -> tuple[bool, bool | None]:
+    """(online, heeft_wifi). Draait op de achtergrond: nmcli kan blijven hangen, en dan mag het venster niet vastlopen.
+
+    heeft_wifi is None als we het niet gevraagd hebben (online, of kort geleden al gevraagd). Zelfde regel als
+    bi.heeft_wifi() (U111): 'nmcli radio' zegt ook 'enabled' zonder wifi-kaart, dus we kijken naar de apparaten.
+    Lukt nmcli niet, dan nemen we aan dat er wifi is: dan staat de knop er, en Instellingen legt het verder uit."""
+    code, uit = draai("nmcli", "-t", "-f", "CONNECTIVITY", "general", timeout=5)
+    # draai() geeft ook wat nmcli op stderr zegt (bijv. een waarschuwing over versies): kijk per regel.
+    online = code == 0 and any(r.strip() == "full" for r in uit.splitlines())
+    if online or not vraag_wifi:
+        return online, None
+    code, uit = draai("nmcli", "-t", "-f", "TYPE", "device", timeout=5)
+    return online, code != 0 or any(r.strip() == "wifi" for r in uit.splitlines())
+
+
+# Knoppen op de donkere achtergrond: wit randje, zodat alleen de hoofdknop rood is.
+WIT_RAND = ("QPushButton{color:#FFFFFF;border:1px solid rgba(255,255,255,0.35);background:rgba(255,255,255,0.06);}"
+            "QPushButton:hover{background:rgba(255,255,255,0.14);}"
+            "QPushButton:disabled{color:rgba(255,255,255,0.40);border-color:rgba(255,255,255,0.15);}")
+# De rode knop als hij even niet kan (bezig): gedempt rood, niet het lichtgrijze vlak van het lichte thema.
+ROOD_UIT = "QPushButton:disabled{background:rgba(222,47,62,0.38);color:rgba(255,255,255,0.70);border:none;}"
+
+
+class Achtergrond(QWidget):
+    """Een venster met de donkere BugOS-achtergrond (het lieveheersbeestje rechtsonder), zoals het welkomstscherm."""
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("BugOS")
-        self.resize(960, 600)
         self.beeld = QPixmap(achtergrond_pad(donker=True))
+
+    def paintEvent(self, _e):  # noqa: N802
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        r = QRectF(self.rect())
+        p.fillRect(r, QColor("#0E0F13"))
+        if not self.beeld.isNull():
+            bw, bh = self.beeld.width(), self.beeld.height()
+            schaal = max(r.width() / bw, r.height() / bh)
+            dw, dh = bw * schaal, bh * schaal
+            p.drawPixmap(QRectF(r.right() - dw, r.bottom() - dh, dw, dh), self.beeld, QRectF(0, 0, bw, bh))
+        g = QLinearGradient(0, 0, r.width(), 0)
+        g.setColorAt(0, QColor(14, 15, 19, 245))
+        g.setColorAt(0.5, QColor(14, 15, 19, 200))
+        g.setColorAt(1, QColor(14, 15, 19, 20))
+        p.fillRect(r, g)
+
+
+class Live(Achtergrond):
+    def __init__(self):
+        super().__init__()
+        self.resize(960, 600)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(56, 52, 56, 44)
         lay.setSpacing(18)
@@ -57,11 +115,22 @@ class Live(QWidget):
         self.wifi = Knop(t("Wifi kiezen", "Choose Wi-Fi"), "rand", "network-wireless")
         self.wifi.setStyleSheet("QPushButton{color:#FFFFFF;border:1px solid rgba(255,255,255,0.35);background:transparent;}"
                                 "QPushButton:hover{background:rgba(255,255,255,0.10);}")
-        self.wifi.clicked.connect(lambda: subprocess.Popen(["systemsettings", "kcm_networkmanagement"],
-                                                           start_new_session=True))
+        # Naar de wifi-pagina van BugOS Instellingen (niet naar KDE). Op de stick mag de live-gebruiker zonder
+        # wachtwoord verbinden (hij zit in 'wheel'; regel van NetworkManager).
+        self.wifi.clicked.connect(self.kies_wifi)
+        self.wifi.hide()   # pas tonen als we weten dat er wifi is
         net_rij.addWidget(self.wifi)
         net_rij.addStretch(1)
         lay.addLayout(net_rij)
+        # Gaat Instellingen niet open, dan staat hier hoe het anders kan. Een eigen regel, niet in de chip: die krijgt
+        # elke 3 s een nieuwe tekst, en dan zou de uitleg meteen weer weg zijn.
+        self.wifi_fout = label(t("Instellingen gaan niet open. Kies wifi met het netwerk-icoon rechtsonder.",
+                                 "Settings did not open. Choose Wi-Fi with the network icon at the bottom right."), "sub")
+        self.wifi_fout.setStyleSheet("color:rgba(255,255,255,0.78);font-size:14px;")
+        self.wifi_fout.setWordWrap(True)
+        self.wifi_fout.setMaximumWidth(560)
+        self.wifi_fout.hide()
+        lay.addWidget(self.wifi_fout)
 
         # Weinig geheugen? Dan eerlijk zeggen dat installeren kan mislukken.
         # Het installatieprogramma zet elk onderdeel van BugOS eerst in het
@@ -76,8 +145,7 @@ class Live(QWidget):
         rij = QHBoxLayout()
         rij.setSpacing(14)
         proberen = Knop(t("Eerst proberen", "Try first"), "rand", groot=True)
-        proberen.setStyleSheet("QPushButton{color:#FFFFFF;border:1px solid rgba(255,255,255,0.35);background:rgba(255,255,255,0.06);}"
-                               "QPushButton:hover{background:rgba(255,255,255,0.14);}")
+        proberen.setStyleSheet(WIT_RAND)
         self.installeren = Knop(t("BugOS installeren", "Install BugOS"), "hoofd", groot=True)
         self.installeren.setMinimumWidth(220)
         proberen.clicked.connect(self.close)
@@ -87,6 +155,11 @@ class Live(QWidget):
         rij.addStretch(1)
         lay.addLayout(rij)
 
+        self._heeft_wifi: bool | None = None
+        self._wifi_gevraagd = float("-inf")
+        self._bezig = False
+        # Tot nmcli het eerste antwoord geeft: niets beweren (geen 'geen internet', geen wifi-knop).
+        self.chip.setText(t("Internet nakijken…", "Checking the internet…"))
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.kijk_internet)
         self.timer.start(3000)
@@ -99,41 +172,155 @@ class Live(QWidget):
         nodig. Internet is alleen handig om alvast rond te kijken (websites,
         apps uit de Winkel). Daarom blijft de knop "BugOS installeren" altijd
         aan, en is "Wifi kiezen" er alleen voor het gemak.
+        nmcli draait op de achtergrond; de wifi-kaart vragen we hooguit elke 30 s.
         """
-        code, uit = draai("nmcli", "-t", "-f", "CONNECTIVITY", "general", timeout=5)
-        online = code == 0 and uit.strip() == "full"
-        self.wifi.setVisible(not online)
+        if self._bezig:
+            return
+        self._bezig = True
+        vraag_wifi = time.monotonic() - self._wifi_gevraagd >= WIFI_OPNIEUW
+        op_achtergrond(self, lambda: net_toestand(vraag_wifi), self._net_bekend)
+
+    def _net_bekend(self, uitkomst) -> None:
+        self._bezig = False
+        # Ging het vragen zelf mis, dan zelfde regel als bij een nmcli die faalt: aannemen dat er wifi is.
+        online, wifi = uitkomst if uitkomst else (False, True)
+        if wifi is not None:
+            self._heeft_wifi = wifi
+            self._wifi_gevraagd = time.monotonic()
+        self.toon_net(online)
+
+    def toon_net(self, online: bool) -> None:
+        # Alleen met een wifi-kaart (True; ook als nmcli faalt). Geen kaart (een pc met een kabel) of nog niet bekend
+        # (None): geen knop die nergens heen leidt.
+        self.wifi.setVisible(not online and self._heeft_wifi is True)
+        if online:
+            self.wifi_fout.hide()
         self.chip.setText(t("✓  Je hebt internet", "✓  You are online") if online
                           else t("Geen internet? Geen probleem: BugOS installeert vanaf de stick",
                                  "No internet? No problem: BugOS installs from the stick"))
         # Allebei "goed": zonder internet is er niets mis.
         self.chip.setStyleSheet(Chip("", "goed").styleSheet())
 
+    def kies_wifi(self) -> None:
+        try:
+            subprocess.Popen(["bugos-settings", "wifi"], start_new_session=True)
+        except OSError:
+            self.wifi_fout.show()
+
     def installeer(self) -> None:
         # Via ons startertje: dat waarschuwt eerst bij een BitLocker-schijf.
         subprocess.Popen(["bugos-install"], start_new_session=True)
         self.close()
 
-    def paintEvent(self, _e):  # noqa: N802
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        r = QRectF(self.rect())
-        p.fillRect(r, QColor("#0E0F13"))
-        if not self.beeld.isNull():
-            bw, bh = self.beeld.width(), self.beeld.height()
-            schaal = max(r.width() / bw, r.height() / bh)
-            dw, dh = bw * schaal, bh * schaal
-            p.drawPixmap(QRectF(r.right() - dw, r.bottom() - dh, dw, dh), self.beeld, QRectF(0, 0, bw, bh))
-        g = QLinearGradient(0, 0, r.width(), 0)
-        g.setColorAt(0, QColor(14, 15, 19, 245))
-        g.setColorAt(0.5, QColor(14, 15, 19, 200))
-        g.setColorAt(1, QColor(14, 15, 19, 20))
-        p.fillRect(r, g)
+
+class Klaar(Achtergrond):
+    """Na het installeren (bugos-install start dit als het gelukt is): opnieuw opstarten, of later.
+
+    In de taal die je in het installatieprogramma koos (bugos-install zet LANGUAGE). Opnieuw opstarten mag zonder
+    wachtwoord (polkit: org.freedesktop.login1.reboot, actieve sessie). systemctl draait los (QProcess), dus het venster
+    blijft altijd reageren. Lukt het niet, dan zegt het venster hoe het anders kan (het startmenu)."""
+
+    def __init__(self):
+        super().__init__()
+        self.resize(720, 440)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(48, 44, 48, 36)
+        lay.setSpacing(14)
+        logo = QLabel()
+        logo.setPixmap(QIcon("/usr/share/bugos/logo-dark.svg").pixmap(64, 64))
+        lay.addWidget(logo)
+        self.kop = label("", "groot")
+        self.kop.setStyleSheet("color:#FFFFFF;")
+        lay.addWidget(self.kop)
+        self.tekst = label("", "sub")
+        self.tekst.setStyleSheet("color:rgba(255,255,255,0.78);font-size:15px;")
+        self.tekst.setMaximumWidth(520)
+        lay.addWidget(self.tekst)
+        self.fout = Chip(t("!  Opnieuw opstarten lukte niet. Gebruik Opnieuw opstarten in het startmenu.",
+                           "!  Restarting did not work. Use Restart in the Start menu."), "let_op")
+        self.fout.setWordWrap(True)
+        self.fout.hide()
+        lay.addWidget(self.fout)
+        lay.addStretch(1)
+
+        rij = QHBoxLayout()
+        rij.setSpacing(12)
+        self.later = Knop(t("Later", "Later"), "rand", groot=True)
+        self.later.setStyleSheet(WIT_RAND)
+        self.later.clicked.connect(self.close)
+        self.nu = Knop(t("Nu opnieuw opstarten", "Restart now"), "hoofd", groot=True)
+        self.nu.setMinimumWidth(200)
+        self.nu.setStyleSheet(ROOD_UIT)
+        self.nu.setDefault(True)
+        self.nu.clicked.connect(self.herstart)
+        rij.addWidget(self.later)
+        rij.addWidget(self.nu)
+        rij.addStretch(1)
+        lay.addLayout(rij)
+        self.proces: QProcess | None = None
+        self.toon("begin")
+        self.nu.setFocus()
+
+    def toon(self, stand: str) -> None:
+        """begin, bezig (na 'Nu opnieuw opstarten') of mislukt (dan staat er ook hoe het via het startmenu kan)."""
+        if stand == "bezig":
+            self.kop.setText(t("Opnieuw opstarten…", "Restarting…"))
+            self.tekst.setText(t("Haal de USB-stick eruit zodra het scherm zwart wordt.",
+                                 "Take out the USB stick as soon as the screen goes black."))
+        else:
+            self.kop.setText(t("BugOS staat op je computer", "BugOS is on your computer"))
+            self.tekst.setText(t("Start de computer opnieuw om BugOS te gebruiken.\n"
+                                 "Haal de USB-stick eruit zodra het scherm zwart wordt.",
+                                 "Restart the computer to start using BugOS.\n"
+                                 "Take out the USB stick as soon as the screen goes black."))
+        self.fout.setVisible(stand == "mislukt")
+        self.later.setEnabled(stand != "bezig")
+        self.nu.setEnabled(stand != "bezig")
+
+    def herstart(self) -> None:
+        self.toon("bezig")
+        if os.environ.get("BUGOS_INSTELLINGEN_VOORBEELD"):   # voorbeeldstand (foto's, tests): niets echt doen
+            return
+        self.proces = QProcess(self)
+        self.proces.errorOccurred.connect(self._fout)
+        self.proces.finished.connect(lambda code, _status: self.toon("mislukt") if code != 0 else None)
+        self.proces.start("systemctl", ["reboot"])
+
+    def _fout(self, fout) -> None:
+        if fout == QProcess.ProcessError.FailedToStart:
+            self.toon("mislukt")
+
+
+# bugos-live bitlocker: 0 = doorgaan, STOPPEN = niet installeren. Elke andere code (Python-fout, geen scherm) betekent
+# voor bugos-install 'kon het niet vragen', en dan vraagt het op een andere manier (review I10).
+STOPPEN = 10
+
+
+def vraag_bitlocker() -> bool:
+    """Voor het installeren, als er een BitLocker-schijf is: eerst de herstelsleutel opschrijven. Enter = Stoppen."""
+    return vraag_ja(None, t("Er staat een versleutelde Windows-schijf (BitLocker) op deze computer",
+                            "This computer has an encrypted Windows drive (BitLocker)"),
+                    t("Wil je BugOS naast Windows zetten? Schrijf dan eerst je BitLocker-herstelsleutel op "
+                      "(account.microsoft.com/devices/recoverykey). Zonder die sleutel kom je daarna misschien niet "
+                      "meer in Windows.\n\nDoorgaan met installeren?",
+                      "Do you want to put BugOS next to Windows? Then first write down your BitLocker recovery key "
+                      "(account.microsoft.com/devices/recoverykey). Without that key you may not get back into "
+                      "Windows afterwards.\n\nContinue installing?"),
+                    t("Ja, doorgaan", "Yes, continue"), t("Stoppen", "Stop"), enter_is_nee=True)
+
+
+def venster(args: list[str]) -> QWidget:
+    """Welk venster: 'klaar' na het installeren, anders het welkomstscherm."""
+    if args[:1] == ["klaar"]:
+        return Klaar()
+    return Live()
 
 
 def main() -> int:
     app = maak_app("bugos-live", "bugos-live", sys.argv)
-    return uitvoeren(app, Live())
+    if sys.argv[1:2] == ["bitlocker"]:
+        return 0 if vraag_bitlocker() else STOPPEN
+    return uitvoeren(app, venster(sys.argv[1:]))
 
 
 if __name__ == "__main__":

@@ -14,14 +14,51 @@
 
 # lsblk --list: elke schijf én partitie op een eigen regel. (Met --json staan
 # partities "onder" de schijf, en dan zag de oude controle ze niet.)
+# De vraag is een BugOS-venster (bugos-live bitlocker; Enter = Stoppen): 0 = doorgaan, 10 = stoppen.
+# Elke andere uitkomst betekent dat het venster het niet kon vragen (een fout, geen scherm). Dan niet stilletjes
+# niets doen (dan gebeurt er niets als je op "BugOS installeren" drukt), maar dezelfde vraag in een eenvoudig
+# venster (zenity, dat het installatieprogramma zelf ook gebruikt). Kan ook dat niet, dan gaat het installeren door:
+# het installatieprogramma laat de schijven zelf ook nog zien voordat er iets gebeurt.
 if lsblk --list --noheadings -o FSTYPE 2>/dev/null | grep -qx BitLocker; then
-    if ! kdialog --title BugOS --warningcontinuecancel \
-        "$(t "<b>Let op: er staat een versleutelde Windows-schijf (BitLocker) op deze computer.</b><br><br>Wil je BugOS naast Windows zetten? Schrijf dan eerst je BitLocker-herstelsleutel op (account.microsoft.com/devices/recoverykey).<br><br>Doorgaan met installeren?" \
-            "<b>Careful: this computer has an encrypted Windows drive (BitLocker).</b><br><br>Do you want to put BugOS next to Windows? Then first write down your BitLocker recovery key (account.microsoft.com/devices/recoverykey).<br><br>Continue installing?")" \
-        --continue-label "$(t "Ja, doorgaan" "Yes, continue")" --cancel-label "$(t "Stoppen" "Stop")"; then
+    bugos-live bitlocker
+    antwoord=$?
+    if [ "$antwoord" = 10 ]; then
         exit 0
+    elif [ "$antwoord" != 0 ]; then
+        echo "bugos-install: bugos-live bitlocker gaf $antwoord; de vraag komt nu via zenity" >&2
+        zenity --question --no-markup --title=BugOS --width=480 \
+            --ok-label="$(t "Ja, doorgaan" "Yes, continue")" --cancel-label="$(t "Stoppen" "Stop")" \
+            --text="$(t "Er staat een versleutelde Windows-schijf (BitLocker) op deze computer. Wil je BugOS naast Windows zetten? Schrijf dan eerst je BitLocker-herstelsleutel op (account.microsoft.com/devices/recoverykey). Doorgaan met installeren?" \
+                "This computer has an encrypted Windows drive (BitLocker). Do you want to put BugOS next to Windows? Then first write down your BitLocker recovery key (account.microsoft.com/devices/recoverykey). Continue installing?")" 2>/dev/null
+        antwoord=$?
+        if [ "$antwoord" = 1 ]; then
+            exit 0
+        fi
     fi
 fi
 
-# Het echte installatieprogramma (Anaconda) overnemen.
-exec liveinst "$@"
+# Het echte installatieprogramma (Anaconda). Niet met exec: daarna kijken we of het gelukt is. (Wat liveinst
+# teruggeeft zegt daar niets over: het laatste wat het doet is setenforce.)
+# Merkteken van de kickstart (build.sh, %post --nochroot, als laatste stap): regel 1 = seconden sinds het
+# opstarten, regel 2 = de gekozen taal (LANG="nl_NL.UTF-8", zoals Anaconda het in locale.conf zet).
+MERKTEKEN="${BUGOS_INSTALL_MERKTEKEN:-/run/bugos-install/gelukt}"
+begin="$(cut -d. -f1 /proc/uptime 2>/dev/null)"
+case "$begin" in '' | *[!0-9]*) begin=0 ;; esac
+liveinst "$@"
+
+# Gelukt in DEZE ronde (niet een merkteken van een eerdere poging)? Dan het BugOS-venster "Nu opnieuw opstarten",
+# in de taal die je in het installatieprogramma koos. Gestopt of mislukt: niets (Anaconda zei het al).
+klaar="$(sed -n 1p "$MERKTEKEN" 2>/dev/null)"
+case "$klaar" in '' | *[!0-9]*) klaar=0 ;; esac
+if [ "$klaar" -gt 0 ] && [ "$klaar" -ge "$begin" ]; then
+    taal="$(sed -n 2p "$MERKTEKEN" 2>/dev/null)"
+    taal="${taal#LANG=}"
+    taal="${taal//\"/}"   # Anaconda schrijft LANG="nl_NL.UTF-8", met aanhalingstekens (review I1)
+    taal="${taal%%[._@]*}"
+    # Alleen een gewone taalcode (nl, en, fy, ast) gaat naar LANGUAGE; de rest: de taal van de stick.
+    case "$taal" in [a-z][a-z] | [a-z][a-z][a-z]) ;; *) taal="" ;; esac
+    if [ -n "$taal" ]; then
+        LANGUAGE="$taal" exec bugos-live klaar
+    fi
+    exec bugos-live klaar
+fi
