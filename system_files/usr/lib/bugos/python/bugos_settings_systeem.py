@@ -12,7 +12,7 @@ import threading
 from pathlib import Path
 
 import bugos_config as bi
-from bugos_ui import Kaart, Knop, Rij, bestaat, draai, label, start, t
+from bugos_ui import Kaart, Knop, Rij, bestaat, draai, label, start, t, vraag_ja
 from bugos_settings_onderdelen import Blad, Sein, op_achtergrond, schuifje
 from PySide6.QtCore import QProcess, Qt
 from PySide6.QtGui import QPixmap
@@ -44,7 +44,12 @@ def op_live_stick() -> bool:
         return False
 
 
+VOORBEELD_VERSIE = "44.20261110"
+
+
 def versie() -> str:
+    if bi.VOORBEELD:   # foto's en tests: een echte versie, niet die van de computer waarop ze draaien
+        return VOORBEELD_VERSIE
     try:
         return json.loads(Path("/usr/share/bugos/image-info.json").read_text())["versie"]
     except (OSError, ValueError, KeyError):
@@ -54,6 +59,11 @@ def versie() -> str:
 def systeem_info() -> list[tuple[str, str]]:
     """Gegevens voor 'Over deze computer', in gewone taal."""
     info: list[tuple[str, str]] = [(t("BugOS-versie", "BugOS version"), versie() or "?")]
+    if bi.VOORBEELD:   # dezelfde regels als echt, met geloofwaardige gegevens (niet de computer van de foto)
+        return info + [(t("Processor", "Processor"), "Intel Core i5-1235U"), (t("Geheugen", "Memory"), "16 GB"),
+                       (t("Opslag", "Storage"), t("180 GB vrij van 256 GB", "180 GB free of 256 GB")),
+                       (t("Naam van deze computer", "Computer name"), "bugie-laptop"),
+                       (t("Linux-kern", "Linux kernel"), "6.17.7-300.fc44.x86_64")]
     try:
         for regel in Path("/proc/cpuinfo").read_text().splitlines():
             if regel.startswith("model name"):
@@ -180,22 +190,14 @@ class UpdatesPagina(Schakelaars, Blad):
     def vraag_terug(self) -> None:
         """Eerst zeggen wat 'terug' ook terugzet: wat sinds de update in het systeem veranderde, hoort bij de nieuwe
         versie (elke versie heeft zijn eigen /etc) (U368)."""
-        from PySide6.QtWidgets import QMessageBox
-        box = QMessageBox(self)
-        box.setIcon(QMessageBox.Icon.Question)
-        box.setWindowTitle(t("Terug naar de vorige versie", "Back to the previous version"))
-        box.setText(t("Terug naar de vorige versie?", "Go back to the previous version?"))
-        box.setInformativeText(t(
-            "Je bestanden blijven gewoon staan. Maar wat je sinds de laatste update in het systeem veranderde, gaat ook "
-            "terug: een nieuw wachtwoord (dan geldt het oude weer), nieuwe gebruikers, en wifi-netwerken die je sindsdien "
-            "toevoegde.",
-            "Your files stay where they are. But what you changed in the system since the last update goes back too: "
-            "a new password (the old one works again), new users, and Wi-Fi networks you added since."))
-        ja = box.addButton(t("Terug", "Go back"), QMessageBox.ButtonRole.AcceptRole)
-        annuleer = box.addButton(t("Annuleren", "Cancel"), QMessageBox.ButtonRole.RejectRole)
-        box.setDefaultButton(annuleer)   # Enter uit gewoonte = niets doen, zoals bij weggooien in Bestanden (U380)
-        box.exec()
-        if box.clickedButton() is ja:
+        if vraag_ja(self, t("Terug naar de vorige versie?", "Go back to the previous version?"), t(
+                "Je bestanden blijven gewoon staan. Maar wat je sinds de laatste update in het systeem veranderde, gaat "
+                "ook terug: een nieuw wachtwoord (dan geldt het oude weer), nieuwe gebruikers, en wifi-netwerken die je "
+                "sindsdien toevoegde.",
+                "Your files stay where they are. But what you changed in the system since the last update goes back "
+                "too: a new password (the old one works again), new users, and Wi-Fi networks you added since."),
+                t("Terug", "Go back"),
+                enter_is_nee=True):   # Enter uit gewoonte = niets doen, zoals bij weggooien in Bestanden (U380)
             self.updates("terug")
 
     def bouw_rest(self) -> None:
@@ -424,12 +426,17 @@ class OverPagina(Blad):
         g = self.kaart()
         self.info = systeem_info()
         for sleutel, waarde in self.info:
+            # De waarde krijgt de vrije breedte (rechts uitgelijnd): een lange processornaam past op één regel, en
+            # breekt alleen af als het echt niet past. Marges zoals een gewone Rij.
             rij = QWidget()
+            rij.setObjectName("info")
             r = QHBoxLayout(rij)
-            r.setContentsMargins(16, 14, 16, 14)
-            r.addWidget(label(sleutel, "klein", wrap=False))
-            r.addStretch(1)
-            r.addWidget(label(waarde, "kop3", kopieerbaar=True), 0, Qt.AlignmentFlag.AlignRight)
+            r.setContentsMargins(14, 12, 12, 12)
+            r.setSpacing(16)
+            r.addWidget(label(sleutel, "klein", wrap=False), 0, Qt.AlignmentFlag.AlignVCenter)
+            w = label(waarde, "kop3", kopieerbaar=True)
+            w.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            r.addWidget(w, 1)
             g.voeg(rij)
         kopieer = Knop(t("Gegevens kopiëren", "Copy details"), "gewoon", "lijn:kopieer")
         kopieer.clicked.connect(self.kopieer)

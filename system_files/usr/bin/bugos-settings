@@ -22,7 +22,8 @@ sys.path.insert(0, "/usr/lib/bugos/python")
 
 import bugos_config as bi  # noqa: E402
 from bugos_ui import (  # noqa: E402
-    Groep, Rij, Schuif, Venster, label, leeg_groep, lijn_icoon, maak_app, sectie, start, t, uitvoeren, zoeksleutel,
+    K, Groep, Rij, Schuif, Venster, label, leeg_groep, lijn_icoon, maak_app, px, schaal_css, sectie, start, t,
+    uitvoeren, zoeksleutel,
 )
 from bugos_settings_account import InloggenPagina, TijdPagina  # noqa: E402
 from bugos_settings_meldingen import MeldingenPagina, PrintersPagina, ProgrammasPagina  # noqa: E402
@@ -33,7 +34,7 @@ from bugos_settings_onderdelen import (  # noqa: E402,F401  (KiesDialoog en Wach
 from bugos_settings_scherm import EnergiePagina, GeluidPagina, SchermPagina, UiterlijkPagina  # noqa: E402
 from bugos_settings_systeem import OverPagina, SpelenPagina, UpdatesPagina  # noqa: E402
 from bugos_settings_zien import MuisPagina, ZienPagina  # noqa: E402
-from PySide6.QtCore import QEvent, QSize, QTimer  # noqa: E402
+from PySide6.QtCore import QEvent, QSize, Qt, QTimer  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
     QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
 )
@@ -195,7 +196,8 @@ GROEPEN: list[Indeling] = [
     Indeling("energie", EnergiePagina.icoon, "Energie", "Power",
              "Zuinig of snel, batterij en slaapstand.", "Saving or fast, battery and sleep.", [EnergiePagina]),
     Indeling("account", InloggenPagina.icoon, "Account en taal", "Account and language",
-             "Je naam en wachtwoord, de klok en de taal.", "Your name and password, the clock and the language.",
+             "Je account, andere mensen, de klok, de taal en het toetsenbord.",
+             "Your account, other people, the clock, the language and the keyboard.",
              [InloggenPagina, TijdPagina]),
     Indeling("zien", ZienPagina.icoon, "Makkelijker zien", "Easier to see",
              "Grotere letters, vergrootglas, voorlezen.", "Bigger text, magnifier, read aloud.", [ZienPagina]),
@@ -220,15 +222,17 @@ class GroepPagina(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
         rij = QHBoxLayout()
-        rij.setContentsMargins(40, 22, 40, 0)
-        rij.setSpacing(8)
+        rij.setContentsMargins(*TABS_MARGE)
+        rij.setSpacing(4)
         self.tabs: dict[str, QPushButton] = {}
         knoppen = QButtonGroup(self)
         for b in bladen:
+            # Stille tabjes zoals in Windows 11: geen tweede rode knop naast de rode hoofdknop van de pagina.
             k = QPushButton(b.naam())
             k.setObjectName("tab")
             k.setCheckable(True)
-            k.setMinimumHeight(36)
+            k.setCursor(Qt.CursorShape.PointingHandCursor)
+            k.setMinimumHeight(px(TAB_HOOGTE))
             k.clicked.connect(lambda _c=False, s=b.sleutel: self.toon(s))
             knoppen.addButton(k)
             rij.addWidget(k)
@@ -237,6 +241,9 @@ class GroepPagina(QWidget):
         lay.addLayout(rij)
         self.stapel = QStackedWidget()
         for b in bladen:
+            # Onder de tabjes begint de pagina hoger: de titel staat bijna even hoog als op een pagina zonder tabjes.
+            m = b.lay.contentsMargins()
+            b.lay.setContentsMargins(m.left(), BLAD_ONDER_TABS, m.right(), m.bottom())
             self.stapel.addWidget(b)
         lay.addWidget(self.stapel, 1)
         self.toon(bladen[0].sleutel, ververs=False)
@@ -258,12 +265,23 @@ class GroepPagina(QWidget):
 
 # ================================================================ venster ===
 
-TAB_STIJL = """
-QPushButton#tab { border: 1px solid palette(mid); border-radius: 18px; padding: 6px 18px;
-                  background: transparent; font-weight: 600; }
-QPushButton#tab:hover { background: palette(midlight); }
-QPushButton#tab:checked { background: #DE2F3E; border-color: #DE2F3E; color: #FFFFFF; }
-"""
+TAB_HOOGTE = 32
+TABS_MARGE = (40, 16, 40, 0)    # de rij tabjes boven een pagina (links, boven, rechts, onder)
+BLAD_ONDER_TABS = 14            # de bovenmarge van een pagina onder de tabjes (een gewone pagina: 32)
+
+
+def tab_stijl() -> str:
+    """Tabjes zoals in Windows 11: stil (geen rand, geen rood vlak). Het gekozen tabje heeft rode letters op een
+    zacht rood vlak (zoals in de zijbalk) en een rode streep eronder, die je ook zonder kleur goed ziet (3:1)."""
+    return schaal_css(f"""
+QPushButton#tab {{ border: none; border-radius: 12px; padding: 5px 14px; background: transparent;
+                  color: {K['tekst2']}; font-size: 14px; font-weight: 600; }}
+QPushButton#tab:hover {{ background: {K['knop']}; color: {K['tekst']}; }}
+QPushButton#tab:checked {{ background: {K['accent_zacht']}; color: {K['accent_gekozen']};
+                          border-bottom: 3px solid {K['accent']}; padding-bottom: 2px; }}
+QPushButton#tab:focus {{ border: 2px solid {K['accent']}; padding: 3px 12px; }}
+""")
+
 
 class Instellingen(Venster):
     def __init__(self, begin: str = "start"):
@@ -281,7 +299,7 @@ class Instellingen(Venster):
             self.groepen[g.sleutel] = groep
             for b in bladen:
                 self.paginas[b.sleutel] = b   # elke pagina blijft op zijn eigen sleutel te vinden
-        self.setStyleSheet(self.styleSheet() + TAB_STIJL)
+        self.setStyleSheet(self.styleSheet() + tab_stijl())
         self.zoekveld.textChanged.connect(self.zoeken)
         begin = OUDE_NAMEN.get(begin, begin)
         self.ga_naar(begin if begin in self.paginas else "start")

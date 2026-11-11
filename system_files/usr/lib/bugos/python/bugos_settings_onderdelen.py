@@ -5,7 +5,7 @@ onderdelen (keuzes, schuifbalken, menu's), Blad (een pagina) en de dialogen om i
 from __future__ import annotations
 
 from bugos_ui import (K, Knop, Pagina, Schuif, Venster, Zoekveld, kde_instelling, label, lijn_icoon, ronde_knop,
-                      px, schaal_css, t, zoeksleutel)
+                      px, schaal_css, schermmaat, t, zoeksleutel)
 from PySide6.QtCore import QObject, QRunnable, QSize, Qt, QThreadPool, QTimer, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView, QButtonGroup, QDialog, QFrame, QHBoxLayout, QLineEdit, QListWidget, QListWidgetItem, QMenu,
@@ -50,7 +50,8 @@ QFrame#snel {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-ra
 QPushButton#keus {{ background: transparent; border: none; border-radius: 9px; padding: 8px 14px; font-size: 14px;
     font-weight: 600; color: {K['tekst2']}; }}
 QPushButton#keus:hover {{ color: {K['tekst']}; }}
-QPushButton#keus:checked {{ background: {K['vlak']}; color: {K['tekst']}; }}
+QPushButton#keus:checked {{ background: {K['vlak']}; color: {K['accent_gekozen']}; border-bottom: 3px solid {K['accent']};
+    padding-bottom: 5px; }}
 QPushButton#keus:focus {{ border: 2px solid {K['accent']}; padding: 6px 12px; }}
 QFrame#keuzes {{ background: {K['knop']}; border-radius: 12px; }}
 QPushButton#plaatje {{ background: transparent; border: 2px solid transparent; border-radius: 16px; padding: 3px; }}
@@ -205,7 +206,9 @@ class KiesDialoog(QDialog):
             lay.addWidget(self.zoekveld)
         self.lijst = QListWidget()
         self.lijst.setObjectName("keuzelijst")
-        self.lijst.setMinimumHeight(min(400, 42 * len(items) + 12))
+        # Niet hoger dan het scherm (1280x800 bij 150 %: 445 px vrij): de lijst schuift, de knoppen blijven te zien.
+        ruimte = schermmaat((0, 9999))[0][1] - px(36) * (3 if zoek_hint else 2) - 110
+        self.lijst.setMinimumHeight(max(120, min(400, 42 * len(items) + 12, ruimte)))
         for waarde, tekst in items:
             it = QListWidgetItem(tekst)
             it.setData(Qt.ItemDataRole.UserRole, waarde)
