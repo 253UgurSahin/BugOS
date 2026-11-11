@@ -583,15 +583,21 @@ class VraagDialoog(QDialog):
         else:
             standaard.setFocus()
 
-    def showEvent(self, e) -> None:  # noqa: N802
-        """Precies zo hoog als de inhoud bij deze breedte: geen lege strook boven de knoppen. (Qt rekent de hoogte van
-        een afgebroken uitleg anders uit bij een smallere breedte en houdt die ruimte dan over.)"""
-        super().showEvent(e)
+    def sizeHint(self) -> QSize:  # noqa: N802
+        """Precies zo hoog als de inhoud bij de echte breedte: geen lege strook boven de knoppen. (Qt rekende de hoogte
+        van een afgebroken uitleg uit bij een smallere breedte dan de minimale 440 px, en hield die ruimte dan over.)"""
         lay = self.layout()
-        lay.activate()
-        hoog = lay.totalHeightForWidth(self.width()) if lay.hasHeightForWidth() else lay.totalSizeHint().height()
-        self.setMinimumHeight(min(self.minimumHeight(), hoog))
-        self.resize(self.width(), hoog)
+        if lay is None:
+            return super().sizeHint()
+        breed = max(self.minimumWidth(), min(self.maximumWidth(), lay.totalSizeHint().width()))
+        hoog = lay.totalHeightForWidth(breed) if lay.hasHeightForWidth() else lay.totalSizeHint().height()
+        return QSize(breed, hoog)
+
+    def showEvent(self, e) -> None:  # noqa: N802
+        super().showEvent(e)
+        maat = self.sizeHint()
+        self.setMinimumHeight(min(self.minimumHeight(), maat.height()))
+        self.resize(maat)
 
     @property
     def standaard(self) -> str:
