@@ -3,16 +3,110 @@
 from __future__ import annotations
 
 import bugos_config as bi
-from bugos_ui import Knop, Rij, bestaat, kde_instelling, leeg_groep, sectie_met_knop, start, t, vraag_tekst
+from bugos_ui import (Banner, Groep, Knop, Rij, bestaat, kde_instelling, label, leeg_groep, schermmaat, schuifbaar,
+                      sectie_met_knop, start, t, vraag_tekst)
 from bugos_settings_onderdelen import Blad, meer_knop, op_achtergrond, schuifje
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import QHBoxLayout, QInputDialog, QLineEdit
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtWidgets import QDialog, QHBoxLayout, QInputDialog, QLineEdit, QVBoxLayout, QWidget
+
+
+def vrije_hoogte(w: QWidget | None = None) -> int:
+    """Hoe hoog een venster hier mag zijn (het scherm zonder taakbalk en titelbalk)."""
+    scherm = w.screen() if w is not None and w.screen() is not None else None
+    return schermmaat((0, 99999), scherm=scherm)[0][1]
+
+
+def knoppenrij(*knoppen: QWidget) -> QHBoxLayout:
+    """Rechts onderin een dialoog: eerst de stille knop, dan de rode."""
+    rij = QHBoxLayout()
+    rij.setSpacing(8)
+    rij.addStretch(1)
+    for k in knoppen:
+        rij.addWidget(k)
+    return rij
 
 
 # ================================================================== wifi ===
 
 def sterkte_woord(n: int) -> str:
     return t("Sterk", "Strong") if n >= 70 else t("Goed", "Good") if n >= 45 else t("Zwak", "Weak")
+
+
+class OpgeslagenDialoog(QDialog):
+    """Opgeslagen netwerken: wat BugOS onthoudt, en per netwerk 'Vergeten' (ook een oud netwerk dat nu niet in de buurt
+    is, met een oud wachtwoord)."""
+
+    def __init__(self, ouder: QWidget):
+        super().__init__(ouder)
+        self.setWindowTitle(t("Opgeslagen netwerken", "Saved networks"))
+        self.setMinimumWidth(480)
+        self.veranderd = False
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(24, 22, 24, 20)
+        lay.setSpacing(12)
+        lay.addWidget(label(t("Opgeslagen netwerken", "Saved networks"), "kop2"))
+        lay.addWidget(label(t("Vergeet je een netwerk, dan verbindt BugOS er niet meer vanzelf mee. De volgende keer "
+                              "vraagt BugOS het wachtwoord opnieuw.",
+                              "If you forget a network, BugOS no longer connects to it by itself. Next time BugOS "
+                              "asks for the password again."), "klein"))
+        self.banner = Banner()
+        lay.addWidget(self.banner)
+        binnen = QWidget()
+        bl = QVBoxLayout(binnen)
+        bl.setContentsMargins(0, 0, 0, 0)
+        self.groep = Groep()
+        self.groep.lay.setContentsMargins(4, 4, 4, 4)
+        bl.addWidget(self.groep)
+        bl.addStretch(1)
+        self.vlak = schuifbaar(binnen)
+        self.binnen = binnen
+        lay.addWidget(self.vlak, 1)
+        lay.addSpacing(4)
+        sluit = Knop(t("Sluiten", "Close"), "hoofd")
+        sluit.clicked.connect(self.accept)
+        sluit.setDefault(True)
+        lay.addLayout(knoppenrij(sluit))
+        self.rijen: dict[str, Rij] = {}
+        self.vul([])
+        op_achtergrond(self, bi.opgeslagen_wifi, self.vul)
+
+    def vul(self, lijst) -> None:
+        leeg_groep(self.groep)
+        self.rijen = {}
+        for o in lijst or []:
+            knop = Knop(t("Vergeten", "Forget"), "stil")
+            knop.setAccessibleName(t("{naam} vergeten", "Forget {naam}").format(naam=o.naam))
+            knop.clicked.connect(lambda _c=False, x=o: self.vergeet(x))
+            rij = Rij("wifi", o.naam, t("Nu verbonden", "Connected now") if o.actief else "", knop)
+            self.rijen[o.naam] = rij
+            self.groep.voeg(rij)
+        if not self.rijen:
+            self.groep.voeg(Rij("wifi", t("Nog geen netwerken opgeslagen", "No saved networks yet") if lijst is not None
+                                else t("Even kijken…", "Looking…")))
+        self.pas_hoogte()
+
+    def pas_hoogte(self) -> None:
+        maxh = max(160, vrije_hoogte(self) - 220)
+        self.vlak.setMinimumHeight(min(self.binnen.sizeHint().height(), maxh))
+        self.vlak.setMaximumHeight(maxh)
+        self.adjustSize()
+
+    def vergeet(self, o) -> None:
+        rij = self.rijen.get(o.naam)
+        if rij is not None and rij.rechts is not None:
+            rij.rechts.setEnabled(False)
+
+        def klaar(ok) -> None:
+            if ok:
+                self.veranderd = True
+                self.banner.zet(t("{naam} is vergeten.", "{naam} is forgotten.").format(naam=o.naam), "goed")
+                op_achtergrond(self, bi.opgeslagen_wifi, self.vul)
+            else:
+                if rij is not None and rij.rechts is not None:
+                    rij.rechts.setEnabled(True)
+                self.banner.zet(t("Vergeten lukte niet.", "Forgetting did not work."), "fout")
+
+        op_achtergrond(self, lambda: bi.vergeet_opgeslagen(o), klaar)
 
 
 class WifiPagina(Blad):
@@ -37,6 +131,13 @@ class WifiPagina(Blad):
                          self.kabel_knop)
         self.kabel.hide()
         self.kabel_apparaat = ""
+        # Opgeslagen netwerken, vlak onder de schakelaar (zoals 'Bekende netwerken beheren' in Windows): daar vergeet je
+        # ook een oud netwerk dat nu niet in de buurt is.
+        self.opgeslagen = Rij("slot", t("Opgeslagen netwerken", "Saved networks"),
+                              t("Netwerken die BugOS onthoudt. Hier kun je ze vergeten.",
+                                "Networks BugOS remembers. You can forget them here."), klikbaar=True)
+        self.opgeslagen.geklikt.connect(self.open_opgeslagen)
+        g.voeg(self.opgeslagen)
         g.voeg(self.kabel)
         self.zoek_knop = Knop(t("Opnieuw zoeken", "Search again"), "stil", "lijn:verversen")
         self.zoek_knop.clicked.connect(lambda _c=False: self.ververs(True))
@@ -75,7 +176,7 @@ class WifiPagina(Blad):
         self.schakel.zet_stil(aan)
         self.toon_kabel(kabel)
         # Zonder wifi in de computer: dat zeggen, en geen schakelaar of lijst die niets doen (U111).
-        for w in (self.schakel, self.zoek_knop, self.lijst, self.ander):
+        for w in (self.schakel, self.zoek_knop, self.lijst, self.ander, self.opgeslagen):
             w.setVisible(wifi)
         if not wifi:
             self.hoofd.zet_uitleg(t("Deze computer heeft geen wifi", "This computer has no Wi-Fi"))
@@ -100,6 +201,11 @@ class WifiPagina(Blad):
             self.lijst.voeg(Rij("wifi", t("Geen netwerken gevonden", "No networks found") if aan else
                                 t("Wifi staat uit", "Wi-Fi is off"),
                                 t("Zet wifi aan of zoek opnieuw.", "Turn on Wi-Fi or search again.")))
+
+    def open_opgeslagen(self) -> None:
+        d = self.opgeslagen_dialoog = OpgeslagenDialoog(self)
+        d.finished.connect(lambda _r: d.veranderd and self.ververs())
+        d.open()
 
     def verbind_kabel(self) -> None:
         apparaat = self.kabel_apparaat

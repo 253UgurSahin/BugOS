@@ -229,6 +229,64 @@ def kabel_verbonden() -> bool:
     return any(splits_nmcli(r)[:2] == ["ethernet", "connected"] for r in uit.splitlines())
 
 
+@dataclass
+class Opgeslagen:
+    """Een opgeslagen wifi-netwerk: alle profielen met dezelfde netwerknaam (SSID) samen, want 'Thuis' en een ouder
+    'Thuis 1' zijn voor jou hetzelfde netwerk (U357)."""
+    naam: str
+    uuids: list[str] = field(default_factory=list)
+    actief: bool = False
+
+
+def opgeslagen_wifi() -> list[Opgeslagen]:
+    """Alle wifi-netwerken die BugOS onthoudt, het verbonden netwerk eerst."""
+    if _c.VOORBEELD:
+        return sorted((Opgeslagen(n, ["voorbeeld-" + n], n == _c._VB["verbonden"]) for n in VB_NET["opgeslagen"]),
+                      key=lambda o: (not o.actief, o.naam.lower()))
+    code, uit = _c.draai("nmcli", "-t", "-f", "NAME,UUID,TYPE,ACTIVE", "connection", "show")
+    if code != 0:
+        return []
+    per_ssid: dict[str, Opgeslagen] = {}
+    for regel in uit.splitlines():
+        d = splits_nmcli(regel)
+        if len(d) < 4 or d[2] != "802-11-wireless" or not d[1]:
+            continue
+        ruw = _c.draai("nmcli", "-g", "802-11-wireless.ssid", "connection", "show", "uuid", d[1])[1]
+        ssid = (splits_nmcli(ruw.rstrip("\n")) or [""])[0] or d[0]
+        o = per_ssid.setdefault(ssid, Opgeslagen(ssid))
+        o.uuids.append(d[1])
+        o.actief = o.actief or d[3].strip() == "yes"
+    return sorted(per_ssid.values(), key=lambda o: (not o.actief, o.naam.lower()))
+
+
+def vergeet_profiel(uuid: str) -> bool:
+    """Gooi één opgeslagen profiel weg (op zijn UUID)."""
+    if _c.VOORBEELD:
+        naam = uuid.removeprefix("voorbeeld-")
+        if naam in VB_NET["opgeslagen"]:
+            VB_NET["opgeslagen"].remove(naam)
+        VB_NET["zakelijk"].pop(naam, None)
+        if _c._VB["verbonden"] == naam:
+            _c._VB["verbonden"] = ""
+        return True
+    if not uuid or uuid.startswith("-"):
+        return False
+    return _c.draai("nmcli", "connection", "delete", "uuid", uuid)[0] == 0
+
+
+def vergeet_opgeslagen(o: Opgeslagen) -> bool:
+    """Vergeet een opgeslagen netwerk: al zijn profielen (anders verbindt NetworkManager met het oudere) (U357)."""
+    return all([_c.vergeet_profiel(u) for u in o.uuids]) if o.uuids else False
+
+
+def stop_profiel(uuid: str) -> bool:
+    if _c.VOORBEELD:
+        return True
+    if not uuid or uuid.startswith("-"):
+        return False
+    return _c.draai("nmcli", "connection", "down", "uuid", uuid, timeout=20)[0] == 0
+
+
 _KABEL_RANG = {"verbonden": 4, "bezig": 3, "uit": 2, "los": 1}
 
 

@@ -95,6 +95,26 @@ _t0 = time.time()
 klopt(bi.draai_nm(str(_nep / "nepslaap"), timeout=1)[0] == 124 and time.time() - _t0 < 2.5,
       "draai_nm: te traag: 124 (en niet blijven wachten)")
 
+# ===================================================== opgeslagen netwerken ===
+def _antw_opg(cmd):
+    if "NAME,UUID,TYPE,ACTIVE" in cmd:
+        return 0, ("Home:u-1:802-11-wireless:yes\nWired connection 1:u-2:802-3-ethernet:yes\n"
+                   "Cafe\\: De Hoek:u-3:802-11-wireless:no\nHome 1:u-4:802-11-wireless:no\n")
+    if "802-11-wireless.ssid" in cmd:
+        return 0, {"u-1": "Home\n", "u-3": "Cafe\\: De Hoek\n", "u-4": "Home\n"}[cmd[-1]]
+    return 0, ""
+
+
+_, _opg = vang(bi.opgeslagen_wifi, antwoord=_antw_opg)
+klopt([(o.naam, o.uuids, o.actief) for o in _opg] == [("Home", ["u-1", "u-4"], True), ("Cafe: De Hoek", ["u-3"], False)],
+      f"opgeslagen: alleen wifi, per netwerknaam samen ('Home' en 'Home 1'), verbonden eerst ({_opg})")
+o, ok = vang(bi.vergeet_opgeslagen, _opg[0])
+klopt(ok and [c for c, _i in o] == [("nmcli", "connection", "delete", "uuid", "u-1"),
+                                    ("nmcli", "connection", "delete", "uuid", "u-4")],
+      f"opgeslagen: vergeten gooit alle profielen van dat netwerk weg ({o})")
+o, ok = vang(bi.vergeet_profiel, "-x")
+klopt(not ok and not o, "opgeslagen: een uuid die met '-' begint, gaat niet naar nmcli")
+
 # ================================================================ pagina's ===
 # (alles hierboven raakt Qt niet; vanaf hier het venster van Instellingen in de voorbeeldstand)
 lader = importlib.machinery.SourceFileLoader("instellingen", str(BIN / "bugos-settings"))
@@ -154,6 +174,34 @@ klopt(wifi.kabel.isHidden() and wifi.lijst.isHidden(), "kabel-regel: de oude vor
 wifi.toon((True, [], ("verbonden", "enp0s1"), False))
 klopt(not wifi.kabel.isHidden() and "geen wifi" in wifi.hoofd.uitleg.text().lower(),
       "kabel-regel: zonder wifi in de computer staat de kabel er wel")
+wifi.ververs()
+wacht()
+
+# ---- opgeslagen netwerken (in de eerste kaart, onder de schakelaar)
+klopt(not wifi.opgeslagen.isHidden() and wifi.opgeslagen.parent() is wifi.hoofd.parent(),
+      "opgeslagen: de regel 'Opgeslagen netwerken' staat in de eerste kaart, onder de wifi-schakelaar")
+wifi.opgeslagen.geklikt.emit()
+wacht()
+_od = wifi.opgeslagen_dialoog
+_namen = list(_od.rijen)
+klopt(_od.isVisible() and _namen[:1] == ["Home"] and set(_namen) == {"Home", "Home-5G", "eduroam", "Hotel Zonneveld"}
+      and _od.rijen["Home"].uitleg.text() == "Nu verbonden",
+      f"opgeslagen: het venster toont de 4 voorbeeldnetwerken, 'Home' (verbonden) eerst ({_namen})")
+_od.rijen["Hotel Zonneveld"].rechts.click()
+wacht()
+klopt("Hotel Zonneveld" not in _od.rijen and not _od.banner.isHidden() and "vergeten" in _od.banner.tekst.text(),
+      f"opgeslagen: 'Vergeten' haalt de regel weg en zegt het ({_od.banner.tekst.text()!r})")
+_oud_vo = bi.vergeet_opgeslagen
+bi.vergeet_opgeslagen = lambda o: False
+_od.rijen["Home-5G"].rechts.click()
+wacht()
+bi.vergeet_opgeslagen = _oud_vo
+klopt("Home-5G" in _od.rijen and "lukte niet" in _od.banner.tekst.text() and _od.rijen["Home-5G"].rechts.isEnabled(),
+      "opgeslagen: lukt vergeten niet, dan zegt het venster dat (en de knop doet het weer)")
+_od.accept()
+wacht()
+wifi.toon((True, [], False, False))
+klopt(wifi.opgeslagen.isHidden(), "opgeslagen: zonder wifi in de computer geen regel 'Opgeslagen netwerken'")
 wifi.ververs()
 wacht()
 
