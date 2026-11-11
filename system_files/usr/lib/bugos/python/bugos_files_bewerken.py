@@ -10,18 +10,17 @@ from __future__ import annotations
 
 import errno
 import os
-import shutil
-import subprocess
 from pathlib import Path
 
 from bugos_ui import lijn_icoon, t
+from bugos_ui import vraag_ja as _vraag_ja, vraag_tekst as _vraag_tekst
 from bugos_files_plekken import INFO_ROL, PAD_ROL, VERBERG_EXT, thuis, toon_naam
 from bugos_files_acties import (  # noqa: I001
     NAAM_FOUTEN, RECHTEN_FOUTEN, Klus, Weggooien, achter_uitleg, naar_prullenbak, op_losse_schijf, prullenbak_legen, terugzetten, vrije_naam,
     zelfde_schijf,
 )
 from PySide6.QtCore import QEvent, QMimeData, Qt, QTimer, QUrl
-from PySide6.QtWidgets import QApplication, QInputDialog, QLabel, QLineEdit, QMenu, QMessageBox
+from PySide6.QtWidgets import QApplication, QMenu
 
 
 class Bewerken:
@@ -53,19 +52,10 @@ class Bewerken:
             actie("potlood", t("Naam wijzigen", "Rename"), self.hernoem, len(gekozen) == 1)
             m.addSeparator()
             actie("prullenbak", t("Naar de prullenbak", "Move to trash"), self.weggooien)
-            if shutil.which("dolphin"):
-                m.addSeparator()
-                actie("oog", t("Openen in Dolphin (voor gevorderden)", "Open in Dolphin (advanced)"), self.in_dolphin)
         else:
             actie("plak", t("Plakken", "Paste"), self.plak, self.klembord_heeft_bestanden())
             actie("map-plus", t("Nieuwe map", "New folder"), self.nieuwe_map)
-            if shutil.which("dolphin"):
-                m.addSeparator()
-                actie("oog", t("Openen in Dolphin (voor gevorderden)", "Open in Dolphin (advanced)"), self.in_dolphin)
         m.exec(self.lijst.viewport().mapToGlobal(punt))
-
-    def in_dolphin(self) -> None:
-        subprocess.Popen(["dolphin", str(self.huidig)], start_new_session=True)
 
     # ------------------------------------------- kopiëren en plakken
     def _naar_klembord(self, knip: bool) -> None:
@@ -231,23 +221,10 @@ class Bewerken:
 
     # ------------------------------------------------------------ vragen
     def vraag_tekst(self, titel: str, vraag: str, tekst: str, ok: str = "", kies_tot: int | None = None) -> str | None:
-        """kies_tot: alleen het begin kiezen (de naam zonder .odt), zoals in Windows (U507)."""
-        d = QInputDialog(self)
-        d.setWindowTitle(titel)
-        d.setLabelText(vraag)
-        d.setTextValue(tekst)
-        d.setOkButtonText(ok or t("Klaar", "OK"))
-        d.setCancelButtonText(t("Annuleren", "Cancel"))
-        for uitleg in d.findChildren(QLabel):
-            uitleg.setWordWrap(True)  # lange uitleg netjes over een paar regels
-        d.resize(460, d.sizeHint().height())
-        if kies_tot is not None:
-            def kies() -> None:
-                veld = d.findChild(QLineEdit)
-                if veld is not None:
-                    veld.setSelection(0, kies_tot)
-            QTimer.singleShot(0, kies)
-        return d.textValue().strip() if d.exec() else None
+        """De gedeelde BugOS-vraag (geen QInputDialog). kies_tot: alleen het begin kiezen (de naam zonder .odt),
+        zoals in Windows (U507). None als je annuleert."""
+        antwoord = _vraag_tekst(self, titel, vraag, tekst, ok=ok or t("OK", "OK"), kies_tot=kies_tot)
+        return antwoord.strip() if antwoord is not None else None
 
     def naam_fout(self, e: OSError) -> str:
         """Waarom een naam niet kon, in gewone woorden (niet 'Invalid argument') (U508)."""
@@ -263,15 +240,8 @@ class Bewerken:
         return e.strerror or t("er ging iets mis", "something went wrong")
 
     def vraag_ja(self, titel: str, tekst: str, ja: str) -> bool:
-        box = QMessageBox(self)
-        box.setWindowTitle(titel)
-        box.setText(tekst)
-        box.setIcon(QMessageBox.Icon.Warning)
-        ja_knop = box.addButton(ja, QMessageBox.ButtonRole.DestructiveRole)
-        nee = box.addButton(t("Annuleren", "Cancel"), QMessageBox.ButtonRole.RejectRole)
-        box.setDefaultButton(nee)
-        box.exec()
-        return box.clickedButton() is ja_knop
+        """Iets dat je niet ongedaan maakt (wissen, de prullenbak legen): Enter uit gewoonte doet dan niets."""
+        return _vraag_ja(self, titel, tekst, ja, enter_is_nee=True)
 
     # ------------------------------------------- naam, map, weggooien
     def hernoem(self) -> None:
@@ -281,7 +251,7 @@ class Bewerken:
         oud = paden[0]
         verborgen_ext = not oud.is_dir() and toon_naam(oud.name, False) != oud.name
         nieuw = self.vraag_tekst(t("Naam wijzigen", "Rename"), t("Nieuwe naam:", "New name:"), oud.name,
-                                 kies_tot=len(oud.stem) if oud.suffix and not oud.is_dir() else None)
+                                 ok=t("Naam wijzigen", "Rename"), kies_tot=len(oud.stem) if oud.suffix and not oud.is_dir() else None)
         if not nieuw or nieuw == oud.name:
             return
         # De tegel laat 'Recept' zien zonder '.odt': typ je 'Taart', dan wordt het 'Taart.odt', niet een bestand
@@ -320,7 +290,7 @@ class Bewerken:
         if self.in_prullenbak or self.in_computer:
             return
         naam = self.vraag_tekst(t("Nieuwe map", "New folder"), t("Naam van de map:", "Folder name:"),
-                                t("Nieuwe map", "New folder"))
+                                t("Nieuwe map", "New folder"), ok=t("Maken", "Make"))
         if not naam:
             return
         if "/" in naam or naam in (".", ".."):   # '.' maakte een map naast deze, '..' een verborgen map (U509)

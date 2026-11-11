@@ -7,8 +7,6 @@ venster (Bestanden in bugos_files_venster.py erft het).
 
 from __future__ import annotations
 
-import shutil
-import subprocess
 import time
 from pathlib import Path
 
@@ -112,16 +110,10 @@ class Computer:
                                       t("Steek een USB-stick in, dan staat hij hier.",
                                         "Plug in a USB stick and it shows up here."), leeg=True))
         lay.addWidget(lijst_kaart)
-        if shutil.which("partitionmanager"):
-            beheer = Knop(t("Schijfbeheer (voor gevorderden)", "Disk management (advanced)"), "stil", "lijn:opslag")
-            beheer.setToolTip(t("Schijven indelen en formatteren, zoals Schijfbeheer in Windows",
-                                "Partition and format drives, like Disk Management in Windows"))
-            beheer.clicked.connect(lambda _c=False: subprocess.Popen(["partitionmanager"], start_new_session=True))
-            lay.addWidget(beheer, 0, Qt.AlignmentFlag.AlignRight)
         lay.addStretch(1)
 
     def ruimte_menu(self) -> QMenu:
-        """Ruimte maken: de prullenbak leegmaken, of (voor gevorderden) Schijfbeheer."""
+        """Ruimte maken: de prullenbak leegmaken, of zien wat ruimte inneemt."""
         m = QMenu(self)
         bak = (self.ruimte or {}).get("prullenbak")
         tekst = t(f"Prullenbak leegmaken ({mooie_maat(bak)})", f"Empty the trash ({mooie_maat(bak)})") if bak else \

@@ -13,8 +13,9 @@ from pathlib import Path
 
 from bugos_ui import lijn_icoon, platte_tip, t
 from bugos_drives import (
-    MAX_NAAM, Schijf, hernoem_stappen, klaarmaak_stappen, leegmaak_stappen, mooie_maat, openen_stappen,
-    repareer_stappen, schijven, uitwerp_stappen,
+    MAX_NAAM, SLOT_FS, VERBORGEN_FS, VERBORGEN_TYPES, Schijf, _alle, _plekken_van, dicht_stappen, hernoem_stappen,
+    klaarmaak_stappen, leegmaak_stappen, lees_lsblk, mooie_maat, openen_stappen, repareer_stappen, schijven,
+    systeem_plek, uitwerp_stappen,
 )
 from bugos_files_plekken import schijf_van, thuis, zit_in
 from bugos_files_onderdelen import SchijfRij
@@ -92,11 +93,15 @@ class Schijven:
                   vrij_spel and not x.op_slot and x.fs in MAX_NAAM)
             actie("vink", t("Controleren en repareren", "Check and repair"), lambda: self.repareer_schijf(x),
                   vrij_spel and not x.op_slot)
-            # Alleen voor schijven die je eruit kunt halen: nooit per ongeluk de Windows-schijf of een
-            # andere interne schijf wissen (daarvoor is Schijfbeheer, voor gevorderden).
+            # Een stick of externe schijf: leegmaken (exFAT, werkt overal). Een tweede schijf in de computer alleen
+            # als hij nergens van opstart (geen Windows, geen BugOS, geen ander systeem): dan helemaal wissen en
+            # opnieuw in gebruik nemen, zoals 'Schijven en volumes' in Windows 11. Nooit de schijf van Windows.
             if x.los:
                 actie("prullenbak", t("Leegmaken (alles wissen)…", "Erase (delete everything)…"),
                       lambda: self.leegmaak_schijf(x), vrij_spel, "fout")
+            elif wisbare_interne_schijf(x):
+                actie("prullenbak", t("Leegmaken (alles wissen)…", "Erase (delete everything)…"),
+                      lambda: self.wis_interne_schijf(x), vrij_spel, "fout")
         if x.los:
             m.addSeparator()
             actie("uitwerpen", t("Veilig verwijderen", "Safely remove"), lambda: self.uitwerpen(x.station), vrij_spel)
@@ -191,6 +196,46 @@ class Schijven:
                     t("Leegmaken lukte niet. Haal de stick eruit, steek hem er opnieuw in en probeer het nog eens.",
                       "Erasing did not work. Unplug the stick, plug it in again and try again."))
 
+    def wis_interne_schijf(self, x: Schijf) -> None:
+        """Een tweede schijf in de computer (bijvoorbeeld de oude D: van Windows) helemaal wissen en opnieuw in
+        gebruik nemen. Eerst een duidelijke vraag met de naam en de grootte; Enter uit gewoonte doet niets."""
+        station = stations_info(x.station)
+        if station is None or not wisbare_interne_schijf(x):
+            self.melding.toon(t("Deze schijf kun je hier niet wissen.", "You cannot erase this drive here."), "fout")
+            return
+        delen = [s for s in self.lijst_schijven if s.station == x.station]
+        namen = ", ".join(f"'{s.naam}'" for s in delen) or f"'{x.naam}'"
+        maat = mooie_maat(station.get("grootte") or x.grootte)
+        if not self.vraag_ja(t("Deze schijf helemaal wissen?", "Erase this whole drive?"),
+                             t("Alles op deze schijf in je computer ({maat}) wordt gewist: {namen}, met alle bestanden "
+                               "erop. Dit kan niet ongedaan worden.\n\nZet eerst over wat je wilt houden. Daarna is "
+                               "de schijf leeg en klaar voor gebruik in deze computer. BugOS vraagt het "
+                               "beheerderswachtwoord.",
+                               "Everything on this drive in your computer ({maat}) will be erased: {namen}, with all "
+                               "the files on it. This cannot be undone.\n\nCopy what you want to keep first. "
+                               "Afterwards the drive is empty and ready to use in this computer. BugOS asks for the "
+                               "administrator password.").replace("{maat}", maat).replace("{namen}", namen),
+                             t("Alles wissen", "Erase everything")):
+            return
+        # Zit precies dezelfde schijf er nog (zelfde grootte, zelfde delen)? Anders niets doen.
+        nu = stations_info(x.station)
+        if nu is None or nu != station or not wisbare_interne_schijf(x):
+            self.melding.toon(t("De schijf is veranderd. Er is niets gewist.",
+                                "The drive has changed. Nothing was erased."), "fout")
+            self._zijbalk_sleutels = None
+            self.vul_zijbalk()
+            return
+        naam = x.naam if len(x.naam) <= MAX_NAAM["ext4"] and "(" not in x.naam else t("Opslag", "Storage")
+        stappen = [stap for s in delen for stap in dicht_stappen(s)]
+        stappen += klaarmaak_stappen(Schijf(apparaat=x.station, naam=naam, soort="intern", station=x.station), naam)
+        self.beheer(x, stappen,
+                    t("De schijf wissen en klaarmaken… Dit duurt even.",
+                      "Erasing and setting up the drive… This takes a moment."),
+                    t("Klaar: '{naam}' is leeg en staat links bij Schijven.",
+                      "Done: '{naam}' is empty and listed under Drives.").replace("{naam}", naam),
+                    t("Wissen lukte niet. Er kan nog iets open zijn op de schijf: sluit dat en probeer het opnieuw.",
+                      "Erasing did not work. Something may still be open on the drive: close it and try again."))
+
     def neem_in_gebruik(self, x: Schijf) -> None:
         """Een nieuwe, lege schijf klaarmaken (zoals Schijfbeheer in Windows), met één vraag: de naam."""
         standaard = t("USB-stick", "USB stick") if x.soort == "stick" else t("Opslag", "Storage")
@@ -281,8 +326,9 @@ class Schijven:
             return
         opdracht = openen_stappen(x)
         if not shutil.which(opdracht[0]):
-            self.melding.toon(t(f"'{x.naam}' kan hier niet open. Probeer Dolphin (voor gevorderden).",
-                                f"'{x.naam}' cannot be opened here. Try Dolphin (advanced)."), "fout")
+            self.melding.toon(t("'{naam}' kan hier niet open. Haal hem eruit en steek hem er opnieuw in.",
+                                "'{naam}' cannot be opened here. Unplug it and plug it in again.").replace(
+                                    "{naam}", x.naam), "fout")
             return
         self.bezig.add(x.apparaat)
         self.melding.toon(t(f"'{x.naam}' openen…", f"Opening '{x.naam}'…"), seconden=0)
@@ -348,3 +394,43 @@ class Schijven:
                                     f"'{naam}' is still busy. Close what is open on it and try again."), "fout")
 
         self.draai(stappen, klaar, laatste)
+
+
+# ===================================================== een interne schijf wissen ===
+# Opstart-delen: EFI, 'gereserveerd voor Microsoft', Windows-herstel en BIOS-opstart. Een schijf met zo'n deel
+# start iets op (Windows, een ander systeem): die wist Bestanden nooit.
+OPSTART_TYPES = VERBORGEN_TYPES
+
+
+def stations_info(station: str) -> dict | None:
+    """Wat lsblk nu over dit hele apparaat zegt: grootte en de delen (pad, soort, bestandssysteem, plekken).
+    None als het er niet (meer) is."""
+    for st in lees_lsblk():
+        if (st.get("path") or f"/dev/{st.get('name')}") != station or st.get("type") != "disk":
+            continue
+        delen = [(a.get("path") or a.get("name") or "", (a.get("parttype") or "").lower(), a.get("fstype") or "",
+                  tuple(_plekken_van(a))) for a in list(_alle(st))[1:]]
+        return {"grootte": st.get("size") or 0, "delen": delen, "los": bool(st.get("rm") or st.get("hotplug")),
+                "fs": st.get("fstype") or "", "plekken": tuple(_plekken_van(st))}
+    return None
+
+
+def wisbare_interne_schijf(x: Schijf) -> bool:
+    """Een interne schijf die je mag wissen: een losse dataschijf. Niet de schijf van BugOS, nergens een
+    opstart-deel, geen BitLocker, geen ander Linux (swap, LVM, RAID) en geen Windows-map erop."""
+    if x.soort != "intern" or x.nieuw or not x.station:
+        return False
+    info = stations_info(x.station)
+    if info is None or info["los"]:
+        return False
+    oude_indeling = any(soort.startswith("0x") for _p, soort, _f, _m in info["delen"])
+    for _pad, soort, fs, plekken_ in info["delen"] + [("", "", info["fs"], info["plekken"])]:
+        if soort in OPSTART_TYPES or fs in VERBORGEN_FS or (fs in SLOT_FS and fs != "crypto_LUKS"):
+            return False
+        if any(systeem_plek(m) for m in plekken_):
+            return False
+        if any((Path(m) / "Windows" / "System32").is_dir() for m in plekken_):
+            return False
+        if oude_indeling and fs == "ntfs":
+            return False   # oude indeling (MBR) met Windows-bestanden: niet te zien of Windows ervan opstart
+    return True

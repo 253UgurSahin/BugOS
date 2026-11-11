@@ -7,9 +7,12 @@ Jip-en-Janneke:
   - Rechts zie je grote tegels met een voorbeeldje van elk bestand.
     Dubbelklik om iets te openen.
   - Weggooien gaat altijd eerst naar de prullenbak. Daar zet je het terug.
-  - Meer knoppen nodig? Rechtermuisknop, of "Openen in Dolphin" voor gevorderden.
+  - Meer knoppen nodig? Rechtermuisknop.
+  - Deze computer: hoeveel ruimte er is, en wat de meeste ruimte inneemt.
 
 Gebruik:  bugos-files [map of bestand]
+          bugos-files computer:/          (Deze computer)
+          bugos-files computer:/ruimte    (meteen naar 'Wat de meeste ruimte inneemt')
 """
 
 from __future__ import annotations
