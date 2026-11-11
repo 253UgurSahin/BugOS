@@ -97,6 +97,222 @@ def kies_uitgang(naam: str) -> None:
     _c.draai("pactl", "set-default-sink", naam, timeout=5)
 
 
+# --------------------------------------------------------------- microfoon ---
+
+@dataclass
+class Ingang:
+    naam: str           # technische naam (voor pactl), bv. alsa_input.pci-0000_00_1f.3.analog-stereo
+    omschrijving: str   # wat je ziet, bv. "Ingebouwde microfoon"
+    standaard: bool
+
+
+@dataclass
+class Headset:
+    """Een bluetooth-headset die nu alleen muziek doet (A2DP): zijn microfoon werkt pas in de stand 'bellen' (I6)."""
+    kaart: str          # bluez_card.AA_BB_CC_DD_EE_FF
+    omschrijving: str
+    profiel: str        # het profiel voor bellen, bv. headset-head-unit
+
+
+@dataclass
+class Microfoon:
+    bereikbaar: bool    # reageert het geluid (PipeWire)?
+    volume: int
+    stil: bool
+    ingangen: list[Ingang]
+    headsets: list[Headset] = field(default_factory=list)
+
+
+def geldige_bron(naam: str) -> bool:
+    """Een naam van pactl (alsa_input.pci-0000_00_03.0.analog-stereo, bluez_input.AA_BB.0, @DEFAULT_SOURCE@)."""
+    return isinstance(naam, str) and re.fullmatch(r"[A-Za-z0-9_.:@+-]+", naam) is not None and not naam.startswith("-")
+
+
+def is_monitor(s: dict) -> bool:
+    """De 'monitor' van een luidspreker (wat eruit komt) is geen microfoon."""
+    eigen = s.get("properties") if isinstance(s.get("properties"), dict) else {}
+    return bool(s.get("monitor_source")) or eigen.get("device.class") == "monitor" or \
+        str(s.get("name", "")).endswith(".monitor")
+
+
+def lees_ingangen(json_tekst: str, standaard: str) -> list[Ingang]:
+    """Uit: pactl -f json list sources (en pactl get-default-source): de echte microfoons."""
+    try:
+        data = json.loads(json_tekst or "[]")
+    except ValueError:
+        return []
+    if not isinstance(data, list):
+        return []
+    return [Ingang(s["name"], s.get("description") or s["name"], s["name"] == standaard)
+            for s in data if isinstance(s, dict) and s.get("name") and not is_monitor(s) and _aangesloten(s, standaard)]
+
+
+def lees_headsets(json_tekst: str) -> list[Headset]:
+    """Uit: pactl -f json list cards: bluetooth-headsets die nu op 'muziek' staan maar ook kunnen bellen."""
+    try:
+        data = json.loads(json_tekst or "[]")
+    except ValueError:
+        return []
+    uit = []
+    for k in data if isinstance(data, list) else []:
+        if not isinstance(k, dict) or not str(k.get("name", "")).startswith("bluez_card."):
+            continue
+        if not str(k.get("active_profile", "")).startswith("a2dp"):
+            continue
+        profielen = k.get("profiles") if isinstance(k.get("profiles"), dict) else {}
+        bellen = [(p.get("priority", 0) if isinstance(p, dict) else 0, naam) for naam, p in profielen.items()
+                  if str(naam).startswith("headset-head-unit") and isinstance(p, dict) and p.get("available", True)
+                  and p.get("sources", 1)]
+        if not bellen or not geldige_bron(k["name"]):
+            continue
+        profiel = max(bellen)[1]
+        if not geldige_bron(profiel):
+            continue
+        eigen = k.get("properties") if isinstance(k.get("properties"), dict) else {}
+        uit.append(Headset(k["name"], eigen.get("device.description") or eigen.get("device.alias") or k["name"], profiel))
+    return uit
+
+
+def _vb_ingangen() -> list[Ingang]:
+    gekozen = _c._VB["ingang"]
+    return [Ingang("builtin-mic", t("Ingebouwde microfoon", "Built-in microphone"), gekozen == "builtin-mic"),
+            Ingang("webcam-mic", t("Microfoon van de webcam", "Webcam microphone"), gekozen == "webcam-mic"),
+            Ingang("headset-mic", t("Headset van Bugie", "Bugie's headset"), gekozen == "headset-mic")]
+
+
+_c._VB.setdefault("mic_volume", 80)
+_c._VB.setdefault("mic_stil", False)
+_c._VB.setdefault("ingang", "builtin-mic")
+
+
+def microfoon() -> Microfoon:
+    if _c.VOORBEELD:
+        return Microfoon(True, _c._VB["mic_volume"], _c._VB["mic_stil"], _vb_ingangen())
+    standaard = _c.draai("pactl", "get-default-source", timeout=5)[1].strip()
+    code, uit = _c.draai("pactl", "-f", "json", "list", "sources", timeout=5)
+    ingangen = lees_ingangen(uit, standaard) if code == 0 else []
+    if any(i.standaard for i in ingangen):
+        volume, stil = lees_volume(uit, standaard)
+    else:   # de standaard is een 'monitor' of staat er niet bij: niets gekozen
+        volume, stil = 0, False
+    headsets = lees_headsets(_c.draai("pactl", "-f", "json", "list", "cards", timeout=5)[1]) if code == 0 else []
+    return Microfoon(code == 0, min(volume, 100), stil, ingangen, headsets)
+
+
+def zet_microfoon_volume(procent: int) -> None:
+    if _c.VOORBEELD:
+        _c._VB["mic_volume"] = procent
+        return
+    _c.draai("pactl", "set-source-volume", "@DEFAULT_SOURCE@", f"{max(0, min(procent, 100))}%", timeout=5)
+
+
+def zet_microfoon_stil(stil: bool) -> None:
+    if _c.VOORBEELD:
+        _c._VB["mic_stil"] = stil
+        return
+    _c.draai("pactl", "set-source-mute", "@DEFAULT_SOURCE@", "1" if stil else "0", timeout=5)
+
+
+def kies_ingang(naam: str) -> bool:
+    if not geldige_bron(naam) or naam.startswith("@"):
+        return False
+    if _c.VOORBEELD:
+        _c._VB["ingang"] = naam
+        return True
+    return _c.draai("pactl", "set-default-source", naam, timeout=5)[0] == 0
+
+
+def headset_bellen(kaart: str, profiel: str) -> bool:
+    """Zet een bluetooth-headset op 'bellen' (dan werkt zijn microfoon). Alleen een profiel dat de kaart zelf noemt."""
+    if not geldige_bron(kaart) or not geldige_bron(profiel):
+        return False
+    if _c.VOORBEELD:
+        return True
+    bekend = lees_headsets(_c.draai("pactl", "-f", "json", "list", "cards", timeout=5)[1])
+    if not any(h.kaart == kaart and h.profiel == profiel for h in bekend):
+        return False
+    return _c.draai("pactl", "set-card-profile", kaart, profiel, timeout=8)[0] == 0
+
+
+def microfoon_klaar() -> str:
+    """Vlak voor de test: 'ok', 'stil' (de microfoon staat uit) of 'weg' (de gekozen microfoon is er niet meer:
+    parec neemt dan stilletjes een andere op, I9)."""
+    m = microfoon()
+    if not m.bereikbaar or not any(i.standaard for i in m.ingangen):
+        return "weg"
+    return "stil" if m.stil else "ok"
+
+
+def microfoon_test_opdracht(naam: str = "@DEFAULT_SOURCE@") -> list[str]:
+    """parec: 8000 keer per seconde, mono, 16 bits. Plasma toont dan 'BugOS Settings gebruikt de microfoon'.
+    Er wordt niets opgeslagen: alleen de hoogste waarde van elk stukje telt."""
+    if not geldige_bron(naam) or shutil.which("parec") is None:
+        return []
+    return ["parec", "-d", naam, "-n", "BugOS Settings", "--stream-name=Microphone test", "--raw", "--format=s16le",
+            "--channels=1", "--rate=8000", "--latency-msec=50"]
+
+
+def niveau(data: bytes) -> int:
+    """Hoe hard (0..100) een stukje geluid is: de hoogste uitslag, in decibel, van -60 dB (0) tot 0 dB (100)."""
+    import array
+    import math
+    import sys
+    if len(data) < 2:
+        return 0
+    getallen = array.array("h")
+    getallen.frombytes(bytes(data[:len(data) - len(data) % 2]))
+    if sys.byteorder == "big":
+        getallen.byteswap()
+    piek = max(abs(x) for x in getallen)
+    if piek <= 0:
+        return 0
+    db = 20 * math.log10(min(piek, 32767) / 32767)
+    return round(min(max((db + 60) / 60, 0), 1) * 100)
+
+
+# ---------------------------------------------------- apps die geluid maken ---
+
+def lees_apps(json_tekst: str) -> list[tuple[int, str, int]]:
+    """Uit: pactl -f json list sink-inputs -> [(nummer, naam, volume)]. Niet: gepauzeerd of meldingsgeluidjes."""
+    try:
+        data = json.loads(json_tekst or "[]")
+    except ValueError:
+        return []
+    uit = []
+    for s in data if isinstance(data, list) else []:
+        if not isinstance(s, dict) or s.get("corked") or not str(s.get("index", "")).isdigit():
+            continue
+        eigen = s.get("properties") if isinstance(s.get("properties"), dict) else {}
+        if eigen.get("media.role") == "event":
+            continue
+        kanalen = [str(v.get("value_percent", "0%")).rstrip("%") for v in (s.get("volume") or {}).values()
+                   if isinstance(v, dict)]
+        procent = [int(k) for k in kanalen if k.isdigit()]
+        naam = eigen.get("application.name") or eigen.get("application.process.binary") or t("Onbekende app", "Unknown app")
+        uit.append((int(s["index"]), str(naam), min(100, round(sum(procent) / len(procent))) if procent else 0))
+    return uit
+
+
+_c._VB.setdefault("apps_geluid", None)
+
+
+def apps_geluid() -> list[tuple[int, str, int]]:
+    if _c.VOORBEELD:
+        if _c._VB["apps_geluid"] is None:
+            _c._VB["apps_geluid"] = [(1, "Firefox", 80), (2, t("Muziek", "Music"), 45)]
+        return list(_c._VB["apps_geluid"])
+    code, uit = _c.draai("pactl", "-f", "json", "list", "sink-inputs", timeout=5)
+    return lees_apps(uit) if code == 0 else []
+
+
+def zet_app_volume(nummer: int, procent: int) -> bool:
+    if _c.VOORBEELD:
+        _c._VB["apps_geluid"] = [(n, a, procent if n == nummer else v) for n, a, v in apps_geluid()]
+        return True
+    return _c.draai("pactl", "set-sink-input-volume", str(int(nummer)), f"{max(0, min(int(procent), 100))}%",
+                    timeout=5)[0] == 0
+
+
 # ================================================================== scherm ===
 
 def backlight() -> Path | None:

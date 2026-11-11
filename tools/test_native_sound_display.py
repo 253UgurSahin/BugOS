@@ -178,6 +178,105 @@ _opd, _ok = vang(bi.pas_toe, ["output.Virtual-1.scale.1.1"], antwoord=ks_fake(co
 klopt(_ok is False and _opd == [], "I2: 110 % mag niet als keuze (alleen als herstel)")
 
 
+# ========================================================================================= microfoon ===
+# pactl -f json list sources uit de VM (PipeWire 1.6.11): de 'monitor' van de luidspreker en de echte ingang.
+VM_BRONNEN = [
+    {"index": 51, "name": "alsa_output.pci-0000_00_03.0.analog-stereo.monitor",
+     "description": "Monitor of Built-in Audio Analog Stereo", "mute": False,
+     "volume": {"front-left": {"value": 65536, "value_percent": "100%", "db": "0.00 dB"},
+                "front-right": {"value": 65536, "value_percent": "100%", "db": "0.00 dB"}},
+     "monitor_source": "alsa_output.pci-0000_00_03.0.analog-stereo", "active_port": "analog-output-lineout",
+     "ports": [{"name": "analog-output-lineout", "description": "Line Out", "type": "Line", "priority": 9000,
+                "availability_group": "Legacy 2", "availability": "availability unknown"}],
+     "state": "SUSPENDED", "properties": {"device.class": "monitor", "media.class": "Audio/Sink",
+                                          "device.form_factor": "internal"}},
+    {"index": 52, "name": "alsa_input.pci-0000_00_03.0.analog-stereo", "description": "Built-in Audio Analog Stereo",
+     "mute": False, "volume": {"front-left": {"value": 65536, "value_percent": "100%", "db": "0.00 dB"},
+                               "front-right": {"value": 45875, "value_percent": "70%", "db": "-9.29 dB"}},
+     "monitor_source": "", "active_port": "analog-input-linein",
+     "ports": [{"name": "analog-input-linein", "description": "Line In", "type": "Line", "priority": 8100,
+                "availability_group": "Legacy 1", "availability": "availability unknown"}],
+     "state": "SUSPENDED", "properties": {"device.class": "sound", "media.class": "Audio/Source",
+                                          "device.form_factor": "internal"}}]
+VM_STANDAARD = "alsa_input.pci-0000_00_03.0.analog-stereo"
+_i = bi.lees_ingangen(json.dumps(VM_BRONNEN), VM_STANDAARD)
+klopt(len(_i) == 1 and _i[0].naam == VM_STANDAARD and _i[0].standaard and _i[0].omschrijving == "Built-in Audio Analog Stereo",
+      f"1: de echte VM-bronnen: één microfoon (de 'monitor' van de luidspreker telt niet), in gebruik ({_i})")
+for _wat, _bron in (("monitor_source", {"name": "a", "monitor_source": "x"}),
+                    ("device.class monitor", {"name": "b", "properties": {"device.class": "monitor"}}),
+                    ("naam .monitor", {"name": "c.monitor"})):
+    klopt(bi.lees_ingangen(json.dumps([_bron, {"name": "echt"}]), "") == [bi.Ingang("echt", "echt", False)],
+          f"2: een monitor valt weg ({_wat})")
+_weg = {"name": "jack", "description": "Headset-aansluiting", "ports": [{"availability": "not available"}]}
+klopt([i.naam for i in bi.lees_ingangen(json.dumps([_weg, {"name": "ingebouwd"}]), "ingebouwd")] == ["ingebouwd"]
+      and [i.naam for i in bi.lees_ingangen(json.dumps([_weg]), "jack")] == ["jack"],
+      "3: een aansluiting zonder headset erin valt weg, behalve als hij gekozen is (zoals U496)")
+klopt(bi.lees_ingangen("kapot", "") == [] and bi.lees_ingangen("", "") == [] and bi.lees_ingangen("{}", "") == [],
+      "4: rare uitvoer: geen microfoons (geen fout)")
+
+
+def _pactl(lijst_code=0, kaarten="[]", standaard=VM_STANDAARD):
+    def antwoord(cmd):
+        if cmd[:2] == ("pactl", "get-default-source"):
+            return 0, standaard + "\n"
+        if cmd[:5] == ("pactl", "-f", "json", "list", "sources"):
+            return lijst_code, json.dumps(VM_BRONNEN) if lijst_code == 0 else ""
+        if cmd[:5] == ("pactl", "-f", "json", "list", "cards"):
+            return 0, kaarten
+        return 0, ""
+    return antwoord
+
+
+_opd, _m = vang(bi.microfoon, antwoord=_pactl())
+klopt(("pactl", "get-default-source") in _opd and ("pactl", "-f", "json", "list", "sources") in _opd
+      and _m.bereikbaar and _m.volume == 85 and not _m.stil and len(_m.ingangen) == 1,
+      f"5: microfoon: pactl get-default-source en list sources; volume is het gemiddelde ({_m.volume})")
+_opd, _m = vang(bi.microfoon, antwoord=_pactl(lijst_code=1))
+klopt(_m.bereikbaar is False and _m.ingangen == [], "5: pactl list sources mislukt: het geluid reageert niet")
+_opd, _m = vang(bi.microfoon, antwoord=_pactl(standaard="alsa_output.pci-0000_00_03.0.analog-stereo.monitor"))
+klopt(_m.bereikbaar and not any(i.standaard for i in _m.ingangen) and _m.volume == 0,
+      "5: de standaard is een 'monitor': geen microfoon gekozen")
+_opd, _ = vang(bi.zet_microfoon_volume, 150)
+_opd2, _ = vang(bi.zet_microfoon_volume, -5)
+klopt(_opd == [("pactl", "set-source-volume", "@DEFAULT_SOURCE@", "100%")] and _opd2[0][-1] == "0%",
+      "6: microfoonvolume 150 wordt 100 %, -5 wordt 0 %")
+_opd, _ = vang(bi.zet_microfoon_stil, True)
+klopt(_opd == [("pactl", "set-source-mute", "@DEFAULT_SOURCE@", "1")], "7: microfoon uit: pactl set-source-mute … 1")
+for _naam in ("-d", "a b", "x;y", "@DEFAULT_SOURCE@", ""):
+    _opd, _ok = vang(bi.kies_ingang, _naam)
+    klopt(_ok is False and _opd == [], f"8: kies_ingang({_naam!r}) draait niets")
+_opd, _ok = vang(bi.kies_ingang, "bluez_input.AA_BB_CC_DD_EE_FF.0")
+klopt(_ok and _opd == [("pactl", "set-default-source", "bluez_input.AA_BB_CC_DD_EE_FF.0")], "8: een echte naam: pactl set-default-source")
+_opd, _ok = vang(bi.kies_ingang, VM_STANDAARD, antwoord=lambda c: (1, ""))
+klopt(_ok is False, "8: pactl zegt 'No such entity' (code 1): niet gelukt")
+
+# I6: een bluetooth-headset op 'muziek' (A2DP): niet 'geen microfoon', maar 'Gebruik voor bellen'
+KAARTEN = json.dumps([
+    {"index": 40, "name": "alsa_card.pci-0000_00_03.0", "active_profile": "output:analog-stereo+input:analog-stereo",
+     "profiles": {"off": {"available": True}}, "properties": {"device.description": "Built-in Audio"}},
+    {"index": 77, "name": "bluez_card.AA_BB_CC_DD_EE_FF", "active_profile": "a2dp-sink",
+     "properties": {"device.description": "Bugie's koptelefoon"},
+     "profiles": {"off": {"sinks": 0, "sources": 0, "priority": 0, "available": True},
+                  "a2dp-sink": {"sinks": 1, "sources": 0, "priority": 18, "available": True},
+                  "headset-head-unit-cvsd": {"sinks": 1, "sources": 1, "priority": 1, "available": True},
+                  "headset-head-unit": {"sinks": 1, "sources": 1, "priority": 30, "available": True}}},
+    {"index": 78, "name": "bluez_card.11_22_33_44_55_66", "active_profile": "headset-head-unit",
+     "profiles": {"headset-head-unit": {"sources": 1, "available": True}}}])
+_h = bi.lees_headsets(KAARTEN)
+klopt(_h == [bi.Headset("bluez_card.AA_BB_CC_DD_EE_FF", "Bugie's koptelefoon", "headset-head-unit")],
+      f"I6: een headset op muziek wordt gevonden, met het beste profiel om te bellen ({_h})")
+_opd, _ok = vang(bi.headset_bellen, "bluez_card.AA_BB_CC_DD_EE_FF", "headset-head-unit", antwoord=_pactl(kaarten=KAARTEN))
+klopt(_ok and _opd[-1] == ("pactl", "set-card-profile", "bluez_card.AA_BB_CC_DD_EE_FF", "headset-head-unit"),
+      "I6: 'Gebruik voor bellen': pactl set-card-profile met het profiel uit de lijst")
+_opd, _ok = vang(bi.headset_bellen, "bluez_card.AA_BB_CC_DD_EE_FF", "off", antwoord=_pactl(kaarten=KAARTEN))
+klopt(not _ok and not any(c[1] == "set-card-profile" for c in _opd), "I6: een profiel dat de kaart niet noemt: niets")
+_opd, _ok = vang(bi.headset_bellen, "-x", "headset-head-unit", antwoord=_pactl(kaarten=KAARTEN))
+klopt(not _ok and _opd == [], "I6: een rare kaartnaam: niets")
+klopt(bi.lees_headsets("kapot") == [] and bi.lees_headsets("{}") == [], "I6: rare uitvoer van cards: geen headsets")
+klopt("kde_instelling(" not in (PY / "bugos_settings_scherm.py").read_text(encoding="utf-8"),
+      "11: Geluid, Scherm, Energie en Uiterlijk openen geen KDE-scherm meer")
+
+
 # ======================================================================================== het venster ===
 lader = importlib.machinery.SourceFileLoader("instellingen", str(BIN / "bugos-settings"))
 spec = importlib.util.spec_from_loader("instellingen", lader)
@@ -201,6 +300,11 @@ def wacht(keer: int = 5) -> None:
         app.processEvents()
 
 
+def rijen_in(g) -> list:
+    """De regels die nu in een kaart staan (leeg_groep haalt ze eruit; weg zijn ze pas later, deleteLater)."""
+    return [g.lay.itemAt(i).widget() for i in range(g.lay.count()) if isinstance(g.lay.itemAt(i).widget(), mod.Rij)]
+
+
 def wacht_ms(ms: int) -> None:
     eind = time.monotonic() + ms / 1000
     while time.monotonic() < eind:
@@ -222,6 +326,38 @@ klopt(callable(ss.groot_genoeg) and ss.groot_genoeg() == 1.0, "30: groot_genoeg(
 sp.ververs()
 wacht()
 
+
+# 12, 15, I6: de pagina Geluid (voorbeeld)
+venster.ga_naar("geluid")
+wacht()
+gp = venster.paginas["geluid"]
+_rijen = rijen_in(gp.mic_lijst)
+_chips = [r for r in _rijen if isinstance(r.rechts, ss.Chip)]
+_teksten = " ".join(w.text() for w in gp.findChildren(ss.QLabel)).lower()
+klopt(len(_rijen) == 3 and len(_chips) == 1 and gp.mic_kaart.isVisibleTo(gp),
+      f"12: Geluid: drie microfoons, één 'In gebruik', en de microfoonkaart ({len(_rijen)}, {len(_chips)})")
+klopt("geluidscherm" not in _teksten and "sound screen" not in _teksten, "12: geen regel meer naar het geluidscherm van KDE")
+_klik = [r for r in _rijen if r.property("klikbaar") == "true"]
+_klik[0].geklikt.emit()
+wacht()
+klopt(bi._VB["ingang"] == "webcam-mic" and "gekozen" in gp.melding.tekst.text().lower(),
+      f"12: een andere microfoon kiezen ({bi._VB['ingang']}, {gp.melding.tekst.text()!r})")
+gp.toon_microfoon(bi.Microfoon(True, 0, False, []))
+_r = rijen_in(gp.mic_lijst)
+klopt(len(_r) == 1 and "Geen microfoon gevonden" in _r[0].titel.text() and not gp.mic_kaart.isVisibleTo(gp)
+      and not gp.mic_lijst_kop.isVisibleTo(gp), "15: geen microfoon: 'Geen microfoon gevonden', geen microfoonkaart")
+gp.toon_microfoon(bi.Microfoon(False, 0, False, []))
+_r = rijen_in(gp.mic_lijst)
+klopt(len(_r) == 1 and "reageert nu niet" in _r[0].titel.text() and not gp.mic_kaart.isVisibleTo(gp),
+      "15: het geluid reageert niet: dat zeggen we, geen microfoonkaart")
+gp.toon_microfoon(None)
+klopt("reageert nu niet" in rijen_in(gp.mic_lijst)[0].titel.text(), "15: lezen mislukt (None): ook 'reageert nu niet'")
+gp.toon_microfoon(bi.Microfoon(True, 0, False, [], bi.lees_headsets(KAARTEN)))
+_r = rijen_in(gp.mic_lijst)
+klopt(len(_r) == 1 and "Geen microfoon" not in _r[0].titel.text() and isinstance(_r[0].rechts, ss.Knop),
+      "I6: alleen een headset op muziek: een knop 'Gebruik voor bellen', niet 'Sluit een headset aan'")
+gp.ververs()
+wacht()
 print(f"\n{fouten} fout(en).")
 venster.close()
 shutil.rmtree(TMP, ignore_errors=True)

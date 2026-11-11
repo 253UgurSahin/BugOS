@@ -5,12 +5,23 @@ from __future__ import annotations
 from pathlib import Path
 
 import bugos_config as bi
-from bugos_ui import Chip, KeuzeKaart, Knop, Rij, label, leeg_groep, lijn_icoon, sectie, t
-from bugos_settings_onderdelen import Blad, Keuzes, Regelaar, dichtstbij, kde_instelling, op_achtergrond, schuifje
+import bugos_ui
+from bugos_ui import Chip, Groep, KeuzeKaart, Knop, Rij, label, leeg_groep, lijn_icoon, sectie, t
+from bugos_settings_onderdelen import Blad, Keuzes, Regelaar, dichtstbij, op_achtergrond, schuifje
 from bugos_settings_systeem import Schakelaars
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QButtonGroup, QFileDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+
+MIC = "microfoon" if "microfoon" in bugos_ui.LIJN else "geluid"
+
+
+def kaart_zonder_kop(lay: QVBoxLayout) -> Groep:
+    """Een kaart met regels, zoals Pagina.kaart(), maar het kopje staat er los boven (dan kan het apart weg)."""
+    g = Groep()
+    g.lay.setContentsMargins(4, 4, 4, 4)
+    lay.addWidget(g)
+    return g
 
 
 # ================================================================ geluid ===
@@ -34,22 +45,29 @@ class GeluidPagina(Blad):
                    self.stil))
         self.lijst = self.kaart(t("Waar komt het geluid uit? Klik om te kiezen.",
                                   "Where does the sound come from? Click to choose."))
-        # De microfoon kies je (nog) in het geluidscherm van KDE: een eigen regel, zodat zoeken op 'microfoon'
-        # ergens heen leidt (U166).
-        mic = self.kaart(t("Microfoon", "Microphone"))
-        mic_rij = Rij("geluid", t("Microfoon kiezen en instellen", "Choose and set the microphone"),
-                      t("Opent het geluidscherm met alle microfoons.", "Opens the sound screen with all microphones."),
-                      klikbaar=True)
-        mic_rij.geklikt.connect(lambda: None if bi.VOORBEELD else kde_instelling(self.kde))
-        mic.voeg(mic_rij)
+        # De microfoon, helemaal in BugOS (niet meer het geluidscherm van KDE). Een eigen kopje 'Microfoon', zodat
+        # 'Volume' kort blijft en de regel ook op 150 % past (review I7); zoeken op 'microfoon' komt hier (U166).
+        self.lay.addWidget(sectie(t("Microfoon", "Microphone")))
+        self.mic_kaart = kaart_zonder_kop(self.lay)
+        self.mic_regelaar = Regelaar(80)
+        self.mic_regelaar.veranderd.connect(
+            lambda w: op_achtergrond(self, lambda: bi.zet_microfoon_volume(w), lambda _u: None))
+        self.mic_kaart.voeg(Rij(MIC, t("Volume", "Volume"), "", self.mic_regelaar))
+        self.mic_uit = schuifje(False, self.zet_mic_uit)
+        self.mic_kaart.voeg(Rij("kruis", t("Microfoon uit", "Microphone off"),
+                                t("Niemand hoort je, ook niet in een gesprek", "Nobody hears you, not even in a call"),
+                                self.mic_uit))
+        self.mic_lijst_kop = sectie(t("Waar praat je in? Klik om te kiezen.", "What do you talk into? Click to choose."))
+        self.lay.addWidget(self.mic_lijst_kop)
+        self.mic_lijst = kaart_zonder_kop(self.lay)
 
     def ververs(self) -> None:
-        op_achtergrond(self, bi.geluid, self.toon)
+        op_achtergrond(self, lambda: (*bi.geluid(), bi.microfoon()), self.toon)
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:
             return
-        volume, stil, uitgangen = uitkomst
+        volume, stil, uitgangen, *rest = uitkomst
         self.regelaar.zet(volume)
         self.stil.zet_stil(stil)
         leeg_groep(self.lijst)
@@ -64,6 +82,67 @@ class GeluidPagina(Blad):
         if not uitgangen:
             self.lijst.voeg(Rij("geluid", t("Geen luidsprekers gevonden", "No speakers found"),
                                 t("Sluit een koptelefoon of luidspreker aan.", "Connect headphones or a speaker.")))
+        if rest:
+            self.toon_microfoon(rest[0])
+
+    def toon_microfoon(self, m) -> None:
+        if m is None:   # het lezen ging mis (Klusje gaf None): zoals 'reageert niet'
+            m = bi.Microfoon(False, 0, False, [])
+        self.mic = m
+        leeg_groep(self.mic_lijst)
+        gekozen = any(i.standaard for i in m.ingangen)
+        if not m.bereikbaar:
+            self.mic_lijst.voeg(Rij(MIC, t("Het geluid reageert nu niet", "Sound is not responding right now"),
+                                    t("Log uit en weer in. Helpt dat niet, start de computer dan opnieuw.",
+                                      "Sign out and back in. If that does not help, restart the computer.")))
+        else:
+            for i in m.ingangen:
+                if i.standaard:
+                    self.mic_lijst.voeg(Rij("vink", i.omschrijving, "", Chip(t("In gebruik", "In use"), "goed")))
+                else:
+                    rij = Rij(MIC, i.omschrijving, "", klikbaar=True, pijl=False)
+                    rij.geklikt.connect(lambda x=i: self.kies_microfoon(x))
+                    self.mic_lijst.voeg(rij)
+            # Een bluetooth-headset op 'muziek' heeft geen microfoon: niet 'Sluit een headset aan' zeggen (die zit er
+            # al), maar één knop om hem op 'bellen' te zetten (review I6).
+            for h in m.headsets:
+                knop = Knop(t("Gebruik voor bellen", "Use for calls"), "gewoon")
+                knop.clicked.connect(lambda _c=False, x=h: self.headset_bellen(x))
+                self.mic_lijst.voeg(Rij(MIC, h.omschrijving, t("Nu alleen voor muziek. Zet hem op bellen om ermee te "
+                                                                "praten.", "Now only for music. Switch it to calls to "
+                                                                "talk through it."), knop))
+            if not m.ingangen and not m.headsets:
+                self.mic_lijst.voeg(Rij(MIC, t("Geen microfoon gevonden", "No microphone found"),
+                                        t("Sluit een headset of microfoon aan. Een webcam heeft er vaak ook een.",
+                                          "Connect a headset or microphone. A webcam often has one too.")))
+        self.mic_kaart.setVisible(m.bereikbaar and gekozen)
+        self.mic_lijst_kop.setVisible(m.bereikbaar and bool(m.ingangen or m.headsets))
+        self.mic_regelaar.zet(m.volume)
+        self.mic_uit.zet_stil(m.stil)
+
+    def kies_microfoon(self, ingang) -> None:
+        def klaar(ok) -> None:
+            if ok:
+                self.melding.toon(t("Microfoon gekozen.", "Microphone chosen."), "goed")
+            else:
+                self.melding.toon(t("Dat lukte niet. Is de microfoon nog aangesloten?",
+                                    "That did not work. Is the microphone still connected?"), "fout")
+            self.ververs()
+        op_achtergrond(self, lambda: bi.kies_ingang(ingang.naam), klaar)
+
+    def headset_bellen(self, h) -> None:
+        def klaar(ok) -> None:
+            if ok:
+                self.melding.toon(t("Je headset staat nu op bellen. Je kunt ermee praten.",
+                                    "Your headset is now set for calls. You can talk through it."), "goed")
+            else:
+                self.melding.toon(t("Dat lukte niet. Zet de headset uit en weer aan, en probeer het nog eens.",
+                                    "That did not work. Turn the headset off and on, and try again."), "fout")
+            self.ververs()
+        op_achtergrond(self, lambda: bi.headset_bellen(h.kaart, h.profiel), klaar)
+
+    def zet_mic_uit(self, aan: bool) -> None:
+        op_achtergrond(self, lambda: bi.zet_microfoon_stil(aan), lambda _u: None)
 
 
 # ================================================================ scherm ===
