@@ -266,6 +266,32 @@ _soorten = {
     "anders": bi.agent_soort({}),
 }
 klopt(all(k == v for k, v in _soorten.items()), f"school/werk: de uitslag van het hulpje in gewone woorden ({_soorten})")
+# Echte uitslagen van bugos_wifi_agent tegen NetworkManager 1.56.1 (container van de BugOS-image, bekabeld 802.1X op
+# een veth-paar zonder server: de inlog loopt altijd vast, zoals een verkeerd wachtwoord).
+_echt_agent = {
+    # eerste keer, wachtwoord gegeven: één keer gegeven, de tweede vraag (REQUEST_NEW) geweigerd; KDE niets gevraagd
+    "inloggen": '{"gelukt": false, "staat": 4, "reden": 3, "apparaat_reden": 7, "gevraagd": 2, "opnieuw": true, '
+                '"zonder": false, "te_laat": false, "fout": "", "melding": "", "bewaard": false}',
+    # bekend netwerk (lege invoer), het opgeslagen wachtwoord werkte niet
+    "inloggen ": '{"gelukt": false, "staat": 4, "reden": 3, "apparaat_reden": 7, "gevraagd": 1, "opnieuw": true, '
+                 '"zonder": true, "te_laat": false, "fout": "", "melding": "", "bewaard": false}',
+    # ons eigen tijdslimiet: NetworkManager gestopt
+    "traag": '{"gelukt": false, "staat": 1, "reden": 0, "apparaat_reden": 0, "gevraagd": 0, "opnieuw": false, '
+             '"zonder": false, "te_laat": true, "fout": "", "melding": "", "bewaard": false}',
+    # een profiel zonder opgeslagen wachtwoord (van KDE, in KWallet) en geen gegeven: BugOS vraagt het zelf
+    "nodig": '{"gelukt": false, "staat": 4, "reden": 3, "apparaat_reden": 7, "gevraagd": 1, "opnieuw": false, '
+             '"zonder": true, "te_laat": false, "fout": "", "melding": "", "bewaard": false}',
+    "opslaan": '{"gelukt": false, "staat": 0, "reden": 0, "apparaat_reden": 0, "gevraagd": 0, "opnieuw": false, '
+               '"zonder": false, "te_laat": false, "fout": "org.freedesktop.NetworkManager.Settings.InvalidConnection", '
+               '"melding": "No connection with the UUID was found.", "bewaard": false}',
+    "apparaat": '{"gelukt": false, "staat": 0, "reden": 0, "apparaat_reden": 0, "gevraagd": 0, "opnieuw": false, '
+                '"zonder": false, "te_laat": false, "fout": "org.freedesktop.NetworkManager.UnknownDevice", "melding": '
+                '"No suitable device found for this connection (device lo not available because device is strictly '
+                'unmanaged).", "bewaard": false}',
+}
+_echt_fout = {k: bi.agent_soort(bi.lees_agent_uitslag(v)) for k, v in _echt_agent.items()
+              if bi.agent_soort(bi.lees_agent_uitslag(v)) != k.strip()}
+klopt(not _echt_fout, f"school/werk: echte uitslagen van het hulpje (NetworkManager 1.56) in gewone woorden ({_echt_fout})")
 _, u = vang(bi.verbind_zakelijk, _uuid, "pw", antwoord_nm=lambda c, i: (124, "", "Timeout"))
 klopt(u[:2] == (False, "traag"), "school/werk: het hulpje te traag: 'traag'")
 _, u = vang(bi.verbind_zakelijk, _uuid, "a\nb", antwoord_nm=lambda c, i: (0, _agent_ok, ""))
