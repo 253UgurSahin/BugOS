@@ -221,7 +221,7 @@ sys.exit(0)
 class Paneel:
     """bugos-panel in een tijdelijke map, met nep-programma's op PATH."""
 
-    def __init__(self, tmp: Path):
+    def __init__(self, tmp: Path, qdbus6: bool = True):
         self.tmp = tmp
         self.bin = tmp / "bin"
         self.bin.mkdir()
@@ -233,7 +233,7 @@ class Paneel:
         tekst = PANEEL_TEKST.replace("/usr/share/bugos", str(ROOT / "system_files/usr/share/bugos"))
         self.script = tmp / "paneel"
         self.script.write_text(tekst, encoding="utf-8", newline="\n")
-        for naam in ("gdbus", "qdbus6", "notify-send"):
+        for naam in ("gdbus", "notify-send") + (("qdbus6",) if qdbus6 else ()):
             p = self.bin / naam
             p.write_text(NEP, encoding="utf-8", newline="\n")
             p.chmod(p.stat().st_mode | stat.S_IEXEC)
@@ -272,13 +272,19 @@ ALLE_MERKEN = ["paneel-hernoemd-1", "paneel-standaard-1", "paneel-systeemvak-1",
                "paneel-verhouding-1"]
 
 if shutil.which("bash"):
+    # Het echte BugOS heeft geen qdbus6 (alleen qdbus-qt6): dan praat bugos-panel via gdbus. Allebei proberen.
+    for _met in ((True, False) if not shutil.which("qdbus6") else (True,)):
+        with tempfile.TemporaryDirectory() as t:
+            p = Paneel(Path(t), qdbus6=_met)
+            uit = p.draai("snelmenu", "aan")
+            sc = [s for s in p.scripts() if "vervang(" in s]
+            via = "qdbus6" if _met else "gdbus"
+            klopt(uit.returncode == 0 and len(sc) == 1 and sc[0].strip().startswith("slot(false);")
+                  and sc[0].index("slot(false);") < sc[0].index("vervang(") and sc[0].rstrip().endswith("finally { slot(true); }")
+                  and any(a[0] == via and any(x.endswith("evaluateScript") for x in a) for a in p.log()),
+                  f"B1 ({via}): snelmenu aan: slot eraf, vervang, en (ook bij een fout) slot erop, in één script ({sc})")
     with tempfile.TemporaryDirectory() as t:
         p = Paneel(Path(t))
-        p.draai("snelmenu", "aan")
-        sc = [s for s in p.scripts() if "vervang(" in s]
-        klopt(len(sc) == 1 and sc[0].strip().startswith("slot(false);") and sc[0].index("slot(false);") < sc[0].index("vervang(")
-              and sc[0].rstrip().endswith("finally { slot(true); }"),
-              f"B1: snelmenu aan: slot eraf, vervang, en (ook bij een fout) slot erop, in één script ({sc})")
         klopt(all(s.startswith(" ") or s == "" for s in p.scripts()), "B1: elk script begint met het hele JS-blok")
         (p.merk / "paneel-bewerken").touch()
         p.draai("snelmenu", "aan")
@@ -306,6 +312,81 @@ _code = "\n".join(r for r in STYLE_TEKST.split("\n") if not r.lstrip().startswit
 klopt("unlockedDesktop" not in _code, "D2: style.sh gebruikt plasma/plasmashell/unlockedDesktop niet (breekt bugos-panel)")
 _code = "\n".join(r for r in PANEEL_TEKST.split("\n") if not r.lstrip().startswith("#"))
 klopt("unlockedDesktop" not in _code, "D2: bugos-panel gebruikt unlockedDesktop niet")
+
+
+# --- E. QML: de eigen regels in de rechtermuismenu's ------------------------------------------------------------
+SLEUTELS = set()
+for _f in (ROOT / "system_files/usr/lib/bugos/python").glob("bugos_settings_*.py"):
+    SLEUTELS.update(re.findall(r'sleutel, icoon = "(\w+)"', lees(_f)))
+APPS = {f.name for f in (ROOT / "system_files/usr/share/applications").glob("*.desktop")} | {"org.kde.konsole.desktop"}
+# Woorden die in het Nederlands en het Engels hetzelfde zijn (dan mag de vertaling gelijk zijn).
+ZELFDE = {"Terminal"}
+
+
+def blok(tekst: str, begin: int) -> str:
+    """Van het [ of { op plek 'begin' tot en met het bijbehorende sluitteken."""
+    open_, dicht = tekst[begin], {"[": "]", "{": "}"}[tekst[begin]]
+    diepte = 0
+    for i in range(begin, len(tekst)):
+        if tekst[i] == open_:
+            diepte += 1
+        elif tekst[i] == dicht:
+            diepte -= 1
+            if diepte == 0:
+                return tekst[begin:i + 1]
+    return tekst[begin:]
+
+
+def acties(plasmoid: str) -> list[dict]:
+    tekst = re.sub(r"//[^
+]*", "", lees(PLASMOIDS / plasmoid / "contents/ui/main.qml"))
+    m = re.search(r"Plasmoid\.contextualActions:\s*\[", tekst)
+    if not m:
+        return []
+    lijst = blok(tekst, m.end() - 1)
+    uit = []
+    for a in re.finditer(r"PlasmaCore\.Action\s*\{", lijst):
+        stuk = blok(lijst, a.end() - 1)
+        t_ = re.search(r'text:\s*root\.tr\("([^"]*)",\s*"([^"]*)"\)', stuk)
+        doe = re.search(r'onTriggered:\s*root\.(voerUit|startApp)\("([^"]*)"\)', stuk)
+        uit.append({"nl": t_.group(1) if t_ else "", "en": t_.group(2) if t_ else "",
+                    "soort": doe.group(1) if doe else "", "wat": doe.group(2) if doe else "",
+                    "icoon": bool(re.search(r'icon\.name:\s*"[\w-]+"', stuk))})
+    return uit
+
+
+def gaat_goed(a: dict) -> bool:
+    if a["soort"] == "startApp":
+        return a["wat"] in APPS
+    m = re.fullmatch(r"bugos-start-data --start (?:instelling:(\w*)|/usr/share/applications/([\w.-]+\.desktop))", a["wat"])
+    if not m:
+        return False
+    return (m.group(1) == "" or m.group(1) in SLEUTELS) if m.group(2) is None else m.group(2) in APPS
+
+
+ALLE_ACTIES = {}
+for _p in ("org.bugos.clock", "org.bugos.quickmenu", "org.bugos.taskbar", "org.bugos.startmenu"):
+    ALLE_ACTIES[_p] = acties(_p)
+    _a = ALLE_ACTIES[_p]
+    klopt(bool(_a) and all(x["nl"] and x["en"] and (x["nl"] != x["en"] or x["en"] in ZELFDE) and x["icoon"] for x in _a),
+          f"E2: {_p}: elke regel in het rechtermuismenu heeft een Nederlandse en Engelse tekst en een pictogram ({[x['en'] for x in _a]})")
+    klopt(all(gaat_goed(x) for x in _a),
+          f"E2: {_p}: elke regel opent een bestaande pagina van Instellingen of een bestaande app ({[x['wat'] for x in _a if not gaat_goed(x)]})")
+    _t = lees(PLASMOIDS / _p / "contents/ui/main.qml")
+    klopt(not re.search(r'internalAction\("configure"\)|setInternalAction|removeInternalAction', _t),
+          f"E4: {_p}: geen eigen KDE-instellingenvenster (configure) in main.qml")
+klopt([x["wat"] for x in ALLE_ACTIES["org.bugos.clock"]]
+      == ["bugos-start-data --start instelling:tijd", "bugos-start-data --start instelling:meldingen"]
+      and [x["en"] for x in ALLE_ACTIES["org.bugos.clock"]] == ["Adjust date and time", "Notification settings"],
+      "E3: klok: precies 'Datum en tijd aanpassen' en 'Meldingsinstellingen', zoals Windows 11")
+klopt([x["wat"] for x in ALLE_ACTIES["org.bugos.quickmenu"]]
+      == ["bugos-start-data --start instelling:wifi", "bugos-start-data --start instelling:geluid",
+          "bugos-start-data --start instelling:"]
+      and "All settings" not in [x["en"] for x in ALLE_ACTIES["org.bugos.quickmenu"]],
+      "E3: snelmenu: precies 'Wifi en internet', 'Geluidsinstellingen' en 'Instellingen openen' (niet 'Alle instellingen': dat is KDE)")
+klopt("import org.kde.plasma.plasma5support as P5Support" in lees(PLASMOIDS / "org.bugos.clock/contents/ui/main.qml")
+      and "id: opdracht" in lees(PLASMOIDS / "org.bugos.clock/contents/ui/main.qml"),
+      "E3: de klok kan een opdracht starten (P5Support.DataSource)")
 
 
 # --- F. De indeling voor nieuwe gebruikers -----------------------------------------------------------------------
