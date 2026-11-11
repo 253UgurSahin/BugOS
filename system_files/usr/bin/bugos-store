@@ -3,7 +3,9 @@
 
 Jip-en-Janneke: links kies je een onderwerp (Internet, Kantoor, Gamen...),
 rechts zie je bekende, veilige apps. Druk op "Installeren" en klaar.
-Staat wat je zoekt er niet bij? Dan zoek je verder in "Meer apps".
+Staat wat je zoekt er niet bij? Typ de naam: de Winkel zoekt dan ook in alle andere apps van Flathub,
+en laat elke app eerst op een eigen pagina zien (wie hem maakt, voor welke leeftijd, hoe groot).
+Alles gebeurt in de Winkel zelf; er gaat geen ander programma open.
 
   bugos-store                       -> de winkel
   bugos-store appstream://<id>      -> meteen naar die app
@@ -12,19 +14,20 @@ Staat wat je zoekt er niet bij? Dan zoek je verder in "Meer apps".
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, "/usr/lib/bugos/python")
 
 from bugos_ui import (  # noqa: E402
-    TAAL, ZIJBALK_BREEDTE, Banner, Chip, Kaart, Knop, Venster, Zoekveld, bestaat, draai, label, maak_app,
-    raster, start, t, uitvoeren, zoeksleutel,
+    TAAL, ZIJBALK_BREEDTE, Banner, Chip, IcoonChip, Kaart, Knop, Venster, Zoekveld, bestaat, draai, label,
+    maak_app, raster, start, t, uitvoeren, zoeksleutel,
 )
 from PySide6.QtCore import QProcess, QProcessEnvironment, QSize, Qt, QTimer  # noqa: E402
-from PySide6.QtGui import QIcon, QPixmap  # noqa: E402
+from PySide6.QtGui import QIcon, QKeySequence, QPixmap, QShortcut  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QCheckBox, QFrame, QHBoxLayout, QLabel, QMessageBox, QScrollArea, QVBoxLayout, QWidget,
+    QCheckBox, QFrame, QHBoxLayout, QLabel, QMessageBox, QScrollArea, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 CATALOGUS = Path("/usr/share/bugos/store.json")
@@ -39,6 +42,8 @@ ICOON_MAPPEN = [
 THEMA_NAMEN = {"org.mozilla.firefox": "firefox", "com.valvesoftware.Steam": "steam"}
 if os.environ.get("BUGOS_APPICONEN"):
     ICOON_MAPPEN.insert(0, Path(os.environ["BUGOS_APPICONEN"]))
+# Een geldig app-id (org.voorbeeld.App): alleen zo'n id gaat ooit naar flatpak. Nooit met '-' vooraan (geen optie).
+APP_ID = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]*(\.[A-Za-z0-9_-]+){2,}$")
 
 
 def app_naam(app: dict) -> str:
@@ -174,10 +179,64 @@ class AppKaart(Kaart):
             self.winkel.installeer(self.app)
 
 
+class AppPagina(QWidget):
+    """De pagina van één app die niet in de BugOS-selectie staat. Bovenaan altijd 'Terug', dan de kop (pictogram,
+    naam, één regel) en een melding."""
+
+    def __init__(self, winkel: "Winkel", soort: str, app_id: str, naam: str = "", kort: str = ""):
+        super().__init__()
+        self.setObjectName("pagina")
+        self.winkel, self.soort, self.app_id = winkel, soort, app_id
+        self.lay = QVBoxLayout(self)
+        self.lay.setContentsMargins(36, 26, 36, 28)   # dezelfde marges als de lijst
+        self.lay.setSpacing(16)
+        self.terug = Knop(t("Terug", "Back"), "stil", "lijn:terug")
+        self.terug.clicked.connect(lambda _c=False: winkel.terug())
+        self.lay.addWidget(self.terug, 0, Qt.AlignmentFlag.AlignLeft)
+        self.kop_rij = QHBoxLayout()
+        self.kop_rij.setSpacing(20)
+        self.plaatje = IcoonChip("lijn:apps", "neutraal", maat=96, vol=False)
+        self.kop_rij.addWidget(self.plaatje, 0, Qt.AlignmentFlag.AlignTop)
+        kolom = QVBoxLayout()
+        kolom.setSpacing(6)
+        self.naam = label(naam or app_id.rsplit(".", 1)[-1], "titel")
+        kolom.addWidget(self.naam)
+        self.kort = label(kort, "sub")
+        self.kort.setVisible(bool(kort))
+        kolom.addWidget(self.kort)
+        kolom.addStretch(1)
+        self.kop_rij.addLayout(kolom, 1)
+        self.knoppen = QVBoxLayout()
+        self.knoppen.setSpacing(8)
+        self.kop_rij.addLayout(self.knoppen)
+        self.lay.addLayout(self.kop_rij)
+        self.melding = Banner()
+        self.lay.addWidget(self.melding)
+        self.einde = QVBoxLayout()
+        self.einde.setSpacing(16)
+        self.lay.addLayout(self.einde)
+        self.lay.addStretch(1)
+
+    def ververs(self) -> None:
+        """Na installeren of verwijderen: de knoppen opnieuw (in latere stappen)."""
+
+
 class Winkel(Venster):
-    def __init__(self, catalogus: dict, begin_zoek: str = "", begin_app: str = ""):
+    def __init__(self, catalogus: dict, begin_zoek: str = "", begin_app: str = "", opdracht: list[str] | None = None):
         scroll = QScrollArea()
-        super().__init__(t("BugOS Winkel", "BugOS Store"), inhoud=scroll, maat=(1180, 800))
+        # Rechts een stapel: 0 = de lijst met apps, 1 = de pagina van één app (Terug brengt je weer naar de lijst).
+        stapel = QStackedWidget()
+        stapel.addWidget(scroll)
+        pagina_scroll = QScrollArea()
+        pagina_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        pagina_scroll.setWidgetResizable(True)
+        pagina_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        stapel.addWidget(pagina_scroll)
+        super().__init__(t("BugOS Winkel", "BugOS Store"), inhoud=stapel, maat=(1180, 800))
+        self.scroll, self.stapel, self.pagina_scroll = scroll, stapel, pagina_scroll
+        self.pagina: AppPagina | None = None
+        self.pagina_id: str | None = None
+        self._terug_naar: tuple[int, QWidget | None] = (0, None)
         self.cat = catalogus
         self.systeem = systeem_apps(self.cat["apps"])
         self.flatpaks = geinstalleerd()
@@ -192,9 +251,9 @@ class Winkel(Venster):
             self.lijst.voeg_toe(c["icoon"], c["nl" if TAAL == "nl" else "en"], c["id"])
         if self.installed:
             self.mijn_apps_erbij()
-        self.lijst.currentRowChanged.connect(lambda _: self.toon())
-        self.onder_knop(t("Meer apps zoeken", "Search more apps"), "zoek", self.meer_apps,
-                        tip=t("In de grote winkel (Discover), voor gevorderden", "In the big store (Discover), advanced"))
+        self.lijst.currentRowChanged.connect(lambda _: self.onderwerp_gekozen())
+        self.onder_knop(t("Alle apps doorzoeken", "Search all apps"), "zoek", self.meer_apps,
+                        tip=t("Zoek in alle apps van Flathub", "Search all apps from Flathub"))
 
         # Rechts: zoeken en de apps
         scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -209,6 +268,8 @@ class Winkel(Venster):
         self.zoek = Zoekveld(t("Zoek een app, bijvoorbeeld \"muziek\" of \"Zoom\"",
                                "Search for an app, for example \"music\" or \"Zoom\""))
         self.zoek.textChanged.connect(lambda _: self.toon())
+        # Wat een opdracht van buiten zei (een link of bestand dat de Winkel niet opent): weg zodra je zelf typt.
+        self.zoek.textEdited.connect(lambda _: self.opdracht_melding.zet(""))
         rechts.addWidget(self.zoek)
 
         self.held = QWidget()
@@ -223,16 +284,20 @@ class Winkel(Venster):
 
         self.kop = label("", "kop2")
         rechts.addWidget(self.kop)
+        self.opdracht_melding = Banner()
+        rechts.addWidget(self.opdracht_melding)
         self.melding = Banner()
         rechts.addWidget(self.melding)
         self.raster_widget, self.raster = raster(2, 14)
         rechts.addWidget(self.raster_widget)
 
-        onder = Kaart("true", marge=20, ruimte=14, richting="h")
-        onder.lay.addWidget(label(t("Niet gevonden wat je zoekt? Er zijn duizenden andere apps.",
-                                    "Didn't find what you need? There are thousands of other apps."), "sub"), 1)
-        meer2 = Knop(t("Meer apps zoeken", "Search more apps"), "rand", "lijn:zoek")
-        meer2.clicked.connect(self.meer_apps)
+        self.onder = onder = Kaart("true", marge=20, ruimte=14, richting="h")
+        onder.lay.addWidget(label(t("Niet gevonden wat je zoekt? Typ de naam hierboven: de Winkel zoekt dan ook in "
+                                    "duizenden andere apps van Flathub.",
+                                    "Didn't find what you need? Type its name above: the Store then also searches "
+                                    "thousands of other apps from Flathub."), "sub"), 1)
+        self.onder_zoek = meer2 = Knop(t("Zoeken", "Search"), "rand", "lijn:zoek")
+        meer2.clicked.connect(lambda _c=False: self.meer_apps())
         onder.lay.addWidget(meer2)
         rechts.addWidget(onder)
         rechts.addStretch(1)
@@ -242,14 +307,20 @@ class Winkel(Venster):
         self.proces.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
         self.proces.finished.connect(self.klaar)
 
+        # Terug naar de lijst: Esc of Alt+Links, zoals in een webbrowser.
+        for toets in (QKeySequence(Qt.Key.Key_Escape), QKeySequence(QKeySequence.StandardKey.Back)):
+            sc = QShortcut(toets, self.pagina_scroll)
+            sc.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+            sc.activated.connect(self.terug)
+
         self.lijst.setCurrentRow(0)
+        self.lijst.setFocus()
         if begin_zoek:
             self.zoek.setText(begin_zoek)
-        if begin_app:
-            gevonden = next((a for a in self.cat["apps"] if a["id"] == begin_app), None)
-            if gevonden:
-                self.zoek.setText(app_naam(gevonden))
-        self.lijst.setFocus()
+        if opdracht:
+            self.open_opdracht(opdracht)
+        elif begin_app:
+            self.open_opdracht([f"appstream://{begin_app}"])
 
     def tweede_start(self, args: list[str]) -> None:
         """De Winkel was al open en wordt opnieuw gestart, bijv. 'Uit de Winkel halen?' na een .exe (U222)."""
@@ -257,17 +328,88 @@ class Winkel(Venster):
             # Weer geopend tijdens het installeren: de Winkel gaat daarna niet meer vanzelf dicht (U233).
             naam = next((app_naam(a) for a in self.cat["apps"] if a["id"] == self.bezig_met), self.bezig_met)
             self.melding.zet(self.bezig_tekst(naam), "bezig")
-        zoek, app_id = begin_uit(args)
-        if app_id:
-            app_id = echte_id(self.cat, app_id)
-            gevonden = next((a for a in self.cat["apps"] if a["id"] == app_id), None)
-            if gevonden is None:
-                start("plasma-discover", args[0])   # niet in onze selectie: de grote winkel op die app
-                return
-            zoek = app_naam(gevonden)
-        if zoek:
+        self.open_opdracht(args)
+
+    def open_opdracht(self, args: list[str]) -> None:
+        """Wat de Winkel bij het openen moet laten zien: zoeken, een app, of uitleg waarom hij iets niet opent.
+        Alles in de Winkel zelf; er start nooit een ander programma."""
+        zoek, app_id, weiger = opdracht_uit(args)
+        if weiger:
+            self.naar_lijst()
+            if zoek:
+                self.zoek.setText(zoek)
+            tekst_, soort = weiger_tekst(weiger)
+            self.opdracht_melding.zet(tekst_, soort)
+            self.lijst.setFocus()
+        elif app_id:
+            self.toon_app(app_id)
+        elif zoek:
+            self.naar_lijst()
             self.zoek.setText(zoek)
             self.lijst.setFocus()
+
+    # ---------------------------------------------------------------- de pagina van één app
+    def toon_app(self, app_id: str) -> None:
+        """De pagina van een app. Een app uit de BugOS-selectie heeft geen pagina: dan de lijst met die app (U222)."""
+        pick = next((a for a in self.cat["apps"] if a["id"].lower() == app_id.lower()), None)
+        if pick is not None:
+            self.naar_lijst()
+            self.zoek.setText(app_naam(pick))
+            self.lijst.setFocus()
+            return
+        pagina = AppPagina(self, "niet_gevonden", app_id)
+        pagina.melding.zet(t("Deze app staat niet (meer) in Flathub, of de lijst met alle apps is nog niet opgehaald.",
+                             "This app is not (or no longer) on Flathub, or the list of all apps has not been "
+                             "fetched yet."), "info")
+        zoek_knop = Knop(t("Zoek een andere app", "Search for another app"), "hoofd", "lijn:zoek")
+        zoek_knop.clicked.connect(lambda _c=False, z=app_id.rsplit(".", 1)[-1]: self.zoek_vanaf_pagina(z))
+        pagina.einde.addWidget(zoek_knop, 0, Qt.AlignmentFlag.AlignLeft)
+        self.zet_pagina(pagina, app_id)
+
+    def zet_pagina(self, pagina: AppPagina, app_id: str) -> None:
+        if self.stapel.currentIndex() == 0:   # onthoud waar je in de lijst was
+            self._terug_naar = (self.scroll.verticalScrollBar().value(), self.focusWidget())
+        oud = self.pagina_scroll.takeWidget()
+        if oud is not None:
+            oud.deleteLater()
+        self.pagina, self.pagina_id = pagina, app_id
+        self.pagina_scroll.setWidget(pagina)
+        self.pagina_scroll.verticalScrollBar().setValue(0)
+        self.stapel.setCurrentIndex(1)
+        pagina.terug.setFocus()
+
+    def naar_lijst(self) -> None:
+        """Zonder iets te onthouden terug naar de lijst (een nieuwe opdracht, een ander onderwerp)."""
+        if self.stapel.currentIndex() != 0:
+            self.stapel.setCurrentIndex(0)
+        self.pagina_id = None
+
+    def terug(self) -> None:
+        """Terug naar de lijst, met dezelfde zoektekst, op dezelfde plek en met de focus op dezelfde knop."""
+        if self.stapel.currentIndex() == 0:
+            return
+        self.naar_lijst()
+        waarde, focus = self._terug_naar
+        QTimer.singleShot(0, lambda: self.scroll.verticalScrollBar().setValue(waarde))
+        try:
+            if focus is not None and focus.isVisibleTo(self):
+                focus.setFocus()
+                return
+        except RuntimeError:   # die kaart is er niet meer
+            pass
+        self.zoek.setFocus()
+
+    def zoek_vanaf_pagina(self, zoek: str) -> None:
+        self.naar_lijst()
+        self.zoek.setText(zoek)
+        self.zoek.setFocus()
+        self.zoek.selectAll()
+
+    def onderwerp_gekozen(self) -> None:
+        """Een onderwerp in de zijbalk: altijd de lijst (ook als er een app-pagina open stond)."""
+        self.naar_lijst()
+        self.opdracht_melding.zet("")
+        self.toon()
 
     # ------------------------------------------------------------------
     def toon(self) -> None:
@@ -296,8 +438,10 @@ class Winkel(Venster):
         for k in range(3):
             self.raster.setColumnStretch(k, 1 if k < self.kolommen else 0)
         if not apps:
-            self.melding.zet(t("Niet in de BugOS-selectie. Druk op \"Meer apps zoeken\" om verder te zoeken.",
-                               "Not in the BugOS selection. Press \"Search more apps\" to search further."), "info")
+            self.melding.zet(t("Niets gevonden voor \"{}\". Probeer een ander woord, bijvoorbeeld wat de app doet: "
+                               "\"foto's\", \"muziek\" of \"tekenen\".",
+                               "Nothing found for \"{}\". Try another word, for example what the app does: "
+                               "\"photos\", \"music\" or \"drawing\".").format(zoek), "info")
         elif self.bezig_met is not None and not getattr(self, "sluit_na", False):   # 'gaat vanzelf dicht' laten staan (U344)
             # Wordt er iets geïnstalleerd? Dan die melding terug (een zoekopdracht zonder uitkomst verving hem) (U333).
             naam = next((app_naam(a) for a in self.cat["apps"] if a["id"] == self.bezig_met), self.bezig_met)
@@ -439,11 +583,14 @@ class Winkel(Venster):
                 self.sluit_na = False   # mislukt: open laten, zodat je de melding ziet
 
     def meer_apps(self) -> None:
-        zoek = self.zoek.text().strip()
-        if zoek:
-            start("plasma-discover", "--search", zoek)
-        else:
-            start("plasma-discover")
+        """'Alle apps doorzoeken': het zoekveld van de Winkel zelf doorzoekt ook alle apps van Flathub."""
+        self.naar_lijst()
+        self.zoek.setFocus()
+        self.zoek.selectAll()
+        if not self.zoek.text().strip():
+            self.opdracht_melding.zet(t("Typ hierboven wat je zoekt, bijvoorbeeld \"muziek\" of \"Zoom\".",
+                                        "Type above what you are looking for, for example \"music\" or \"Zoom\"."),
+                                      "info")
 
 
 def begin_uit(args: list[str]) -> tuple[str, str]:
@@ -462,17 +609,30 @@ def echte_id(catalogus: dict, app_id: str) -> str:
     return next((a["id"] for a in catalogus["apps"] if a["id"].lower() == app_id.lower()), app_id)
 
 
+def opdracht_uit(args: list[str]) -> tuple[str, str, str]:
+    """(zoektekst, app-id, weigering) uit de opdracht. De weigering is een code voor weiger_tekst()."""
+    zoek, app_id = begin_uit(args)
+    if app_id and not APP_ID.match(app_id):
+        return "", "", ""
+    return zoek, app_id, ""
+
+
+def weiger_tekst(code: str) -> tuple[str, str]:
+    """Waarom de Winkel een link of bestand niet opent, in gewone woorden, met de soort melding."""
+    return {
+        "andere_bron": (t("Deze app komt uit een andere appwinkel dan Flathub. BugOS installeert alleen apps van "
+                          "Flathub, omdat die gecontroleerd en bijgewerkt worden. Zoek de app hier in de Winkel.",
+                          "This app comes from another app shop than Flathub. BugOS only installs apps from Flathub, "
+                          "because those are checked and kept up to date. Look for the app here in the Store."),
+                        "let_op"),
+    }.get(code, (t("De Winkel kan dit niet openen.", "The Store cannot open this."), "let_op"))
+
+
 def main() -> int:
     args = sys.argv[1:]
-    begin_zoek, begin_app = begin_uit(args)
     catalogus = lees_catalogus()
-    begin_app = echte_id(catalogus, begin_app) if begin_app else ""
-    if begin_app and not any(a["id"] == begin_app for a in catalogus["apps"]):
-        # Niet in onze selectie: open de grote winkel op die app.
-        start("plasma-discover", args[0])
-        return 0
     app = maak_app("bugos-store", "bugos-store", sys.argv, een_keer=True)   # (U208)
-    return uitvoeren(app, Winkel(catalogus, begin_zoek, begin_app))
+    return uitvoeren(app, Winkel(catalogus, opdracht=args))
 
 
 if __name__ == "__main__":
