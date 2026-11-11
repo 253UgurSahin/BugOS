@@ -59,6 +59,9 @@ def _met_heel_jaar(formaat: str) -> str:
     return formaat if "yyyy" in formaat else formaat.replace("yy", "yyyy")
 
 
+RICHTING = set("\u200e\u200f\u061c\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")   # LRM, RLM, ALM, LRE…PDF, LRI…PDI
+
+
 def regio_naam(code: str) -> str:
     """'nl_BE' -> 'België (Nederlands)'; een regio die niet in de lijst staat, heet zoals Qt hem noemt."""
     for c, nl, en in bi.REGIOS:
@@ -71,6 +74,9 @@ def regio_voorbeeld(code: str, met_week: bool = True) -> str:
     """Zo ziet het eruit in die regio: '11-11-2026 14:58 · week begint op maandag'."""
     loc = QLocale(code)
     voorbeeld = loc.toString(QDateTime.currentDateTime(), QLocale.FormatType.ShortFormat)
+    # Arabische notaties hebben tekens voor rechts-naar-links; in een lijst van links naar rechts gooien die de
+    # volgorde door elkaar ('1113:27 2026/11/'). Zonder die tekens staat er gewoon 11/11/2026 13:27.
+    voorbeeld = "".join(c for c in voorbeeld if c not in RICHTING)
     if met_week:
         dag = DAGEN[loc.firstDayOfWeek().value - 1]
         voorbeeld += " · " + t("week begint op {dag}", "week starts on {dag}").format(dag=t(dag[0], dag[1]))
@@ -238,11 +244,10 @@ class TijdPagina(Blad):
         self.toetsenbord_lijst = list(lijst)
         self.toetsenbord_namen = {ind: bi.toetsenbord_naam(ind, beschrijvingen.get(ind, ""), nl) for ind in lijst}
         for i, ind in enumerate(lijst):
-            delen = [t("Wordt eerst gebruikt", "Used first")] if i == 0 and len(lijst) > 1 else []
-            if (ind.layout, ind.variant) == ("us", "intl"):
-                delen.append(t("' en \" maken accenten (é, ë)", "' and \" make accents (é, ë)"))
+            # (Wat VS-Internationaal doet, staat al in de naam: "accenten met ' en \"".)
+            uitleg = t("Wordt eerst gebruikt", "Used first") if i == 0 and len(lijst) > 1 else ""
             rechts = meer_knop(lambda ind=ind: self.menu_toetsenbord(ind)) if len(lijst) > 1 else None
-            rij = Rij("toetsenbord", self.toetsenbord_namen[ind], " · ".join(delen), rechts)
+            rij = Rij("toetsenbord", self.toetsenbord_namen[ind], uitleg, rechts)
             rij.indeling = ind
             self.g3.voeg(rij)
             self.toetsenbord_rijen.append(rij)
@@ -456,19 +461,19 @@ class WachtwoordVoorDialoog(WachtwoordDialoog):
 
 class PersoonDialoog(QDialog):
     """Iemand toevoegen: een naam, een inlognaam (vult zichzelf in), twee keer een wachtwoord en de soort account.
-    Compact (twee wachtwoordvelden naast elkaar), zodat het op 1280x800 bij 150 % past."""
+    Compact (twee wachtwoordvelden naast elkaar, uitleg op één regel): op 1280x800 bij 150 % is er maar
+    485 - 40 (titelbalk) px hoog vrij, en dan moet 'Standaard / Beheerder' er nog heel op staan."""
 
     def __init__(self, ouder: QWidget, volledig: str = "", inlog: str = ""):
         super().__init__(ouder)
         self.setWindowTitle(t("Iemand toevoegen", "Add someone"))
         self.setMinimumWidth(520)
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(24, 22, 24, 20)
-        lay.setSpacing(10)
+        lay.setContentsMargins(24, 20, 24, 18)
+        lay.setSpacing(8)
         lay.addWidget(label(t("Iemand toevoegen", "Add someone"), "kop2"))
-        lay.addWidget(label(t("Die krijgt eigen bestanden, apps en instellingen, en logt in met een eigen naam en "
-                              "wachtwoord.", "They get their own files, apps and settings, and log in with their own "
-                              "name and password."), "klein"))
+        lay.addWidget(label(t("Met eigen bestanden, eigen instellingen en een eigen wachtwoord.",
+                              "With their own files, their own settings and their own password."), "klein"))
         self.vol = QLineEdit(volledig)
         self.vol.setPlaceholderText(t("Naam (zo heet het account)", "Name (what the account is called)"))
         self.vol.setAccessibleName(t("Naam", "Name"))
@@ -507,9 +512,8 @@ class PersoonDialoog(QDialog):
         self.soort.gekozen.connect(lambda w: setattr(self, "_soort", w))
         soort.addWidget(self.soort)
         lay.addLayout(soort)
-        lay.addWidget(label(t("Standaard: kan de computer gewoon gebruiken. Beheerder: kan ook apps installeren en "
-                              "alles veranderen.", "Standard: can use the computer. Administrator: can also install "
-                              "apps and change everything."), "klein"))
+        lay.addWidget(label(t("Een beheerder kan ook apps installeren en alles veranderen.",
+                              "An administrator can also install apps and change everything."), "klein"))
         self.fout = label("", "klein")
         self.fout.setStyleSheet(f"color: {K['fout']};")
         lay.addWidget(self.fout)

@@ -699,8 +699,11 @@ klopt(_klein27[0] == "café" and "kleine letters" in _klein27[1] and not _klein2
       and _blijft27 == "huis.werk" and "bestaat al" in _root27,
       f"27: zelf getypt: kleine letters, spatie wordt punt, volgt de naam dan niet meer; 'root' bestaat al "
       f"({_klein27}, {_punt27!r}, {_blijft27!r}, {_root27!r})")
-klopt(_maat27.height() <= 480 and _maat27.width() <= 600,
-      f"27: het venster past op 1280x800 bij 150 % ({_maat27.width()}x{_maat27.height()} <= 600x480)")
+# 1280x800 bij 150 %: 533 - 48 (taakbalk) - 40 (titelbalk) = 445 px; in de foto's houdt Qt er ~400 over.
+_d27.fout.setText("De twee wachtwoorden zijn niet hetzelfde.")
+_maat27 = _d27.sizeHint()
+klopt(_maat27.height() <= 400 and _maat27.width() <= 600,
+      f"27: het venster past op 1280x800 bij 150 %, ook met een foutregel ({_maat27.width()}x{_maat27.height()} <= 600x400)")
 _d27.soort.knoppen["beheerder"].click()
 klopt(_d27.beheerder and _d27.volledige_naam == "Crème Brûlée x", "27: soort account en naam komen goed terug")
 _d27.wis()
@@ -716,7 +719,7 @@ tp.ververs()
 wacht()
 _t29 = [(r.titel.text(), r.uitleg.text()) for r in tp.toetsenbord_rijen]
 klopt(len(_t29) == 2 and _t29[0][0].startswith("VS-Internationaal") and "Wordt eerst gebruikt" in _t29[0][1]
-      and "accenten" in _t29[0][1] and _t29[1][0] == "Belgisch (AZERTY)"
+      and "accenten met" in _t29[0][0] and _t29[1][0] == "Belgisch (AZERTY)" and not _t29[1][1]
       and "Windows-toets + spatie" in tp.voeg_toetsenbord.uitleg.text() and "Toetsenbord" in teksten(tp),
       f"29: twee toetsenborden, de eerste wordt eerst gebruikt, wisselen met Windows-toets + spatie ({_t29})")
 klopt(tp.inlog_rij is not None and "Engels (VS)" in tp.inlog_rij.uitleg.text(),
@@ -796,6 +799,8 @@ klopt(len(set(_codes10)) == len(_codes10) and all(QLocale(c).language() != QLoca
       and all(nl and en for _c, nl, en in bi.REGIOS), "10: elke notatie is uniek en Qt kent hem")
 klopt(tp.regio_rij.uitleg.text().startswith("Nederland · ") and "week begint op maandag" in tp.regio_rij.uitleg.text(),
       f"G: Notatie: Nederland, met een voorbeeld en de eerste dag van de week ({tp.regio_rij.uitleg.text()!r})")
+klopt(not any(c in sa.RICHTING for code in ("ar_MA", "ar_EG") for c in sa.regio_voorbeeld(code)),
+      f"G: Arabische notaties zonder richtingtekens (anders door elkaar in de lijst) ({sa.regio_voorbeeld('ar_MA')!r})")
 klopt("week begint op zondag" in sa.regio_voorbeeld("en_US") and sa.regio_naam("xx_YY"),
       f"G: Verenigde Staten: de week begint op zondag ({sa.regio_voorbeeld('en_US')!r})")
 _kies_g: list = []
