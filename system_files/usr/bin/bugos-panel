@@ -5,6 +5,7 @@
 #   bugos-panel snelmenu  aan|uit|status
 #   bugos-panel standaard          (bij elk inloggen: eenmalige stappen, daarna het slot erop)
 #   bugos-panel systeemvak rustig|alles   (KDE-pictogrammen naast het snelmenu verbergen of terugzetten)
+#   bugos-panel bewerken aan|uit|status   (voor gevorderden: het slot eraf voor KDE's eigen taakbalkbewerking)
 #
 # Jip-en-Janneke: de startknop linksonder (het lieveheersbeestje) is het
 # BugOS-menu. "uit" zet het gewone KDE-menu terug, precies zoals BugOS het
@@ -474,8 +475,27 @@ standaard:*)
     # Altijd: het slot erop (goedkoop). Herstelt ook een slot dat KDE's unlock_widgets.js of iets anders eraf haalde.
     plasma_script "$JS slot($(slot_na));" >/dev/null || true
     ;;
+# Voor gevorderden (bewust geen knop): het slot eraf, zodat KDE's "Widgets toevoegen..." en "Paneel instellen..."
+# terugkomen. Blijft los, ook na opnieuw inloggen, tot 'bugos-panel bewerken uit'.
+bewerken:aan)
+    bureaublad_er || niet_bereikbaar
+    mkdir -p "$BUGOS_CONFIG"
+    plasma_script "$JS slot(false);" >/dev/null || niet_bereikbaar
+    touch "$BEWERKEN"
+    melding "$(t "Taakbalk en bureaublad zijn los" "Taskbar and desktop are unlocked")" \
+        "$(t "Zet ze weer vast met: bugos-panel bewerken uit" "Lock them again with: bugos-panel bewerken uit")"
+    ;;
+bewerken:uit)
+    bureaublad_er || niet_bereikbaar
+    plasma_script "$JS slot(true);" >/dev/null || niet_bereikbaar
+    rm -f "$BEWERKEN"
+    melding "$(t "Taakbalk en bureaublad staan weer vast" "Taskbar and desktop are locked again")" ""
+    ;;
+bewerken:status)
+    if [ -f "$BEWERKEN" ]; then echo aan; else echo uit; fi
+    ;;
 *)
-    echo "Gebruik: bugos-panel startmenu|snelmenu aan|uit|status, bugos-panel systeemvak rustig|alles, of bugos-panel standaard" >&2
+    echo "Gebruik: bugos-panel startmenu|snelmenu aan|uit|status, bugos-panel systeemvak rustig|alles, bugos-panel bewerken aan|uit|status, of bugos-panel standaard" >&2
     exit 2
     ;;
 esac

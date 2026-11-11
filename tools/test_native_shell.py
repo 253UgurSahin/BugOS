@@ -419,7 +419,26 @@ if shutil.which("bash"):
               "B6: leeg antwoord (Plasma heeft de sneltoets nog niet aangemeld): niets doen, de volgende keer opnieuw kijken")
         _zet = sneltoets("")
         klopt(not _zet and not (p.merk / "paneel-sneltoets-1").exists(), "B6: geen antwoord van KDE: de volgende keer opnieuw")
+        # De deur voor gevorderden.
+        p.antwoorden({})
+        uit = p.draai("bewerken", "aan")
+        klopt(uit.returncode == 0 and (p.merk / "paneel-bewerken").exists() and p.scripts() == [" slot(false);"]
+              and any("Taakbalk en bureaublad zijn los" in m and "bugos-panel bewerken uit" in m for m in p.meldingen()),
+              f"B3: bewerken aan: slot eraf, onthouden, en een melding hoe je het terugzet ({p.scripts()}, {p.meldingen()})")
+        klopt(p.draai("bewerken", "status").stdout.strip() == "aan", "B3: bewerken status: aan")
+        p.draai("standaard")
+        klopt(p.scripts() == [" slot(false);"], f"B3: na opnieuw inloggen blijft het los ({p.scripts()})")
+        uit = p.draai("bewerken", "uit")
+        klopt(uit.returncode == 0 and not (p.merk / "paneel-bewerken").exists() and p.scripts() == [" slot(true);"]
+              and any("weer vast" in m for m in p.meldingen()),
+              f"B3: bewerken uit: slot erop, vergeten, melding ({p.scripts()}, {p.meldingen()})")
+        klopt(p.draai("bewerken", "status").stdout.strip() == "uit", "B3: bewerken status: uit")
         p.antwoorden({"plasma": False})
+        uit = p.draai("bewerken", "aan")
+        klopt(uit.returncode != 0 and not (p.merk / "paneel-bewerken").exists() and "niet bereikbaar" in uit.stderr,
+              f"B3: antwoordt Plasma niet: gewone zin, en niets onthouden ({uit.stderr.strip()})")
+        uit = p.draai()
+        klopt(uit.returncode == 2 and "bewerken aan|uit|status" in uit.stderr, f"B8: de uitleg noemt 'bewerken' ({uit.stderr.strip()})")
         uit = p.draai("standaard")
         klopt(uit.returncode == 0, f"B4: antwoordt Plasma niet, dan stopt standaard netjes (code {uit.returncode})")
         p.antwoorden({})
