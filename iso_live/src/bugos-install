@@ -23,5 +23,28 @@ if lsblk --list --noheadings -o FSTYPE 2>/dev/null | grep -qx BitLocker; then
     fi
 fi
 
-# Het echte installatieprogramma (Anaconda) overnemen.
-exec liveinst "$@"
+# Het echte installatieprogramma (Anaconda). Niet met exec: daarna kijken we of het gelukt is. (Wat liveinst
+# teruggeeft zegt daar niets over: het laatste wat het doet is setenforce.)
+# Merkteken van de kickstart (build.sh, %post --nochroot, als laatste stap): regel 1 = seconden sinds het
+# opstarten, regel 2 = de gekozen taal (LANG="nl_NL.UTF-8", zoals Anaconda het in locale.conf zet).
+MERKTEKEN="${BUGOS_INSTALL_MERKTEKEN:-/run/bugos-install/gelukt}"
+begin="$(cut -d. -f1 /proc/uptime 2>/dev/null)"
+case "$begin" in '' | *[!0-9]*) begin=0 ;; esac
+liveinst "$@"
+
+# Gelukt in DEZE ronde (niet een merkteken van een eerdere poging)? Dan het BugOS-venster "Nu opnieuw opstarten",
+# in de taal die je in het installatieprogramma koos. Gestopt of mislukt: niets (Anaconda zei het al).
+klaar="$(sed -n 1p "$MERKTEKEN" 2>/dev/null)"
+case "$klaar" in '' | *[!0-9]*) klaar=0 ;; esac
+if [ "$klaar" -gt 0 ] && [ "$klaar" -ge "$begin" ]; then
+    taal="$(sed -n 2p "$MERKTEKEN" 2>/dev/null)"
+    taal="${taal#LANG=}"
+    taal="${taal//\"/}"   # Anaconda schrijft LANG="nl_NL.UTF-8", met aanhalingstekens (review I1)
+    taal="${taal%%[._@]*}"
+    # Alleen een gewone taalcode (nl, en, fy, ast) gaat naar LANGUAGE; de rest: de taal van de stick.
+    case "$taal" in [a-z][a-z] | [a-z][a-z][a-z]) ;; *) taal="" ;; esac
+    if [ -n "$taal" ]; then
+        LANGUAGE="$taal" exec bugos-live klaar
+    fi
+    exec bugos-live klaar
+fi

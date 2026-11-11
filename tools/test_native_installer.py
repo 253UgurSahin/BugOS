@@ -179,6 +179,7 @@ def test_live() -> None:
     klopt(duur < 0.5, f"22: een trage nmcli laat het venster niet vastlopen ({duur:.2f} s)")
     wacht(app, lambda: not w._bezig, 8)
     w.close()
+    test_klaar(app, live)
 
 
 # ===================================================================================== woorden (bugos_webui.py) ===
@@ -480,6 +481,229 @@ def test_voortgang() -> None:
           "6: build.sh zet bugos_voortgang.py naast Anaconda en past installation.py aan (na het installeren van Anaconda)")
 
 
+# ============================================================================ bugos-install en het merkteken ===
+def post_merkteken(map_: Path) -> Path:
+    """Het %post-stukje uit build.sh, zoals Anaconda het krijgt (de heredoc uitgevouwen door bash), met /run/bugos-install
+    vervangen door een map van de test. Geeft het pad van het script."""
+    bouw = bron("build.sh").replace("\r\n", "\n")
+    begin = bouw.index("%post --nochroot\ninstall -d -m 0755 /run/bugos-install")
+    stuk = bouw[begin:bouw.index("%end", begin)].split("\n", 1)[1]
+    # bash vouwt de heredoc uit (\$ wordt $), precies zoals bij het bouwen.
+    uit = subprocess.run(["bash", "-c", "cat <<EOF\n" + stuk + "EOF\n"], capture_output=True, text=True, check=True).stdout
+    script = map_ / "post.sh"
+    script.write_text(uit.replace("/run/bugos-install", str(map_ / "run")), encoding="utf-8", newline="\n")
+    return script
+
+
+def test_install() -> None:
+    bin_ = TMP / "bugos-install"
+    bin_.write_text(bron("bugos-install").replace("\r\n", "\n").replace("/usr/share/bugos", str(ROOT / "system_files/usr/share/bugos")),
+                    encoding="utf-8", newline="\n")
+    bin_.chmod(0o755)
+    m = TMP / "merk"
+    m.mkdir()
+    merk = m / "run" / "gelukt"
+    post = post_merkteken(m)
+    sysroot = m / "sysroot"
+    (sysroot / "etc").mkdir(parents=True)
+    nep("lsblk", f'cat \'{TMP}/lsblk\' 2>/dev/null || echo ext4')
+    nep("kdialog", "exit 0")
+    nep("bugos-live", f'echo "LANGUAGE=${{LANGUAGE-<leeg>}}" >> \'{LOG}\'; exit "$(cat \'{TMP}/live-code\' 2>/dev/null || echo 0)"')
+    # liveinst: doet wat er in $TMP/liveinst-doe staat (het %post-script draaien, of iets anders).
+    nep("liveinst", f'[ -f \'{TMP}/liveinst-doe\' ] && bash \'{TMP}/liveinst-doe\'; exit 3')
+
+    def ronde(doe: str | None, locale: str | None = None, post_lang: str = "", oud: str | None = None) -> list[str]:
+        LOG.write_text("", encoding="utf-8")
+        shutil.rmtree(m / "run", ignore_errors=True)
+        if oud is not None:   # een merkteken van een eerdere poging
+            (m / "run").mkdir()
+            merk.write_text(oud, encoding="utf-8")
+        lc = sysroot / "etc" / "locale.conf"
+        if locale is None:
+            lc.unlink(missing_ok=True)
+        else:
+            lc.write_text(locale + "\n", encoding="utf-8")
+        doe_pad = TMP / "liveinst-doe"
+        if doe is None:
+            doe_pad.unlink(missing_ok=True)
+        else:
+            doe_pad.write_text(doe, encoding="utf-8")
+        env = dict(os.environ, BUGOS_INSTALL_MERKTEKEN=str(merk), ANA_INSTALL_PATH=str(sysroot), LANG=post_lang or "en_US.UTF-8")
+        env.pop("LANGUAGE", None)
+        env.pop("LC_ALL", None)
+        subprocess.run([str(bin_)], env=env, capture_output=True, text=True, timeout=30)
+        return [r for r in log() if r.startswith(("bugos-live", "LANGUAGE=", "liveinst"))]
+
+    draai_post = f"bash '{post}'\n"
+    # 15. Gelukt, Nederlands gekozen. Anaconda schrijft LANG="nl_NL.UTF-8" (met aanhalingstekens, review I1).
+    r = ronde(draai_post, 'LANG="nl_NL.UTF-8"')
+    klopt(r == ["liveinst ", "bugos-live klaar", "LANGUAGE=nl"],
+          f"15: gelukt, Nederlands (LANG=\"nl_NL.UTF-8\" zoals Anaconda het schrijft): het venster in het Nederlands ({r})")
+    klopt(oct(merk.stat().st_mode & 0o777) == "0o644" and oct(merk.parent.stat().st_mode & 0o777) == "0o755",
+          f"15 (I6): het merkteken is leesbaar voor de live-gebruiker ({oct(merk.stat().st_mode & 0o777)})")
+    r = ronde(draai_post, "LANG=nl_NL.UTF-8")
+    klopt(r[-1:] == ["LANGUAGE=nl"], f"15: ook zonder aanhalingstekens ({r})")
+    # 16. Engels.
+    r = ronde(draai_post, 'LANG="en_US.UTF-8"')
+    klopt(r == ["liveinst ", "bugos-live klaar", "LANGUAGE=en"], f"16: gelukt, Engels ({r})")
+    # I6: locale.conf niet te lezen: dan de taal van Anaconda zelf (LANG van het %post-script).
+    r = ronde(draai_post, None, post_lang="fy_NL.UTF-8")
+    klopt(r[-1:] == ["LANGUAGE=fy"], f"16 (I6): geen locale.conf: de taal van het installatieprogramma ({r})")
+    # 17. Gestopt (niets geschreven), met een merkteken van een eerdere poging: geen venster.
+    r = ronde(None, oud="0\nnl_NL.UTF-8\n")
+    klopt(r == ["liveinst "], f"17: gestopt, oud merkteken '0': geen venster ({r})")
+    oud = int(Path("/proc/uptime").read_text().split(".")[0]) - 100
+    r = ronde(None, oud=f"{oud}\nnl_NL.UTF-8\n")
+    klopt(r == ["liveinst "], f"17: merkteken van een eerdere poging (voor deze start): geen venster ({r})")
+    r = ronde(None)
+    klopt(r == ["liveinst "], f"17: geen merkteken (mislukt of gestopt): geen venster ({r})")
+    # 18. Rommel in het merkteken.
+    r = ronde("printf 'abc\\nnl\\n' > '" + str(merk) + "'", oud="")
+    klopt(r == ["liveinst "], f"18: rommel op regel 1: geen venster ({r})")
+    nu = "$(cut -d. -f1 /proc/uptime)"
+    r = ronde(f"printf '%s\\n%s\\n' \"{nu}\" 'x;rm -rf /' > '{merk}'", oud="")
+    klopt(r == ["liveinst ", "bugos-live klaar", "LANGUAGE=<leeg>"],
+          f"18: een rare taal gaat niet naar LANGUAGE, het venster komt in de taal van de stick ({r})")
+    r = ronde(f"printf '%s\\n' \"{nu}\" > '{merk}'", oud="")
+    klopt(r == ["liveinst ", "bugos-live klaar", "LANGUAGE=<leeg>"], f"18 (I6): alleen regel 1: venster, taal van de stick ({r})")
+    r = ronde(f"printf '%s\\n%s\\n' \"{nu}\" 'C.UTF-8' > '{merk}'", oud="")
+    klopt(r[-1:] == ["LANGUAGE=<leeg>"], f"18: taal C: geen LANGUAGE ({r})")
+
+    # 20. Statisch: niet meer exec liveinst; het merkteken is de laatste stap in de kickstart; geen nieuw yad-venster.
+    tekst = bron("bugos-install")
+    klopt("exec liveinst" not in tekst, "20: bugos-install neemt liveinst niet meer over (exec), zodat het daarna kan kijken")
+    bouw = bron("build.sh").replace("\r\n", "\n")
+    ks = bouw[bouw.index("interactive-defaults.ks <<EOF"):]
+    ks = ks[:ks.index("\nEOF\n")]
+    klopt(ks.index("%post --nochroot\ninstall -d -m 0755 /run/bugos-install") > ks.index("%include /usr/share/anaconda/post-scripts/bugos-updates.ks"),
+          "20: het merkteken komt na de bootc-switch en de Nvidia-stap (%include)")
+    if shutil.which("shellcheck"):
+        r = subprocess.run(["shellcheck", "-x", "iso_live/src/bugos-install", "iso_live/src/build.sh"], cwd=ROOT,
+                           capture_output=True, text=True)
+        klopt(r.returncode == 0, f"20: shellcheck -x bugos-install en build.sh ({r.stdout.strip()[-300:]})")
+        r = subprocess.run(["shellcheck", "-s", "bash", str(post)], capture_output=True, text=True)
+        klopt(r.returncode == 0, f"20: shellcheck op het %post-script zoals Anaconda het krijgt ({r.stdout.strip()[-300:]})")
+    else:
+        klopt(True, "20: shellcheck OK (overgeslagen: niet op deze computer)")
+
+
+# ====================================================================================== het venster 'klaar' ===
+MAAT = r'''
+import importlib.machinery, importlib.util, json, os, sys
+sys.path.insert(0, sys.argv[2])
+lader = importlib.machinery.SourceFileLoader("bugos_live", sys.argv[1])
+spec = importlib.util.spec_from_loader("bugos_live", lader)
+live = importlib.util.module_from_spec(spec); lader.exec_module(live)
+app = live.maak_app("bugos-live", "bugos-live", ["bugos-live"])
+from PySide6.QtWidgets import QLabel, QPushButton
+k = live.venster(["klaar"])
+uit = {"klasse": type(k).__name__, "kop": k.kop.text(), "nu": k.nu.text(), "fouten": []}
+k.resize(720, 440)
+k.show()
+for stand in ("begin", "bezig", "mislukt"):
+    k.toon(stand)
+    for _ in range(5):
+        app.processEvents()
+    # Op het scherm: elk zichtbaar stuk binnen het venster, geen tekst afgeknipt, de knoppen onder de tekst.
+    for w in k.findChildren(QLabel) + k.findChildren(QPushButton):
+        if not w.isVisible():
+            continue
+        g = w.geometry()
+        if g.left() < 0 or g.top() < 0 or g.right() > k.width() or g.bottom() > k.height():
+            uit["fouten"].append(f"{stand}: {w.text()[:20]!r} valt buiten het venster {g.getRect()}")
+        if isinstance(w, QLabel) and w.wordWrap() and w.text() and w.heightForWidth(w.width()) > w.height():
+            uit["fouten"].append(f"{stand}: {w.text()[:20]!r} afgeknipt ({w.heightForWidth(w.width())} > {w.height()})")
+        if isinstance(w, QPushButton) and w.width() < w.sizeHint().width():
+            uit["fouten"].append(f"{stand}: knop {w.text()!r} te smal")
+    tekst_onder = max(x.geometry().bottom() for x in (k.kop, k.tekst, k.fout) if x.isVisible())
+    if k.nu.geometry().top() <= tekst_onder:
+        uit["fouten"].append(f"{stand}: de knoppen staan over de tekst")
+    uit[stand] = k.layout().minimumSize().height()
+print(json.dumps(uit))
+'''
+
+
+def test_klaar(app, live) -> None:
+    import json
+
+    os.environ["BUGOS_INSTELLINGEN_VOORBEELD"] = "1"
+    # 23. Voorbeeldstand: 'Nu opnieuw opstarten' laat zien wat er gebeurt, maar start niets.
+    LOG.write_text("", encoding="utf-8")
+    nep("systemctl", f"exit \"$(cat '{TMP}/sc-code' 2>/dev/null || echo 0)\"")
+    k = live.Klaar()
+    k.show()
+    klopt(k.kop.text() == "BugOS is on your computer" and k.nu.isDefault() and not k.fout.isVisible(),
+          f"23: begin: 'BugOS is on your computer', 'Restart now' is de standaardknop ({k.kop.text()})")
+    k.nu.click()
+    klopt(k.kop.text() == "Restarting…" and not k.nu.isEnabled() and not k.later.isEnabled()
+          and "screen goes black" in k.tekst.text(), f"23: bezig: 'Restarting…', beide knoppen uit ({k.kop.text()})")
+    wacht(app, lambda: False, 0.2)
+    klopt(not [r for r in log() if r.startswith("systemctl")], "23: in de voorbeeldstand wordt systemctl niet gestart")
+    k.close()
+    os.environ.pop("BUGOS_INSTELLINGEN_VOORBEELD")
+
+    # 24. Echt: systemctl weigert -> uitleg met het startmenu; lukt het -> blijft 'bezig' (de computer gaat uit).
+    def klik(code: str | None) -> live.Klaar:
+        LOG.write_text("", encoding="utf-8")
+        oud_pad = os.environ["PATH"]
+        if code is None:   # systemctl bestaat niet
+            leeg = TMP / "leeg-pad"
+            leeg.mkdir(exist_ok=True)
+            os.environ["PATH"] = str(leeg)
+        else:
+            (TMP / "sc-code").write_text(code, encoding="utf-8")
+        k = live.Klaar()
+        k.show()
+        try:
+            k.nu.click()
+            if k.proces is not None:
+                k.proces.waitForFinished(5000)
+            wacht(app, lambda: k.fout.isVisible(), 1.0)
+        finally:
+            os.environ["PATH"] = oud_pad
+        return k
+
+    k = klik("1")
+    klopt(k.fout.isVisible() and k.nu.isEnabled() and k.later.isEnabled() and k.kop.text() == "BugOS is on your computer"
+          and "Start menu" in k.fout.text(), f"24: systemctl weigert: uitleg 'Use Restart in the Start menu', knoppen weer aan ({k.fout.text()})")
+    klopt("systemctl reboot" in log(), f"24: 'Restart now' vraagt systemctl reboot ({log()})")
+    k.close()
+    k = klik("0")
+    klopt(not k.fout.isVisible() and not k.nu.isEnabled() and k.kop.text() == "Restarting…",
+          "24: systemctl lukt: het venster blijft op 'Restarting…' (de computer gaat uit)")
+    k.close()
+    k = klik(None)
+    klopt(k.fout.isVisible() and k.nu.isEnabled(), "24: systemctl ontbreekt: ook de uitleg, geen dood spoor")
+    k.close()
+
+    # 25. 'Later' sluit; main() kiest het venster; in het Nederlands als het installatieprogramma Nederlands was.
+    k = live.Klaar()
+    k.show()
+    k.later.click()
+    klopt(not k.isVisible(), "25: 'Later' sluit het venster (verder gebeurt er niets)")
+    klopt(isinstance(live.venster(["klaar"]), live.Klaar) and isinstance(live.venster([]), live.Live)
+          and type(live.venster(["iets"])) is live.Live, "25: bugos-live klaar -> Klaar, bugos-live -> het welkomstscherm")
+    metingen = {}
+    for taal in ("en", "nl"):
+        env = dict(os.environ, LANGUAGE=taal, LANG="en_US.UTF-8", QT_QPA_PLATFORM="offscreen")
+        env.pop("LC_ALL", None)
+        r = subprocess.run([sys.executable, "-c", MAAT, str(SRC / "bugos-live"), str(PY)], env=env,
+                           capture_output=True, text=True, timeout=60)
+        try:
+            metingen[taal] = json.loads(r.stdout.strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            metingen[taal] = {"fout": r.stderr[-300:]}
+    nl = metingen["nl"]
+    klopt(nl.get("klasse") == "Klaar" and nl.get("kop") == "BugOS staat op je computer" and nl.get("nu") == "Nu opnieuw opstarten",
+          f"25: met LANGUAGE=nl (zo start bugos-install het) is het venster Nederlands ({nl.get('kop')})")
+    # 26. Past op een laptop van 1280x800 bij 150 %: 720x440 (x1.5 = 1080x660) plus titelbalk, boven de taakbalk.
+    for taal, mt in metingen.items():
+        klopt("fouten" in mt and not mt["fouten"],
+              f"26: {taal}: in 720x440 past alles, in alle drie de standen (niets afgeknipt of eronder) ({mt.get('fouten')})")
+    klopt(720 * 1.5 <= 1280 and (440 + 40) * 1.5 <= 800 - 72,
+          "26: 720x440 met titelbalk bij 150 % past op 1280x800 boven een taakbalk van 72 px")
+
+
 # =================================================================== --beeld: in de echte live-image (geen ISO nodig) ===
 WEBUI = Path("/usr/share/cockpit/anaconda-webui")
 
@@ -724,6 +948,7 @@ def main() -> int:
     test_woorden()
     test_tijdzone()
     test_voortgang()
+    test_install()
     test_live()
     shutil.rmtree(TMP, ignore_errors=True)
     print()

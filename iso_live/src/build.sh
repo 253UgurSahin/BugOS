@@ -268,6 +268,19 @@ tail -n 60 /tmp/anaconda.log | run0 --user=liveuser --setenv=WAYLAND_DISPLAY=way
 # BugOS vanaf de stick zelf installeren (zie stap 1): geen internet nodig.
 ostreecontainer --url=/var/lib/bugos-stick/bugos --transport=oci --no-signature-verification
 %include /usr/share/anaconda/post-scripts/bugos-updates.ks
+
+# Merkteken voor bugos-install: het installeren is gelukt. Dit is de laatste echte stap (daarna kopieert Anaconda
+# alleen nog zijn logboeken en zet het de SELinux-labels); ging er eerder iets mis, dan komt Anaconda hier niet.
+# Regel 1 = seconden sinds het opstarten (de klok kan tijdens het installeren verzetten), regel 2 = de gekozen taal.
+# Anaconda schrijft LANG="nl_NL.UTF-8" (met aanhalingstekens); lukt dat lezen niet, dan de taal van Anaconda zelf.
+# Leesbaar voor de live-gebruiker (0644), wat de umask ook is.
+%post --nochroot
+install -d -m 0755 /run/bugos-install
+taal="\$(sed -n 's/^LANG=//p' "\${ANA_INSTALL_PATH:-/mnt/sysroot}/etc/locale.conf" 2>/dev/null | tr -d '"' | head -n 1)"
+[ -n "\$taal" ] || taal="\${LANG:-}"
+printf '%s\n%s\n' "\$(cut -d. -f1 /proc/uptime)" "\$taal" >/run/bugos-install/gelukt
+chmod 0644 /run/bugos-install/gelukt
+%end
 EOF
 
 # Na het installeren: updates voortaan van GitHub halen. BugOS kwam van de

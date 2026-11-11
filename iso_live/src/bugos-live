@@ -1,6 +1,11 @@
 #!/usr/bin/python3
-"""BugOS Live - eerste scherm op de USB-stick: proberen of installeren?"""
+"""BugOS Live - de vensters van de USB-stick.
 
+    bugos-live          eerste scherm op de stick: proberen of installeren?
+    bugos-live klaar    na het installeren (bugos-install): "BugOS staat op je computer" met "Nu opnieuw opstarten"
+"""
+
+import os
 import subprocess
 import sys
 import time
@@ -9,7 +14,7 @@ sys.path.insert(0, "/usr/lib/bugos/python")
 
 from bugos_settings_onderdelen import op_achtergrond  # noqa: E402
 from bugos_ui import Chip, Knop, achtergrond_pad, draai, label, maak_app, t, uitvoeren  # noqa: E402
-from PySide6.QtCore import QRectF, QTimer  # noqa: E402
+from PySide6.QtCore import QProcess, QRectF, QTimer  # noqa: E402
 from PySide6.QtGui import QColor, QIcon, QLinearGradient, QPainter, QPixmap  # noqa: E402
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget  # noqa: E402
 
@@ -46,12 +51,43 @@ def net_toestand(vraag_wifi: bool) -> tuple[bool, bool | None]:
     return online, code != 0 or any(r.strip() == "wifi" for r in uit.splitlines())
 
 
-class Live(QWidget):
+# Knoppen op de donkere achtergrond: wit randje, zodat alleen de hoofdknop rood is.
+WIT_RAND = ("QPushButton{color:#FFFFFF;border:1px solid rgba(255,255,255,0.35);background:rgba(255,255,255,0.06);}"
+            "QPushButton:hover{background:rgba(255,255,255,0.14);}"
+            "QPushButton:disabled{color:rgba(255,255,255,0.40);border-color:rgba(255,255,255,0.15);}")
+# De rode knop als hij even niet kan (bezig): gedempt rood, niet het lichtgrijze vlak van het lichte thema.
+ROOD_UIT = "QPushButton:disabled{background:rgba(222,47,62,0.38);color:rgba(255,255,255,0.70);border:none;}"
+
+
+class Achtergrond(QWidget):
+    """Een venster met de donkere BugOS-achtergrond (het lieveheersbeestje rechtsonder), zoals het welkomstscherm."""
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("BugOS")
-        self.resize(960, 600)
         self.beeld = QPixmap(achtergrond_pad(donker=True))
+
+    def paintEvent(self, _e):  # noqa: N802
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        r = QRectF(self.rect())
+        p.fillRect(r, QColor("#0E0F13"))
+        if not self.beeld.isNull():
+            bw, bh = self.beeld.width(), self.beeld.height()
+            schaal = max(r.width() / bw, r.height() / bh)
+            dw, dh = bw * schaal, bh * schaal
+            p.drawPixmap(QRectF(r.right() - dw, r.bottom() - dh, dw, dh), self.beeld, QRectF(0, 0, bw, bh))
+        g = QLinearGradient(0, 0, r.width(), 0)
+        g.setColorAt(0, QColor(14, 15, 19, 245))
+        g.setColorAt(0.5, QColor(14, 15, 19, 200))
+        g.setColorAt(1, QColor(14, 15, 19, 20))
+        p.fillRect(r, g)
+
+
+class Live(Achtergrond):
+    def __init__(self):
+        super().__init__()
+        self.resize(960, 600)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(56, 52, 56, 44)
         lay.setSpacing(18)
@@ -99,8 +135,7 @@ class Live(QWidget):
         rij = QHBoxLayout()
         rij.setSpacing(14)
         proberen = Knop(t("Eerst proberen", "Try first"), "rand", groot=True)
-        proberen.setStyleSheet("QPushButton{color:#FFFFFF;border:1px solid rgba(255,255,255,0.35);background:rgba(255,255,255,0.06);}"
-                               "QPushButton:hover{background:rgba(255,255,255,0.14);}")
+        proberen.setStyleSheet(WIT_RAND)
         self.installeren = Knop(t("BugOS installeren", "Install BugOS"), "hoofd", groot=True)
         self.installeren.setMinimumWidth(220)
         proberen.clicked.connect(self.close)
@@ -163,26 +198,95 @@ class Live(QWidget):
         subprocess.Popen(["bugos-install"], start_new_session=True)
         self.close()
 
-    def paintEvent(self, _e):  # noqa: N802
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        r = QRectF(self.rect())
-        p.fillRect(r, QColor("#0E0F13"))
-        if not self.beeld.isNull():
-            bw, bh = self.beeld.width(), self.beeld.height()
-            schaal = max(r.width() / bw, r.height() / bh)
-            dw, dh = bw * schaal, bh * schaal
-            p.drawPixmap(QRectF(r.right() - dw, r.bottom() - dh, dw, dh), self.beeld, QRectF(0, 0, bw, bh))
-        g = QLinearGradient(0, 0, r.width(), 0)
-        g.setColorAt(0, QColor(14, 15, 19, 245))
-        g.setColorAt(0.5, QColor(14, 15, 19, 200))
-        g.setColorAt(1, QColor(14, 15, 19, 20))
-        p.fillRect(r, g)
+
+class Klaar(Achtergrond):
+    """Na het installeren (bugos-install start dit als het gelukt is): opnieuw opstarten, of later.
+
+    In de taal die je in het installatieprogramma koos (bugos-install zet LANGUAGE). Opnieuw opstarten mag zonder
+    wachtwoord (polkit: org.freedesktop.login1.reboot, actieve sessie). systemctl draait los (QProcess), dus het venster
+    blijft altijd reageren. Lukt het niet, dan zegt het venster hoe het anders kan (het startmenu)."""
+
+    def __init__(self):
+        super().__init__()
+        self.resize(720, 440)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(48, 44, 48, 36)
+        lay.setSpacing(14)
+        logo = QLabel()
+        logo.setPixmap(QIcon("/usr/share/bugos/logo-dark.svg").pixmap(64, 64))
+        lay.addWidget(logo)
+        self.kop = label("", "groot")
+        self.kop.setStyleSheet("color:#FFFFFF;")
+        lay.addWidget(self.kop)
+        self.tekst = label("", "sub")
+        self.tekst.setStyleSheet("color:rgba(255,255,255,0.78);font-size:15px;")
+        self.tekst.setMaximumWidth(520)
+        lay.addWidget(self.tekst)
+        self.fout = Chip(t("!  Opnieuw opstarten lukte niet. Gebruik Opnieuw opstarten in het startmenu.",
+                           "!  Restarting did not work. Use Restart in the Start menu."), "let_op")
+        self.fout.setWordWrap(True)
+        self.fout.hide()
+        lay.addWidget(self.fout)
+        lay.addStretch(1)
+
+        rij = QHBoxLayout()
+        rij.setSpacing(12)
+        self.later = Knop(t("Later", "Later"), "rand", groot=True)
+        self.later.setStyleSheet(WIT_RAND)
+        self.later.clicked.connect(self.close)
+        self.nu = Knop(t("Nu opnieuw opstarten", "Restart now"), "hoofd", groot=True)
+        self.nu.setMinimumWidth(200)
+        self.nu.setStyleSheet(ROOD_UIT)
+        self.nu.setDefault(True)
+        self.nu.clicked.connect(self.herstart)
+        rij.addWidget(self.later)
+        rij.addWidget(self.nu)
+        rij.addStretch(1)
+        lay.addLayout(rij)
+        self.proces: QProcess | None = None
+        self.toon("begin")
+        self.nu.setFocus()
+
+    def toon(self, stand: str) -> None:
+        """begin, bezig (na 'Nu opnieuw opstarten') of mislukt (dan staat er ook hoe het via het startmenu kan)."""
+        if stand == "bezig":
+            self.kop.setText(t("Opnieuw opstarten…", "Restarting…"))
+            self.tekst.setText(t("Haal de USB-stick eruit zodra het scherm zwart wordt.",
+                                 "Take out the USB stick as soon as the screen goes black."))
+        else:
+            self.kop.setText(t("BugOS staat op je computer", "BugOS is on your computer"))
+            self.tekst.setText(t("Start de computer opnieuw om BugOS te gebruiken.\n"
+                                 "Haal de USB-stick eruit zodra het scherm zwart wordt.",
+                                 "Restart the computer to start using BugOS.\n"
+                                 "Take out the USB stick as soon as the screen goes black."))
+        self.fout.setVisible(stand == "mislukt")
+        self.later.setEnabled(stand != "bezig")
+        self.nu.setEnabled(stand != "bezig")
+
+    def herstart(self) -> None:
+        self.toon("bezig")
+        if os.environ.get("BUGOS_INSTELLINGEN_VOORBEELD"):   # voorbeeldstand (foto's, tests): niets echt doen
+            return
+        self.proces = QProcess(self)
+        self.proces.errorOccurred.connect(self._fout)
+        self.proces.finished.connect(lambda code, _status: self.toon("mislukt") if code != 0 else None)
+        self.proces.start("systemctl", ["reboot"])
+
+    def _fout(self, fout) -> None:
+        if fout == QProcess.ProcessError.FailedToStart:
+            self.toon("mislukt")
+
+
+def venster(args: list[str]) -> QWidget:
+    """Welk venster: 'klaar' na het installeren, anders het welkomstscherm."""
+    if args[:1] == ["klaar"]:
+        return Klaar()
+    return Live()
 
 
 def main() -> int:
     app = maak_app("bugos-live", "bugos-live", sys.argv)
-    return uitvoeren(app, Live())
+    return uitvoeren(app, venster(sys.argv[1:]))
 
 
 if __name__ == "__main__":
