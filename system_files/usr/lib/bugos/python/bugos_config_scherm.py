@@ -750,6 +750,13 @@ def schermstand(lijst: list[Beeldscherm]) -> str:
     return "uitbreiden"
 
 
+def schermnummers(lijst: list[Beeldscherm]) -> dict[str, int]:
+    """Het nummer dat je ziet ('Scherm 1', 'Alleen 2'): vast per scherm, het ingebouwde eerst, dan op aansluiting.
+    Niet op plek: anders werd de tv na 'Alleen 2' of na 'Links' ineens scherm 1, en wisselde 'Alleen 1' van scherm."""
+    volgorde = sorted(lijst, key=lambda s: (s.soort != "ingebouwd", s.naam))
+    return {s.naam: i + 1 for i, s in enumerate(volgorde)}
+
+
 def _hoofd(lijst: list[Beeldscherm]) -> Beeldscherm | None:
     return next((s for s in lijst if s.hoofd and s.aan), next((s for s in lijst if s.aan), lijst[0] if lijst else None))
 

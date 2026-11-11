@@ -410,20 +410,48 @@ class HoudenDialoog(QDialog):
         self.reject()
 
 
+def scherm_model(naam: str) -> str:
+    """Het merk en type dat het scherm zelf zegt (Qt), bv. 'Samsung TV'. Niet als het alleen de aansluiting herhaalt
+    (de VM zegt 'Virtual-1-QEMU Monitor')."""
+    from PySide6.QtGui import QGuiApplication
+    for sc in QGuiApplication.screens():
+        if sc.name() == naam:
+            model = (sc.model() or "").strip()
+            if model and naam not in model:
+                return model
+    return ""
+
+
+def scherm_naam(s, lijst) -> str:
+    """De naam die je ziet: 'Ingebouwd scherm', 'Scherm of tv (HDMI)', of het merk van het scherm."""
+    model = scherm_model(s.naam)
+    if model:
+        return f"{model} (HDMI)" if s.soort == "hdmi" else model
+    if s.soort == "ingebouwd":
+        return t("Ingebouwd scherm", "Built-in screen")
+    if s.soort == "hdmi":
+        return t("Scherm of tv (HDMI)", "Screen or TV (HDMI)")
+    return t("Scherm", "Screen") if len(lijst) == 1 else t("Extra scherm", "Extra screen")
+
+
 class SchermPagina(Blad):
     sleutel, icoon = "scherm", "computer"
     titel_nl, titel_en = "Scherm", "Display"
     uitleg_nl = "Helderheid, warm licht voor de avond, en hoe groot alles is."
     uitleg_en = "Brightness, warm light for the evening, and how big everything is."
     zoekwoorden = ("scherm beeldscherm monitor helderheid nachtlicht nachtlampje groot groter klein schaal tekst "
-                   "resolutie verversing hz draaien kantelen staand tweede scherm tv beamer projector "
+                   "resolutie verversing hz draaien kantelen staand tweede scherm tv beamer projector uitbreiden "
+                   "dupliceren hoofdscherm "
                    "display screen monitor brightness night light night color blue light size bigger smaller scale "
-                   "scaling text resolution refresh rate rotate rotation portrait second screen tv projector")
+                   "scaling text resolution refresh rate rotate rotation portrait second screen tv projector extend "
+                   "duplicate mirror main screen")
     kde = "kcm_kscreen"
 
     def bouw(self) -> None:
         self.bezig = False
         self._schermen = None
+        self._gekozen = None         # het scherm onder 'Instellen voor' (naam van de aansluiting)
+        self._stand_opties = self._kies_opties = None
         g = self.kaart()
         self.helder = Regelaar(70)
         self.helder.veranderd.connect(lambda w: op_achtergrond(self, lambda: bi.zet_helderheid(w), lambda _u: None))
@@ -433,10 +461,45 @@ class SchermPagina(Blad):
         g.voeg(Rij("maan", t("Nachtlicht", "Night light"),
                    t("'s Avonds warmer licht, prettiger voor je ogen", "Warmer light in the evening, easier on your eyes"),
                    self.nacht))
-        # Het beeld van het scherm. Zonder gegevens van kscreen-doctor alleen de grootte, zoals vroeger.
+        # Je schermen: alleen met twee of meer (een laptop met een tv, twee monitoren).
+        self.schermen_kop = sectie(t("Je schermen", "Your screens"))
+        self.lay.addWidget(self.schermen_kop)
+        self.schermen_kaart = kaart_zonder_kop(self.lay)
+        titel_stand = t("Meer dan één scherm", "More than one screen")
+        self.stand = Wissel(keuzes_voor([], titel_stand, self.zet_stand))
+        self.stand_rij = Rij("computer", titel_stand, t("Uitbreiden geeft meer ruimte. Hetzelfde beeld is handig "
+                                                        "voor de tv.", "Extend gives more room. Duplicate is handy "
+                                                        "for the TV."), self.stand)
+        self.schermen_kaart.voeg(self.stand_rij)
+        titel_kies = t("Instellen voor", "Settings for")
+        self.kies = Wissel(keuzes_voor([], titel_kies, self.kies_scherm))
+        self.kies_rij = Rij("computer", titel_kies, "", self.kies)
+        self.schermen_kaart.voeg(self.kies_rij)
+        self.schermen_kop.hide()
+        self.schermen_kaart.hide()
+        # Het beeld van (het gekozen) scherm. Zonder gegevens van kscreen-doctor alleen de grootte, zoals vroeger.
         self.beeld_kop = sectie(t("Grootte", "Size"))
         self.lay.addWidget(self.beeld_kop)
         self.beeld_kaart = kaart_zonder_kop(self.lay)
+        hoofd = QWidget()
+        hl = QHBoxLayout(hoofd)
+        hl.setContentsMargins(0, 0, 0, 0)
+        self.hoofd_chip = Chip(t("Dit is je hoofdscherm", "This is your main screen"), "goed")
+        self.hoofd_knop = Knop(t("Maak hoofdscherm", "Make main screen"), "gewoon")
+        self.hoofd_knop.clicked.connect(self.maak_hoofd)
+        hl.addWidget(self.hoofd_chip)
+        hl.addWidget(self.hoofd_knop)
+        self.hoofd_rij = Rij("ster", t("Hoofdscherm", "Main screen"),
+                             t("Hier komen de taakbalk en nieuwe vensters", "The taskbar and new windows go here"), hoofd)
+        self.beeld_kaart.voeg(self.hoofd_rij)
+        titel_plek = t("Waar staat dit scherm?", "Where is this screen?")
+        self.plek = keuzes_voor([("links", t("Links", "Left")), ("rechts", t("Rechts", "Right")),
+                                 ("boven", t("Boven", "Above")), ("onder", t("Onder", "Below"))], titel_plek,
+                                self.zet_plek)
+        self.plek_rij = Rij("kaart", titel_plek, t("Naast je hoofdscherm, zodat de muis de goede kant op gaat",
+                                                   "Next to your main screen, so the mouse goes the right way"),
+                            self.plek)
+        self.beeld_kaart.voeg(self.plek_rij)
         self.resolutie_rij = Rij("computer", t("Resolutie", "Resolution"), "", klikbaar=True)
         self.resolutie_rij.geklikt.connect(self.kies_resolutie)
         self.beeld_kaart.voeg(self.resolutie_rij)
@@ -456,8 +519,23 @@ class SchermPagina(Blad):
         self.grootte_rij = Rij("computer", t("Alles groter of kleiner", "Make everything bigger or smaller"),
                                t("Tekst, knoppen en vensters", "Text, buttons and windows"), self.grootte)
         self.beeld_kaart.voeg(self.grootte_rij)
-        for r in (self.resolutie_rij, self.hz_rij, self.draai_rij):
+        aanzetten = Knop(t("Aanzetten", "Turn on"), "gewoon")
+        aanzetten.clicked.connect(self.zet_aan)
+        self.uit_rij = Rij("computer", t("Dit scherm staat uit", "This screen is off"),
+                           t("Je gebruikt nu alleen het andere scherm", "You only use the other screen now"), aanzetten)
+        self.beeld_kaart.voeg(self.uit_rij)
+        for r in (self.hoofd_rij, self.plek_rij, self.resolutie_rij, self.hz_rij, self.draai_rij, self.uit_rij):
             r.hide()
+        # Een tv in- of uitpluggen terwijl de pagina open is: meteen bijwerken.
+        from PySide6.QtGui import QGuiApplication
+        app = QGuiApplication.instance()
+        if app is not None:
+            app.screenAdded.connect(self.schermen_anders)
+            app.screenRemoved.connect(self.schermen_anders)
+
+    def schermen_anders(self, *_a) -> None:
+        if self.isVisible():
+            self.ververs()
 
     def ververs(self) -> None:
         def lees():
@@ -476,26 +554,77 @@ class SchermPagina(Blad):
         if helder is not None:
             self.helder.zet(helder)
         self.nacht.zet_stil(nacht)
+        self.toon_schermen()
         s = self.gekozen_scherm()
-        if s is not None:
-            schaal = s.schaal
-        self._schaal = schaal   # onthouden: bij een klik niet opnieuw kscreen-doctor vragen (dat houdt het venster op) (U407)
-        self.toon_beeld(s)
-        self.grootte.zet(min(bi.SCHALEN, key=lambda w: abs(w - schaal)))
-        # Op een klein scherm (1366×768) is 200% maar 683×384: dan past niets meer, ook de knop terug niet. Alleen
-        # groottes aanbieden waarbij minstens 1024×700 overblijft (de huidige blijft altijd te kiezen) (U397).
-        grens = self.grens()
-        for waarde, knop in self.grootte.knoppen.items():
-            knop.setEnabled(waarde <= max(grens, schaal + 0.01))
+        self.toon_beeld(s, s.schaal if s is not None else schaal)
 
-    def toon_beeld(self, s) -> None:
-        """Resolutie, verversing en draaien van het gekozen scherm."""
+    def meer_schermen(self) -> bool:
+        return len(self._schermen or []) >= 2
+
+    def toon_schermen(self) -> None:
+        """De kaart 'Je schermen': uitbreiden, hetzelfde beeld, of maar één aan; en welk scherm je instelt."""
+        lijst = self._schermen or []
+        meer = self.meer_schermen()
+        self.schermen_kop.setVisible(meer)
+        self.schermen_kaart.setVisible(meer)
+        if not meer:
+            self._gekozen = None
+            return
+        nummers = bi.schermnummers(lijst)
+        if self._gekozen not in nummers:
+            hoofd = next((s for s in lijst if s.hoofd), lijst[0])
+            self._gekozen = hoofd.naam
+        op_nummer = sorted(lijst, key=lambda s: nummers[s.naam])
+        opties = [("uitbreiden", t("Uitbreiden", "Extend")), ("kopie", t("Hetzelfde beeld", "Duplicate"))]
+        if len(lijst) == 2:
+            opties += [("alleen:" + s.naam, t("Alleen {n}", "Only {n}").format(n=nummers[s.naam])) for s in op_nummer]
+        if opties != self._stand_opties:
+            self._stand_opties = opties
+            self.stand.zet(keuzes_voor(opties, self.stand_rij.titel.text(), self.zet_stand))
+        stand = bi.schermstand(lijst)
+        if stand in self.stand.inhoud.knoppen:
+            self.stand.inhoud.zet(stand)
+        else:
+            niets_gekozen(self.stand.inhoud)   # (3 schermen, maar één aan)
+        kies = [(s.naam, t("Scherm {n}", "Screen {n}").format(n=nummers[s.naam])) for s in op_nummer]
+        if kies != self._kies_opties:
+            self._kies_opties = kies
+            self.kies.zet(keuzes_voor(kies, self.kies_rij.titel.text(), self.kies_scherm))
+        self.kies.inhoud.zet(self._gekozen)
+        s = self.gekozen_scherm()
+        self.kies_rij.zet_uitleg(scherm_naam(s, lijst) if s is not None else "")
+
+    def toon_beeld(self, s, schaal: float) -> None:
+        """Hoofdscherm, plek, resolutie, verversing, draaien en grootte van het gekozen scherm."""
+        lijst = self._schermen or []
+        self._schaal = schaal   # onthouden: bij een klik niet opnieuw kscreen-doctor vragen (dat houdt het venster op) (U407)
         if s is None:
             self.beeld_kop.setText(t("Grootte", "Size"))
-            for r in (self.resolutie_rij, self.hz_rij, self.draai_rij):
+            for r in (self.hoofd_rij, self.plek_rij, self.resolutie_rij, self.hz_rij, self.draai_rij, self.uit_rij):
                 r.hide()
+            self.grootte_rij.show()
+            self.toon_grootte(schaal)
             return
-        self.beeld_kop.setText(t("Beeld", "Picture"))
+        if self.meer_schermen():
+            self.beeld_kop.setText(t("Scherm {n} · {naam}", "Screen {n} · {naam}").format(
+                n=bi.schermnummers(lijst)[s.naam], naam=scherm_naam(s, lijst)))
+        else:
+            self.beeld_kop.setText(t("Beeld", "Picture"))
+        if not s.aan:   # 'Alleen' het andere scherm: dit scherm staat uit
+            for r in (self.hoofd_rij, self.plek_rij, self.resolutie_rij, self.hz_rij, self.draai_rij, self.grootte_rij):
+                r.hide()
+            self.uit_rij.show()
+            return
+        self.uit_rij.hide()
+        stand = bi.schermstand(lijst)
+        aan = [x for x in lijst if x.aan]
+        self.hoofd_rij.setVisible(len(aan) >= 2 and stand != "kopie")
+        self.hoofd_chip.setVisible(s.hoofd)
+        self.hoofd_knop.setVisible(not s.hoofd)
+        kant = bi.huidige_kant(lijst, s.naam)
+        self.plek_rij.setVisible(stand == "uitbreiden" and kant is not None)
+        if kant is not None:
+            self.plek.zet(kant)
         b, h = bi.huidige_resolutie(s)
         self.resolutie_rij.zet_uitleg(t("Hoe scherp het beeld is: nu {b} × {h}",
                                         "How sharp the picture is: now {b} × {h}").format(b=b, h=h))
@@ -515,12 +644,23 @@ class SchermPagina(Blad):
         else:
             niets_gekozen(self.draai)   # gespiegeld (uit KDE): geen van de vier
         self.draai_rij.show()
+        self.grootte_rij.show()
+        self.toon_grootte(schaal)
+
+    def toon_grootte(self, schaal: float) -> None:
+        self.grootte.zet(min(bi.SCHALEN, key=lambda w: abs(w - schaal)))
+        # Op een klein scherm (1366×768) is 200% maar 683×384: dan past niets meer, ook de knop terug niet. Alleen
+        # groottes aanbieden waarbij minstens 1024×700 overblijft (de huidige blijft altijd te kiezen) (U397).
+        grens = self.grens()
+        for waarde, knop in self.grootte.knoppen.items():
+            knop.setEnabled(waarde <= max(grens, schaal + 0.01))
 
     def gekozen_scherm(self):
         schermen = getattr(self, "_schermen", None)
         if not schermen:
             return None
-        return next((s for s in schermen if s.hoofd), schermen[0])
+        return next((s for s in schermen if s.naam == self._gekozen), None) or \
+            next((s for s in schermen if s.hoofd), schermen[0])
 
     def grens(self) -> float:
         """De grootste grootte voor het gekozen scherm: uit de echte beeldpunten als we die weten (P2)."""
@@ -528,6 +668,41 @@ class SchermPagina(Blad):
         return bi.grootste_schaal(s) if s is not None else groot_genoeg()
 
     # ------------------------------------------------------------ veranderen ---
+
+    def kies_scherm(self, naam: str) -> None:
+        self._gekozen = naam
+        self.toon_schermen()
+        s = self.gekozen_scherm()
+        if s is not None:
+            self.toon_beeld(s, s.schaal)
+
+    def zet_stand(self, stand: str) -> None:
+        lijst = self._schermen or []
+        if not lijst or stand == bi.schermstand(lijst):
+            return
+        if stand == "uitbreiden":
+            stappen = bi.stappen_uitbreiden(lijst)
+        elif stand == "kopie":
+            stappen = bi.stappen_kopie(lijst)
+        else:
+            stappen = bi.stappen_alleen(lijst, stand.partition(":")[2])
+        self.verander(stappen)
+
+    def maak_hoofd(self) -> None:
+        s = self.gekozen_scherm()
+        if s is not None and not s.hoofd:
+            self.verander(bi.stappen_hoofd(s.naam))
+
+    def zet_plek(self, kant: str) -> None:
+        s = self.gekozen_scherm()
+        lijst = self._schermen or []
+        if s is None or kant == bi.huidige_kant(lijst, s.naam):
+            return
+        self.verander(bi.stappen_plek(lijst, s.naam, kant))
+
+    def zet_aan(self) -> None:
+        if self._schermen:
+            self.verander(bi.stappen_uitbreiden(self._schermen))
 
     def kies_resolutie(self) -> None:
         s = self.gekozen_scherm()
@@ -561,26 +736,41 @@ class SchermPagina(Blad):
                                 "That is too big for this screen: nothing would fit any more."), "let_op")
             self.ververs()
             return
+        s = self.gekozen_scherm()
+        per_scherm = s is not None and sum(1 for x in self._schermen or [] if x.aan) >= 2
         self.melding.toon(t("Grootte {p} wordt ingesteld…", "Setting size to {p}…").format(p=f"{waarde:.0%}"))
-        op_achtergrond(self, lambda: bi.zet_schaal(waarde), lambda ok: (setattr(self, "_schaal", waarde) if ok else self.ververs(), self.melding.toon(
-            t("Klaar. Sommige programma's worden pas groter als je ze opnieuw opent.",
-              "Done. Some programs only change after you open them again.") if ok else
-            t("Dat lukte niet. Probeer een andere grootte.", "That did not work. Try another size."),
-            "goed" if ok else "fout")))   # mislukt: opnieuw lezen, dan staat de echte grootte weer gekozen
+
+        def klaar(ok) -> None:
+            if ok:
+                self._schaal = waarde
+                self.melding.toon(t("Klaar. Sommige programma's worden pas groter als je ze opnieuw opent.",
+                                    "Done. Some programs only change after you open them again."), "goed")
+                if per_scherm:
+                    self.ververs()   # de andere schermen schoven mee (I4)
+            else:   # mislukt: opnieuw lezen, dan staat de echte grootte weer gekozen
+                self.melding.toon(t("Dat lukte niet. Probeer een andere grootte.",
+                                    "That did not work. Try another size."), "fout")
+                self.ververs()
+        # Eén scherm: precies zoals vroeger (alle schermen). Meer: alleen het gekozen scherm.
+        op_achtergrond(self, (lambda: bi.zet_schaal(waarde, s.naam)) if per_scherm else (lambda: bi.zet_schaal(waarde)),
+                       klaar)
+
+    def zet_slot(self, dicht: bool) -> None:
+        self.bezig = dicht
+        self.schermen_kaart.setEnabled(not dicht)
+        self.beeld_kaart.setEnabled(not dicht)
 
     def verander(self, stappen: list[str]) -> None:
         """Iets aan de schermen veranderen. Kan het beeld zwart worden, dan daarna 'Beeld houden?' (C3)."""
         if self.bezig or not stappen:
             self.ververs()   # de knoppen weer zoals het echt staat
             return
-        self.bezig = True
-        self.beeld_kaart.setEnabled(False)
+        self.zet_slot(True)
         self.melding.toon(t("Even geduld…", "One moment…"), seconden=0)
         op_achtergrond(self, lambda: bi.scherm_wijzigen(stappen), self.na_wijzigen)
 
     def klaar_met_wijzigen(self) -> None:
-        self.bezig = False
-        self.beeld_kaart.setEnabled(True)
+        self.zet_slot(False)
         self.ververs()
 
     def na_wijzigen(self, w) -> None:

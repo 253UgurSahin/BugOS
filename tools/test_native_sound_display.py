@@ -264,6 +264,101 @@ klopt(_ok and _staat["outputs"][0]["rotation"] == 1 and _opd[-1][:3] == ("system
       "26: 'Terugzetten': weer gewoon, en het vangnet uit")
 
 
+# ============================================================================== schermen: meer schermen ===
+def twee(**anders) -> dict:
+    """Het voorbeeld met een tv; anders={'HDMI-A-1': {...}} verandert velden van een scherm."""
+    d = copy.deepcopy(TWEE)
+    for o in d["outputs"]:
+        o.update(anders.get(o["name"], {}))
+    return d
+
+
+# 18: twee schermen lezen: volgorde, soort, hoofdscherm, en hoe ze samen staan
+_l2 = bi.lees_beeldschermen(ks(TWEE))
+klopt([s.naam for s in _l2] == ["eDP-1", "HDMI-A-1"] and [s.soort for s in _l2] == ["ingebouwd", "hdmi"]
+      and _l2[0].hoofd and not _l2[1].hoofd and bi.schermstand(_l2) == "uitbreiden" and _l2[0].logisch == (1536, 960),
+      "18: twee schermen: eerst de laptop, dan de tv; de laptop is het hoofdscherm; uitgebreid")
+klopt(bi.schermstand(bi.lees_beeldschermen(ks(twee(**{"HDMI-A-1": {"replicationSource": 1}})))) == "kopie"
+      and bi.schermstand(bi.lees_beeldschermen(ks(twee(**{"HDMI-A-1": {"enabled": False}})))) == "alleen:eDP-1",
+      "18: de tv doet de laptop na: 'kopie'; de tv uit: 'alleen:eDP-1'")
+_l2r = bi.lees_beeldschermen(ks(twee(**{"eDP-1": {"pos": {"x": 1920, "y": 0}}, "HDMI-A-1": {"pos": {"x": 0, "y": 0}}})))
+klopt([s.naam for s in _l2r] == ["HDMI-A-1", "eDP-1"] and bi.schermnummers(_l2r) == {"eDP-1": 1, "HDMI-A-1": 2}
+      and bi.schermnummers(bi.lees_beeldschermen(ks(twee(**{"eDP-1": {"enabled": False}})))) == {"eDP-1": 1, "HDMI-A-1": 2},
+      "18: de nummers blijven vast (de laptop 1, de tv 2), ook als de tv links staat of de laptop uit is")
+_lu = bi.lees_beeldschermen(ks(twee(**{"eDP-1": {"enabled": False}})))
+klopt([s.naam for s in _lu] == ["HDMI-A-1", "eDP-1"] and _lu[0].hoofd and not _lu[1].hoofd
+      and bi.lees_beeldschermen(ks(twee(**{"eDP-1": {"enabled": False, "priority": 1}, "HDMI-A-1": {"priority": 2}})))[0].hoofd,
+      "18: staat het hoofdscherm uit, dan is het eerste scherm dat aan staat het hoofdscherm")
+
+# 21: de stappen, precies
+klopt(bi.stappen_alleen(_l2, "HDMI-A-1") == ["output.HDMI-A-1.enable", "output.HDMI-A-1.mirror.none",
+                                              "output.HDMI-A-1.position.0,0", "output.eDP-1.disable",
+                                              "output.HDMI-A-1.primary"],
+      f"21: alleen de tv ({bi.stappen_alleen(_l2, 'HDMI-A-1')})")
+klopt(bi.stappen_kopie(_l2) == ["output.eDP-1.enable", "output.eDP-1.mirror.none", "output.HDMI-A-1.enable",
+                                "output.HDMI-A-1.mirror.eDP-1"], f"21: hetzelfde beeld ({bi.stappen_kopie(_l2)})")
+klopt(bi.stappen_uitbreiden(_l2) == ["output.eDP-1.enable", "output.eDP-1.mirror.none", "output.HDMI-A-1.enable",
+                                     "output.HDMI-A-1.mirror.none"],
+      "21: uitbreiden terwijl ze al netjes naast elkaar staan: geen nieuwe plekken")
+_over = bi.lees_beeldschermen(ks(twee(**{"HDMI-A-1": {"pos": {"x": 0, "y": 0}, "replicationSource": 1}})))
+klopt(bi.stappen_uitbreiden(_over)[-2:] == ["output.eDP-1.position.0,0", "output.HDMI-A-1.position.1536,0"],
+      f"21: uitbreiden na 'hetzelfde beeld': de tv rechts naast de laptop ({bi.stappen_uitbreiden(_over)[-2:]})")
+_plek = {k: bi.stappen_plek(_l2, "HDMI-A-1", k) for k in ("rechts", "links", "boven", "onder")}
+klopt(_plek["links"] == ["output.eDP-1.position.1920,0", "output.HDMI-A-1.position.0,0"]
+      and _plek["rechts"] == ["output.eDP-1.position.0,0", "output.HDMI-A-1.position.1536,0"]
+      and _plek["boven"] == ["output.eDP-1.position.0,1080", "output.HDMI-A-1.position.0,0"]
+      and _plek["onder"] == ["output.eDP-1.position.0,0", "output.HDMI-A-1.position.0,960"]
+      and bi.stappen_plek(_l2, "eDP-1", "links") == [] and bi.stappen_plek(_l2, "HDMI-A-1", "schuin") == [],
+      f"21: waar staat de tv: links, rechts, boven, onder (alles begint bij 0,0); het hoofdscherm zelf: niets ({_plek})")
+klopt(bi.huidige_kant(_l2, "HDMI-A-1") == "rechts" and bi.huidige_kant(_l2, "eDP-1") is None
+      and bi.huidige_kant(_l2r, "HDMI-A-1") == "links", "21: huidige_kant: de tv staat rechts (of links)")
+_drie = twee()
+_drie["outputs"].append(dict(copy.deepcopy(TWEE["outputs"][1]), id=3, name="DP-2", type=0, pos={"x": 3456, "y": 0}))
+_l3 = bi.lees_beeldschermen(ks(_drie))
+_p3 = bi.stappen_plek(_l3, "DP-2", "links")
+klopt(_p3 == ["output.eDP-1.position.1920,0", "output.HDMI-A-1.position.3456,0", "output.DP-2.position.0,0"],
+      f"C4: drie schermen, de derde naar links: voorbij alles wat er al staat, niets over elkaar ({_p3})")
+
+# I4: een scherm wordt groter of kleiner: de andere schuiven mee (geen gat, niet over elkaar)
+klopt(bi.plekken_na(_l2, ["output.HDMI-A-1.scale.2"]) == [],
+      "I4: de tv naar 200 %: de tv blijft op x=1536 (hij staat rechts; links verandert niets)")
+klopt(bi.plekken_na(_l2, ["output.eDP-1.mode.4", "output.eDP-1.scale.1"]) == ["output.HDMI-A-1.position.1280,0"],
+      f"I4: de laptop naar 1280x800 op 100 %: de tv schuift naar x=1280 ({bi.plekken_na(_l2, ['output.eDP-1.mode.4', 'output.eDP-1.scale.1'])})")
+klopt(bi.plekken_na(_l2r, ["output.HDMI-A-1.scale.2"]) == ["output.eDP-1.position.960,0"],
+      "I4: de tv links naar 200 % (960 breed): de laptop schuift mee naar x=960")
+klopt(bi.plekken_na(_l2, ["output.eDP-1.rotation.left"]) == ["output.HDMI-A-1.position.960,0"],
+      "I4: de laptop op zijn kant (960 breed): de tv schuift naar x=960")
+klopt(bi.plekken_na(bi.lees_beeldschermen(ks(twee(**{"HDMI-A-1": {"replicationSource": 1}}))),
+                    ["output.eDP-1.scale.1"]) == [] and bi.plekken_na(_vm, ["output.Virtual-1.scale.1"]) == [],
+      "I4: hetzelfde beeld of maar één scherm: geen plekken")
+_staat = twee()
+_opd, _ok = vang(bi.zet_schaal, 1.0, "eDP-1", antwoord=ks_fake(_staat))
+klopt(_ok and ("kscreen-doctor", "output.eDP-1.scale.1", "output.HDMI-A-1.position.1920,0") in _opd
+      and _staat["outputs"][1]["pos"] == {"x": 1920, "y": 0} and _staat["outputs"][1]["scale"] == 1.0,
+      "I4: de laptop naar 100 % (1920 breed): in dezelfde opdracht schuift de tv naar x=1920")
+_staat = twee()
+_opd, _w = vang(bi.scherm_wijzigen, ["output.eDP-1.mode.4"], antwoord=ks_fake(_staat))
+klopt(_w.gelukt and _staat["outputs"][1]["pos"]["x"] == 1024, "I4: andere resolutie op de laptop: de tv schuift mee (x=1024)")
+
+# I5: 'Uitbreiden' na 'Alleen 1': de tv staat uit; zonder bruikbare stand de aanbevolen stand
+_uit = bi.lees_beeldschermen(ks(twee(**{"HDMI-A-1": {"enabled": False, "currentModeId": "", "size": {"width": 0, "height": 0}}})))
+_u = bi.stappen_uitbreiden(_uit)
+klopt(_u == ["output.eDP-1.enable", "output.eDP-1.mirror.none", "output.HDMI-A-1.enable", "output.HDMI-A-1.mirror.none",
+             "output.HDMI-A-1.mode.12", "output.eDP-1.position.0,0", "output.HDMI-A-1.position.1536,0"],
+      f"I5: de tv weer aan met zijn aanbevolen stand (4K), rechts van de laptop ({_u})")
+_geen = bi.lees_beeldschermen(ks(twee(**{"HDMI-A-1": {"enabled": False, "currentModeId": "", "modes": [],
+                                                       "preferredModes": [], "size": {"width": 0, "height": 0}}})))
+_g = bi.stappen_uitbreiden(_geen)
+klopt("output.HDMI-A-1.enable" in _g and not any(s.startswith("output.HDMI-A-1.position") for s in _g)
+      and not any(".mode." in s for s in _g), f"I5: zonder enige stand: aanzetten zonder plek ({_g})")
+_staat = twee(**{"HDMI-A-1": {"enabled": False}})
+_opd, _w = vang(bi.scherm_wijzigen, bi.stappen_uitbreiden(bi.lees_beeldschermen(ks(_staat))), antwoord=ks_fake(_staat))
+klopt(_w.gelukt and _w.risico and _staat["outputs"][1]["enabled"], "I5: 'Uitbreiden' na 'Alleen 1' lukt (met vangnet)")
+_h2 = bi.stappen_herstel(_uit)
+klopt(_h2[-2:] == ["output.HDMI-A-1.disable", "output.eDP-1.primary"] and all(bi.geldige_herstel(x) for x in _h2),
+      f"22: terugzetten met een scherm dat uit staat: dat gaat weer uit, en het hoofdscherm blijft ({_h2[-2:]})")
+
+
 # ========================================================================================= microfoon ===
 # pactl -f json list sources uit de VM (PipeWire 1.6.11): de 'monitor' van de luidspreker en de echte ingang.
 VM_BRONNEN = [
@@ -601,6 +696,83 @@ _d.close()
 klopt(_d.result() == ss.QDialog.DialogCode.Rejected, "29: het kruisje: terugzetten")
 sp.verander([])   # niets te doen: geen fout
 wacht()
+
+# 28: twee schermen (de laptop en een tv)
+bi._VB["kscreen"] = twee()
+sp.ververs()
+wacht()
+klopt(sp.schermen_kaart.isVisibleTo(sp) and sp.schermen_kop.isVisibleTo(sp)
+      and list(sp.stand.inhoud.knoppen) == ["uitbreiden", "kopie", "alleen:eDP-1", "alleen:HDMI-A-1"]
+      and [k.text() for k in sp.stand.inhoud.knoppen.values()] == ["Uitbreiden", "Hetzelfde beeld", "Alleen 1", "Alleen 2"]
+      and sp.stand.inhoud.knoppen["uitbreiden"].isChecked() and sp.kies.inhoud.knoppen["eDP-1"].isChecked()
+      and sp.kies_rij.uitleg.text() == "Ingebouwd scherm",
+      "28: twee schermen: 'Je schermen' met vier keuzes (uitgebreid gekozen), instellen voor scherm 1 (de laptop)")
+klopt(sp.beeld_kop.text() == "Scherm 1 · Ingebouwd scherm" and sp.hoofd_rij.isVisibleTo(sp)
+      and sp.hoofd_chip.isVisibleTo(sp) and not sp.hoofd_knop.isVisibleTo(sp) and not sp.plek_rij.isVisibleTo(sp),
+      f"28: de laptop is het hoofdscherm; geen 'Waar staat dit scherm?' voor het hoofdscherm ({sp.beeld_kop.text()!r})")
+sp.kies.inhoud.knoppen["HDMI-A-1"].click()
+klopt(sp.beeld_kop.text() == "Scherm 2 · Scherm of tv (HDMI)" and sp.hoofd_knop.isVisibleTo(sp)
+      and sp.plek_rij.isVisibleTo(sp) and sp.plek.knoppen["rechts"].isChecked()
+      and "1920 × 1080" in sp.resolutie_rij.uitleg.text() and sorted(sp.hz.inhoud.knoppen) == [50, 60]
+      and sp.grootte.knoppen[1.5].isEnabled() and not sp.grootte.knoppen[1.75].isEnabled()
+      and sp.grootte.knoppen[1.0].isChecked(),
+      "28: de tv kiezen: zijn eigen resolutie (1920 × 1080), 50/60 Hz, 100 %, rechts van de laptop; tot 150 %")
+sp.zet_grootte(1.5)
+wacht()
+wacht()
+klopt(kscreen_vb()["HDMI-A-1"]["scale"] == 1.5 and kscreen_vb()["eDP-1"]["scale"] == 1.25
+      and sp.kies.inhoud.knoppen["HDMI-A-1"].isChecked() and sp.grootte.knoppen[1.5].isChecked(),
+      "28: de grootte geldt alleen voor het gekozen scherm (de tv 150 %, de laptop blijft 125 %)")
+sp.plek.knoppen["links"].click()
+wacht()
+wacht()
+klopt(kscreen_vb()["HDMI-A-1"]["pos"] == {"x": 0, "y": 0} and kscreen_vb()["eDP-1"]["pos"] == {"x": 1280, "y": 0}
+      and sp.plek.knoppen["links"].isChecked() and sp.beeld_kop.text().startswith("Scherm 2")
+      and "Klaar" in sp.melding.tekst.text(),
+      f"28: de tv links: de tv op 0,0, de laptop ernaast; hij blijft 'Scherm 2' ({kscreen_vb()['eDP-1']['pos']})")
+sp.hoofd_knop.click()
+wacht()
+wacht()
+klopt(kscreen_vb()["HDMI-A-1"]["priority"] == 1 and kscreen_vb()["eDP-1"]["priority"] == 2
+      and sp.hoofd_chip.isVisibleTo(sp) and not sp.plek_rij.isVisibleTo(sp),
+      "28: 'Maak hoofdscherm': de tv is nu het hoofdscherm (zonder 'Beeld houden?': dat is geen risico)")
+ss.TERUG_NA = 1
+houden_klikken("houden")
+sp.stand.inhoud.knoppen["alleen:HDMI-A-1"].click()
+wacht()
+wacht()
+klopt(kscreen_vb()["eDP-1"]["enabled"] is False and kscreen_vb()["HDMI-A-1"]["enabled"]
+      and sp.stand.inhoud.knoppen["alleen:HDMI-A-1"].isChecked() and "blijft" in sp.melding.tekst.text()
+      and not sp.bezig and sp.schermen_kaart.isEnabled(),
+      f"28: 'Alleen 2' en 'Houden': de laptop staat uit ({sp.melding.tekst.text()!r})")
+sp.kies.inhoud.knoppen["eDP-1"].click()
+klopt(sp.uit_rij.isVisibleTo(sp) and not sp.resolutie_rij.isVisibleTo(sp) and not sp.grootte_rij.isVisibleTo(sp)
+      and sp.beeld_kop.text() == "Scherm 1 · Ingebouwd scherm",
+      "28: de laptop kiezen terwijl hij uit staat: 'Dit scherm staat uit' met 'Aanzetten'")
+houden_klikken("houden")
+sp.uit_rij.rechts.click()
+wacht()
+wacht()
+klopt(kscreen_vb()["eDP-1"]["enabled"] and sp.stand.inhoud.knoppen["uitbreiden"].isChecked()
+      and not sp.uit_rij.isVisibleTo(sp),
+      f"28/I5: 'Aanzetten': weer uitgebreid, de laptop staat weer aan ({kscreen_vb()['eDP-1'].get('pos')})")
+sp.kies.inhoud.knoppen["HDMI-A-1"].click()
+sp.draai.knoppen[2].click()
+wacht()
+wacht_ms(1600)
+wacht()
+klopt(kscreen_vb()["HDMI-A-1"]["rotation"] == 1 and "zoals het was" in sp.melding.tekst.text(),
+      f"28: de tv draaien en niets doen: na de tijd weer gewoon ({sp.melding.tekst.text()!r})")
+ss.TERUG_NA = 15
+sp.hide()
+sp.schermen_anders()   # een scherm erbij terwijl de pagina weg is: niets
+klopt(True, "28: een scherm in- of uitpluggen terwijl de pagina dicht is: geen fout")
+bi._VB["kscreen"] = copy.deepcopy(EEN_VB)
+venster.ga_naar("geluid")
+venster.ga_naar("scherm")
+wacht()
+klopt(not sp.schermen_kaart.isVisibleTo(sp) and sp.beeld_kop.text() == "Beeld",
+      "28: weer één scherm: geen 'Je schermen', het kopje is 'Beeld'")
 print(f"\n{fouten} fout(en).")
 venster.close()
 shutil.rmtree(TMP, ignore_errors=True)
