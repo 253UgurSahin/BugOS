@@ -216,6 +216,90 @@ klopt(_u22 == (True, "") and len(_n22.aanroepen) == 1 and _n22.aanroepen[0][:2] 
       and _n22.aanroepen[0][2][0].startswith("$6$") and _n22.aanroepen[0][2][1] == "" and not _o22,
       f"22: nieuw wachtwoord voor iemand anders: één SetPassword met een hash, geen opdracht ({_n22.aanroepen[:1]})")
 
+# ====================================================================== iemand toevoegen (stap 3) ===
+
+_gast_bestaat = lambda n: n == "gast"  # noqa: E731
+_f4 = {n: bi.inlognaam_fout(n, _gast_bestaat) for n in
+       ("", "a" * 33, "Cafe", "-x", ".x", "a b", "a;rm", "x.", "x-", "2b", "root", "gast", "huis.werk", "creme-2")}
+klopt(_f4 == {"": "leeg", "a" * 33: "lang", "Cafe": "teken", "-x": "teken", ".x": "teken", "a b": "teken",
+              "a;rm": "teken", "x.": "teken", "x-": "teken", "2b": "teken", "root": "bestaat", "gast": "bestaat",
+              "huis.werk": "", "creme-2": ""}, f"4: regels voor een inlognaam ({_f4})")
+_v5 = {
+    "Gast": bi.inlognaam_voor("Gast", lambda n: False),
+    "Crème Brûlée": bi.inlognaam_voor("Crème Brûlée", lambda n: False),
+    "creme bezet": bi.inlognaam_voor("Crème Brûlée", lambda n: n == "creme"),
+    "beide bezet": bi.inlognaam_voor("Crème Brûlée", lambda n: n in ("creme", "creme.brulee")),
+    "!!!": bi.inlognaam_voor("!!!", lambda n: False),
+    "2B": bi.inlognaam_voor("2B", lambda n: False),
+    "Huiswerk 2": bi.inlognaam_voor("Huiswerk 2", lambda n: False),
+}
+klopt(_v5 == {"Gast": "gast", "Crème Brûlée": "creme", "creme bezet": "creme.brulee", "beide bezet": "creme2",
+              "!!!": "", "2B": "u2b", "Huiswerk 2": "huiswerk"}, f"5: een inlognaam bij een naam ({_v5})")
+_lang = "Abcdefghijklmnopqrstuvwxyzabcdefghijklmn"   # 40 letters
+_v5b = bi.inlognaam_voor(_lang, lambda n: n == _lang.lower()[:32])
+klopt(len(_v5b) <= 32 and _v5b != _lang.lower()[:32] and _v5b.endswith("2") and bi.inlognaam_fout(_v5b, lambda n: False) == "",
+      f"I11: een lange naam die al bestaat wordt toch uniek ({_v5b!r})")
+# 6: alles wat wij goedkeuren, mag ook bij bugos-login (U002), anders lukt 'inloggen zonder wachtwoord' later niet.
+_regel6 = next(r for r in (BIN / "bugos-login").read_text(encoding="utf-8").splitlines() if "=~" in r)
+_patroon6 = re.search(r"\^\S*\$", _regel6).group(0)
+_goed6 = [n for n, r in _f4.items() if r == ""] + [v for v in _v5.values() if v] + [_v5b]
+klopt(all(re.fullmatch(_patroon6, n) for n in _goed6), f"6: elke goede inlognaam past ook bij bugos-login ({_goed6})")
+klopt(bi.volledige_naam_fout("Gast") == "" and bi.volledige_naam_fout("  ") == "leeg"
+      and bi.volledige_naam_fout("a:b") == "teken" and bi.volledige_naam_fout("a,b") == "teken"
+      and bi.volledige_naam_fout("a\nb") == "teken", "B: een naam zonder : , of nieuwe regel")
+
+
+def _maak(antwoorden, *args):
+    nep = Dbus(antwoorden)
+    oud_sleep = ca.time.sleep
+    geslapen: list = []
+    ca.time.sleep = lambda s: geslapen.append(s)
+    try:
+        uit, opdrachten = met_dbus(nep, bi.maak_persoon, *args)
+    finally:
+        ca.time.sleep = oud_sleep
+    return uit, nep.aanroepen, opdrachten, geslapen
+
+
+_oud_nb3 = ca.naam_bestaat
+ca.naam_bestaat = lambda n: False
+ca._laatst_weg = None
+_pad18 = "/org/freedesktop/Accounts/User1501"
+_u18, _a18, _o18, _ = _maak({"CreateUser": (True, "", [_pad18])}, "gast", "Gast", False, "geheim-123")
+_m18 = [a[1] for a in _a18]
+_hash18 = _a18[-1][2][0] if _a18 else ""
+klopt(_u18 == (True, "") and _m18 == ["CreateUser", "Get", "SetPassword"] and _a18[0][2] == ("gast", "Gast", 0)
+      and _a18[1][0] == _pad18 and _a18[1][2] == ("org.freedesktop.Accounts.User", "UserName")
+      and _a18[2][0] == _pad18 and _hash18.startswith("$6$") and _a18[2][2][1] == "",
+      f"18: toevoegen: CreateUser, wachten op het account, SetPassword met een hash ({_a18})")
+klopt(not any("geheim-123" in " ".join(c) or _hash18 in " ".join(c) for c in _o18),
+      "18: het wachtwoord en de hash staan nooit op een opdrachtregel")
+_u18b, _a18b, _, _ = _maak({"CreateUser": (True, "", [_pad18])}, "werk", "Werk", True, "geheim-123")
+klopt(_a18b[0][2] == ("werk", "Werk", 1), "18: als beheerder: CreateUser met 1")
+_u19a, _a19a, _, _ = _maak({"CreateUser": (False, "org.freedesktop.Accounts.Error.PermissionDenied: Not authorized", [])},
+                           "gast", "Gast", False, "geheim-123")
+_u19b, _, _, _ = _maak({"CreateUser": (False, "org.freedesktop.Accounts.Error.UserExists: A user with name 'gast' "
+                                              "already exists", [])}, "gast", "Gast", False, "geheim-123")
+_u19c, _, _, _ = _maak({"CreateUser": (False, "org.freedesktop.Accounts.Error.Failed: running '/usr/sbin/useradd' "
+                                              "failed: Child process exited with code 9", [])},
+                       "video", "Video", False, "geheim-123")
+_u19d, _a19d, _, _ = _maak({"CreateUser": (True, "", [_pad18]), "Get": (False, "UnknownObject", [])},
+                           "gast", "Gast", False, "geheim-123")
+klopt(_u19a == (False, "geweigerd") and [a[1] for a in _a19a] == ["CreateUser"] and _u19b == (False, "bestaat")
+      and _u19c == (False, "bestaat") and _u19d == (False, "wachtwoord") and "SetPassword" not in [a[1] for a in _a19d],
+      f"19: geweigerd, bestaat al (ook een groep: code 9), en het account komt niet: 'wachtwoord' "
+      f"({_u19a}, {_u19b}, {_u19c}, {_u19d})")
+_u20a, _a20a, _, _ = _maak({}, "Cafe", "Café", False, "geheim-123")
+_u20b, _a20b, _, _ = _maak({}, "cafe", "a:b", False, "geheim-123")
+klopt(_u20a == (False, "fout") and _u20b == (False, "fout") and not _a20a and not _a20b,
+      "20: een rare naam: 'fout', zonder iets aan AccountsService te vragen")
+ca._laatst_weg = time.monotonic()
+_u24, _a24, _, _slaap24 = _maak({"CreateUser": (True, "", [_pad18])}, "gast", "Gast", False, "geheim-123")
+klopt(_u24 == (True, "") and _slaap24 and _slaap24[0] >= 9 and _a24[0][1] == "CreateUser",
+      f"24/I15: net iemand weggehaald: eerst ~10 s wachten, dan pas CreateUser ({_slaap24[:1]})")
+ca._laatst_weg = None
+ca.naam_bestaat = _oud_nb3
+
 # ============================================================ het venster van Instellingen (voorbeeldstand) ===
 
 lader = importlib.machinery.SourceFileLoader("instellingen", str(BIN / "bugos-settings"))
@@ -384,9 +468,78 @@ ca._VB_ACCOUNT["mensen"] = None
 inl.ververs()
 wacht()
 
+# 26: 'Iemand toevoegen' opent het BugOS-venster en de nieuwe persoon staat meteen in de lijst.
+from PySide6.QtTest import QTest  # noqa: E402
+
+_open26: list = []
+
+
+class _NepPersoon:
+    def __init__(self, ouder, volledig="", inlog=""):
+        _open26.append((volledig, inlog))
+        self.volledige_naam, self.inlognaam, self.wachtwoord, self.beheerder = "Gast twee", "gast2", "geheim-12", False
+
+    def wis(self):
+        self.wachtwoord = ""
+
+
+setattr(_NepPersoon, "exec", lambda self: 1)
+_oud26 = sa.PersoonDialoog
+sa.PersoonDialoog = _NepPersoon
+_voor26 = len(inl.mensen_rijen)
+inl.voeg_rij.geklikt.emit()
+wacht()
+sa.PersoonDialoog = _oud26
+klopt(len(inl.mensen_rijen) == _voor26 + 1 and "Gast twee" in [r.titel.text() for r in inl.mensen_rijen]
+      and "Gast twee kan nu inloggen" in inl.melding.tekst.text() and _open26 == [("", "")],
+      f"26: toevoegen: het BugOS-venster, daarna staat 'Gast twee' in de lijst ({inl.melding.tekst.text()!r})")
+ca._VB_ACCOUNT["mensen"] = None
+inl.ververs()
+wacht()
+# 27: het echte venster.
+_d27 = sa.PersoonDialoog(inl)
+_d27.show()
+QTest.keyClicks(_d27.vol, "Crème Brûlée")
+_volgt = _d27.inlog.text()
+_d27.een.setText("abc")
+_d27.twee.setText("abc")
+_kort = (_d27.ok.isEnabled(), _d27.fout.text())
+_d27.een.setText("geheim12")
+_d27.twee.setText("geheim12")
+_goed27 = _d27.ok.isEnabled()
+_d27.inlog.clear()
+QTest.keyClicks(_d27.inlog, "Café")
+_klein27 = (_d27.inlog.text(), _d27.fout.text(), _d27.ok.isEnabled())
+_d27.inlog.clear()
+QTest.keyClicks(_d27.inlog, "Huis Werk")
+_punt27 = _d27.inlog.text()
+QTest.keyClicks(_d27.vol, " x")
+_blijft27 = _d27.inlog.text()
+_d27.inlog.clear()
+QTest.keyClicks(_d27.inlog, "root")
+_root27 = _d27.fout.text()
+_maat27 = _d27.sizeHint()
+klopt(_volgt == "creme" and not _kort[0] and "te kort" in _kort[1] and _goed27,
+      f"27: de inlognaam volgt de naam ('creme'); OK pas met een wachtwoord van 6 tekens ({_volgt!r}, {_kort})")
+klopt(_klein27[0] == "café" and "kleine letters" in _klein27[1] and not _klein27[2] and _punt27 == "huis.werk"
+      and _blijft27 == "huis.werk" and "bestaat al" in _root27,
+      f"27: zelf getypt: kleine letters, spatie wordt punt, volgt de naam dan niet meer; 'root' bestaat al "
+      f"({_klein27}, {_punt27!r}, {_blijft27!r}, {_root27!r})")
+klopt(_maat27.height() <= 480 and _maat27.width() <= 600,
+      f"27: het venster past op 1280x800 bij 150 % ({_maat27.width()}x{_maat27.height()} <= 600x480)")
+_d27.soort.knoppen["beheerder"].click()
+klopt(_d27.beheerder and _d27.volledige_naam == "Crème Brûlée x", "27: soort account en naam komen goed terug")
+_d27.wis()
+klopt(_d27.wachtwoord == "", "B: na gebruik zijn de wachtwoordvelden leeg")
+_d27.close()
+_d27b = sa.PersoonDialoog(inl)
+klopt(_d27b.fout.text() == "" and not _d27b.ok.isEnabled(), "B: een nieuw venster begint zonder rode tekst")
+_d27b.close()
+
 # 31: geen sprongen naar KDE meer in de pagina's van dit pakket.
 _bron = (PY / "bugos_settings_account.py").read_text(encoding="utf-8")
-klopt("kcm_clock" not in _bron, "31: Tijd en taal opent geen KDE-onderdeel meer")
+klopt(not hasattr(sa, "kde_instelling") and "kde_instelling(" not in _bron and "kcm_clock" not in _bron
+      and 'kcm_users")' not in _bron, "31: Tijd en taal en Inloggen openen geen KDE-onderdeel meer")
 
 QThreadPool.globalInstance().waitForDone(5000)
 venster.close()

@@ -646,3 +646,108 @@ def zet_wachtwoord_van(uid: int, nieuw: str) -> tuple[bool, str]:
         return False, "crypt"
     ok, fout, _ = _c.accounts_roep(_user_pad(uid), "org.freedesktop.Accounts.User", "SetPassword", hash_, "")
     return (True, "") if ok else (False, _reden(fout))
+
+
+# Strenger dan bugos-login (U002: ^[a-z_][a-z0-9_.-]{0,31}$), dus wat hier mag, mag daar altijd. useradd op Fedora
+# neemt ook hoofdletters aan (Jan.Jansen), en dan weigert bugos-login hem later: daarom kijken we zelf.
+INLOGNAAM = re.compile(r"[a-z][a-z0-9._-]{0,31}")
+
+
+def volledige_naam_fout(naam: str) -> str:
+    """'' als de naam goed is, anders 'leeg', 'teken' (: , of een nieuwe regel: die breken /etc/passwd) of 'lang'."""
+    if not naam.strip():
+        return "leeg"
+    if any(c in naam for c in ":,\n\r"):
+        return "teken"
+    if len(naam) > 64:
+        return "lang"
+    return ""
+
+
+def inlognaam_fout(naam: str, bestaat=None) -> str:
+    """'' als de inlognaam kan, anders 'leeg', 'lang', 'teken' of 'bestaat'."""
+    bestaat = bestaat or naam_bestaat
+    if not naam:
+        return "leeg"
+    if len(naam) > 32:
+        return "lang"
+    if not INLOGNAAM.fullmatch(naam) or naam.endswith((".", "-")):
+        return "teken"
+    if naam == "root" or bestaat(naam):
+        return "bestaat"
+    return ""
+
+
+def inlognaam_voor(volledig: str, bestaat=None) -> str:
+    """Een inlognaam bij een naam: 'Crème Brûlée' -> 'creme', of 'creme.brulee' / 'creme2' als die al bestaat."""
+    import unicodedata
+    bestaat = bestaat or naam_bestaat
+    plat = "".join(c for c in unicodedata.normalize("NFKD", volledig) if not unicodedata.combining(c)).lower()
+    woorden = re.findall(r"[a-z0-9]+", plat)
+    if not woorden:
+        return ""
+    if woorden[0][0].isdigit():
+        woorden[0] = "u" + woorden[0]
+    basis = woorden[0]
+    kandidaten = [basis]
+    if len(woorden) > 1:
+        kandidaten.append(".".join(woorden))
+    # Lang? Dan het getal achter een ingekorte naam, anders knipt '…2' weer terug tot de naam die al bestaat.
+    kandidaten += [basis[:32 - len(str(n))] + str(n) for n in range(2, 100)]
+    for k in kandidaten:
+        k = k[:32].rstrip(".-")
+        if inlognaam_fout(k, bestaat) == "":
+            return k
+    return ""
+
+
+WACHT_NA_WEG = 10.0   # seconden: haal je iemand weg en voeg je meteen iemand toe, dan raakt AccountsService in de war
+
+
+def maak_persoon(naam: str, volledig: str, beheerder: bool, wachtwoord: str) -> tuple[bool, str]:
+    """Iemand toevoegen: een account met een eigen map, en meteen een wachtwoord. Reden: 'fout' (rare naam),
+    'crypt', 'geweigerd', 'bestaat', 'wachtwoord' (het account is er, maar op slot: het wachtwoord lukte niet).
+    Het wachtwoord gaat alleen als hash over D-Bus in dit proces, nooit op een opdrachtregel of in een bestand."""
+    if inlognaam_fout(naam) or volledige_naam_fout(volledig) or not wachtwoord:
+        return False, "fout"
+    if _c.VOORBEELD:
+        lijst = _vb_mensen()
+        lijst.append(Persoon(naam, volledig.strip(), max(p.uid for p in lijst) + 1, beheerder))
+        return True, ""
+    try:
+        hash_ = versleutel(wachtwoord)   # eerst: nooit een account zonder wachtwoord
+    except OSError:
+        hash_ = ""
+    if not hash_:
+        return False, "crypt"
+    # Net iemand weggehaald? Dan maakt AccountsService het nieuwe account wel, maar zonder D-Bus-object
+    # ('An object is already exported'), en kan het geen wachtwoord krijgen. Even wachten voorkomt dat.
+    if _laatst_weg is not None:
+        rest = WACHT_NA_WEG - (time.monotonic() - _laatst_weg)
+        if rest > 0:
+            time.sleep(rest)
+    ok, fout, uit = _c.accounts_roep("/org/freedesktop/Accounts", "org.freedesktop.Accounts", "CreateUser",
+                                     naam, volledig.strip(), 1 if beheerder else 0)
+    if not ok:
+        if "UserExists" in fout or ("useradd" in fout and "code 9" in fout):
+            return False, "bestaat"
+        return False, "geweigerd" if _reden(fout) == "geweigerd" else "fout"
+    pad = str(uit[0]) if uit and str(uit[0]).startswith("/org/freedesktop/Accounts/") else ""
+    # Het nieuwe account moet er op D-Bus zijn voordat het een wachtwoord kan krijgen (even wachten, hooguit 5 s).
+    klaar = False
+    for _ in range(10):
+        if not pad:
+            gevonden = _c.accounts_roep("/org/freedesktop/Accounts", "org.freedesktop.Accounts", "FindUserByName",
+                                        naam, timeout=5)
+            if gevonden[0] and gevonden[2]:
+                pad = str(gevonden[2][0])
+        if pad and _c.accounts_roep(pad, "org.freedesktop.DBus.Properties", "Get", "org.freedesktop.Accounts.User",
+                                    "UserName", timeout=5)[0]:
+            klaar = True
+            break
+        time.sleep(0.5)
+    if not klaar:
+        return False, "wachtwoord"
+    if not _c.accounts_roep(pad, "org.freedesktop.Accounts.User", "SetPassword", hash_, "")[0]:
+        return False, "wachtwoord"
+    return True, ""

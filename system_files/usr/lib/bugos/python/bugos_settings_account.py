@@ -6,13 +6,13 @@ import time
 from datetime import datetime
 
 import bugos_config as bi
-from bugos_ui import TAAL, Knop, Rij, kde_instelling, label, leeg_groep, ronde_pixmap, t, vraag_ja, vraag_tekst
+from bugos_ui import TAAL, K, Knop, Rij, label, leeg_groep, ronde_pixmap, t, vraag_ja, vraag_tekst
 from bugos_settings_onderdelen import (
     Blad, Keuzes, KiesDialoog, WachtwoordDialoog, dichtstbij, meer_knop, op_achtergrond, schuifje,
 )
 from PySide6.QtCore import QDate, QLocale, Qt, QTime, QTimer
 from PySide6.QtGui import QIcon, QImage, QPixmap
-from PySide6.QtWidgets import QDateEdit, QDialog, QGridLayout, QHBoxLayout, QTimeEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QDateEdit, QDialog, QGridLayout, QHBoxLayout, QLineEdit, QTimeEdit, QVBoxLayout, QWidget
 
 
 # ============================================================ tijd en taal ===
@@ -280,6 +280,155 @@ class WachtwoordVoorDialoog(WachtwoordDialoog):
         lay.itemAt(1).widget().setText(uitleg)
 
 
+class PersoonDialoog(QDialog):
+    """Iemand toevoegen: een naam, een inlognaam (vult zichzelf in), twee keer een wachtwoord en de soort account.
+    Compact (twee wachtwoordvelden naast elkaar), zodat het op 1280x800 bij 150 % past."""
+
+    def __init__(self, ouder: QWidget, volledig: str = "", inlog: str = ""):
+        super().__init__(ouder)
+        self.setWindowTitle(t("Iemand toevoegen", "Add someone"))
+        self.setMinimumWidth(520)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(24, 22, 24, 20)
+        lay.setSpacing(10)
+        lay.addWidget(label(t("Iemand toevoegen", "Add someone"), "kop2"))
+        lay.addWidget(label(t("Die krijgt eigen bestanden, apps en instellingen, en logt in met een eigen naam en "
+                              "wachtwoord.", "They get their own files, apps and settings, and log in with their own "
+                              "name and password."), "klein"))
+        self.vol = QLineEdit(volledig)
+        self.vol.setPlaceholderText(t("Naam (zo heet het account)", "Name (what the account is called)"))
+        self.vol.setAccessibleName(t("Naam", "Name"))
+        self.vol.setMaxLength(64)
+        lay.addWidget(self.vol)
+        self.inlog = QLineEdit(inlog)
+        self.inlog.setPlaceholderText(t("Inlognaam", "Login name"))
+        self.inlog.setAccessibleName(t("Inlognaam", "Login name"))
+        self.inlog.setMaxLength(32)
+        lay.addWidget(self.inlog)
+        lay.addWidget(label(t("Kleine letters en cijfers. Dit typ je op het inlogscherm.",
+                              "Small letters and numbers. You type this on the login screen."), "klein"))
+        ww = QHBoxLayout()
+        ww.setSpacing(8)
+        self.een = QLineEdit()
+        self.een.setPlaceholderText(t("Wachtwoord", "Password"))
+        self.een.setAccessibleName(t("Wachtwoord", "Password"))
+        self.twee = QLineEdit()
+        self.twee.setPlaceholderText(t("Nog een keer", "Once more"))
+        self.twee.setAccessibleName(t("Nog een keer", "Once more"))
+        for veld in (self.een, self.twee):
+            veld.setEchoMode(QLineEdit.EchoMode.Password)
+            ww.addWidget(veld, 1)
+        self.oog = Knop(t("Laten zien", "Show"), "stil", "lijn:oog")
+        self.oog.setCheckable(True)
+        self.oog.setAutoDefault(False)
+        self.oog.toggled.connect(self.laat_zien)
+        ww.addWidget(self.oog)
+        lay.addLayout(ww)
+        soort = QHBoxLayout()
+        soort.addWidget(label(t("Soort account", "Kind of account"), "rij"))
+        soort.addStretch(1)
+        self.soort = Keuzes([("standaard", t("Standaard", "Standard")), ("beheerder", t("Beheerder", "Administrator"))])
+        self.soort.zet("standaard")
+        self._soort = "standaard"
+        self.soort.gekozen.connect(lambda w: setattr(self, "_soort", w))
+        soort.addWidget(self.soort)
+        lay.addLayout(soort)
+        lay.addWidget(label(t("Standaard: kan de computer gewoon gebruiken. Beheerder: kan ook apps installeren en "
+                              "alles veranderen.", "Standard: can use the computer. Administrator: can also install "
+                              "apps and change everything."), "klein"))
+        self.fout = label("", "klein")
+        self.fout.setStyleSheet(f"color: {K['fout']};")
+        lay.addWidget(self.fout)
+        knoppen = QHBoxLayout()
+        knoppen.setSpacing(8)
+        knoppen.addStretch(1)
+        weg = Knop(t("Annuleren", "Cancel"), "stil")
+        weg.clicked.connect(self.reject)
+        self.ok = Knop(t("Toevoegen", "Add"), "hoofd")
+        self.ok.setDefault(True)
+        self.ok.clicked.connect(self.accept)
+        knoppen.addWidget(weg)
+        knoppen.addWidget(self.ok)
+        lay.addLayout(knoppen)
+        self._zelf_getypt = bool(inlog)   # de inlognaam volgt de naam, tot je hem zelf verandert
+        self._getypt = bool(volledig)     # pas iets 'fout' noemen als je begonnen bent
+        self.vol.textEdited.connect(self.naam_getypt)
+        self.inlog.textEdited.connect(self.inlog_getypt)
+        for veld in (self.vol, self.inlog, self.een, self.twee):
+            veld.textChanged.connect(self.controleer)
+        self.controleer()
+        (self.een if volledig else self.vol).setFocus()
+
+    def naam_getypt(self, tekst: str) -> None:
+        self._getypt = True
+        if not self._zelf_getypt:
+            self.inlog.setText(bi.inlognaam_voor(tekst))
+
+    def inlog_getypt(self, tekst: str) -> None:
+        self._getypt = True
+        self._zelf_getypt = bool(tekst)   # helemaal leeg gemaakt: dan volgt hij de naam weer
+        nieuw = tekst.lower().replace(" ", ".")
+        if nieuw != tekst:
+            plek = self.inlog.cursorPosition()
+            self.inlog.setText(nieuw)
+            self.inlog.setCursorPosition(plek)
+
+    def laat_zien(self, aan: bool) -> None:
+        for veld in (self.een, self.twee):
+            veld.setEchoMode(QLineEdit.EchoMode.Normal if aan else QLineEdit.EchoMode.Password)
+
+    def reden(self) -> str:
+        """Wat er nog niet klopt (de eerste regel die niet klopt), of '' als alles kan."""
+        r = bi.volledige_naam_fout(self.vol.text())
+        if r == "leeg":
+            return t("Typ een naam.", "Type a name.")
+        if r:
+            return t("Een naam mag geen : of , bevatten.", "A name cannot contain : or ,.")
+        r = bi.inlognaam_fout(self.inlog.text())
+        if r == "leeg":
+            return t("Kies een inlognaam.", "Choose a login name.")
+        if r == "teken":
+            return t("Alleen kleine letters, cijfers, een punt of een streepje, en begin met een letter.",
+                     "Only small letters, numbers, a dot or a dash, and start with a letter.")
+        if r == "lang":
+            return t("Te lang: hooguit 32 tekens.", "Too long: at most 32 characters.")
+        if r == "bestaat":
+            return t("Die inlognaam bestaat al. Kies een andere.", "That login name already exists. Choose another one.")
+        a, b = self.een.text(), self.twee.text()
+        if a and len(a) < WachtwoordDialoog.MINIMUM:
+            return t("Nog te kort.", "Still too short.")
+        if a and b and a != b:
+            return t("De twee wachtwoorden zijn niet hetzelfde.", "The two passwords are not the same.")
+        return ""
+
+    def controleer(self) -> None:
+        reden = self.reden()
+        a = self.een.text()
+        self.ok.setEnabled(not reden and len(a) >= WachtwoordDialoog.MINIMUM and a == self.twee.text())
+        self.fout.setText(reden if self._getypt else "")
+
+    def wis(self) -> None:
+        """De wachtwoorden niet langer dan nodig in het geheugen van het venster."""
+        self.een.setText("")
+        self.twee.setText("")
+
+    @property
+    def volledige_naam(self) -> str:
+        return self.vol.text().strip()
+
+    @property
+    def inlognaam(self) -> str:
+        return self.inlog.text()
+
+    @property
+    def wachtwoord(self) -> str:
+        return self.een.text()
+
+    @property
+    def beheerder(self) -> bool:
+        return self._soort == "beheerder"
+
+
 BEZIG = ("Even geduld… BugOS vraagt je wachtwoord.", "One moment… BugOS asks for your password.")
 
 
@@ -369,7 +518,7 @@ class InloggenPagina(Blad):
         self.voeg_rij = Rij("persoon", t("Iemand toevoegen", "Add someone"),
                             t("Een eigen account voor iemand anders, met eigen bestanden en instellingen",
                               "A separate account for someone else, with their own files and settings"), klikbaar=True)
-        self.voeg_rij.geklikt.connect(lambda: kde_instelling("kcm_users"))
+        self.voeg_rij.geklikt.connect(lambda: self.iemand_toevoegen())
         self.g3.voeg(self.voeg_rij)
 
     def ververs(self) -> None:
@@ -469,6 +618,34 @@ class InloggenPagina(Blad):
 
     def _bezig(self) -> None:
         self.melding.toon(t(*BEZIG), seconden=120)
+
+    def iemand_toevoegen(self, volledig: str = "", inlog: str = "") -> None:
+        d = PersoonDialoog(self, volledig, inlog)
+        if not d.exec():
+            return
+        vol, naam, ww, beheerder = d.volledige_naam, d.inlognaam, d.wachtwoord, d.beheerder
+        d.wis()
+        self._bezig()
+
+        def klaar(uitkomst) -> None:
+            ok, reden = uitkomst if isinstance(uitkomst, tuple) else (False, "fout")
+            if ok:
+                self.melding.toon(t("{naam} kan nu inloggen.", "{naam} can log in now.").format(naam=vol), "goed")
+            elif reden == "bestaat":
+                self.melding.toon(t("Die inlognaam bestaat al. Kies een andere.",
+                                    "That login name already exists. Choose another one."), "fout")
+                QTimer.singleShot(0, lambda: self.iemand_toevoegen(vol, naam))   # weer open, de namen staan er nog
+            elif reden == "wachtwoord":
+                self.melding.toon(t("{naam} is toegevoegd, maar het wachtwoord kon niet worden ingesteld. Start de "
+                                    "computer opnieuw en kies dan 'Nieuw wachtwoord…' bij {naam}.",
+                                    "{naam} was added, but the password could not be set. Restart the computer, "
+                                    "then choose 'Set a new password…' next to {naam}.").format(naam=vol),
+                                  "fout", seconden=0)
+            else:
+                self.melding.toon(reden_tekst(reden, vol), "fout")
+            self.ververs()
+
+        op_achtergrond(self, lambda: bi.maak_persoon(naam, vol, beheerder, ww), klaar)
 
     def zet_soort(self, p: bi.Persoon, beheerder: bool) -> None:
         naam = p.volledige_naam
