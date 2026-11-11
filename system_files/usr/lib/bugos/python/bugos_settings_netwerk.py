@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import bugos_config as bi
-from bugos_ui import Knop, Rij, bestaat, kde_instelling, leeg_groep, sectie, start, t
+from bugos_ui import Knop, Rij, bestaat, kde_instelling, leeg_groep, sectie_met_knop, start, t, vraag_tekst
 from bugos_settings_onderdelen import Blad, meer_knop, op_achtergrond, schuifje
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QHBoxLayout, QInputDialog, QLineEdit
@@ -38,12 +38,9 @@ class WifiPagina(Blad):
         self.kabel.hide()
         self.kabel_apparaat = ""
         g.voeg(self.kabel)
-        kop = QHBoxLayout()
-        kop.addWidget(sectie(t("Netwerken in de buurt", "Networks nearby")), 1)
         self.zoek_knop = Knop(t("Opnieuw zoeken", "Search again"), "stil", "lijn:verversen")
         self.zoek_knop.clicked.connect(lambda _c=False: self.ververs(True))
-        kop.addWidget(self.zoek_knop)
-        self.lay.addLayout(kop)
+        self.lay.addWidget(sectie_met_knop(t("Netwerken in de buurt", "Networks nearby"), self.zoek_knop))
         self.lijst = self.kaart()
         # Een netwerk dat zijn naam niet laat zien (een 'verborgen' netwerk) (U109).
         self.ander = Knop(t("Ander netwerk…", "Other network…"), "stil", "lijn:plus")
@@ -131,23 +128,16 @@ class WifiPagina(Blad):
         op_achtergrond(self, lambda: bi.bekend_netwerk(n.naam), lambda bekend: self.verbind_met(n, bekend is True))
 
     def vraag_wachtwoord(self, n: bi.Netwerk, veranderd: bool = False) -> str:
-        """Vraag het wachtwoord van een netwerk ('' = niet ingevuld of geannuleerd)."""
-        d = QInputDialog(self)
-        d.setWindowTitle(t("Wachtwoord", "Password"))
+        """Vraag het wachtwoord van een netwerk ('' = niet ingevuld of geannuleerd). Het gaat daarna via stdin naar
+        nmcli, nooit op de opdrachtregel."""
         if veranderd:
-            d.setLabelText(t(f"Verbinden met '{n.naam}' lukte niet. Misschien is het wachtwoord veranderd.\n"
-                             "Wat is het wachtwoord nu?",
-                             f"Connecting to '{n.naam}' did not work. Maybe the password changed.\n"
-                             "What is the password now?"))
+            vraag = t("Verbinden met '{naam}' lukte niet. Misschien is het wachtwoord veranderd. Wat is het wachtwoord "
+                      "nu?", "Connecting to '{naam}' did not work. Maybe the password changed. What is the password "
+                      "now?").format(naam=n.naam)
         else:
-            d.setLabelText(t(f"Wat is het wachtwoord van '{n.naam}'?\n(Het staat vaak op de onderkant van het modem.)",
-                             f"What is the password of '{n.naam}'?\n(It is often on the bottom of the router.)"))
-        d.setTextEchoMode(QLineEdit.EchoMode.Password)
-        d.setOkButtonText(t("Verbinden", "Connect"))
-        d.setCancelButtonText(t("Annuleren", "Cancel"))
-        if not d.exec():
-            return ""
-        return d.textValue()
+            vraag = t("Wat is het wachtwoord van '{naam}'? Het staat vaak op de onderkant van het modem.",
+                      "What is the password of '{naam}'? It is often on the bottom of the router.").format(naam=n.naam)
+        return vraag_tekst(self, t("Wachtwoord", "Password"), vraag, ok=t("Verbinden", "Connect"), wachtwoord=True) or ""
 
     def verbind_met(self, n: bi.Netwerk, bekend: bool, wachtwoord: str = "") -> None:
         if getattr(n, "zakelijk", False) and not bekend:
@@ -259,7 +249,7 @@ def apparaat_icoon(soort: str) -> str:
     if soort.startswith("input-gaming"):
         return "spel"
     if soort == "phone":
-        return "praten"
+        return "telefoon"
     return "bluetooth"
 
 
@@ -276,13 +266,10 @@ class BluetoothPagina(Blad):
         self.schakel = schuifje(True, self.zet_bt)
         self.hoofd = Rij("bluetooth", "Bluetooth", "", self.schakel)
         g.voeg(self.hoofd)
-        kop = QHBoxLayout()
-        kop.addWidget(sectie(t("Jouw apparaten", "Your devices")), 1)
         nieuw = self.nieuw = Knop(t("Nieuw apparaat koppelen", "Pair a new device"), "stil", "lijn:map-plus")
         nieuw.clicked.connect(lambda _c=False: start("bluedevil-wizard") if bestaat("bluedevil-wizard")
                               else kde_instelling("kcm_bluetooth"))
-        kop.addWidget(nieuw)
-        self.lay.addLayout(kop)
+        self.lay.addWidget(sectie_met_knop(t("Jouw apparaten", "Your devices"), nieuw))
         self.lijst = self.kaart()
 
     def ververs(self) -> None:

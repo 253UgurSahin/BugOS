@@ -157,6 +157,36 @@ klopt(not wifi.kabel.isHidden() and "geen wifi" in wifi.hoofd.uitleg.text().lowe
 wifi.ververs()
 wacht()
 
+# ---- de lay-out-notities: kopjes met een knop, de wachtwoordvraag in BugOS-stijl, Engelse voorbeeldnamen
+klopt(wifi.zoek_knop.parent().objectName() == "sectie_met_knop",
+      "wifi: 'Opnieuw zoeken' staat in het kopje 'Netwerken in de buurt' (sectie_met_knop)")
+import bugos_shell  # noqa: E402
+
+_vd = {}
+
+
+def _nep_exec(self):
+    _vd["echo"] = self.veld.echoMode() if self.veld is not None else None
+    _vd["uitleg"] = self.uitleg.text()
+    self.veld.setText("ge heim")
+    return 1
+
+
+_oud_exec = bugos_shell.VraagDialoog.exec
+bugos_shell.VraagDialoog.exec = _nep_exec
+_ww = wifi.vraag_wachtwoord(bi.Netwerk("Thuis", 80, True, False))
+bugos_shell.VraagDialoog.exec = lambda self: 0
+_ww_weg = wifi.vraag_wachtwoord(bi.Netwerk("Thuis", 80, True, False), veranderd=True)
+bugos_shell.VraagDialoog.exec = _oud_exec
+from PySide6.QtWidgets import QLineEdit  # noqa: E402
+
+klopt(_ww == "ge heim" and _ww_weg == "" and _vd.get("echo") == QLineEdit.EchoMode.Password and "Thuis" in _vd["uitleg"],
+      f"wifi: het wachtwoord vragen gaat met BugOS' eigen vraag (bolletjes), Annuleren geeft '' ({_vd})")
+_bron_cfg = (PY / "bugos_config_netwerk.py").read_text(encoding="utf-8")
+klopt('t("Buren", "Neighbours")' in _bron_cfg and 't("Telefoon", "Phone")' in _bron_cfg and 't("Muis", "Mouse")' in _bron_cfg,
+      "voorbeeldstand: de namen van buren, muis en telefoon zijn er ook in het Engels")
+klopt(sn.apparaat_icoon("phone") == "telefoon", "bluetooth: een telefoon heeft het telefoon-icoon (geen tekstballon)")
+
 # ==================================================================== eind ===
 venster.close()
 shutil.rmtree(TMP, ignore_errors=True)

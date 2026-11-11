@@ -118,7 +118,8 @@ def netwerken(opnieuw_zoeken: bool = False) -> list[Netwerk]:
         if not _c._VB["wifi"]:
             return []
         lijst = [Netwerk("Home", 86, True, False), Netwerk("Home-5G", 72, True, False),
-                 Netwerk("Buren", 41, True, False), Netwerk("Bibliotheek gratis", 35, False, False),
+                 Netwerk(t("Buren", "Neighbours"), 41, True, False),
+                 Netwerk(t("Bibliotheek gratis", "Library free Wi-Fi"), 35, False, False),
                  Netwerk("Ziggo1234", 22, True, False)]
         for n in lijst:
             n.verbonden = n.naam == _c._VB["verbonden"]
@@ -351,8 +352,8 @@ def zet_bt(aan: bool) -> bool:
 def bt_apparaten() -> list[Apparaat]:
     if _c.VOORBEELD:
         lijst = [Apparaat("AA:BB:CC:DD:EE:01", "Bugie's headphones", "audio-headset", False, 80),
-                 Apparaat("AA:BB:CC:DD:EE:02", "Muis", "input-mouse", False, None),
-                 Apparaat("AA:BB:CC:DD:EE:03", "Telefoon", "phone", False, None)]
+                 Apparaat("AA:BB:CC:DD:EE:02", t("Muis", "Mouse"), "input-mouse", False, None),
+                 Apparaat("AA:BB:CC:DD:EE:03", t("Telefoon", "Phone"), "phone", False, None)]
         for a in lijst:
             a.verbonden = a.adres in _c._VB["bt_verbonden"]
         return lijst
