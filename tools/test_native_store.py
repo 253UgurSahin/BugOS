@@ -373,7 +373,7 @@ from PySide6.QtWidgets import QLabel  # noqa: E402
 
 (APPS / "org.kde.dolphin.desktop").write_text("[Desktop Entry]\nName=Dolphin\nName[nl]=Dolphin\nNoDisplay=true\n"
                                               "Exec=dolphin\n")
-(APPS / "org.kde.kcalc.desktop").write_text("[Desktop Entry]\nName=KCalc\nExec=kcalc\n")
+(APPS / "org.kde.kclock.desktop").write_text("[Desktop Entry]\nName=KClock\nExec=kclock\n")
 for _f in CACHE.glob("*.json"):
     _f.unlink()
 LOG.write_text("")
@@ -404,6 +404,7 @@ klopt(zichtbaar(w.meer_toon_meer) and "(6)" in w.meer_toon_meer.text() and zicht
       and "26" in w.meer_hint.text() and not zichtbaar(w.onder),
       f"F2/I9: 'Meer laten zien (6)', en bovenaan dat er nog {w.meer_hint.text()!r}")
 w.toon_meer()
+even(50)   # nieuwe kaarten worden pas getoond als Qt even tijd krijgt
 klopt(len(w.meer_kaarten) == 26 and not zichtbaar(w.meer_toon_meer), "F2: 'Meer laten zien' zet de rest erbij")
 _k = w.meer_kaarten[0]
 klopt(isinstance(_k, winkel.FlathubKaart) and _k.knop.text() == "Bekijken" and _k.knop.accessibleDescription()
@@ -413,7 +414,7 @@ klopt(w.stapel.currentIndex() == 1 and "install" not in LOG.read_text(),
       "F2: 'Bekijken' opent de pagina van de app en installeert niets")
 w.terug()
 klopt(w.stapel.currentIndex() == 0 and w.zoek.text() == "muziek" and w.focusWidget() is _k.knop,
-      "F3: Terug: dezelfde zoektekst, en de focus weer op die kaart")
+      f"F3: Terug: dezelfde zoektekst, en de focus weer op die kaart ({w.focusWidget()!r}, {w._terug_naar!r}, {_k.knop!r})")
 from PySide6.QtCore import QPoint  # noqa: E402
 
 QTest.mouseClick(_k, Qt.MouseButton.LeftButton, pos=QPoint(20, 100))   # onder het pictogram: geen knop
@@ -459,12 +460,12 @@ w.tweede_start(["appstream://org.kde.dolphin"])
 klopt(w.pagina.soort == "systeem" and "hoort bij BugOS" in w.pagina.melding.tekst.text()
       and not w.pagina.installeer_knop.isVisibleTo(w.pagina) and not w.pagina.open_knop.isVisibleTo(w.pagina),
       "I1: Dolphin (via KRunner): 'hoort bij BugOS', geen Installeren, en geen Openen (BugOS verbergt hem)")
-w.tweede_start(["appstream://org.kde.kcalc.desktop"])
+w.tweede_start(["appstream://org.kde.kclock.desktop"])
 klopt(w.pagina.soort == "systeem" and w.pagina.open_knop.isVisibleTo(w.pagina),
       "I1: een gewoon programma van BugOS heeft wel 'Openen'")
 gestart.clear()
 w.pagina.open_knop.click()
-klopt(gestart and gestart[0][-1].endswith("org.kde.kcalc.desktop"), f"I1: ... en dat opent zijn eigen .desktop ({gestart})")
+klopt(gestart and gestart[0][-1].endswith("org.kde.kclock.desktop"), f"I1: ... en dat opent zijn eigen .desktop ({gestart})")
 w.tweede_start(["appstream://org.example.NietBijOns"])
 klopt(w.pagina.soort == "niet_gevonden", "F3: een id dat nergens is: 'staat niet in Flathub', met zoeken")
 
@@ -536,7 +537,7 @@ sys.path.insert(0, {str(PY)!r})
 from PySide6.QtWidgets import QApplication
 app = QApplication([])
 l = m.SourceFileLoader("w10", {str(BRON)!r}); w = u.module_from_spec(u.spec_from_loader(l.name, l)); l.exec_module(w)
-v = w.Winkel(w.lees_catalogus({str(ROOT / "system_files/usr/share/bugos/store.json")!r}))
+v = w.Winkel(w.lees_catalogus(w.Path({str(ROOT / "system_files/usr/share/bugos/store.json")!r})))
 v.zoek.setText("muziek")
 v.zoek_meer()
 print("KAARTEN", ",".join(k.app["id"] for k in v.meer_kaarten))
