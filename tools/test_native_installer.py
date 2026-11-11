@@ -127,17 +127,17 @@ def test_live() -> None:
     # anders even het verkeerde), daarna wel de echte toestand (hier: offline, met een wifi-kaart).
     (TMP / "types").write_text("ethernet\nwifi\n", encoding="utf-8")
     (TMP / "traag").write_text("", encoding="utf-8")
-    w = live.Live()
-    w.timer.stop()
-    w.show()
+    w0 = live.Live()   # een eigen naam: dit venster mag Python niet halverwege de test opruimen (dat liet Qt vallen)
+    w0.timer.stop()
+    w0.show()
     app.processEvents()
-    klopt(w.wifi.isHidden() and "Checking" in w.chip.text() and "No internet" not in w.chip.text(),
-          f"22: vóór het eerste antwoord: geen wifi-knop, de chip zegt 'Checking the internet…' ({w.chip.text()})")
+    klopt(w0.wifi.isHidden() and "Checking" in w0.chip.text() and "No internet" not in w0.chip.text(),
+          f"22: vóór het eerste antwoord: geen wifi-knop, de chip zegt 'Checking the internet…' ({w0.chip.text()})")
     (TMP / "traag").unlink()
-    wacht(app, lambda: not w._bezig, 8)
-    klopt(not w.wifi.isHidden() and "No internet" in w.chip.text(),
-          f"22: na het eerste antwoord: offline met een wifi-kaart, de knop staat er ({w.chip.text()})")
-    w.close()
+    wacht(app, lambda: not w0._bezig, 8)
+    klopt(not w0.wifi.isHidden() and "No internet" in w0.chip.text(),
+          f"22: na het eerste antwoord: offline met een wifi-kaart, de knop staat er ({w0.chip.text()})")
+    w0.close()
     (TMP / "types").write_text("ethernet\nloopback\n", encoding="utf-8")
 
     # 21. 'Wifi kiezen' opent BugOS Instellingen op de wifi-pagina, niet KDE.
@@ -653,6 +653,10 @@ def test_install() -> None:
     ks = ks[:ks.index("\nEOF\n")]
     klopt(ks.index("%post --nochroot\ninstall -d -m 0755 /run/bugos-install") > ks.index("%include /usr/share/anaconda/post-scripts/bugos-updates.ks"),
           "20: het merkteken komt na de bootc-switch en de Nvidia-stap (%include)")
+    na = bouw[bouw.index('install -Dm0755 "$SRC/bugos-live" /usr/bin/bugos-live'):]
+    klopt(na.index('SourceFileLoader("bugos_live", "/usr/bin/bugos-live")') < na.index("\nPY\n") < 1500
+          and "except ImportError" in na[:1500],
+          "20: build.sh laadt bugos-live na het kopiëren: past het niet bij BASE_IMAGE (te oud), dan stopt het bouwen")
     if shutil.which("shellcheck"):
         r = subprocess.run(["shellcheck", "-x", "iso_live/src/bugos-install", "iso_live/src/build.sh"], cwd=ROOT,
                            capture_output=True, text=True)
