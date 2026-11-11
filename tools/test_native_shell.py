@@ -346,7 +346,8 @@ class Paneel:
 
 
 ALLE_MERKEN = ["paneel-hernoemd-1", "paneel-standaard-1", "paneel-systeemvak-1", "paneel-taakbalkruimte-1",
-               "paneel-verhouding-1", "paneel-bureaubladmenu-1", "paneel-systeemvak-2"]
+               "paneel-verhouding-1", "paneel-bureaubladmenu-1", "paneel-systeemvak-2", "paneel-sneltoets-1"]
+META_Q_ID = "['plasmashell','manage activities','plasmashell','Show Activity Switcher']"
 
 if shutil.which("bash"):
     # Het echte BugOS heeft geen qdbus6 (alleen qdbus-qt6): dan praat bugos-panel via gdbus. Allebei proberen.
@@ -360,9 +361,9 @@ if shutil.which("bash"):
                   and sc[0].index("slot(false);") < sc[0].index("vervang(") and sc[0].rstrip().endswith("finally { slot(true); }")
                   and any(a[0] == via and any(x.endswith("evaluateScript") for x in a) for a in p.log()),
                   f"B1 ({via}): snelmenu aan: slot eraf, vervang, en (ook bij een fout) slot erop, in één script ({sc})")
+            klopt(p.scripts() and all(s.startswith(" ") for s in p.scripts()), f"B1 ({via}): elk script begint met het hele JS-blok")
     with tempfile.TemporaryDirectory() as t:
         p = Paneel(Path(t))
-        klopt(all(s.startswith(" ") or s == "" for s in p.scripts()), "B1: elk script begint met het hele JS-blok")
         (p.merk / "paneel-bewerken").touch()
         p.draai("snelmenu", "aan")
         sc = [s for s in p.scripts() if "vervang(" in s]
@@ -374,7 +375,7 @@ if shutil.which("bash"):
             (p.merk / m).touch()
         p.draai("standaard")
         sc = p.scripts()
-        klopt(sc == [" slot(true);"],
+        klopt(sc == [" slot(true);"] and not [a for a in p.log() if "org.kde.KGlobalAccel.shortcut" in a],
               f"B4: standaard met alle stappen al gedaan: toch elke keer het slot erop, en verder niets ({sc})")
         for m in ALLE_MERKEN:
             (p.merk / m).unlink()
@@ -398,6 +399,26 @@ if shutil.which("bash"):
         p.draai("standaard")
         klopt((p.merk / "paneel-systeemvak-2").exists() and not [x for x in p.scripts() if "systeemvak(" in x],
               "B5: staat het snelmenu uit, dan blijft het systeemvak zoals het is (en is stap 6 klaar)")
+
+        # Meta+Q (KDE: zijpaneel Activiteiten).
+        def sneltoets(antwoord: str) -> list[list[str]]:
+            m = p.merk / "paneel-sneltoets-1"
+            if m.exists():
+                m.unlink()
+            p.antwoorden({"sneltoets": antwoord})
+            p.draai("standaard")
+            return [a for a in p.log() if "org.kde.KGlobalAccel.setForeignShortcut" in a]
+        _zet = sneltoets("([268435537],)")
+        klopt(len(_zet) == 1 and _zet[0][-2:] == [META_Q_ID, "@ai []"] and (p.merk / "paneel-sneltoets-1").exists(),
+              f"B5: Meta+Q (nog de standaard van KDE) gaat uit, één keer, en wordt onthouden ({_zet})")
+        _zet = sneltoets("([268435538],)")
+        klopt(not _zet and (p.merk / "paneel-sneltoets-1").exists(),
+              "B6: zelf een andere toets gekozen: niet aankomen (wel onthouden)")
+        _zet = sneltoets("(@ai [],)")
+        klopt(not _zet and not (p.merk / "paneel-sneltoets-1").exists(),
+              "B6: leeg antwoord (Plasma heeft de sneltoets nog niet aangemeld): niets doen, de volgende keer opnieuw kijken")
+        _zet = sneltoets("")
+        klopt(not _zet and not (p.merk / "paneel-sneltoets-1").exists(), "B6: geen antwoord van KDE: de volgende keer opnieuw")
         p.antwoorden({"plasma": False})
         uit = p.draai("standaard")
         klopt(uit.returncode == 0, f"B4: antwoordt Plasma niet, dan stopt standaard netjes (code {uit.returncode})")

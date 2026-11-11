@@ -405,6 +405,8 @@ standaard:*)
     # Stap 6: de KDE-onderdelen in het systeemvak die het snelmenu vervangt echt uitzetten (niet alleen verbergen),
     # en de toetsenbordindeling weer laten zien. Alleen als het snelmenu er staat.
     MARKER6="$BUGOS_CONFIG/paneel-systeemvak-2"
+    # Stap 7: Meta+Q opent niet meer het zijpaneel "Activiteiten" van KDE (alleen als het nog de standaard is).
+    MARKER7="$BUGOS_CONFIG/paneel-sneltoets-1"
     for _ in $(seq 1 30); do
         bureaublad_er && break
         sleep 2
@@ -449,6 +451,25 @@ standaard:*)
             plasma_wijzig "systeemvak(true);" >/dev/null || gelukt=0
         fi
         [ "$gelukt" = 1 ] && touch "$MARKER6"
+    fi
+    if [ ! -f "$MARKER7" ]; then
+        ID="['plasmashell','manage activities','plasmashell','Show Activity Switcher']"
+        huidig="$(gdbus call --session --dest org.kde.kglobalaccel --object-path /kglobalaccel \
+            --method org.kde.KGlobalAccel.shortcut "$ID" 2>/dev/null)"
+        case "$huidig" in
+        "([268435537],)")
+            # Meta+Q (het Qt-sleutelgetal), de standaard van KDE: uitzetten.
+            gdbus call --session --dest org.kde.kglobalaccel --object-path /kglobalaccel \
+                --method org.kde.KGlobalAccel.setForeignShortcut "$ID" '@ai []' >/dev/null && touch "$MARKER7"
+            ;;
+        '(['[0-9]*)
+            touch "$MARKER7"   # zelf een andere toets gekozen: niet aankomen
+            ;;
+        *)
+            # Leeg ((@ai [],)): Plasma heeft de sneltoets nog niet aangemeld, of je maakte hem zelf leeg. Niet
+            # onthouden: de volgende keer opnieuw kijken (één D-Bus-vraag); er wordt alleen Meta+Q uitgezet.
+            ;;
+        esac
     fi
     # Altijd: het slot erop (goedkoop). Herstelt ook een slot dat KDE's unlock_widgets.js of iets anders eraf haalde.
     plasma_script "$JS slot($(slot_na));" >/dev/null || true
