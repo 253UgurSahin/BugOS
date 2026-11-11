@@ -930,12 +930,13 @@ del _pr.ververs
 del venster.isActiveWindow
 
 # U368: 'Terug naar de vorige versie' vraagt het eerst, en zegt dat wachtwoord, nieuwe gebruikers en wifi ook teruggaan.
-from PySide6.QtWidgets import QMessageBox as _QMB2  # noqa: E402
+# (De vraag is de gedeelde BugOS-vraag, bugos_shell.VraagDialoog, niet meer een QMessageBox.)
+from bugos_shell import VraagDialoog as _QMB2  # noqa: E402
 
 _up = venster.paginas["updates"]
 _teksten, _gestart, _std = [], [], []
 _oud_exec, _oud_up = _QMB2.exec, _up.updates
-_QMB2.exec = lambda self: (_teksten.append(self.informativeText()), _std.append(self.defaultButton().text() if self.defaultButton() else ""))[0] or 0   # 'Annuleren'
+_QMB2.exec = lambda self: (_teksten.append(self.uitleg.text()), _std.append(self.standaard))[0] or 0   # 'Annuleren'
 _up.updates = lambda wat: _gestart.append(wat)
 _up.vraag_terug()
 _QMB2.exec, _up.updates = _oud_exec, _oud_up
