@@ -187,6 +187,68 @@ klopt(not any("/ActionPlugins/1" in k for k in _b) and set(_b) <= {
       "plasma-org.kde.plasma.desktop-appletsrc/ActionPlugins/0/RightButton;NoModifier"},
       f"A6: bureaubladmenu() schrijft NIETS in groep 1 (het paneel: dan verdwijnt het hele taakbalkmenu) ({sorted(_b)})")
 
+# Het systeemvak zoals in de test-VM (Plasma 6.8.2, [General] extraItems: 19 onderdelen), plus een eigen app.
+VM_EXTRA = ["org.kde.kdeconnect", "org.kde.plasma.vault", "org.kde.kscreen", "org.kde.plasma.battery",
+            "org.kde.plasma.bluetooth", "org.kde.plasma.brightness", "org.kde.plasma.cameraindicator",
+            "org.kde.plasma.clipboard", "org.kde.plasma.devicenotifier", "org.kde.plasma.dwellclicker",
+            "org.kde.plasma.keyboardindicator", "org.kde.plasma.keyboardlayout", "org.kde.plasma.manage-inputmethod",
+            "org.kde.plasma.mediacontroller", "org.kde.plasma.networkmanagement", "org.kde.plasma.notifications",
+            "org.kde.plasma.printmanager", "org.kde.plasma.volume", "org.kde.plasma.weather"]
+UIT = ["org.kde.plasma.volume", "org.kde.plasma.networkmanagement", "org.kde.plasma.bluetooth",
+       "org.kde.plasma.battery", "org.kde.plasma.brightness", "org.kde.plasma.manage-inputmethod",
+       "org.kde.kdeconnect", "org.kde.plasma.weather", "org.kde.plasma.vault", "org.kde.kscreen"]
+BLIJFT = ["org.kde.plasma.clipboard", "org.kde.plasma.notifications", "org.kde.plasma.devicenotifier",
+          "org.kde.plasma.printmanager", "org.kde.plasma.keyboardlayout", "org.kde.plasma.keyboardindicator",
+          "org.kde.plasma.cameraindicator", "org.kde.plasma.mediacontroller", "org.kde.plasma.dwellclicker", "mijn.app"]
+klopt(sorted(UIT + BLIJFT) == sorted(VM_EXTRA + ["mijn.app"]),
+      "A7: over elk onderdeel van het systeemvak in de VM is besloten: uit of blijft")
+_vak = {"org.kde.plasma.systemtray": {"extraItems": VM_EXTRA + ["mijn.app"], "hiddenItems": ["mijn.app"]}}
+r = draai_js("var v = vak(paneel); " + wijzig("systeemvak(true);") + " var a = {extra: v.cfg.extraItems, uit: v.cfg.bugosOff,"
+             " verborgen: v.cfg.hiddenItems, herladen: v.herladen}; " + wijzig("systeemvak(false);")
+             + " var b = {extra: v.cfg.extraItems, uit: v.cfg.bugosOff};", "{a: a, b: b, js: UIT}", cfgs=_vak)
+u = r["u"] or {}
+a, b = u.get("a", {}), u.get("b", {})
+klopt(u.get("js") == UIT, f"A7: de UIT-lijst van bugos-panel is de lijst uit het ontwerp ({u.get('js')})")
+klopt(r["gedrukt"] == ["1", "1"] and sorted(a.get("extra", [])) == sorted(BLIJFT) and sorted(a.get("uit", [])) == sorted(UIT)
+      and a.get("herladen") == 1,
+      f"A7: snelmenu aan: de KDE-onderdelen die het snelmenu vervangt staan UIT (niet alleen verborgen) en zijn onthouden ({r})")
+klopt(sorted(b.get("extra", [])) == sorted(VM_EXTRA + ["mijn.app"]) and b.get("uit") == [""],
+      f"A7: snelmenu uit: precies die komen terug ({b})")
+klopt("org.kde.plasma.keyboardlayout" not in a.get("verborgen", []) and "org.kde.plasma.keyboardlayout" in a.get("extra", []),
+      "A7: de toetsenbordindeling blijft aan en zichtbaar (zoals Windows 11, met twee of meer indelingen)")
+_zonder = [x for x in VM_EXTRA if x != "org.kde.plasma.weather"]
+r = draai_js(wijzig("systeemvak(true);") + wijzig("systeemvak(false);"), "vak(paneel).cfg.extraItems",
+             cfgs={"org.kde.plasma.systemtray": {"extraItems": _zonder}})
+klopt(r["u"] is not None and "org.kde.plasma.weather" not in r["u"] and sorted(r["u"]) == sorted(_zonder),
+      f"A7: wat je zelf uitzette (Weer) komt niet terug als het snelmenu uit gaat ({r['u']})")
+r = draai_js(wijzig("systeemvak(true);"), "vak(paneel).cfg", cfgs={"org.kde.plasma.systemtray": {}})
+klopt(r["u"] is not None and "extraItems" not in r["u"] and r["u"].get("bugosOff") == [""],
+      f"A7: een systeemvak zonder extraItems: er wordt niets uitgezet en niets verzonnen ({r['u']})")
+r = draai_js(wijzig("systeemvak(true);") + wijzig("systeemvak(true);"), "vak(paneel).cfg",
+             cfgs={"org.kde.plasma.systemtray": {"extraItems": ",".join(VM_EXTRA)}})
+klopt(r["u"] is not None and sorted(r["u"].get("bugosOff", [])) == sorted(UIT)
+      and not set(UIT) & set(r["u"].get("extraItems", [])),
+      f"A7: twee keer aan (en een lijst als tekst, zoals Plasma soms geeft): bugosOff blijft compleet ({r['u']})")
+# U456 (zoals tools/test_panel.sh, maar zonder node): wat je zelf verborg, blijft verborgen.
+r = draai_js(wijzig("systeemvak(true);") * 2 + wijzig("systeemvak(false);"), "vak(paneel).cfg.hiddenItems",
+             cfgs={"org.kde.plasma.systemtray": {"hiddenItems": ["org.kde.kdeconnect", "mijn.app"]}})
+klopt(r["u"] == ["org.kde.kdeconnect", "mijn.app"], f"A7/U456: snelmenu aan en uit: wat je zelf verborg, blijft verborgen ({r['u']})")
+_vroeger = ["org.kde.plasma.volume", "org.kde.plasma.networkmanagement", "org.kde.plasma.bluetooth", "org.kde.plasma.battery",
+            "org.kde.plasma.brightness", "org.kde.kscreen", "org.kde.plasma.clipboard", "org.kde.plasma.keyboardlayout",
+            "org.kde.plasma.keyboardindicator", "org.kde.plasma.manage-inputmethod", "org.kde.plasma.printmanager",
+            "org.kde.kdeconnect", "org.kde.plasma.weather"]
+r = draai_js(wijzig("systeemvak(false);"), "vak(paneel).cfg.hiddenItems",
+             cfgs={"org.kde.plasma.systemtray": {"hiddenItems": ["mijn.app"] + _vroeger}})
+klopt(r["u"] == ["mijn.app"], f"A7/U456: na een oudere BugOS (ook met de toetsenbordindeling): snelmenu uit laat ze weer zien ({r['u']})")
+r = draai_js(wijzig("systeemvak(true);"), "vak(paneel).cfg.hiddenItems", cfgs={"org.kde.plasma.systemtray": {"hiddenItems": ["mijn.app"]}})
+klopt((r["u"] or [])[:2] == ["mijn.app", "org.kde.plasma.volume"] and "org.kde.plasma.keyboardlayout" not in r["u"],
+      f"A7/U456: snelmenu aan verbergt de BugOS-lijst erbij, zonder de toetsenbordindeling ({r['u']})")
+r = draai_js(wijzig("systeemvak(true);"), "vak(paneel).cfg.hiddenItems",
+             cfgs={"org.kde.plasma.systemtray": {"hiddenItems": ["org.kde.plasma.keyboardlayout"],
+                                                 "bugosHidden": ["org.kde.plasma.keyboardlayout", "org.kde.plasma.volume"]}})
+klopt(r["u"] is not None and "org.kde.plasma.keyboardlayout" not in r["u"],
+      f"A7: wie de vorige BugOS had: de toetsenbordindeling die BugOS verborg, is weer te zien ({r['u']})")
+
 r = draai_js("slot(false); slot(true);", "1")
 klopt(r["gedrukt"] == [], f"A8: slot() print niets (anders klopt de 0/1 van vervang niet meer) ({r['gedrukt']})")
 
@@ -284,7 +346,7 @@ class Paneel:
 
 
 ALLE_MERKEN = ["paneel-hernoemd-1", "paneel-standaard-1", "paneel-systeemvak-1", "paneel-taakbalkruimte-1",
-               "paneel-verhouding-1", "paneel-bureaubladmenu-1"]
+               "paneel-verhouding-1", "paneel-bureaubladmenu-1", "paneel-systeemvak-2"]
 
 if shutil.which("bash"):
     # Het echte BugOS heeft geen qdbus6 (alleen qdbus-qt6): dan praat bugos-panel via gdbus. Allebei proberen.
@@ -328,6 +390,14 @@ if shutil.which("bash"):
         p.draai("standaard")
         klopt(not (p.merk / "paneel-bureaubladmenu-1").exists(),
               "B7: lukt het bureaubladmenu niet (Plasma geeft 0), dan de volgende keer opnieuw (geen merkteken)")
+        _vak = [x for x in sc if "systeemvak(true);" in x]
+        klopt((p.merk / "paneel-systeemvak-2").exists() and len([x for x in p.scripts() if "systeemvak(true);" in x]) == 2,
+              f"B5: standaard (nieuwe gebruiker): systeemvak(true) voor stap 2 en de nieuwe stap 6, allebei onthouden ({_vak})")
+        (p.merk / "paneel-systeemvak-2").unlink()
+        p.antwoorden({"regels": [['heeft("org.bugos.quickmenu")', "uit"]]})
+        p.draai("standaard")
+        klopt((p.merk / "paneel-systeemvak-2").exists() and not [x for x in p.scripts() if "systeemvak(" in x],
+              "B5: staat het snelmenu uit, dan blijft het systeemvak zoals het is (en is stap 6 klaar)")
         p.antwoorden({"plasma": False})
         uit = p.draai("standaard")
         klopt(uit.returncode == 0, f"B4: antwoordt Plasma niet, dan stopt standaard netjes (code {uit.returncode})")
@@ -586,6 +656,20 @@ r = draai_indeling()
 klopt(r.get("slot") is True and (r.get("s") or [""])[0] == "org.bugos.startmenu"
       and "org.bugos.quickmenu" in r.get("s", []),
       f"F: de indeling draait in een nagebootst Plasma: startmenu eerst, snelmenu erbij, slot erop ({r.get('s') or r})")
+klopt(r.get("vak") is not None and "extraItems" not in r["vak"] and "bugosOff" not in r["vak"],
+      f"F: heeft Plasma extraItems nog niet ingevuld, dan laat de indeling die met rust (bugos-panel doet het later) ({r.get('vak')})")
+r = draai_indeling({"org.kde.plasma.systemtray": {"extraItems": VM_EXTRA}})
+_v = r.get("vak") or {}
+klopt(sorted(_v.get("extraItems", [])) == sorted(x for x in VM_EXTRA if x not in UIT)
+      and sorted(_v.get("bugosOff", [])) == sorted(UIT),
+      f"F: nieuwe gebruiker: de KDE-onderdelen die het snelmenu vervangt staan meteen uit, en zijn onthouden ({_v})")
+_e = QJSEngine()
+_e.evaluate(JS)
+_paneel_lijsten = json.loads(_e.evaluate("JSON.stringify([RUSTIG, UIT])").toString())
+klopt(_v.get("hiddenItems") == _paneel_lijsten[0], "F: de indeling verbergt dezelfde lijst als bugos-panel (RUSTIG)")
+klopt(sorted(_v.get("bugosOff", [])) == sorted(_paneel_lijsten[1]), "F: de indeling zet dezelfde lijst uit als bugos-panel (UIT)")
+klopt("org.kde.plasma.keyboardlayout" not in _v.get("hiddenItems", ["org.kde.plasma.keyboardlayout"]),
+      "F: de toetsenbordindeling is niet verborgen (met twee of meer indelingen naast de klok)")
 
 
 print(f"{fouten} fout(en).")

@@ -166,10 +166,54 @@ function weg(soort) {
 // helderheid/batterij) of die je bijna nooit nodig hebt. Ze blijven werken (de
 // volumetoetsen, meldingen bij een lege batterij), maar staan niet meer in beeld.
 // Wie ze toch wil: het pijltje in het systeemvak, of "bugos-panel systeemvak alles".
+// Niet (meer) in de lijst: de toetsenbordindeling. Met twee of meer indelingen zie je die naast de klok, zoals in
+// Windows 11 ("EN", "BE"); met één indeling laat KDE hem zelf weg.
 var RUSTIG = ["org.kde.plasma.volume", "org.kde.plasma.networkmanagement", "org.kde.plasma.bluetooth",
     "org.kde.plasma.battery", "org.kde.plasma.brightness", "org.kde.kscreen", "org.kde.plasma.clipboard",
-    "org.kde.plasma.keyboardlayout", "org.kde.plasma.keyboardindicator", "org.kde.plasma.manage-inputmethod",
+    "org.kde.plasma.keyboardindicator", "org.kde.plasma.manage-inputmethod",
     "org.kde.plasma.printmanager", "org.kde.kdeconnect", "org.kde.plasma.weather"];
+// De lijst van een oudere BugOS (met de toetsenbordindeling), om te herkennen wat BugOS toen verborg.
+var RUSTIG_VROEGER = RUSTIG.concat(["org.kde.plasma.keyboardlayout"]);
+// Uit (niet alleen verborgen) zolang het snelmenu aan staat: het snelmenu of Instellingen doet dit al, of niemand
+// heeft het nodig. Het tandwiel van zulke onderdelen opende KDE (Netwerken: systemsettings kcm_networkmanagement).
+// Hun werk op de achtergrond doen KDE-diensten (kded: audioshortcutsservice, networkmanagement, bluedevil;
+// powerdevil; het scherm-OSD van KWin), dus de volume- en helderheidstoetsen, wifi-wachtwoorden en Meta+P blijven
+// werken. Ze komen terug als je het snelmenu uitzet. Wat aan blijft (verborgen achter het pijltje): meldingen,
+// klembord (Meta+V), apparaten (USB-stick veilig verwijderen), printers, toetsenbord, camera, media, klikhulp.
+var UIT = ["org.kde.plasma.volume", "org.kde.plasma.networkmanagement", "org.kde.plasma.bluetooth",
+    "org.kde.plasma.battery", "org.kde.plasma.brightness", "org.kde.plasma.manage-inputmethod",
+    "org.kde.kdeconnect", "org.kde.plasma.weather", "org.kde.plasma.vault", "org.kde.kscreen"];
+function lijst(waarde) {
+    if (typeof waarde == "string") return waarde === "" ? [] : waarde.split(",");
+    var uit = [];
+    for (var i = 0; i < waarde.length; i++) if (waarde[i] !== "" && uit.indexOf(waarde[i]) < 0) uit.push(String(waarde[i]));
+    return uit;
+}
+function zelfde(a, b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) if (a[i] != b[i]) return false;
+    return true;
+}
+// rustig: de UIT-onderdelen uit [General] extraItems halen en in bugosOff onthouden. Niet rustig: precies die
+// terugzetten. Iets wat je zelf uitzette, staat nooit in bugosOff en komt dus niet vanzelf terug. knownItems blijft
+// zoals het is (anders zet Plasma ze zelf weer aan).
+function vakUit(vak, rustig) {
+    var extra = lijst(vak.readConfig("extraItems", []));
+    var uitVorig = lijst(vak.readConfig("bugosOff", [""]));
+    var extraNieuw = [], uitNieuw = [];
+    if (rustig) {
+        uitNieuw = uitVorig.slice();
+        for (var e = 0; e < extra.length; e++) {
+            if (UIT.indexOf(extra[e]) < 0) extraNieuw.push(extra[e]);
+            else if (uitNieuw.indexOf(extra[e]) < 0) uitNieuw.push(extra[e]);
+        }
+    } else {
+        extraNieuw = extra.slice();
+        for (var u = 0; u < uitVorig.length; u++) if (extraNieuw.indexOf(uitVorig[u]) < 0) extraNieuw.push(uitVorig[u]);
+    }
+    if (!zelfde(extra, extraNieuw)) vak.writeConfig("extraItems", extraNieuw);
+    vak.writeConfig("bugosOff", uitNieuw.length ? uitNieuw : [""]);
+}
 function systeemvak(rustig) {
     var ps = panels(), n = 0;
     for (var i = 0; i < ps.length; i++) {
@@ -191,7 +235,7 @@ function systeemvak(rustig) {
             if (vorig.length == 1 && vorig[0] == "-") {
                 var alles = true;
                 for (var a = 0; a < RUSTIG.length; a++) if (oud.indexOf(RUSTIG[a]) < 0) alles = false;
-                vanOns = alles ? RUSTIG : [];
+                vanOns = alles ? RUSTIG_VROEGER : [];
             }
             var nieuw = [], erbij = [];
             for (var k = 0; k < oud.length; k++)
@@ -201,6 +245,7 @@ function systeemvak(rustig) {
                     if (nieuw.indexOf(RUSTIG[r]) < 0) { nieuw.push(RUSTIG[r]); erbij.push(RUSTIG[r]); }
             vak.writeConfig("hiddenItems", nieuw);
             vak.writeConfig("bugosHidden", erbij.length ? erbij : [""]);
+            vakUit(vak, rustig);
             vak.reloadConfig();
             n++;
         }
@@ -357,6 +402,9 @@ standaard:*)
     MARKER4="$BUGOS_CONFIG/paneel-verhouding-1"
     # Stap 5: het rechtermuismenu van het bureaublad zonder KDE-regels (zichtbaar na de volgende keer inloggen).
     MARKER5="$BUGOS_CONFIG/paneel-bureaubladmenu-1"
+    # Stap 6: de KDE-onderdelen in het systeemvak die het snelmenu vervangt echt uitzetten (niet alleen verbergen),
+    # en de toetsenbordindeling weer laten zien. Alleen als het snelmenu er staat.
+    MARKER6="$BUGOS_CONFIG/paneel-systeemvak-2"
     for _ in $(seq 1 30); do
         bureaublad_er && break
         sleep 2
@@ -394,6 +442,13 @@ standaard:*)
     if [ ! -f "$MARKER5" ]; then
         # 14 = alle KDE-regels zijn uitgezet; anders de volgende keer opnieuw.
         [ "$(plasma_wijzig "bureaubladmenu();")" = 14 ] && touch "$MARKER5"
+    fi
+    if [ ! -f "$MARKER6" ]; then
+        gelukt=1
+        if [ "$(status_van org.bugos.quickmenu)" = aan ]; then
+            plasma_wijzig "systeemvak(true);" >/dev/null || gelukt=0
+        fi
+        [ "$gelukt" = 1 ] && touch "$MARKER6"
     fi
     # Altijd: het slot erop (goedkoop). Herstelt ook een slot dat KDE's unlock_widgets.js of iets anders eraf haalde.
     plasma_script "$JS slot($(slot_na));" >/dev/null || true
