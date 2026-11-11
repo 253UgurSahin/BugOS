@@ -357,6 +357,129 @@ def test_tijdzone() -> None:
     klopt(css.count("{") == css.count("}"), "A: de CSS is heel (evenveel { als })")
 
 
+# =============================================================================== voortgang (bugos_voortgang.py) ===
+INSTALLATIE = '''class DeployOSTreeTask(Task):
+    def run(self):
+        ref = _get_ref(self._data)
+        if self._data.is_container():
+            args = ["container", "image", "deploy", "--sysroot=" + self._physroot, "--image=" + ref]
+            safe_exec_program(
+                "ostree",
+                args,
+                env_add={"LC_ALL": "C.UTF-8"},
+            )
+        else:
+            pass
+'''
+
+
+def maak_oci(map_: Path, lagen: dict[str, int]) -> None:
+    import json
+    (map_ / "blobs" / "sha256").mkdir(parents=True)
+    (map_ / "index.json").write_text(json.dumps({"manifests": [{"digest": "sha256:m1"}]}), encoding="utf-8")
+    (map_ / "blobs" / "sha256" / "m1").write_text(json.dumps(
+        {"layers": [{"digest": f"sha256:{h}", "size": g} for h, g in lagen.items()]}), encoding="utf-8")
+
+
+def test_voortgang() -> None:
+    import re
+    import threading
+
+    v = laad("bugos_voortgang", SRC / "bugos_voortgang.py")
+    oci = TMP / "oci"
+    maak_oci(oci, {"a": 100, "b": 300, "c": 600})
+    # 1. De lagen en hun grootte uit de OCI-map op de stick.
+    klopt(v.lagen(str(oci)) == {"a": 100, "b": 300, "c": 600}, f"1: lagen() leest de OCI-map ({v.lagen(str(oci))})")
+    klopt(v.lagen(str(oci) + ":latest") == {"a": 100, "b": 300, "c": 600}, "1: ook met ':naam' erachter (oci-transport)")
+    # 2. Wat er al binnen is, en hoeveel procent dat is (naar grootte, niet naar aantal).
+    phys = TMP / "sysimage"
+    klopt(v.binnen(str(phys)) == set(), "2: binnen() zolang de map er nog niet is: niets")
+    blob = phys / v.BLOB_MAP
+    blob.mkdir(parents=True)
+    for n in ("sha256_3A_b", "sha256_3A_c", "ostree"):
+        (blob / n).write_text("", encoding="utf-8")
+    alle = v.lagen(str(oci))
+    klopt(v.binnen(str(phys)) == {"b", "c"} and v.procent(alle, v.binnen(str(phys))) == 90,
+          f"2: twee van de drie lagen (900 van 1000 bytes) = 90% ({v.procent(alle, v.binnen(str(phys)))})")
+    klopt(v.procent(alle, {"a", "b", "c"}) == 100 and v.procent({}, set()) == 0 and v.procent(alle, set()) == 0,
+          "2: alles binnen = 100; niets = 0; geen lagen = 0 (geen deling door nul)")
+    # 3. De zinnen.
+    b = v.bericht
+    klopt(b(37, 12, True) == "BugOS wordt gekopieerd: 37% klaar (12 minuten bezig)", f"3: NL ({b(37, 12, True)})")
+    klopt(b(37, 1, False) == "Copying BugOS: 37% done (1 minute so far)" and b(3, 0, False) == "Copying BugOS: 3% done",
+          f"3: EN, 1 minute / geen minuten ({b(37, 1, False)} | {b(3, 0, False)})")
+    klopt(b(100, 25, False).startswith("Almost done") and b(100, 1, True).startswith("Bijna klaar")
+          and "(1 minuut bezig)" in b(100, 1, True), "3: 100%: 'Almost done: putting BugOS in place'")
+    klopt(b(None, 2, True) == "BugOS wordt gekopieerd (2 minuten bezig)" and "%" not in b(None, 3, False),
+          "3: percentage onbekend: alleen de minuten")
+    klopt(not re.search(r"few minutes|paar minuten", " ".join(b(p, m, n) for p in (None, 5, 100) for m in (0, 1, 7)
+                                                         for n in (True, False))),
+          "3 (I11): nergens 'a few minutes': we beloven geen tijd die we niet gemeten hebben")
+
+    # 4. Het meldt op de achtergrond, in het Nederlands, en het percentage loopt nooit terug.
+    for n in ("sha256_3A_b", "sha256_3A_c"):
+        (blob / n).unlink()
+    tik = iter(range(0, 10 ** 6, 30))
+    berichten: list[str] = []
+    with v.met_voortgang(berichten.append, str(phys), str(oci), interval=0.02, klok=lambda: next(tik), taal="nl_NL.UTF-8"):
+        for n in ("sha256_3A_a", "sha256_3A_b", "sha256_3A_c"):
+            time.sleep(0.07)
+            (blob / n).write_text("", encoding="utf-8")
+        time.sleep(0.07)
+    time.sleep(0.05)
+    klopt(not any(d.name == "bugos-voortgang" for d in threading.enumerate()), "4: na het blok is de draad weg")
+    pct = [int(x) for m in berichten for x in re.findall(r"(\d+)% klaar", m)]
+    klopt(len(berichten) >= 4 and all(m.startswith(("BugOS wordt gekopieerd", "Bijna klaar")) for m in berichten),
+          f"4: berichten in het Nederlands ({len(berichten)}: {berichten[:1]} ... {berichten[-1:]})")
+    klopt(pct == sorted(pct) and pct and pct[0] < 100 and berichten[-1].startswith("Bijna klaar"),
+          f"4: het percentage loopt alleen op, en eindigt met 'Bijna klaar' ({sorted(set(pct))})")
+    klopt("minuten bezig" in berichten[-1], f"4: de minuten tellen mee ({berichten[-1]})")
+    # 5. Geen OCI-map, of een meld() die misgaat: het installeren merkt er niets van.
+    berichten = []
+    gewoon = TMP / "geen-oci"
+    gewoon.mkdir()
+    with v.met_voortgang(berichten.append, str(phys), str(gewoon), interval=0.02, taal="en_US.UTF-8"):
+        time.sleep(0.1)
+    klopt(berichten and all("%" not in m and m.startswith("Copying BugOS") for m in berichten),
+          f"5: geen OCI-map: alleen 'Copying BugOS' zonder percentage ({berichten[:1]})")
+
+    def kapot(_m):
+        raise RuntimeError("D-Bus weg")
+    try:
+        with v.met_voortgang(kapot, str(phys), str(oci), interval=0.02):
+            time.sleep(0.08)
+        klopt(True, "5: een meld() die misgaat breekt het installeren niet")
+    except Exception as e:  # noqa: BLE001
+        klopt(False, f"5: een meld() die misgaat breekt het installeren niet ({e!r})")
+    try:
+        with v.met_voortgang(berichten.append, str(phys), str(oci), interval=0.02):
+            raise OSError("ostree mislukt")
+    except OSError:
+        klopt(not any(d.name == "bugos-voortgang" for d in threading.enumerate()),
+              "5: mislukt ostree, dan gaat de fout gewoon door naar Anaconda en stopt de draad")
+
+    # 6. De aanroep in Anaconda zetten: precies één keer, en het blijft geldige Python.
+    nieuw = v.patch_installatie(INSTALLATIE)
+    klopt("met_voortgang(self.report_progress, self._physroot, ref)" in nieuw and 'env_add={"LC_ALL": "C.UTF-8"}' in nieuw,
+          "6: patch_installatie zet met_voortgang om het kopiëren, ostree krijgt nog steeds LC_ALL=C.UTF-8")
+    try:
+        compile(nieuw, "installation.py", "exec")
+        klopt(True, "6: de aangepaste installation.py is geldige Python")
+    except SyntaxError as e:
+        klopt(False, f"6: de aangepaste installation.py is geldige Python ({e})")
+    for naam, tekst in (("zonder het stuk", INSTALLATIE.replace("args,\n", "argumenten,\n")),
+                        ("met het stuk twee keer", INSTALLATIE + INSTALLATIE), ("al aangepast", nieuw)):
+        try:
+            v.patch_installatie(tekst)
+            klopt(False, f"6: {naam}: het bouwen stopt")
+        except AssertionError:
+            klopt(True, f"6: {naam}: het bouwen stopt")
+    bouw = bron("build.sh")
+    klopt(bouw.find('bugos_voortgang.py" patch') > bouw.find("anaconda-webui") > 0
+          and 'install -Dm0644 "$SRC/bugos_voortgang.py"' in bouw and "py_compile" in bouw,
+          "6: build.sh zet bugos_voortgang.py naast Anaconda en past installation.py aan (na het installeren van Anaconda)")
+
+
 # =================================================================== --beeld: in de echte live-image (geen ISO nodig) ===
 WEBUI = Path("/usr/share/cockpit/anaconda-webui")
 
@@ -485,6 +608,61 @@ def beeld_tijdzone(w) -> None:
     klopt(kleur == GROEN, f"beeld: CSS: vinkje en NTP weg, lijsten niet ingesprongen, de zin in en/nl, niet in de ({kleur}, {png})")
 
 
+def beeld_voortgang() -> None:
+    """patch_installatie op een kopie van de echte pyanaconda; daarna moet DeployOSTreeTask.run met_voortgang gebruiken."""
+    import pyanaconda
+    ana = Path(pyanaconda.__file__).parent
+    kopie = Path("/tmp/installer-ana")
+    shutil.rmtree(kopie, ignore_errors=True)
+    shutil.copytree(ana, kopie / "pyanaconda", ignore=shutil.ignore_patterns("__pycache__"))
+    doel = kopie / "pyanaconda" / "modules" / "payloads" / "payload" / "rpm_ostree"
+    shutil.copy(SRC / "bugos_voortgang.py", doel / "bugos_voortgang.py")
+    r = subprocess.run([sys.executable, str(SRC / "bugos_voortgang.py"), "patch", str(doel / "installation.py")],
+                       capture_output=True, text=True)
+    klopt(r.returncode == 0, f"beeld: de echte installation.py van Anaconda laat zich aanpassen ({r.stderr.strip()[-200:]})")
+    code = ("from pyanaconda.modules.payloads.payload.rpm_ostree.installation import DeployOSTreeTask as D;"
+            "import pyanaconda;print(pyanaconda.__file__);print('met_voortgang' in D.run.__code__.co_names)")
+    for vlag in ([], ["-O"]):
+        r = subprocess.run([sys.executable, *vlag, "-c", code], capture_output=True, text=True,
+                           env=dict(os.environ, PYTHONPATH=str(kopie)))
+        regels = r.stdout.split()
+        klopt(r.returncode == 0 and regels[-1:] == ["True"] and str(kopie) in regels[0],
+              f"beeld: DeployOSTreeTask.run gebruikt met_voortgang {' '.join(vlag)} ({r.stdout.strip()} {r.stderr.strip()[-200:]})")
+    shutil.rmtree(kopie, ignore_errors=True)
+
+
+def beeld_echt_kopieren(seconden: int = 70) -> None:
+    """(--echt, ~75 s, podman run --privileged) Echt kopiëren zoals Anaconda het doet, met de voortgang erbij."""
+    import re
+    v = laad("bugos_voortgang", SRC / "bugos_voortgang.py")
+    oci = "/var/lib/bugos-stick/bugos"
+    sr = Path("/var/tmp/installer-sr")
+    shutil.rmtree(sr, ignore_errors=True)
+    sr.mkdir(parents=True)
+    subprocess.run(["ostree", "admin", "init-fs", "--modern", str(sr)], capture_output=True, check=False)
+    subprocess.run(["ostree", "admin", f"--sysroot={sr}", "os-init", "bugos"], capture_output=True, check=False)
+    berichten: list[str] = []
+    begin = time.monotonic()
+
+    def meld(m: str) -> None:
+        berichten.append(m)
+        print(f"      {time.monotonic() - begin:4.0f}s  {m}")
+    proc = subprocess.Popen(["ostree", "container", "image", "deploy", f"--sysroot={sr}", f"--image={oci}",
+                             "--transport=oci", "--stateroot=bugos", "--no-signature-verification"],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=dict(os.environ, LC_ALL="C.UTF-8"))
+    # De klok 30 keer zo snel, zodat je in 70 s ook de minuten ziet lopen.
+    with v.met_voortgang(meld, str(sr), oci, interval=8, klok=lambda: (time.monotonic() - begin) * 30, taal="en_US.UTF-8"):
+        try:
+            proc.wait(timeout=seconden)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+    pct = [int(x) for m in berichten for x in re.findall(r"(\d+)% done", m)]
+    klopt(len(berichten) >= 2 and pct == sorted(pct) and pct and pct[-1] > pct[0],
+          f"beeld (echt): tijdens het echte kopiëren loopt het percentage op ({pct})")
+    shutil.rmtree(sr, ignore_errors=True)
+
+
 def proof_js(proef: str, test: str) -> str:
     return (proef + test + 'document.body.style.background=goed?"#00ff00":"#ff0000";'
             'document.body.textContent=uit.join(" ");')
@@ -531,6 +709,9 @@ def beeld() -> int:
     w = laad("bugos_webui", SRC / "bugos_webui.py")
     beeld_woorden(w)
     beeld_tijdzone(w)
+    beeld_voortgang()
+    if "--echt" in sys.argv[1:]:
+        beeld_echt_kopieren()
     print()
     print("Alles goed." if not fouten else f"{fouten} fout(en).")
     return 1 if fouten else 0
@@ -542,6 +723,7 @@ def main() -> int:
     os.environ["PATH"] = str(NEP) + os.pathsep + schoon_pad()
     test_woorden()
     test_tijdzone()
+    test_voortgang()
     test_live()
     shutil.rmtree(TMP, ignore_errors=True)
     print()

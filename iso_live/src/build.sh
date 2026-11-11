@@ -91,6 +91,16 @@ dnf install -qy --allowerasing firefox anaconda-live anaconda-webui \
     libblockdev-btrfs libblockdev-lvm libblockdev-dm yad jq
 mkdir -p /var/lib/rpm-state
 
+# Echte voortgang tijdens het kopiëren van BugOS (20 tot 40 minuten). Anaconda liet al die tijd alleen
+# "Deployment starting: /var/lib/bugos-stick/bugos" zien, omdat ostree zelf niets zegt. bugos_voortgang.py telt
+# de lagen die al binnen zijn: "Copying BugOS: 37% done (12 minutes so far)". Heeft installation.py een andere
+# vorm (Anaconda bijgewerkt), dan stopt het bouwen hier.
+ANA="$(python3 -c 'import os, pyanaconda; print(os.path.dirname(pyanaconda.__file__))')"
+OSTREE_PY="$ANA/modules/payloads/payload/rpm_ostree"
+install -Dm0644 "$SRC/bugos_voortgang.py" "$OSTREE_PY/bugos_voortgang.py"
+python3 "$SRC/bugos_voortgang.py" patch "$OSTREE_PY/installation.py"
+python3 -m py_compile "$OSTREE_PY/installation.py" "$OSTREE_PY/bugos_voortgang.py"
+
 # shellcheck source=/dev/null
 . /etc/os-release
 mkdir -p /etc/anaconda/profile.d
