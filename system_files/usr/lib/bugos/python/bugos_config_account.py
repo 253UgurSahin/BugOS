@@ -750,10 +750,16 @@ def inlognaam_fout(naam: str, bestaat=None) -> str:
     return ""
 
 
+LOSSE_LETTERS = str.maketrans({"ł": "l", "Ł": "L", "ø": "o", "Ø": "O", "đ": "d", "Đ": "D", "ð": "d", "Ð": "D",
+                               "ß": "ss", "æ": "ae", "Æ": "AE", "œ": "oe", "Œ": "OE", "ı": "i", "þ": "th", "Þ": "TH"})
+
+
 def inlognaam_voor(volledig: str, bestaat=None) -> str:
     """Een inlognaam bij een naam: 'Crème Brûlée' -> 'creme', of 'creme.brulee' / 'creme2' als die al bestaat."""
     import unicodedata
     bestaat = bestaat or naam_bestaat
+    # Letters die NFKD niet uit elkaar haalt (Łukasz werd anders 'ukasz').
+    volledig = volledig.translate(LOSSE_LETTERS)
     plat = "".join(c for c in unicodedata.normalize("NFKD", volledig) if not unicodedata.combining(c)).lower()
     woorden = re.findall(r"[a-z0-9]+", plat)
     if not woorden:
