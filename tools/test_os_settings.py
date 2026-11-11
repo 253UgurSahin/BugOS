@@ -1020,12 +1020,13 @@ _n495 = bi.lees_netwerken("  :eduroam:70:WPA2 802.1X\n  :Station:60:OWE\n  :Thui
 _z495 = {n.naam: (n.beveiligd, n.zakelijk) for n in _n495}
 klopt(_z495 == {"eduroam": (True, True), "Station": (False, False), "Thuis": (True, False)},
       f"U495: eduroam is school/werk-wifi, OWE is open ({_z495})")
-_sn = sys.modules["bugos_settings_netwerk"]
-_open495 = []
-_oud495, _sn.kde_instelling = _sn.kde_instelling, (lambda m: _open495.append(m))
-venster.paginas["wifi"].verbind_met(_n495[0] if _n495[0].naam == "eduroam" else next(n for n in _n495 if n.zakelijk), False)
-_sn.kde_instelling = _oud495
-klopt(_open495 == ["kcm_networkmanagement"], f"U495: eduroam opent KDE's netwerkscherm in plaats van 'wachtwoord fout' ({_open495})")
+_edu495 = _n495[0] if _n495[0].naam == "eduroam" else next(n for n in _n495 if n.zakelijk)
+venster.paginas["wifi"].verbind_met(_edu495, False)
+_d495 = getattr(venster.paginas["wifi"], "zakelijk_dialoog", None)
+klopt(_d495 is not None and _d495.isVisible() and "eduroam" in _d495.windowTitle(),
+      "U495: eduroam opent BugOS' eigen venster voor wifi van school of werk (gebruikersnaam en wachtwoord, geen KDE)")
+if _d495 is not None:
+    _d495.reject()
 # U496: een HDMI-uitgang zonder scherm eraan staat niet in de lijst (dan is alles stil); de gekozen wel.
 _j496 = __import__("json").dumps([{"name": "speakers", "description": "Speakers", "ports": [{"availability": "available"}]},
                     {"name": "hdmi1", "description": "HDMI 1", "ports": [{"availability": "not available"}]},

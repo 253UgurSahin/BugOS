@@ -311,7 +311,7 @@ mod = importlib.util.module_from_spec(spec)
 sys.modules["instellingen"] = mod
 lader.exec_module(mod)
 from PySide6.QtCore import QThreadPool  # noqa: E402
-from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtWidgets import QApplication, QLineEdit  # noqa: E402,F401
 
 app = mod.maak_app("bugos-settings", "bugos-settings", ["test"])
 venster = mod.Instellingen("start")
@@ -391,6 +391,151 @@ wacht()
 wifi.toon((True, [], False, False))
 klopt(wifi.opgeslagen.isHidden(), "opgeslagen: zonder wifi in de computer geen regel 'Opgeslagen netwerken'")
 wifi.ververs()
+wacht()
+
+# ---- wifi van school of werk: het eigen venster (geen KDE)
+_kde = []
+_oud_kde = (sn.kde_instelling, sn.start)
+sn.kde_instelling = lambda *a, **k: _kde.append(a)
+sn.start = lambda *a, **k: _kde.append(a)
+_netten = bi.netwerken()
+_edu = next((n for n in _netten if n.naam == "eduroam"), None)
+klopt(_edu is not None and _edu.zakelijk, "school/werk: de voorbeeldlijst heeft eduroam (school of werk)")
+wifi.verbind_met(_edu, False)
+zd = wifi.zakelijk_dialoog
+klopt(zd.isVisible() and "eduroam" in zd.windowTitle() and not zd.ok.isEnabled() and not _kde,
+      f"school/werk: eduroam opent BugOS' eigen venster, 'Verbinden' kan nog niet (KDE: {_kde})")
+zd.gebruiker.setText("")
+zd.gebruiker.textEdited.emit("student@student.tudelft.nl")
+zd.gebruiker.setText("student@student.tudelft.nl")
+klopt(zd.domein.text() == "tudelft.nl", f"school/werk: het domein vult zich in uit de gebruikersnaam ({zd.domein.text()!r})")
+zd.wachtwoord.setText("geheim")
+klopt(zd.ok.isEnabled() and zd.hint.isHidden(), "school/werk: met naam en wachtwoord kan 'Verbinden'")
+klopt(zd.wachtwoord.echoMode() == QLineEdit.EchoMode.Password and zd.oog.toolTip(),
+      "school/werk: het wachtwoord zijn bolletjes, met een oogje om het te laten zien")
+zd.controle.setChecked(False)
+klopt(not zd.waarschuwing.isHidden() and "minder veilig" in zd.waarschuwing.tekst.text(),
+      "school/werk: de controle uit: een waarschuwing")
+zd.methode.knoppen["ttls"].click()
+klopt("TTLS" in zd.waarschuwing.tekst.text(), "school/werk: TTLS zonder controle: de strengere waarschuwing")
+zd.methode.knoppen["peap"].click()
+zd.controle.setChecked(True)
+zd.domein.setText("")
+klopt(not zd.ok.isEnabled() and not zd.hint.isHidden() and "domein" in zd.hint_tekst.text() and zd.meer.isChecked(),
+      "school/werk: controle aan zonder domein: 'Verbinden' kan niet, en boven de knoppen staat waarom (N9)")
+zd.domein.setText("nl")
+klopt(not zd.ok.isEnabled() and "geen domein" in zd.hint_tekst.text(),
+      "school/werk: 'nl' is geen domein (minstens twee delen) (N12)")
+zd.domein.setText("tudelft.nl")
+zd.reject()
+wacht()
+
+# zonder '@' in de gebruikersnaam: Meer opties gaat open en zegt wat er mist (geen grijze knop zonder reden)
+wifi.open_zakelijk("eduroam")
+zd = wifi.zakelijk_dialoog
+zd.gebruiker.textEdited.emit("CORP\\jdoe")
+zd.gebruiker.setText("CORP\\jdoe")
+zd.wachtwoord.setText("x")
+klopt(zd.meer.isChecked() and not zd.opties.isHidden() and not zd.hint.isHidden() and not zd.ok.isEnabled(),
+      "school/werk: 'CORP\\jdoe': Meer opties klapt open, met de reden boven de knoppen (N9)")
+zd.reject()
+wacht()
+
+# verbinden: wachtwoord 'fout' -> het venster blijft, met de reden; domein 'fout.nl' -> certificaat
+wifi.open_zakelijk("eduroam")
+zd = wifi.zakelijk_dialoog
+zd.gebruiker.textEdited.emit("student@uni.nl")
+zd.gebruiker.setText("student@uni.nl")
+zd.wachtwoord.setText("fout")
+zd.ok.click()
+klopt(not zd.ok.isEnabled() and "Verbinden…" in zd.ok.text() and "minuut" in zd.banner.tekst.text(),
+      "school/werk: tijdens het verbinden: 'Verbinden…' en een melding dat het even kan duren")
+wacht()
+klopt(zd.isVisible() and not zd.banner.isHidden() and "Kloppen je gebruikersnaam en wachtwoord" in zd.banner.tekst.text()
+      and zd.wachtwoord.selectedText() == "fout" and zd.nieuw_uuid == "voorbeeld-eduroam",
+      f"school/werk: verkeerd wachtwoord: het venster blijft, zegt het, en het wachtwoord is gekozen ({zd.banner.tekst.text()!r})")
+_vergeten = []
+_oud_vp = bi.vergeet_profiel
+bi.vergeet_profiel = lambda u: (_vergeten.append(u), True)[1]
+zd.reject()
+wacht()
+bi.vergeet_profiel = _oud_vp
+klopt(_vergeten == ["voorbeeld-eduroam"], f"school/werk: Annuleren na een mislukt nieuw profiel gooit het weer weg ({_vergeten})")
+bi.VB_NET["zakelijk"].clear()
+
+wifi.open_zakelijk("eduroam")
+zd = wifi.zakelijk_dialoog
+zd.gebruiker.setText("student@uni.nl")
+zd.domein.textEdited.emit("fout.nl")
+zd.domein.setText("fout.nl")
+zd.wachtwoord.setText("goed")
+zd.ok.click()
+wacht()
+klopt(zd.isVisible() and zd.meer.isChecked() and "radius.voorbeeld.nl" in zd.banner.tekst.text()
+      and "fout.nl" in zd.banner.tekst.text(),
+      f"school/werk: verkeerd domein: Meer opties open, met de naam van de server ({zd.banner.tekst.text()!r})")
+zd.domein.setText("uni.nl")
+zd.ok.click()
+wacht()
+klopt(not zd.isVisible() and zd.gelukt and "Verbonden met eduroam" in wifi.melding.tekst.text()
+      and next((n.verbonden for n in bi.netwerken() if n.naam == "eduroam"), False),
+      f"school/werk: goed: het venster gaat dicht, 'Verbonden met eduroam.' ({wifi.melding.tekst.text()!r})")
+klopt(zd.wachtwoord.text() == "", "school/werk: het wachtwoord blijft niet in het venster staan")
+wacht()
+
+# een bekend netwerk van school of werk dat niet meer wil: het venster opent ingevuld, met de reden
+_oud_zk = (bi.bekend_netwerk, bi.zakelijk_profiel, bi.verbind_zakelijk)
+bi.bekend_netwerk = lambda naam: True
+bi.zakelijk_profiel = lambda naam: bi.ZakelijkProfiel(naam, "oud@uni.nl", domein="uni.nl", uuid="u-5")
+bi.verbind_zakelijk = lambda uuid, ww="": (False, "wachtwoord", "", "")
+wifi.verbind(_edu)
+wacht()
+bi.bekend_netwerk, bi.zakelijk_profiel, bi.verbind_zakelijk = _oud_zk
+zd = wifi.zakelijk_dialoog
+klopt(zd.isVisible() and zd.gebruiker.text() == "oud@uni.nl" and zd.uuid == "u-5" and "Inloggen lukte niet" in zd.banner.tekst.text()
+      and zd.nieuw_uuid == "",
+      "school/werk: bekend netwerk dat niet meer wil: het venster opent met de oude naam en de reden")
+zd.reject()
+wacht()
+
+# verborgen netwerk van school of werk: met een naamveld
+klopt(not wifi.school.isHidden() and wifi.school.parent() is wifi.ander.parent(),
+      "school/werk: naast 'Ander netwerk…' staat 'Netwerk van school of werk…'")
+_bewaard = []
+_oud_bz = bi.bewaar_zakelijk
+bi.bewaar_zakelijk = lambda p: (_bewaard.append(p), ("voorbeeld-" + p.naam, ""))[1]
+wifi.school.click()
+zd = wifi.zakelijk_dialoog
+klopt(zd.netnaam is not None and "school of werk" in zd.windowTitle(), "school/werk: verborgen: venster met een naamveld")
+zd.gebruiker.textEdited.emit("a@b.nl")
+zd.gebruiker.setText("a@b.nl")
+zd.wachtwoord.setText("x")
+klopt(not zd.ok.isEnabled(), "school/werk: verborgen: zonder netwerknaam kan 'Verbinden' niet")
+zd.netnaam.setText("Kantoor")
+zd.ok.click()
+wacht()
+bi.bewaar_zakelijk = _oud_bz
+klopt(_bewaard and _bewaard[0].verborgen and _bewaard[0].naam == "Kantoor", "school/werk: verborgen: het profiel is 'hidden'")
+wacht()
+wifi.toon((True, [], False, False))
+klopt(wifi.school.isHidden(), "school/werk: zonder wifi in de computer ook geen knop 'Netwerk van school of werk…' (N15)")
+wifi.ververs()
+wacht()
+sn.kde_instelling, sn.start = _oud_kde
+klopt(not _kde, f"school/werk: nergens een KDE-venster ({_kde})")
+_bron_pag = (PY / "bugos_settings_netwerk.py").read_text(encoding="utf-8")
+klopt("kcm_networkmanagement" not in _bron_pag and sn.WifiPagina.kde == "",
+      "school/werk: de wifi-pagina verwijst niet meer naar KDE (kcm_networkmanagement)")
+
+# past op een klein scherm: de knoppen blijven te zien (het middenstuk schuift)
+wifi.open_zakelijk("eduroam")
+zd = wifi.zakelijk_dialoog
+zd.meer.setChecked(True)
+zd.controle.setChecked(False)
+wacht()
+klopt(zd.height() <= sn.vrije_hoogte(zd) and zd.vlak.maximumHeight() < 16777215,
+      f"school/werk: met Meer opties open past het venster op het scherm ({zd.height()} <= {sn.vrije_hoogte(zd)})")
+zd.reject()
 wacht()
 
 # ---- de lay-out-notities: kopjes met een knop, de wachtwoordvraag in BugOS-stijl, Engelse voorbeeldnamen
