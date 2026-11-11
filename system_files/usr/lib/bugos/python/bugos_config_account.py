@@ -22,7 +22,7 @@ from bugos_base import t
 
 # Wat de voorbeeldstand (BUGOS_INSTELLINGEN_VOORBEELD=1) voor dit onderdeel onthoudt. Hier en niet in _c._VB:
 # dat staat in het gedeelde bugos_config.py.
-_VB_ACCOUNT: dict = {"klok_gezet": None, "mensen": None, "foto": ""}
+_VB_ACCOUNT: dict = {"klok_gezet": None, "mensen": None, "foto": "", "regio": "nl_NL"}
 
 
 # ============================================================ tijd en taal ===
@@ -166,6 +166,57 @@ def zet_taal(code: str) -> bool:
     if streek != HOUDEN:
         for sleutel in LC_STREEK:
             goed = _c.kde_schrijf("plasma-localerc", "Formats", sleutel, f"{streek}.UTF-8" if streek else None) and goed
+        # Een andere taal: ook de notatie van datum en tijd weer die van de taal (kies je daarna opnieuw).
+        for sleutel in LC_REGIO + ("LC_NUMERIC",):
+            goed = _c.kde_schrijf("plasma-localerc", "Formats", sleutel, None) and goed
+    return goed
+
+
+# De notatie van datum en tijd: 14:58 of 2:58 PM, 11-11-2026 of 11/11/2026, de week begint op maandag of zondag.
+# (code, nl, en). Alle zijn er als glibc-locale in BugOS (glibc-all-langpacks).
+REGIOS = [("nl_NL", "Nederland", "Netherlands"), ("nl_BE", "België (Nederlands)", "Belgium (Dutch)"),
+          ("fr_BE", "België (Frans)", "Belgium (French)"), ("en_US", "Verenigde Staten", "United States"),
+          ("en_GB", "Verenigd Koninkrijk", "United Kingdom"), ("en_IE", "Ierland", "Ireland"),
+          ("en_CA", "Canada", "Canada"), ("en_AU", "Australië", "Australia"), ("en_ZA", "Zuid-Afrika", "South Africa"),
+          ("en_IN", "India", "India"), ("de_DE", "Duitsland", "Germany"), ("de_AT", "Oostenrijk", "Austria"),
+          ("de_CH", "Zwitserland", "Switzerland"), ("fr_FR", "Frankrijk", "France"), ("es_ES", "Spanje", "Spain"),
+          ("it_IT", "Italië", "Italy"), ("pt_PT", "Portugal", "Portugal"), ("pt_BR", "Brazilië", "Brazil"),
+          ("pl_PL", "Polen", "Poland"), ("tr_TR", "Turkije", "Türkiye"), ("uk_UA", "Oekraïne", "Ukraine"),
+          ("ar_MA", "Marokko", "Morocco"), ("ar_EG", "Egypte", "Egypt"), ("nl_AW", "Aruba", "Aruba")]
+# Alleen LC_TIME: de keuze gaat over de datum en de tijd. Getallen, papier, maten en geld blijven van je taal
+# (U229/U242): wie een 12-uursklok wil, krijgt er geen Letter-papier en dollars bij (review I2).
+LC_REGIO = ("LC_TIME",)
+
+
+def _locale_code(tekst: str) -> str:
+    """'nl_NL.UTF-8' of 'en_US.utf8@euro' -> 'nl_NL'; C en POSIX tellen niet."""
+    code = tekst.split(":")[0].split(".")[0].split("@")[0].strip()
+    return "" if code in ("C", "POSIX") else code
+
+
+def regio() -> str:
+    """Hoe je de datum en de tijd schrijft (de LC_TIME van je sessie), bv. 'nl_NL'. Niets gezet: Amerikaans."""
+    if _c.VOORBEELD:
+        return _VB_ACCOUNT["regio"]
+    for tekst in (_c.kde_lees("plasma-localerc", "Formats", "LC_TIME", ""),
+                  _c.kde_lees("plasma-localerc", "Formats", "LANG", ""),
+                  os.environ.get("LC_TIME", ""), os.environ.get("LANG", "")):
+        code = _locale_code(tekst)
+        if code:
+            return code
+    return "en_US"
+
+
+def zet_regio(code: str) -> bool:
+    """De notatie van datum en tijd; geldt na opnieuw inloggen (plasma-localerc wordt dan doorgegeven)."""
+    if code not in {c for c, _nl, _en in REGIOS}:
+        return False
+    if _c.VOORBEELD:
+        _VB_ACCOUNT["regio"] = code
+        return True
+    goed = True
+    for sleutel in LC_REGIO:
+        goed = _c.kde_schrijf("plasma-localerc", "Formats", sleutel, f"{code}.UTF-8") and goed
     return goed
 
 

@@ -382,6 +382,43 @@ _o13f, _u13f = vang(bi.toetsenborden, antwoord=lambda c: (0, "false") if c[0] ==
 klopt(_u13e == [_I("us", "intl"), _I("be")] and _u13f == [_I("us")],
       f"13: je toetsenborden uit kxkbrc; nog niets gekozen: dat van het systeem, of Engels (VS) ({_u13e}, {_u13f})")
 
+# ======================================================================== notatie (stap 5) ===
+
+def _sleutels(opdrachten) -> dict:
+    """{sleutel: waarde of None (weggehaald)} van elke kwriteconfig6-opdracht op plasma-localerc."""
+    uit = {}
+    for c in opdrachten:
+        if c[0] == "kwriteconfig6" and "plasma-localerc" in c:
+            uit[c[c.index("--key") + 1]] = None if c[-1] == "--delete" else c[-1]
+    return uit
+
+
+_o15, _u15 = vang(bi.zet_regio, "nl_BE")
+_o15b, _u15b = vang(bi.zet_regio, "xx_YY")
+klopt(_u15 is True and _sleutels(_o15) == {"LC_TIME": "nl_BE.UTF-8"}
+      and all("Formats" in c for c in _o15 if c[0] == "kwriteconfig6") and _u15b is False and not _o15b,
+      f"15/I2: notatie: alleen LC_TIME (geen papier, maten of geld erbij); een onbekende regio: niets ({_sleutels(_o15)})")
+
+
+def _lang(waarde: str):
+    return lambda c: (0, waarde + "\n") if c[0] == "kreadconfig6" and "LANG" in c else (0, "")
+
+
+_oud_env16 = {k: os.environ.pop(k) for k in ("LANG", "LC_TIME") if k in os.environ}
+_o16, _ = vang(bi.zet_taal, "nl", antwoord=_lang("en_US.UTF-8"))
+_o16b, _ = vang(bi.zet_taal, "en", antwoord=_lang("en_GB.UTF-8"))
+_s16, _s16b = _sleutels(_o16), _sleutels(_o16b)
+klopt("LC_TIME" in _s16 and _s16["LC_TIME"] is None and "LC_NUMERIC" in _s16 and _s16["LC_NUMERIC"] is None
+      and _s16.get("LANG") == "nl_NL.UTF-8" and not [k for k in _s16b if k.startswith("LC_")],
+      f"16: een andere taal zet de notatie terug; Engels terwijl je al Engels had: geen LC_ ({_s16}, {_s16b})")
+_r16 = {w: vang(bi.regio, antwoord=a)[1] for w, a in (
+    ("lc_time", lambda c: (0, "en_US.UTF-8\n") if "LC_TIME" in c else (0, "nl_NL.UTF-8\n")),
+    ("lang", lambda c: (0, "") if "LC_TIME" in c else (0, "de_DE.UTF-8\n")),
+    ("c", lambda c: (0, "C.UTF-8\n")))}
+os.environ.update(_oud_env16)
+klopt(_r16 == {"lc_time": "en_US", "lang": "de_DE", "c": "en_US"},
+      f"G: de notatie uit plasma-localerc: LC_TIME, anders LANG; C telt niet: Amerikaans ({_r16})")
+
 # ============================================================ het venster van Instellingen (voorbeeldstand) ===
 
 lader = importlib.machinery.SourceFileLoader("instellingen", str(BIN / "bugos-settings"))
@@ -702,6 +739,38 @@ klopt([r.titel.text() for r in _tp_nieuw.g3.findChildren(sa.Rij)] == ["Even kijk
 _tp_nieuw.toon_rest(None)
 klopt(len(_tp_nieuw.toetsenbord_rijen) == 1, "I16: niet te lezen: toch een toetsenbord en 'toevoegen', nooit eeuwig wachten")
 _tp_nieuw.deleteLater()
+tp.ververs()
+wacht()
+
+# 10 en G: de notatie op de pagina.
+from PySide6.QtCore import QLocale  # noqa: E402
+
+_codes10 = [c for c, _nl, _en in bi.REGIOS]
+klopt(len(set(_codes10)) == len(_codes10) and all(QLocale(c).language() != QLocale.Language.C for c in _codes10)
+      and all(nl and en for _c, nl, en in bi.REGIOS), "10: elke notatie is uniek en Qt kent hem")
+klopt(tp.regio_rij.uitleg.text().startswith("Nederland · ") and "week begint op maandag" in tp.regio_rij.uitleg.text(),
+      f"G: Notatie: Nederland, met een voorbeeld en de eerste dag van de week ({tp.regio_rij.uitleg.text()!r})")
+klopt("week begint op zondag" in sa.regio_voorbeeld("en_US") and sa.regio_naam("xx_YY"),
+      f"G: Verenigde Staten: de week begint op zondag ({sa.regio_voorbeeld('en_US')!r})")
+_kies_g: list = []
+
+
+class _NepKiesG:
+    def __init__(self, ouder, titel, items, huidig=None, hint=""):
+        _kies_g.append((titel, items, huidig, hint))
+        self.gekozen = "en_US"
+
+
+setattr(_NepKiesG, "exec", lambda self: 1)
+sa.KiesDialoog = _NepKiesG
+tp.regio_rij.rechts.click()
+wacht()
+sa.KiesDialoog = _oud29
+klopt(_kies_g and _kies_g[0][2] == "nl_NL" and len(_kies_g[0][1]) == len(bi.REGIOS) and "Zoek een land" == _kies_g[0][3]
+      and any(n.startswith("Verenigde Staten — ") for _c, n in _kies_g[0][1])
+      and tp.regio_rij.uitleg.text().startswith("Verenigde Staten") and "Meld je af" in tp.melding.tekst.text(),
+      f"G: een andere notatie kiezen; daarna afmelden ({tp.melding.tekst.text()!r})")
+ca._VB_ACCOUNT["regio"] = "nl_NL"
 tp.ververs()
 wacht()
 

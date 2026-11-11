@@ -10,7 +10,7 @@ from bugos_ui import TAAL, K, Knop, Rij, label, leeg_groep, ronde_pixmap, t, vra
 from bugos_settings_onderdelen import (
     Blad, Keuzes, KiesDialoog, WachtwoordDialoog, dichtstbij, meer_knop, op_achtergrond, schuifje,
 )
-from PySide6.QtCore import QDate, QLocale, Qt, QTime, QTimer
+from PySide6.QtCore import QDate, QDateTime, QLocale, Qt, QTime, QTimer
 from PySide6.QtGui import QIcon, QImage, QPixmap
 from PySide6.QtWidgets import QDateEdit, QDialog, QGridLayout, QHBoxLayout, QLineEdit, QTimeEdit, QVBoxLayout, QWidget
 
@@ -53,6 +53,24 @@ def _engels_nu(d: datetime) -> str:
 def _met_heel_jaar(formaat: str) -> str:
     """'M/d/yy' -> 'M/d/yyyy': in een datumveld liever het hele jaartal (26 kan ook 1926 zijn)."""
     return formaat if "yyyy" in formaat else formaat.replace("yy", "yyyy")
+
+
+def regio_naam(code: str) -> str:
+    """'nl_BE' -> 'België (Nederlands)'; een regio die niet in de lijst staat, heet zoals Qt hem noemt."""
+    for c, nl, en in bi.REGIOS:
+        if c == code:
+            return t(nl, en)
+    return QLocale(code).nativeTerritoryName() or code
+
+
+def regio_voorbeeld(code: str, met_week: bool = True) -> str:
+    """Zo ziet het eruit in die regio: '11-11-2026 14:58 · week begint op maandag'."""
+    loc = QLocale(code)
+    voorbeeld = loc.toString(QDateTime.currentDateTime(), QLocale.FormatType.ShortFormat)
+    if met_week:
+        dag = DAGEN[loc.firstDayOfWeek().value - 1]
+        voorbeeld += " · " + t("week begint op {dag}", "week starts on {dag}").format(dag=t(dag[0], dag[1]))
+    return voorbeeld
 
 
 class KlokDialoog(QDialog):
@@ -147,6 +165,12 @@ class TijdPagina(Blad):
         taal_knop.clicked.connect(self.kies_taal)
         self.taal_rij = Rij("praten", t("Taal van BugOS", "Language of BugOS"), "", taal_knop)
         g2.voeg(self.taal_rij)
+        # Hoe je de datum en de tijd schrijft (12 of 24 uur, de eerste dag van de week): los van de taal.
+        regio_knop = Knop(t("Andere notatie…", "Other format…"), "gewoon")
+        regio_knop.clicked.connect(self.kies_regio)
+        self.regio = ""
+        self.regio_rij = Rij("klok", t("Notatie", "Formats"), t("Even kijken…", "Checking…"), regio_knop)
+        g2.voeg(self.regio_rij)
         self.lay.addWidget(label(t("Nederlands en Engels zijn compleet. In andere talen zijn KDE en de meeste "
                                    "programma's vertaald; de BugOS-programma's zelf zijn dan in het Engels.",
                                    "Dutch and English are complete. In other languages KDE and most programs are "
@@ -163,13 +187,37 @@ class TijdPagina(Blad):
         op_achtergrond(self, lambda: (bi.tijd(), bi.taal()), self.toon)
         # Wat er verder op de pagina staat in een tweede klusje: toon() blijft zoals het was (tests roepen het aan).
         op_achtergrond(self, lambda: (bi.toetsenborden(), bi.systeem_toetsenbord(), bi.gebruiker().beheerder,
-                                      dict(bi.alle_toetsenborden())), self.toon_rest)
+                                      dict(bi.alle_toetsenborden()), bi.regio()), self.toon_rest)
 
     def toon_rest(self, uitkomst) -> None:
         if not isinstance(uitkomst, tuple):   # niet te lezen: dan wat we weten, nooit eeuwig 'even kijken'
-            uitkomst = (self.toetsenbord_lijst or [bi.Indeling("us")], bi.Indeling("us"), False, {})
-        lijst, systeem, beheerder, beschrijvingen = uitkomst
+            uitkomst = (self.toetsenbord_lijst or [bi.Indeling("us")], bi.Indeling("us"), False, {}, self.regio)
+        lijst, systeem, beheerder, beschrijvingen, regio = uitkomst
         self.vul_toetsenborden(lijst, systeem, beheerder, beschrijvingen)
+        if regio:
+            self.regio = regio
+            self.regio_rij.zet_uitleg(f"{regio_naam(regio)} · {regio_voorbeeld(regio)}")
+
+    def kies_regio(self) -> None:
+        huidig = self.regio
+        items = [(c, f"{t(nl, en)} — {regio_voorbeeld(c, met_week=False)}") for c, nl, en in bi.REGIOS]
+        items.sort(key=lambda x: x[1].casefold())
+        d = KiesDialoog(self, t("Hoe schrijf je de datum en de tijd?", "How do you write the date and time?"), items,
+                        huidig, t("Zoek een land", "Search a country"))
+        if not d.exec() or d.gekozen in (None, huidig):
+            return
+        code = d.gekozen
+
+        def klaar(ok) -> None:
+            if ok is True:
+                self.melding.toon(t("Klaar. Meld je af en weer aan, dan zie je overal de nieuwe notatie.",
+                                    "Done. Log out and back in to see the new format everywhere."), "goed",
+                                  t("Nu afmelden", "Log out now"), bi.afmelden, seconden=0)
+            else:
+                self.melding.toon(t("Dat lukte niet.", "That did not work."), "fout")
+            self.ververs()
+
+        op_achtergrond(self, lambda: bi.zet_regio(code), klaar)
 
     # ------------------------------------------------------------ toetsenbord ---
 
