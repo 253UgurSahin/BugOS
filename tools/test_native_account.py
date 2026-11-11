@@ -469,8 +469,6 @@ inl.ververs()
 wacht()
 
 # 26: 'Iemand toevoegen' opent het BugOS-venster en de nieuwe persoon staat meteen in de lijst.
-from PySide6.QtTest import QTest  # noqa: E402
-
 _open26: list = []
 
 
@@ -497,9 +495,20 @@ ca._VB_ACCOUNT["mensen"] = None
 inl.ververs()
 wacht()
 # 27: het echte venster.
+from PySide6.QtCore import QEvent, Qt  # noqa: E402
+from PySide6.QtGui import QKeyEvent  # noqa: E402
+
+
+def typ(veld, tekst: str) -> None:
+    """Typ zoals een mens, letter voor letter (ook é en û: QTest.keyClicks kan alleen ASCII)."""
+    for teken in tekst:
+        for soort in (QEvent.Type.KeyPress, QEvent.Type.KeyRelease):
+            app.sendEvent(veld, QKeyEvent(soort, Qt.Key.Key_unknown, Qt.KeyboardModifier.NoModifier, teken))
+
+
 _d27 = sa.PersoonDialoog(inl)
 _d27.show()
-QTest.keyClicks(_d27.vol, "Crème Brûlée")
+typ(_d27.vol, "Crème Brûlée")
 _volgt = _d27.inlog.text()
 _d27.een.setText("abc")
 _d27.twee.setText("abc")
@@ -508,15 +517,15 @@ _d27.een.setText("geheim12")
 _d27.twee.setText("geheim12")
 _goed27 = _d27.ok.isEnabled()
 _d27.inlog.clear()
-QTest.keyClicks(_d27.inlog, "Café")
+typ(_d27.inlog, "Café")
 _klein27 = (_d27.inlog.text(), _d27.fout.text(), _d27.ok.isEnabled())
 _d27.inlog.clear()
-QTest.keyClicks(_d27.inlog, "Huis Werk")
+typ(_d27.inlog, "Huis Werk")
 _punt27 = _d27.inlog.text()
-QTest.keyClicks(_d27.vol, " x")
+typ(_d27.vol, " x")
 _blijft27 = _d27.inlog.text()
 _d27.inlog.clear()
-QTest.keyClicks(_d27.inlog, "root")
+typ(_d27.inlog, "root")
 _root27 = _d27.fout.text()
 _maat27 = _d27.sizeHint()
 klopt(_volgt == "creme" and not _kort[0] and "te kort" in _kort[1] and _goed27,
