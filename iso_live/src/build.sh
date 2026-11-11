@@ -247,6 +247,8 @@ python3 "$SRC/bugos_webui.py" /usr/share/cockpit/anaconda-webui
 install -Dm0755 "$SRC/bugos-install" /usr/bin/bugos-install
 
 # Wat het installatieprogramma doet.
+# Nooit 'timezone' of 'timesource' in deze kickstart (of in bugos-updates.ks): dan zet Anaconda de zone met voorrang 70,
+# en wint onze gok op basis van de taal (voorrang 30, zie bugos_webui.py) nooit meer. tools/test_native_installer.py let erop.
 mkdir -p /usr/share/anaconda/post-scripts
 cat >>/usr/share/anaconda/interactive-defaults.ks <<EOF
 
@@ -330,6 +332,20 @@ fi
 # Welkomstscherm met "Proberen" of "Installeren".
 install -Dm0644 "$SRC/bugos-live.desktop" /etc/xdg/autostart/bugos-live.desktop
 install -Dm0755 "$SRC/bugos-live" /usr/bin/bugos-live
+# bugos-live gebruikt onderdelen van BugOS zelf (bugos_ui.vraag_ja, op_achtergrond, ...). Is BASE_IMAGE een oudere
+# BugOS zonder die onderdelen, dan zou het welkomstscherm op de stick zonder melding niet opengaan. Dan liever hier
+# stoppen: laad het programma (zonder het te starten), dan zijn alle imports nagekeken.
+QT_QPA_PLATFORM=offscreen python3 - <<'PY'
+import importlib.machinery
+import importlib.util
+
+lader = importlib.machinery.SourceFileLoader("bugos_live", "/usr/bin/bugos-live")
+spec = importlib.util.spec_from_loader("bugos_live", lader)
+try:
+    lader.exec_module(importlib.util.module_from_spec(spec))
+except ImportError as e:
+    raise SystemExit(f"bugos-live past niet bij deze BugOS (BASE_IMAGE te oud?): {e}") from e
+PY
 
 # Precies één installeer-knop, en die heet BugOS.
 # De live-scripts van Fedora (livesys-kde) zetten liveinst.desktop

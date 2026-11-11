@@ -122,6 +122,15 @@ class Live(Achtergrond):
         net_rij.addWidget(self.wifi)
         net_rij.addStretch(1)
         lay.addLayout(net_rij)
+        # Gaat Instellingen niet open, dan staat hier hoe het anders kan. Een eigen regel, niet in de chip: die krijgt
+        # elke 3 s een nieuwe tekst, en dan zou de uitleg meteen weer weg zijn.
+        self.wifi_fout = label(t("Instellingen gaan niet open. Kies wifi met het netwerk-icoon rechtsonder.",
+                                 "Settings did not open. Choose Wi-Fi with the network icon at the bottom right."), "sub")
+        self.wifi_fout.setStyleSheet("color:rgba(255,255,255,0.78);font-size:14px;")
+        self.wifi_fout.setWordWrap(True)
+        self.wifi_fout.setMaximumWidth(560)
+        self.wifi_fout.hide()
+        lay.addWidget(self.wifi_fout)
 
         # Weinig geheugen? Dan eerlijk zeggen dat installeren kan mislukken.
         # Het installatieprogramma zet elk onderdeel van BugOS eerst in het
@@ -149,7 +158,8 @@ class Live(Achtergrond):
         self._heeft_wifi: bool | None = None
         self._wifi_gevraagd = float("-inf")
         self._bezig = False
-        self.toon_net(False)
+        # Tot nmcli het eerste antwoord geeft: niets beweren (geen 'geen internet', geen wifi-knop).
+        self.chip.setText(t("Internet nakijken…", "Checking the internet…"))
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.kijk_internet)
         self.timer.start(3000)
@@ -172,15 +182,19 @@ class Live(Achtergrond):
 
     def _net_bekend(self, uitkomst) -> None:
         self._bezig = False
-        online, wifi = uitkomst if uitkomst else (False, None)
+        # Ging het vragen zelf mis, dan zelfde regel als bij een nmcli die faalt: aannemen dat er wifi is.
+        online, wifi = uitkomst if uitkomst else (False, True)
         if wifi is not None:
             self._heeft_wifi = wifi
             self._wifi_gevraagd = time.monotonic()
         self.toon_net(online)
 
     def toon_net(self, online: bool) -> None:
-        # Geen wifi-kaart (een pc met een kabel): geen knop die nergens heen leidt.
-        self.wifi.setVisible(not online and self._heeft_wifi is not False)
+        # Alleen met een wifi-kaart (True; ook als nmcli faalt). Geen kaart (een pc met een kabel) of nog niet bekend
+        # (None): geen knop die nergens heen leidt.
+        self.wifi.setVisible(not online and self._heeft_wifi is True)
+        if online:
+            self.wifi_fout.hide()
         self.chip.setText(t("✓  Je hebt internet", "✓  You are online") if online
                           else t("Geen internet? Geen probleem: BugOS installeert vanaf de stick",
                                  "No internet? No problem: BugOS installs from the stick"))
@@ -191,8 +205,7 @@ class Live(Achtergrond):
         try:
             subprocess.Popen(["bugos-settings", "wifi"], start_new_session=True)
         except OSError:
-            self.chip.setText(t("Instellingen gaan niet open. Kies wifi met het netwerk-icoon rechtsonder.",
-                                "Settings did not open. Choose Wi-Fi with the network icon at the bottom right."))
+            self.wifi_fout.show()
 
     def installeer(self) -> None:
         # Via ons startertje: dat waarschuwt eerst bij een BitLocker-schijf.

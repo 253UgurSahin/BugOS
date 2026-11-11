@@ -115,13 +115,30 @@ def test_live() -> None:
     # nmcli: antwoord uit twee bestandjes, zodat elke test zijn eigen toestand kiest.
     (TMP / "conn").write_text("none\n", encoding="utf-8")
     (TMP / "types").write_text("ethernet\nloopback\n", encoding="utf-8")
-    nep("nmcli", f'case "$*" in *CONNECTIVITY*) cat \'{TMP}/conn\' ;; *TYPE*) [ -f \'{TMP}/types-kapot\' ] && exit 8; '
+    nep("nmcli", f'[ -f \'{TMP}/traag\' ] && sleep 1; case "$*" in *CONNECTIVITY*) cat \'{TMP}/conn\' ;; *TYPE*) [ -f \'{TMP}/types-kapot\' ] && exit 8; '
                  f'cat \'{TMP}/types\' ;; esac')
     nep("bugos-settings", "exit 0")
     live = laad("bugos_live", SRC / "bugos-live")
     import bugos_ui
 
     app = bugos_ui.maak_app("bugos-live", "bugos-live", ["bugos-live"])
+
+    # 22. Vóór het eerste antwoord van nmcli: geen 'geen internet' en geen wifi-knop (een online pc met een kabel zag
+    # anders even het verkeerde), daarna wel de echte toestand (hier: offline, met een wifi-kaart).
+    (TMP / "types").write_text("ethernet\nwifi\n", encoding="utf-8")
+    (TMP / "traag").write_text("", encoding="utf-8")
+    w = live.Live()
+    w.timer.stop()
+    w.show()
+    app.processEvents()
+    klopt(w.wifi.isHidden() and "Checking" in w.chip.text() and "No internet" not in w.chip.text(),
+          f"22: vóór het eerste antwoord: geen wifi-knop, de chip zegt 'Checking the internet…' ({w.chip.text()})")
+    (TMP / "traag").unlink()
+    wacht(app, lambda: not w._bezig, 8)
+    klopt(not w.wifi.isHidden() and "No internet" in w.chip.text(),
+          f"22: na het eerste antwoord: offline met een wifi-kaart, de knop staat er ({w.chip.text()})")
+    w.close()
+    (TMP / "types").write_text("ethernet\nloopback\n", encoding="utf-8")
 
     # 21. 'Wifi kiezen' opent BugOS Instellingen op de wifi-pagina, niet KDE.
     w = live.Live()
@@ -136,6 +153,27 @@ def test_live() -> None:
         live.subprocess.Popen = echt_popen
     klopt(gestart == [(["bugos-settings", "wifi"], True)],
           f"21: 'Choose Wi-Fi' opent bugos-settings wifi (in een eigen sessie) ({gestart})")
+    # 21. Gaat Instellingen niet open, dan blijft de uitleg staan, ook na de volgende keer kijken (elke 3 s).
+    def kapot(_cmd, **_kw):
+        raise OSError(2, "No such file or directory")
+    (TMP / "types").write_text("wifi\n", encoding="utf-8")
+    w._wifi_gevraagd = float("-inf")
+    live.subprocess.Popen = kapot
+    try:
+        w.wifi.click()
+    finally:
+        live.subprocess.Popen = echt_popen
+    w.kijk_internet()
+    wacht(app, lambda: not w._bezig)
+    klopt(not w.wifi_fout.isHidden() and "network icon" in w.wifi_fout.text() and "No internet" in w.chip.text(),
+          f"21: Instellingen gaat niet open: de uitleg blijft staan na een nieuwe ronde ({w.wifi_fout.text()})")
+    klopt("Errno" not in w.wifi_fout.text() and "No such file" not in w.wifi_fout.text(), "21: geen ruwe foutmelding")
+    (TMP / "conn").write_text("full\n", encoding="utf-8")
+    w.kijk_internet()
+    wacht(app, lambda: not w._bezig)
+    klopt(w.wifi_fout.isHidden(), "21: online: de uitleg over wifi is weg")
+    (TMP / "conn").write_text("none\n", encoding="utf-8")
+    (TMP / "types").write_text("ethernet\nloopback\n", encoding="utf-8")
     for naam in ("bugos-live", "bugos-install", "build.sh"):
         tekst = bron(naam)
         klopt("systemsettings" not in tekst and "kcm_" not in tekst, f"21: {naam} opent geen KDE-instellingen")
@@ -356,6 +394,15 @@ def test_tijdzone() -> None:
     klopt("use_geolocation = False" in bouw and "geolocation_provider =\n" in bouw.replace("\r\n", "\n"),
           "A: plaatsbepaling blijft uit (niets wordt op internet gevraagd)")
     klopt(css.count("{") == css.count("}"), "A: de CSS is heel (evenveel { als })")
+    # B. Onze gok zet de zone met voorrang 30. Een 'timezone'- of 'timesource'-regel in de kickstart zet hem met
+    # voorrang 70 (Timezone-module, process_kickstart), en dan wint de gok nooit meer: zonder melding, zonder fout.
+    bouw_lf = bouw.replace("\r\n", "\n")
+    kop = r"cat >>?\S*(?:interactive-defaults|bugos-updates)\.ks <<'?EOF'?\n"
+    stukken = re.findall(kop + r"(.*?)\nEOF\n", bouw_lf, re.S)
+    regels = [r for stuk in stukken for r in stuk.splitlines() if re.match(r"\s*(timezone|timesource)\b", r)]
+    klopt(len(stukken) >= 3 and not regels,
+          "B: geen 'timezone'/'timesource' in de kickstart (voorrang 70 zou de gok met voorrang 30 altijd overschrijven) "
+          f"({len(stukken)} stukken, {regels})")
 
 
 # =============================================================================== voortgang (bugos_voortgang.py) ===
