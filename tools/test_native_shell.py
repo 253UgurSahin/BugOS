@@ -338,8 +338,7 @@ def blok(tekst: str, begin: int) -> str:
 
 
 def acties(plasmoid: str) -> list[dict]:
-    tekst = re.sub(r"//[^
-]*", "", lees(PLASMOIDS / plasmoid / "contents/ui/main.qml"))
+    tekst = re.sub(r"//[^\n]*", "", lees(PLASMOIDS / plasmoid / "contents/ui/main.qml"))
     m = re.search(r"Plasmoid\.contextualActions:\s*\[", tekst)
     if not m:
         return []
