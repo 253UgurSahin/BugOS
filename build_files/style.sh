@@ -142,6 +142,39 @@ if [ -f "$SCHAKEL/SwitchIndicator.qml" ]; then
     grep -q focusColor "$SCHAKEL/SwitchIndicator.qml" || echo "LET OP: schakelaar-aanpassing paste niet (nieuwe KDE-versie?)"
 fi
 
+# >>> bureaubladmenu (getest door tools/test_native_shell.py)
+# Het rechtermuismenu van het bureaublad: twee BugOS-regels erbij (Scherminstellingen, Achtergrond wijzigen) en
+# Ctrl+Shift+D (opent KDE's "Bureaublad en achtergrond", ook als het bureaublad op slot staat) eraf. De mapweergave
+# van KDE staat als QML op schijf. Breekt de bouw nooit (set -e): elke grep staat in een if of achter ||.
+bureaubladmenu() {
+    local ui="$1" bron="$2"
+    local laag="$ui/FolderViewLayer.qml" hoofd="$ui/main.qml"
+    # 1. Ctrl+Shift+D eraf, los van stap 2: ook als FolderViewLayer.qml in een nieuwe KDE-versie anders is.
+    if [ -f "$hoofd" ]; then
+        sed -i '/^[[:space:]]*shortcut: *"Ctrl+Shift+D"[[:space:]]*$/d' "$hoofd"
+        if grep -q 'Ctrl+Shift+D' "$hoofd"; then
+            echo "LET OP: bureaubladmenu: Ctrl+Shift+D staat nog in main.qml (nieuwe KDE-versie?); dat opent KDE's achtergrondvenster."
+        fi
+    else
+        echo "LET OP: bureaubladmenu: $hoofd ontbreekt (nieuwe KDE-versie?)."
+    fi
+    # 2. De BugOS-regels: één regel achter het scheidingsstreepje dat KDE na zijn eigen regels zet.
+    if [ ! -f "$laag" ] || ! grep -q '^ *Plasmoid\.contextualActions\.push(actionSeparator);$' "$laag"; then
+        echo "LET OP: bureaubladmenu: FolderViewLayer.qml is anders dan verwacht (nieuwe KDE-versie?); geen BugOS-regels in het bureaubladmenu."
+        return 0
+    fi
+    install -m0644 "$bron" "$ui/BugosBureaubladActies.qml"
+    if ! grep -q 'BugosBureaubladActies.qml' "$laag"; then
+        # Plasmoid.isContainment: niet in een losse "Mapweergave" die iemand op een paneel zet.
+        sed -i 's|^\( *\)Plasmoid\.contextualActions\.push(actionSeparator);$|&\n\1if (Plasmoid.isContainment) { const bugosC = Qt.createComponent("BugosBureaubladActies.qml"); const bugosO = bugosC.status === Component.Ready ? bugosC.createObject(folderViewLayerComponent) : null; if (bugosO) { for (const a of bugosO.acties) Plasmoid.contextualActions.push(a); } else { console.warn("BugOS bureaubladmenu:", bugosC.errorString()); } } // BugOS|' "$laag"
+    fi
+    grep -q 'BugosBureaubladActies.qml' "$laag" || echo "LET OP: bureaubladmenu: invoegen in FolderViewLayer.qml lukte niet."
+    return 0
+}
+# <<< bureaubladmenu
+bureaubladmenu /usr/share/plasma/plasmoids/org.kde.desktopcontainment/contents/ui \
+    /usr/share/plasma/plasmoids/org.bugos.taskbar/contents/ui/BureaubladActies.qml
+
 # De kleuren van "BugOS Licht" ook echt in de standaardinstellingen zetten.
 # Alleen de naam van het schema is niet genoeg: programma's zoals de verkenner
 # lezen de kleuren zelf uit kdeglobals. Zo is alles meteen in BugOS-kleuren.

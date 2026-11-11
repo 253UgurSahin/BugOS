@@ -352,6 +352,82 @@ klopt(bool(_skel) and _regels[:2] == ["[ActionPlugins][0]", "RightButton;NoModif
       "D3: nieuwe gebruikers krijgen het bureaubladmenu zonder de 14 KDE-regels (/etc/skel), en niets voor het paneel")
 klopt(bool(_skel) and STYLE_TEKST.index("mkdir -p /etc/skel/.config") < _skel.start(),
       "D3: style.sh maakt /etc/skel/.config eerst")
+klopt(re.search(r"^bureaubladmenu /usr/share/plasma/plasmoids/org\.kde\.desktopcontainment/contents/ui \\\n"
+                r" +/usr/share/plasma/plasmoids/org\.bugos\.taskbar/contents/ui/BureaubladActies\.qml$", STYLE_TEKST, re.M)
+      is not None, "D4: style.sh past de mapweergave van KDE aan (org.kde.desktopcontainment) met BureaubladActies.qml")
+
+
+# --- C. style.sh: bureaubladmenu op nagemaakte KDE-bestanden ----------------------------------------------------
+BRON = PLASMOIDS / "org.bugos.taskbar/contents/ui/BureaubladActies.qml"
+_f = re.search(r"^# >>> bureaubladmenu.*?\n(.*?)^# <<< bureaubladmenu", STYLE_TEKST, re.S | re.M)
+klopt(_f is not None and "bureaubladmenu() {" in _f.group(1), "C: style.sh heeft de functie bureaubladmenu tussen de merktekens")
+LAAG = """import QtQuick
+FolderViewDropArea {
+    id: folderViewLayerComponent
+    Component.onCompleted: {
+        Plasmoid.contextualActions.push(nieuw);
+        Plasmoid.contextualActions.push(actionSeparator);
+        Plasmoid.contextualActions.push(laatste);
+    }
+}
+"""
+HOOFD = """PlasmoidItem {
+    PlasmaCore.Action {
+            id: configAction
+            text: "Desktop and Wallpaper"
+            shortcut:"Ctrl+Shift+D"
+            onTriggered: configureRequested()
+    }
+}
+"""
+if _f and shutil.which("bash"):
+    with tempfile.TemporaryDirectory() as t:
+        t = Path(t)
+        (t / "functie.sh").write_text(_f.group(1), encoding="utf-8", newline="\n")
+        (t / "draai.sh").write_text('set -euo pipefail\n. "$(dirname "$0")/functie.sh"\nbureaubladmenu "$1" "$2"\n',
+                                    encoding="utf-8", newline="\n")
+
+        def bouw(ui: Path) -> subprocess.CompletedProcess:
+            bron = t / "bron.qml"
+            bron.write_text(lees(BRON), encoding="utf-8", newline="\n")
+            return subprocess.run(["bash", str(t / "draai.sh"), str(ui), str(bron)], capture_output=True, text=True, timeout=30)
+
+        ui = t / "ui"
+        ui.mkdir()
+        (ui / "FolderViewLayer.qml").write_text(LAAG, encoding="utf-8", newline="\n")
+        (ui / "main.qml").write_text(HOOFD, encoding="utf-8", newline="\n")
+        u1 = bouw(ui)
+        laag = (ui / "FolderViewLayer.qml").read_text(encoding="utf-8").split("\n")
+        i = laag.index("        Plasmoid.contextualActions.push(actionSeparator);")
+        ingevoegd = laag[i + 1] if i + 1 < len(laag) else ""
+        klopt(u1.returncode == 0 and "LET OP" not in u1.stdout
+              and (ui / "BugosBureaubladActies.qml").read_text(encoding="utf-8") == lees(BRON)
+              and ingevoegd.startswith("        if (Plasmoid.isContainment) {") and "BugosBureaubladActies.qml" in ingevoegd
+              and ingevoegd.endswith("// BugOS") and laag[i + 2] == "        Plasmoid.contextualActions.push(laatste);",
+              f"C1: de BugOS-regels komen direct na het scheidingsstreepje, even ver ingesprongen ({u1.stdout.strip()[:200]})")
+        klopt("Ctrl+Shift+D" not in (ui / "main.qml").read_text(encoding="utf-8")
+              and "onTriggered: configureRequested()" in (ui / "main.qml").read_text(encoding="utf-8"),
+              "C1: Ctrl+Shift+D (KDE's achtergrondvenster) is weg, de rest van main.qml blijft")
+        _js = QJSEngine().evaluate("(function () { " + ingevoegd + " })")
+        klopt(not _js.isError(), f"C1: de ingevoegde regel is geldige JavaScript ({_js.toString() if _js.isError() else 'ok'})")
+        u2 = bouw(ui)
+        klopt(u2.returncode == 0 and (ui / "FolderViewLayer.qml").read_text(encoding="utf-8").count("BugosBureaubladActies.qml") == 1,
+              "C2: twee keer bouwen: de regel staat er nog steeds maar één keer")
+
+        ui3 = t / "ui3"
+        ui3.mkdir()
+        anders = LAAG.replace("Plasmoid.contextualActions.push(actionSeparator);", "Plasmoid.contextualActions.push(streep);")
+        (ui3 / "FolderViewLayer.qml").write_text(anders, encoding="utf-8", newline="\n")
+        (ui3 / "main.qml").write_text(HOOFD, encoding="utf-8", newline="\n")
+        u3 = bouw(ui3)
+        klopt(u3.returncode == 0 and "LET OP" in u3.stdout
+              and (ui3 / "FolderViewLayer.qml").read_text(encoding="utf-8") == anders
+              and not (ui3 / "BugosBureaubladActies.qml").exists(),
+              "C3: een nieuwe KDE-versie (FolderViewLayer.qml anders): de bouw gaat door met LET OP, niets half veranderd")
+        klopt("Ctrl+Shift+D" not in (ui3 / "main.qml").read_text(encoding="utf-8"),
+              "C3: ... en Ctrl+Shift+D is toch weg (los van FolderViewLayer.qml)")
+        u4 = bouw(t / "bestaat-niet")
+        klopt(u4.returncode == 0 and "LET OP" in u4.stdout, "C4: de mapweergave ontbreekt helemaal: de bouw gaat door met LET OP")
 
 
 # --- E. QML: de eigen regels in de rechtermuismenu's ------------------------------------------------------------
@@ -423,6 +499,65 @@ klopt([x["wat"] for x in ALLE_ACTIES["org.bugos.quickmenu"]]
           "bugos-start-data --start instelling:"]
       and "All settings" not in [x["en"] for x in ALLE_ACTIES["org.bugos.quickmenu"]],
       "E3: snelmenu: precies 'Wifi en internet', 'Geluidsinstellingen' en 'Instellingen openen' (niet 'Alle instellingen': dat is KDE)")
+STUB_ACTION = """import QtQuick
+QtObject { property string text; property Icon icon: Icon {}; signal triggered(); function trigger() { triggered() } }
+"""
+STUB_DATASOURCE = """import QtQuick
+QtObject { property string engine; property var connectedSources: []; property var log: []
+    signal newData(string bron, var data)
+    function connectSource(s) { log = log.concat([s]) }
+    function disconnectSource(s) {} }
+"""
+
+
+def bureaublad_acties(taal: str) -> dict:
+    """Laad BureaubladActies.qml met nagemaakte Plasma-modules; klik op elke regel. Geeft teksten, pictogrammen en
+    de opdrachten terug."""
+    from PySide6.QtCore import QLocale, QMetaObject, QUrl
+    from PySide6.QtQml import QQmlComponent, QQmlEngine, QQmlExpression, QQmlListReference
+    with tempfile.TemporaryDirectory() as t:
+        t = Path(t)
+        core = t / "org/kde/plasma/core"
+        p5 = t / "org/kde/plasma/plasma5support"
+        core.mkdir(parents=True)
+        p5.mkdir(parents=True)
+        (core / "qmldir").write_text("module org.kde.plasma.core\nAction 1.0 Action.qml\nIcon 1.0 Icon.qml\n", encoding="utf-8")
+        (core / "Icon.qml").write_text("import QtQuick\nQtObject { property string name }\n", encoding="utf-8")
+        (core / "Action.qml").write_text(STUB_ACTION, encoding="utf-8")
+        (p5 / "qmldir").write_text("module org.kde.plasma.plasma5support\nDataSource 1.0 DataSource.qml\n", encoding="utf-8")
+        (p5 / "DataSource.qml").write_text(STUB_DATASOURCE, encoding="utf-8")
+        QLocale.setDefault(QLocale(taal))
+        engine = QQmlEngine()
+        engine.addImportPath(str(t))
+        comp = QQmlComponent(engine, QUrl.fromLocalFile(str(BRON)))
+        obj = comp.create()
+        if obj is None:
+            return {"fout": "; ".join(e.toString() for e in comp.errors())}
+        lijst = QQmlListReference(obj, "acties")
+        uit = {"teksten": [], "iconen": []}
+        for i in range(lijst.count()):
+            a = lijst.at(i)
+            uit["teksten"].append(a.property("text"))
+            ic = QQmlExpression(engine.rootContext(), a, "icon.name").evaluate()
+            uit["iconen"].append(ic[0] if isinstance(ic, tuple) else ic)
+            QMetaObject.invokeMethod(a, "trigger")
+        log = QQmlExpression(engine.rootContext(), obj, "JSON.stringify(opdracht.log)").evaluate()
+        uit["log"] = json.loads(log[0] if isinstance(log, tuple) else log)
+        obj.deleteLater()
+        return uit
+
+
+_en = bureaublad_acties("en_US")
+_nl = bureaublad_acties("nl_NL")
+klopt(_en.get("teksten") == ["Display settings", "Change background"]
+      and _nl.get("teksten") == ["Scherminstellingen", "Achtergrond wijzigen"],
+      f"E1: bureaublad: 'Scherminstellingen' en 'Achtergrond wijzigen' in het Nederlands en Engels ({_en}, {_nl.get('teksten')})")
+klopt(_en.get("log") == ["bugos-start-data --start instelling:scherm", "bugos-start-data --start instelling:uiterlijk"]
+      and {"scherm", "uiterlijk"} <= SLEUTELS,
+      f"E1: bureaublad: de regels openen Instellingen > Scherm en > Uiterlijk ({_en.get('log')})")
+klopt(_en.get("iconen") == ["preferences-desktop-display", "preferences-desktop-wallpaper"],
+      f"E1: bureaublad: met de pictogrammen van scherm en achtergrond ({_en.get('iconen')})")
+
 klopt("import org.kde.plasma.plasma5support as P5Support" in lees(PLASMOIDS / "org.bugos.clock/contents/ui/main.qml")
       and "id: opdracht" in lees(PLASMOIDS / "org.bugos.clock/contents/ui/main.qml"),
       "E3: de klok kan een opdracht starten (P5Support.DataSource)")
