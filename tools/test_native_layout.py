@@ -30,11 +30,79 @@ TMP = Path(tempfile.mkdtemp(prefix="bugos-layout-test-"))
 SCALES = ("0.75", "1", "1.25", "1.5")
 SCHERM = (1280, 800)
 
+
+def taakbalk_hoogte() -> int:
+    """De hoogte van de BugOS-taakbalk, uit de Plasma-indeling zelf (niet uit bugos_ui: anders toetst de test de code
+    met haar eigen getal). Plasma: gridUnit = 18 bij de gewone letter."""
+    import math
+    import re
+    js = (ROOT / "system_files/usr/share/plasma/look-and-feel/org.bugos.desktop/contents/layouts/"
+          "org.kde.plasma.desktop-layout.js").read_text(encoding="utf-8")
+    m = re.search(r"panel\.height\s*=\s*2\s*\*\s*Math\.floor\(gridUnit\s*\*\s*([\d.]+)\s*/\s*2\)", js)
+    return 2 * math.floor(18 * float(m.group(1)) / 2) if m else 48
+
+
+TAAKBALK_ECHT = taakbalk_hoogte()
+TITELBALK_ECHT = 30   # de titelbalk die KWin (Breeze, zonder randen) boven een venster zet
+
 # Bekende problemen in bestanden van een ander pakket (staan in het verslag, met de precieze wijziging). Ze tellen
-# niet als fout, maar worden wel gemeld; zodra ze opgelost zijn, verschijnen ze vanzelf niet meer.
-BEKEND = {
-    ("settings", "uiterlijk"): "D05: bugos_settings_scherm.py (pakket sound-display): plaatjes 144x81, knop eronder",
-    ("welcome", "uiterlijk"): "D13: bugos-welcome: de voorbeelden Licht/Donker (248x146) passen niet naast elkaar",
+# niet als fout, maar worden wel gemeld; zodra ze opgelost zijn, verschijnen ze vanzelf niet meer. Elk probleem
+# precies: (ronde of None, app, staat, het begin van de melding, iets wat er verderop in moet staan, reden). Een
+# ánder probleem op dezelfde pagina telt dus gewoon als fout.
+BEKEND = [
+    (None, "settings", "uiterlijk", "schuift opzij", "(UiterlijkPagina)",
+     "D05: bugos_settings_scherm.py (pakket sound-display): plaatjes 144x81, knop 'Eigen foto' eronder"),
+    (None, "settings", "uiterlijk", "knop te smal", "'Choose your own photo",
+     "D05: bugos_settings_scherm.py (pakket sound-display): plaatjes 144x81, knop 'Eigen foto' eronder"),
+    (None, "welcome", "uiterlijk", "schuift opzij", "(QScrollArea)",
+     "D13: bugos-welcome (geen eigenaar in deze job): de voorbeelden Licht/Donker (248x146) passen niet naast elkaar"),
+    (None, "backup", "begin", "hoofdknop buiten beeld", "'Make backup'",
+     "R03: bugos-backup (geen eigenaar in deze job): de knoppenrij hoort onder het schuifvlak"),
+    (None, "backup", "deels", "hoofdknop buiten beeld", "'Make backup'",
+     "R03: bugos-backup (geen eigenaar in deze job): de knoppenrij hoort onder het schuifvlak"),
+    (None, "switch", "begin", "hoofdknop buiten beeld", "'Restore my files'",
+     "R03: bugos-switch (geen eigenaar in deze job): de knoppenrij hoort onder het schuifvlak"),
+    ("1 grote letters", "tasks", "programmas", "schuift opzij", "(Pagina)",
+     "R13: Taakbeheer met grote letters (pakket tools): de kaart met kolomkoppen is minstens 640 px breed"),
+    ("1 grote letters", "tasks", "prestaties", "schuift opzij", "(Pagina)",
+     "R13: Taakbeheer met grote letters (pakket tools): de pagina Prestaties is minstens 737 px breed"),
+]
+
+
+def bekend(regel: str, ronde: str = "") -> str:
+    """De reden als deze 'PAS app staat melding'-regel (in deze ronde) een bekend probleem is, anders ''."""
+    d = regel.split(" ", 3)
+    if len(d) < 4:
+        return ""
+    for ronde_, app_, staat_, begin_, ook_, reden in BEKEND:
+        if ronde_ in (None, ronde) and d[1] == app_ and d[2] == staat_ and d[3].startswith(begin_) and ook_ in d[3]:
+            return reden
+    return ""
+
+
+# Teksten die in het Nederlands en het Engels hetzelfde zijn, en dat ook moeten zijn (namen, merken).
+ZELFDE_MAG = {
+    "Bugie's HP LaserJet", "Canon PIXMA", "Intel Core i5-1235U", "LibreOffice Writer", "Haruna (video)",
+    # Namen die het systeem zelf geeft (PipeWire, BlueZ): die vertaalt BugOS niet, ook niet in de voorbeeldstand.
+    "Bugie's headphones", "Built-in speakers", "TV (HDMI)",
+}
+# Nederlandse namen in de voorbeeldstand die andere pakketten nog vertalen (D08 in het verslag). Tot dan: gemeld,
+# geen fout. Zodra ze vertaald zijn, verschijnen ze vanzelf niet meer.
+NL_BEKEND = {
+    "Buren": "D08 network: bugos_config_netwerk.py Netwerk('Buren')",
+    "Bibliotheek gratis": "D08 network: bugos_config_netwerk.py Netwerk('Bibliotheek gratis')",
+    "Muis": "D08 network: bugos_config_netwerk.py:290 'Muis'",
+    "Telefoon": "D08 network: bugos_config_netwerk.py:291 'Telefoon'",
+    "Canon PIXMA (boven)": "D08 printers: bugos_config_meldingen.py:251",
+    "Gwenview (foto's bekijken)": "D08 printers: bugos_config_meldingen.py:114",
+    "Elisa (muziek)": "D08 printers: bugos_config_meldingen.py:116",
+    "Okular (documenten)": "D08 printers: bugos_config_meldingen.py:119",
+    "Kate (tekst)": "D08 printers: bugos_config_meldingen.py:121",
+    "Bestanden": "D08 tools: bugos_tasks_ui.py:111",
+    "Bureaublad (Plasma)": "D08 tools: bugos_tasks_ui.py:113",
+    "Vensters (KWin)": "D08 tools: bugos_tasks_ui.py:115",
+    "Zoeken in je bestanden": "D08 tools: bugos_tasks_ui.py:117",
+    "Netwerk": "D08 tools: bugos_tasks_ui.py:119",
 }
 
 
@@ -63,16 +131,19 @@ def omgeving(thuis: Path) -> dict:
 
 # ===================================================================== schermtest (in een eigen proces) ===
 
-def pas(schaal: str) -> int:
-    """Bouw elke app op een scherm van 1280 x 800 bij deze schaal en druk af wat niet past ('PAS app staat wat')."""
+def pas(schaal: str, groot: bool = False, teksten: bool = False) -> int:
+    """Bouw elke app op een scherm van 1280 x 800 bij deze schaal en druk af wat niet past ('PAS app staat wat').
+    groot: met 'Grote letters' (1,5x). teksten: druk in plaats daarvan elke zichtbare tekst af ('TEKST app staat x')."""
     from PySide6.QtCore import QEventLoop, QTimer
     from PySide6.QtWidgets import (
-        QAbstractItemView, QAbstractScrollArea, QApplication, QLabel, QPushButton, QWidget,
+        QAbstractButton, QAbstractItemView, QAbstractScrollArea, QApplication, QLabel, QPushButton, QWidget,
     )
 
     import bugos_ui
 
     echt_maak = bugos_ui.maak_app
+    if groot:
+        bugos_ui.letter_schaal = lambda _f: 1.5     # zoals KDE 'Grote letters' (12 punten in plaats van 10)
 
     def maak_een(*a, **k):
         """Eén QApplication voor alle apps in dit proces."""
@@ -87,16 +158,29 @@ def pas(schaal: str) -> int:
         lus.exec()
         QApplication.processEvents()
 
-    def kijk(app_naam: str, staat: str, venster: QWidget) -> None:
+    def kijk(app_naam: str, staat: str, venster: QWidget, hoofdknop_in_beeld: bool = False) -> None:
         wacht()
+        if teksten:
+            gezien = set()
+            for w in venster.findChildren(QWidget):
+                if w.isVisible() and isinstance(w, (QLabel, QAbstractButton)) and w.text().strip():
+                    gezien.add(" ".join(w.text().split()))
+            for x in sorted(gezien):
+                print(f"TEKST {app_naam} {staat} {x}", flush=True)
+            return
         scherm = venster.screen() or QApplication.primaryScreen()
-        hoog = scherm.geometry().height() - bugos_ui.TAAKBALK - bugos_ui.TITELBALK
+        hoog = scherm.geometry().height() - TAAKBALK_ECHT - TITELBALK_ECHT
         breed = scherm.geometry().width()
         fout: list[str] = []
         if venster.width() > breed or venster.height() > hoog:
             fout.append(f"venster {venster.width()}x{venster.height()} > {breed}x{hoog}")
         for w in venster.findChildren(QWidget):
-            if not w.isVisible() or w.visibleRegion().isEmpty():
+            if not w.isVisible():
+                continue
+            if w.visibleRegion().isEmpty():
+                # Een rode hoofdknop (Back-up maken, Volgende) hoort altijd in beeld, niet pas na schuiven (R03).
+                if hoofdknop_in_beeld and isinstance(w, QPushButton) and w.property("soort") == "hoofd":
+                    fout.append(f"hoofdknop buiten beeld {w.text()[:40]!r}")
                 continue
             if isinstance(w, QAbstractScrollArea) and not isinstance(w, QAbstractItemView):
                 if w.horizontalScrollBar().maximum() > 1:
@@ -117,10 +201,12 @@ def pas(schaal: str) -> int:
         elif app_naam == "welcome":
             for i in range(venster.stapels.count()):
                 venster.stapels.setCurrentIndex(i)
-                kijk(app_naam, ("hallo", "internet", "uiterlijk", "updates", "jij", "klaar")[i], venster)
+                kijk(app_naam, ("hallo", "internet", "uiterlijk", "updates", "jij", "klaar")[i], venster, True)
         elif app_naam == "tasks":
             for s in ("programmas", "prestaties", "opstarten"):
                 venster.ga_naar(s)
+                if s == "programmas" and teksten and hasattr(venster, "wissel_achtergrond"):
+                    venster.wissel_achtergrond()      # ook de achtergrondtaken (review R04)
                 kijk(app_naam, s, venster)
         elif app_naam == "files":
             kijk(app_naam, "thuis", venster)
@@ -128,11 +214,20 @@ def pas(schaal: str) -> int:
             wacht(400)
             venster.lijst.selectAll()
             kijk(app_naam, "alles-gekozen", venster)
+        elif app_naam == "backup":
+            kijk(app_naam, "begin", venster, True)
+            # Een back-up die deels lukte: de gele melding en de balk erbij. De knoppen moeten nog te zien zijn (R03).
+            venster.melding.zet(g["DEELS_UITLEG"].format(mappen="Documents, Pictures"), "let_op")
+            venster.balk.setValue(42)
+            venster.balk.show()
+            kijk(app_naam, "deels", venster, True)
         else:
-            kijk(app_naam, "begin", venster)
+            kijk(app_naam, "begin", venster, app_naam == "switch")
 
     APPS = {"settings": "bugos-settings", "welcome": "bugos-welcome", "help": "bugos-help", "store": "bugos-store",
             "backup": "bugos-backup", "switch": "bugos-switch", "tasks": "bugos-task-manager", "files": "bugos-files"}
+    if teksten:
+        APPS = {k: APPS[k] for k in ("settings", "tasks")}
     echt_uitvoeren = bugos_ui.uitvoeren
     for app_naam, programma in APPS.items():
         g: dict = {}
@@ -154,7 +249,8 @@ def pas(schaal: str) -> int:
                 g["CONTROLES"][:] = [lambda: Uitslag("Internet", OK, "You are connected to the internet.")]
             if app_naam == "store":   # (runpy geeft een kopie: de functies kijken in hun eigen globals)
                 echt_lees = g["lees_catalogus"]
-                g["main"].__globals__["lees_catalogus"] =                     lambda pad=ROOT / "system_files/usr/share/bugos/store.json": echt_lees(pad)
+                g["main"].__globals__["lees_catalogus"] = \
+                    lambda pad=ROOT / "system_files/usr/share/bugos/store.json": echt_lees(pad)
             (g.get("main") or g["venster"])()
         except Exception as e:  # noqa: BLE001
             meldingen.append(f"PAS {app_naam} start kapot: {type(e).__name__}: {e}")
@@ -165,34 +261,42 @@ def pas(schaal: str) -> int:
     os._exit(0)   # niet wachten op draadjes van de apps die nog lopen (Hulp, Winkel): die doen er hier niet toe
 
 
+def kind(schaal: str, *extra: str, taal: str = "en_US.UTF-8") -> list[str]:
+    """Draai pas() in een eigen proces (QT_SCALE_FACTOR kan maar één keer per proces) en geef de uitvoer."""
+    sleutel = "-".join((schaal,) + extra + (taal[:2],)).replace("--", "")
+    thuis = TMP / f"thuis-{sleutel}" / "thuis"
+    thuis.mkdir(parents=True)
+    conf = TMP / f"scherm-{sleutel}.json"
+    conf.write_text(json.dumps({"screens": [{"name": "s", "x": 0, "y": 0, "width": SCHERM[0], "height": SCHERM[1],
+                                             "logicalDpi": 96, "logicalBaseDpi": 96, "dpr": 1}]}))
+    env = dict(os.environ)
+    env.pop("LANGUAGE", None)
+    env.update(omgeving(thuis))
+    env.update(QT_QPA_PLATFORM=f"offscreen:configfile={conf}", QT_SCALE_FACTOR=schaal, PYTHONDONTWRITEBYTECODE="1",
+               LC_ALL=taal, LANG=taal)
+    try:
+        p = subprocess.run([sys.executable, __file__, "--pas", schaal, *extra], env=env, capture_output=True,
+                           text=True, timeout=300, cwd=str(TMP))
+        regels = p.stdout.splitlines()
+        if p.returncode != 0:
+            regels.append(f"PAS proces stopte met code {p.returncode}: {p.stderr.strip()[-400:]}")
+    except subprocess.TimeoutExpired:
+        regels = ["PAS proces bleef hangen (300 s)"]
+    return regels
+
+
 def schermtest() -> list[tuple[str, list[str], list[str]]]:
-    """Draai pas() voor elke schaal in een eigen proces; geef (schaal, problemen, klaar-gemelde apps)."""
+    """Elke schaal, en 100 % met grote letters: (naam, problemen, klaar-gemelde apps)."""
     uit = []
-    for schaal in SCALES:
-        thuis = TMP / f"thuis-{schaal}" / "thuis"
-        thuis.mkdir(parents=True)
-        conf = TMP / f"scherm-{schaal}.json"
-        conf.write_text(json.dumps({"screens": [{"name": "s", "x": 0, "y": 0, "width": SCHERM[0], "height": SCHERM[1],
-                                                 "logicalDpi": 96, "logicalBaseDpi": 96, "dpr": 1}]}))
-        env = dict(os.environ)
-        env.pop("LANGUAGE", None)
-        env.update(omgeving(thuis))
-        env.update(QT_QPA_PLATFORM=f"offscreen:configfile={conf}", QT_SCALE_FACTOR=schaal, PYTHONDONTWRITEBYTECODE="1")
-        try:
-            p = subprocess.run([sys.executable, __file__, "--pas", schaal], env=env, capture_output=True, text=True,
-                               timeout=300, cwd=str(TMP))
-            regels = p.stdout.splitlines()
-            if p.returncode != 0:
-                regels.append(f"PAS proces stopte met code {p.returncode}: {p.stderr.strip()[-400:]}")
-        except subprocess.TimeoutExpired:
-            regels = ["PAS proces bleef hangen (300 s)"]
-        uit.append((schaal, [r for r in regels if r.startswith("PAS ")],
+    for schaal, extra, naam in [(s, (), s) for s in SCALES] + [("1", ("--groot",), "1 grote letters")]:
+        regels = kind(schaal, *extra)
+        uit.append((naam, [r for r in regels if r.startswith("PAS ")],
                     [r.split()[1] for r in regels if r.startswith("KLAAR ")]))
     return uit
 
 
 if len(sys.argv) > 2 and sys.argv[1] == "--pas":
-    sys.exit(pas(sys.argv[2]))
+    sys.exit(pas(sys.argv[2], groot="--groot" in sys.argv, teksten="--teksten" in sys.argv))
 
 
 # ============================================================================================ in dit proces ===
@@ -704,21 +808,89 @@ klopt(isinstance(_gezien[-1], bugos_shell.VraagDialoog) and _gezien[-1].standaar
       "D11: 'Terug naar de vorige versie?' is de gedeelde vraag; Enter doet niets")
 _up.updates = _oud
 QDialog.exec = _echt_exec
+
+# T-ALIGN: op elke pagina beginnen de kaarten (en keuzekaarten) links op dezelfde lijn als de titel. Kaarten naast
+# elkaar (Energie: drie profielen) tellen per regel: de linkse moet op de lijn staan (D06: 9 px ingesprongen).
+from bugos_ui import KeuzeKaart as _KK  # noqa: E402
+
+BEKEND_UITLIJNING = {   # precies deze melding; elke andere scheve kaart is een fout
+    "energie: titel op x=40, kaarten op x=[49]":
+        "D06: bugos_settings_scherm.py:183 (pakket sound-display): rij.setContentsMargins(0, 0, 0, 0)",
+}
+_scheef = []
+for _klasse in inst.PAGINAS:
+    w.ga_naar(_klasse.sleutel)
+    verwerk()
+    _blad = w.paginas[_klasse.sleutel]
+    _binnen = _blad.widget()
+    if _blad.titel is None:
+        continue
+    _x0 = _blad.titel.mapTo(_binnen, QPoint(0, 0)).x()
+    _regels: dict[int, int] = {}
+    for _k in _binnen.findChildren(QWidget):
+        if not _k.isVisible() or not (_k.property("kaart") or isinstance(_k, _KK)):
+            continue
+        _ouder, _genest = _k.parentWidget(), False
+        while _ouder is not None and _ouder is not _binnen:
+            if _ouder.property("kaart") or isinstance(_ouder, _KK):
+                _genest = True     # een kaart in een kaart: die volgt de buitenste
+                break
+            _ouder = _ouder.parentWidget()
+        if _genest:
+            continue
+        _p = _k.mapTo(_binnen, QPoint(0, 0))
+        _regels[_p.y()] = min(_regels.get(_p.y(), 10 ** 6), _p.x())
+    _fout = sorted({_x for _x in _regels.values() if abs(_x - _x0) > 1})
+    if _fout:
+        _melding = f"{_klasse.sleutel}: titel op x={_x0}, kaarten op x={_fout}"
+        if _melding in BEKEND_UITLIJNING:
+            print(f"BEKEND T-ALIGN {_melding}  <- {BEKEND_UITLIJNING[_melding]}")
+        else:
+            _scheef.append(_melding)
+klopt(not _scheef, "T-ALIGN: op elke pagina beginnen de kaarten op dezelfde lijn als de titel"
+      + "".join(f"\n        {x}" for x in _scheef))
+
 w.close()
 verwerk()
 
 # ------------------------------------------------------------------------- past elk venster? (T-FIT) ---
-for _schaal, _problemen, _klaar in schermtest():
-    klopt(len(_klaar) == 8, f"T-FIT {_schaal}: alle acht apps zijn gebouwd en bekeken ({', '.join(_klaar)})")
+for _naam, _problemen, _klaar in schermtest():
+    klopt(len(_klaar) == 8, f"T-FIT {_naam}: alle acht apps zijn gebouwd en bekeken ({', '.join(_klaar)})")
     _echt = []
     for _p in _problemen:
-        _d = _p.split()
-        if (_d[1], _d[2]) in BEKEND:
-            print(f"BEKEND {_p}  <- {BEKEND[(_d[1], _d[2])]}")
+        _reden = bekend(_p, _naam)
+        if _reden:
+            print(f"BEKEND {_p}  <- {_reden}")
         else:
             _echt.append(_p)
-    klopt(not _echt, f"T-FIT {_schaal}: op 1280x800 past alles: geen venster te groot, niets schuift opzij, "
-                     f"niets afgeknipt" + ("".join(f"\n        {x}" for x in _echt[:25])))
+    klopt(not _echt, f"T-FIT {_naam}: op 1280x800 past alles: geen venster te groot (taakbalk {TAAKBALK_ECHT} px, "
+                     f"titelbalk {TITELBALK_ECHT} px), niets schuift opzij, niets afgeknipt, de hoofdknop in beeld"
+                     + "".join(f"\n        {x}" for x in _echt[:25]))
+
+# ----------------------------------------------------------- Engels scherm, geen Nederlandse woorden (T-NL) ---
+# Taalgestuurd (review R04): elke zichtbare tekst van Instellingen en Taakbeheer, in het Engels én in het
+# Nederlands. Wat in beide talen precies hetzelfde is en uit meer dan één woord bestaat, is vergeten te vertalen.
+# Namen en merken mogen (ZELFDE_MAG); wat andere pakketten nog vertalen, wordt gemeld (NL_BEKEND).
+_talen = {}
+for _taal in ("en_US.UTF-8", "nl_NL.UTF-8"):
+    _talen[_taal[:2]] = {tuple(r.split(" ", 3)[1:]) for r in kind("1", "--teksten", taal=_taal)
+                         if r.startswith("TEKST ") and len(r.split(" ", 3)) == 4}
+klopt(len(_talen["en"]) > 300 and len(_talen["nl"]) > 300,
+      f"T-NL: Instellingen en Taakbeheer gaven hun teksten in beide talen ({len(_talen['en'])}/{len(_talen['nl'])})")
+_nl_tekst = {x[2] for x in _talen["nl"]}
+_verdacht = []
+for _app, _staat, _tekst in sorted(_talen["en"]):
+    if _tekst in NL_BEKEND:
+        print(f"BEKEND T-NL {_app} {_staat} {_tekst!r}  <- {NL_BEKEND[_tekst]}")
+        continue
+    if _tekst not in _nl_tekst or " " not in _tekst or sum(c.isalpha() for c in _tekst) < 4 \
+            or _tekst.startswith("BugOS ") or any(x in _tekst for x in ZELFDE_MAG):
+        continue        # één woord (een naam als 'Firefox') of een getal is vaak in beide talen hetzelfde
+    _verdacht.append(f"{_app} {_staat} {_tekst!r}")
+klopt(not _verdacht, "T-NL: op een Engels scherm staat niets wat in het Nederlands precies hetzelfde is (vergeten te "
+                     "vertalen)" + "".join(f"\n        {x}" for x in _verdacht[:30]))
+klopt(any(x[2].startswith("Logitech mouse") for x in _talen["en"]),
+      "D08: de voorbeeldmuis heet 'Logitech mouse' op het Engelse scherm")
 
 print(f"\n{fouten} fout(en).")
 sys.exit(1 if fouten else 0)
