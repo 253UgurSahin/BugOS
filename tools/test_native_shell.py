@@ -467,6 +467,11 @@ klopt(bool(_skel) and _regels[:2] == ["[ActionPlugins][0]", "RightButton;NoModif
       "D3: nieuwe gebruikers krijgen het bureaubladmenu zonder de 14 KDE-regels (/etc/skel), en niets voor het paneel")
 klopt(bool(_skel) and STYLE_TEKST.index("mkdir -p /etc/skel/.config") < _skel.start(),
       "D3: style.sh maakt /etc/skel/.config eerst")
+_verberg = re.search(r"^for app in org\.kde\.dolphin\.desktop (.*?); do\n    verberg", STYLE_TEKST, re.S | re.M)
+klopt(_verberg is not None and "org.kde.filelight.desktop" in _verberg.group(1) and "org.kde.discover.desktop" not in STYLE_TEKST,
+      "D5: style.sh verbergt Filelight (Bestanden laat zelf de grootste mappen zien) en noemt Discover niet meer (weg uit het beeld)")
+klopt("Schijfbeheer\" in Bestanden" not in STYLE_TEKST and "\"Meer apps\" in de Winkel" not in STYLE_TEKST,
+      "D5: het commentaar in style.sh belooft geen Schijfbeheer in Bestanden en geen 'Meer apps' meer")
 klopt(re.search(r"^bureaubladmenu /usr/share/plasma/plasmoids/org\.kde\.desktopcontainment/contents/ui \\\n"
                 r" +/usr/share/plasma/plasmoids/org\.bugos\.taskbar/contents/ui/BureaubladActies\.qml$", STYLE_TEKST, re.M)
       is not None, "D4: style.sh past de mapweergave van KDE aan (org.kde.desktopcontainment) met BureaubladActies.qml")

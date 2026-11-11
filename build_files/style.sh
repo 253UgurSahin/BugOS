@@ -278,7 +278,6 @@ hernoem() {
         { print }
     ' "$f" >"$f.nieuw" && mv "$f.nieuw" "$f"
 }
-hernoem org.kde.discover.desktop "Meer apps" "More apps"
 hernoem org.kde.dolphin.desktop "Dolphin (voor gevorderden)" "Dolphin (advanced)"
 hernoem systemsettings.desktop "Alle instellingen" "All settings"
 hernoem org.kde.partitionmanager.desktop "Schijfbeheer (voor gevorderden)" "Disk management (advanced)"
@@ -317,9 +316,10 @@ for app in kdesystemsettings.desktop htop.desktop nvtop.desktop org.kde.kdebugse
     verberg "$app"
 done
 # Een echt BugOS-gevoel: de KDE-programma's waar BugOS een eigen app (of knop) voor heeft, staan niet in het
-# startmenu. Ze werken gewoon, en de BugOS-apps openen ze waar nodig ("Meer apps" in de Winkel, "Schijfbeheer"
-# in Bestanden, "Geavanceerde instellingen" onder Over deze computer).
-for app in org.kde.discover.desktop org.kde.dolphin.desktop systemsettings.desktop \
+# startmenu. Ze blijven geïnstalleerd en werken gewoon, maar BugOS opent er nog maar één zelf: KDE Instellingen
+# ("Geavanceerde instellingen" onder Over deze computer). Bestanden laat zelf zien wat de meeste ruimte inneemt
+# (dus geen Filelight) en opent geen Dolphin of Schijfbeheer meer. (Discover zit niet meer in het beeld: de Winkel.)
+for app in org.kde.dolphin.desktop systemsettings.desktop org.kde.filelight.desktop \
     org.kde.partitionmanager.desktop org.kde.plasma-systemmonitor.desktop org.kde.kinfocenter.desktop \
     org.kde.kwalletmanager.desktop org.kde.kwalletmanager5.desktop org.kde.kmenuedit.desktop \
     org.kde.kdeconnect.app.desktop org.kde.kdeconnect.sms.desktop org.kde.kdeconnect_open.desktop \
