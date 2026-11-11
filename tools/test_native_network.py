@@ -409,6 +409,7 @@ zd.gebruiker.setText("")
 zd.gebruiker.textEdited.emit("student@student.tudelft.nl")
 zd.gebruiker.setText("student@student.tudelft.nl")
 klopt(zd.domein.text() == "tudelft.nl", f"school/werk: het domein vult zich in uit de gebruikersnaam ({zd.domein.text()!r})")
+zd.gebruiker.editingFinished.emit()
 zd.wachtwoord.setText("geheim")
 klopt(zd.ok.isEnabled() and zd.hint.isHidden(), "school/werk: met naam en wachtwoord kan 'Verbinden'")
 klopt(zd.wachtwoord.echoMode() == QLineEdit.EchoMode.Password and zd.oog.toolTip(),
@@ -433,9 +434,15 @@ wacht()
 # zonder '@' in de gebruikersnaam: Meer opties gaat open en zegt wat er mist (geen grijze knop zonder reden)
 wifi.open_zakelijk("eduroam")
 zd = wifi.zakelijk_dialoog
+zd.gebruiker.textEdited.emit("C")
+zd.gebruiker.setText("C")
+klopt(not zd.meer.isChecked() and zd.hint.isHidden(),
+      "school/werk: tijdens het typen van de gebruikersnaam klapt er nog niets open")
 zd.gebruiker.textEdited.emit("CORP\\jdoe")
 zd.gebruiker.setText("CORP\\jdoe")
+zd.gebruiker.editingFinished.emit()
 zd.wachtwoord.setText("x")
+klopt(not zd.domein.hasFocus(), "school/werk: de focus springt niet naar het domeinveld (dan typ je daar je wachtwoord)")
 klopt(zd.meer.isChecked() and not zd.opties.isHidden() and not zd.hint.isHidden() and not zd.ok.isEnabled(),
       "school/werk: 'CORP\\jdoe': Meer opties klapt open, met de reden boven de knoppen (N9)")
 zd.reject()
@@ -461,6 +468,30 @@ zd.reject()
 wacht()
 bi.vergeet_profiel = _oud_vp
 klopt(_vergeten == ["voorbeeld-eduroam"], f"school/werk: Annuleren na een mislukt nieuw profiel gooit het weer weg ({_vergeten})")
+bi.VB_NET["zakelijk"].clear()
+
+# Annuleren terwijl het nog verbindt: dat profiel stoppen en (nieuw) weggooien; de late uitslag doet niets meer
+_gestopt, _vergeten = [], []
+_oud_an = (bi.verbind_zakelijk, bi.stop_profiel, bi.vergeet_profiel)
+bi.verbind_zakelijk = lambda uuid, ww="": (time.sleep(0.8), (True, "", "", ""))[1]
+bi.stop_profiel = lambda u: (_gestopt.append(u), True)[1]
+bi.vergeet_profiel = lambda u: (_vergeten.append(u), True)[1]
+wifi.open_zakelijk("eduroam")
+zd = wifi.zakelijk_dialoog
+_klaar_an = []
+zd.klaar.connect(_klaar_an.append)
+zd.gebruiker.textEdited.emit("student@uni.nl")
+zd.gebruiker.setText("student@uni.nl")
+zd.wachtwoord.setText("goed")
+zd.ok.click()
+wacht_ms(300)
+klopt(zd.bezig and zd.uuid == "voorbeeld-eduroam", "school/werk: eerst opgeslagen, nu bezig met verbinden")
+zd.reject()
+wacht()
+bi.verbind_zakelijk, bi.stop_profiel, bi.vergeet_profiel = _oud_an
+klopt(_gestopt == ["voorbeeld-eduroam"] and _vergeten == ["voorbeeld-eduroam"] and _klaar_an == [False]
+      and not zd.isVisible(),
+      f"school/werk: Annuleren tijdens het verbinden stopt het en gooit het nieuwe profiel weg ({_gestopt}, {_vergeten}, {_klaar_an})")
 bi.VB_NET["zakelijk"].clear()
 
 wifi.open_zakelijk("eduroam")

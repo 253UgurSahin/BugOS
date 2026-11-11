@@ -88,6 +88,8 @@ class ZakelijkDialoog(QDialog):
         self.gestopt = False
         self.gelukt = False
         self.domein_zelf = bool(p.domein)
+        # Pas iets zeggen over het domein als je klaar bent met je gebruikersnaam (niet al bij de eerste letter).
+        self.gebruiker_af = bool(p.gebruiker)
         self.ca_pad = p.ca_bestand
         kop = (t("Verbinden met {naam}", "Connect to {naam}").format(naam=naam) if naam else
                t("Netwerk van school of werk", "School or work network"))
@@ -206,6 +208,8 @@ class ZakelijkDialoog(QDialog):
             if e is not None:
                 e.textChanged.connect(lambda _t: self.werk_bij())
         self.gebruiker.textEdited.connect(self.gebruiker_getypt)
+        self.gebruiker.editingFinished.connect(self.gebruiker_klaar)
+        self.wachtwoord.textEdited.connect(lambda _t: self.gebruiker_klaar())
         self.domein.textEdited.connect(lambda _t: (setattr(self, "domein_zelf", True), self.werk_bij()))
         self.domein.textChanged.connect(lambda _t: self.werk_bij())
         self.zet_ca(self.ca_pad)
@@ -222,6 +226,11 @@ class ZakelijkDialoog(QDialog):
         if not self.domein_zelf:
             self.domein.setText(bi.standaard_domein(tekst))
 
+    def gebruiker_klaar(self) -> None:
+        if self.gebruiker.text().strip() and not self.gebruiker_af:
+            self.gebruiker_af = True
+            self.werk_bij()
+
     def kies_methode(self, waarde) -> None:
         self.methode_keus = waarde
         self.werk_bij()
@@ -231,11 +240,13 @@ class ZakelijkDialoog(QDialog):
         self.meer.setIcon(lijn_icoon("onder" if open_ else "rechts"))
         self.pas_hoogte()
 
-    def open_meer(self, focus: QWidget | None = None) -> None:
+    def open_meer(self, focus: QWidget | None = None, zien: QWidget | None = None) -> None:
         if not self.meer.isChecked():
             self.meer.setChecked(True)
         if focus is not None:
             QTimer.singleShot(0, lambda: (self.vlak.ensureWidgetVisible(focus), focus.setFocus()))
+        elif zien is not None:
+            QTimer.singleShot(0, lambda: self.vlak.ensureWidgetVisible(zien))
 
     def kies_ca(self) -> None:
         pad, _ = QFileDialog.getOpenFileName(self, t("Certificaatbestand kiezen", "Choose certificate file"),
@@ -269,16 +280,19 @@ class ZakelijkDialoog(QDialog):
     def werk_bij(self) -> None:
         if not hasattr(self, "ok"):
             return
-        waarom = self.waarom_niet()
+        reden = self.waarom_niet()
+        waarom = reden if self.gebruiker_af else ""
         if waarom and self.hint.isHidden() and not self.meer.isChecked():
-            self.open_meer()   # het domein staat bij Meer opties: dan meteen openklappen
+            # Het domein staat bij Meer opties: dan meteen openklappen (geen grijze knop zonder reden) (N9).
+            # Alleen in beeld, niet de focus: wie met Tab naar het wachtwoord gaat, typt het anders in het domeinveld.
+            self.open_meer(zien=self.domein)
         self.hint_tekst.setText(waarom)
         zichtbaar = bool(waarom)
         if zichtbaar == self.hint.isHidden():
             self.hint.setVisible(zichtbaar)
             self.pas_hoogte()
         klaar = (bool(self.gebruiker.text().strip()) and bool(self.wachtwoord.text())
-                 and (self.netnaam is None or bool(self.netnaam.text().strip())) and not waarom)
+                 and (self.netnaam is None or bool(self.netnaam.text().strip())) and not reden)
         self.ok.setEnabled(klaar and not self.bezig)
         if not self.controle.isChecked():
             self.waarschuwing.zet(
@@ -334,38 +348,50 @@ class ZakelijkDialoog(QDialog):
         self.banner.zet(t("Verbinden met {naam}… Dit kan tot een minuut duren.",
                           "Connecting to {naam}… This can take up to a minute.").format(naam=p.naam), "bezig")
         self.pas_hoogte()
-        was_nieuw = not p.uuid
+        # Eerst opslaan (snel), dan verbinden (tot een minuut): zo weet Annuleren tijdens het verbinden welk profiel
+        # het moet stoppen en weggooien.
+        nieuw = not p.uuid or p.uuid == self.nieuw_uuid   # door dit venster gemaakt en nog nooit verbonden
 
-        def werk():
+        def opslaan():
             if nieuw_ca:
                 pad, f = bi.kopieer_ca(p.ca_bestand, p.naam)
                 if f:
-                    return p.uuid, False, f, "", ""
+                    return p.uuid, f
                 p.ca_bestand = pad
-            uuid, f = bi.bewaar_zakelijk(p)
-            if f:
-                return uuid, False, f, "", ""
-            ok, soort, reden, server = bi.verbind_zakelijk(uuid, ww)
-            if ok and was_nieuw:
-                bi.zet_vanzelf(uuid)
-            return uuid, ok, soort, reden, server
+            return bi.bewaar_zakelijk(p)
 
-        op_achtergrond(self, werk, lambda u: self.verbonden(u, was_nieuw, p))
+        op_achtergrond(self, opslaan, lambda u: self.opgeslagen(u, p, ww, nieuw))
 
-    def verbonden(self, uitkomst, was_nieuw: bool, p: bi.ZakelijkProfiel) -> None:
-        if self.gestopt:
-            # Geannuleerd terwijl het bezig was: een nieuw profiel dat niet verbond, gooien we alsnog weg.
-            uuid_ = (uitkomst or ("",))[0]
-            if was_nieuw and uuid_ and not (uitkomst and uitkomst[1]):
-                op_achtergrond(self.parent() or self, lambda: bi.vergeet_profiel(uuid_), lambda _u: None)
-            return
-        uuid, ok, soort, reden, server = uitkomst or ("", False, "anders", "", "")
+    def opgeslagen(self, uitkomst, p: bi.ZakelijkProfiel, ww: str, nieuw: bool) -> None:
+        uuid, f = uitkomst or ("", "opslaan")
         if uuid:
             self.uuid = uuid
-            if was_nieuw:
+            if nieuw:
                 self.nieuw_uuid = uuid
+        if self.gestopt:
+            # Geannuleerd terwijl het opsloeg: een nieuw profiel blijft niet staan.
+            if nieuw and uuid:
+                op_achtergrond(self.parent() or self, lambda: bi.vergeet_profiel(uuid), lambda _u: None)
+            return
         if p.ca_bestand and p.ca_bestand != self.ca_pad:
             self.zet_ca(p.ca_bestand)   # voortaan de kopie in ~/.cert
+        if f or not uuid:
+            self.zet_bezig(False)
+            self.toon_fout(f or "opslaan")
+            return
+
+        def werk():
+            ok, soort, reden, server = bi.verbind_zakelijk(uuid, ww)
+            if ok and nieuw:
+                bi.zet_vanzelf(uuid)   # pas nu het werkt: voortaan vanzelf verbinden (N4)
+            return ok, soort, reden, server
+
+        op_achtergrond(self, werk, self.verbonden)
+
+    def verbonden(self, uitkomst) -> None:
+        if self.gestopt:
+            return   # Annuleren heeft het al gestopt (en een nieuw profiel weggegooid)
+        ok, soort, reden, server = uitkomst or (False, "anders", "", "")
         self.zet_bezig(False)
         if ok:
             self.gelukt = True
@@ -768,6 +794,9 @@ class WifiPagina(Blad):
         op_achtergrond(self, werk, klaar)
 
     def open_zakelijk(self, naam: str, profiel=None, fout=None, verborgen: bool = False) -> None:
+        oud = getattr(self, "zakelijk_dialoog", None)
+        if oud is not None and not oud.isVisible():
+            oud.deleteLater()
         d = self.zakelijk_dialoog = ZakelijkDialoog(self, naam, profiel, fout, verborgen)
 
         def klaar(ok: bool) -> None:
