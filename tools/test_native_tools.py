@@ -267,6 +267,128 @@ klopt(len(_beheerd) == 1 and _beheerd[0][0] == "/dev/sdb" and _st[0].startswith(
 os.environ["BUGOS_LSBLK"] = ""
 venster.vul_zijbalk()
 
+
+# ======================================================= Taakbeheer: gegevens ===
+import bugos_tasks as bt  # noqa: E402
+
+MIJN = 4000   # een gewone gebruiker, ook als deze test als root draait (de CI-container) (review 5)
+bt.mijn_uid = lambda: MIJN
+EIGEN = f"/user.slice/user-{MIJN}.slice/user@{MIJN}.service"
+
+
+def proces(pid: int, naam: str, groep: str, tijd: int = 10, rss: int = 1000, pss_kb: int = 0, uid: int | None = None,
+           start: int = 100, cmdline: list[str] | None = None, kernel: bool = False, staat: str = "S") -> None:
+    vlaggen = 0x00200000 if kernel else 0x00400100
+    velden = [staat, "1", "0", "0", "0", "-1", str(vlaggen), "0", "0", "0", "0", str(tijd), "0", "0", "0",
+              "20", "0", "1", "0", str(start), "1000000", str(rss)] + ["0"] * 10
+    schrijf(PROC / str(pid) / "stat", f"{pid} ({naam}) " + " ".join(velden) + "\n")
+    u = MIJN if uid is None else uid
+    schrijf(PROC / str(pid) / "status", f"Name:\t{naam}\nUid:\t{u}\t{u}\t{u}\t{u}\n")
+    schrijf(PROC / str(pid) / "cgroup", f"0::{groep}\n")
+    if pss_kb:
+        schrijf(PROC / str(pid) / "smaps_rollup", f"Pss: {pss_kb} kB\n")
+    if cmdline is not None:
+        (PROC / str(pid) / "cmdline").write_bytes("\0".join(cmdline).encode() + b"\0")
+
+
+def processor(bezig: int, rust: int) -> None:
+    schrijf(PROC / "stat", f"cpu  {bezig} 0 0 {rust} 0 0 0 0 0 0\ncpu0 1 0 0 1 0 0 0 0 0 0\ncpu1 1 0 0 1 0 0 0 0 0 0\n")
+
+
+schrijf(PROC / "meminfo", "MemTotal:       16000000 kB\nMemAvailable:    8000000 kB\n")
+schrijf(PROC / "diskstats", "")
+schrijf(PROC / "net" / "dev", "Inter-|\n face |\n")
+schrijf(TMP / "share" / "applications" / "org.mozilla.firefox.desktop",
+        "[Desktop Entry]\nType=Application\nName=Firefox\nIcon=firefox\nExec=firefox\n")
+FF = f"{EIGEN}/app.slice/app-flatpak-org.mozilla.firefox-1234.scope"
+proces(100, "firefox", FF, tijd=100, pss_kb=300000)
+proces(101, "Isolated Web Co", FF, tijd=50, pss_kb=200000, cmdline=["/usr/lib64/firefox/firefox", "-contentproc"])
+proces(200, "plasmashell", f"{EIGEN}/session.slice/plasma-plasmashell.service", pss_kb=150000)
+proces(210, "xdg-desktop-por", f"{EIGEN}/session.slice/xdg-desktop-portal-kde.service",
+       cmdline=["/usr/libexec/xdg-desktop-portal-kde"])
+proces(300, "NetworkManager", "/system.slice/NetworkManager.service", uid=0, rss=5000)
+proces(310, "firewalld", "/system.slice/firewalld.service", uid=0,
+       cmdline=["/usr/bin/python3", "-sP", "/usr/bin/firewalld"], start=1509)
+proces(400, "spotify", f"/user.slice/user-{MIJN + 1}.slice/user@{MIJN + 1}.service/app.slice/app-spotify-9.scope",
+       uid=MIJN + 1)
+proces(2, "kthreadd", "", kernel=True)
+processor(1000, 1000)
+_lijst = {p.pid: p for p in bt.processen()}
+klopt(_lijst[300].uid == 0 and _lijst[100].uid == MIJN and _lijst[100].start == 100 and _lijst[310].start == 1509
+      and _lijst[100].eigen and not _lijst[300].eigen and 2 not in _lijst,
+      "Details: processen() leest van wie (Uid:) en de starttijd (veld 22); geen kernel-draadjes")
+klopt(bt.volle_naam(210, "xdg-desktop-por") == "xdg-desktop-portal-kde" and bt.volle_naam(310, "firewalld") == "firewalld"
+      and bt.volle_naam(101, "Isolated Web Co") == "Isolated Web Co"
+      and bt.volle_naam(999, "nergens-te-vind") == "nergens-te-vind",
+      "Details: een tot 15 tekens ingekorte naam wordt de volle naam; de rest blijft")
+proces(220, "systemd-userwor", f"{EIGEN}/init.scope", cmdline=["systemd-userwork: waiting..."])
+_n220 = bt.volle_naam(220, "systemd-userwor")
+klopt(_n220 == "systemd-userwork", f"review 13: een herschreven titel geeft alleen de naam ({_n220})")
+import shutil as _sh  # noqa: E402
+
+_sh.rmtree(PROC / "220")
+klopt(bt.eigenaar_naam(MIJN) == "jij" and bt.eigenaar_naam(0) == "systeem" and bt.eigenaar_naam(4123456) == "4123456"
+      and bt.eigenaar_naam(-1) == "?", "Details: van wie: 'jij', 'systeem', of het nummer als er geen naam is")
+klopt(not bt.proces_beschermd(_lijst[100]) and bt.proces_beschermd(_lijst[200]) and bt.proces_beschermd(_lijst[300])
+      and bt.proces_beschermd(_lijst[400]) and bt.proces_beschermd(_lijst[210]),
+      "Details: beschermd: plasmashell, NetworkManager (systeem), een ander account en de portalen; Firefox niet")
+meter = bt.Meter()
+meter.meet()
+proces(100, "firefox", FF, tijd=400, pss_kb=300000)
+processor(3000, 3000)
+_m = meter.meet()
+_regels = {r.pid: r for r in _m["processen"]}
+_ff = next(x for x in _m["taken"] if x.soort == "app" and 100 in x.pids)
+klopt(set(_regels) == {100, 101, 200, 210, 300, 310, 400} and _regels[101].hoort_bij == _ff.naam == "Firefox"
+      and all(0 <= r.processor <= 100 for r in _regels.values()) and _regels[100].processor > 0 and _regels[100].app
+      and not _regels[300].app,
+      f"Details: de meting geeft elk proces met de taak waar het bij hoort ({sorted(_regels)})")
+klopt(_regels[310].hoort_bij == "" and _regels[300].hoort_bij == "Netwerk" and _regels[400].eigenaar == str(MIJN + 1),
+      f"review 12: 'Hoort bij' herhaalt de naam niet ({_regels[310].hoort_bij!r}); NetworkManager hoort bij Netwerk")
+klopt(bt.zelfde_proces(100, 100), "Details: zelfde_proces: hetzelfde nummer en dezelfde starttijd")
+proces(100, "firefox", FF, tijd=400, start=555)
+klopt(not bt.zelfde_proces(100, 100) and not bt.zelfde_proces(12345, 100),
+      "Details: zelfde_proces: een hergebruikt nummer (andere starttijd) of een verdwenen proces is niet hetzelfde")
+proces(100, "firefox", FF, tijd=400, staat="Z")
+klopt(not bt.zelfde_proces(100, 100), "review 15: een zombie (Z) is al gestopt")
+proces(100, "firefox", FF, tijd=400, pss_kb=300000)
+_gestuurd: list = []
+_echt_kill = bt.os.kill
+
+
+def _nep_kill(pid, sig):
+    _gestuurd.append((pid, sig))
+
+
+bt.os.kill = _nep_kill
+_r = _regels[100]
+klopt(bt.beeindig(_r) == "klaar" and _gestuurd[-1:] == [(100, signal.SIGTERM)], "Details: Beëindigen stuurt TERM")
+klopt(bt.beeindig(_r, hard=True) == "klaar" and _gestuurd[-1:] == [(100, signal.SIGKILL)],
+      "Details: Geforceerd beëindigen stuurt KILL")
+_voor = len(_gestuurd)
+klopt(bt.beeindig(_regels[200]) == "beschermd" and len(_gestuurd) == _voor,
+      "Details: een beschermd proces: niets gestuurd")
+proces(100, "firefox", FF, tijd=400, start=555)
+klopt(bt.beeindig(_r) == "weg" and len(_gestuurd) == _voor, "Details: een hergebruikt nummer: 'weg', niets gestuurd")
+proces(100, "firefox", FF, tijd=400, pss_kb=300000)
+
+
+def _nee(pid, sig):
+    raise PermissionError(1, "Operation not permitted")
+
+
+bt.os.kill = _nee
+klopt(bt.beeindig(_r) == "mag_niet", "Details: niet toegestaan (EPERM) -> 'mag_niet'")
+
+
+def _weg(pid, sig):
+    raise ProcessLookupError(3, "No such process")
+
+
+bt.os.kill = _weg
+klopt(bt.beeindig(_r) == "weg", "Details: net verdwenen (ESRCH) -> 'weg'")
+bt.os.kill = _nep_kill   # vanaf hier stuurt niets in deze test een echt signaal (ook niet als root) (review 5)
+
 # ================================================================= einde ===
 print(f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)

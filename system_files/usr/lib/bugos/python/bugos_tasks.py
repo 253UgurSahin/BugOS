@@ -7,12 +7,16 @@ Firefox bij elkaar, ook de losse tabbladen.
 Voor tests en foto's kan een nep-/proc gebruikt worden: BUGOS_PROC=/pad/naar/proc.
 
 Namen van apps en 'Opstarten' komen uit de .desktop-bestanden: dat staat in bugos_desktop.
+
+De pagina Details (voor wie helpt) toont elk proces los: details() maakt de regels, beeindig() stopt er een. Een
+proces van een ander (root, een ander account) kan niemand hier stoppen: dat weigert de kernel zelf al.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import pwd
 import re
 import signal
 import subprocess
@@ -76,6 +80,12 @@ BEKENDE_NAMEN = {  # achtergrond: gewone woorden in plaats van programmanamen
 
 def proc() -> Path:
     return Path(os.environ.get("BUGOS_PROC", "/proc"))
+
+
+def mijn_uid() -> int:
+    """Wie ben jij (het nummer van je account)? Op één plek, zodat een test als 'gewone gebruiker' kan draaien,
+    ook in een testcontainer die als root draait (review 5)."""
+    return os.getuid()
 
 
 def sys_map() -> Path:
@@ -198,11 +208,14 @@ class Proces:
     geheugen: int       # bytes (Pss als dat kan, anders RSS)
     eigen: bool         # van jou (dan mag je hem stoppen)
     groep: str          # het cgroup-pad
+    uid: int = -1       # van welk account (de echte gebruiker uit 'Uid:'), -1 als onbekend
+    start: int = 0      # wanneer hij begon (tikjes na het opstarten): zo herken je een hergebruikt nummer
+    staat: str = ""     # R (bezig), S (wacht), Z (zombie: al gestopt) ...
 
 
 def processen() -> list[Proces]:
     lijst = []
-    mijn = os.getuid()
+    mijn = mijn_uid()
     for map_ in proc().iterdir():
         if not map_.name.isdigit():
             continue
@@ -217,9 +230,10 @@ def processen() -> list[Proces]:
         # programma's met extra rechten (gamescope) en voor ssh-agent, ook al zijn ze van jou (U451).
         uid = next((r.split()[1] for r in lees(map_ / "status").splitlines() if r.startswith("Uid:")), "")
         try:
-            eigen = int(uid) == mijn if uid.isdigit() else map_.stat().st_uid == mijn
+            uid_ = int(uid) if uid.isdigit() else map_.stat().st_uid
         except OSError:
             continue
+        eigen = uid_ == mijn
         geheugen_ = 0
         if eigen:
             for regel in lees(map_ / "smaps_rollup").splitlines():
@@ -233,7 +247,7 @@ def processen() -> list[Proces]:
             if regel.startswith("0::"):
                 groep = regel[3:].strip()
         lijst.append(Proces(int(map_.name), naam, int(rest[1]), int(rest[11]) + int(rest[12]), geheugen_, eigen,
-                            groep))
+                            groep, uid_, int(rest[19]) if rest[19].isdigit() else 0, rest[0]))
     return lijst
 
 
@@ -319,11 +333,13 @@ class Meter:
                 "binnen": max((binnen - v["binnen"]) / dt, 0.0), "buiten": max((buiten - v["buiten"]) / dt, 0.0),
             }
         mem_totaal, mem_vrij = geheugen()
+        taken = groepeer(lijst, proc_procent)
         uitslag = {
             **snel,
             "geheugen_totaal": mem_totaal, "geheugen_gebruikt": max(mem_totaal - mem_vrij, 0),
             "temperatuur": temperatuur(), "videokaart": videokaart(),
-            "taken": groepeer(lijst, proc_procent),
+            "taken": taken,
+            "processen": details(lijst, proc_procent, taken),
         }
         if not te_kort:
             self.vorige = gezien
@@ -335,7 +351,7 @@ def _ander_account(groep: str) -> bool:
     """Hoort dit proces bij de sessie van een ander account (user-<nummer>.slice)? Niet: 'niet van jou volgens /proc':
     programma's met extra rechten (kwin_wayland) of ssh-agent zijn daar van root, maar wel van jou (U441)."""
     m = re.search(r"/user-(\d+)\.slice(?:/|$)", groep)
-    return bool(m) and int(m.group(1)) != os.getuid()
+    return bool(m) and int(m.group(1)) != mijn_uid()
 
 
 def groepeer(lijst: list[Proces], procent: dict[int, float]) -> list[Taak]:
@@ -390,6 +406,130 @@ def advies(processor: list[float], gebruikt: int, totaal: int, taken: list[Taak]
             if zwaarste else ""
         return "let_op", t("Je computer heeft het druk." + wie, "Your computer is busy." + wie)
     return "goed", t("Alles loopt soepel.", "Everything is running smoothly.")
+
+
+# ================================================================ details ===
+# De pagina Details: elk proces los, zoals 'Details' in Taakbeheer van Windows. Voor wie helpt ("draait er iets dat
+# Isolated Web Co heet?"). Dezelfde regels als hierboven: wat bij BugOS hoort of niet van jou is, kun je niet stoppen.
+
+_NAMEN: dict[int, str] = {}   # uid -> loginnaam (verandert niet terwijl Taakbeheer open is)
+
+
+def volle_naam(pid: int, comm: str) -> str:
+    """De kernel kort een procesnaam in tot 15 tekens ('xdg-desktop-por'). Dan de naam van het programma zelf
+    (/usr/libexec/xdg-desktop-portal-kde), als die met de korte naam begint. Een programma dat zijn titel
+    herschrijft ('systemd-userwork: waiting...') houdt alleen het eerste woord (review 13). Anders de korte naam:
+    firewalld draait als /usr/bin/python3, en Firefox noemt zijn tabbladen zelf 'Isolated Web Co'."""
+    if len(comm) != 15:
+        return comm
+    eerste = lees(proc() / str(pid) / "cmdline").split("\0", 1)[0]
+    naam = re.split(r"[\s:]", os.path.basename(eerste), maxsplit=1)[0] if eerste else ""
+    return naam if naam.startswith(comm) else comm
+
+
+def eigenaar_naam(uid: int) -> str:
+    """Van wie: 'jij', 'systeem' (root) of de naam van het account (polkitd, een ander gezinslid)."""
+    if uid < 0:
+        return "?"
+    if uid == mijn_uid():
+        return t("jij", "you")
+    if uid == 0:
+        return t("systeem", "system")
+    if uid not in _NAMEN:
+        try:
+            _NAMEN[uid] = pwd.getpwuid(uid).pw_name
+        except (KeyError, OverflowError):
+            _NAMEN[uid] = str(uid)
+    return _NAMEN[uid]
+
+
+def proces_beschermd(p: Proces) -> bool:
+    """Mag dit ene proces niet gestopt worden? Dezelfde regels als groepeer() per taak."""
+    soort, _sleutel, eenheid = soort_van(p.groep)
+    return (not p.eigen or _ander_account(p.groep) or p.naam[:15] in BESCHERMD_KORT or p.pid == os.getpid()
+            or soort == "systeem" or bool(BESCHERMDE_EENHEID.match(eenheid)))
+
+
+@dataclass
+class ProcesRegel:
+    """Eén regel op de pagina Details."""
+    pid: int
+    naam: str
+    uid: int
+    eigenaar: str        # 'jij', 'systeem' of een loginnaam
+    hoort_bij: str       # de naam van de taak (Firefox, Netwerk ...), leeg als die gelijk is aan de naam
+    processor: float     # procent van de hele computer
+    geheugen: int        # bytes
+    eigen: bool          # van jou
+    beschermd: bool      # kan hier niet gestopt worden
+    start: int           # om een hergebruikt procesnummer te herkennen
+    app: bool = False    # hoort bij een programma met een venster (dan eerst netjes sluiten)
+
+
+def details(lijst: list[Proces], procent: dict[int, float], taken: list[Taak]) -> list[ProcesRegel]:
+    """Een regel per proces, met de taak waar hij bij hoort (zoals op de pagina Programma's)."""
+    taak_van = {pid: taak for taak in taken for pid in taak.pids}
+    comm = {p.pid: p.naam for p in lijst}
+    regels = []
+    for p in lijst:
+        naam = volle_naam(p.pid, p.naam)
+        taak = taak_van.get(p.pid)
+        hoort_bij = ""
+        if taak is not None:
+            hoort_bij = taak.naam
+            eerste = taak.pids[0] if taak.pids else p.pid
+            if hoort_bij == comm.get(eerste):   # een systeemtaak zonder eigen woord: de volle naam (review 12)
+                hoort_bij = volle_naam(eerste, hoort_bij)
+            if hoort_bij == naam:
+                hoort_bij = ""                 # alleen de naam nog eens: dan liever niets
+        regels.append(ProcesRegel(p.pid, naam, p.uid, eigenaar_naam(p.uid), hoort_bij, procent.get(p.pid, 0.0),
+                                  p.geheugen, p.eigen, proces_beschermd(p), p.start,
+                                  bool(taak and taak.soort == "app")))
+    return regels
+
+
+def zelfde_proces(pid: int, start: int) -> bool:
+    """Draait dit nummer nog, en is het nog hetzelfde proces (zelfde starttijd)? Een zombie (Z) is al gestopt."""
+    stat = lees(proc() / str(pid) / "stat")
+    if ")" not in stat:
+        return False
+    rest = stat[stat.rfind(")") + 2:].split()
+    if len(rest) < 20 or rest[0] == "Z" or not rest[19].isdigit():
+        return False
+    return int(rest[19]) == start
+
+
+def _signaal(pid: int, start: int, sig: int) -> None:
+    """Stuur het signaal. Op de echte computer via een pidfd: dan kan het nummer tussen kijken en stoppen niet
+    ineens van een ander proces zijn (review 15)."""
+    if str(proc()) == "/proc" and hasattr(os, "pidfd_open") and hasattr(signal, "pidfd_send_signal"):
+        fd = os.pidfd_open(pid)
+        try:
+            if not zelfde_proces(pid, start):
+                raise ProcessLookupError(pid)
+            signal.pidfd_send_signal(fd, sig)
+        finally:
+            os.close(fd)
+        return
+    os.kill(pid, sig)
+
+
+def beeindig(regel: ProcesRegel, hard: bool = False) -> str:
+    """Eén proces stoppen: netjes (TERM) of hard (KILL). Geeft 'klaar', 'weg' (draait niet meer, of het nummer is
+    nu van een ander proces), 'beschermd', 'mag_niet' (niet van jou) of 'fout'."""
+    if regel.beschermd:
+        return "beschermd"
+    if not zelfde_proces(regel.pid, regel.start):
+        return "weg"
+    try:
+        _signaal(regel.pid, regel.start, signal.SIGKILL if hard else signal.SIGTERM)
+    except ProcessLookupError:
+        return "weg"
+    except PermissionError:
+        return "mag_niet"
+    except OSError:
+        return "fout"
+    return "klaar"
 
 
 def stop(pids: list[int], hard: bool = False) -> int:
