@@ -19,7 +19,7 @@ KOLOM_PROCESSOR, KOLOM_GEHEUGEN = 90, 96
 # Details: de breedte van de kolommen Nummer, Van, Hoort bij, Processor en Geheugen (Naam krijgt de rest).
 KOLOM_DETAILS = (None, 70, 96, 160, 84, 90)
 from PySide6.QtCore import (  # noqa: E402
-    QAbstractTableModel, QModelIndex, QRectF, QSortFilterProxyModel, Qt, QThread, Signal,
+    QAbstractTableModel, QModelIndex, QRectF, QSize, QSortFilterProxyModel, Qt, QThread, Signal,
 )
 from PySide6.QtGui import QColor, QFont, QIcon, QLinearGradient, QPainter, QPainterPath, QPen  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
@@ -180,6 +180,7 @@ QTreeView#processen QHeaderView {{ background: transparent; }}
 QTreeView#processen QHeaderView::section {{ background: {K['vlak']}; color: {K['tekst2']}; border: none;
   border-bottom: 1px solid {K['rand']}; padding: 8px 8px; font-size: 13px; font-weight: 600; }}
 QTreeView#processen QHeaderView::section:hover {{ color: {K['tekst']}; }}
+QPushButton#balkknop:disabled {{ color: {K['tekst3']}; }}
 """)
 
 
@@ -529,3 +530,8 @@ class ProcesTabel(QTreeView):
     def resizeEvent(self, e) -> None:  # noqa: N802
         super().resizeEvent(e)
         self.verberg_kolommen()
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        """Niet hoger willen dan het minimum: de pagina geeft de tabel zelf alle ruimte die over is. (Een grotere
+        wens liet de pagina op een klein scherm net een paar pixels schuiven.)"""
+        return QSize(super().sizeHint().width(), self.minimumHeight())
