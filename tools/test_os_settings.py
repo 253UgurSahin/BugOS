@@ -1096,16 +1096,24 @@ else:
 _volg499 = [c[:2] for c in _o499 if c[0] in ("rfkill", "bluetoothctl")]
 klopt(_volg499[:1] == [("rfkill", "unblock")] and _volg499[-1] == ("bluetoothctl", "power") and len(_n499) >= 2,
       f"U499: bluetooth aan wacht tot de kaart terug is ({_volg499})")
-# U474: klok niet vanzelf: een knop naar KDE's Datum en tijd (niet naar 'Meer instellingen', dat is Regio en taal).
+# U474: klok niet vanzelf: 'Klok zelf instellen…' opent het BugOS-venster om de klok te zetten (geen KDE meer).
 _tp474 = venster.paginas["tijd"]
 _tp474.toon((sys.modules["bugos_config_account"].Tijd("Europe/Amsterdam", False, False), "nl_NL"))
 _sa474 = sys.modules["bugos_settings_account"]
 _open474 = []
-_oud474, _sa474.kde_instelling = _sa474.kde_instelling, (lambda m: _open474.append(m))
+
+
+class _NepKlok474:
+    def __init__(self, ouder):
+        _open474.append("klok")
+
+
+setattr(_NepKlok474, "exec", lambda self: 0)
+_oud474, _sa474.KlokDialoog = _sa474.KlokDialoog, _NepKlok474
 _tp474.zelf_rij.geklikt.emit()
-_sa474.kde_instelling = _oud474
-klopt(not _tp474.zelf_rij.isHidden() and _open474 == ["kcm_clock"] and "Meer instellingen" not in _tp474.klok_rij.uitleg.text(),
-      f"U474: klok zelf instellen opent Datum en tijd ({_open474}, {_tp474.klok_rij.uitleg.text()!r})")
+_sa474.KlokDialoog = _oud474
+klopt(not _tp474.zelf_rij.isHidden() and _open474 == ["klok"] and "Meer instellingen" not in _tp474.klok_rij.uitleg.text(),
+      f"U474: klok zelf instellen opent het BugOS-venster ({_open474}, {_tp474.klok_rij.uitleg.text()!r})")
 # U475/U480: 'Nu updaten' werkt daarna ook je eigen apps bij, en zegt pas dan 'Klaar' (geen herstart midden in die update).
 _nep480 = Path(tempfile.mkdtemp(prefix="bugos-nep480-"))
 (_nep480 / "flatpak").write_text(f"#!/usr/bin/bash\necho \"$*\" >>{_nep480}/log\n")

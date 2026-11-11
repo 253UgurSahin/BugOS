@@ -10,8 +10,8 @@ from bugos_ui import TAAL, Knop, Rij, kde_instelling, label, t
 from bugos_settings_onderdelen import (
     Blad, Keuzes, KiesDialoog, WachtwoordDialoog, dichtstbij, meer_knop, op_achtergrond, schuifje,
 )
-from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QHBoxLayout, QInputDialog, QWidget
+from PySide6.QtCore import QDate, QLocale, QTime, QTimer
+from PySide6.QtWidgets import QDateEdit, QDialog, QGridLayout, QHBoxLayout, QInputDialog, QTimeEdit, QVBoxLayout, QWidget
 
 
 # ============================================================ tijd en taal ===
@@ -23,10 +23,15 @@ MAANDEN = (("januari", "January"), ("februari", "February"), ("maart", "March"),
            ("oktober", "October"), ("november", "November"), ("december", "December"))
 
 
+def _klok(d: datetime) -> str:
+    """De tijd zoals de klok op de taakbalk hem schrijft: 14:58, of 2:58 PM als je notatie Amerikaans is (LC_TIME)."""
+    return QLocale.system().toString(QTime(d.hour, d.minute), QLocale.FormatType.ShortFormat)
+
+
 def nu_tekst() -> str:
     d = datetime.now().astimezone()
     dag, maand = DAGEN[d.weekday()], MAANDEN[d.month - 1]
-    return t(f"{dag[0].capitalize()} {d.day} {maand[0]} {d.year} · {d:%H:%M}", _engels_nu(d))
+    return t(f"{dag[0].capitalize()} {d.day} {maand[0]} {d.year} · {_klok(d)}", _engels_nu(d))
 
 
 def _engels_nu(d: datetime) -> str:
@@ -34,14 +39,74 @@ def _engels_nu(d: datetime) -> str:
     2:05 PM zoals de klok op de taakbalk (U445). Ook voor Duits, Frans, Turks…: die krijgen de Engelse tekst van
     BugOS, maar de datum zoals hun eigen taal hem schrijft (Montag, 9. November 2026) (U452).
     Alleen zonder regio (C/POSIX): de Amerikaanse volgorde, 24 uur."""
-    from PySide6.QtCore import QDate, QLocale, QTime
     loc = QLocale.system()
     if loc.language() in (QLocale.Language.C, QLocale.Language.Dutch):
         dag, maand = DAGEN[d.weekday()], MAANDEN[d.month - 1]
-        return f"{dag[1]} {maand[1]} {d.day}, {d.year} · {d:%H:%M}"
+        klok = f"{d:%H:%M}" if loc.language() == QLocale.Language.C else _klok(d)
+        return f"{dag[1]} {maand[1]} {d.day}, {d.year} · {klok}"
     datum = loc.toString(QDate(d.year, d.month, d.day), QLocale.FormatType.LongFormat)
     tijd = loc.toString(QTime(d.hour, d.minute), QLocale.FormatType.ShortFormat)
     return f"{datum} · {tijd}"
+
+
+def _met_heel_jaar(formaat: str) -> str:
+    """'M/d/yy' -> 'M/d/yyyy': in een datumveld liever het hele jaartal (26 kan ook 1926 zijn)."""
+    return formaat if "yyyy" in formaat else formaat.replace("yy", "yyyy")
+
+
+class KlokDialoog(QDialog):
+    """De klok zelf zetten (geen internet): een datum en een tijd, zoals je regio ze schrijft (ook AM/PM)."""
+
+    def __init__(self, ouder: QWidget):
+        super().__init__(ouder)
+        self.setWindowTitle(t("Klok zelf instellen", "Set the clock yourself"))
+        self.setMinimumWidth(420)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(24, 22, 24, 20)
+        lay.setSpacing(12)
+        lay.addWidget(label(t("Klok zelf instellen", "Set the clock yourself"), "kop2"))
+        lay.addWidget(label(t("Kies de datum en de tijd. Daarna vraagt BugOS je wachtwoord.",
+                              "Choose the date and the time. BugOS then asks for your password."), "klein"))
+        loc = QLocale.system()
+        rooster = QGridLayout()
+        rooster.setHorizontalSpacing(12)
+        rooster.setVerticalSpacing(4)
+        self.datum = QDateEdit(QDate.currentDate())
+        self.datum.setCalendarPopup(True)
+        self.datum.setDateRange(QDate(2020, 1, 1), QDate(2099, 12, 31))
+        self.datum.setDisplayFormat(_met_heel_jaar(loc.dateFormat(QLocale.FormatType.ShortFormat)))
+        self.datum.setAccessibleName(t("Datum", "Date"))
+        nu = QTime.currentTime()
+        self.tijd = QTimeEdit(QTime(nu.hour(), nu.minute()))
+        self.tijd.setDisplayFormat(loc.timeFormat(QLocale.FormatType.ShortFormat))
+        self.tijd.setAccessibleName(t("Tijd", "Time"))
+        for veld in (self.datum, self.tijd):
+            veld.setMinimumHeight(36)
+        rooster.addWidget(label(t("Datum", "Date"), "klein"), 0, 0)
+        rooster.addWidget(label(t("Tijd", "Time"), "klein"), 0, 1)
+        rooster.addWidget(self.datum, 1, 0)
+        rooster.addWidget(self.tijd, 1, 1)
+        rooster.setColumnStretch(0, 3)
+        rooster.setColumnStretch(1, 2)
+        lay.addLayout(rooster)
+        lay.addSpacing(4)
+        knoppen = QHBoxLayout()
+        knoppen.setSpacing(8)
+        knoppen.addStretch(1)
+        weg = Knop(t("Annuleren", "Cancel"), "stil")
+        weg.clicked.connect(self.reject)
+        ok = Knop(t("Klok zetten", "Set clock"), "hoofd")
+        ok.clicked.connect(self.accept)
+        ok.setDefault(True)
+        knoppen.addWidget(weg)
+        knoppen.addWidget(ok)
+        lay.addLayout(knoppen)
+        self.datum.setFocus()
+
+    @property
+    def wanneer(self) -> datetime:
+        d, u = self.datum.date(), self.tijd.time()
+        return datetime(d.year(), d.month(), d.day(), u.hour(), u.minute())
 
 
 class TijdPagina(Blad):
@@ -60,10 +125,10 @@ class TijdPagina(Blad):
         self.auto.setAccessibleName(t("Tijd vanzelf instellen", "Set the time automatically"))
         self.klok_rij = Rij("klok", nu_tekst(), "", self.auto)
         g.voeg(self.klok_rij)
-        # Zelf de klok gelijkzetten: KDE's pagina Datum en tijd (niet 'Meer instellingen': dat is Regio en taal) (U474).
+        # Zelf de klok gelijkzetten: een eigen venster van BugOS (vroeger KDE's Datum en tijd) (U474).
         self.zelf_rij = Rij("klok", t("Klok zelf instellen…", "Set the clock yourself…"),
                             t("Datum en tijd met de hand", "Date and time by hand"), klikbaar=True)
-        self.zelf_rij.geklikt.connect(lambda: kde_instelling("kcm_clock"))
+        self.zelf_rij.geklikt.connect(self.klok_zetten)
         g.voeg(self.zelf_rij)
         self.tik = QTimer(self)
         self.tik.setInterval(20000)
@@ -92,9 +157,14 @@ class TijdPagina(Blad):
         tijd, code = uitkomst
         self.auto.zet_stil(tijd.auto)
         self.klok_rij.titel.setText(nu_tekst())
-        self.klok_rij.zet_uitleg(t("Wordt vanzelf gelijkgezet via internet", "Set automatically over the internet")
-                                 if tijd.auto else t("Zet je zelf gelijk met 'Klok zelf instellen…'",
-                                                     "You set it yourself with 'Set the clock yourself…'"))
+        if not tijd.auto:
+            uitleg = t("Zet je zelf gelijk met 'Klok zelf instellen…'",
+                       "You set it yourself with 'Set the clock yourself…'")
+        elif tijd.gelijk:
+            uitleg = t("Wordt vanzelf gelijkgezet via internet", "Set automatically over the internet")
+        else:
+            uitleg = t("Wacht op internet om de klok gelijk te zetten", "Waiting for the internet to set the clock")
+        self.klok_rij.zet_uitleg(uitleg)
         self.zelf_rij.setVisible(not tijd.auto)
         self.zone_rij.zet_uitleg(bi.mooie_zone(tijd.zone, TAAL == "nl"))
         self.taal_rij.zet_uitleg(next((n for c, _l, n in bi.TALEN if c == code), code))
@@ -103,6 +173,28 @@ class TijdPagina(Blad):
         # Ook als het niet lukte (bijv. Annuleren bij het wachtwoord) opnieuw lezen: dan springt het schuifje terug.
         op_achtergrond(self, lambda: bi.zet_tijd_auto(aan), lambda ok: (self.ververs(), None if ok else self.melding.toon(
             t("Dat lukte niet.", "That did not work."), "fout")))
+
+    def klok_zetten(self) -> None:
+        d = KlokDialoog(self)
+        if not d.exec():
+            return
+        wanneer = d.wanneer
+        self.melding.toon(t("Klok wordt gezet… BugOS vraagt je wachtwoord.",
+                            "Setting the clock… BugOS asks for your password."), seconden=120)
+
+        def klaar(uitkomst) -> None:
+            ok, reden = uitkomst if isinstance(uitkomst, tuple) else (False, "fout")
+            if ok:
+                self.melding.toon(t("De klok is gezet.", "The clock has been set."), "goed")
+                self.klok_rij.titel.setText(nu_tekst())
+            elif reden == "auto":
+                self.melding.toon(t("Zet eerst 'Tijd vanzelf instellen' uit.",
+                                    "Turn off 'Set the time automatically' first."), "fout")
+            else:
+                self.melding.toon(t("Dat lukte niet.", "That did not work."), "fout")
+            self.ververs()
+
+        op_achtergrond(self, lambda: bi.zet_klok(wanneer), klaar)
 
     def kies_zone(self) -> None:
         # timedatectl kan even duren: eerst op de achtergrond ophalen, dan pas de keuzelijst.

@@ -1,5 +1,5 @@
 """BugOS Instellingen: tijd en taal (timedatectl, plasma-localerc) en inloggen en wachtwoord
-(AccountsService, bugos-login, kscreenlockerrc).
+(AccountsService, bugos-login, kscreenlockerrc); ook de klok met de hand (timedatectl set-time).
 
 Hoort bij bugos_config (importeer het via daar). draai, VOORBEELD, _VB en de KDE-hulpjes komen via
 bugos_config (_c.draai), zodat een test die bi.draai of bi.VOORBEELD vervangt dat ook hier ziet.
@@ -9,10 +9,16 @@ from __future__ import annotations
 
 import os
 import shutil
+import time
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import bugos_config as _c
+
+# Wat de voorbeeldstand (BUGOS_INSTELLINGEN_VOORBEELD=1) voor dit onderdeel onthoudt. Hier en niet in _c._VB:
+# dat staat in het gedeelde bugos_config.py.
+_VB_ACCOUNT: dict = {"klok_gezet": None}
 
 
 # ============================================================ tijd en taal ===
@@ -74,6 +80,28 @@ def zet_tijd_auto(aan: bool) -> bool:
         _c._VB["tijd_auto"] = aan
         return True
     return _c.draai("timedatectl", "set-ntp", "true" if aan else "false", timeout=60)[0] == 0
+
+
+def zet_klok(wanneer: datetime) -> tuple[bool, str]:
+    """De klok met de hand zetten (plaatselijke tijd, zoals je hem typte). timedated zet ook de klok in de computer
+    (RTC). KDE vraagt het wachtwoord van een beheerder, net als bij de tijdzone. Geeft (gelukt, reden): reden 'auto'
+    als de tijd nog vanzelf via internet gaat (dan weigert timedated), anders 'fout'."""
+    if _c.VOORBEELD:
+        _VB_ACCOUNT["klok_gezet"] = wanneer
+        return True, ""
+    if tijd().auto:
+        return False, "auto"
+    begin, t0 = datetime.now(), time.monotonic()
+    if _c.draai("timedatectl", "set-time", wanneer.strftime("%Y-%m-%d %H:%M:%S"), timeout=120)[0] == 0:
+        return True, ""
+    # timedatectl geeft het na 25 s op, ook als je dan nog in het wachtwoordvenster zit; de klok gaat daarna toch
+    # gewoon. Dus nog even kijken: loopt de klok nu zoals gevraagd (2 minuten speling)? Alleen als je hem echt
+    # verzette, anders zegt dit niets.
+    if abs((wanneer - begin).total_seconds()) > 120:
+        verwacht = wanneer + timedelta(seconds=time.monotonic() - t0)
+        if abs((datetime.now() - verwacht).total_seconds()) <= 120:
+            return True, ""
+    return False, "fout"
 
 
 # (code, landcode voor de klok en getallen, naam in die taal zelf)
