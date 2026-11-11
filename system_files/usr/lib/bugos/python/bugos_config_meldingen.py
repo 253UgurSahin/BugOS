@@ -7,13 +7,17 @@ bugos_config (_c.draai), zodat een test die bi.draai of bi.VOORBEELD vervangt da
 from __future__ import annotations
 
 import getpass
+import grp
 import os
+import pwd
 import re
 import shutil
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 import bugos_config as _c
+from bugos_base import t
 
 
 # =============================================================== meldingen ===
@@ -111,14 +115,15 @@ SOORTEN = [
 
 _VB_APPS = {"internet": ("firefox.desktop", [("firefox.desktop", "Firefox"), ("org.chromium.Chromium.desktop", "Chromium")]),
             "mail": ("org.mozilla.Thunderbird.desktop", [("org.mozilla.Thunderbird.desktop", "Thunderbird")]),
-            "fotos": ("org.kde.gwenview.desktop", [("org.kde.gwenview.desktop", "Gwenview (foto's bekijken)"),
+            "fotos": ("org.kde.gwenview.desktop", [("org.kde.gwenview.desktop",
+                                                    t("Gwenview (foto's bekijken)", "Gwenview (view photos)")),
                                                    ("org.kde.krita.desktop", "Krita")]),
-            "muziek": ("org.kde.elisa.desktop", [("org.kde.elisa.desktop", "Elisa (muziek)"),
+            "muziek": ("org.kde.elisa.desktop", [("org.kde.elisa.desktop", t("Elisa (muziek)", "Elisa (music)")),
                                                  ("vlc.desktop", "VLC")]),
             "videos": ("org.kde.haruna.desktop", [("org.kde.haruna.desktop", "Haruna (video)"), ("vlc.desktop", "VLC")]),
-            "pdf": ("org.kde.okular.desktop", [("org.kde.okular.desktop", "Okular (documenten)"),
+            "pdf": ("org.kde.okular.desktop", [("org.kde.okular.desktop", t("Okular (documenten)", "Okular (documents)")),
                                                ("firefox.desktop", "Firefox")]),
-            "tekst": ("org.kde.kate.desktop", [("org.kde.kate.desktop", "Kate (tekst)"),
+            "tekst": ("org.kde.kate.desktop", [("org.kde.kate.desktop", t("Kate (tekst)", "Kate (text)")),
                                                ("org.kde.kwrite.desktop", "KWrite")])}
 
 
@@ -216,6 +221,112 @@ def zet_standaard_app(sleutel: str, desktop_id: str) -> bool:
 
 
 # ================================================================ printers ===
+# Alles gaat via de gewone CUPS-programma's (lpstat, lpadmin, lpoptions, cancel). Wie in de groep wheel zit, is voor
+# CUPS beheerder over de eigen socket (cups-files.conf: SystemGroup sys root wheel, PeerCred on): zonder wachtwoord.
+# Anderen vragen via pkexec één keer het wachtwoord van een beheerder (org.bugos.printers.policy). Nooit een shell:
+# alles is een lijst met argumenten, en wat van buiten komt (namen uit het netwerk, wat je typt) wordt eerst gecontroleerd.
+
+LPADMIN = "/usr/bin/lpadmin"   # /usr/sbin is in Fedora een link naar bin: dit is het echte pad (pkexec, polkit)
+LPINFO = "/usr/bin/lpinfo"
+NAAM_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,126}$")   # een wachtrij: niet met '-' of '.' beginnen
+TAAK_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*-\d+$")
+
+
+def cups_draai(*cmd: str, timeout: int = 15, fout: bool = True) -> tuple[int, str]:
+    """Zoals draai, maar met de foutmelding erbij (CUPS zegt alles op stderr; fout=False: alleen stdout) en een lege
+    invoer, zodat lpadmin nooit op een wachtwoord blijft wachten. Te lang: code 124. Bestaat het niet: 127."""
+    if not shutil.which(cmd[0]):
+        return 127, ""
+    try:
+        r = subprocess.run(list(cmd), input="", capture_output=True, text=True, timeout=timeout,
+                           env=_c.omgeving(cmd[0]))
+        return r.returncode, (r.stdout or "") + ((r.stderr or "") if fout else "")
+    except subprocess.TimeoutExpired:
+        return 124, ""
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return 1, ""
+
+
+_FOUTEN = (
+    ("verboden", ("forbidden", "not-authorized", "unauthorized", "not authorized")),
+    ("onbereikbaar", ("unable to connect", "timed out", "host is down", "no route to host", "name or service not known",
+                      "connection refused", "unable to locate printer")),
+    ("geen_driverless", ("unable to create ppd", "does not support required ipp attributes")),
+    ("bestaat_niet", ("does not exist", "invalid destination")),
+)
+
+
+def cups_fout(code: int, uitvoer: str) -> str:
+    """'ok' bij code 0 (een waarschuwing als 'drivers are deprecated' telt niet), anders wat er misging:
+    verboden, onbereikbaar, geen_driverless, bestaat_niet of anders. (Geweigerd bij pkexec: zie als_beheerder.)"""
+    if code == 0:
+        return "ok"
+    if code == 124:
+        return "onbereikbaar"
+    laag = uitvoer.lower()
+    for soort, stukjes in _FOUTEN:
+        if any(s in laag for s in stukjes):
+            return soort
+    return "anders"
+
+
+def ben_beheerder() -> bool:
+    """Mag ik CUPS zonder wachtwoord veranderen? (wheel, sys of root, zoals SystemGroup in cups-files.conf)"""
+    if _c.VOORBEELD:
+        return _c._VB.setdefault("printer_beheerder", True)
+    if os.getuid() == 0:
+        return True
+    ik = getpass.getuser()
+    try:
+        eigen_gid = pwd.getpwnam(ik).pw_gid
+    except KeyError:
+        eigen_gid = os.getgid()
+    for naam in ("wheel", "sys", "root"):
+        try:
+            g = grp.getgrnam(naam)
+        except KeyError:
+            continue
+        if ik in g.gr_mem or g.gr_gid == eigen_gid:
+            return True
+    return False
+
+
+def als_beheerder(*cmd: str, timeout: int = 15) -> tuple[str, str]:
+    """Een opdracht die CUPS alleen van een beheerder aanneemt (lpadmin, of lpinfo voor printers met een kabel).
+    Geeft (soort, uitvoer): 'ok', 'geweigerd' (geen wachtwoord gegeven) of wat cups_fout zegt. Hooguit één keer
+    pkexec per keer: wie het wachtwoord niet weet, krijgt geen tweede venster (review R3)."""
+    if cmd[0] not in ("lpadmin", "lpinfo"):
+        raise ValueError(cmd[0])
+    if _c.ben_beheerder():
+        code, uit = _c.cups_draai(cmd[0], *cmd[1:], timeout=timeout)
+        soort = cups_fout(code, uit)
+        if soort != "verboden":   # verboden: pas net in de groep gezet, nog niet opnieuw ingelogd -> één keer pkexec
+            return soort, uit
+    if not shutil.which("pkexec"):
+        return "anders", ""
+    # Lang wachten: eerst typt iemand het wachtwoord, dan praat lpadmin nog met de printer (review R12).
+    code, uit = _c.cups_draai("pkexec", LPADMIN if cmd[0] == "lpadmin" else LPINFO, *cmd[1:],
+                              timeout=max(timeout, 180))
+    if code in (126, 127):   # 126: Annuleren geklikt, 127: geen toestemming (pkexec zelf, review R11)
+        return "geweigerd", uit
+    return cups_fout(code, uit), uit
+
+
+def schone_tekst(tekst: str, lengte: int = 127) -> str:
+    """Een naam of plek van buiten (het netwerk, wat je typt): zonder tabs, regeleindes en andere stuurtekens."""
+    return " ".join("".join(c if c.isprintable() else " " for c in tekst).split())[:lengte].strip()
+
+
+# Wat lpstat -l -p onder een printer zet, en geen reden is (de reden staat er direct onder: '\tPaused').
+_LPSTAT_SLEUTELS = ("Form mounted", "Content types", "Printer types", "Description", "Alerts", "Location",
+                    "Connection", "Interface", "On fault", "After fault", "Users allowed", "Users denied",
+                    "Forms allowed", "Forms not allowed", "Banner required", "Charset sets", "Default pitch",
+                    "Default page size", "Default port settings")
+# Wat CUPS zegt als hij een printer op het netwerk niet vindt; de wachtrij blijft dan 'aan het printen' (review R6).
+_ONBEREIKBAAR = ("may not exist or is unavailable", "not responding", "unable to connect",
+                 "waiting for printer to become available", "unable to locate printer", "host is down",
+                 "connection refused")
+
 
 @dataclass
 class Printer:
@@ -223,6 +334,10 @@ class Printer:
     omschrijving: str   # wat je ziet
     staat: str          # klaar, bezig of gestopt
     standaard: bool
+    gepauzeerd: bool = False    # bewust gepauzeerd (cupsdisable), niet gestopt door een fout
+    reden: str = ""             # wat CUPS erbij zegt ('Paused', 'Unable to connect to printer')
+    locatie: str = ""
+    onbereikbaar: bool = False  # CUPS wacht op de printer (uit, of niet op hetzelfde netwerk)
 
 
 def lees_lpstat(printers_uit: str, standaard_uit: str) -> list[Printer]:
@@ -230,6 +345,7 @@ def lees_lpstat(printers_uit: str, standaard_uit: str) -> list[Printer]:
     m = re.search(r"destination:\s*(\S+)", standaard_uit)
     standaard = m.group(1) if m else ""
     lijst: list[Printer] = []
+    net_printer = False
     for regel in printers_uit.splitlines():
         m = re.match(r"^printer (\S+) (is idle|now printing|disabled)", regel)
         if m:
@@ -237,32 +353,53 @@ def lees_lpstat(printers_uit: str, standaard_uit: str) -> list[Printer]:
             lijst.append(Printer(naam, naam.replace("_", " "),
                                  "klaar" if staat == "is idle" else "bezig" if staat == "now printing" else "gestopt",
                                  naam == standaard))
-        elif lijst and regel.strip().startswith("Description:"):
-            omschrijving = regel.split(":", 1)[1].strip()
+            net_printer = True
+            continue
+        direct_eronder, net_printer = net_printer, False
+        if not lijst:
+            continue
+        tekst = regel.strip()
+        if direct_eronder and regel.startswith("\t") and not regel.startswith("\t\t") and tekst and \
+                not any(tekst == k or tekst.startswith(k + ":") for k in _LPSTAT_SLEUTELS):
+            lijst[-1].reden = schone_tekst(tekst, 200)
+        elif tekst.startswith("Description:"):
+            omschrijving = schone_tekst(tekst.split(":", 1)[1])
             if omschrijving:
                 lijst[-1].omschrijving = omschrijving
+        elif tekst.startswith("Location:"):
+            lijst[-1].locatie = schone_tekst(tekst.split(":", 1)[1])
+    for p in lijst:
+        p.gepauzeerd = p.staat == "gestopt" and p.reden in ("Paused", "Rejecting Jobs")
+        p.onbereikbaar = any(s in p.reden.lower() for s in _ONBEREIKBAAR)
     return lijst
 
 
 def printers() -> list[Printer]:
     if _c.VOORBEELD:
         if _c._VB["printers"] is None:
-            _c._VB["printers"] = [Printer("HP_LaserJet", "Bugie's HP LaserJet", "klaar", True),
-                               Printer("Canon_PIXMA", "Canon PIXMA (boven)", "gestopt", False)]
+            _c._VB["printers"] = [Printer("HP_LaserJet", "Bugie's HP LaserJet", "klaar", True,
+                                          locatie=t("Studeerkamer", "Study")),
+                                  Printer("Canon_PIXMA", t("Canon PIXMA (boven)", "Canon PIXMA (upstairs)"), "gestopt",
+                                          False, reden="Unable to connect to printer", onbereikbaar=True)]
         return _c._VB["printers"]
     if not shutil.which("lpstat"):
         return []
     return lees_lpstat(_c.draai("lpstat", "-l", "-p", timeout=8)[1], _c.draai("lpstat", "-d", timeout=8)[1])
 
 
+def _eigen_regels() -> list[str]:
+    """De regels van lpstat -o die van jou zijn (die van anderen kun je zonder beheerder niet weghalen, U158).
+    Alleen lpstat -o zegt de hele naam van de eigenaar; lpq knipt hem af (review R10)."""
+    ik = getpass.getuser()
+    return [r for r in _c.draai("lpstat", "-o", timeout=8)[1].splitlines()
+            if len(r.split()) >= 2 and r.split()[1] == ik]
+
+
 def wachtrij() -> int:
     """Hoeveel documenten staan te wachten om geprint te worden."""
     if _c.VOORBEELD:
-        return 1
-    # Alleen die van jou: die van anderen kun je zonder beheerder niet weghalen (U158).
-    ik = getpass.getuser()
-    return len([r for r in _c.draai("lpstat", "-o", timeout=8)[1].splitlines()
-                if len(r.split()) >= 2 and r.split()[1] == ik])
+        return len(taken())
+    return len(_eigen_regels())
 
 
 def zet_standaard_printer(naam: str) -> bool:
@@ -282,11 +419,109 @@ def testpagina(naam: str) -> bool:
     return _c.draai("lp", "-d", naam, proef, timeout=15)[0] == 0
 
 
+def _vb_printer(naam: str) -> Printer | None:
+    return next((p for p in printers() if p.naam == naam), None)
+
+
+def hervat_printer(naam: str) -> str:
+    """Verder printen na een fout of een pauze: lpadmin -p Q -E zet hem aan én laat hem weer documenten aannemen.
+    (Niet cupsenable via pkexec: dat is in BugOS een link naar cupsaccept, die op zijn eigen naam let.)"""
+    if not NAAM_RE.match(naam):
+        return "anders"
+    if _c.VOORBEELD:
+        p = _vb_printer(naam)
+        if p:
+            p.staat, p.gepauzeerd, p.reden, p.onbereikbaar = "klaar", False, "", False
+        return "ok"
+    return _c.als_beheerder("lpadmin", "-p", naam, "-E", timeout=15)[0]
+
+
+def pauzeer_printer(naam: str) -> str:
+    """Even niet printen (alleen voor een beheerder, zonder wachtwoord; nooit via pkexec)."""
+    if not NAAM_RE.match(naam):
+        return "anders"
+    if _c.VOORBEELD:
+        p = _vb_printer(naam)
+        if p:
+            p.staat, p.gepauzeerd, p.reden = "gestopt", True, "Paused"
+        return "ok"
+    code, uit = _c.cups_draai("cupsdisable", naam, timeout=8)
+    return cups_fout(code, uit)
+
+
+def verwijder_printer(naam: str) -> str:
+    if not NAAM_RE.match(naam):
+        return "anders"
+    if _c.VOORBEELD:
+        _c._VB["printers"] = [p for p in printers() if p.naam != naam]
+        return "ok"
+    soort = _c.als_beheerder("lpadmin", "-x", naam, timeout=15)[0]
+    if soort == "ok":
+        _c.cups_draai("lpoptions", "-x", naam, timeout=8)   # ook jouw eigen keuzes voor deze printer weg
+    return soort
+
+
+@dataclass
+class Taak:
+    printer: str
+    id: int
+    titel: str       # '' als CUPS het niet weet (de pagina zegt dan 'Document')
+    actief: bool     # wordt nu geprint
+
+
+def lees_lpq(uitvoer: str) -> dict[int, tuple[str, bool]]:
+    """Uit: lpq -P <printer> -> {taaknummer: (titel, wordt nu geprint)}. De kolom met de eigenaar knipt CUPS af op
+    7 tekens: daar kijken we dus niet naar. Welke van jou zijn, zegt lpstat -o (review R10)."""
+    uit: dict[int, tuple[str, bool]] = {}
+    for regel in uitvoer.splitlines():
+        m = re.match(r"^(\S+)\s+(\S+)\s+(\d+)\s+(.*?)\s+(\d+) bytes$", regel.strip())
+        if m:
+            uit[int(m.group(3))] = (schone_tekst(m.group(4), 100), m.group(1) == "active")
+    return uit
+
+
+def taken() -> list[Taak]:
+    """Jouw documenten die nog geprint moeten worden, het eerste eerst."""
+    if _c.VOORBEELD:
+        return _c._VB.setdefault("taken", [Taak("HP_LaserJet", 12, t("Brief aan de bank.pdf", "Letter to the bank.pdf"),
+                                                True)])
+    lijst: list[Taak] = []
+    for regel in _eigen_regels():
+        printer, _, nummer = regel.split()[0].rpartition("-")
+        if NAAM_RE.match(printer) and nummer.isdigit():
+            lijst.append(Taak(printer, int(nummer), "", False))
+    titels: dict[str, dict[int, tuple[str, bool]]] = {}
+    for taak in lijst:
+        if taak.printer not in titels:
+            titels[taak.printer] = lees_lpq(_c.draai("lpq", "-P", taak.printer, timeout=8)[1])
+        taak.titel, taak.actief = titels[taak.printer].get(taak.id, ("", False))
+    return lijst
+
+
+def annuleer_taak(printer: str, nummer: int) -> bool:
+    taak = f"{printer}-{nummer}"
+    if not TAAK_RE.match(taak):
+        return False
+    if _c.VOORBEELD:
+        _c._VB["taken"] = [x for x in taken() if (x.printer, x.id) != (printer, nummer)]
+        return True
+    return _c.draai("cancel", taak, timeout=8)[0] == 0
+
+
 def wachtrij_leegmaken() -> bool:
     if _c.VOORBEELD:
+        _c._VB["taken"] = []
         return True
     # 'cancel -a' vraagt CUPS om álles (van iedereen): dat mag alleen een beheerder. Je eigen documenten wel (U158).
-    return _c.draai("cancel", "-u", getpass.getuser(), timeout=8)[0] == 0
+    # Maar 'cancel -u jij' weigert CUPS voor wie geen beheerder is ('Forbidden'): dan één voor één, met hun nummer.
+    if _c.draai("cancel", "-u", getpass.getuser(), timeout=8)[0] == 0:
+        return True
+    goed = True
+    for regel in _eigen_regels():
+        taak = regel.split()[0]
+        if TAAK_RE.match(taak):
+            goed = _c.draai("cancel", taak, timeout=8)[0] == 0 and goed
+    return goed
 
 
 def scanprogramma() -> str | None:
