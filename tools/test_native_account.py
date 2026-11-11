@@ -300,6 +300,88 @@ klopt(_u24 == (True, "") and _slaap24 and _slaap24[0] >= 9 and _a24[0][1] == "Cr
 ca._laatst_weg = None
 ca.naam_bestaat = _oud_nb3
 
+# =========================================================================== toetsenbord (stap 4) ===
+
+_I = bi.Indeling
+_lc7 = {
+    "be": "   System Locale: LANG=en_US.UTF-8\n       VC Keymap: be\n      X11 Layout: be\n       X11 Model: pc105\n",
+    "intl": "   X11 Layout: us\n    X11 Model: pc105\n  X11 Variant: intl\n  X11 Options: terminate:ctrl_alt_bksp\n",
+    "niets": "   System Locale: LANG=C.UTF-8\n       VC Keymap: (unset)\n      X11 Layout: (unset)\n",
+    "lijst": "      X11 Layout: be,us\n     X11 Variant: ,intl\n",
+}
+_u7 = {k: bi.lees_localectl(v) for k, v in _lc7.items()}
+klopt(_u7 == {"be": _I("be"), "intl": _I("us", "intl"), "niets": None, "lijst": _I("be")}
+      and bi.lees_localectl_alles(_lc7["intl"])["options"] == "terminate:ctrl_alt_bksp",
+      f"7: het toetsenbord van het systeem uit localectl status ({_u7})")
+_evdev8 = ("! model\n  pc105           Generic 105-key PC\n\n! layout\n  us              English (US)\n"
+           "  be              Belgian\n\n! variant\n  intl            us: English (US, intl., with dead keys)\n\n"
+           "! option\n  grp                  Switching to another layout\n  grp:win_space_toggle Win+Space\n")
+_u8 = bi.lees_evdev_lst(_evdev8)
+klopt(_u8 == [(_I("us"), "English (US)"), (_I("be"), "Belgian"), (_I("us", "intl"), "English (US, intl., with dead keys)")],
+      f"8: evdev.lst: layouts en varianten, geen modellen of opties ({_u8})")
+_echt8 = Path(bi.EVDEV[0])
+if _echt8.is_file():
+    _alle8 = {ind for ind, _b in bi.alle_toetsenborden()}
+    _mist8 = [(lay, var) for lay, var, _n, _e in bi.BEKEND if _I(lay, var) not in _alle8]
+    klopt(not _mist8, f"8: elk bekend toetsenbord staat in xkb ({_mist8})")
+_n9 = (bi.toetsenbord_naam(_I("be"), "Belgian", nl=True), bi.toetsenbord_naam(_I("be"), "Belgian", nl=False),
+       bi.toetsenbord_naam(_I("xx", "yy"), "Something (odd)", nl=True), bi.toetsenbord_naam(_I("xx", "yy"), "", nl=True),
+       bi.toetsenbord_naam(_I("xx"), "", nl=False))
+klopt(_n9[0] == "Belgisch (AZERTY)" and _n9[1] == "Belgian (AZERTY)" and _n9[2] and _n9[3] == "xx (yy)" and _n9[4] == "xx",
+      f"9: de naam van een toetsenbord in gewone woorden ({_n9})")
+klopt(len({(a, b) for a, b, _n, _e in bi.BEKEND}) == len(bi.BEKEND)
+      and all(bi.goede_indeling(_I(a, b)) for a, b, _n, _e in bi.BEKEND), "9: de bekende toetsenborden: uniek en geldig")
+
+
+def _kxkb(opties: str):
+    def antwoord(cmd):
+        if cmd[0] == "kreadconfig6" and "Options" in cmd:
+            return 0, opties + "\n"
+        return 0, ""
+    return antwoord
+
+
+_o11, _u11 = vang(bi.zet_toetsenborden, [_I("us", "intl"), _I("be")], antwoord=_kxkb("caps:escape,grp:alt_shift_toggle"))
+_s11 = [c for c in _o11 if c[0] == "kwriteconfig6"]
+_verwacht11 = [("LayoutList", "us,be"), ("VariantList", "intl,"), ("DisplayNames", ","), ("ResetOldOptions", "true"),
+               ("Options", "caps:escape,grp:win_space_toggle")]
+klopt(_u11 and [(c[c.index("--key") + 1], c[-1]) for c in _s11[:-1]] == _verwacht11
+      and not any("--notify" in c for c in _s11[:-1]) and _s11[-1][-3:] == ("Use", "--notify", "true")
+      and all(c[1:5] == ("--file", "kxkbrc", "--group", "Layout") for c in _s11),
+      f"11: twee toetsenborden: eerst alles stil, als laatste Use=true met --notify (KWin past het meteen toe) ({_s11})")
+_o11b, _u11b = vang(bi.zet_toetsenborden, [_I("be")], antwoord=_kxkb("caps:escape,grp:win_space_toggle"))
+_s11b = {c[c.index("--key") + 1]: c[-1] for c in _o11b if c[0] == "kwriteconfig6"}
+klopt(_u11b and _s11b["Options"] == "caps:escape" and _s11b["LayoutList"] == "be" and _s11b["DisplayNames"] == "",
+      f"11: één toetsenbord: geen wisseltoets, andere opties blijven ({_s11b})")
+_o11c, _ = vang(bi.zet_toetsenborden, [_I("us")], antwoord=_kxkb(""))
+klopt(any(c[0] == "kwriteconfig6" and "Options" in c and c[-1] == "--delete" for c in _o11c),
+      "11: geen opties over: de sleutel Options gaat weg")
+_slecht12 = [[], [_I("us")] * 5, [_I("us;rm")], [_I("us", "a b")], [_I("")], [_I("US")]]
+_u12 = [vang(bi.zet_toetsenborden, s) for s in _slecht12]
+klopt(all(u is False and not o for o, u in _u12), f"12: rare toetsenborden: niets geschreven ({[u for _o, u in _u12]})")
+_o13, _u13 = vang(bi.zet_systeem_toetsenbord, _I("be"), antwoord=lambda c: (0, _lc7["niets"]) if c[1:2] == ("status",)
+                  else (0, ""))
+_o13b, _u13b = vang(bi.zet_systeem_toetsenbord, _I("be"), antwoord=lambda c: (0, _lc7["intl"]) if c[1:2] == ("status",)
+                    else (0, ""))
+_set13 = [c for c in _o13 if c[1:2] == ("set-x11-keymap",)]
+_set13b = [c for c in _o13b if c[1:2] == ("set-x11-keymap",)]
+klopt(_u13 and _set13 == [("localectl", "set-x11-keymap", "be", "", "", "")]
+      and _set13b == [("localectl", "set-x11-keymap", "be", "pc105", "", "terminate:ctrl_alt_bksp")],
+      f"13/I13: het inlogscherm: localectl set-x11-keymap; model en opties blijven ({_set13}, {_set13b})")
+_stand13 = iter([_lc7["niets"], _lc7["be"]])
+_o13c, _u13c = vang(bi.zet_systeem_toetsenbord, _I("be"),
+                    antwoord=lambda c: (0, next(_stand13)) if c[1:2] == ("status",) else (1, ""))
+klopt(_u13c is True, "I5: localectl gaf het op, maar het inlogscherm heeft het toetsenbord wel: gelukt")
+_o13d, _u13d = vang(bi.zet_systeem_toetsenbord, _I("us;x"))
+klopt(_u13d is False and not _o13d, "13: een rare indeling gaat niet naar localectl")
+# Lezen: kxkbrc (Use=true) of anders het systeem; niet gezet = Engels (VS) (I13).
+_kx = {"Use": "true", "LayoutList": "us,be", "VariantList": "intl"}
+_o13e, _u13e = vang(bi.toetsenborden, antwoord=lambda c: (0, _kx.get(c[c.index("--key") + 1], "")) if c[0] == "kreadconfig6"
+                    else (0, ""))
+_o13f, _u13f = vang(bi.toetsenborden, antwoord=lambda c: (0, "false") if c[0] == "kreadconfig6" else (0, _lc7["niets"]))
+klopt(_u13e == [_I("us", "intl"), _I("be")] and _u13f == [_I("us")],
+      f"13: je toetsenborden uit kxkbrc; nog niets gekozen: dat van het systeem, of Engels (VS) ({_u13e}, {_u13f})")
+
 # ============================================================ het venster van Instellingen (voorbeeldstand) ===
 
 lader = importlib.machinery.SourceFileLoader("instellingen", str(BIN / "bugos-settings"))
@@ -544,6 +626,84 @@ _d27.close()
 _d27b = sa.PersoonDialoog(inl)
 klopt(_d27b.fout.text() == "" and not _d27b.ok.isEnabled(), "B: een nieuw venster begint zonder rode tekst")
 _d27b.close()
+
+# 29: de kaart Toetsenbord (voorbeeldstand: VS-Internationaal en Belgisch; het inlogscherm heeft Engels (VS)).
+venster.ga_naar("tijd")
+tp.ververs()
+wacht()
+_t29 = [(r.titel.text(), r.uitleg.text()) for r in tp.toetsenbord_rijen]
+klopt(len(_t29) == 2 and _t29[0][0].startswith("VS-Internationaal") and "Wordt eerst gebruikt" in _t29[0][1]
+      and "accenten" in _t29[0][1] and _t29[1][0] == "Belgisch (AZERTY)"
+      and "Windows-toets + spatie" in tp.voeg_toetsenbord.uitleg.text() and "Toetsenbord" in teksten(tp),
+      f"29: twee toetsenborden, de eerste wordt eerst gebruikt, wisselen met Windows-toets + spatie ({_t29})")
+klopt(tp.inlog_rij is not None and "Engels (VS)" in tp.inlog_rij.uitleg.text(),
+      "H: een beheerder ziet dat het inlogscherm een ander toetsenbord heeft")
+_m29 = {tekst: f for _i, tekst, f in tp.menu_toetsenbord(tp.toetsenbord_lijst[1])}
+_m29a = [tekst for _i, tekst, _f in tp.menu_toetsenbord(tp.toetsenbord_lijst[0])]
+klopt(set(_m29) == {"Als eerste gebruiken", "Weghalen"} and _m29a == ["Weghalen"],
+      f"H: menu: 'Als eerste gebruiken' (niet bij de eerste) en 'Weghalen' ({list(_m29)}, {_m29a})")
+_m29["Als eerste gebruiken"]()
+wacht()
+klopt([r.titel.text() for r in tp.toetsenbord_rijen][0] == "Belgisch (AZERTY)" and "meteen typen" in tp.melding.tekst.text()
+      and tp.inlog_rij is not None, f"H: Belgisch als eerste; meteen typen ({tp.melding.tekst.text()!r})")
+tp.inlog_rij.rechts.click()
+wacht()
+klopt(tp.inlog_rij is None and ca._VB_ACCOUNT["toetsenbord_inlog"] == ("be", "")
+      and "inlogscherm gebruikt nu ook" in tp.melding.tekst.text(),
+      f"H: 'Ook daar gebruiken': het inlogscherm krijgt Belgisch, de regel gaat weg ({tp.melding.tekst.text()!r})")
+next(f for _i, tekst, f in tp.menu_toetsenbord(tp.toetsenbord_lijst[1]) if tekst == "Weghalen")()
+wacht()
+klopt(len(tp.toetsenbord_rijen) == 1 and tp.toetsenbord_rijen[0].rechts is None
+      and "AZERTY" in tp.voeg_toetsenbord.uitleg.text() and "weggehaald" in tp.melding.tekst.text(),
+      f"H: één toetsenbord over: geen menu, geen 'wisselen' ({tp.melding.tekst.text()!r})")
+# Toevoegen: de bekende bovenaan, wat je al hebt niet; met vier kan er niets meer bij.
+_kies29: list = []
+
+
+class _NepKies29:
+    def __init__(self, ouder, titel, items, huidig=None, hint=""):
+        _kies29.append((titel, items, hint))
+        self.gekozen = next(ind for ind, naam in items if naam.startswith("VS-Internationaal ("))
+
+
+setattr(_NepKies29, "exec", lambda self: 1)
+_oud29 = sa.KiesDialoog
+sa.KiesDialoog = _NepKies29
+tp.voeg_toetsenbord.geklikt.emit()
+wacht()
+sa.KiesDialoog = _oud29
+_items29 = _kies29[0][1] if _kies29 else []
+klopt(_kies29 and _kies29[0][0] == "Welk toetsenbord?" and _items29[0][1] == "Engels (VS)"
+      and _I("be") not in [i for i, _n in _items29] and "AZERTY" in _kies29[0][2]
+      and [r.titel.text() for r in tp.toetsenbord_rijen][1].startswith("VS-Internationaal"),
+      f"H: toevoegen: een zoeklijst, de bekende bovenaan, Belgisch (heb je al) niet ({len(_items29)} keuzes)")
+if _echt8.is_file():
+    # In het Nederlands als de vertaling van xkb er is (op Ubuntu in de CI niet, in BugOS wel).
+    _nl29 = any(v.gettext("Belgian") != "Belgian" for v in ca._xkb_vertalingen())
+    _naam29 = "internationaal, met dode toetsen" if _nl29 else "intl., with dead keys"
+    klopt(len(_items29) > 100 and all(n for _i, n in _items29) and any(_naam29 in n for _i, n in _items29),
+          f"H: ook alle andere toetsenborden van xkb ({len(_items29)}, Nederlands: {_nl29})")
+ca._VB_ACCOUNT.update(toetsenborden=[("us", ""), ("be", ""), ("nl", ""), ("de", "")], toetsenbord_inlog=("us", ""))
+tp.ververs()
+wacht()
+klopt(len(tp.toetsenbord_rijen) == 4 and tp.voeg_toetsenbord.property("klikbaar") == "false"
+      and "Hooguit 4" in tp.voeg_toetsenbord.uitleg.text(), "H: met vier toetsenborden kan er niets meer bij")
+klopt(tp.inlog_rij is None, "H: het inlogscherm heeft al het eerste toetsenbord: geen regel")
+ca._VB_ACCOUNT.update(toetsenborden=[("us", "intl"), ("be", "")], toetsenbord_inlog=("us", ""))
+_oud29g = bi.gebruiker
+bi.gebruiker = lambda: bi.Gebruiker("bugie", "Bugie", False, False)
+tp.ververs()
+wacht()
+bi.gebruiker = _oud29g
+klopt(tp.inlog_rij is None, "H: wie geen beheerder is, ziet de regel voor het inlogscherm niet")
+_tp_nieuw = sa.TijdPagina(venster)
+klopt([r.titel.text() for r in _tp_nieuw.g3.findChildren(sa.Rij)] == ["Even kijken…"],
+      "I16: tot de toetsenborden gelezen zijn: 'Even kijken…'")
+_tp_nieuw.toon_rest(None)
+klopt(len(_tp_nieuw.toetsenbord_rijen) == 1, "I16: niet te lezen: toch een toetsenbord en 'toevoegen', nooit eeuwig wachten")
+_tp_nieuw.deleteLater()
+tp.ververs()
+wacht()
 
 # 31: geen sprongen naar KDE meer in de pagina's van dit pakket.
 _bron = (PY / "bugos_settings_account.py").read_text(encoding="utf-8")

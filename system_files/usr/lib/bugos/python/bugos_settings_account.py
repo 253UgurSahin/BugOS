@@ -113,10 +113,13 @@ class KlokDialoog(QDialog):
 class TijdPagina(Blad):
     sleutel, icoon = "tijd", "klok"
     titel_nl, titel_en = "Tijd en taal", "Time and language"
-    uitleg_nl = "De klok, je tijdzone en de taal van BugOS."
-    uitleg_en = "The clock, your time zone and the language of BugOS."
+    uitleg_nl = "De klok, je tijdzone, de taal van BugOS en je toetsenbord."
+    uitleg_en = "The clock, your time zone, the language of BugOS and your keyboard."
     zoekwoorden = ("tijd klok datum tijdzone zomertijd wintertijd taal nederlands engels language land time clock "
-                   "date time zone timezone daylight saving language english dutch region")
+                   "date time zone timezone daylight saving language english dutch region "
+                   "notatie datum tijd 12 24 uur am pm eerste dag week maandag zondag regio land formaat format "
+                   "region country first day week monday sunday keyboard toetsenbord toetsenbordindeling indeling "
+                   "azerty qwerty qwertz layout keyboard layout accenten accents")
     kde = "kcm_regionandlang"
 
     def bouw(self) -> None:
@@ -148,9 +151,128 @@ class TijdPagina(Blad):
                                    "programma's vertaald; de BugOS-programma's zelf zijn dan in het Engels.",
                                    "Dutch and English are complete. In other languages KDE and most programs are "
                                    "translated; the BugOS programs themselves are then in English."), "klein"))
+        # Toetsenborden: eerst 'even kijken', tot ze gelezen zijn (I16).
+        self.g3 = self.kaart(t("Toetsenbord", "Keyboard"))
+        self.toetsenbord_lijst: list[bi.Indeling] = []
+        self.toetsenbord_rijen: list[Rij] = []
+        self.toetsenbord_namen: dict = {}
+        self.inlog_rij: Rij | None = None
+        self.vul_toetsenborden(None, bi.Indeling("us"), False, {})
 
     def ververs(self) -> None:
         op_achtergrond(self, lambda: (bi.tijd(), bi.taal()), self.toon)
+        # Wat er verder op de pagina staat in een tweede klusje: toon() blijft zoals het was (tests roepen het aan).
+        op_achtergrond(self, lambda: (bi.toetsenborden(), bi.systeem_toetsenbord(), bi.gebruiker().beheerder,
+                                      dict(bi.alle_toetsenborden())), self.toon_rest)
+
+    def toon_rest(self, uitkomst) -> None:
+        if not isinstance(uitkomst, tuple):   # niet te lezen: dan wat we weten, nooit eeuwig 'even kijken'
+            uitkomst = (self.toetsenbord_lijst or [bi.Indeling("us")], bi.Indeling("us"), False, {})
+        lijst, systeem, beheerder, beschrijvingen = uitkomst
+        self.vul_toetsenborden(lijst, systeem, beheerder, beschrijvingen)
+
+    # ------------------------------------------------------------ toetsenbord ---
+
+    def vul_toetsenborden(self, lijst: list[bi.Indeling] | None, systeem: bi.Indeling, beheerder: bool,
+                          beschrijvingen: dict) -> None:
+        """De kaart Toetsenbord: je toetsenborden (de eerste wordt eerst gebruikt), 'Toetsenbord toevoegen…' en,
+        voor een beheerder, het inlogscherm als dat een ander toetsenbord heeft."""
+        leeg_groep(self.g3)
+        self.toetsenbord_rijen, self.inlog_rij = [], None
+        if lijst is None:
+            self.g3.voeg(Rij("toetsenbord", t("Even kijken…", "Checking…")))
+            return
+        nl = TAAL == "nl"
+        self.toetsenbord_lijst = list(lijst)
+        self.toetsenbord_namen = {ind: bi.toetsenbord_naam(ind, beschrijvingen.get(ind, ""), nl) for ind in lijst}
+        for i, ind in enumerate(lijst):
+            delen = [t("Wordt eerst gebruikt", "Used first")] if i == 0 and len(lijst) > 1 else []
+            if (ind.layout, ind.variant) == ("us", "intl"):
+                delen.append(t("' en \" maken accenten (é, ë)", "' and \" make accents (é, ë)"))
+            rechts = meer_knop(lambda ind=ind: self.menu_toetsenbord(ind)) if len(lijst) > 1 else None
+            rij = Rij("toetsenbord", self.toetsenbord_namen[ind], " · ".join(delen), rechts)
+            rij.indeling = ind
+            self.g3.voeg(rij)
+            self.toetsenbord_rijen.append(rij)
+        if len(lijst) >= bi.MAX_TOETSENBORDEN:
+            self.voeg_toetsenbord = Rij("toetsenbord", t("Toetsenbord toevoegen…", "Add a keyboard…"),
+                                        t("Hooguit 4 toetsenborden", "At most 4 keyboards"))
+        else:
+            self.voeg_toetsenbord = Rij("toetsenbord", t("Toetsenbord toevoegen…", "Add a keyboard…"),
+                                        t("Wisselen: Windows-toets + spatie", "Switch: Windows key + Space")
+                                        if len(lijst) > 1 else
+                                        t("Bijvoorbeeld AZERTY of US-Internationaal",
+                                          "For example AZERTY or US-International"), klikbaar=True)
+            self.voeg_toetsenbord.geklikt.connect(self.toetsenbord_toevoegen)
+        self.g3.voeg(self.voeg_toetsenbord)
+        if beheerder and lijst and systeem != lijst[0]:
+            knop = Knop(t("Ook daar gebruiken", "Use it there too"), "gewoon")
+            knop.clicked.connect(lambda _c=False, ind=lijst[0]: self.zet_inlogscherm(ind))
+            naam = self.toetsenbord_namen.get(systeem) or bi.toetsenbord_naam(systeem, beschrijvingen.get(systeem, ""), nl)
+            self.inlog_rij = Rij("slot", t("Inlogscherm", "Login screen"),
+                                 t("Gebruikt nu {naam}", "Uses {naam} now").format(naam=naam), knop)
+            self.g3.voeg(self.inlog_rij)
+
+    def menu_toetsenbord(self, ind: bi.Indeling) -> list:
+        lijst = self.toetsenbord_lijst
+        items = []
+        if lijst and lijst[0] != ind:
+            items.append(("vink", t("Als eerste gebruiken", "Use first"),
+                          lambda: self.zet_toetsenborden([ind] + [x for x in lijst if x != ind])))
+        if len(lijst) > 1:
+            items.append(("prullenbak", t("Weghalen", "Remove"),
+                          lambda: self.zet_toetsenborden([x for x in lijst if x != ind], weg=ind)))
+        return items
+
+    def zet_toetsenborden(self, nieuw: list[bi.Indeling], weg: bi.Indeling | None = None) -> None:
+        naam = self.toetsenbord_namen.get(weg, "") if weg else ""
+
+        def klaar(ok) -> None:
+            if ok is True and weg:
+                self.melding.toon(t("{naam} is weggehaald.", "{naam} has been removed.").format(naam=naam), "goed")
+            elif ok is True:
+                self.melding.toon(t("Klaar. Je kunt meteen typen met dit toetsenbord.",
+                                    "Done. You can type with this keyboard right away."), "goed")
+            else:
+                self.melding.toon(t("Dat lukte niet.", "That did not work."), "fout")
+            self.ververs()
+
+        op_achtergrond(self, lambda: bi.zet_toetsenborden(nieuw), klaar)
+
+    def toetsenbord_toevoegen(self) -> None:
+        # Honderden toetsenborden met hun Nederlandse naam: eerst op de achtergrond, dan pas de keuzelijst.
+        nl = TAAL == "nl"
+        gekozen = set(self.toetsenbord_lijst)
+
+        def werk():
+            bekend = [(bi.Indeling(lay, var), naam_nl if nl else naam_en) for lay, var, naam_nl, naam_en in bi.BEKEND]
+            al = {ind for ind, _n in bekend}
+            rest = sorted(((ind, bi.toetsenbord_naam(ind, b, nl)) for ind, b in bi.alle_toetsenborden()
+                           if ind not in al), key=lambda x: x[1].casefold())
+            return [(ind, naam) for ind, naam in bekend + rest if ind not in gekozen]
+
+        op_achtergrond(self, werk, self.toetsenbord_kiezen)
+
+    def toetsenbord_kiezen(self, items) -> None:
+        if not isinstance(items, list) or not items:
+            self.melding.toon(t("Dat lukte niet.", "That did not work."), "fout")
+            return
+        d = KiesDialoog(self, t("Welk toetsenbord?", "Which keyboard?"), items, None,
+                        t("Zoek, bijvoorbeeld Belgisch of AZERTY", "Search, for example Belgian or AZERTY"))
+        if not d.exec() or d.gekozen is None:
+            return
+        self.zet_toetsenborden(self.toetsenbord_lijst + [d.gekozen])
+
+    def zet_inlogscherm(self, ind: bi.Indeling) -> None:
+        self.melding.toon(t(*BEZIG), seconden=120)
+
+        def klaar(ok) -> None:
+            self.melding.toon(t("Het inlogscherm gebruikt nu ook dit toetsenbord.",
+                                "The login screen now uses this keyboard too.") if ok is True else
+                              t("Dat lukte niet.", "That did not work."), "goed" if ok is True else "fout")
+            self.ververs()
+
+        op_achtergrond(self, lambda: bi.zet_systeem_toetsenbord(ind), klaar)
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:

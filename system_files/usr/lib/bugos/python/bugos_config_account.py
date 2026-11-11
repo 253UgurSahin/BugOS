@@ -1,6 +1,7 @@
 """BugOS Instellingen: tijd en taal (timedatectl, plasma-localerc) en inloggen en wachtwoord
-(AccountsService, bugos-login, kscreenlockerrc); ook de klok met de hand (timedatectl set-time) en
-andere mensen op deze computer (lezen uit pwd/grp, veranderen via AccountsService).
+(AccountsService, bugos-login, kscreenlockerrc); ook de klok met de hand (timedatectl set-time),
+andere mensen op deze computer (lezen uit pwd/grp, veranderen via AccountsService), je eigen foto
+(AccountsService), de toetsenborden (kxkbrc, localectl) en de notatie van datum en tijd (plasma-localerc).
 
 Hoort bij bugos_config (importeer het via daar). draai, VOORBEELD, _VB en de KDE-hulpjes komen via
 bugos_config (_c.draai), zodat een test die bi.draai of bi.VOORBEELD vervangt dat ook hier ziet.
@@ -751,3 +752,191 @@ def maak_persoon(naam: str, volledig: str, beheerder: bool, wachtwoord: str) -> 
     if not _c.accounts_roep(pad, "org.freedesktop.Accounts.User", "SetPassword", hash_, "")[0]:
         return False, "wachtwoord"
     return True, ""
+
+
+# ========================================================== toetsenbord ===
+# Je eigen toetsenborden staan in ~/.config/kxkbrc (KWin past ze meteen toe); het toetsenbord van het inlogscherm
+# (en van nieuwe mensen) is van het systeem: locale1, via localectl (vraagt het wachtwoord van een beheerder).
+
+@dataclass(frozen=True)
+class Indeling:
+    layout: str          # bv. "us", "be"
+    variant: str = ""    # bv. "intl"
+
+
+MAX_TOETSENBORDEN = 4    # xkb kent vier groepen
+
+# (layout, variant, nl, en): de gewone keuzes bovenaan, in gewone woorden.
+BEKEND = [
+    ("us", "", "Engels (VS)", "English (US)"),
+    ("us", "intl", "VS-Internationaal (accenten met ' en \")", "US-International (accents with ' and \")"),
+    ("us", "altgr-intl", "VS-Internationaal met AltGr", "US-International with AltGr"),
+    ("nl", "", "Nederlands", "Dutch"),
+    ("be", "", "Belgisch (AZERTY)", "Belgian (AZERTY)"),
+    ("fr", "", "Frans (AZERTY)", "French (AZERTY)"),
+    ("de", "", "Duits (QWERTZ)", "German (QWERTZ)"),
+    ("gb", "", "Engels (VK)", "English (UK)"),
+    ("tr", "", "Turks (Q)", "Turkish (Q)"),
+    ("tr", "f", "Turks (F)", "Turkish (F)"),
+    ("es", "", "Spaans", "Spanish"), ("it", "", "Italiaans", "Italian"), ("pt", "", "Portugees", "Portuguese"),
+    ("pl", "", "Pools", "Polish"), ("ua", "", "Oekraïens", "Ukrainian"), ("ara", "", "Arabisch", "Arabic"),
+    ("ch", "", "Zwitsers (Duits)", "Swiss (German)"), ("ch", "fr", "Zwitsers (Frans)", "Swiss (French)"),
+]
+EVDEV = ("/usr/share/X11/xkb/rules/evdev.lst", "/usr/share/xkeyboard-config-2/rules/evdev.lst")
+_LAYOUT = re.compile(r"[a-z0-9_]{1,32}")
+_VARIANT = re.compile(r"[a-z0-9_-]{0,32}")
+_VB_ACCOUNT.update(toetsenborden=[("us", "intl"), ("be", "")], toetsenbord_inlog=("us", ""))
+
+
+def lees_evdev_lst(tekst: str) -> list[tuple[Indeling, str]]:
+    """Alle toetsenborden uit evdev.lst van xkb: (indeling, Engelse beschrijving). Een layout-regel is
+    '  us   English (US)', een variant-regel '  intl   us: English (US, intl., with dead keys)'."""
+    uit: list[tuple[Indeling, str]] = []
+    deel = ""
+    for regel in tekst.splitlines():
+        if regel.startswith("!"):
+            deel = regel[1:].strip()
+            continue
+        delen = regel.split(None, 1)
+        if len(delen) < 2 or deel not in ("layout", "variant"):
+            continue
+        naam, rest = delen[0], delen[1].strip()
+        if deel == "layout":
+            uit.append((Indeling(naam), rest))
+        elif ":" in rest:
+            ouder, beschrijving = rest.split(":", 1)
+            uit.append((Indeling(ouder.strip(), naam), beschrijving.strip()))
+    return uit
+
+
+def alle_toetsenborden() -> list[tuple[Indeling, str]]:
+    """Elk toetsenbord dat xkb kent (het eerste evdev.lst dat er is), of [] als er geen is."""
+    for pad in EVDEV:
+        try:
+            return lees_evdev_lst(Path(pad).read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            continue
+    return []
+
+
+def toetsenbord_naam(ind: Indeling, beschrijving: str = "", nl: bool = True) -> str:
+    """De naam die je ziet: uit BEKEND, anders de beschrijving van xkb (in het Nederlands vertaald), anders de code."""
+    for layout, variant, naam_nl, naam_en in BEKEND:
+        if (layout, variant) == (ind.layout, ind.variant):
+            return naam_nl if nl else naam_en
+    if beschrijving:
+        if nl:
+            for vertaling in _xkb_vertalingen():
+                vertaald = vertaling.gettext(beschrijving)
+                if vertaald != beschrijving:
+                    return vertaald
+        return beschrijving
+    return f"{ind.layout} ({ind.variant})" if ind.variant else ind.layout
+
+
+_XKB_VERTALING: list = []
+
+
+def _xkb_vertalingen() -> list:
+    """De Nederlandse namen van xkb (eenmaal opzoeken: de keuzelijst vraagt er honderden)."""
+    if not _XKB_VERTALING:
+        import gettext
+        _XKB_VERTALING.extend(gettext.translation(d, languages=["nl"], fallback=True)
+                              for d in ("xkeyboard-config-2", "xkeyboard-config"))
+    return _XKB_VERTALING
+
+
+def lees_localectl_alles(uitvoer: str) -> dict[str, str]:
+    """De regels 'X11 Layout:', 'X11 Model:', 'X11 Variant:' en 'X11 Options:' uit 'localectl status'
+    ('' als ze niet gezet zijn)."""
+    uit = {"layout": "", "model": "", "variant": "", "options": ""}
+    for regel in uitvoer.splitlines():
+        if ":" not in regel:
+            continue
+        sleutel, waarde = (x.strip() for x in regel.split(":", 1))
+        if sleutel.startswith("X11 ") and sleutel[4:].lower() in uit:
+            uit[sleutel[4:].lower()] = "" if waarde == "(unset)" else waarde
+    return uit
+
+
+def lees_localectl(uitvoer: str) -> Indeling | None:
+    """Het toetsenbord van het systeem (inlogscherm), of None als het niet gezet is."""
+    d = lees_localectl_alles(uitvoer)
+    if not d["layout"]:
+        return None
+    return Indeling(d["layout"].split(",")[0], d["variant"].split(",")[0])
+
+
+def _localectl_status() -> str:
+    return _c.draai("localectl", "status", timeout=5)[1]
+
+
+def systeem_toetsenbord() -> Indeling:
+    """Het toetsenbord van het inlogscherm. Niet gezet: Engels (VS), dat gebruikt het inlogscherm dan (I13)."""
+    if _c.VOORBEELD:
+        return Indeling(*_VB_ACCOUNT["toetsenbord_inlog"])
+    return lees_localectl(_localectl_status()) or Indeling("us")
+
+
+def _lijst(tekst: str) -> list[str]:
+    return [x.strip() for x in tekst.split(",")] if tekst.strip() else []
+
+
+def toetsenborden() -> list[Indeling]:
+    """Je eigen toetsenborden; de eerste wordt eerst gebruikt. Nog niets gekozen: dat van het systeem."""
+    if _c.VOORBEELD:
+        return [Indeling(*x) for x in _VB_ACCOUNT["toetsenborden"]]
+    if _c.kde_lees("kxkbrc", "Layout", "Use", "false") == "true":
+        layouts = _lijst(_c.kde_lees("kxkbrc", "Layout", "LayoutList", ""))
+        varianten = _lijst(_c.kde_lees("kxkbrc", "Layout", "VariantList", ""))
+        varianten += [""] * (len(layouts) - len(varianten))
+        lijst = [Indeling(lay, var) for lay, var in zip(layouts, varianten) if lay]
+        if lijst:
+            return lijst
+    return [systeem_toetsenbord()]
+
+
+def goede_indeling(ind: Indeling) -> bool:
+    return bool(_LAYOUT.fullmatch(ind.layout)) and bool(_VARIANT.fullmatch(ind.variant))
+
+
+def zet_toetsenborden(lijst: list[Indeling]) -> bool:
+    """Schrijf je toetsenborden in kxkbrc. Eerst alles stil, en als laatste Use=true mét --notify: dan leest KWin
+    de hele groep opnieuw en kun je meteen typen (los herladen via D-Bus doet niets, nagekeken). Met twee of meer:
+    wisselen met Windows-toets + spatie. Andere opties (bv. caps:escape uit KDE) blijven staan."""
+    if not 1 <= len(lijst) <= MAX_TOETSENBORDEN or not all(goede_indeling(i) for i in lijst):
+        return False
+    if _c.VOORBEELD:
+        _VB_ACCOUNT["toetsenborden"] = [(i.layout, i.variant) for i in lijst]
+        return True
+    opties = [o for o in _lijst(_c.kde_lees("kxkbrc", "Layout", "Options", "")) if not o.startswith("grp:")]
+    if len(lijst) > 1:
+        opties.append("grp:win_space_toggle")
+
+    def stil(sleutel: str, waarde: str | None) -> bool:
+        cmd = ["kwriteconfig6", "--file", "kxkbrc", "--group", "Layout", "--key", sleutel]
+        cmd += ["--delete"] if waarde is None else [waarde]
+        return _c.draai(*cmd, timeout=5)[0] == 0
+
+    goed = stil("LayoutList", ",".join(i.layout for i in lijst))
+    goed = stil("VariantList", ",".join(i.variant for i in lijst)) and goed
+    goed = stil("DisplayNames", "," * (len(lijst) - 1)) and goed
+    goed = stil("ResetOldOptions", "true") and goed
+    goed = stil("Options", ",".join(opties) if opties else None) and goed
+    return _c.kde_schrijf("kxkbrc", "Layout", "Use", "true") and goed
+
+
+def zet_systeem_toetsenbord(ind: Indeling) -> bool:
+    """Ook voor het inlogscherm (en wie nieuw is): localectl, het wachtwoord van een beheerder. Het model en de opties
+    die er al staan, geven we terug (anders wist localectl ze, I13). Zonder --no-convert: ook de tekstconsole."""
+    if not goede_indeling(ind):
+        return False
+    if _c.VOORBEELD:
+        _VB_ACCOUNT["toetsenbord_inlog"] = (ind.layout, ind.variant)
+        return True
+    nu = lees_localectl_alles(_localectl_status())
+    if _c.draai("localectl", "set-x11-keymap", ind.layout, nu["model"], ind.variant, nu["options"],
+                timeout=120)[0] == 0:
+        return True
+    # localectl geeft het na 25 s op, ook als je dan nog je wachtwoord typt; daarna gebeurt het toch (I5).
+    return lees_localectl(_localectl_status()) == ind
