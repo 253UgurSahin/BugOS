@@ -2,18 +2,23 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import bugos_config as bi
 import bugos_ui
-from bugos_ui import Chip, Groep, KeuzeKaart, Knop, Rij, label, leeg_groep, lijn_icoon, sectie, t
+from bugos_ui import Chip, Groep, KeuzeKaart, Knop, Rij, Voortgang, label, leeg_groep, lijn_icoon, sectie, t
 from bugos_settings_onderdelen import Blad, Keuzes, Regelaar, dichtstbij, op_achtergrond, schuifje
 from bugos_settings_systeem import Schakelaars
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QProcess, QSize, Qt, QTimer
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QButtonGroup, QFileDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 MIC = "microfoon" if "microfoon" in bugos_ui.LIJN else "geluid"
+TEST_SECONDEN = 20              # de microfoontest stopt vanzelf
+BASIS_MONSTERS = 4000           # het eerste halve seconde (8000 per seconde): hoe stil de kamer is
+HOORDE_BOVEN, HOORDE_MIN = 20, 40   # 'gehoord': zoveel boven de stilte, en minstens zo hard (0..100, review I10)
+VB_NIVEAUS = (4, 6, 5, 3, 6, 4, 12, 35, 62, 48, 70, 30, 8, 55)   # voorbeeldstand: eerst stil, dan praten
 
 
 def kaart_zonder_kop(lay: QVBoxLayout) -> Groep:
@@ -57,6 +62,30 @@ class GeluidPagina(Blad):
         self.mic_kaart.voeg(Rij("kruis", t("Microfoon uit", "Microphone off"),
                                 t("Niemand hoort je, ook niet in een gesprek", "Nobody hears you, not even in a call"),
                                 self.mic_uit))
+        test = QWidget()
+        tl = QHBoxLayout(test)
+        tl.setContentsMargins(0, 0, 0, 0)
+        tl.setSpacing(12)
+        self.meter = Voortgang()
+        self.meter.setObjectName("dun")   # dun en grijs: meters zijn grijs (BRAND.md)
+        self.meter.setFixedWidth(bugos_ui.px(160))
+        self.meter.setAccessibleName(t("Hoe hard de microfoon je hoort", "How loud the microphone hears you"))
+        self.meter.hide()
+        tl.addWidget(self.meter, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.test_knop = Knop(t("Testen", "Test"), "gewoon")
+        self.test_knop.clicked.connect(self.test_knop_geklikt)
+        tl.addWidget(self.test_knop)
+        self.test_rij = Rij(MIC, t("Test je microfoon", "Test your microphone"),
+                            t("Druk op Testen en zeg iets. De balk beweegt als de microfoon je hoort.",
+                              "Press Test and say something. The bar moves when the microphone hears you."), test)
+        self.mic_kaart.voeg(self.test_rij)
+        self._proces = None
+        self._test_klok = QTimer(self)        # stopt de test vanzelf
+        self._test_klok.setSingleShot(True)
+        self._test_klok.timeout.connect(lambda: self.eind_test(True))
+        self._vb_klok = QTimer(self)          # voorbeeldstand: een balk die beweegt, zonder microfoon
+        self._vb_klok.setInterval(80)
+        self._vb_klok.timeout.connect(self._vb_stukje)
         self.mic_lijst_kop = sectie(t("Waar praat je in? Klik om te kiezen.", "What do you talk into? Click to choose."))
         self.lay.addWidget(self.mic_lijst_kop)
         self.mic_lijst = kaart_zonder_kop(self.lay)
@@ -121,6 +150,7 @@ class GeluidPagina(Blad):
         self.mic_uit.zet_stil(m.stil)
 
     def kies_microfoon(self, ingang) -> None:
+        self.stop_test()
         def klaar(ok) -> None:
             if ok:
                 self.melding.toon(t("Microfoon gekozen.", "Microphone chosen."), "goed")
@@ -142,7 +172,142 @@ class GeluidPagina(Blad):
         op_achtergrond(self, lambda: bi.headset_bellen(h.kaart, h.profiel), klaar)
 
     def zet_mic_uit(self, aan: bool) -> None:
+        if aan:
+            self.stop_test()
         op_achtergrond(self, lambda: bi.zet_microfoon_stil(aan), lambda _u: None)
+
+    # ------------------------------------------------------ de microfoon testen ---
+    # parec neemt op van de microfoon die gesprekken ook gebruiken (@DEFAULT_SOURCE@); er wordt niets bewaard, alleen
+    # hoe hard elk stukje is. Weg van de pagina (ander tabje, venster dicht): de test stopt, BugOS luistert nooit stiekem.
+
+    @property
+    def test_bezig(self) -> bool:
+        return self._proces is not None or self._vb_klok.isActive()
+
+    def test_knop_geklikt(self) -> None:
+        if self.test_bezig:
+            self.eind_test(True)
+            return
+        if self.mic_uit.isChecked():
+            self.melding.toon(t("Je microfoon staat uit. Zet hem eerst aan.", "Your microphone is off. Turn it on first."),
+                              "let_op")
+            return
+        self.test_knop.setEnabled(False)
+
+        def klaar(staat) -> None:
+            self.test_knop.setEnabled(True)
+            if not self.isVisible():
+                return
+            if staat == "stil":
+                self.melding.toon(t("Je microfoon staat uit. Zet hem eerst aan.",
+                                    "Your microphone is off. Turn it on first."), "let_op")
+                self.ververs()
+            elif staat != "ok":   # de gekozen microfoon is er niet meer (dan neemt parec stilletjes een andere: I9)
+                self.melding.toon(t("Dat lukte niet. Is de microfoon nog aangesloten?",
+                                    "That did not work. Is the microphone still connected?"), "fout")
+                self.ververs()
+            else:
+                self.begin_test()
+        op_achtergrond(self, bi.microfoon_klaar, klaar)
+
+    def begin_test(self) -> None:
+        self._hoogste = self._basis = self._toon_niveau = self._monsters = 0
+        self._rest = b""
+        self._begon = time.monotonic()
+        if bi.VOORBEELD:
+            self._vb_i = 0
+            self._vb_klok.start()
+        else:
+            opdracht = bi.microfoon_test_opdracht()
+            if not opdracht:
+                self.test_mislukt()
+                return
+            p = QProcess(self)
+            p.setProgram(opdracht[0])
+            p.setArguments(opdracht[1:])
+            p.setProcessChannelMode(QProcess.ProcessChannelMode.SeparateChannels)
+            p.readyReadStandardOutput.connect(self._stukje)
+            p.errorOccurred.connect(lambda _f, p=p: self._proces_weg(p))
+            p.finished.connect(lambda *_a, p=p: self._proces_weg(p))
+            self._proces = p
+            p.start()
+        self.meter.setValue(0)
+        self.meter.show()
+        self.test_knop.setText(t("Stoppen", "Stop"))
+        self._test_klok.start(int(TEST_SECONDEN * 1000))
+
+    def _verwerk(self, n: int, monsters: int) -> None:
+        # Het eerste halve seconde is de stilte van de kamer: 'gehoord' telt pas ruim daarboven (review I10).
+        if self._monsters < BASIS_MONSTERS:
+            self._basis = max(self._basis, n)
+        else:
+            self._hoogste = max(self._hoogste, n)
+        self._monsters += monsters
+        self._toon_niveau = max(n, round(self._toon_niveau * 0.7))
+        self.meter.setValue(self._toon_niveau)
+
+    def _stukje(self) -> None:
+        if self._proces is None:
+            return
+        data = self._rest + bytes(self._proces.readAllStandardOutput())
+        heel = len(data) - len(data) % 2
+        self._rest = data[heel:]
+        if heel:
+            self._verwerk(bi.niveau(data[:heel]), heel // 2)
+
+    def _vb_stukje(self) -> None:
+        self._verwerk(VB_NIVEAUS[self._vb_i % len(VB_NIVEAUS)], 640)   # 80 ms bij 8000 Hz
+        self._vb_i += 1
+
+    def _proces_weg(self, p) -> None:
+        if p is not self._proces:
+            return   # al gestopt door ons
+        if self._monsters == 0 and time.monotonic() - self._begon < 1.5:
+            self.test_mislukt()   # parec startte niet, of stopte meteen zonder geluid
+        else:
+            self.eind_test(True)
+
+    def test_mislukt(self) -> None:
+        self.stop_test()
+        self.melding.toon(t("De test lukte niet. Probeer het nog eens.", "The test did not work. Try again."), "fout")
+
+    def eind_test(self, met_uitslag: bool) -> None:
+        if not self.test_bezig:
+            return
+        gehoord = self._hoogste >= max(self._basis + HOORDE_BOVEN, HOORDE_MIN)
+        self.stop_test()
+        if not met_uitslag:
+            return
+        if gehoord:
+            self.melding.toon(t("Je microfoon werkt.", "Your microphone works."), "goed")
+        else:
+            self.melding.toon(t("We hoorden niets. Staat het volume van de microfoon laag, of is het de verkeerde "
+                                "microfoon?", "We heard nothing. Is the microphone volume low, or is it the wrong "
+                                "microphone?"), "let_op")
+        self.ververs()
+
+    def stop_test(self) -> None:
+        """Stil stoppen (geen melding)."""
+        self._test_klok.stop()
+        self._vb_klok.stop()
+        p, self._proces = self._proces, None
+        if p is not None:
+            for sein in (p.readyReadStandardOutput, p.errorOccurred, p.finished):
+                try:
+                    sein.disconnect()
+                except (RuntimeError, TypeError):
+                    pass
+            p.terminate()
+            if not p.waitForFinished(500):
+                p.kill()
+                p.waitForFinished(500)
+            p.deleteLater()
+        self.meter.hide()
+        self.test_knop.setText(t("Testen", "Test"))
+
+    def hideEvent(self, e) -> None:  # noqa: N802
+        self.stop_test()
+        super().hideEvent(e)
 
 
 # ================================================================ scherm ===

@@ -277,6 +277,29 @@ klopt("kde_instelling(" not in (PY / "bugos_settings_scherm.py").read_text(encod
       "11: Geluid, Scherm, Energie en Uiterlijk openen geen KDE-scherm meer")
 
 
+# 9: hoe hard een stukje geluid is (16 bits, little-endian; -60 dB is 0, 0 dB is 100)
+import struct  # noqa: E402
+
+_n = [bi.niveau(b""), bi.niveau(b"\x01\x00" * 400), bi.niveau(struct.pack("<h", 32767) * 4),
+      bi.niveau(struct.pack("<h", -12702) * 9), bi.niveau(struct.pack("<h", 328) * 3), bi.niveau(b"\x00\x40\x01")]
+klopt(_n[:5] == [0, 0, 100, 86, 33] and 0 <= _n[5] <= 100,
+      f"9: niveau: stil 0, piek 1 is 0, de hoogste 100, 12702 is 86, 328 is 33; een oneven lengte geeft geen fout ({_n})")
+# 10 (en I9): de test neemt op van de microfoon die gesprekken gebruiken
+_opd, _cmd = vang(bi.microfoon_test_opdracht)
+klopt(_cmd == ["parec", "-d", "@DEFAULT_SOURCE@", "-n", "BugOS Settings", "--stream-name=Microphone test", "--raw",
+               "--format=s16le", "--channels=1", "--rate=8000", "--latency-msec=50"],
+      "10/I9: de testopdracht: parec van @DEFAULT_SOURCE@, 8000 Hz mono, met de naam 'BugOS Settings'")
+klopt(vang(bi.microfoon_test_opdracht, "-x")[1] == [], "10: een rare naam: geen opdracht")
+_w = shutil.which
+shutil.which = lambda n, *a, **k: None
+klopt(bi.microfoon_test_opdracht() == [], "10: zonder parec: geen opdracht")
+shutil.which = _w
+klopt(vang(bi.microfoon_klaar, antwoord=_pactl())[1] == "ok"
+      and vang(bi.microfoon_klaar, antwoord=_pactl(standaard="weg.mic"))[1] == "weg"
+      and vang(bi.microfoon_klaar, antwoord=_pactl(lijst_code=1))[1] == "weg",
+      "I9: vlak voor de test: is de gekozen microfoon er nog (anders neemt parec stilletjes een andere)")
+
+
 # ======================================================================================== het venster ===
 lader = importlib.machinery.SourceFileLoader("instellingen", str(BIN / "bugos-settings"))
 spec = importlib.util.spec_from_loader("instellingen", lader)
@@ -357,6 +380,54 @@ _r = rijen_in(gp.mic_lijst)
 klopt(len(_r) == 1 and "Geen microfoon" not in _r[0].titel.text() and isinstance(_r[0].rechts, ss.Knop),
       "I6: alleen een headset op muziek: een knop 'Gebruik voor bellen', niet 'Sluit een headset aan'")
 gp.ververs()
+wacht()
+# 13, 14, 16: de microfoon testen (voorbeeldstand: een balk die beweegt, zonder echte microfoon)
+ss.TEST_SECONDEN = 1.5
+bi._VB["mic_stil"] = False
+gp.ververs()
+wacht()
+gp.test_knop.click()
+wacht()
+wacht_ms(500)
+klopt(gp.test_bezig and gp.meter.isVisibleTo(gp) and gp.meter.value() > 0 and gp.test_knop.text() == "Stoppen",
+      f"13: Testen: de balk staat er en beweegt ({gp.meter.value()}), de knop heet 'Stoppen'")
+wacht_ms(1400)
+klopt(not gp.test_bezig and not gp.meter.isVisibleTo(gp) and "werkt" in gp.melding.tekst.text(),
+      f"13: na de test: 'Je microfoon werkt.' ({gp.melding.tekst.text()!r})")
+_oud_niv = ss.VB_NIVEAUS
+ss.VB_NIVEAUS = (30, 32, 31, 30, 33, 30, 34, 36, 35, 33)   # alleen het geruis van de kamer (I10)
+gp.test_knop.click()
+wacht()
+wacht_ms(1700)
+ss.VB_NIVEAUS = _oud_niv
+klopt("hoorden niets" in gp.melding.tekst.text(), f"I10: alleen geruis van de kamer telt niet als 'gehoord' ({gp.melding.tekst.text()!r})")
+bi._VB["mic_stil"] = True
+gp.ververs()
+wacht()
+gp.test_knop.click()
+wacht()
+klopt(not gp.test_bezig and not gp.meter.isVisibleTo(gp) and "staat uit" in gp.melding.tekst.text(),
+      "14: de microfoon staat uit: de test begint niet, 'Zet hem eerst aan'")
+bi._VB["mic_stil"] = False
+gp.ververs()
+wacht()
+ss.TEST_SECONDEN = 20
+gp.test_knop.click()
+wacht()
+wacht_ms(200)
+_was = gp.test_bezig
+venster.ga_naar("meldingen")   # een ander tabje: de pagina gaat weg
+wacht()
+klopt(_was and not gp.test_bezig and gp._proces is None and not gp._test_klok.isActive(),
+      "16: weg van de pagina tijdens de test: de test stopt (BugOS luistert niet stiekem door)")
+venster.ga_naar("geluid")
+wacht()
+gp.test_knop.click()
+wacht()
+wacht_ms(200)
+gp.mic_uit.setChecked(True)
+klopt(not gp.test_bezig, "A: 'Microfoon uit' tijdens de test: de test stopt")
+gp.mic_uit.setChecked(False)
 wacht()
 print(f"\n{fouten} fout(en).")
 venster.close()
