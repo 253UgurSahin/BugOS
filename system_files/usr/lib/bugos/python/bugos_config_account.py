@@ -685,6 +685,26 @@ def verwijder_persoon(p: Persoon, alle: list[Persoon]) -> tuple[bool, str]:
     return True, ""
 
 
+def zet_foto(pad: str) -> bool:
+    """Je eigen foto (het startmenu en het inlogscherm laten hem zien). AccountsService kopieert het bestand naar
+    /var/lib/AccountsService/icons/<naam>; voor jezelf is geen wachtwoord nodig. pad '' haalt de foto weg.
+    Het bestand is een tijdelijke kopie van de pagina: die gaat daarna altijd weg."""
+    if _c.VOORBEELD:
+        # De voorbeeldstand bewaart de kopie zelf (dat is dan 'de map van AccountsService'); de vorige gaat weg.
+        oud = _VB_ACCOUNT["foto"]
+        if oud and oud != pad:
+            Path(oud).unlink(missing_ok=True)
+        _VB_ACCOUNT["foto"] = pad
+        return True
+    try:
+        ok, _fout, _ = _c.accounts_roep(_user_pad(os.getuid()), "org.freedesktop.Accounts.User", "SetIconFile", pad,
+                                        timeout=30)
+    finally:
+        if pad:
+            Path(pad).unlink(missing_ok=True)
+    return ok
+
+
 def zet_wachtwoord_van(uid: int, nieuw: str) -> tuple[bool, str]:
     """Een nieuw wachtwoord voor iemand anders (een beheerder mag dat). Reden: 'crypt', 'geweigerd', 'later', 'fout'.
     De hash gaat over D-Bus in dit proces, nooit op een opdrachtregel."""

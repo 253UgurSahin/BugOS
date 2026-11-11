@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
 import time
 from datetime import datetime
 
@@ -12,7 +14,9 @@ from bugos_settings_onderdelen import (
 )
 from PySide6.QtCore import QDate, QDateTime, QLocale, Qt, QTime, QTimer
 from PySide6.QtGui import QIcon, QImage, QPixmap
-from PySide6.QtWidgets import QDateEdit, QDialog, QGridLayout, QHBoxLayout, QLineEdit, QTimeEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QDateEdit, QDialog, QFileDialog, QGridLayout, QHBoxLayout, QLineEdit, QTimeEdit, QVBoxLayout, QWidget,
+)
 
 
 # ============================================================ tijd en taal ===
@@ -713,7 +717,51 @@ class InloggenPagina(Blad):
     # ------------------------------------------------------------------ jij ---
 
     def menu_ik(self) -> list:
-        return [("potlood", t("Naam wijzigen…", "Change name…"), self.wijzig_naam)]
+        items = [("foto", t("Foto kiezen…", "Choose a picture…"), self.kies_foto)]
+        if self.gebruiker is not None and getattr(self.gebruiker, "foto", ""):
+            items.append(("kruis", t("Foto weghalen", "Remove picture"), self.weg_foto))
+        items.append(("potlood", t("Naam wijzigen…", "Change name…"), self.wijzig_naam))
+        return items
+
+    def kies_foto(self) -> None:
+        # De echte map Afbeeldingen (ook als je later een andere taal koos) (U114), zoals bij de achtergrond.
+        from bugos_files_plekken import xdg_map
+        map_ = xdg_map("PICTURES", "Pictures")
+        pad, _ = QFileDialog.getOpenFileName(self, t("Kies een foto", "Choose a photo"),
+                                             str(map_ if map_.exists() else map_.parent),
+                                             t("Afbeeldingen (*.png *.jpg *.jpeg *.webp *.bmp)",
+                                               "Images (*.png *.jpg *.jpeg *.webp *.bmp)"))
+        if pad:
+            self.zet_foto(pad)
+
+    def zet_foto(self, pad: str) -> None:
+        """Het midden van de foto, vierkant en 256 px (een foto van 12 MP is anders te groot voor AccountsService),
+        als tijdelijke kopie die alleen jij kunt lezen (mkstemp, geen vaste naam)."""
+        beeld = QImage(pad)
+        if beeld.isNull():
+            self.melding.toon(t("Dat plaatje kan BugOS niet openen.", "BugOS cannot open that picture."), "fout")
+            return
+        zijde = min(beeld.width(), beeld.height())
+        beeld = beeld.copy((beeld.width() - zijde) // 2, (beeld.height() - zijde) // 2, zijde, zijde).scaled(
+            256, 256, Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        try:
+            fd, kopie = tempfile.mkstemp(prefix="bugos-foto-", suffix=".png", dir=os.environ.get("XDG_RUNTIME_DIR") or None)
+            os.close(fd)
+        except OSError:
+            kopie = ""
+        if not kopie or not beeld.save(kopie, "PNG"):
+            if kopie:
+                os.unlink(kopie)
+            self.melding.toon(t("Dat lukte niet.", "That did not work."), "fout")
+            return
+        op_achtergrond(self, lambda: bi.zet_foto(kopie), lambda ok: (self.melding.toon(
+            t("Je foto is veranderd.", "Your picture has been changed.") if ok is True else
+            t("Dat lukte niet.", "That did not work."), "goed" if ok is True else "fout"), self.ververs()))
+
+    def weg_foto(self) -> None:
+        op_achtergrond(self, lambda: bi.zet_foto(""), lambda ok: (self.melding.toon(
+            t("Je foto is weggehaald.", "Your picture has been removed.") if ok is True else
+            t("Dat lukte niet.", "That did not work."), "goed" if ok is True else "fout"), self.ververs()))
 
     def wijzig_naam(self) -> None:
         nieuw = vraag_tekst(self, t("Je naam", "Your name"),

@@ -300,6 +300,21 @@ klopt(_u24 == (True, "") and _slaap24 and _slaap24[0] >= 9 and _a24[0][1] == "Cr
 ca._laatst_weg = None
 ca.naam_bestaat = _oud_nb3
 
+# ====================================================================== je eigen foto (stap 6) ===
+
+_foto23 = TMP / "bugos-foto-test.png"
+_foto23.write_bytes(b"png")
+_n23 = Dbus()
+_u23, _o23 = met_dbus(_n23, bi.zet_foto, str(_foto23))
+_u23b, _ = met_dbus(_n23, bi.zet_foto, "")
+_n23c = Dbus({"SetIconFile": (False, "org.freedesktop.Accounts.Error.Failed: file too large", [])})
+_foto23.write_bytes(b"png")
+_u23c, _ = met_dbus(_n23c, bi.zet_foto, str(_foto23))
+klopt(_u23 is True and _n23.aanroepen == [(f"/org/freedesktop/Accounts/User{os.getuid()}", "SetIconFile", (str(_foto23),)),
+                                          (f"/org/freedesktop/Accounts/User{os.getuid()}", "SetIconFile", ("",))]
+      and _u23b is True and _u23c is False and not _foto23.exists() and not _o23,
+      f"23: je foto via SetIconFile op je eigen account; '' haalt hem weg; de kopie is daarna weg ({_n23.aanroepen})")
+
 # =========================================================================== toetsenbord (stap 4) ===
 
 _I = bi.Indeling
@@ -586,6 +601,37 @@ bi._VB["volledige_naam"] = "Bugie"
 ca._VB_ACCOUNT["mensen"] = None
 inl.ververs()
 wacht()
+
+# E: je eigen foto (voorbeeldstand): kiezen, dan staat hij bij jou; weghalen.
+from PySide6.QtGui import QColor, QImage  # noqa: E402
+
+_m_e = [tekst for _i, tekst, _f in inl.menu_ik()]
+klopt(_m_e == ["Foto kiezen…", "Naam wijzigen…"], f"E: je eigen menu: foto kiezen en naam wijzigen ({_m_e})")
+_groot = QImage(1200, 800, QImage.Format.Format_RGB32)
+_groot.fill(QColor("#c0392b"))
+_groot.save(str(TMP / "vakantie.jpg"), "JPG")
+_voor_e = inl.ik.icoon.pixmap().cacheKey()
+inl.zet_foto(str(TMP / "vakantie.jpg"))
+wacht()
+_kopie_e = ca._VB_ACCOUNT["foto"]
+_maat_e = QImage(_kopie_e).size() if _kopie_e else None
+klopt(_kopie_e and Path(_kopie_e).parent == TMP and Path(_kopie_e).name.startswith("bugos-foto-")
+      and _maat_e is not None and (_maat_e.width(), _maat_e.height()) == (256, 256)
+      and (Path(_kopie_e).stat().st_mode & 0o077) == 0 and "Je foto is veranderd" in inl.melding.tekst.text()
+      and inl.ik.icoon.pixmap().cacheKey() != _voor_e,
+      f"E: een grote foto wordt een vierkant van 256 px, alleen voor jou leesbaar, en staat bij jou ({_kopie_e}, {_maat_e})")
+_m_e2 = [tekst for _i, tekst, _f in inl.menu_ik()]
+next(f for _i, tekst, f in inl.menu_ik() if tekst == "Foto weghalen")()
+wacht()
+klopt("Foto weghalen" in _m_e2 and ca._VB_ACCOUNT["foto"] == "" and not Path(_kopie_e).exists()
+      and "weggehaald" in inl.melding.tekst.text(), f"E: 'Foto weghalen' ({_m_e2}, {inl.melding.tekst.text()!r})")
+(TMP / "kapot.png").write_bytes(b"geen plaatje")
+inl.zet_foto(str(TMP / "kapot.png"))
+klopt("kan BugOS niet openen" in inl.melding.tekst.text() and ca._VB_ACCOUNT["foto"] == "",
+      "E: een kapot plaatje: een gewone zin, niets veranderd")
+_bron_e = (PY / "bugos_settings_account.py").read_text(encoding="utf-8")
+klopt('xdg_map("PICTURES"' in _bron_e and "mkstemp" in _bron_e and "gettempdir" not in _bron_e,
+      "I9: de echte map Afbeeldingen (U114) en een tijdelijke kopie zonder vaste naam")
 
 # 26: 'Iemand toevoegen' opent het BugOS-venster en de nieuwe persoon staat meteen in de lijst.
 _open26: list = []
