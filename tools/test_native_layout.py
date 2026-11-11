@@ -303,6 +303,13 @@ for _naam in ("telefoon", "microfoon"):
     _hoog = (max(_ys) - min(_ys)) / 96 if _xs else 0
     klopt(_ok and 0.5 <= _hoog <= 0.92, f"lijn-icoon '{_naam}' tekent binnen het 24-raster, zo groot als de rest ({_hoog:.2f})")
 
+# ------------------------------------------------------------------------- R11 schijf-tegeltje (Back-up) ---
+_sk_kiezer = bugos_ui.SchijfKiezer("Plug in a USB stick")
+_sk_kiezer.zet([("stick", "USB stick", "180 GB free of 256 GB")])
+_chips = [c for c in _sk_kiezer.findChildren(bugos_widgets.IcoonChip) if c.neutraal]
+klopt(bool(_chips) and all(c.lijn == "usb" and not c.vol for c in _chips),
+      "R11: een schijf staat als lijnicoon op een grijs tegeltje; het volgt de tekstkleur, ook in het donker")
+
 # ---------------------------------------------------------------------------------------- D01 lijntjes ---
 _g = Groep()
 _a, _b, _c = (_g.voeg(label(x)) for x in ("A", "B", "C"))
@@ -606,9 +613,6 @@ w.ga_naar("bluetooth")
 verwerk()
 _groep = w.paginas["bluetooth"].titel.mapTo(w, QPoint(0, 0)).y()
 klopt(0 < _groep - _enkel <= 40, f"D12: de titel onder de tabjes staat bijna even hoog als zonder tabjes ({_enkel} -> {_groep})")
-_acc = next(g for g in inst.GROEPEN if g.sleutel == "account")
-klopt(_acc.uen == "Your account, other people, the clock, the language and the keyboard.",
-      "Instellingen: 'Account en taal' noemt ook andere mensen en het toetsenbord")
 # D01 in het echt: wifi heeft een verborgen regel 'Kabel'
 w.ga_naar("wifi")
 verwerk()

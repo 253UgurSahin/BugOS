@@ -73,8 +73,9 @@ class SchijfKiezer(QWidget):
             r = QHBoxLayout(binnen)
             r.setContentsMargins(4, 2, 4, 2)
             r.setSpacing(14)
-            # Een lijnicoon op een rustig grijs tegeltje, zoals overal (BRAND: geen gekleurde tegeltjes meer).
-            r.addWidget(IcoonChip("drive-removable-media-usb", "neutraal", 44, vol=False))
+            # Een lijnicoon op een rustig grijs tegeltje, zoals overal (BRAND: geen gekleurde tegeltjes meer). Ons
+            # eigen lijnicoon volgt de tekstkleur, ook in het donker (het thema-icoon is altijd donker getekend).
+            r.addWidget(IcoonChip("lijn:usb", "neutraal", 44, vol=False))
             b = QVBoxLayout()
             b.setSpacing(2)
             naam_l, extra_l = label(naam, "kop3"), label(extra, "klein")
