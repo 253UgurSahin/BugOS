@@ -522,6 +522,18 @@ w.zoek.setText("")
 klopt(not zichtbaar(w.meer_blok) and zichtbaar(w.onder) and "geïnstalleerd" in w.melding.tekst.text(),
       "F2/U333: weer leeg: de Flathub-apps weg, de onderste kaart terug, en 'wordt geïnstalleerd' staat er weer")
 w.bezig_met = None
+# F7: 'Mijn apps' laat elke geïnstalleerde app zien, ook een van buiten de BugOS-selectie, met Verwijderen.
+_rij_mijn = next((i for i in range(w.lijst.count()) if w.lijst.sleutel(i) == "_mijn"), -1)
+w.lijst.setCurrentRow(_rij_mijn)
+even(50)
+_oud = next((k for k in w.kaarten if k.app["id"] == OUD_ID), None)
+klopt(_rij_mijn >= 0 and isinstance(_oud, winkel.FlathubKaart) and _oud.weg.isVisibleTo(w)
+      and _oud.knop.text() == "Openen" and w.naam_van(OUD_ID) == "Oud",
+      f"F7: 'Mijn apps' heeft ook {OUD_ID} (niet uit de selectie), met Openen en Verwijderen")
+gestart.clear()
+_oud.knop.click()
+klopt(gestart == [("flatpak", "run", OUD_ID)], f"F7: ... en Openen start die app ({gestart})")
+w.lijst.setCurrentRow(0)
 # 12. de kaarten van Flathub zijn niet breder dan die van BugOS
 w.zoek.setText("muziek")
 wacht(lambda: bool(w.meer_kaarten), 2000)

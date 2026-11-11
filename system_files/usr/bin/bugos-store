@@ -67,6 +67,29 @@ def geinstalleerd() -> set[str]:
     return {regel.strip() for regel in uit.splitlines() if regel.strip()}
 
 
+def flatpak_lijst() -> dict[str, dict]:
+    """Elke geïnstalleerde Flatpak-app: id -> {'naam': naam, 'bron': waar hij vandaan kwam (meestal 'flathub')}.
+    Zo kan 'Mijn apps' ook apps laten zien die niet uit de BugOS-selectie komen."""
+    if os.environ.get("BUGOS_GEINSTALLEERD") is not None:   # voor screenshots: de naam is het laatste stuk van het id
+        return {i: {"naam": i.rsplit(".", 1)[-1], "bron": "flathub"}
+                for i in filter(None, os.environ["BUGOS_GEINSTALLEERD"].split(","))}
+    if not bestaat("flatpak"):
+        return {}
+    _, uit = draai("flatpak", "list", "--app", "--columns=application,name,origin", timeout=20)
+    lijst = {}
+    for regel in uit.splitlines():
+        delen = [d.strip() for d in regel.split("\t")]
+        if delen and APP_ID.match(delen[0]):
+            lijst[delen[0]] = {"naam": delen[1] if len(delen) > 1 and delen[1] else delen[0].rsplit(".", 1)[-1],
+                               "bron": delen[2] if len(delen) > 2 else ""}
+    return lijst
+
+
+def flatpak_namen() -> dict[str, str]:
+    """id -> naam van elke geïnstalleerde Flatpak-app (uit 'flatpak list')."""
+    return {i: v["naam"] for i, v in flatpak_lijst().items()}
+
+
 # Waar gewone programma's (geen Flatpak) hun .desktop-bestand hebben. Firefox en Steam zitten
 # bijvoorbeeld al in BugOS zelf: die zijn er dus al, ook al staan ze niet in 'flatpak list'.
 APP_MAPPEN = [Path("/usr/share/applications"), Path("/usr/local/share/applications"),
@@ -942,7 +965,7 @@ class Winkel(Venster):
         self.runtimes: set[str] = set()
         self._ref_van: dict[str, str] = {}
         self._groottes_bezig = False
-        self.flatpak_info: dict[str, dict] = {}
+        self.flatpak_info: dict[str, dict] = flatpak_lijst() if self.flatpaks else {}
         self._wachtend: list[str] | None = None   # installeren/verwijderen dat wacht op het verversen van de lijst
         self._meer_sleutel: tuple | None = None
         self._meer_zoek = ""
@@ -1103,6 +1126,9 @@ class Winkel(Venster):
         self.op_id = {e["id"].lower(): e for e in index["apps"]}
         self._meer_sleutel = None
         self.zoek_meer()
+        rij = self.lijst.currentRow()
+        if not self.zoek.text().strip() and rij >= 0 and self.lijst.sleutel(rij) == "_mijn":
+            self.toon()   # 'Mijn apps': nu met pictogram, uitleg en maker uit Flathub's lijst
         if self._wacht_app is not None:   # die pagina wachtte op de index
             app_id, self._wacht_app = self._wacht_app, None
             if self.pagina_id == app_id and self.stapel.currentIndex() == 1:
@@ -1363,6 +1389,19 @@ class Winkel(Venster):
             return naam_in_taal(e)
         return self.flatpak_info.get(app_id, {}).get("naam") or app_id
 
+    def entry_van(self, app_id: str) -> dict:
+        """Wat de Winkel van een geïnstalleerde app weet: uit Flathub's lijst, anders alleen de naam uit 'flatpak list'."""
+        e = self.op_id.get(app_id.lower())
+        if e is not None:
+            return e
+        naam = self.flatpak_info.get(app_id, {}).get("naam") or app_id.rsplit(".", 1)[-1]
+        return {"id": app_id, "naam": naam, "naam_nl": "", "kort": "", "kort_nl": "", "uitleg": "", "uitleg_nl": "",
+                "maker": "", "icoon": "", "echt": False, "echt_site": "", "oars": None, "woorden": "", "site": ""}
+
+    def ververs_geinstalleerd(self) -> None:
+        self.flatpaks = geinstalleerd()
+        self.flatpak_info = flatpak_lijst() if self.flatpaks else {}
+
     def zet_pagina(self, pagina: AppPagina, app_id: str) -> None:
         oud = self.pagina_scroll.takeWidget()
         if oud is not None:
@@ -1422,12 +1461,17 @@ class Winkel(Venster):
         elif cat_id == "_mijn":
             apps = [a for a in self.cat["apps"] if a["id"] in self.installed]
             self.kop.setText(t("Mijn apps", "My apps"))
+            # Daarna elke andere Flatpak-app op deze computer (ook van buiten de BugOS-selectie), op naam (F7).
+            picks = {a["id"].lower() for a in self.cat["apps"]}
+            anderen = [self.entry_van(f) for f in self.flatpaks if f.lower() not in picks and APP_ID.match(f)]
+            apps = apps + sorted(anderen, key=lambda e: zoeksleutel(naam_in_taal(e)))
         else:
             apps = [a for a in self.cat["apps"] if cat_id in a["cat"]]
             item = self.lijst.item(rij)
             self.kop.setText(item.text() if item else "")
         for i, app in enumerate(apps):
-            kaart = AppKaart(app, self)
+            # Een app uit Flathub's lijst (in 'Mijn apps') heeft de velden van de index, geen 'cat'.
+            kaart = FlathubKaart(app, self) if "cat" not in app else AppKaart(app, self)
             self.kaarten.append(kaart)
             self.raster.addWidget(kaart, i // self.kolommen, i % self.kolommen)
         for k in range(3):
@@ -1519,7 +1563,8 @@ class Winkel(Venster):
         self.proces.start("flatpak", args)
 
     def klaar_verwijderen(self, code: int, uit: str, app_id: str, naam: str) -> None:
-        self.flatpaks = geinstalleerd() - ({app_id} if code == 0 else set())
+        self.ververs_geinstalleerd()
+        self.flatpaks -= {app_id} if code == 0 else set()
         self.installed = self.flatpaks | set(self.systeem)
         # In 'Mijn apps': de lijst opnieuw, zonder de app die weg is (U472).
         rij = self.lijst.currentRow()
@@ -1567,7 +1612,8 @@ class Winkel(Venster):
                 else:
                     self.sluit_na = False   # mislukt: open laten, zodat je de melding ziet (U472)
             return
-        self.flatpaks = geinstalleerd() | ({app_id} if code == 0 else set())
+        self.ververs_geinstalleerd()
+        self.flatpaks |= {app_id} if code == 0 and app_id else set()
         self.installed = self.flatpaks | set(self.systeem)
         if code == 0:
             self.mijn_apps_erbij()
