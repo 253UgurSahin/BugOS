@@ -541,6 +541,108 @@ klopt(max(k.minimumSizeHint().width() for k in w.meer_kaarten) <= max(k.minimumS
       "12: een kaart van Flathub is niet breder dan een kaart van BugOS (de rasters lopen gelijk)")
 w.close()
 
+# ============================================================== 9. de lijst van Flathub vers houden ===
+import time  # noqa: E402
+
+_ts = BRONMAP / ".timestamp"
+os.utime(_ts, (time.time() - 25 * 3600,) * 2)
+_oud25 = winkel.lijst_oud(BRONMAP)
+os.utime(_ts, (time.time() - 3600,) * 2)
+_oud1 = winkel.lijst_oud(BRONMAP)
+_ts.unlink()
+klopt(_oud25 and not _oud1 and winkel.lijst_oud(BRONMAP) and winkel.lijst_oud(TMP / "bestaat-niet"),
+      "9: de lijst is oud na een dag, of als hij (of zijn tijdstempel) er niet is")
+os.environ["BUGOS_TEST_METERED"] = "1"
+_m1 = winkel.gemeten()
+os.environ["BUGOS_TEST_METERED"] = "3"
+_m3 = winkel.gemeten()
+os.environ["BUGOS_TEST_METERED"] = "4"
+os.environ["BUGOS_TEST_ACTIEF"] = "false"
+_a0 = winkel.sessie_actief()
+os.environ.pop("BUGOS_TEST_ACTIEF")
+klopt(_m1 and _m3 and not winkel.gemeten() and not _a0 and winkel.sessie_actief(),
+      "9/I7: een hotspot (1 of 3) telt als 'kost per MB'; een sessie die niet actief is, ververst niet")
+os.environ.pop("BUGOS_WINKEL_GEEN_VERVERS", None)
+
+
+def winkel_start(**omgeving) -> "winkel.Winkel":
+    for k, v in omgeving.items():
+        os.environ[k] = v
+    LOG.write_text("")
+    v = winkel.Winkel(CAT)
+    wacht(lambda: v.flathub is not None)
+    return v
+
+
+def ververst() -> bool:
+    return "update --appstream --noninteractive flathub" in LOG.read_text()
+
+
+w = winkel_start(BUGOS_TEST_METERED="4")
+klopt(wacht(ververst, 4000) and wacht(lambda: not w.lijst_bezig(), 3000),
+      "9: oude lijst, gewone verbinding: de Winkel ververst hem zelf (flatpak update --appstream)")
+w.close()
+w = winkel_start(BUGOS_TEST_METERED="1")
+even(2200)
+klopt(not ververst(), "9: op een telefoon-hotspot niet vanzelf (dat kost geld)")
+w.close()
+w = winkel_start(BUGOS_TEST_METERED="4", BUGOS_TEST_ACTIEF="false")
+even(2200)
+klopt(not ververst(), "9/I7: niet als je sessie niet de actieve is (dan zou Flatpak om een wachtwoord vragen)")
+os.environ.pop("BUGOS_TEST_ACTIEF")
+w.close()
+w = winkel_start(BUGOS_TEST_METERED="4", BUGOS_TEST_VERVERS="1")
+wacht(ververst, 4000)
+wacht(lambda: not w.lijst_bezig(), 3000)
+w.zoek.setText("radio")
+w.zoek_meer()
+klopt(not w.lijst_mislukt and "lukte niet" not in w.meer_status.text() and w.meer_kaarten,
+      "9: mislukt het stille verversen terwijl er al een lijst is: geen melding, zoeken werkt gewoon")
+w.close()
+# I13: installeren wacht tot het verversen klaar is (dezelfde map op de computer), en andersom.
+w = winkel_start(BUGOS_TEST_VERVERS="0", BUGOS_TEST_VERVERS_SLAAP="1", BUGOS_WINKEL_GEEN_VERVERS="1")
+LOG.write_text("")
+w.haal_lijst()
+_tijdens = w.lijst_bezig()
+w.installeer(winkel.entry_naar_app(w.op_id["org.voorbeeld.radio"]))
+_wacht13 = w.proces.state() == w.proces.ProcessState.NotRunning and w._wachtend is not None
+wacht(lambda: w.bezig_met is None and not w.lijst_bezig() and w.proces.state() == w.proces.ProcessState.NotRunning)
+_regels = [r for r in LOG.read_text().splitlines() if r.startswith(("update", "install"))]
+klopt(_tijdens and _wacht13 and _regels[:2] == ["update --appstream --noninteractive flathub",
+                                                "install -y flathub org.voorbeeld.Radio"],
+      f"9/I13: installeren start pas als het verversen klaar is ({_regels})")
+_klaar13 = w.start_lijst(handmatig=False)   # er loopt niets meer: dat mag weer
+wacht(lambda: not w.lijst_bezig(), 3000)
+w.proces.start("/usr/bin/sleep", ["1"])
+klopt(_klaar13 and not w.start_lijst(handmatig=False), "9/I13: tijdens het installeren start het verversen niet")
+w.proces.waitForFinished(3000)
+w.close()
+os.environ.pop("BUGOS_TEST_VERVERS_SLAAP")
+# Geen lijst op de computer (vers geïnstalleerd, nooit online): 'Nu ophalen'; mislukt -> een gewone zin.
+_leeg = TMP / "geen-appstream"
+_echt_bron = winkel.APPSTREAM
+winkel.APPSTREAM = _leeg
+w = winkel_start(BUGOS_TEST_VERVERS="1", BUGOS_WINKEL_GEEN_VERVERS="1")
+w.zoek.setText("radio")
+w.zoek_meer()
+_status0 = (w.meer_status.text(), w.meer_knop_ophalen.isVisibleTo(w))
+os.environ["BUGOS_TEST_VERVERS_SLAAP"] = "0.5"
+w.meer_knop_ophalen.click()
+_status1 = (w.meer_status.text(), w.meer_knop_ophalen.isVisibleTo(w))
+wacht(lambda: not w.lijst_bezig(), 3000)
+even(50)
+klopt("is er nog niet" in _status0[0] and _status0[1] and "wordt opgehaald" in _status1[0] and not _status1[1]
+      and "Ophalen lukte niet" in w.meer_status.text() and ververst(),
+      f"9/I6: geen lijst: 'Nu ophalen'; tijdens het ophalen geen knop; mislukt: een gewone zin ({w.meer_status.text()!r})")
+os.environ["BUGOS_TEST_VERVERS"] = "0"   # gelukt, maar de lijst blijft leeg (kapot): ook 'lukte niet', geen lus
+w.meer_knop_ophalen.click()
+klopt(wacht(lambda: not w.lijst_bezig() and not w._index_bezig and "Ophalen lukte niet" in w.meer_status.text(), 5000),
+      f"9/I6: gelukt maar nog steeds geen lijst: 'lukte niet' ({w.meer_status.text()!r})")
+w.close()
+winkel.APPSTREAM = _echt_bron
+os.environ.pop("BUGOS_TEST_VERVERS_SLAAP")
+os.environ["BUGOS_WINKEL_GEEN_VERVERS"] = "1"
+
 # ============================================================== 10. de voorbeeldstand (foto's) ===
 LOG.write_text("")
 _code10 = f'''

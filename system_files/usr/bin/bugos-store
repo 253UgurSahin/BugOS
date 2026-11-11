@@ -16,6 +16,7 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, "/usr/lib/bugos/python")
@@ -525,6 +526,51 @@ def alle_groottes() -> tuple[dict, set[str]]:
     code, uit = _draai_c("flatpak", "list", "--runtime", "--columns=ref")
     runtimes = {r.strip() for r in uit.splitlines() if r.strip()} if code == 0 else set()
     return groottes, runtimes
+
+
+# ---- de lijst van Flathub vers houden (ook bij 'Ik kies zelf wanneer') ----
+DAG = 24 * 3600
+
+
+def lijst_oud(bron: Path = APPSTREAM, nu: float | None = None) -> bool:
+    """True als Flathub's lijst er niet is, of al meer dan een dag niet ververst."""
+    nu = time.time() if nu is None else nu
+    actief = bron / "active"
+    if not ((actief / "appstream.xml").is_file() or (actief / "appstream.xml.gz").is_file()):
+        return True
+    try:
+        return nu - (bron / ".timestamp").stat().st_mtime > DAG
+    except OSError:
+        return True
+
+
+def gemeten() -> bool:
+    """Een verbinding die per MB kost (telefoon-hotspot)? Zelfde regel als bugos-update-apps.service: 1 of 3 (U089).
+    Weet NetworkManager het niet, dan niet gemeten."""
+    code, uit = draai("busctl", "get-property", "org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager",
+                      "org.freedesktop.NetworkManager", "Metered", timeout=5)
+    # (draai() geeft ook wat op stderr komt, bijv. een waarschuwing van de shell: kijk alleen naar de regel 'u N')
+    return code == 0 and any(r.split() in (["u", "1"], ["u", "3"]) for r in uit.splitlines())
+
+
+def sessie_actief() -> bool:
+    """Zit je nu echt achter deze computer (de actieve sessie)? Alleen dan mag Flatpak zonder wachtwoord de lijst
+    verversen; anders zou er een wachtwoordvraag kunnen komen. Bij twijfel: nee."""
+    code, uit = draai("busctl", "get-property", "org.freedesktop.login1", "/org/freedesktop/login1/session/auto",
+                      "org.freedesktop.login1.Session", "Active", timeout=5)
+    return code == 0 and any(r.split() == ["b", "true"] for r in uit.splitlines())
+
+
+def automatisch_verversen() -> bool:
+    """Mag de Winkel zelf de lijst verversen? Niet in de voorbeeldstand, niet voor foto's of tests, niet zonder flatpak."""
+    if VOORBEELD or os.environ.get("BUGOS_GEINSTALLEERD") is not None or os.environ.get("BUGOS_WINKEL_GEEN_VERVERS"):
+        return False
+    return bestaat("flatpak")
+
+
+def moet_verversen(bron: Path | None = None) -> bool:
+    """Oud, en je zit achter de computer, en de verbinding kost niets per MB (in een werkdraad: busctl kan even duren)."""
+    return lijst_oud(bron or APPSTREAM) and sessie_actief() and not gemeten()
 
 
 def entry_naar_app(e: dict) -> dict:
@@ -1068,6 +1114,17 @@ class Winkel(Venster):
         self.proces = QProcess(self)
         self.proces.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
         self.proces.finished.connect(self.klaar)
+        # Een tweede proces, alleen voor het verversen van Flathub's lijst (nooit self.proces: dat installeert).
+        self.lijst_proces = QProcess(self)
+        self.lijst_proces.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        self.lijst_proces.finished.connect(self._lijst_klaar)
+        self.lijst_proces.errorOccurred.connect(self._lijst_fout)
+        self._lijst_handmatig = False
+        self._index_bezig = False   # na het verversen wordt de index opnieuw gemaakt
+        self._lijst_wacht = QTimer(self)   # na 2 minuten geeft de Winkel het op
+        self._lijst_wacht.setSingleShot(True)
+        self._lijst_wacht.setInterval(120_000)
+        self._lijst_wacht.timeout.connect(self.lijst_proces.kill)
 
         # Terug naar de lijst: Esc of Alt+Links, zoals in een webbrowser.
         for toets in (QKeySequence(Qt.Key.Key_Escape), QKeySequence(QKeySequence.StandardKey.Back)):
@@ -1079,6 +1136,8 @@ class Winkel(Venster):
             self._index_binnen({"apps": [dict(e) for e in VOORBEELD_FLATHUB], "hoort_bij": {}, "geen_app": {}})
         else:
             self.laad_index()
+        if automatisch_verversen():   # even na het openen, zodat het venster eerst snel verschijnt
+            QTimer.singleShot(1500, self.ververs_lijst_als_oud)
 
         self.lijst.setCurrentRow(0)
         self.lijst.setFocus()
@@ -1152,7 +1211,7 @@ class Winkel(Venster):
         if self.flathub is None:
             self.zet_meer_status(t("Alle apps van Flathub worden geladen…", "Loading all apps from Flathub…"))
         elif not self.flathub["apps"]:
-            if self.lijst_bezig():
+            if self.lijst_bezig() or self._index_bezig:
                 self.zet_meer_status(t("De lijst wordt opgehaald…", "Getting the list…"))
             elif self.lijst_mislukt:
                 self.zet_meer_status(t("Ophalen lukte niet. Heb je internet? Probeer het later nog eens.",
@@ -1228,10 +1287,59 @@ class Winkel(Venster):
             self.meer_kaarten[eerder].knop.setFocus()
 
     def lijst_bezig(self) -> bool:
-        return False
+        return self.lijst_proces.state() != QProcess.ProcessState.NotRunning
+
+    def ververs_lijst_als_oud(self) -> None:
+        """Is Flathub's lijst ouder dan een dag? Dan haalt de Winkel stil een nieuwe (zonder wachtwoord, zonder
+        melding). Niet op een verbinding die per MB kost."""
+        op_achtergrond(self, moet_verversen, lambda moet: moet is True and self.start_lijst(handmatig=False))
 
     def haal_lijst(self) -> None:
-        """'Nu ophalen' (in een latere stap)."""
+        """'Nu ophalen': je vroeg er zelf om, dus ook op een telefoon-hotspot."""
+        self.lijst_mislukt = False
+        self.start_lijst(handmatig=True)
+        self.zoek_meer()
+
+    def start_lijst(self, handmatig: bool) -> bool:
+        """flatpak update --appstream: alleen Flathub's lijst, geen apps. Nooit tegelijk met installeren of
+        verwijderen (dezelfde map op de computer): die wachten op elkaar."""
+        if self.lijst_bezig() or (not handmatig and (self.proces.state() != QProcess.ProcessState.NotRunning
+                                                      or self._wachtend is not None)):
+            return False
+        if handmatig and self.proces.state() != QProcess.ProcessState.NotRunning:
+            return False
+        self._lijst_handmatig = handmatig
+        omgeving = QProcessEnvironment.systemEnvironment()
+        omgeving.insert("LC_ALL", "C.UTF-8")
+        self.lijst_proces.setProcessEnvironment(omgeving)
+        self.lijst_proces.start("flatpak", ["update", "--appstream", "--noninteractive", "flathub"])
+        self._lijst_wacht.start()
+        self.zoek_meer()   # 'De lijst wordt opgehaald…' en geen knop, ook als het vanzelf gebeurt (I6)
+        return True
+
+    def _lijst_fout(self, fout) -> None:
+        if fout == QProcess.ProcessError.FailedToStart:   # geen flatpak: dan komt er ook geen 'finished'
+            self._lijst_klaar(1, None)
+
+    def _lijst_klaar(self, code: int, _status) -> None:
+        self._lijst_wacht.stop()
+        self.lijst_proces.readAll()
+        handmatig, self._lijst_handmatig = self._lijst_handmatig, False
+        if code == 0:
+            # Een nieuwe lijst: de index opnieuw. Blijft hij leeg (een kapotte lijst), dan zeggen we dat het niet lukte.
+            def binnen(index) -> None:
+                self._index_bezig = False
+                self._index_binnen(index)
+                if handmatig and not (self.flathub or {}).get("apps"):
+                    self.lijst_mislukt = True
+                    self.zoek_meer()
+            self._index_bezig = True
+            op_achtergrond(self, lambda: flathub_index(APPSTREAM, INDEX_MAP, apart=True), binnen)
+        elif handmatig:
+            self.lijst_mislukt = True   # alleen als je er zelf om vroeg; stil mislukt is geen melding waard
+        self.zoek_meer()
+        if self._wachtend is not None:   # een installatie wachtte op de lijst
+            self.start_flatpak(self._wachtend)
 
     # ---------------------------------------------------------------- de pagina van één app
     def toon_app(self, app_id: str, terug_focus: QWidget | None = None) -> None:
