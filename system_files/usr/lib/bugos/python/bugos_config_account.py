@@ -1,5 +1,6 @@
 """BugOS Instellingen: tijd en taal (timedatectl, plasma-localerc) en inloggen en wachtwoord
-(AccountsService, bugos-login, kscreenlockerrc); ook de klok met de hand (timedatectl set-time).
+(AccountsService, bugos-login, kscreenlockerrc); ook de klok met de hand (timedatectl set-time) en
+andere mensen op deze computer (lezen uit pwd/grp, veranderen via AccountsService).
 
 Hoort bij bugos_config (importeer het via daar). draai, VOORBEELD, _VB en de KDE-hulpjes komen via
 bugos_config (_c.draai), zodat een test die bi.draai of bi.VOORBEELD vervangt dat ook hier ziet.
@@ -8,6 +9,7 @@ bugos_config (_c.draai), zodat een test die bi.draai of bi.VOORBEELD vervangt da
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import time
 from dataclasses import dataclass
@@ -15,10 +17,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import bugos_config as _c
+from bugos_base import t
 
 # Wat de voorbeeldstand (BUGOS_INSTELLINGEN_VOORBEELD=1) voor dit onderdeel onthoudt. Hier en niet in _c._VB:
 # dat staat in het gedeelde bugos_config.py.
-_VB_ACCOUNT: dict = {"klok_gezet": None}
+_VB_ACCOUNT: dict = {"klok_gezet": None, "mensen": None, "foto": ""}
 
 
 # ============================================================ tijd en taal ===
@@ -181,6 +184,7 @@ class Gebruiker:
     volledige_naam: str     # bv. Bugie
     beheerder: bool
     auto_inloggen: bool
+    foto: str = ""          # pad van je foto (AccountsService), of ""
 
 
 # Fedora 44 heeft Plasma Login (plasmalogin); SDDM alleen als Plasma Login er niet is (net als bugos-login).
@@ -209,9 +213,33 @@ def lees_autologin(teksten: list[str], naam: str) -> bool:
     return False
 
 
+def _inlog_teksten() -> list[str]:
+    """De instellingen van het inlogscherm (voor 'inloggen zonder wachtwoord')."""
+    teksten = []
+    for pad in inlog_bestanden():
+        p = Path(pad)
+        bestanden = sorted(p.glob("*.conf")) if p.is_dir() else [p]
+        for b in bestanden:
+            try:
+                teksten.append(b.read_text(encoding="utf-8"))
+            except OSError:
+                pass
+    return teksten
+
+
+def fotomap() -> Path:
+    """Waar AccountsService de foto's van de mensen bewaart (het startmenu en het inlogscherm lezen ze daar)."""
+    return Path(os.environ.get("BUGOS_ACCOUNTS_ICONEN", "/var/lib/AccountsService/icons"))
+
+
+def _foto_van(naam: str) -> str:
+    pad = fotomap() / naam
+    return str(pad) if pad.is_file() else ""
+
+
 def gebruiker() -> Gebruiker:
     if _c.VOORBEELD:
-        return Gebruiker("bugie", _c._VB["volledige_naam"], True, _c._VB["auto_inloggen"])
+        return Gebruiker("bugie", _c._VB["volledige_naam"], True, _c._VB["auto_inloggen"], _VB_ACCOUNT["foto"])
     import grp
     import pwd
     try:
@@ -223,16 +251,8 @@ def gebruiker() -> Gebruiker:
         beheerder = naam in grp.getgrnam("wheel").gr_mem
     except KeyError:
         beheerder = False
-    teksten = []
-    for pad in inlog_bestanden():
-        p = Path(pad)
-        bestanden = sorted(p.glob("*.conf")) if p.is_dir() else [p]
-        for b in bestanden:
-            try:
-                teksten.append(b.read_text(encoding="utf-8"))
-            except OSError:
-                pass
-    return Gebruiker(naam, vol or naam.capitalize(), beheerder, lees_autologin(teksten, naam))
+    return Gebruiker(naam, vol or naam.capitalize(), beheerder, lees_autologin(_inlog_teksten(), naam),
+                     _foto_van(naam))
 
 
 def _accounts(methode: str, *args: str, timeout: int = 60) -> tuple[int, str]:
@@ -417,3 +437,212 @@ def zet_slot_na_slapen(aan: bool) -> None:
 def vergrendel() -> None:
     if not _c.VOORBEELD:
         _c.draai("loginctl", "lock-session", timeout=5)
+
+
+# ======================================================== andere mensen ===
+# Lezen gaat uit pwd en grp (zoals gebruiker()): dat mist nooit iemand en heeft geen D-Bus nodig. Veranderen gaat
+# via AccountsService; dat vraagt zelf het wachtwoord van een beheerder (polkit), net als Windows.
+
+@dataclass
+class Persoon:
+    naam: str               # inlognaam
+    volledige_naam: str
+    uid: int
+    beheerder: bool         # lid van wheel (zo telt AccountsService het op Fedora ook)
+    foto: str = ""          # pad, of ""
+    ingelogd: bool = False
+    ik: bool = False        # dat ben jij
+
+
+def uid_grenzen(tekst: str) -> tuple[int, int]:
+    """UID_MIN en UID_MAX uit /etc/login.defs: daartussen zitten de mensen (de rest is het systeem)."""
+    grenzen = {"UID_MIN": 1000, "UID_MAX": 60000}
+    for regel in tekst.splitlines():
+        delen = regel.split()
+        if len(delen) >= 2 and delen[0] in grenzen and delen[1].isdigit():
+            grenzen[delen[0]] = int(delen[1])
+    return grenzen["UID_MIN"], grenzen["UID_MAX"]
+
+
+def lees_ingelogd(uitvoer: str) -> set[str]:
+    """Wie is nu ingelogd, uit 'loginctl list-users --no-legend' (UID USER LINGER STATE). 'closing' is al aan het
+    afmelden. Een oud systemd geeft alleen UID en USER: dan telt iedereen in de lijst."""
+    namen = set()
+    for regel in uitvoer.splitlines():
+        delen = regel.split()
+        if len(delen) >= 4:
+            if delen[3] in ("active", "online"):
+                namen.add(delen[1])
+        elif len(delen) >= 2:
+            namen.add(delen[1])
+    return namen
+
+
+def lees_mensen(rijen, wheel, grenzen: tuple[int, int], ik_uid: int, ingelogd: set[str],
+                fotomap_: str | Path) -> list[Persoon]:
+    """rijen: (naam, uid, gecos, shell) zoals pwd.getpwall(). Alleen echte mensen: een uid tussen de grenzen en een
+    shell waarmee je kunt inloggen."""
+    uit = []
+    for naam, uid, gecos, shell in rijen:
+        if not grenzen[0] <= uid <= grenzen[1] or shell.endswith(("nologin", "false")):
+            continue
+        vol = (gecos or "").split(",")[0].strip() or naam.capitalize()
+        foto = Path(fotomap_) / naam
+        uit.append(Persoon(naam, vol, uid, naam in wheel, str(foto) if foto.is_file() else "", naam in ingelogd,
+                           uid == ik_uid))
+    return uit
+
+
+def _vb_mensen() -> list[Persoon]:
+    if _VB_ACCOUNT["mensen"] is None:
+        _VB_ACCOUNT["mensen"] = [
+            Persoon("bugie", "Bugie", 1000, True, "", True, True),
+            Persoon("werk", t("Werk", "Work"), 1501, True),
+            Persoon("huiswerk", t("Huiswerk", "Homework"), 1502, False),
+            Persoon("gast", t("Gast", "Guest"), 1503, False),
+        ]
+    return _VB_ACCOUNT["mensen"]
+
+
+def ingelogd_nu() -> set[str]:
+    return lees_ingelogd(_c.draai("loginctl", "list-users", "--no-legend", timeout=5)[1])
+
+
+def mensen() -> list[Persoon]:
+    """Iedereen die op deze computer kan inloggen (jij ook: ik=True)."""
+    from dataclasses import replace
+    if _c.VOORBEELD:
+        return [replace(p) for p in _vb_mensen()]
+    import grp
+    import pwd
+    try:
+        grenzen = uid_grenzen(Path("/etc/login.defs").read_text(encoding="utf-8", errors="replace"))
+    except OSError:
+        grenzen = (1000, 60000)
+    try:
+        wheel = list(grp.getgrnam("wheel").gr_mem)
+    except KeyError:
+        wheel = []
+    rijen = [(p.pw_name, p.pw_uid, p.pw_gecos, p.pw_shell) for p in pwd.getpwall()]
+    return lees_mensen(rijen, wheel, grenzen, os.getuid(), ingelogd_nu(), fotomap())
+
+
+def naam_bestaat(naam: str) -> bool:
+    """Bestaat er al iemand of een groep met deze naam? (useradd faalt ook bij een groep: code 9.)"""
+    if _c.VOORBEELD:
+        return naam in {p.naam for p in _vb_mensen()} | {"root", "wheel"}
+    import grp
+    import pwd
+    for zoek in (pwd.getpwnam, grp.getgrnam):
+        try:
+            zoek(naam)
+            return True
+        except KeyError:
+            pass
+    return False
+
+
+def accounts_roep(pad: str, interface: str, methode: str, *args, timeout: int = 600) -> tuple[bool, str, list]:
+    """Eén aanroep naar AccountsService in dít proces (QtDBus), met de wachtwoordvraag van polkit erbij. Zo staat
+    een wachtwoord(-hash) nooit op een opdrachtregel. De tijd is ruim: het wachtwoordvenster telt mee.
+    Geeft (gelukt, 'foutnaam: foutmelding', antwoorden); een objectpad komt terug als tekst."""
+    try:
+        from PySide6.QtDBus import QDBus, QDBusConnection, QDBusMessage, QDBusObjectPath
+    except ImportError:
+        return False, "dbus", []
+    bericht = QDBusMessage.createMethodCall("org.freedesktop.Accounts", pad, interface, methode)
+    bericht.setArguments(list(args))
+    bericht.setInteractiveAuthorizationAllowed(True)
+    antwoord = QDBusConnection.systemBus().call(bericht, QDBus.CallMode.Block, timeout * 1000)
+    if antwoord.type() == QDBusMessage.MessageType.ErrorMessage:
+        return False, f"{antwoord.errorName()}: {antwoord.errorMessage()}", []
+    return True, "", [a.path() if isinstance(a, QDBusObjectPath) else a for a in antwoord.arguments()]
+
+
+def _reden(fout: str) -> str:
+    """Een D-Bus-fout van AccountsService in één woord, voor de melding op de pagina."""
+    if any(w in fout for w in ("PermissionDenied", "AccessDenied", "InteractiveAuthorizationRequired",
+                               "NotAuthorized", "Not authorized")):
+        return "geweigerd"
+    if any(w in fout for w in ("UnknownObject", "does not exist", "UnknownMethod")):
+        return "later"
+    return "fout"
+
+
+def _user_pad(uid: int) -> str:
+    return f"/org/freedesktop/Accounts/User{int(uid)}"
+
+
+def laatste_beheerder(p: Persoon, alle: list[Persoon]) -> bool:
+    """Is dit de enige beheerder? Die mag niet weg en niet gewone gebruiker worden."""
+    return p.beheerder and sum(1 for x in alle if x.beheerder) <= 1
+
+
+def zet_soort(p: Persoon, beheerder: bool, alle: list[Persoon]) -> tuple[bool, str]:
+    """Beheerder maken of een gewone gebruiker. Reden: 'laatste' (er moet een beheerder blijven), 'geweigerd',
+    'later' (AccountsService kent de persoon nog niet: na een herstart), 'fout'."""
+    if not beheerder and laatste_beheerder(p, alle):
+        return False, "laatste"
+    if _c.VOORBEELD:
+        for x in _vb_mensen():
+            if x.naam == p.naam:
+                x.beheerder = beheerder
+        return True, ""
+    ok, fout, _ = _c.accounts_roep(_user_pad(p.uid), "org.freedesktop.Accounts.User", "SetAccountType",
+                                   1 if beheerder else 0)
+    return (True, "") if ok else (False, _reden(fout))
+
+
+_laatst_weg: float | None = None   # wanneer we iemand weghaalden (zie maak_persoon: AccountsService heeft even nodig)
+
+
+def verwijder_persoon(p: Persoon, alle: list[Persoon]) -> tuple[bool, str]:
+    """Iemand van deze computer halen, met al zijn bestanden. Reden: 'ik', 'laatste', 'ingelogd', 'geweigerd',
+    'fout'. Bestanden bewaren bieden we niet: het volgende nieuwe account krijgt hetzelfde uid, en dus die map."""
+    global _laatst_weg
+    if p.ik:
+        return False, "ik"
+    if laatste_beheerder(p, alle):
+        return False, "laatste"
+    if _c.VOORBEELD:
+        if p.ingelogd:
+            return False, "ingelogd"
+        _VB_ACCOUNT["mensen"] = [x for x in _vb_mensen() if x.naam != p.naam]
+        return True, ""
+    if p.naam in ingelogd_nu():
+        return False, "ingelogd"
+    if lees_autologin(_inlog_teksten(), p.naam):
+        # Eerst 'inloggen zonder wachtwoord' uit (daarna kent bugos-login die naam niet meer).
+        if _c.draai("pkexec", "/usr/bin/bugos-login", "uit", p.naam, timeout=600)[0] != 0:
+            return False, "geweigerd"
+    # Niet via QtDBus: DeleteUser wil een int64 en PySide6 stuurt een klein getal als int32 (InvalidArgs). gdbus
+    # leest de soorten uit de beschrijving van de dienst. Het uid lazen we zelf (een getal: niets in te smokkelen).
+    # --timeout: anders geeft gdbus het na 25 s op, terwijl je nog je wachtwoord typt of de bestanden nog weggaan.
+    code = _c.draai("gdbus", "call", "--system", "--interactive", "--timeout", "600", "--dest",
+                    "org.freedesktop.Accounts", "--object-path", "/org/freedesktop/Accounts", "--method",
+                    "org.freedesktop.Accounts.DeleteUser", str(int(p.uid)), "true", timeout=610)[0]
+    if code != 0:
+        # Toch weg? (gdbus kan opgeven terwijl AccountsService doorwerkt.) Even kijken.
+        for _ in range(6):
+            if not naam_bestaat(p.naam):
+                break
+            time.sleep(0.5)
+        else:
+            return False, "geweigerd"
+    _laatst_weg = time.monotonic()
+    return True, ""
+
+
+def zet_wachtwoord_van(uid: int, nieuw: str) -> tuple[bool, str]:
+    """Een nieuw wachtwoord voor iemand anders (een beheerder mag dat). Reden: 'crypt', 'geweigerd', 'later', 'fout'.
+    De hash gaat over D-Bus in dit proces, nooit op een opdrachtregel."""
+    if _c.VOORBEELD:
+        return True, ""
+    try:
+        hash_ = versleutel(nieuw)
+    except OSError:
+        hash_ = ""
+    if not hash_:
+        return False, "crypt"
+    ok, fout, _ = _c.accounts_roep(_user_pad(uid), "org.freedesktop.Accounts.User", "SetPassword", hash_, "")
+    return (True, "") if ok else (False, _reden(fout))

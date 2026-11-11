@@ -6,12 +6,13 @@ import time
 from datetime import datetime
 
 import bugos_config as bi
-from bugos_ui import TAAL, Knop, Rij, kde_instelling, label, t
+from bugos_ui import TAAL, Knop, Rij, kde_instelling, label, leeg_groep, ronde_pixmap, t, vraag_ja, vraag_tekst
 from bugos_settings_onderdelen import (
     Blad, Keuzes, KiesDialoog, WachtwoordDialoog, dichtstbij, meer_knop, op_achtergrond, schuifje,
 )
-from PySide6.QtCore import QDate, QLocale, QTime, QTimer
-from PySide6.QtWidgets import QDateEdit, QDialog, QGridLayout, QHBoxLayout, QInputDialog, QTimeEdit, QVBoxLayout, QWidget
+from PySide6.QtCore import QDate, QLocale, Qt, QTime, QTimer
+from PySide6.QtGui import QIcon, QImage, QPixmap
+from PySide6.QtWidgets import QDateEdit, QDialog, QGridLayout, QHBoxLayout, QTimeEdit, QVBoxLayout, QWidget
 
 
 # ============================================================ tijd en taal ===
@@ -246,18 +247,73 @@ class TijdPagina(Blad):
 
 # ================================================== inloggen en wachtwoord ===
 
+def _foto_icoon(pad: str, maat: int = 22) -> QIcon | None:
+    """Een foto als rond icoontje (scherp op elk scherm), of None als het plaatje niet te openen is."""
+    if not pad:
+        return None
+    beeld = QImage(pad)
+    if beeld.isNull():
+        return None
+    zijde = min(beeld.width(), beeld.height())
+    beeld = beeld.copy((beeld.width() - zijde) // 2, (beeld.height() - zijde) // 2, zijde, zijde)
+    pix = QPixmap.fromImage(beeld.scaled(maat * 3, maat * 3, Qt.AspectRatioMode.IgnoreAspectRatio,
+                                         Qt.TransformationMode.SmoothTransformation))
+    pix.setDevicePixelRatio(3)
+    return QIcon(ronde_pixmap(pix, maat / 2))
+
+
+class WachtwoordVoorDialoog(WachtwoordDialoog):
+    """Een nieuw wachtwoord voor iemand anders: het venster zegt van wie, en welk wachtwoord BugOS daarna vraagt."""
+
+    def __init__(self, ouder: QWidget, naam: str, beheerder: bool = True):
+        super().__init__(ouder, huidig=False)
+        titel = t("Nieuw wachtwoord voor {naam}", "New password for {naam}").format(naam=naam)
+        self.setWindowTitle(titel)
+        lay = self.layout()
+        lay.itemAt(0).widget().setText(titel)
+        uitleg = t("Minstens {n} tekens. Daarna logt {naam} in met dit wachtwoord.",
+                   "At least {n} characters. {naam} then logs in with this password.").format(n=self.MINIMUM, naam=naam)
+        uitleg += " " + (t("BugOS vraagt eerst nog één keer jouw eigen wachtwoord.",
+                           "BugOS first asks for your own password once more.") if beheerder else
+                         t("BugOS vraagt eerst het wachtwoord van een beheerder.",
+                           "BugOS first asks for the password of an administrator."))
+        lay.itemAt(1).widget().setText(uitleg)
+
+
+BEZIG = ("Even geduld… BugOS vraagt je wachtwoord.", "One moment… BugOS asks for your password.")
+
+
+def reden_tekst(reden: str, naam: str = "") -> str:
+    """Waarom iets met een account niet lukte, in gewone woorden (nooit de foutmelding van het systeem)."""
+    if reden == "geweigerd":
+        return t("Er is niets veranderd: daarvoor is het wachtwoord van een beheerder nodig.",
+                 "Nothing changed: this needs the password of an administrator.")
+    if reden == "later":
+        return t("Dat lukt pas na een herstart van de computer.", "This only works after restarting the computer.")
+    if reden == "laatste":
+        return t("Er moet altijd minstens één beheerder zijn.", "There must always be at least one administrator.")
+    if reden == "ingelogd":
+        return t("{naam} is nog ingelogd. Laat {naam} eerst afmelden, of start de computer opnieuw.",
+                 "{naam} is still logged in. Ask {naam} to log out first, or restart the computer.").format(naam=naam)
+    return t("Dat lukte niet.", "That did not work.")
+
+
 class InloggenPagina(Blad):
     sleutel, icoon = "inloggen", "persoon"
     titel_nl, titel_en = "Inloggen en wachtwoord", "Login and password"
-    uitleg_nl = "Jouw naam en wachtwoord, en wanneer het scherm op slot gaat."
-    uitleg_en = "Your name and password, and when the screen locks."
+    uitleg_nl = "Jouw naam, foto en wachtwoord, andere mensen, en wanneer het scherm op slot gaat."
+    uitleg_en = "Your name, picture and password, other people, and when the screen locks."
     zoekwoorden = ("inloggen aanmelden wachtwoord account gebruiker naam beheerder op slot vergrendelen automatisch "
                    "inloggen zonder wachtwoord login log in sign in password account user name administrator admin "
-                   "lock screen lock automatic login")
+                   "lock screen lock automatic login "
+                   "mensen persoon toevoegen verwijderen kind kinderen gezin gast foto profielfoto plaatje "
+                   "people person add remove family guest picture photo avatar account type standard")
     kde = "kcm_users"
 
     def bouw(self) -> None:
         self.gebruiker: bi.Gebruiker | None = None
+        self.mensen: list[bi.Persoon] = []
+        self.mensen_rijen: list[Rij] = []
         g = self.kaart()
         rechts = QWidget()
         rl = QHBoxLayout(rechts)
@@ -266,7 +322,7 @@ class InloggenPagina(Blad):
         ww = Knop(t("Wachtwoord wijzigen…", "Change password…"), "gewoon", "lijn:slot")
         ww.clicked.connect(self.wijzig_wachtwoord)
         rl.addWidget(ww)
-        rl.addWidget(meer_knop(lambda: [("potlood", t("Naam wijzigen…", "Change name…"), self.wijzig_naam)]))
+        rl.addWidget(meer_knop(self.menu_ik))
         self.ik = Rij("persoon", "…", "", rechts)
         g.voeg(self.ik)
         self.auto = schuifje(False, self.zet_auto)
@@ -287,37 +343,68 @@ class InloggenPagina(Blad):
         nu.clicked.connect(lambda _c=False: bi.vergrendel())
         g2.voeg(Rij("computer", t("Even weg?", "Stepping away?"), t("Zoals Windows-toets + L", "Like Windows key + L"),
                     nu))
-        g3 = self.kaart(t("Andere mensen", "Other people"))
-        rij = Rij("persoon", t("Iemand toevoegen", "Add someone"),
-                  t("Een eigen account voor iemand anders, met eigen bestanden en instellingen",
-                    "A separate account for someone else, with their own files and settings"), klikbaar=True)
-        rij.geklikt.connect(lambda: kde_instelling("kcm_users"))
-        g3.voeg(rij)
+        self.g3 = self.kaart(t("Andere mensen", "Other people"))
+        self.vul_mensen([])
+        # Wie geen beheerder is, mag het ook proberen: dan vraagt BugOS het wachtwoord van een beheerder (zoals Windows).
+        self.alleen_beheerder = label(t("Iemand toevoegen of weghalen kan alleen met het wachtwoord van een beheerder.",
+                                        "Adding or removing someone needs the password of an administrator."), "klein")
+        self.alleen_beheerder.hide()
+        self.lay.addWidget(self.alleen_beheerder)
+
+    def vul_mensen(self, lijst: list[bi.Persoon]) -> None:
+        """De kaart Andere mensen opnieuw vullen: iedereen behalve jij, op naam, en onderaan 'Iemand toevoegen'."""
+        self.mensen = list(lijst)
+        leeg_groep(self.g3)
+        self.mensen_rijen = []
+        for p in sorted((p for p in lijst if not p.ik), key=lambda p: (p.volledige_naam.casefold(), p.naam)):
+            uitleg = (t("Beheerder", "Administrator") if p.beheerder else t("Standaard", "Standard"))
+            uitleg += t(" · inlognaam {naam}", " · login name {naam}").format(naam=p.naam)
+            if p.ingelogd:
+                uitleg += t(" · nu ingelogd", " · logged in now")
+            rij = Rij(_foto_icoon(p.foto) or "persoon", p.volledige_naam, uitleg,
+                      meer_knop(lambda p=p: self.menu_voor(p)))
+            rij.persoon = p
+            self.g3.voeg(rij)
+            self.mensen_rijen.append(rij)
+        self.voeg_rij = Rij("persoon", t("Iemand toevoegen", "Add someone"),
+                            t("Een eigen account voor iemand anders, met eigen bestanden en instellingen",
+                              "A separate account for someone else, with their own files and settings"), klikbaar=True)
+        self.voeg_rij.geklikt.connect(lambda: kde_instelling("kcm_users"))
+        self.g3.voeg(self.voeg_rij)
 
     def ververs(self) -> None:
-        op_achtergrond(self, lambda: (bi.gebruiker(), bi.slot_na(), bi.slot_na_slapen()), self.toon)
+        op_achtergrond(self, lambda: (bi.gebruiker(), bi.slot_na(), bi.slot_na_slapen(), bi.mensen()), self.toon)
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:
             return
-        g, slot, slaap = uitkomst
+        g, slot, slaap = uitkomst[:3]
         self.gebruiker = g
         self.ik.titel.setText(g.volledige_naam)
         self.ik.zet_uitleg(t(f"Inlognaam: {g.naam}", f"Login name: {g.naam}") +
                            (t(" · beheerder", " · administrator") if g.beheerder else ""))
+        self.ik.zet_icoon(_foto_icoon(getattr(g, "foto", "")) or "persoon")
         self.auto.zet_stil(g.auto_inloggen)
         self.slot.zet(dichtstbij(bi.SLOT_KEUZES, slot))
         self.slot_slaap.zet_stil(bool(slaap))
+        self.alleen_beheerder.setVisible(not g.beheerder)
+        if len(uitkomst) > 3 and uitkomst[3] is not None:   # (een oude aanroeper geeft er drie: mensen dan laten)
+            self.vul_mensen(uitkomst[3])
+
+    # ------------------------------------------------------------------ jij ---
+
+    def menu_ik(self) -> list:
+        return [("potlood", t("Naam wijzigen…", "Change name…"), self.wijzig_naam)]
 
     def wijzig_naam(self) -> None:
-        nieuw, ok = QInputDialog.getText(self, t("Je naam", "Your name"),
-                                         t("Hoe heet je? Dit zie je op het inlogscherm.",
-                                           "What is your name? You see this on the login screen."),
-                                         text=self.gebruiker.volledige_naam if self.gebruiker else "")
-        nieuw = nieuw.strip()
-        if ok and nieuw:
+        nieuw = vraag_tekst(self, t("Je naam", "Your name"),
+                            t("Hoe heet je? Dit zie je op het inlogscherm.",
+                              "What is your name? You see this on the login screen."),
+                            self.gebruiker.volledige_naam if self.gebruiker else "", t("Opslaan", "Save"))
+        nieuw = (nieuw or "").strip()
+        if nieuw:
             op_achtergrond(self, lambda: bi.zet_volledige_naam(nieuw), lambda goed: (
-                self.melding.toon(t(f"Je heet nu {nieuw}.", f"You are now called {nieuw}.") if goed else
+                self.melding.toon(t("Je heet nu {naam}.", "You are now called {naam}.").format(naam=nieuw) if goed else
                                   t("Dat lukte niet.", "That did not work."), "goed" if goed else "fout"),
                 self.ververs()))
 
@@ -367,3 +454,89 @@ class InloggenPagina(Blad):
             self.ververs()
 
         op_achtergrond(self, lambda: bi.zet_auto_inloggen(aan, naam), klaar)
+
+    # -------------------------------------------------------- andere mensen ---
+
+    def menu_voor(self, p: bi.Persoon) -> list:
+        items = [("slot", t("Nieuw wachtwoord…", "Set a new password…"), lambda: self.nieuw_wachtwoord_voor(p))]
+        if p.beheerder:
+            items.append(("persoon", t("Gewone gebruiker maken", "Make standard user"), lambda: self.zet_soort(p, False)))
+        else:
+            items.append(("persoon", t("Beheerder maken", "Make administrator"), lambda: self.zet_soort(p, True)))
+        if not bi.laatste_beheerder(p, self.mensen):
+            items.append(("prullenbak", t("Verwijderen…", "Remove…"), lambda: self.verwijder(p)))
+        return items
+
+    def _bezig(self) -> None:
+        self.melding.toon(t(*BEZIG), seconden=120)
+
+    def zet_soort(self, p: bi.Persoon, beheerder: bool) -> None:
+        naam = p.volledige_naam
+        if beheerder and not vraag_ja(
+                self, t("Beheerder maken?", "Make administrator?"),
+                t("{naam} kan dan apps installeren, andere mensen toevoegen en alles op deze computer veranderen.",
+                  "{naam} can then install apps, add other people and change everything on this computer."
+                  ).format(naam=naam),
+                t("Beheerder maken", "Make administrator")):
+            return
+        self._bezig()
+        alle = list(self.mensen)
+
+        def klaar(uitkomst) -> None:
+            ok, reden = uitkomst if isinstance(uitkomst, tuple) else (False, "fout")
+            if ok:
+                tekst = (t("{naam} is nu beheerder.", "{naam} is now an administrator.") if beheerder else
+                         t("{naam} is nu een gewone gebruiker.", "{naam} is now a standard user.")).format(naam=naam)
+                if p.ingelogd:
+                    tekst += t(" Dat geldt vanaf de volgende keer dat die inlogt.",
+                               " It counts from the next time they log in.")
+                self.melding.toon(tekst, "goed")
+            else:
+                self.melding.toon(reden_tekst(reden, naam), "fout")
+            self.ververs()
+
+        op_achtergrond(self, lambda: bi.zet_soort(p, beheerder, alle), klaar)
+
+    def verwijder(self, p: bi.Persoon) -> None:
+        naam = p.volledige_naam
+        if p.ingelogd:   # meteen zeggen, niet eerst een wachtwoord vragen
+            self.melding.toon(reden_tekst("ingelogd", naam), "fout", seconden=12)
+            return
+        if not vraag_ja(self, t("{naam} verwijderen?", "Remove {naam}?").format(naam=naam),
+                        t("Het account en alle bestanden van {naam} (documenten, foto's, downloads) gaan van deze "
+                          "computer af. Dat kan niet ongedaan worden. Wil je iets bewaren? Log dan eerst in als {naam} "
+                          "en zet het op een USB-stick.",
+                          "The account and all files of {naam} (documents, photos, downloads) are removed from this "
+                          "computer. This cannot be undone. Want to keep something? Log in as {naam} first and copy "
+                          "it to a USB stick.").format(naam=naam),
+                        t("Verwijderen", "Remove"), enter_is_nee=True):
+            return
+        self._bezig()
+        alle = list(self.mensen)
+
+        def klaar(uitkomst) -> None:
+            ok, reden = uitkomst if isinstance(uitkomst, tuple) else (False, "fout")
+            if ok:
+                self.melding.toon(t("{naam} is verwijderd.", "{naam} has been removed.").format(naam=naam), "goed")
+            else:
+                self.melding.toon(reden_tekst(reden, naam), "fout", seconden=12 if reden == "ingelogd" else 7)
+            self.ververs()
+
+        op_achtergrond(self, lambda: bi.verwijder_persoon(p, alle), klaar)
+
+    def nieuw_wachtwoord_voor(self, p: bi.Persoon) -> None:
+        naam = p.volledige_naam
+        d = WachtwoordVoorDialoog(self, naam, self.gebruiker is None or self.gebruiker.beheerder)
+        if not d.exec():
+            return
+        nieuw = d.wachtwoord
+        d.een.setText("")
+        d.twee.setText("")
+        self._bezig()
+
+        def klaar(uitkomst) -> None:
+            ok, reden = uitkomst if isinstance(uitkomst, tuple) else (False, "fout")
+            self.melding.toon(t("Het wachtwoord van {naam} is veranderd.", "{naam}'s password has been changed."
+                                ).format(naam=naam) if ok else reden_tekst(reden, naam), "goed" if ok else "fout")
+
+        op_achtergrond(self, lambda: bi.zet_wachtwoord_van(p.uid, nieuw), klaar)
