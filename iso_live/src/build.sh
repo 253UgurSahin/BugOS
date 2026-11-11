@@ -219,6 +219,12 @@ PY
 if zcat /usr/share/cockpit/anaconda-webui/po.nl.js.gz | grep -q '\[null, "[^"]*Fedora'; then
     echo "Let op: er staat nog 'Fedora' in de Nederlandse teksten van het installatieprogramma" >&2
 fi
+# Gewone woorden in het installatieprogramma, Engels en Nederlands: "Password" in plaats van "Passphrase",
+# "Use the whole disk", "Finish" ... (iso_live/src/bugos_webui.py). Engels krijgt een eigen woordenboek
+# (po.en_US.js.gz en de andere Engelse talen van Anaconda); Nederlands komt achteraan in po.nl.js.gz, na de
+# regels hierboven, zodat onze woorden winnen. Klopt de vorm van een bestand niet meer (nieuwe versie van het
+# installatieprogramma), dan stopt het bouwen hier.
+python3 "$SRC/bugos_webui.py" /usr/share/cockpit/anaconda-webui
 
 # Waarschuwing voor BitLocker, vóórdat het installatieprogramma opent.
 # Dit zat eerst in de kickstart, maar daar kwam het venster niet op het
