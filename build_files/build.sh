@@ -51,16 +51,14 @@ chmod 0644 /usr/share/bugos/store-icons/* 2>/dev/null || true
 mapfile -t PAKKETTEN < <(grep -vE '^\s*(#|$)' /ctx/packages.txt)
 dnf5 install -y --skip-unavailable "${PAKKETTEN[@]}"
 
-# KDE Discover voor "Meer apps zoeken" in de BugOS Winkel: alleen Flatpak-apps.
-# Zonder weak deps, anders komt PackageKit mee en toont Discover Fedora-
-# pakketten en "updates" die op BugOS (alleen-lezen systeem) niet kunnen.
-dnf5 install -y --setopt=install_weak_deps=False plasma-discover plasma-discover-flatpak
-# Weg met wat Discover laat zien over het systeem zelf: Fedora-pakketten
-# (PackageKit) en systeemupdates (rpm-ostree, dat zit in Kinoite). Updates doet
-# BugOS zelf (stap 6). In één keer, omdat ze van elkaar afhangen.
-# Ook de updatemelder van KDE: die werkte Flatpak-apps stilletjes bij, ook bij 'Ik kies zelf wanneer' (U321).
-mapfile -t TEVEEL < <(rpm -q --qf '%{NAME}
-' plasma-discover-packagekit plasma-discover-offline-updates     plasma-discover-rpm-ostree plasma-discover-notifier 2>/dev/null | grep -v 'not installed' || true)
+# Geen KDE Discover: de BugOS Winkel doet alle apps zelf, ook die van buiten de BugOS-selectie (Flathub),
+# en opent zelf de .flatpakref-bestanden van flathub.org. Haal hem weg als de basis hem meebrengt, met de
+# PackageKit-, systeemupdate- en updatemelder-onderdelen (plasma-discover-notifier werkte Flatpak-apps
+# stilletjes bij, ook bij 'Ik kies zelf wanneer' (U321)). Updates doet BugOS zelf (stap 6).
+# Zonder --nodeps: hangt er ooit iets van Discover af, dan moet de bouw luid stoppen, niet dat pakket breken.
+mapfile -t TEVEEL < <(rpm -q --qf '%{NAME}\n' plasma-discover plasma-discover-flatpak plasma-discover-kns \
+    plasma-discover-libs plasma-discover-packagekit plasma-discover-offline-updates plasma-discover-rpm-ostree \
+    plasma-discover-notifier 2>/dev/null | grep -v 'not installed' || true)
 if [ "${#TEVEEL[@]}" -gt 0 ]; then
     rpm -e "${TEVEEL[@]}"
 fi
