@@ -391,7 +391,7 @@ if shutil.which("bash"):
         klopt(not (p.merk / "paneel-bureaubladmenu-1").exists(),
               "B7: lukt het bureaubladmenu niet (Plasma geeft 0), dan de volgende keer opnieuw (geen merkteken)")
         _vak = [x for x in sc if "systeemvak(true);" in x]
-        klopt((p.merk / "paneel-systeemvak-2").exists() and len([x for x in p.scripts() if "systeemvak(true);" in x]) == 2,
+        klopt((p.merk / "paneel-systeemvak-2").exists() and len(_vak) == 2,
               f"B5: standaard (nieuwe gebruiker): systeemvak(true) voor stap 2 en de nieuwe stap 6, allebei onthouden ({_vak})")
         (p.merk / "paneel-systeemvak-2").unlink()
         p.antwoorden({"regels": [['heeft("org.bugos.quickmenu")', "uit"]]})
