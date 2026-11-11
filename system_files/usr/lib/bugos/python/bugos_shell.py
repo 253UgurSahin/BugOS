@@ -311,7 +311,6 @@ class ActieBalk(QFrame):
     def knop(self, sleutel: str, icoon_naam: str, tekst: str, actie) -> QPushButton:
         k = QPushButton(tekst)
         k.setObjectName("balkknop")
-        k.setAccessibleName(tekst)   # ook als er straks alleen het icoontje staat (zie plaats)
         k.setIcon(lijn_icoon(icoon_naam, "tekst", 18, gekozen=None))
         k.setIconSize(QSize(18, 18))
         k.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -347,13 +346,21 @@ class ActieBalk(QFrame):
             if volle and not k.text():                  # een nieuwe tekst van de app gaat voor
                 k.setText(volle)
         self.adjustSize()
-        if self.sizeHint().width() > self.maximumWidth():
-            for k in self.knoppen.values():
-                if k.text():
-                    k.setProperty("volle_tekst", k.text())
-                    k.setToolTip(k.text())
-                    k.setAccessibleName(k.text())
-                    k.setText("")
+        alleen_icoon = self.sizeHint().width() > self.maximumWidth()
+        for k in self.knoppen.values():
+            if alleen_icoon:
+                # Het woord als tip en voor de schermlezer. Steeds opnieuw: de app kan het woord veranderen
+                # (Taakbeheer: 'Sluiten' of 'Stoppen').
+                naam = k.text() or k.property("volle_tekst") or ""
+                k.setProperty("volle_tekst", naam)
+                k.setToolTip(naam)
+                k.setAccessibleName(naam)
+                k.setText("")
+            else:
+                # Met woorden: geen vaste naam, dan leest de schermlezer altijd het woord dat er nu staat.
+                k.setToolTip("")
+                k.setAccessibleName("")
+        if alleen_icoon:
             self.adjustSize()
         self.move(gebied.center().x() - self.width() // 2, gebied.bottom() - self.height() - 14)
         self.raise_()
@@ -534,11 +541,12 @@ class VraagDialoog(QDialog):
                 self.veld.setEchoMode(QLineEdit.EchoMode.Password)
                 self.oog = Knop(t("Laten zien", "Show"), "stil", "lijn:oog")
                 self.oog.setCheckable(True)
+                # Een aan/uit-knopje zoals een vinkje: spatie zet het om, Enter verstuurt nog steeds de vraag.
+                self.oog.setAutoDefault(False)
                 self.oog.toggled.connect(lambda aan: self.veld.setEchoMode(
                     QLineEdit.EchoMode.Normal if aan else QLineEdit.EchoMode.Password))
                 lay.addWidget(self.oog, 0, Qt.AlignmentFlag.AlignLeft)
         lay.addSpacing(4)
-        lay.addStretch(1)   # ruimte over (een lange uitleg die smaller uitvalt): boven de knoppen, niet onder de kop
         knoppen = QHBoxLayout()
         knoppen.setSpacing(8)
         knoppen.addStretch(1)
@@ -550,8 +558,9 @@ class VraagDialoog(QDialog):
         knoppen.addWidget(self.ja)
         lay.addLayout(knoppen)
         # Enter uit gewoonte: bij iets dat je niet ongedaan maakt (teruggaan, weggooien) doet dat niets (U380).
-        standaard, ander = (self.nee, self.ja) if enter_is_nee else (self.ja, self.nee)
-        ander.setAutoDefault(False)
+        # Sta je met Tab op een knop, dan doet Enter (net als spatie) die knop, zoals overal in Windows en KDE: beide
+        # knoppen blijven 'autoDefault'. De standaardknop telt alleen als er geen knop gekozen is (in het tekstveld).
+        standaard = self.nee if enter_is_nee else self.ja
         standaard.setDefault(True)
         if self.veld is not None:
             if not wachtwoord:   # een lege naam kan niet; een leeg wachtwoord (open netwerk) mag de pagina zelf weigeren
@@ -560,6 +569,16 @@ class VraagDialoog(QDialog):
             self.veld.setFocus()
         else:
             standaard.setFocus()
+
+    def showEvent(self, e) -> None:  # noqa: N802
+        """Precies zo hoog als de inhoud bij deze breedte: geen lege strook boven de knoppen. (Qt rekent de hoogte van
+        een afgebroken uitleg anders uit bij een smallere breedte en houdt die ruimte dan over.)"""
+        super().showEvent(e)
+        lay = self.layout()
+        lay.activate()
+        hoog = lay.totalHeightForWidth(self.width()) if lay.hasHeightForWidth() else lay.totalSizeHint().height()
+        self.setMinimumHeight(min(self.minimumHeight(), hoog))
+        self.resize(self.width(), hoog)
 
     @property
     def standaard(self) -> str:

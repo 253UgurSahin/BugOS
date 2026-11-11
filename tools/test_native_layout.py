@@ -205,7 +205,8 @@ import importlib.machinery  # noqa: E402
 import importlib.util  # noqa: E402
 
 import bugos_ui  # noqa: E402
-from PySide6.QtCore import QPoint, QRect, QSize  # noqa: E402
+from PySide6.QtCore import QPoint, QRect, QSize, Qt, QTimer  # noqa: E402
+from PySide6.QtTest import QTest  # noqa: E402
 from PySide6.QtGui import QColor, QImage  # noqa: E402
 from PySide6.QtWidgets import QApplication, QDialog, QLabel, QLineEdit, QVBoxLayout, QWidget  # noqa: E402
 
@@ -428,6 +429,25 @@ _balk.knoppen["weg"].setText("Stop")
 _balk.plaats(QRect(0, 0, 400, 300))
 _balk.plaats(QRect(0, 0, 1400, 300))
 klopt(_balk.knoppen["weg"].text() == "Stop", "D04: een tekst die de app later zet, blijft (bijv. 'Stop' in Taakbeheer)")
+_weg = _balk.knoppen["weg"]
+klopt(not _weg.accessibleName() and not _weg.toolTip(),
+      "D04: met woorden geen vaste naam: de schermlezer leest het woord dat er nu staat")
+_weg.setText("End")                         # zoals Taakbeheer: 'Sluiten' wordt 'Beëindigen'
+_balk.plaats(QRect(0, 0, 1400, 300))
+klopt(_weg.text() == "End" and not _weg.accessibleName(), "D04: de app zet 'End': de schermlezer zegt 'End', niet 'Delete'")
+_balk.plaats(QRect(0, 0, 400, 300))
+klopt(not _weg.text() and _weg.accessibleName() == "End" and _weg.toolTip() == "End",
+      "D04: daarna te smal: het icoontje heet 'End' (tip en schermlezer), niet het oude woord")
+_balk.plaats(QRect(0, 0, 1400, 300))
+_weg.setText("Close")
+_balk.plaats(QRect(0, 0, 400, 300))
+klopt(_weg.accessibleName() == "Close" and _weg.toolTip() == "Close",
+      "D04: smal - breed - nieuw woord - smal: de naam loopt niet een stap achter")
+_weg.setText("Stop")
+_balk.plaats(QRect(0, 0, 400, 300))
+klopt(not _weg.text() and _weg.accessibleName() == "Stop", "D04: een nieuw woord terwijl alleen icoontjes passen: tip en naam volgen")
+_balk.plaats(QRect(0, 0, 1400, 300))
+klopt(_weg.text() == "Stop" and not _weg.toolTip(), "D04: weer breed: het nieuwe woord staat er, zonder overbodige tip")
 _venster.hide()
 
 # ---------------------------------------------------------------------------------- D09 gekozen keuze ---
@@ -491,6 +511,50 @@ klopt(_d.veld.echoMode() == QLineEdit.EchoMode.Password and _d.oog is not None a
 QDialog.exec = _nep_exec(False)
 klopt(vraag_tekst(None, "Your name", "?", "Bugie") is None, "D11: Annuleren bij vraag_tekst geeft None")
 QDialog.exec = _echt_exec
+
+
+def _druk(d, wie, toets=Qt.Key.Key_Return) -> str:
+    """Open de vraag echt, zet de focus op 'wie' (zoals met Tab) en druk op een toets: wat gebeurt er?"""
+    def doe():
+        w_ = getattr(d, wie)
+        w_.setFocus(Qt.FocusReason.TabFocusReason)
+        verwerk()
+        QTest.keyClick(w_, toets)
+    QTimer.singleShot(50, doe)
+    QTimer.singleShot(3000, d.reject)    # nooit blijven hangen
+    return "ja" if d.exec() == QDialog.DialogCode.Accepted else "nee"
+
+
+_V = bugos_shell.VraagDialoog
+klopt(_druk(_V(None, "Remove printer?", "x", "Remove"), "nee") == "nee",
+      "D11: Tab naar 'Annuleren' + Enter = annuleren (de printer blijft)")
+klopt(_druk(_V(None, "Remove printer?", "x", "Remove"), "ja") == "ja", "D11: Tab naar 'Verwijderen' + Enter = verwijderen")
+klopt(_druk(_V(None, "Go back?", "x", "Go back", enter_is_nee=True), "ja") == "ja",
+      "D11: enter_is_nee, Tab naar 'Teruggaan' + Enter = teruggaan (Enter doet de knop waar je op staat)")
+klopt(_druk(_V(None, "Go back?", "x", "Go back", enter_is_nee=True), "nee") == "nee",
+      "D11: enter_is_nee, Enter op 'Annuleren' = annuleren")
+klopt(_druk(_V(None, "Rename", "New name", "Rename", veld=True, waarde="Letter.odt"), "nee") == "nee",
+      "D11: vraag_tekst, Tab naar 'Annuleren' + Enter = annuleren (de naam blijft)")
+klopt(_druk(_V(None, "Rename", "New name", "Rename", veld=True, waarde="Letter.odt"), "veld") == "ja",
+      "D11: vraag_tekst, Enter in het tekstveld = OK")
+klopt(_druk(_V(None, "Wi-Fi", "pw", "Connect", veld=True, wachtwoord=True), "oog") == "ja",
+      "D11: Enter op 'Laten zien' verstuurt (het is een vinkje, geen eigen knop); spatie zet het om")
+_d = _V(None, "Wi-Fi", "pw", "Connect", veld=True, wachtwoord=True)
+_d.show()
+verwerk()
+_d.oog.setFocus()
+QTest.keyClick(_d.oog, Qt.Key.Key_Space)
+klopt(_d.oog.isChecked() and _d.isVisible(), "D11: spatie op 'Laten zien' laat het wachtwoord zien en sluit de vraag niet")
+_d.close()
+for _uitleg in ("Sure?", "Your computer restarts with the previous version of BugOS. Your files stay where they are.",
+                "A much longer explanation that goes on. " * 6):
+    _d = _V(None, "Go back to the previous version?", _uitleg, "Go back", enter_is_nee=True)
+    _d.show()
+    verwerk()
+    _gat = _d.ja.geometry().top() - _d.uitleg.geometry().bottom()
+    klopt(_gat <= 24 and _d.uitleg.height() >= _d.uitleg.heightForWidth(_d.uitleg.width()) - 1,
+          f"D11: geen lege strook boven de knoppen ({_gat} px) en de uitleg is heel ({len(_uitleg)} tekens)")
+    _d.close()
 
 # ----------------------------------------------------------------------------- op het scherm (helper) ---
 _scherm = QApplication.primaryScreen()
