@@ -14,12 +14,26 @@
 
 # lsblk --list: elke schijf én partitie op een eigen regel. (Met --json staan
 # partities "onder" de schijf, en dan zag de oude controle ze niet.)
+# De vraag is een BugOS-venster (bugos-live bitlocker; Enter = Stoppen): 0 = doorgaan, 10 = stoppen.
+# Elke andere uitkomst betekent dat het venster het niet kon vragen (een fout, geen scherm). Dan niet stilletjes
+# niets doen (dan gebeurt er niets als je op "BugOS installeren" drukt), maar dezelfde vraag in een eenvoudig
+# venster (zenity, dat het installatieprogramma zelf ook gebruikt). Kan ook dat niet, dan gaat het installeren door:
+# het installatieprogramma laat de schijven zelf ook nog zien voordat er iets gebeurt.
 if lsblk --list --noheadings -o FSTYPE 2>/dev/null | grep -qx BitLocker; then
-    if ! kdialog --title BugOS --warningcontinuecancel \
-        "$(t "<b>Let op: er staat een versleutelde Windows-schijf (BitLocker) op deze computer.</b><br><br>Wil je BugOS naast Windows zetten? Schrijf dan eerst je BitLocker-herstelsleutel op (account.microsoft.com/devices/recoverykey).<br><br>Doorgaan met installeren?" \
-            "<b>Careful: this computer has an encrypted Windows drive (BitLocker).</b><br><br>Do you want to put BugOS next to Windows? Then first write down your BitLocker recovery key (account.microsoft.com/devices/recoverykey).<br><br>Continue installing?")" \
-        --continue-label "$(t "Ja, doorgaan" "Yes, continue")" --cancel-label "$(t "Stoppen" "Stop")"; then
+    bugos-live bitlocker
+    antwoord=$?
+    if [ "$antwoord" = 10 ]; then
         exit 0
+    elif [ "$antwoord" != 0 ]; then
+        echo "bugos-install: bugos-live bitlocker gaf $antwoord; de vraag komt nu via zenity" >&2
+        zenity --question --no-markup --title=BugOS --width=480 \
+            --ok-label="$(t "Ja, doorgaan" "Yes, continue")" --cancel-label="$(t "Stoppen" "Stop")" \
+            --text="$(t "Er staat een versleutelde Windows-schijf (BitLocker) op deze computer. Wil je BugOS naast Windows zetten? Schrijf dan eerst je BitLocker-herstelsleutel op (account.microsoft.com/devices/recoverykey). Doorgaan met installeren?" \
+                "This computer has an encrypted Windows drive (BitLocker). Do you want to put BugOS next to Windows? Then first write down your BitLocker recovery key (account.microsoft.com/devices/recoverykey). Continue installing?")" 2>/dev/null
+        antwoord=$?
+        if [ "$antwoord" = 1 ]; then
+            exit 0
+        fi
     fi
 fi
 

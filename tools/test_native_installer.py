@@ -569,9 +569,38 @@ def test_install() -> None:
     r = ronde(f"printf '%s\\n%s\\n' \"{nu}\" 'C.UTF-8' > '{merk}'", oud="")
     klopt(r[-1:] == ["LANGUAGE=<leeg>"], f"18: taal C: geen LANGUAGE ({r})")
 
+    # 19. BitLocker: de BugOS-vraag (bugos-live bitlocker). 0 = doorgaan, 10 = stoppen, iets anders = kon niet vragen.
+    (TMP / "lsblk").write_text("\nntfs\nBitLocker\next4\n", encoding="utf-8")
+    nep("zenity", f"exit \"$(cat '{TMP}/zen-code' 2>/dev/null || echo 0)\"")
+
+    def bitlocker(live_code: int, zen_code: int = 0) -> list[str]:
+        (TMP / "live-code").write_text(str(live_code), encoding="utf-8")
+        (TMP / "zen-code").write_text(str(zen_code), encoding="utf-8")
+        r = ronde(None)
+        return [x.split()[0] + (" " + x.split()[1] if x.startswith("bugos-live") and len(x.split()) > 1 else "")
+                for x in log() if x.startswith(("bugos-live", "liveinst", "zenity", "kdialog"))]
+
+    r = bitlocker(10)
+    klopt(r == ["bugos-live bitlocker"], f"19: BitLocker, 'Stop' (of het venster dicht): het installatieprogramma start niet ({r})")
+    r = bitlocker(0)
+    klopt(r == ["bugos-live bitlocker", "liveinst"], f"19: BitLocker, 'Yes, continue': het installatieprogramma start ({r})")
+    r = bitlocker(1, zen_code=1)
+    klopt(r == ["bugos-live bitlocker", "zenity", "liveinst"][:2],
+          f"19 (I10): het BugOS-venster valt om: de vraag komt via zenity; 'Stop' daar stopt ({r})")
+    r = bitlocker(1, zen_code=0)
+    klopt(r == ["bugos-live bitlocker", "zenity", "liveinst"], f"19 (I10): ... en 'Yes, continue' daar gaat door ({r})")
+    r = bitlocker(139, zen_code=127)
+    klopt(r == ["bugos-live bitlocker", "zenity", "liveinst"],
+          f"19 (I10): kan ook zenity niet: het installeren gaat door, 'BugOS installeren' doet nooit niets ({r})")
+    (TMP / "lsblk").unlink()
+    (TMP / "live-code").unlink()
+    r = bitlocker(0)
+    klopt(r == ["liveinst"], f"19: geen BitLocker: geen vraag, meteen het installatieprogramma ({r})")
+
     # 20. Statisch: niet meer exec liveinst; het merkteken is de laatste stap in de kickstart; geen nieuw yad-venster.
     tekst = bron("bugos-install")
     klopt("exec liveinst" not in tekst, "20: bugos-install neemt liveinst niet meer over (exec), zodat het daarna kan kijken")
+    klopt("kdialog" not in tekst and "bugos-live bitlocker" in tekst, "20: de BitLocker-vraag is een BugOS-venster, geen kdialog (KDE)")
     bouw = bron("build.sh").replace("\r\n", "\n")
     ks = bouw[bouw.index("interactive-defaults.ks <<EOF"):]
     ks = ks[:ks.index("\nEOF\n")]
@@ -702,6 +731,41 @@ def test_klaar(app, live) -> None:
               f"26: {taal}: in 720x440 past alles, in alle drie de standen (niets afgeknipt of eronder) ({mt.get('fouten')})")
     klopt(720 * 1.5 <= 1280 and (440 + 40) * 1.5 <= 800 - 72,
           "26: 720x440 met titelbalk bij 150 % past op 1280x800 boven een taakbalk van 72 px")
+
+    # F. De BitLocker-vraag: de gedeelde BugOS-vraag (vraag_ja), Enter = Stop; de exitcode die bugos-install verwacht.
+    import bugos_shell
+    from PySide6.QtWidgets import QDialog
+    gezien = []
+    echt = bugos_shell.VraagDialoog.exec
+    for antwoord in (QDialog.DialogCode.Rejected, QDialog.DialogCode.Accepted):
+        bugos_shell.VraagDialoog.exec = lambda self, a=antwoord: (gezien.append(self), a)[1]
+        try:
+            ja = live.vraag_bitlocker()
+        finally:
+            bugos_shell.VraagDialoog.exec = echt
+        klopt(ja == (antwoord == QDialog.DialogCode.Accepted), f"F: BitLocker-vraag: {antwoord.name} -> {ja}")
+    d = gezien[0]
+    klopt(d.standaard == "Stop" and d.nee.text() == "Stop" and d.ja.text() == "Yes, continue",
+          f"F: knoppen 'Stop' en 'Yes, continue'; Enter doet het veilige: Stop ({d.standaard})")
+    klopt("recovery key" in d.uitleg.text() and "account.microsoft.com/devices/recoverykey" in d.uitleg.text()
+          and "BitLocker" in d.kop.text(), "F: de vraag zegt waarom: eerst de herstelsleutel opschrijven")
+    code = ("import importlib.machinery, importlib.util, sys\n"
+            "sys.path.insert(0, sys.argv[2])\n"
+            "lader = importlib.machinery.SourceFileLoader('bugos_live', sys.argv[1])\n"
+            "live = importlib.util.module_from_spec(importlib.util.spec_from_loader('bugos_live', lader)); lader.exec_module(live)\n"
+            "import bugos_shell\n"
+            "keus = int(sys.argv[3])\n"
+            "bugos_shell.VraagDialoog.exec = lambda self: keus\n"
+            "sys.argv = ['bugos-live', 'bitlocker']\n"
+            "sys.exit(live.main())\n")
+    codes = []
+    for keus in ("0", "1"):
+        r = subprocess.run([sys.executable, "-c", code, str(SRC / "bugos-live"), str(PY), keus],
+                           env=dict(os.environ, QT_QPA_PLATFORM="offscreen"), capture_output=True, text=True, timeout=60)
+        codes.append(r.returncode)
+        if r.returncode not in (0, 10):
+            print(r.stderr[-600:])
+    klopt(codes == [10, 0], f"F (I10): bugos-live bitlocker: Stop = 10, doorgaan = 0 (anders = 'kon niet vragen') ({codes})")
 
 
 # =================================================================== --beeld: in de echte live-image (geen ISO nodig) ===

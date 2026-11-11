@@ -3,6 +3,7 @@
 
     bugos-live          eerste scherm op de stick: proberen of installeren?
     bugos-live klaar    na het installeren (bugos-install): "BugOS staat op je computer" met "Nu opnieuw opstarten"
+    bugos-live bitlocker  vóór het installeren (bugos-install), bij een BitLocker-schijf: doorgaan (0) of stoppen (10)
 """
 
 import os
@@ -13,7 +14,7 @@ import time
 sys.path.insert(0, "/usr/lib/bugos/python")
 
 from bugos_settings_onderdelen import op_achtergrond  # noqa: E402
-from bugos_ui import Chip, Knop, achtergrond_pad, draai, label, maak_app, t, uitvoeren  # noqa: E402
+from bugos_ui import Chip, Knop, achtergrond_pad, draai, label, maak_app, t, uitvoeren, vraag_ja  # noqa: E402
 from PySide6.QtCore import QProcess, QRectF, QTimer  # noqa: E402
 from PySide6.QtGui import QColor, QIcon, QLinearGradient, QPainter, QPixmap  # noqa: E402
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget  # noqa: E402
@@ -277,6 +278,24 @@ class Klaar(Achtergrond):
             self.toon("mislukt")
 
 
+# bugos-live bitlocker: 0 = doorgaan, STOPPEN = niet installeren. Elke andere code (Python-fout, geen scherm) betekent
+# voor bugos-install 'kon het niet vragen', en dan vraagt het op een andere manier (review I10).
+STOPPEN = 10
+
+
+def vraag_bitlocker() -> bool:
+    """Voor het installeren, als er een BitLocker-schijf is: eerst de herstelsleutel opschrijven. Enter = Stoppen."""
+    return vraag_ja(None, t("Er staat een versleutelde Windows-schijf (BitLocker) op deze computer",
+                            "This computer has an encrypted Windows drive (BitLocker)"),
+                    t("Wil je BugOS naast Windows zetten? Schrijf dan eerst je BitLocker-herstelsleutel op "
+                      "(account.microsoft.com/devices/recoverykey). Zonder die sleutel kom je daarna misschien niet "
+                      "meer in Windows.\n\nDoorgaan met installeren?",
+                      "Do you want to put BugOS next to Windows? Then first write down your BitLocker recovery key "
+                      "(account.microsoft.com/devices/recoverykey). Without that key you may not get back into "
+                      "Windows afterwards.\n\nContinue installing?"),
+                    t("Ja, doorgaan", "Yes, continue"), t("Stoppen", "Stop"), enter_is_nee=True)
+
+
 def venster(args: list[str]) -> QWidget:
     """Welk venster: 'klaar' na het installeren, anders het welkomstscherm."""
     if args[:1] == ["klaar"]:
@@ -286,6 +305,8 @@ def venster(args: list[str]) -> QWidget:
 
 def main() -> int:
     app = maak_app("bugos-live", "bugos-live", sys.argv)
+    if sys.argv[1:2] == ["bitlocker"]:
+        return 0 if vraag_bitlocker() else STOPPEN
     return uitvoeren(app, venster(sys.argv[1:]))
 
 
