@@ -463,12 +463,13 @@ class ProcesRegel:
     eigen: bool          # van jou
     beschermd: bool      # kan hier niet gestopt worden
     start: int           # om een hergebruikt procesnummer te herkennen
-    app: bool = False    # hoort bij een programma met een venster (dan eerst netjes sluiten)
+    app: bool = False    # het hoofdproces van een programma met vensters (dan eerst netjes sluiten)
 
 
 def details(lijst: list[Proces], procent: dict[int, float], taken: list[Taak]) -> list[ProcesRegel]:
     """Een regel per proces, met de taak waar hij bij hoort (zoals op de pagina Programma's)."""
     taak_van = {pid: taak for taak in taken for pid in taak.pids}
+    pids_van = {id(taak): set(taak.pids) for taak in taken}
     comm = {p.pid: p.naam for p in lijst}
     regels = []
     for p in lijst:
@@ -484,7 +485,9 @@ def details(lijst: list[Proces], procent: dict[int, float], taken: list[Taak]) -
                 hoort_bij = ""                 # alleen de naam nog eens: dan liever niets
         regels.append(ProcesRegel(p.pid, naam, p.uid, eigenaar_naam(p.uid), hoort_bij, procent.get(p.pid, 0.0),
                                   p.geheugen, p.eigen, proces_beschermd(p), p.start,
-                                  bool(taak and taak.soort == "app")))
+                                  # Het hoofdproces van een programma (zijn ouder hoort er niet bij) heeft de vensters;
+                                  # een tabblad van Firefox ('Isolated Web Co') niet.
+                                  bool(taak and taak.soort == "app" and p.ppid not in pids_van[id(taak)])))
     return regels
 
 

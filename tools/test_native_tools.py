@@ -277,9 +277,10 @@ EIGEN = f"/user.slice/user-{MIJN}.slice/user@{MIJN}.service"
 
 
 def proces(pid: int, naam: str, groep: str, tijd: int = 10, rss: int = 1000, pss_kb: int = 0, uid: int | None = None,
-           start: int = 100, cmdline: list[str] | None = None, kernel: bool = False, staat: str = "S") -> None:
+           start: int = 100, cmdline: list[str] | None = None, kernel: bool = False, staat: str = "S",
+           ppid: int = 1) -> None:
     vlaggen = 0x00200000 if kernel else 0x00400100
-    velden = [staat, "1", "0", "0", "0", "-1", str(vlaggen), "0", "0", "0", "0", str(tijd), "0", "0", "0",
+    velden = [staat, str(ppid), "0", "0", "0", "-1", str(vlaggen), "0", "0", "0", "0", str(tijd), "0", "0", "0",
               "20", "0", "1", "0", str(start), "1000000", str(rss)] + ["0"] * 10
     schrijf(PROC / str(pid) / "stat", f"{pid} ({naam}) " + " ".join(velden) + "\n")
     u = MIJN if uid is None else uid
@@ -302,7 +303,8 @@ schrijf(TMP / "share" / "applications" / "org.mozilla.firefox.desktop",
         "[Desktop Entry]\nType=Application\nName=Firefox\nIcon=firefox\nExec=firefox\n")
 FF = f"{EIGEN}/app.slice/app-flatpak-org.mozilla.firefox-1234.scope"
 proces(100, "firefox", FF, tijd=100, pss_kb=300000)
-proces(101, "Isolated Web Co", FF, tijd=50, pss_kb=200000, cmdline=["/usr/lib64/firefox/firefox", "-contentproc"])
+proces(101, "Isolated Web Co", FF, tijd=50, pss_kb=200000, cmdline=["/usr/lib64/firefox/firefox", "-contentproc"],
+       ppid=100)
 proces(200, "plasmashell", f"{EIGEN}/session.slice/plasma-plasmashell.service", pss_kb=150000)
 proces(210, "xdg-desktop-por", f"{EIGEN}/session.slice/xdg-desktop-portal-kde.service",
        cmdline=["/usr/libexec/xdg-desktop-portal-kde"])
@@ -341,7 +343,7 @@ _regels = {r.pid: r for r in _m["processen"]}
 _ff = next(x for x in _m["taken"] if x.soort == "app" and 100 in x.pids)
 klopt(set(_regels) == {100, 101, 200, 210, 300, 310, 400} and _regels[101].hoort_bij == _ff.naam == "Firefox"
       and all(0 <= r.processor <= 100 for r in _regels.values()) and _regels[100].processor > 0 and _regels[100].app
-      and not _regels[300].app,
+      and not _regels[101].app and not _regels[300].app,
       f"Details: de meting geeft elk proces met de taak waar het bij hoort ({sorted(_regels)})")
 klopt(_regels[310].hoort_bij == "" and _regels[300].hoort_bij == "Netwerk" and _regels[400].eigenaar == str(MIJN + 1),
       f"review 12: 'Hoort bij' herhaalt de naam niet ({_regels[310].hoort_bij!r}); NetworkManager hoort bij Netwerk")
@@ -388,6 +390,242 @@ def _weg(pid, sig):
 bt.os.kill = _weg
 klopt(bt.beeindig(_r) == "weg", "Details: net verdwenen (ESRCH) -> 'weg'")
 bt.os.kill = _nep_kill   # vanaf hier stuurt niets in deze test een echt signaal (ook niet als root) (review 5)
+
+
+# ======================================================= Taakbeheer: venster ===
+proces(100, "firefox", FF, tijd=400, pss_kb=300000)
+tm = laad("bugos_task_manager", ROOT / "system_files" / "usr" / "bin" / "bugos-task-manager")
+import bugos_tasks_ui as tbu  # noqa: E402
+
+klopt("plasma-systemmonitor" not in (ROOT / "system_files" / "usr" / "bin" / "bugos-task-manager").read_text(
+    encoding="utf-8"), "T1: bugos-task-manager noemt plasma-systemmonitor niet meer")
+_echt_meetdraad_start = tbu.Meetdraad.start
+tbu.Meetdraad.start = lambda self: None   # niet zelf meten: de test geeft de metingen
+tv = tm.Taakbeheer()
+_venster_vensters: list = []
+tv.sluit_vensters = lambda pids: (_venster_vensters.append(list(pids)), True)[1]   # nooit echt KWin vragen
+tv.resize(1080, 720)
+tv.show()
+verwerk(50)
+klopt(not any("Systeemmonitor" in k.text() or "System Monitor" in k.text() for k in tv.findChildren(QPushButton))
+      and "details" in tv.paginas,
+      "T1: geen knop 'Systeemmonitor' (ook al bestaat plasma-systemmonitor), wel een pagina Details")
+_meter = bt.Meter()
+_meter.meet()
+processor(5000, 5000)
+_m1 = _meter.meet()
+tv.nieuwe_meting(_m1)
+tv.tweede_start(["--details"])
+verwerk(50)
+klopt(tv.huidige() == "details" and tv.proces_model.rowCount() == 7 and tv.details_aantal.text() == "7 processen",
+      f"Details: --details opent de pagina; 7 processen ({tv.proces_model.rowCount()}, {tv.details_aantal.text()!r})")
+
+
+def zichtbare_pids() -> list[int]:
+    f = tv.proces_filter
+    return [f.index(i, 0).data(tbu.REGEL_ROL).pid for i in range(f.rowCount())]
+
+
+tv.details_zoek.setText("isol")
+_isol = zichtbare_pids()
+tv.details_zoek.setText("3")
+_drie = sorted(zichtbare_pids())
+tv.details_zoek.setText("firefox")
+_ff_pids = sorted(zichtbare_pids())
+tv.details_zoek.setText("nergens")
+_niets = (zichtbare_pids(), tv.details_leeg.isVisible(), tv.details_leeg.text())
+tv.details_zoek.setText("")
+klopt(_isol == [101] and _drie == [300, 310] and _ff_pids == [100, 101] and len(zichtbare_pids()) == 7,
+      f"Details: zoeken op naam, op het begin van het nummer en op 'hoort bij' ({_isol}, {_drie}, {_ff_pids})")
+klopt(_niets[0] == [] and _niets[1] and _niets[2].startswith("Niets gevonden"),
+      f"Details: niets gevonden: dat staat er, met een tip ({_niets[2]!r})")
+klopt(tv.details_zoek.placeholderText() == "Zoeken" and "nummer" in tv.details_zoek.toolTip()
+      and tv.alleen_eigen.accessibleName() == "Alleen van jou",
+      "review 18: kort 'Zoeken' in het vak (de hele uitleg als tip), en het schuifje heeft een naam")
+tv.alleen_eigen.setChecked(True)
+_eigen = sorted(zichtbare_pids())
+_eigen_tekst = tv.details_aantal.text()
+tv.alleen_eigen.setChecked(False)
+klopt(_eigen == [100, 101, 200, 210] and _eigen_tekst == "4 van 7",
+      f"Details: 'Alleen van jou' laat alleen je eigen processen zien ({_eigen}, {_eigen_tekst!r})")
+tv.tabel.sortByColumn(5, Qt.SortOrder.DescendingOrder)
+_eerste = tv.proces_filter.index(0, 0).data(tbu.REGEL_ROL)
+klopt(_eerste.geheugen == max(r.geheugen for r in tv.proces_model.regels),
+      f"Details: sorteren op Geheugen: de grootste bovenaan ({_eerste.naam})")
+tv.tabel.sortByColumn(0, Qt.SortOrder.AscendingOrder)
+_namen = [tv.proces_filter.index(i, 0).data() for i in range(tv.proces_filter.rowCount())]
+klopt(_namen == sorted(_namen, key=str.lower), f"Details: op naam, zonder op hoofdletters te letten ({_namen[:3]})")
+
+
+def kies_pid(pid: int) -> None:
+    f = tv.proces_filter
+    for i in range(f.rowCount()):
+        if f.index(i, 0).data(tbu.REGEL_ROL).pid == pid:
+            tv.tabel.setCurrentIndex(f.index(i, 0))
+            break
+    verwerk(20)
+
+
+kies_pid(200)
+_knoppen = tv.details_balk.knoppen
+klopt(tv.details_balk.isVisible() and not _knoppen["beeindigen"].isEnabled() and not _knoppen["forceren"].isEnabled()
+      and "hoort bij BugOS" in _knoppen["beeindigen"].toolTip(),
+      "Details: plasmashell gekozen: de balk, maar beide knoppen grijs met de reden als tip")
+kies_pid(400)
+klopt(not _knoppen["beeindigen"].isEnabled() and "niet van jou" in _knoppen["forceren"].toolTip(),
+      "Details: een proces van een ander account: grijs, 'Dit is niet van jou'")
+kies_pid(100)
+klopt(_knoppen["beeindigen"].isEnabled() and _knoppen["forceren"].isEnabled() and tv.gekozen_regel().pid == 100
+      and tv.details_balk.aantal.text() == "firefox", "Details: Firefox gekozen: beide knoppen werken")
+# In-place bijwerken: 101 gekozen, dan is 100 weg en 120 nieuw: 101 blijft gekozen, geen modelReset (review/spec 14).
+kies_pid(101)
+_resets: list = []
+tv.proces_model.modelReset.connect(lambda: _resets.append(1))
+_sh.rmtree(PROC / "100")
+proces(120, "firefox", FF, tijd=10, pss_kb=1000)
+processor(7000, 7000)
+tv.nieuwe_meting(_meter.meet())
+verwerk(30)
+_pids = {r.pid for r in tv.proces_model.regels}
+klopt(tv.gekozen_regel() is not None and tv.gekozen_regel().pid == 101 and 120 in _pids and 100 not in _pids
+      and not _resets, f"Details: bijwerken op zijn plek: je keuze blijft staan ({sorted(_pids)}, resets {_resets})")
+# Het gekozen proces verdwijnt: de balk gaat weg.
+kies_pid(120)
+_sh.rmtree(PROC / "120")
+processor(8000, 8000)
+tv.nieuwe_meting(_meter.meet())
+verwerk(30)
+klopt(tv.gekozen_regel() is None and tv.details_balk.isHidden(), "Details: het gekozen proces is weg: de balk ook")
+proces(100, "firefox", FF, tijd=400, pss_kb=300000)
+processor(9000, 9000)
+tv.nieuwe_meting(_meter.meet())
+verwerk(20)
+
+# Beëindigen vraagt eerst (review 1). Annuleren: niets; Delete op de tabel: dezelfde vraag.
+_vragen: list = []
+_antwoord = [QDialog.DialogCode.Rejected]
+
+
+def _vraag_exec(self):
+    _vragen.append(self)
+    return _antwoord[0]
+
+
+bugos_shell.VraagDialoog.exec = _vraag_exec
+_beeindigd: list = []
+_echt_beeindig = tm.bt.beeindig
+tm.bt.beeindig = lambda regel, hard=False: (_beeindigd.append((regel.pid, hard)), "klaar")[1]
+kies_pid(101)
+tv.beeindig_gekozen()
+klopt(len(_vragen) == 1 and _vragen[0].kop.text() == "Isolated Web Co beëindigen?" and _vragen[0].standaard == "Annuleren"
+      and "opgeslagen" in _vragen[0].uitleg.text() and not _beeindigd,
+      "review 1: Beëindigen vraagt eerst (werk kan verloren gaan; Enter = Annuleren); Annuleren doet niets")
+from PySide6.QtGui import QKeySequence, QShortcut  # noqa: E402
+
+# (Offscreen is geen venster 'actief', dus de toets zelf komt niet aan: kijk naar de sneltoets en druk hem in.)
+_del = [sc for sc in tv.tabel.findChildren(QShortcut) if sc.key() == QKeySequence(QKeySequence.StandardKey.Delete)]
+if _del:
+    _del[0].activated.emit()
+verwerk(20)
+klopt(len(_del) == 1 and _del[0].context() == Qt.ShortcutContext.WidgetShortcut and len(_vragen) == 2
+      and not _beeindigd, f"review 1: Delete op de tabel vraagt ook eerst ({len(_vragen)} vragen)")
+_antwoord[0] = QDialog.DialogCode.Accepted
+_venster_vensters.clear()
+tv.beeindig_gekozen()
+klopt(wacht_tot(lambda: _beeindigd == [(101, False)], 5) and "wordt beëindigd" in tv.details.melding.tekst.text()
+      and not _venster_vensters,
+      f"Details: Beëindigen na 'ja': een stopverzoek voor 101 (geen venster) ({_beeindigd}, {_venster_vensters})")
+_beeindigd.clear()
+kies_pid(100)
+tv.beeindig_gekozen()
+klopt(wacht_tot(lambda: _venster_vensters == [[100]], 5) and not _beeindigd,
+      f"review 1: Firefox zelf (heeft vensters) eerst netjes sluiten, zoals op het kruisje ({_venster_vensters}, {_beeindigd})")
+kies_pid(100)
+tv.beeindig_gekozen(hard=True)
+klopt(wacht_tot(lambda: _beeindigd == [(100, True)], 5) and "geforceerd" in _vragen[-1].kop.text(),
+      f"Details: Geforceerd beëindigen vraagt ook, en stuurt dan meteen KILL ({_beeindigd})")
+klopt(wacht_tot(lambda: "geforceerd beëindigd" in tv.details.melding.tekst.text(), 5),
+      f"Details: daarna 'is geforceerd beëindigd' ({tv.details.melding.tekst.text()!r})")
+# Na 3 s draait het nog: de melding met 'Geforceerd beëindigen'.
+_r101 = next(r for r in tv.proces_model.regels if r.pid == 101)
+tv.nog_bezig(_r101, False)
+klopt(tv.details.melding.knop.isVisible() and tv.details.melding.knop.text() == "Geforceerd beëindigen"
+      and "draait nog" in tv.details.melding.tekst.text(), "Details: draait het na 3 s nog, dan 'Geforceerd beëindigen'")
+_sh.rmtree(PROC / "101")
+tv.nog_bezig(_r101, False)
+klopt("is beëindigd" in tv.details.melding.tekst.text(), "Details: is het weg, dan 'is beëindigd'")
+tm.bt.beeindig = _echt_beeindig
+for _uitkomst, _woord in (("weg", "draait al niet meer"), ("mag_niet", "niet van jou"), ("fout", "lukte niet")):
+    tm.bt.beeindig = lambda regel, hard=False, u=_uitkomst: u
+    kies_pid(310 if _uitkomst == "mag_niet" else 210)
+    _rg = tv.gekozen_regel()
+    tv.beeindig_regel(_rg, hard=True)
+    klopt(wacht_tot(lambda w=_woord: w in tv.details.melding.tekst.text(), 5),
+          f"Details: uitkomst '{_uitkomst}': '{_woord}' in gewone woorden ({tv.details.melding.tekst.text()!r})")
+tm.bt.beeindig = _echt_beeindig
+bugos_shell.VraagDialoog.exec = _echt_exec
+# Escape: eerst de keuze weg, het venster blijft open.
+kies_pid(200)
+tv.escape()
+klopt(tv.gekozen_regel() is None and tv.isVisible(), "Details: Escape haalt eerst je keuze weg (het venster blijft open)")
+# Een andere pagina: de balk weg.
+kies_pid(210)
+tv.ga_naar("programmas")
+verwerk(20)
+klopt(tv.details_balk.isHidden() and tv.gekozen_regel() is None, "Details: naar een andere pagina: de balk is weg")
+tv.ga_naar("details")
+verwerk(20)
+# Smal venster: 'Hoort bij' gaat weg, breed weer terug (review 14: het venster is echt in beeld).
+tv.resize(900, 600)
+verwerk(60)
+_smal = tv.tabel.isColumnHidden(3)
+tv.resize(1400, 800)
+verwerk(60)
+klopt(_smal and not tv.tabel.isColumnHidden(3) and not tv.tabel.isColumnHidden(2),
+      f"Details: smal venster: 'Hoort bij' verborgen; breed: alles te zien (viewport {tv.tabel.viewport().width()})")
+tv.stop_meten()
+tv.close()
+verwerk(20)
+
+# Voorbeeldstand (BUGOS_TAKEN_VOORBEELD=1): nooit een echt signaal, ook KWin niets vragen (X1, review 11).
+os.environ["BUGOS_TAKEN_VOORBEELD"] = "1"
+_signalen: list = []
+bt.os.kill = lambda pid, sig: _signalen.append((pid, sig))
+_echt_stop = tm.bt.stop
+tm.bt.stop = lambda pids, hard=False: (_signalen.append(("stop", tuple(pids))), 0)[1]
+_echt_beeindig = tm.bt.beeindig
+tm.bt.beeindig = lambda regel, hard=False: (_signalen.append(("beeindig", regel.pid)), "klaar")[1]
+tv2 = tm.Taakbeheer()
+_kwin: list = []
+tv2.sluit_vensters = lambda pids: (_kwin.append(list(pids)), True)[1]
+tv2.show()
+_vm = tbu.voorbeeld_meting(0)
+_vr = _vm["processen"]
+tv2.nieuwe_meting(_vm)
+tv2.ga_naar("details")
+verwerk(30)
+klopt(len(_vr) == 17 and len({r.pid for r in _vr}) == 17 and any(r.beschermd and r.uid == 0 for r in _vr)
+      and next(r for r in _vr if r.pid == 1).eigenaar == "systeem" and next(r for r in _vr if r.pid == 101).eigen,
+      f"Details: de voorbeeldstand heeft 17 processen, met vaste eigenaren (ook als root) ({len(_vr)})")
+klopt(next(r for r in _vr if r.pid == 501).hoort_bij == "Bestanden" and next(r for r in _vr if r.pid == 1).hoort_bij == ""
+      and next(r for r in _vr if r.pid == 1530).hoort_bij == "Printers",
+      "review 7/12: de voorbeeldnamen zijn vertaalbaar (Bestanden/Files), systemd herhaalt zijn naam niet")
+_r = next(r for r in _vr if r.pid == 101)
+tv2.beeindig_regel(_r, hard=True)
+tv2.beeindig_regel(_r, hard=False)
+_ff_taak = next(x for x in _vm["taken"] if x.naam == "Firefox")
+tv2.sluiten(_ff_taak)
+tv2.forceren(_ff_taak)
+verwerk(100)
+klopt(not _signalen and not _kwin and "geforceerd gesloten" in tv2.programmas.melding.tekst.text(),
+      f"X1: voorbeeldstand: Beëindigen, Sluiten en Geforceerd sluiten sturen niets en vragen KWin niets ({_signalen}, {_kwin})")
+tv2.stop_meten()
+tv2.close()
+verwerk(20)
+os.environ.pop("BUGOS_TAKEN_VOORBEELD", None)
+tm.bt.stop, tm.bt.beeindig = _echt_stop, _echt_beeindig
+bt.os.kill = _nep_kill
+tbu.Meetdraad.start = _echt_meetdraad_start
 
 # ================================================================= einde ===
 print(f"{fouten} fout(en).")
