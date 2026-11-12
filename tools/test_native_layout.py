@@ -48,20 +48,10 @@ TITELBALK_ECHT = 30   # de titelbalk die KWin (Breeze, zonder randen) boven een 
 # Bekende problemen in bestanden van een ander pakket (staan in het verslag, met de precieze wijziging). Ze tellen
 # niet als fout, maar worden wel gemeld; zodra ze opgelost zijn, verschijnen ze vanzelf niet meer. Elk probleem
 # precies: (ronde of None, app, staat, het begin van de melding, iets wat er verderop in moet staan, reden). Een
-# ánder probleem op dezelfde pagina telt dus gewoon als fout.
+# ánder probleem op dezelfde pagina telt dus gewoon als fout. Komt een regel in geen enkele ronde meer voor, dan
+# meldt de test 'OPGELOST?': dan mag hij hier weg (zo blijft de lijst niet stilletjes iets toestaan).
+# (Opgelost en weggehaald: D05 Uiterlijk, D13 Welkom, R03 Back-up en Overstap.)
 BEKEND = [
-    (None, "settings", "uiterlijk", "schuift opzij", "(UiterlijkPagina)",
-     "D05: bugos_settings_scherm.py (pakket sound-display): plaatjes 144x81, knop 'Eigen foto' eronder"),
-    (None, "settings", "uiterlijk", "knop te smal", "'Choose your own photo",
-     "D05: bugos_settings_scherm.py (pakket sound-display): plaatjes 144x81, knop 'Eigen foto' eronder"),
-    (None, "welcome", "uiterlijk", "schuift opzij", "(QScrollArea)",
-     "D13: bugos-welcome (geen eigenaar in deze job): de voorbeelden Licht/Donker (248x146) passen niet naast elkaar"),
-    (None, "backup", "begin", "hoofdknop buiten beeld", "'Make backup'",
-     "R03: bugos-backup (geen eigenaar in deze job): de knoppenrij hoort onder het schuifvlak"),
-    (None, "backup", "deels", "hoofdknop buiten beeld", "'Make backup'",
-     "R03: bugos-backup (geen eigenaar in deze job): de knoppenrij hoort onder het schuifvlak"),
-    (None, "switch", "begin", "hoofdknop buiten beeld", "'Restore my files'",
-     "R03: bugos-switch (geen eigenaar in deze job): de knoppenrij hoort onder het schuifvlak"),
     ("1 grote letters", "tasks", "programmas", "schuift opzij", "(Pagina)",
      "R13: Taakbeheer met grote letters (pakket tools): de kaart met kolomkoppen is minstens 640 px breed"),
     ("1 grote letters", "tasks", "prestaties", "schuift opzij", "(Pagina)",
@@ -69,13 +59,18 @@ BEKEND = [
 ]
 
 
+# Welke regels van BEKEND deze keer echt voorkwamen (hun plek in de lijst). De rest is opgelost: 'OPGELOST?'.
+BEKEND_GEZIEN: set[int] = set()
+
+
 def bekend(regel: str, ronde: str = "") -> str:
     """De reden als deze 'PAS app staat melding'-regel (in deze ronde) een bekend probleem is, anders ''."""
     d = regel.split(" ", 3)
     if len(d) < 4:
         return ""
-    for ronde_, app_, staat_, begin_, ook_, reden in BEKEND:
+    for i, (ronde_, app_, staat_, begin_, ook_, reden) in enumerate(BEKEND):
         if ronde_ in (None, ronde) and d[1] == app_ and d[2] == staat_ and d[3].startswith(begin_) and ook_ in d[3]:
+            BEKEND_GEZIEN.add(i)     # deze bekende regel bestaat nog: hij moet dus (nog) in de lijst blijven
             return reden
     return ""
 
@@ -87,17 +82,9 @@ ZELFDE_MAG = {
     "Bugie's headphones", "Built-in speakers", "TV (HDMI)",
 }
 # Nederlandse namen in de voorbeeldstand die andere pakketten nog vertalen (D08 in het verslag). Tot dan: gemeld,
-# geen fout. Zodra ze vertaald zijn, verschijnen ze vanzelf niet meer.
+# geen fout. Zodra ze vertaald zijn, verschijnen ze vanzelf niet meer (en meldt de test 'OPGELOST?': haal ze weg).
+# (De namen van wifi, bluetooth, printers en programma's zijn vertaald en staan nu vast in D08_VOORBEELD, onderaan.)
 NL_BEKEND = {
-    "Buren": "D08 network: bugos_config_netwerk.py Netwerk('Buren')",
-    "Bibliotheek gratis": "D08 network: bugos_config_netwerk.py Netwerk('Bibliotheek gratis')",
-    "Muis": "D08 network: bugos_config_netwerk.py:290 'Muis'",
-    "Telefoon": "D08 network: bugos_config_netwerk.py:291 'Telefoon'",
-    "Canon PIXMA (boven)": "D08 printers: bugos_config_meldingen.py:251",
-    "Gwenview (foto's bekijken)": "D08 printers: bugos_config_meldingen.py:114",
-    "Elisa (muziek)": "D08 printers: bugos_config_meldingen.py:116",
-    "Okular (documenten)": "D08 printers: bugos_config_meldingen.py:119",
-    "Kate (tekst)": "D08 printers: bugos_config_meldingen.py:121",
     "Bestanden": "D08 tools: bugos_tasks_ui.py:111",
     "Bureaublad (Plasma)": "D08 tools: bugos_tasks_ui.py:113",
     "Vensters (KWin)": "D08 tools: bugos_tasks_ui.py:115",
@@ -809,6 +796,33 @@ klopt(isinstance(_gezien[-1], bugos_shell.VraagDialoog) and _gezien[-1].standaar
 _up.updates = _oud
 QDialog.exec = _echt_exec
 
+# D05: Uiterlijk. Drie plaatjes van 176 x 99 met 'Eigen foto kiezen' ernaast pasten niet (de pagina schoof opzij,
+# de knop werd afgeknipt). Nu: plaatjes van 144 x 81 in een Doorloop, de knop op een eigen regel eronder. Of het
+# echt past, ziet T-FIT hieronder (elke schaal); hier staat de opbouw vast, ook voor wat T-FIT niet draait (150 %
+# met grote letters: dan is er naast de zijbalk maar 391 px vrij).
+w.ga_naar("uiterlijk")
+verwerk()
+_ui = w.paginas["uiterlijk"]
+# getattr: is de opbouw ooit anders, dan een gewone FOUT (en loopt de rest van de test door) in plaats van een crash.
+_plaatjes, _eigen = getattr(_ui, "plaatjes", None), getattr(_ui, "eigen", None)
+_pl = [_plaatjes.itemAt(_i).widget() for _i in range(_plaatjes.count())] if _plaatjes is not None else []
+klopt(isinstance(_plaatjes, inst.Doorloop) and len(_pl) == 3 and all(k.iconSize() == QSize(144, 81) for k in _pl),
+      f"D05: Uiterlijk: {len(_pl)} plaatjes van 144 x 81, in een Doorloop (ze gaan door naar een volgende regel)")
+klopt(bool(_pl) and _eigen is not None and _eigen.geometry().top() > max(k.geometry().bottom() for k in _pl)
+      and _eigen.x() == _pl[0].x() and _eigen.width() >= _eigen.sizeHint().width(),
+      "D05: 'Eigen foto kiezen' staat onder de plaatjes, links, met zijn hele breedte")
+if isinstance(_plaatjes, inst.Doorloop) and _pl:
+    # De Doorloop zelf, op een vaste breedte (hoe breed de pagina hier is, hangt af van het scherm van de test).
+    _plek = _plaatjes.geometry()     # waar de plaatjes nu echt liggen: straks weer terug
+    for _breed, _regels in ((600, 1), (391, 2)):
+        _plaatjes.setGeometry(QRect(_plek.x(), _plek.y(), _breed, _plaatjes.heightForWidth(_breed)))
+        klopt(len({k.y() for k in _pl}) == _regels and all(k.geometry().right() < _plek.x() + _breed for k in _pl),
+              f"D05: {_breed} px breed: de plaatjes staan op {_regels} regel(s) en niets steekt rechts uit")
+    _plaatjes.setGeometry(_plek)
+# De kaarten Licht en Donker: hoogstens 264 px; bij weinig ruimte delen ze de regel (hun minimum won het nooit).
+klopt(all(k.maximumWidth() == 264 for k in _ui.thema.values()),
+      "D05: de kaarten Licht en Donker worden niet breder dan 264 px (zoals altijd bij 100 %)")
+
 # T-ALIGN: op elke pagina beginnen de kaarten (en keuzekaarten) links op dezelfde lijn als de titel. Kaarten naast
 # elkaar (Energie: drie profielen) tellen per regel: de linkse moet op de lijn staan (D06: 9 px ingesprongen).
 from bugos_ui import KeuzeKaart as _KK  # noqa: E402
@@ -817,6 +831,7 @@ BEKEND_UITLIJNING = {   # precies deze melding; elke andere scheve kaart is een 
     "energie: titel op x=40, kaarten op x=[49]":
         "D06: bugos_settings_scherm.py:183 (pakket sound-display): rij.setContentsMargins(0, 0, 0, 0)",
 }
+_uitlijning_gezien: set[str] = set()   # welke bekende meldingen er deze keer echt waren
 _scheef = []
 for _klasse in inst.PAGINAS:
     w.ga_naar(_klasse.sleutel)
@@ -845,10 +860,14 @@ for _klasse in inst.PAGINAS:
         _melding = f"{_klasse.sleutel}: titel op x={_x0}, kaarten op x={_fout}"
         if _melding in BEKEND_UITLIJNING:
             print(f"BEKEND T-ALIGN {_melding}  <- {BEKEND_UITLIJNING[_melding]}")
+            _uitlijning_gezien.add(_melding)
         else:
             _scheef.append(_melding)
 klopt(not _scheef, "T-ALIGN: op elke pagina beginnen de kaarten op dezelfde lijn als de titel"
       + "".join(f"\n        {x}" for x in _scheef))
+for _melding, _reden in BEKEND_UITLIJNING.items():
+    if _melding not in _uitlijning_gezien:   # geen fout: wel een teken dat de regel weg mag
+        print(f"OPGELOST? BEKEND_UITLIJNING {_melding!r} kwam niet meer voor: haal hem weg  <- {_reden}")
 
 w.close()
 verwerk()
@@ -866,6 +885,12 @@ for _naam, _problemen, _klaar in schermtest():
     klopt(not _echt, f"T-FIT {_naam}: op 1280x800 past alles: geen venster te groot (taakbalk {TAAKBALK_ECHT} px, "
                      f"titelbalk {TITELBALK_ECHT} px), niets schuift opzij, niets afgeknipt, de hoofdknop in beeld"
                      + "".join(f"\n        {x}" for x in _echt[:25]))
+# Een bekende regel die in geen enkele ronde meer voorkwam, is opgelost: geen fout, maar hij mag uit BEKEND (anders
+# zou hij later stilletjes hetzelfde probleem weer toestaan).
+for _i, _b in enumerate(BEKEND):
+    if _i not in BEKEND_GEZIEN:
+        print(f"OPGELOST? BEKEND {_b[1]} {_b[2]} {_b[3]!r} kwam in geen enkele ronde meer voor: haal hem weg  "
+              f"<- {_b[5]}")
 
 # ----------------------------------------------------------- Engels scherm, geen Nederlandse woorden (T-NL) ---
 # Taalgestuurd (review R04): elke zichtbare tekst van Instellingen en Taakbeheer, in het Engels én in het
@@ -889,6 +914,28 @@ for _app, _staat, _tekst in sorted(_talen["en"]):
     _verdacht.append(f"{_app} {_staat} {_tekst!r}")
 klopt(not _verdacht, "T-NL: op een Engels scherm staat niets wat in het Nederlands precies hetzelfde is (vergeten te "
                      "vertalen)" + "".join(f"\n        {x}" for x in _verdacht[:30]))
+for _tekst, _reden in NL_BEKEND.items():
+    if not any(x[2] == _tekst for x in _talen["en"]):   # geen fout: wel een teken dat de regel weg mag
+        print(f"OPGELOST? NL_BEKEND {_tekst!r} staat niet meer op het Engelse scherm: haal hem weg  <- {_reden}")
+# D08 (netwerk en printers): de namen uit de voorbeeldstand (voor foto's en tests) staan in het Engels op het Engelse
+# scherm. De vergelijking hierboven slaat losse woorden ('Buren', 'Muis') en namen met een merk ('Canon PIXMA (boven)')
+# over, dus hier precies: (pagina, Nederlands, Engels). Het Engels moet op zijn pagina staan (anders keek de test niet
+# naar die namen), het Nederlands nergens op het Engelse scherm.
+D08_VOORBEELD = [
+    ("wifi", "Buren", "Neighbours"),                                    # bugos_config_netwerk.py: netwerken()
+    ("wifi", "Bibliotheek gratis", "Library free Wi-Fi"),
+    ("bluetooth", "Muis", "Mouse"),                                     # bugos_config_netwerk.py: bt_apparaten()
+    ("bluetooth", "Telefoon", "Phone"),
+    ("printers", "Canon PIXMA (boven)", "Canon PIXMA (upstairs)"),      # bugos_config_meldingen.py: printers()
+    ("programmas", "Gwenview (foto's bekijken)", "Gwenview (view photos)"),   # bugos_config_meldingen.py: _VB_APPS
+    ("programmas", "Elisa (muziek)", "Elisa (music)"),
+    ("programmas", "Okular (documenten)", "Okular (documents)"),
+    ("programmas", "Kate (tekst)", "Kate (text)"),
+]
+_d08 = [f"{_pagina}: {_nl!r} -> {_en!r}" for _pagina, _nl, _en in D08_VOORBEELD
+        if ("settings", _pagina, _en) not in _talen["en"] or any(x[2] == _nl for x in _talen["en"])]
+klopt(not _d08, "D08: wifi, bluetooth, printers en programma's tonen hun voorbeeldnamen in het Engels op een Engels "
+                "scherm" + "".join(f"\n        {x}" for x in _d08))
 klopt(any(x[2].startswith("Logitech mouse") for x in _talen["en"]),
       "D08: de voorbeeldmuis heet 'Logitech mouse' op het Engelse scherm")
 

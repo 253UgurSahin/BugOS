@@ -6,10 +6,10 @@ from __future__ import annotations
 
 from bugos_ui import (K, Knop, Pagina, Schuif, StreepKnop, Venster, Zoekveld, kde_instelling, label, lijn_icoon, ronde_knop,
                       px, schaal_css, schermmaat, t, zoeksleutel)
-from PySide6.QtCore import QObject, QRunnable, QSize, Qt, QThreadPool, QTimer, Signal
+from PySide6.QtCore import QObject, QPoint, QRect, QRunnable, QSize, Qt, QThreadPool, QTimer, Signal
 from PySide6.QtWidgets import (
-    QAbstractItemView, QButtonGroup, QDialog, QFrame, QHBoxLayout, QLineEdit, QListWidget, QListWidgetItem, QMenu,
-    QPushButton, QSlider, QVBoxLayout, QWidget,
+    QAbstractItemView, QButtonGroup, QDialog, QFrame, QHBoxLayout, QLayout, QLineEdit, QListWidget, QListWidgetItem,
+    QMenu, QPushButton, QSlider, QVBoxLayout, QWidget,
 )
 
 
@@ -63,6 +63,87 @@ QListWidget#keuzelijst::item {{ padding: 6px 12px; border-radius: 10px; color: {
 QListWidget#keuzelijst::item:hover {{ background: {K['knop']}; }}
 QListWidget#keuzelijst::item:selected {{ background: {K['accent_zacht']}; color: {K['accent_gekozen']}; font-weight: 600; }}
 """)
+
+
+class Doorloop(QLayout):
+    """Onderdelen naast elkaar, links uitgelijnd; wat niet meer past, gaat naar de volgende regel (zoals tekst).
+
+    Waarom: een gewone QHBoxLayout wordt nooit smaller dan alles naast elkaar. Bij 150 % of met grote letters is er
+    op een laptop van 1280 x 800 te weinig ruimte, en dan schoof de hele pagina opzij (of viel een knop eraf). Een
+    Doorloop zet wat niet meer past op een nieuwe regel. Gebruikt voor de tabjes boven een pagina (R07) en de
+    plaatjes van de achtergrond op Uiterlijk (D05). Hij stond eerst in bugos-settings zelf; hier kunnen de pagina's
+    hem ook gebruiken (bugos-settings haalt hem hier vandaan, dus 'Doorloop' bestaat daar nog steeds)."""
+
+    def __init__(self, ruimte: int = 4):
+        super().__init__()
+        self._items: list = []
+        # Dezelfde ruimte tussen twee onderdelen naast elkaar én tussen twee regels.
+        self.setSpacing(ruimte)
+
+    # --- de gewone QLayout-functies: een eenvoudige lijst met onderdelen ---
+
+    def addItem(self, item) -> None:  # noqa: N802
+        self._items.append(item)
+
+    def count(self) -> int:
+        return len(self._items)
+
+    def itemAt(self, i: int):  # noqa: N802
+        return self._items[i] if 0 <= i < len(self._items) else None
+
+    def takeAt(self, i: int):  # noqa: N802
+        return self._items.pop(i) if 0 <= i < len(self._items) else None
+
+    def expandingDirections(self) -> Qt.Orientation:  # noqa: N802
+        # Wil zelf niet groeien: de onderdelen houden hun eigen maat, de rest van de regel blijft leeg.
+        return Qt.Orientation(0)
+
+    # --- de hoogte hangt af van de breedte (meer regels als het smaller wordt) ---
+
+    def hasHeightForWidth(self) -> bool:  # noqa: N802
+        return True
+
+    def heightForWidth(self, breed: int) -> int:  # noqa: N802
+        # Alleen uitrekenen hoe hoog het wordt, niets verplaatsen.
+        return self._leg(QRect(0, 0, breed, 0), alleen_meten=True)
+
+    def setGeometry(self, r: QRect) -> None:  # noqa: N802
+        super().setGeometry(r)
+        self._leg(r)
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        """Alles op één regel."""
+        m = self.contentsMargins()
+        zichtbaar = [i.sizeHint() for i in self._items if not i.isEmpty()]
+        breed = sum(z.width() for z in zichtbaar) + self.spacing() * max(0, len(zichtbaar) - 1)
+        hoog = max((z.height() for z in zichtbaar), default=0)
+        return QSize(breed + m.left() + m.right(), hoog + m.top() + m.bottom())
+
+    def minimumSize(self) -> QSize:  # noqa: N802
+        """Zo smal als het breedste onderdeel: de rest kan eronder. (Dit maakt dat de pagina niet opzij schuift.)"""
+        m = self.contentsMargins()
+        z = QSize()
+        for i in self._items:
+            z = z.expandedTo(i.minimumSize())
+        return QSize(z.width() + m.left() + m.right(), z.height() + m.top() + m.bottom())
+
+    def _leg(self, r: QRect, alleen_meten: bool = False) -> int:
+        """Leg de onderdelen neer in r (of meet alleen) en geef de hoogte die daarvoor nodig is."""
+        m = self.contentsMargins()
+        links, rechts = r.x() + m.left(), r.right() - m.right()
+        x, y, regel = links, r.y() + m.top(), 0
+        for item in self._items:
+            if item.isEmpty():     # verborgen onderdelen tellen niet mee
+                continue
+            z = item.sizeHint()
+            if x > links and x + z.width() - 1 > rechts:   # past niet meer: volgende regel
+                x, y, regel = links, y + regel + self.spacing(), 0
+            if not alleen_meten:
+                # Nooit breder dan de regel zelf (één onderdeel dat breder is dan alles, wordt smaller).
+                item.setGeometry(QRect(QPoint(x, y), QSize(min(z.width(), rechts - links + 1), z.height())))
+            x += z.width() + self.spacing()
+            regel = max(regel, z.height())
+        return y + regel + m.bottom() - r.y()
 
 
 class Keuzes(QFrame):

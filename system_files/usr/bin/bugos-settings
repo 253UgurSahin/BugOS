@@ -28,16 +28,17 @@ from bugos_ui import (  # noqa: E402
 from bugos_settings_account import InloggenPagina, TijdPagina  # noqa: E402
 from bugos_settings_meldingen import MeldingenPagina, PrintersPagina, ProgrammasPagina  # noqa: E402
 from bugos_settings_netwerk import BluetoothPagina, WifiPagina  # noqa: E402
+# Doorloop (tabjes die naar een tweede regel gaan) staat in bugos_settings_onderdelen, zodat de pagina's hem ook
+# kunnen gebruiken (Uiterlijk, D05); hier blijft hij onder dezelfde naam te vinden (de test kijkt naar inst.Doorloop).
 from bugos_settings_onderdelen import (  # noqa: E402,F401  (KiesDialoog en WachtwoordDialoog: voor de test)
-    Blad, KiesDialoog, Regelaar, WachtwoordDialoog, op_achtergrond, stijl,
+    Blad, Doorloop, KiesDialoog, Regelaar, WachtwoordDialoog, op_achtergrond, stijl,
 )
 from bugos_settings_scherm import EnergiePagina, GeluidPagina, SchermPagina, UiterlijkPagina  # noqa: E402
 from bugos_settings_systeem import OverPagina, SpelenPagina, UpdatesPagina  # noqa: E402
 from bugos_settings_zien import MuisPagina, ZienPagina  # noqa: E402
-from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QTimer  # noqa: E402
+from PySide6.QtCore import QEvent, Qt, QTimer  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QLabel, QLayout, QPushButton, QStackedWidget, QVBoxLayout,
-    QWidget,
+    QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 
@@ -209,72 +210,6 @@ GROEPEN: list[Indeling] = [
              "Updates, back to the previous version, about this computer.", [UpdatesPagina, OverPagina]),
 ]
 GROEP_VAN = {k.sleutel: g for g in GROEPEN for k in g.paginas}
-
-
-class Doorloop(QLayout):
-    """Onderdelen naast elkaar, links uitgelijnd; wat niet meer past, gaat naar de volgende regel (zoals tekst)."""
-
-    def __init__(self, ruimte: int = 4):
-        super().__init__()
-        self._items: list = []
-        self.setSpacing(ruimte)
-
-    def addItem(self, item) -> None:  # noqa: N802
-        self._items.append(item)
-
-    def count(self) -> int:
-        return len(self._items)
-
-    def itemAt(self, i: int):  # noqa: N802
-        return self._items[i] if 0 <= i < len(self._items) else None
-
-    def takeAt(self, i: int):  # noqa: N802
-        return self._items.pop(i) if 0 <= i < len(self._items) else None
-
-    def expandingDirections(self) -> Qt.Orientation:  # noqa: N802
-        return Qt.Orientation(0)
-
-    def hasHeightForWidth(self) -> bool:  # noqa: N802
-        return True
-
-    def heightForWidth(self, breed: int) -> int:  # noqa: N802
-        return self._leg(QRect(0, 0, breed, 0), alleen_meten=True)
-
-    def setGeometry(self, r: QRect) -> None:  # noqa: N802
-        super().setGeometry(r)
-        self._leg(r)
-
-    def sizeHint(self) -> QSize:  # noqa: N802
-        """Alles op één regel."""
-        m = self.contentsMargins()
-        zichtbaar = [i.sizeHint() for i in self._items if not i.isEmpty()]
-        breed = sum(z.width() for z in zichtbaar) + self.spacing() * max(0, len(zichtbaar) - 1)
-        hoog = max((z.height() for z in zichtbaar), default=0)
-        return QSize(breed + m.left() + m.right(), hoog + m.top() + m.bottom())
-
-    def minimumSize(self) -> QSize:  # noqa: N802
-        """Zo smal als het breedste onderdeel: de rest kan eronder."""
-        m = self.contentsMargins()
-        z = QSize()
-        for i in self._items:
-            z = z.expandedTo(i.minimumSize())
-        return QSize(z.width() + m.left() + m.right(), z.height() + m.top() + m.bottom())
-
-    def _leg(self, r: QRect, alleen_meten: bool = False) -> int:
-        m = self.contentsMargins()
-        links, rechts = r.x() + m.left(), r.right() - m.right()
-        x, y, regel = links, r.y() + m.top(), 0
-        for item in self._items:
-            if item.isEmpty():
-                continue
-            z = item.sizeHint()
-            if x > links and x + z.width() - 1 > rechts:   # past niet meer: volgende regel
-                x, y, regel = links, y + regel + self.spacing(), 0
-            if not alleen_meten:
-                item.setGeometry(QRect(QPoint(x, y), QSize(min(z.width(), rechts - links + 1), z.height())))
-            x += z.width() + self.spacing()
-            regel = max(regel, z.height())
-        return y + regel + m.bottom() - r.y()
 
 
 class GroepPagina(QWidget):
