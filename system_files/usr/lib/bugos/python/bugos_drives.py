@@ -69,9 +69,18 @@ VERBORGEN_TYPES = {  # partities die je nooit hoeft te zien
 }
 VERBORGEN_FS = {"swap", "LVM2_member", "linux_raid_member", "zfs_member", "squashfs", "erofs"}
 SLOT_FS = {"crypto_LUKS", "BitLocker"}
+# PTTYPE/PTUUID (de indeling van de hele schijf), PARTFLAGS (de 'actief'/opstart-vlag), UUID/PARTUUID/PARTLABEL
+# (om /etc/fstab te herkennen) zijn er voor het veilig wissen van een interne schijf (bugos_files_schijven).
+# Allemaal oude kolommen van lsblk (util-linux 2.2x); Fedora 44 heeft 2.41.
 LSBLK = ["lsblk", "-J", "-b", "-o",
-         "NAME,KNAME,PATH,TYPE,SIZE,FSTYPE,FSAVAIL,FSSIZE,LABEL,MODEL,RM,HOTPLUG,TRAN,MOUNTPOINTS,PARTTYPE"]
+         "NAME,KNAME,PATH,TYPE,SIZE,FSTYPE,FSAVAIL,FSSIZE,LABEL,MODEL,RM,HOTPLUG,TRAN,MOUNTPOINTS,PARTTYPE,"
+         "PTTYPE,PTUUID,PARTFLAGS,UUID,PARTUUID,PARTLABEL"]
 UDISKS = "/org/freedesktop/UDisks2/block_devices/"
+# Waar udisks een schijf voor jou openzet (udisksctl mount, en bugos-open-drives bij het inloggen). Alleen wat
+# daar open staat, mag BugOS zelf dichtzetten om te wissen; alles wat ergens anders hangt (/mnt via /etc/fstab,
+# /run/initramfs/live van de live-stick, ...) gebruikt het systeem zelf. Een tuple, zodat een test er een
+# nepmap aan kan toevoegen.
+MEDIA_WORTELS: tuple[str, ...] = ("/run/media/",)
 
 
 def udisks_pad(kname: str) -> str:
@@ -80,13 +89,215 @@ def udisks_pad(kname: str) -> str:
 
 
 def systeem_plek(plek: str) -> bool:
-    """Staat hier BugOS zelf? (/, /boot, /var, ... maar niet /var/mnt of /run/media)"""
+    """Staat hier BugOS zelf? (/, /boot, /var, ... maar niet /var/mnt of /run/media)
+
+    Ook de plekken van de live-stick (dracut dmsquash-live): /run/initramfs/live (de stick zelf, waar het
+    BugOS-beeld op staat), /run/initramfs/overlayfs en /run/overlayfs (wat je op de stick bewaart) en
+    /run/rootfsbase (het beeld). Draait BugOS van een stick, dan is die stick 'de schijf van BugOS zelf': die
+    staat niet in Bestanden, en wissen of uitwerpen kan dus niet (anders viel het systeem onder je weg)."""
     if plek in ("/", "[SWAP]"):
         return True
     if plek.startswith(("/var/mnt/", "/var/media/", "/run/media/", "/media/", "/mnt/")):
         return False
     return any(plek == p or plek.startswith(p + "/")
-               for p in ("/sysroot", "/boot", "/efi", "/usr", "/etc", "/var", "/home", "/root", "/opt", "/srv"))
+               for p in ("/sysroot", "/boot", "/efi", "/usr", "/etc", "/var", "/home", "/root", "/opt", "/srv",
+                         "/run/initramfs", "/run/overlayfs", "/run/rootfsbase"))
+
+
+def op_media_plek(plek: str) -> bool:
+    """Staat deze schijf open op een plek van udisks voor jou (/run/media/<naam>/...)? Zie MEDIA_WORTELS."""
+    return any(plek.startswith(w) for w in MEDIA_WORTELS)
+
+
+# ===================================================== wat het systeem zelf gebruikt ===
+# lsblk zegt per stuk waar het open staat. Dat is niet altijd alles: een btrfs over twee schijven (RAID) noemt maar
+# één schijf, en een loop-apparaat (het beeld van de live-stick) staat op een bestand op een andere schijf. Daarom
+# kijken we hier ook zelf in /proc/self/mountinfo en /sys: welke hele schijven zitten onder iets dat het systeem
+# gebruikt? Die mogen nooit gewist worden, wat lsblk er ook over zegt (bugos_files_schijven.wis_bezwaar).
+
+@dataclass
+class Koppeling:
+    """Eén regel uit /proc/self/mountinfo: wat waar hangt."""
+    nummer: str    # major:minor van het apparaat (bij btrfs een 'anoniem' nummer 0:NN)
+    plek: str      # waar het hangt (het koppelpunt)
+    soort: str     # het bestandssysteem (ext4, btrfs, nfs4, fuse.sshfs, ...)
+    bron: str      # waar het vandaan komt (/dev/sdb1, of iets als 'overlay' of 'server:/pad')
+
+
+def _proc() -> Path:
+    """/proc, of een nep-/proc in een test (BUGOS_PROC, net als in Taakbeheer)."""
+    return Path(os.environ.get("BUGOS_PROC", "/proc"))
+
+
+def _sys() -> Path:
+    return Path(os.environ.get("BUGOS_SYS", "/sys"))
+
+
+def _ontsnap(tekst: str) -> str:
+    """mountinfo schrijft een spatie als \\040 (en tab, regeleinde en \\ ook zo): maak er weer gewone tekens van."""
+    return re.sub(r"\\([0-7]{3})", lambda m: chr(int(m.group(1), 8)), tekst)
+
+
+def koppelingen() -> list[Koppeling]:
+    """Alles wat er nu gekoppeld is, uit /proc/self/mountinfo. Leeg als dat niet te lezen is.
+    Vorm: 'ID OUDER MAJ:MIN WORTEL PLEK OPTIES [VELDEN...] - SOORT BRON SUPEROPTIES'."""
+    try:
+        tekst = (_proc() / "self" / "mountinfo").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    uit = []
+    for regel in tekst.splitlines():
+        d = regel.split()
+        if len(d) < 5:
+            continue
+        # Na veld 6 komen nul of meer 'optionele velden', dan een losse '-', dan soort, bron en opties.
+        rest = d[d.index("-", 6) + 1:] if "-" in d[6:] else []
+        uit.append(Koppeling(d[2], _ontsnap(d[4]), rest[0] if rest else "", _ontsnap(rest[1]) if len(rest) > 1 else ""))
+    return uit
+
+
+def _blok_map(naam: str) -> Path | None:
+    """De map van een blokapparaat in /sys/class/block (sdb1, dm-0, loop0, nvme0n1p2), echt pad; None als het er
+    niet is."""
+    pad = _sys() / "class" / "block" / naam
+    try:
+        return pad.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return None
+
+
+def _hele_schijven(naam: str, diepte: int = 0) -> set[str]:
+    """Op welke hele schijven staat dit blokapparaat? sdb1 -> {sdb}; een versleuteld of LVM-stuk (dm-0) -> de
+    schijven van zijn 'slaves'; een loop-apparaat (het beeld van de live-stick) -> de schijf waar zijn bestand op
+    staat. Begrensd op 8 lagen diep (een kring kan niet, maar zeker is zeker)."""
+    if diepte > 8:
+        return set()
+    map_ = _blok_map(naam)
+    if map_ is None:
+        return set()
+    if (map_ / "partition").exists():
+        return {map_.parent.name}            # .../block/sdb/sdb1: de map erboven is de hele schijf
+    uit: set[str] = set()
+    try:
+        slaven = [s.name for s in (map_ / "slaves").iterdir()]
+    except OSError:
+        slaven = []
+    for s in slaven:
+        uit |= _hele_schijven(s, diepte + 1)
+    if map_.name.startswith("loop"):
+        try:
+            bestand = (map_ / "loop" / "backing_file").read_text(encoding="utf-8").strip()
+            dev = os.stat(bestand).st_dev
+            uit |= _van_nummer(f"{os.major(dev)}:{os.minor(dev)}", diepte + 1)
+        except (OSError, ValueError):
+            pass
+    if not slaven and not map_.name.startswith(("loop", "dm-", "md", "zram", "ram", "nbd")):
+        uit.add(map_.name)                   # zelf al een hele schijf (een stick zonder indeling, sr0)
+    return uit
+
+
+def _van_nummer(nummer: str, diepte: int = 0) -> set[str]:
+    """De hele schijven onder een major:minor (/sys/dev/block/8:17 -> .../sdb/sdb1 -> {sdb})."""
+    if not re.fullmatch(r"\d+:\d+", nummer) or nummer.startswith("0:"):
+        return set()                         # 0:NN is geen echt apparaat (tmpfs, overlay, het nummer van btrfs)
+    try:
+        echt = (_sys() / "dev" / "block" / nummer).resolve(strict=True)
+    except (OSError, RuntimeError):
+        return set()
+    return _hele_schijven(echt.name, diepte)
+
+
+def _van_bron(bron: str) -> set[str]:
+    """De hele schijven onder een bron als /dev/sdb1 of /dev/mapper/luks-... (dat is een snelkoppeling naar dm-N).
+    In een test zonder echte /dev: dan telt de naam zelf (sdb1)."""
+    if not bron.startswith("/dev/"):
+        return set()
+    naam = os.path.basename(os.path.realpath(bron))
+    return _hele_schijven(naam)
+
+
+def stations_in_gebruik() -> set[str]:
+    """Namen van de hele schijven (sdb, nvme0n1) die het draaiende systeem nu gebruikt: alles wat gekoppeld is
+    behalve wat udisks voor jou opende (MEDIA_WORTELS), de leden van een btrfs die zo gekoppeld is (ook de tweede
+    schijf van een RAID), actieve swap, en wat daar via versleuteling, LVM, RAID of een loop-bestand onder zit.
+    Zo valt ook de schijf waar BugOS van draait (ook de live-stick) er altijd onder."""
+    uit: set[str] = set()
+    btrfs_bronnen: set[str] = set()
+    for k in koppelingen():
+        if op_media_plek(k.plek):
+            continue                         # door jou geopend: mag dicht (en wordt dat ook, vóór het wissen)
+        uit |= _van_nummer(k.nummer) | _van_bron(k.bron)
+        if k.soort == "btrfs" and k.bron.startswith("/dev/"):
+            btrfs_bronnen.add(os.path.basename(os.path.realpath(k.bron)))
+    # btrfs over meer schijven: /sys/fs/btrfs/<id>/devices/ noemt ze allemaal. Hoort er één bij een btrfs die het
+    # systeem gebruikt, dan horen ze er allemaal bij.
+    try:
+        btrfs_mappen = list((_sys() / "fs" / "btrfs").iterdir())
+    except OSError:
+        btrfs_mappen = []
+    for fs in btrfs_mappen:
+        try:
+            leden = {d.name for d in (fs / "devices").iterdir()}
+        except OSError:
+            continue
+        if leden & btrfs_bronnen:
+            for lid in leden:
+                uit |= _hele_schijven(lid)
+    # Actieve swap (een swap-stuk staat niet altijd als [SWAP] in lsblk, bijvoorbeeld in een container).
+    try:
+        swaps = (_proc() / "swaps").read_text(encoding="utf-8", errors="replace").splitlines()[1:]
+    except OSError:
+        swaps = []
+    for regel in swaps:
+        if regel.split():
+            uit |= _van_bron(regel.split()[0])
+    return uit
+
+
+def fstab_sleutels() -> set[str]:
+    """Wat /etc/fstab en /etc/crypttab noemen: 'UUID=...', 'PARTUUID=...', 'LABEL=...', 'PARTLABEL=...' en
+    apparaten ('/dev/sdb1'). Een schijf die daarin staat, start het systeem zelf op (of probeert dat): wissen
+    zou het opstarten laten mislukken. In een test: BUGOS_ETC in plaats van /etc."""
+    etc = Path(os.environ.get("BUGOS_ETC", "/etc"))
+    uit: set[str] = set()
+    for naam, kolom in (("fstab", 0), ("crypttab", 1)):
+        try:
+            regels = (etc / naam).read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        for regel in regels:
+            d = regel.split("#", 1)[0].split()
+            if len(d) <= kolom:
+                continue
+            waarde = d[kolom]
+            if "=" in waarde:
+                soort, _, rest = waarde.partition("=")
+                uit.add(f"{soort.upper()}={rest.strip(chr(34)).lower()}")
+            elif waarde.startswith("/dev/"):
+                uit.add(waarde)
+                # /dev/disk/by-uuid/<uuid> en /dev/disk/by-partuuid/<id> zijn dezelfde sleutels in een andere vorm.
+                m = re.fullmatch(r"/dev/disk/by-(uuid|partuuid|label|partlabel)/(.+)", waarde)
+                if m:
+                    uit.add(f"{m.group(1).upper()}={_ontsnap_udev(m.group(2)).lower()}")
+    return uit
+
+
+def _ontsnap_udev(tekst: str) -> str:
+    """udev schrijft een spatie in /dev/disk/by-label als \\x20: maak er weer gewone tekens van."""
+    return re.sub(r"\\x([0-9a-fA-F]{2})", lambda m: chr(int(m.group(1), 16)), tekst)
+
+
+def fstab_noemt(a: dict, sleutels: set[str]) -> bool:
+    """Noemt /etc/fstab of /etc/crypttab dit stuk (een lsblk-regel)? Vergelijkt UUID, PARTUUID, LABEL, PARTLABEL
+    (zonder op hoofdletters te letten) en het apparaat zelf."""
+    if not sleutels:
+        return False
+    kandidaten = {f"{sleutel}={str(a.get(veld) or '').lower()}"
+                  for sleutel, veld in (("UUID", "uuid"), ("PARTUUID", "partuuid"), ("LABEL", "label"),
+                                        ("PARTLABEL", "partlabel")) if a.get(veld)}
+    if a.get("path"):
+        kandidaten.add(str(a["path"]))
+    return bool(kandidaten & sleutels)
 
 
 def lees_lsblk() -> list[dict]:
