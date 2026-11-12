@@ -115,8 +115,8 @@ class Taakbeheer(Venster):
         p = Pagina(t("Programma's", "Programs"))
         self.status_regel(p)
         self.programmas = p
-        # samenvatting: vier getallen op een rij
-        # Vier getallen op een rij; past dat niet (150 %, grote letters), dan twee rijen van twee (R13).
+        # De samenvatting: vier getallen op een rij; past dat niet (150 %, grote letters), dan twee rijen van twee,
+        # en op het smalst één per rij (R13). Nooit drie plus één: dat ziet eruit alsof er een getal mist.
         samen = Kaart(marge=20, ruimte=0, richting="h")
         self.kort: dict[str, QLabel] = {}
         blokken = []
@@ -142,7 +142,7 @@ class Taakbeheer(Venster):
             blok.streep.setVisible(kolom > 0)   # een streep alleen tussen twee getallen, niet aan het begin
             blok.tekst.setContentsMargins(14 if kolom else 4, 0, 4, 0)
 
-        self.samen_plooi = Plooi(blokken, 4, ruimte=0, bij_kolom=bij_kolom)
+        self.samen_plooi = Plooi(blokken, 4, ruimte=0, bij_kolom=bij_kolom, keuzes=(4, 2, 1))
         self.samen_plooi.rooster.setVerticalSpacing(12)
         samen.lay.addWidget(self.samen_plooi)
         p.lay.addWidget(samen)
@@ -242,6 +242,9 @@ class Taakbeheer(Venster):
         self.details_ruimte.hide()
         p.lay.addWidget(self.details_ruimte)
         self._keuze: tuple[int, int] | None = None   # (pid, starttijd) van wat je koos
+        # (pid, starttijd) van processen waar Beëindigen al naartoe ging. Pas dan mag Geforceerd beëindigen: eerst
+        # krijgt een programma de kans om netjes te stoppen (en zijn werk te bewaren), zoals bij Sluiten.
+        self._al_beeindigd: set[tuple[int, int]] = set()
         self._bijwerken = False
         self.details_zoek.textChanged.connect(lambda tekst: self._bewaak(lambda: self.proces_filter.zet_zoek(tekst)))
         self.alleen_eigen.toggled.connect(lambda aan: self._bewaak(lambda: self.proces_filter.zet_eigen(aan)))
@@ -256,6 +259,11 @@ class Taakbeheer(Venster):
         if self.laatste is not None:
             self._bewaak(lambda: self.proces_model.zet(self.laatste.get("processen", [])))
         self.details_tellen()
+
+    def mag_forceren(self, regel) -> bool:
+        """Geforceerd beëindigen pas nadat Beëindigen naar precies dit proces ging (zelfde nummer én starttijd), en
+        nooit bij iets dat bij BugOS hoort of niet van jou is."""
+        return not regel.beschermd and (regel.pid, regel.start) in self._al_beeindigd
 
     def _bewaak(self, werk) -> None:
         """Bijwerken (een nieuwe meting, zoeken) zonder dat je keuze naar een ander proces springt: verdwijnt het
@@ -305,8 +313,8 @@ class Taakbeheer(Venster):
         self.details_balk.aantal.setText(QFontMetrics(self.details_balk.aantal.font()).elidedText(
             regel.naam, Qt.TextElideMode.ElideRight, px(140)))
         self.details_balk.aantal.setToolTip(f"{regel.naam} · {regel.pid}")
-        for k in self.details_balk.knoppen.values():
-            k.setEnabled(not regel.beschermd)
+        self.details_balk.knoppen["beeindigen"].setEnabled(not regel.beschermd)
+        self.details_balk.knoppen["forceren"].setEnabled(self.mag_forceren(regel))
         self.plaats_balk()
         self.ruimte_onder(self.details_balk.height())
         if verschuif:   # alleen als je zelf iets kiest, niet bij elke meting (dan kun je nog schuiven)
@@ -325,9 +333,15 @@ class Taakbeheer(Venster):
         self.details_ruimte.setVisible(bool(balk))
 
     def _beschermd_tip(self) -> None:
-        """Waarom de knoppen grijs zijn. Na elke plaats(): die zet bij alleen-icoontjes het woord als tip."""
+        """Waarom een knop grijs is. Na elke plaats(): die zet bij alleen-icoontjes het woord als tip."""
         regel = self.gekozen_regel() if not self.details_balk.isHidden() else None
-        if regel is None or not regel.beschermd:
+        if regel is None:
+            return
+        if not regel.beschermd:
+            if not self.mag_forceren(regel):
+                self.details_balk.knoppen["forceren"].setToolTip(
+                    t("Probeer eerst Beëindigen: dan kan het netjes stoppen. Reageert het daarna niet, dan kan dit.",
+                      "Try End first: then it can stop properly. If it does not respond after that, use this."))
             return
         tip = (t("Dit hoort bij BugOS of bij de computer zelf. Dat kun je hier niet beëindigen.",
                  "This is part of BugOS or of the computer itself. You cannot end it here.") if regel.eigen
@@ -478,6 +492,9 @@ class Taakbeheer(Venster):
                                        f"Show background ({n}, advanced)"))
         if self.gekozen and self.taak_van(self.gekozen) is None:
             self.kies(None)  # het gekozen programma is weg
+        # Wat niet meer draait, hoeft Taakbeheer niet meer te onthouden. (Een nieuw proces met hetzelfde nummer heeft
+        # een andere starttijd: dat telt dus nooit als 'al beëindigd'.)
+        self._al_beeindigd &= {(r.pid, r.start) for r in m.get("processen", [])}
         if self.huidige() == "details":
             self._bewaak(lambda: self.proces_model.zet(m.get("processen", [])))
 
@@ -528,6 +545,8 @@ class Taakbeheer(Venster):
         """Netjes sluiten: de vensters dicht, zoals op het kruisje klikken (het programma kan nog vragen
         of je wilt opslaan). Achtergrondtaken krijgen een vriendelijk stopverzoek."""
         sleutel, naam, pids, app = taak.sleutel, taak.naam, list(taak.pids), taak.soort == "app"
+        if taak.beschermd or not taak.eigen:
+            return   # hoort bij BugOS of is niet van jou: zo'n regel kun je niet eens kiezen, maar zeker is zeker
         if self.draad.voorbeeld:
             # Voorbeeldstand (foto's): de nummers 101, 102 ... zijn op deze computer echte processen. Niets sturen,
             # ook KWin niets vragen; alleen laten zien hoe het eruitziet (X1, review 11).
@@ -593,9 +612,10 @@ class Taakbeheer(Venster):
     # ------------------------------------------------- Details: beëindigen
     def beeindig_gekozen(self, hard: bool = False) -> None:
         """Eerst vragen (er kan werk verloren gaan, review 1). Een programma met vensters eerst netjes sluiten,
-        zoals op het kruisje klikken; anders een stopverzoek (TERM). Geforceerd: meteen (KILL)."""
+        zoals op het kruisje klikken; anders een stopverzoek (TERM). Geforceerd (KILL) pas als Beëindigen al
+        geprobeerd is (mag_forceren)."""
         regel = self.gekozen_regel()
-        if regel is None or regel.beschermd:
+        if regel is None or regel.beschermd or (hard and not self.mag_forceren(regel)):
             return
         naam = regel.naam
         if hard:
@@ -612,8 +632,19 @@ class Taakbeheer(Venster):
         self.beeindig_regel(regel, hard)
 
     def beeindig_regel(self, regel, hard: bool = False) -> None:
+        """Stuur het verzoek (op de achtergrond) en zeg in gewone woorden hoe het ging. Ook hier nog eens de regels:
+        nooit iets dat bij BugOS hoort of niet van jou is (ook niet via KWin), en geforceerd pas na Beëindigen."""
         naam, melding = regel.naam, self.details.melding
-        if self.draad.voorbeeld:   # voorbeeldstand: niets sturen (X1)
+        if regel.beschermd:
+            melding.toon(t("{naam} hoort bij BugOS of is niet van jou: dat kun je hier niet beëindigen.",
+                           "{naam} is part of BugOS or not yours: you cannot end it here.").replace("{naam}", naam),
+                         "fout")
+            return
+        if hard and not self.mag_forceren(regel):
+            return   # (de knop is dan al grijs; dit vangt een andere weg naar hier af)
+        if self.draad.voorbeeld:   # voorbeeldstand: niets sturen (X1), wel laten zien hoe het verder gaat
+            if not hard:
+                self._al_beeindigd.add((regel.pid, regel.start))
             melding.toon((t("{naam} is geforceerd beëindigd.", "{naam} was forced to end.") if hard
                           else t("{naam} is beëindigd.", "{naam} has ended.")).replace("{naam}", naam), "goed",
                          seconden=5)
@@ -626,6 +657,11 @@ class Taakbeheer(Venster):
             return bt.beeindig(regel, hard)
 
         def klaar(uitkomst) -> None:
+            if uitkomst in ("klaar", "venster") and not hard:
+                # Het stopverzoek is verstuurd: reageert het niet, dan mag nu Geforceerd beëindigen.
+                self._al_beeindigd.add((regel.pid, regel.start))
+                if self.gekozen_regel() is not None:
+                    self.kies_regel(verschuif=False)
             if uitkomst in ("klaar", "venster") and hard:
                 melding.toon(t("{naam} is geforceerd beëindigd.", "{naam} was forced to end.").replace("{naam}", naam),
                              "goed", seconden=5)

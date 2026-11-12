@@ -266,28 +266,38 @@ class MeetKaart(Kaart):
 class Plooi(QWidget):
     """Kaarten of blokjes naast elkaar, net zoveel als er passen (hoogstens 'hoogstens' per rij). Bij 150 % of met
     'Grote letters' gaan ze naar een volgende rij in plaats van dat de pagina opzij schuift (R13).
-    bij_kolom(deel, kolom) hoort na elke nieuwe indeling (bijv. om een scheidingsstreep links te verbergen)."""
+    bij_kolom(deel, kolom) hoort na elke nieuwe indeling (bijv. om een scheidingsstreep links te verbergen).
+    keuzes: welke aantallen per rij mogen (bijv. (4, 2, 1): vier getallen worden twee rijen van twee, nooit 3 + 1)."""
 
-    def __init__(self, delen: list[QWidget], hoogstens: int, ruimte: int = 14, bij_kolom=None):
+    def __init__(self, delen: list[QWidget], hoogstens: int, ruimte: int = 14, bij_kolom=None,
+                 keuzes: tuple[int, ...] | None = None):
         super().__init__()
         self.delen, self.hoogstens, self.ruimte, self.bij_kolom = list(delen), hoogstens, ruimte, bij_kolom
+        self.keuzes = tuple(sorted(set(keuzes or range(1, hoogstens + 1)) | {1}, reverse=True))
         self.rooster = QGridLayout(self)
         self.rooster.setContentsMargins(0, 0, 0, 0)
         self.rooster.setSpacing(ruimte)
         # De breedte bepaalt dit vlak zelf (minimumSizeHint): anders hield de indeling van nu de pagina breed.
         self.rooster.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)
         self.kolommen = 0
-        self.deel_in(hoogstens)
+        self.deel_in(self.keuzes[0])
+
+    @staticmethod
+    def verstopt(d: QWidget) -> bool:
+        """Is dit deel echt verborgen (iemand riep hide(), zoals bij de videokaart)? Niet: 'nog nergens geplaatst'.
+        Een widget zonder ouder zegt isHidden() tot een layout hem opneemt; dan kreeg het eerste blokje bij het
+        bouwen nooit zijn indeling (de streep links bleef staan)."""
+        return d.isHidden() and d.testAttribute(Qt.WidgetAttribute.WA_WState_ExplicitShowHide)
 
     def nodig(self, n: int) -> int:
         """Hoe breed het minstens is met n naast elkaar: per kolom het breedste deel, plus de ruimte ertussen."""
-        breed = [max(d.minimumSizeHint().width(), d.minimumWidth()) for d in self.delen if not d.isHidden()]
+        breed = [max(d.minimumSizeHint().width(), d.minimumWidth()) for d in self.delen if not self.verstopt(d)]
         return sum(max(breed[k::n], default=0) for k in range(n)) + (n - 1) * self.ruimte
 
     def past(self) -> int:
         """Hoeveel er naast elkaar passen. Naar méér per rij pas met wat speling: de getallen veranderen elke twee
         seconden een beetje van breedte, en dan moet de indeling niet heen en weer springen."""
-        return next((k for k in range(self.hoogstens, 0, -1)
+        return next((k for k in self.keuzes
                      if self.nodig(k) + (12 if k > self.kolommen else 0) <= self.width()), 1)
 
     def deel_in(self, n: int, opnieuw: bool = False) -> None:
@@ -295,8 +305,8 @@ class Plooi(QWidget):
             return
         while self.rooster.count():
             self.rooster.takeAt(0)
-        zichtbaar = [d for d in self.delen if not d.isHidden()]
-        for i, d in enumerate(zichtbaar + [d for d in self.delen if d.isHidden()]):   # verborgen achteraan
+        zichtbaar = [d for d in self.delen if not self.verstopt(d)]
+        for i, d in enumerate(zichtbaar + [d for d in self.delen if self.verstopt(d)]):   # verborgen achteraan
             self.rooster.addWidget(d, i // n, i % n)
             if self.bij_kolom and i < len(zichtbaar):
                 self.bij_kolom(d, i % n)
@@ -307,7 +317,7 @@ class Plooi(QWidget):
 
     def herschik(self) -> None:
         """Opnieuw indelen, na het tonen of verbergen van een deel."""
-        self.deel_in(self.past() if self.width() > 1 else self.hoogstens, opnieuw=True)
+        self.deel_in(self.past() if self.width() > 1 else self.keuzes[0], opnieuw=True)
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802
         return QSize(self.nodig(1), self.rooster.minimumSize().height())
@@ -440,8 +450,12 @@ def procent_tekst(p: float) -> str:
 class ProcesModel(QAbstractTableModel):
     """Alle processen (bt.ProcesRegel), zes kolommen."""
 
-    KOPPEN = (("Naam", "Name"), ("Nummer", "Number"), ("Van", "Owner"), ("Hoort bij", "Part of"),
-              ("Processor", "Processor"), ("Geheugen", "Memory"))
+    @staticmethod
+    def koppen() -> tuple[str, ...]:
+        """De kolomkoppen. Elk als eigen t("..", "..") met twee vaste teksten: alleen zo vindt
+        tools/collect-translations.py ze voor de vertalingen (t(*een_lijst) ziet hij niet)."""
+        return (t("Naam", "Name"), t("Nummer", "Number"), t("Van", "Owner"), t("Hoort bij", "Part of"),
+                t("Processor", "Processor"), t("Geheugen", "Memory"))
 
     def __init__(self):
         super().__init__()
@@ -457,7 +471,7 @@ class ProcesModel(QAbstractTableModel):
         if richting != Qt.Orientation.Horizontal or not 0 <= kolom < 6:
             return None
         if rol == Qt.ItemDataRole.DisplayRole:
-            return t(*self.KOPPEN[kolom])
+            return self.koppen()[kolom]
         if rol == Qt.ItemDataRole.TextAlignmentRole:
             rechts = kolom in (1, 4, 5)
             return int((Qt.AlignmentFlag.AlignRight if rechts else Qt.AlignmentFlag.AlignLeft)
