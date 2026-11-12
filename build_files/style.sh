@@ -50,15 +50,19 @@ EOF
 # "Activiteiten >" (Meta+Q gaat ook uit: bugos-panel), "Tags toekennen >", "Via KDE Connect versturen" (KDE Connect
 # start niet vanzelf, zie hieronder) en de kluis (Plasma Vault). /etc/xdg wordt hiervoor wel gelezen (KConfig);
 # de sleutel is de bestandsnaam van de plug-in in /usr/lib64/qt6/plugins/kf6/kfileitemaction (zonder .so).
-# Ook "Openen als beheerder" (kio-admin: Dolphin met beheerdersrechten, een KDE-venster).
+# Ook "Openen als beheerder" (kio-admin: Dolphin met beheerdersrechten, een KDE-venster; Dolphin zelf is verborgen).
+# Nagekeken in Kinoite 44: alle vijf bestaan in /usr/lib64/qt6/plugins/kf6/kfileitemaction, en geen van hun
+# metadata heeft een eigen "Id", dus KIO gebruikt echt de bestandsnaam als sleutel.
 # Wat blijft (KDE, met reden): "Eigenschappen" (het KDE-venster met grootte en rechten; BugOS heeft er nog geen eigen
 # venster voor) en "Openen met <programma>" (de echte naam van het programma).
 for plugin in kactivitymanagerd_fileitem_linking_plugin tagsfileitemaction kdeconnectfileitemaction \
     plasmavaultfileitemaction kio-admin; do
     kwriteconfig6 --file /etc/xdg/kservicemenurc --group Show --key "$plugin" false
 done
-# "Gebruiksstatistieken van schijven bekijken" op elke map opent Filelight (KDE; verborgen, zie 4c: Bestanden laat
-# zelf zien wat de meeste ruimte inneemt). Het is een los servicemenu-bestand van het pakket filelight.
+# De Filelight-regel ("schijfgebruik bekijken") op elke map opent Filelight, een KDE-programma dat hieronder (4c) uit
+# het startmenu gaat: Bestanden laat zelf zien wat de meeste ruimte inneemt (pakket tools). Die regel is geen
+# plug-in maar een los servicemenu-bestand van het pakket filelight (rpm -ql filelight, Kinoite 44). rm -f: geen
+# fout als filelight ooit niet meer in de basis zit.
 rm -f /usr/share/kio/servicemenus/filelight.desktop
 # Geen Overzicht van KDE als je per ongeluk de muis linksboven in de hoek duwt (net als Windows: daar gebeurt niets).
 kwriteconfig6 --file /etc/xdg/kwinrc --group Effect-overview --key BorderActivate 9
@@ -330,10 +334,13 @@ for app in kdesystemsettings.desktop htop.desktop nvtop.desktop org.kde.kdebugse
     verberg "$app"
 done
 # Een echt BugOS-gevoel: de KDE-programma's waar BugOS een eigen app (of knop) voor heeft, staan niet in het
-# startmenu. Ze blijven geïnstalleerd en werken gewoon, maar BugOS opent er nog maar één zelf: KDE Instellingen
-# ("Geavanceerde instellingen" onder Over deze computer). Bestanden laat zelf zien wat de meeste ruimte inneemt
-# (dus geen Filelight) en opent geen Dolphin of Schijfbeheer meer. Discover (de Winkel doet dit) blijft verborgen
-# zolang build.sh het nog installeert; haalt de bouw het weg, dan doet verberg hier niets.
+# startmenu. Ze blijven geïnstalleerd en werken gewoon. Samen met de pakketten store en tools opent BugOS er nog
+# maar één zelf: KDE Instellingen ("Geavanceerde instellingen" onder Over deze computer). Bestanden laat zelf zien
+# wat de meeste ruimte inneemt (dus geen Filelight) en opent geen Dolphin of Schijfbeheer meer (pakket tools).
+# Discover: de Winkel doet alle apps zelf (pakket store, dat Discover ook uit het beeld haalt). Zolang de basis
+# Discover nog meebrengt, blijft hij hier verborgen; is hij weg, dan doet verberg niets (het bestand ontbreekt).
+# Geen "Meer apps"-naam meer: niets in BugOS wijst nog naar Discover. (Van de vijf Discover-bestanden in Kinoite 44
+# heeft alleen org.kde.discover.desktop geen NoDisplay=true; daar staat NoDisplay=false, dat verberg omzet.)
 for app in org.kde.discover.desktop org.kde.dolphin.desktop systemsettings.desktop org.kde.filelight.desktop \
     org.kde.partitionmanager.desktop org.kde.plasma-systemmonitor.desktop org.kde.kinfocenter.desktop \
     org.kde.kwalletmanager.desktop org.kde.kwalletmanager5.desktop org.kde.kmenuedit.desktop \

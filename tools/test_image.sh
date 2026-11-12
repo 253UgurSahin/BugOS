@@ -87,6 +87,10 @@ klopt '! grep -q "Ctrl+Shift+D" "$MAP/main.qml"' "bureaubladmenu: geen Ctrl+Shif
 klopt 'grep -q "edit mode=false" /etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc && grep -q "RightButton;NoModifier=org.kde.contextmenu" /etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc' "nieuwe gebruikers: bureaubladmenu zonder KDE-regels"
 klopt '( for p in kactivitymanagerd_fileitem_linking_plugin tagsfileitemaction kdeconnectfileitemaction plasmavaultfileitemaction kio-admin; do [ -f /usr/lib64/qt6/plugins/kf6/kfileitemaction/$p.so ] && grep -qx "$p=false" /etc/xdg/kservicemenurc || exit 1; done )' "bestandsmenu: geen Activiteiten, tags, KDE Connect, kluis en Openen als beheerder (de plug-ins bestaan en staan uit)"
 klopt '[ ! -e /usr/share/kio/servicemenus/filelight.desktop ]' "bestandsmenu: geen 'Gebruiksstatistieken van schijven bekijken' (Filelight) op mappen"
+# Discover en Filelight niet in het startmenu (style.sh, 4c): weg uit het beeld (Discover: pakket store) of verborgen.
+# Werkt met en zonder Discover in het beeld. 5b hieronder ziet alleen namen met "Discover" erin, Filelight niet.
+klopt '[ ! -f /usr/share/applications/org.kde.discover.desktop ] || grep -qx "NoDisplay=true" /usr/share/applications/org.kde.discover.desktop' "startmenu: geen KDE Discover (weg uit het beeld, of verborgen)"
+klopt '[ ! -f /usr/share/applications/org.kde.filelight.desktop ] || grep -qx "NoDisplay=true" /usr/share/applications/org.kde.filelight.desktop' "startmenu: geen Filelight (Bestanden laat zelf zien wat de meeste ruimte inneemt)"
 
 klopt '! grep -qE "^(TEMPLATES|PUBLICSHARE)=" /etc/xdg/user-dirs.defaults && grep -q "^DOCUMENTS=" /etc/xdg/user-dirs.defaults'     "thuismap: een nieuwe gebruiker krijgt geen lege mappen Templates en Public (zoals Windows)"
 
