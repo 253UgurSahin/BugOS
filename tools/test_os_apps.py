@@ -564,6 +564,12 @@ bb.ruimte_genoeg = _echt_ruimte
 
 # ============================== U013: de Winkel ziet Firefox en Steam die al in BugOS zitten (geen Flatpak) ===
 os.environ.pop("BUGOS_GEINSTALLEERD", None)
+# De Winkel leest ook Flathub's lijst van alle apps (/var/lib/flatpak/appstream) en ververst die zelf (pakket store).
+# Deze test gaat over de BugOS-selectie: nooit de echte lijst van de computer waarop hij draait lezen (dat maakt hem
+# trager en afhankelijk van die computer), en nooit zelf 'flatpak update --appstream' starten. tools/test_native_store.py
+# test dat deel, met een nep-lijst. (Moet vóór laad(): de Winkel leest BUGOS_APPSTREAM bij het laden.)
+os.environ["BUGOS_APPSTREAM"] = str(TMP / "geen-flathub-lijst")
+os.environ["BUGOS_WINKEL_GEEN_VERVERS"] = "1"
 winkel = laad("bugos_winkel", "bugos-store")
 APPS = TMP / "applications"
 APPS.mkdir()

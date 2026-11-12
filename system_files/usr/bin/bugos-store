@@ -31,7 +31,7 @@ from bugos_ui import (  # noqa: E402
 )
 from bugos_settings_onderdelen import op_achtergrond  # noqa: E402
 from bugos_ui import px  # noqa: E402
-from PySide6.QtCore import QProcess, QProcessEnvironment, QSize, Qt, QTimer  # noqa: E402
+from PySide6.QtCore import QEvent, QProcess, QProcessEnvironment, QSize, Qt, QTimer  # noqa: E402
 from PySide6.QtGui import QIcon, QKeySequence, QPixmap, QShortcut  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
     QCheckBox, QDialog, QFrame, QHBoxLayout, QLabel, QScrollArea, QStackedWidget, QVBoxLayout, QWidget,
@@ -88,11 +88,6 @@ def flatpak_lijst() -> dict[str, dict]:
             lijst[delen[0]] = {"naam": delen[1] if len(delen) > 1 and delen[1] else delen[0].rsplit(".", 1)[-1],
                                "bron": delen[2] if len(delen) > 2 else ""}
     return lijst
-
-
-def flatpak_namen() -> dict[str, str]:
-    """id -> naam van elke geïnstalleerde Flatpak-app (uit 'flatpak list')."""
-    return {i: v["naam"] for i, v in flatpak_lijst().items()}
 
 
 # Waar gewone programma's (geen Flatpak) hun .desktop-bestand hebben. Firefox en Steam zitten
@@ -523,9 +518,20 @@ def _draai_c(*cmd: str, timeout: int = 20) -> tuple[int, str]:
 
 
 def alle_groottes() -> tuple[dict, set[str]]:
-    """De groottes van alles op Flathub, en welke gedeelde onderdelen (runtimes) er al zijn."""
-    code, uit = _draai_c("flatpak", "remote-ls", "--cached", "--columns=ref,download-size,installed-size,runtime",
-                         "flathub")
+    """De groottes van alles op Flathub, en welke gedeelde onderdelen (runtimes) er al zijn.
+
+    Eerst uit de cache van flatpak (--cached: geen internet, ongeveer 2 s). Die cache is per gebruiker: haalde
+    alleen de computer zelf Flathub's samenvatting op (de dagelijkse update draait als root), dan heb jij hem nog
+    niet en zegt flatpak 'No cached summary' (nagegaan op Kinoite 44). Zonder iets erbij zou de grootte dan bijna
+    nooit verschijnen. Dus dan één keer zonder --cached: flatpak haalt de samenvatting van dl.flathub.org (ongeveer
+    1,7 MB, 3 s) en bewaart hem in ~/.cache/flatpak, zodat het daarna ook zonder internet werkt. Niet op een
+    verbinding die per MB kost, net als het verversen van de lijst. Zonder internet faalt dat meteen (flatpak:
+    'Could not resolve hostname'): dan geen grootte, en geen melding. De 30 s is de grens voor een trage of
+    haperende verbinding; dit draait altijd in een werkdraad, het venster wacht er nooit op."""
+    kolommen = "--columns=ref,download-size,installed-size,runtime"
+    code, uit = _draai_c("flatpak", "remote-ls", "--cached", kolommen, "flathub")
+    if code != 0 and not gemeten():
+        code, uit = _draai_c("flatpak", "remote-ls", kolommen, "flathub", timeout=30)
     groottes = lees_groottes(uit) if code == 0 else {}
     code, uit = _draai_c("flatpak", "list", "--runtime", "--columns=ref")
     runtimes = {r.strip() for r in uit.splitlines() if r.strip()} if code == 0 else set()
@@ -653,6 +659,45 @@ VOORBEELD_FLATHUB = [
 ]
 
 
+class NaamLabel(QLabel):
+    """Een naam met iets direct erachter: de chip 'Geïnstalleerd' op een Flathub-kaart, 'Geverifieerde maker' op de
+    pagina van een app.
+
+    Waarom een eigen soort label: een gewone afbrekende QLabel kiest zelf een 'nette' breedte, en bij een naam van
+    meer dan ongeveer 20 tekens is die veel smaller dan de naam op één regel. Met een chip ernaast en een rek
+    erachter krijgt het label precies die breedte, en dan breekt 'Strawberry Music Player' in tweeën terwijl de kaart
+    ruimte genoeg heeft. Helemaal niet afbreken kan ook niet: dan maakt een lange naam de kaart (en zo de hele kolom
+    van het raster) breder.
+    Daarom: wel afbreken, maar nooit breder dan de naam op één regel (maximumWidth). In de rij krijgt het label
+    stretch 1 en komt er een rek (stretch 0) achter de chip. Past de naam, dan krijgt hij precies zijn eigen
+    breedte, staat de chip er direct naast en gaat de rest van de rij naar het rek; past hij niet, dan breekt hij
+    pas af. De voorkeursbreedte (sizeHint) blijft die van QLabel, dus de kaart wordt niet breder dan voorheen.
+    De letter komt van het stijlblad (rol 'kop3' of 'klein', en 'Grote letters') en is er pas als het label
+    opgemaakt wordt: daarom wordt bij elke letter- of stijlwissel opnieuw gemeten."""
+
+    def __init__(self, tekst: str, rol: str):
+        super().__init__(tekst)
+        # Gewone tekst, zoals label(): een naam van buiten (Flathub) wordt nooit opmaak (U210).
+        self.setTextFormat(Qt.TextFormat.PlainText)
+        self.setProperty("rol", rol)
+        self.setWordWrap(True)
+        self._meet()
+
+    def _meet(self) -> None:
+        """Maximaal zo breed als de hele naam op één regel. De 3 px extra vangen de afronding in de tekstopmaak op
+        (anders kan het laatste woord net op een nieuwe regel vallen)."""
+        m = self.contentsMargins()
+        breed = self.fontMetrics().horizontalAdvance(self.text()) + m.left() + m.right() + 2 * self.margin() + 3
+        if breed != self.maximumWidth():
+            self.setMaximumWidth(breed)
+
+    def changeEvent(self, e) -> None:  # noqa: N802
+        super().changeEvent(e)
+        # Het stijlblad zet de letter pas bij het opmaken (polish), en 'Grote letters' kan hem later veranderen.
+        if e.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange):
+            self._meet()
+
+
 class AppKaart(Kaart):
     def __init__(self, app: dict, winkel: "Winkel"):
         super().__init__(marge=18, ruimte=14, richting="h")
@@ -742,10 +787,14 @@ class FlathubKaart(AppKaart):
         blok.setSpacing(4)
         kop_rij = QHBoxLayout()
         kop_rij.setSpacing(8)
-        kop_rij.addWidget(label(naam, "kop3"))   # een lange naam mag afbreken: de kaart blijft even breed
+        # De naam krijgt de ruimte (stretch 1), maar wordt nooit breder dan hij zelf is (NaamLabel). Zo staat de
+        # chip direct naast de naam, zoals bij de BugOS-apps, en breekt een lange naam pas af als de kaart echt te
+        # smal is. De kaart blijft even breed als de andere (U482: de rasters lopen gelijk).
+        self.naam_label = NaamLabel(naam, "kop3")
+        kop_rij.addWidget(self.naam_label, 1)
         self.chip = Chip(t("Geïnstalleerd", "Installed"), "goed")
-        kop_rij.addWidget(self.chip, 0, Qt.AlignmentFlag.AlignTop)   # naast de naam, zoals bij de BugOS-apps
-        kop_rij.addStretch(1)
+        kop_rij.addWidget(self.chip, 0, Qt.AlignmentFlag.AlignTop)   # bij een naam op twee regels: bovenaan
+        kop_rij.addStretch(0)   # krijgt wat de naam niet nodig heeft (een rek zonder stretch, zie NaamLabel)
         blok.addLayout(kop_rij)
         kort = label(kort_in_taal(entry), "klein")
         kort.setVisible(bool(kort_in_taal(entry)))   # geen lege regel tussen naam en maker
@@ -855,11 +904,14 @@ class AppPagina(QWidget):
         if entry is not None:
             maker_rij = QHBoxLayout()
             maker_rij.setSpacing(8)
-            maker_rij.addWidget(label(t("Door {}", "By {}").format(entry["maker"]) if entry.get("maker") else
-                                      t("Maker onbekend", "Maker unknown"), "klein"))
+            # Zelfde opbouw als de kop van een FlathubKaart (zie NaamLabel): 'Door Rick van Lieshout' blijft op één
+            # regel met de chip ernaast, en breekt pas af als de pagina te smal is.
+            self.maker = NaamLabel(t("Door {}", "By {}").format(entry["maker"]) if entry.get("maker") else
+                                   t("Maker onbekend", "Maker unknown"), "klein")
+            maker_rij.addWidget(self.maker, 1)
             if entry.get("echt"):
                 maker_rij.addWidget(Chip(t("Geverifieerde maker", "Verified maker"), "goed"))
-            maker_rij.addStretch(1)
+            maker_rij.addStretch(0)
             kolom.addLayout(maker_rij)
         kolom.addStretch(1)
         self.kop_rij.addLayout(kolom, 1)
@@ -951,7 +1003,11 @@ class AppPagina(QWidget):
             hl = QHBoxLayout(houder)
             hl.setContentsMargins(0, 0, 0, 0)
             # Het pictogram op één lijn met de andere feiten (een stille knop heeft anders 16 px ruimte links).
-            knop.setStyleSheet("QPushButton { padding-left: 2px; padding-right: 10px; }")
+            # Met de focus wordt de rand 2 px in plaats van 1: dan ook 1 px minder ruimte, zodat de tekst niet
+            # verspringt (zoals het stijlblad van BugOS dat doet: 6/16 wordt 5/15). Px in een stijlblad zijn
+            # schermpunten: bij 150 % schalen ze vanzelf mee, net als de rest van het stijlblad.
+            knop.setStyleSheet("QPushButton { padding-left: 2px; padding-right: 10px; }"
+                               "QPushButton:focus { padding-left: 1px; padding-right: 9px; }")
             hl.addWidget(knop)
             hl.addStretch(1)
             self.feit(feiten, t("Website", "Website"), houder, midden=True)
@@ -988,7 +1044,9 @@ class AppPagina(QWidget):
 
 
 class Winkel(Venster):
-    def __init__(self, catalogus: dict, begin_zoek: str = "", begin_app: str = "", opdracht: list[str] | None = None):
+    def __init__(self, catalogus: dict, opdracht: list[str] | None = None):
+        """opdracht: de argumenten waarmee de Winkel gestart werd ('--zoek <tekst>', 'appstream://<id>', een
+        .flatpakref...). Alles wat de Winkel bij het openen laat zien, komt daarvandaan (zie opdracht_uit)."""
         scroll = QScrollArea()
         # Rechts een stapel: 0 = de lijst met apps, 1 = de pagina van één app (Terug brengt je weer naar de lijst).
         stapel = QStackedWidget()
@@ -1020,6 +1078,7 @@ class Winkel(Venster):
         self.runtimes: set[str] = set()
         self._ref_van: dict[str, str] = {}
         self._groottes_bezig = False
+        self._groottes_om = 0.0   # wanneer (time.monotonic) het laatste antwoord over de groottes kwam
         self.flatpak_info: dict[str, dict] = flatpak_lijst() if self.flatpaks else {}
         self._wachtend: list[str] | None = None   # installeren/verwijderen dat wacht op het verversen van de lijst
         self._meer_sleutel: tuple | None = None
@@ -1150,12 +1209,8 @@ class Winkel(Venster):
 
         self.lijst.setCurrentRow(0)
         self.lijst.setFocus()
-        if begin_zoek:
-            self.zoek.setText(begin_zoek)
         if opdracht:
             self.open_opdracht(opdracht)
-        elif begin_app:
-            self.open_opdracht([f"appstream://{begin_app}"])
 
     def tweede_start(self, args: list[str]) -> None:
         """De Winkel was al open en wordt opnieuw gestart, bijv. 'Uit de Winkel halen?' na een .exe (U222)."""
@@ -1249,7 +1304,6 @@ class Winkel(Venster):
         rest = len(resultaten) - len(self.meer_kaarten)
         self.meer_toon_meer.setText(t("Meer laten zien ({})", "Show more ({})").format(rest))
         self.meer_toon_meer.setVisible(rest > 0)
-        self._meer_alles = resultaten
         if picks and resultaten:
             n = len(resultaten)
             self.meer_hint.setText(t("Nog 1 app van Flathub staat hieronder.", "1 more app from Flathub is below.")
@@ -1331,11 +1385,13 @@ class Winkel(Venster):
         if fout == QProcess.ProcessError.FailedToStart:   # geen flatpak: dan komt er ook geen 'finished'
             self._lijst_klaar(1, None)
 
-    def _lijst_klaar(self, code: int, _status) -> None:
+    def _lijst_klaar(self, code: int, status) -> None:
         self._lijst_wacht.stop()
         self.lijst_proces.readAll()
         handmatig, self._lijst_handmatig = self._lijst_handmatig, False
-        if code == 0:
+        # Na 2 minuten stopt _lijst_wacht flatpak met kill: dat is mislukt, wat de code ook is (Qt geeft dan het
+        # nummer van het signaal als code en CrashExit als status). Alleen een gewoon einde met 0 is gelukt.
+        if code == 0 and status != QProcess.ExitStatus.CrashExit:
             # Een nieuwe lijst: de index opnieuw. Blijft hij leeg (een kapotte lijst), dan zeggen we dat het niet lukte.
             def binnen(index) -> None:
                 self._index_bezig = False
@@ -1435,14 +1491,21 @@ class Winkel(Venster):
                   str(bestand))
 
     def laad_groottes(self) -> None:
-        """De groottes van alle apps, één keer per keer dat de Winkel open is (0,3 s, zonder internet)."""
-        if VOORBEELD or self.groottes is not None or self._groottes_bezig:
+        """De groottes van alle apps (zie alle_groottes), in een werkdraad, één keer per keer dat de Winkel open is.
+        Kwam er niets (geen internet en nog geen cache van flatpak), dan bij een volgende app-pagina opnieuw, maar
+        hooguit één keer per minuut: zo verschijnt de grootte vanzelf als je weer online bent, zonder dat elke
+        pagina flatpak opnieuw laat zoeken."""
+        if VOORBEELD or self._groottes_bezig:
+            return
+        if self.groottes is not None and (self.groottes or time.monotonic() - self._groottes_om < 60):
             return
         self._groottes_bezig = True
+        self.groottes = None   # de pagina zegt 'Wordt bekeken…' tot het antwoord er is
         op_achtergrond(self, alle_groottes, self._groottes_binnen)
 
     def _groottes_binnen(self, uitkomst) -> None:
         self._groottes_bezig = False
+        self._groottes_om = time.monotonic()
         groottes, runtimes = uitkomst if isinstance(uitkomst, tuple) else ({}, set())
         self.groottes, self.runtimes = groottes, runtimes
         self._ref_van = {ref.split("/")[1].lower(): ref for ref in groottes if ref.startswith("app/")}
@@ -1777,12 +1840,6 @@ def begin_uit(args: list[str]) -> tuple[str, str]:
         # Ook 'appstream:id' zonder // (U330).
         return "", args[0][len("appstream:"):].lstrip("/").removesuffix(".desktop")
     return "", ""
-
-
-def echte_id(catalogus: dict, app_id: str) -> str:
-    """Het id zoals het in onze catalogus staat. Via KDE komt een link soms in kleine letters binnen
-    ('org.videolan.vlc'): dan toch de goede app (U330)."""
-    return next((a["id"] for a in catalogus["apps"] if a["id"].lower() == app_id.lower()), app_id)
 
 
 # Flathub zelf (de gewone versie). De Winkel voegt nooit een andere appwinkel toe.

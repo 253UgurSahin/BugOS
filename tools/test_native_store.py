@@ -34,7 +34,7 @@ os.environ["BUGOS_APPSTREAM"] = str(TMP / "appstream")
 os.environ["LC_ALL"] = "nl_NL.UTF-8"   # de test kijkt naar de Nederlandse teksten
 os.environ["BUGOS_MEERDERE"] = "1"
 for _weg in ("LANGUAGE", "BUGOS_GEINSTALLEERD", "BUGOS_INSTELLINGEN_VOORBEELD", "BUGOS_WINKEL_VOORBEELD",
-             "BUGOS_WINKEL_GEEN_VERVERS"):
+             "BUGOS_WINKEL_GEEN_VERVERS", "BUGOS_TEST_GEEN_CACHE", "BUGOS_TEST_GEEN_NET"):
     os.environ.pop(_weg, None)
 
 NEP = TMP / "nep-bin"
@@ -56,6 +56,14 @@ case "$1 $2 $3" in
   "list --runtime --columns=ref") printf 'org.gnome.Platform/x86_64/49\\n'; exit 0 ;;
 esac
 if [ "$1" = remote-ls ]; then
+  # Zo zegt de echte flatpak het (nagegaan op Kinoite 44): een gewone gebruiker zonder eigen cache krijgt bij
+  # --cached 'No cached summary'; zonder --cached haalt hij de samenvatting op, en zonder internet faalt dat.
+  if [ "$2" = --cached ] && [ -n "$BUGOS_TEST_GEEN_CACHE" ]; then
+    echo "error: Unable to load summary from remote flathub: No cached summary for remote 'flathub'" >&2; exit 1
+  fi
+  if [ "$2" != --cached ] && [ -n "$BUGOS_TEST_GEEN_NET" ]; then
+    echo "error: Unable to load summary from remote flathub: [6] Could not resolve hostname" >&2; exit 1
+  fi
   printf 'app/org.voorbeeld.Radio/x86_64/stable\\t5.5\\302\\240MB\\t12.3\\302\\240MB\\torg.gnome.Platform/x86_64/49\\n'
   printf 'app/org.voorbeeld.Groot/x86_64/stable\\t50.0\\302\\240MB\\t120.4\\302\\240MB\\torg.freedesktop.Platform/x86_64/25.08\\n'
   printf 'app/org.voorbeeld.Oud/x86_64/stable\\t309.7\\302\\240MB\\t15.9\\302\\240MB\\torg.freedesktop.Platform/x86_64/25.08\\n'
@@ -712,6 +720,16 @@ w.close()
 winkel.APPSTREAM = _echt_bron
 os.environ.pop("BUGOS_TEST_VERVERS_SLAAP")
 os.environ["BUGOS_WINKEL_GEEN_VERVERS"] = "1"
+# Na 2 minuten stopt de Winkel flatpak (kill). Qt geeft dan CrashExit (en het nummer van het signaal als code): dat is
+# mislukt, ook als de code 0 zou zijn. Dus geen nieuwe index, en 'lukte niet' als je er zelf om vroeg.
+from PySide6.QtCore import QProcess  # noqa: E402
+
+w = winkel_start(BUGOS_TEST_VERVERS="0")
+w._lijst_handmatig = True
+w._lijst_klaar(0, QProcess.ExitStatus.CrashExit)
+klopt(w.lijst_mislukt and not w._index_bezig,
+      "9: verversen gestopt na 2 minuten (CrashExit): geen nieuwe index, en 'Ophalen lukte niet' als je erom vroeg")
+w.close()
 
 # ============================================================== 10. de voorbeeldstand (foto's) ===
 LOG.write_text("")
@@ -733,6 +751,126 @@ _r = subprocess.run([sys.executable, "-c", _code10], env={**os.environ, "BUGOS_W
 klopt("io.bassi.Amberol" in _r.stdout and "GROOTTE Ongeveer 12 MB" in _r.stdout
       and "update" not in LOG.read_text() and "remote-ls" not in LOG.read_text(),
       f"10: voorbeeldstand: echte voorbeelden, geen flatpak ({_r.stdout.strip()[-120:]!r} {_r.stderr.strip()[-200:]!r})")
+
+# ============================================================== 13. groottes, ook zonder eigen cache van flatpak ===
+# Nagegaan op Kinoite 44: 'flatpak remote-ls --cached' faalt voor een gewone gebruiker zolang zijn eigen cache leeg
+# is ('No cached summary'), ook als de computer zelf (root) Flathub al had. Zonder meer kwam de grootte dan bijna
+# nooit. Nu: één keer zonder --cached (niet op een hotspot); zonder internet gewoon geen grootte.
+_ls = "--columns=ref,download-size,installed-size,runtime flathub"
+os.environ["BUGOS_TEST_GEEN_CACHE"] = "1"
+os.environ["BUGOS_TEST_METERED"] = "4"
+LOG.write_text("")
+_g13, _r13 = winkel.alle_groottes()
+_ls13 = [r for r in LOG.read_text().splitlines() if r.startswith("remote-ls")]
+klopt(len(_g13) == 5 and _ls13 == [f"remote-ls --cached {_ls}", f"remote-ls {_ls}"] and _r13,
+      f"13: geen eigen cache: één keer zonder --cached, en dan zijn de groottes er toch ({len(_g13)}, {_ls13})")
+os.environ["BUGOS_TEST_METERED"] = "1"
+LOG.write_text("")
+_g13m, _ = winkel.alle_groottes()
+klopt(_g13m == {} and [r for r in LOG.read_text().splitlines() if r.startswith("remote-ls")] == [f"remote-ls --cached {_ls}"],
+      "13: op een telefoon-hotspot niet zelf ophalen (dat kost geld): dan gewoon geen grootte")
+os.environ["BUGOS_TEST_METERED"] = "4"
+os.environ["BUGOS_TEST_GEEN_NET"] = "1"
+w = winkel_start()
+w.resize(1180, 760)
+w.show()
+w.toon_app("org.voorbeeld.Radio")
+klopt(wacht(lambda: not w._groottes_bezig and w.groottes is not None, 4000) and w.groottes == {}
+      and not w.pagina.grootte_rij.isVisibleTo(w.pagina) and w.stapel.currentIndex() == 1
+      and not w.pagina.melding.tekst.text(),
+      "13: zonder internet en zonder cache: geen grootte en geen melding; de pagina werkt gewoon")
+os.environ.pop("BUGOS_TEST_GEEN_NET")
+LOG.write_text("")
+w.toon_app("org.voorbeeld.Groot")
+_meteen = w._groottes_bezig or "remote-ls" in LOG.read_text()
+w._groottes_om -= 61   # een minuut later
+w.toon_app("org.voorbeeld.Radio")
+klopt(not _meteen and wacht(lambda: "Ongeveer 12 MB" in w.pagina.grootte.text(), 4000),
+      f"13: niet bij elke pagina opnieuw, wel na een minuut: dan staat de grootte er alsnog ({w.pagina.grootte.text()!r})")
+os.environ.pop("BUGOS_TEST_GEEN_CACHE")
+w.close()
+
+# ============================================================== 14. naam en chip, op een kaart en op de pagina ===
+# Een gewone afbrekende QLabel brak 'Strawberry Music Player' al af bij ongeveer 20 tekens, ook op een brede kaart
+# (zo stond het in de WIP-versie: de naam zonder stretch, met chip en rek erachter). Nu staat de chip direct naast de
+# naam, breekt een lange naam pas af als de kaart echt te smal is, en wordt de kaart er niet breder van.
+from PySide6.QtWidgets import QVBoxLayout, QWidget  # noqa: E402
+
+
+def in_houder(breed: int, widget: QWidget) -> QWidget:
+    """Zet een kaart of pagina in een eigen venster van deze breedte (minstens zijn minimum)."""
+    houder = QWidget()
+    lay = QVBoxLayout(houder)
+    lay.setContentsMargins(0, 0, 0, 0)
+    lay.addWidget(widget)
+    houder.resize(breed, 300)
+    houder.show()
+    even(60)
+    return houder
+
+
+def regels(lab) -> int:
+    return round(lab.height() / lab.fontMetrics().lineSpacing())
+
+
+def gat(links, rechts) -> int:
+    """Ruimte tussen het eind van 'links' en het begin van 'rechts' (zelfde ouder)."""
+    return rechts.geometry().left() - links.geometry().right() - 1
+
+
+w = winkel_start()
+_lang = {"id": OUD_ID, "naam": "Strawberry Music Player", "kort": "Speelt muziek af", "maker": "Iemand", "echt": True}
+_k14 = winkel.FlathubKaart(dict(_lang), w)   # OUD_ID is geïnstalleerd: de chip 'Geïnstalleerd' staat er
+_h14 = in_houder(620, _k14)
+klopt(regels(_k14.naam_label) == 1 and _k14.chip.isVisibleTo(_k14) and 6 <= gat(_k14.naam_label, _k14.chip) <= 10,
+      f"14: brede kaart: 'Strawberry Music Player' op één regel, de chip er direct naast "
+      f"({regels(_k14.naam_label)} regel(s), {gat(_k14.naam_label, _k14.chip)} px)")
+_k14s = winkel.FlathubKaart(dict(_lang), w)
+_h14s = in_houder(300, _k14s)
+klopt(regels(_k14s.naam_label) >= 2 and gat(_k14s.naam_label, _k14s.chip) >= 6
+      and _k14s.chip.geometry().right() <= _k14s.width(),
+      f"14: smalle kaart: de naam breekt af en de chip staat er nog naast ({regels(_k14s.naam_label)} regels)")
+_k14k = winkel.FlathubKaart(dict(_lang, naam="Oud"), w)
+klopt(_k14s.minimumSizeHint().width() == _k14k.minimumSizeHint().width(),
+      f"14: een lange naam maakt de kaart niet breder ({_k14s.minimumSizeHint().width()} = "
+      f"{_k14k.minimumSizeHint().width()} px), dus de rasters blijven gelijk lopen")
+_p14 = winkel.AppPagina(w, "flathub", "org.voorbeeld.Lang",
+                        entry=dict(w.entry_van(OUD_ID), id="org.voorbeeld.Lang", maker="Rick van Lieshout", echt=True))
+_hp14 = in_houder(900, _p14)
+_chip14 = next(c for c in _p14.findChildren(winkel.Chip) if c.text() == "Geverifieerde maker")
+klopt(_p14.maker.text() == "Door Rick van Lieshout" and regels(_p14.maker) == 1 and 6 <= gat(_p14.maker, _chip14) <= 10,
+      f"14: de pagina: 'Door Rick van Lieshout' op één regel, met 'Geverifieerde maker' ernaast ({regels(_p14.maker)})")
+for _h in (_h14, _h14s, _hp14):
+    _h.close()
+w.close()
+
+# ============================================================== 15. geen KDE Discover meer in het beeld ===
+# Zonder Discover is de Winkel de enige die een .flatpakref (de knop 'Install' op flathub.org), een flatpak+https://-
+# en een appstream://-link opent. build.sh haalt Discover (en KDE Partition Manager) weg met rpm -e zonder --nodeps:
+# hangt er ooit iets van af, dan stopt de bouw luid. (Of het in het gebouwde beeld klopt: tools/test_image.sh, 5c.)
+import re  # noqa: E402
+
+SOORTEN = ["x-scheme-handler/appstream", "x-scheme-handler/flatpak+https", "application/vnd.flatpak.ref",
+           "application/vnd.flatpak.repo", "application/vnd.flatpak"]
+_desktop = (ROOT / "system_files/usr/share/applications/bugos-store.desktop").read_text(encoding="utf-8")
+_mime = next((r.split("=", 1)[1] for r in _desktop.splitlines() if r.startswith("MimeType=")), "")
+klopt(set(SOORTEN) <= set(filter(None, _mime.split(";"))) and "Exec=bugos-store %U" in _desktop,
+      f"15: bugos-store.desktop kent .flatpakref, .flatpakrepo, .flatpak, flatpak+https:// en appstream:// ({_mime})")
+_lijst = (ROOT / "system_files/etc/xdg/kde-mimeapps.list").read_text(encoding="utf-8")
+_standaard = dict(r.split("=", 1) for r in _lijst.split("[Added Associations]")[0].splitlines()
+                  if "=" in r and not r.startswith("#"))
+klopt(all(_standaard.get(s) == "bugos-store.desktop" for s in SOORTEN),
+      "15: kde-mimeapps.list: die vijf openen standaard de Winkel (ook voor Firefox: gio leest kde-mimeapps.list)")
+_bouw = (ROOT / "build_files/build.sh").read_text(encoding="utf-8")
+_stap2 = _bouw.split("# Geen KDE Discover")[1].split("# Steam als echt")[0]
+_rpm_e = [r.strip() for r in _stap2.splitlines() if r.strip().startswith("rpm -e")]
+klopt(all(p in _stap2 for p in ("plasma-discover-libs", "plasma-discover-kns", "plasma-discover-flatpak",
+                                "plasma-discover-notifier", "kde-partitionmanager", "kpmcore"))
+      and len(_rpm_e) == 2 and not any("--nodeps" in r for r in _rpm_e) and "dnf5 install" not in _stap2,
+      f"15: build.sh haalt Discover en Partition Manager weg, met rpm -e zonder --nodeps ({_rpm_e})")
+_pakketten = (ROOT / "build_files/packages.txt").read_text(encoding="utf-8")
+klopt(not re.search(r"^\s*(plasma-discover|kde-partitionmanager|kpmcore)", _pakketten, re.M),
+      "15: packages.txt installeert Discover en Partition Manager niet (meer)")
 
 print()
 print("Fouten:", fouten)
