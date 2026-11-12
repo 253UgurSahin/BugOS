@@ -79,6 +79,14 @@ klopt '[ -f /usr/share/color-schemes/BugOSLight.colors ] && [ -f /usr/share/colo
 klopt '[ -f /usr/share/bugos/wine/licht.reg ] && [ -f /usr/share/bugos/wine/donker.reg ]' "Windows-programma's: licht.reg en donker.reg"
 klopt '[ -f /usr/share/plasma/shells/org.kde.plasma.desktop/contents/logout/bugos-aftellen.js ] && [ -f /usr/share/plasma/look-and-feel/org.bugos.desktop/contents/logout/bugos-aftellen.js ]' "uitzetscherm: bugos-aftellen.js staat naast Logout.qml (U088)"
 klopt 'fc-list | grep -q "Inter" && fc-list | grep -q "JetBrains Mono"' "letters: Inter en JetBrains Mono geïnstalleerd"
+# Taakbalk en bureaublad zonder KDE-bewerkregels (pakket shell).
+MAP=/usr/share/plasma/plasmoids/org.kde.desktopcontainment/contents/ui
+klopt 'grep -q "plasma/allow_configure_when_locked=false" /etc/xdg/kdeglobals && ! grep -q "unlockedDesktop" /etc/xdg/kdeglobals' "slot: kiosk-sleutel allow_configure_when_locked, niet unlockedDesktop"
+klopt 'grep -q BugosBureaubladActies.qml "$MAP/FolderViewLayer.qml" && [ -f "$MAP/BugosBureaubladActies.qml" ]' "bureaubladmenu: BugOS-regels in de mapweergave van KDE"
+klopt '! grep -q "Ctrl+Shift+D" "$MAP/main.qml"' "bureaubladmenu: geen Ctrl+Shift+D (KDE's achtergrondvenster)"
+klopt 'grep -q "edit mode=false" /etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc && grep -q "RightButton;NoModifier=org.kde.contextmenu" /etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc' "nieuwe gebruikers: bureaubladmenu zonder KDE-regels"
+klopt '( for p in kactivitymanagerd_fileitem_linking_plugin tagsfileitemaction kdeconnectfileitemaction plasmavaultfileitemaction kio-admin; do [ -f /usr/lib64/qt6/plugins/kf6/kfileitemaction/$p.so ] && grep -qx "$p=false" /etc/xdg/kservicemenurc || exit 1; done )' "bestandsmenu: geen Activiteiten, tags, KDE Connect, kluis en Openen als beheerder (de plug-ins bestaan en staan uit)"
+klopt '[ ! -e /usr/share/kio/servicemenus/filelight.desktop ]' "bestandsmenu: geen 'Gebruiksstatistieken van schijven bekijken' (Filelight) op mappen"
 
 klopt '! grep -qE "^(TEMPLATES|PUBLICSHARE)=" /etc/xdg/user-dirs.defaults && grep -q "^DOCUMENTS=" /etc/xdg/user-dirs.defaults'     "thuismap: een nieuwe gebruiker krijgt geen lege mappen Templates en Public (zoals Windows)"
 

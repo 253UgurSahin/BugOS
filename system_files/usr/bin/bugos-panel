@@ -3,12 +3,19 @@
 #
 #   bugos-panel startmenu aan|uit|status
 #   bugos-panel snelmenu  aan|uit|status
-#   bugos-panel standaard          (één keer, na het inloggen: allebei aan)
+#   bugos-panel standaard          (bij elk inloggen: eenmalige stappen, daarna het slot erop)
 #   bugos-panel systeemvak rustig|alles   (KDE-pictogrammen naast het snelmenu verbergen of terugzetten)
+#   bugos-panel bewerken aan|uit|status   (voor gevorderden: het slot eraf voor KDE's eigen taakbalkbewerking)
 #
 # Jip-en-Janneke: de startknop linksonder (het lieveheersbeestje) is het
 # BugOS-menu. "uit" zet het gewone KDE-menu terug, precies zoals BugOS het
 # had ingesteld. Alles is terug te draaien in Instellingen → Uiterlijk → Taakbalk.
+#
+# Taakbalk en bureaublad staan op slot (het slot van Plasma zelf, "widgets vastzetten"): zo kom je niet per
+# ongeluk in de bewerkmodus van KDE, en staan er geen KDE-regels ("Configureren...", "Widgets toevoegen...")
+# in de rechtermuismenu's. Elke verandering hieronder haalt het slot er even af, in hetzelfde script.
+# NOOIT de kiosk-sleutel plasma/plasmashell/unlockedDesktop=false gebruiken: dan weigert Plasma elk script
+# ("Widgets are locked") en werkt dit programma (en Instellingen > Taakbalk) niet meer.
 
 # shellcheck source=system_files/usr/share/bugos/lib.sh
 . /usr/share/bugos/lib.sh
@@ -46,8 +53,36 @@ niet_bereikbaar() {
 #   vervang(oud, nieuw, voor): zet widget-soort 'nieuw' op de plek van 'oud' (of vóór 'voor' als oud "" is)
 #   weg(soort): haalt alle widgets van die soort weg
 #   heeft(soort): print aan of uit
+#   slot(dicht): taakbalk en bureaublad op slot (true) of los (false); print niets
 # Kickoff krijgt altijd de BugOS-instellingen terug; het BugOS-startmenu krijgt de sneltoets Alt+F1.
+# LET OP: geen backslash in dit blok. Via gdbus wordt een script met bijv. een backslash-n een SyntaxError.
 JS='
+// Het slot op taakbalk en bureaublad: zo kom je niet per ongeluk in de bewerkmodus van KDE en staan er geen
+// KDE-regels ("Configureren...", "Widgets toevoegen...") in het menu van de rechtermuisknop. Het update-script
+// unlock_widgets.js van KDE gebruikt dezelfde schakelaar (__AppInterface.locked). Om iets te veranderen gaat
+// het slot er even af, in hetzelfde script (anders voegt Plasma niets toe).
+function slot(dicht) {
+    var cs = panels();
+    if (typeof desktops == "function") cs = cs.concat(desktops());
+    if (!dicht) {
+        if (typeof __AppInterface != "undefined") __AppInterface.locked = false;
+        // Ook een los slot op een paneel of onderdeel (van de reserveweg hieronder) eraf, anders lukt addWidget niet.
+        for (var i = 0; i < cs.length; i++) {
+            cs[i].locked = false;
+            var ws = cs[i].widgets();
+            for (var j = 0; j < ws.length; j++) ws[j].locked = false;
+        }
+        return;
+    }
+    if (typeof __AppInterface != "undefined") { __AppInterface.locked = true; return; }
+    // Reserveweg (een Plasma zonder __AppInterface): elk onderdeel en elk paneel apart. Alleen de panelen
+    // vastzetten is niet genoeg: de onderdelen volgen dan nog het (open) geheel.
+    for (var k = 0; k < cs.length; k++) {
+        var vs = cs[k].widgets();
+        for (var m = 0; m < vs.length; m++) vs[m].locked = true;
+        cs[k].locked = true;
+    }
+}
 function zet_sneltoets(w) {
     w.currentConfigGroup = ["Shortcuts"];
     w.writeConfig("global", "Alt+F1");
@@ -84,6 +119,7 @@ function vervang(oud, nieuw, voor) {
         // hem zelf opnieuw bij elke verandering; widget.index zet de plek echt (Widget::setIndex) (U259).
         var plek = (oud !== "" ? doel : buur).index;
         var w = p.addWidget(nieuw);
+        if (!w) continue;   // op slot of onbekend onderdeel: niet als gelukt tellen (er is nog niets weggehaald)
         if (nieuw == "org.kde.plasma.kickoff") zet_kickoff(w);
         if (nieuw == "org.bugos.startmenu") zet_sneltoets(w);
         if (oud !== "") doel.remove();
@@ -131,10 +167,56 @@ function weg(soort) {
 // helderheid/batterij) of die je bijna nooit nodig hebt. Ze blijven werken (de
 // volumetoetsen, meldingen bij een lege batterij), maar staan niet meer in beeld.
 // Wie ze toch wil: het pijltje in het systeemvak, of "bugos-panel systeemvak alles".
+// Niet (meer) in de lijst: de toetsenbordindeling. Met twee of meer indelingen zie je die naast de klok, zoals in
+// Windows 11 ("EN", "BE"); met één indeling laat KDE hem zelf weg.
 var RUSTIG = ["org.kde.plasma.volume", "org.kde.plasma.networkmanagement", "org.kde.plasma.bluetooth",
     "org.kde.plasma.battery", "org.kde.plasma.brightness", "org.kde.kscreen", "org.kde.plasma.clipboard",
-    "org.kde.plasma.keyboardlayout", "org.kde.plasma.keyboardindicator", "org.kde.plasma.manage-inputmethod",
+    "org.kde.plasma.keyboardindicator", "org.kde.plasma.manage-inputmethod",
     "org.kde.plasma.printmanager", "org.kde.kdeconnect", "org.kde.plasma.weather"];
+// De lijst van een oudere BugOS (met de toetsenbordindeling), om te herkennen wat BugOS toen verborg.
+var RUSTIG_VROEGER = RUSTIG.concat(["org.kde.plasma.keyboardlayout"]);
+// Uit (niet alleen verborgen) zolang het snelmenu aan staat: het snelmenu of Instellingen doet dit al, of niemand
+// heeft het nodig. Het tandwiel van zulke onderdelen opende KDE (Netwerken: systemsettings kcm_networkmanagement).
+// Hun werk op de achtergrond doen KDE-diensten (kded: audioshortcutsservice, networkmanagement, bluedevil;
+// powerdevil; het scherm-OSD van KWin), dus de volume- en helderheidstoetsen, wifi-wachtwoorden en Meta+P blijven
+// werken. Ze komen terug als je het snelmenu uitzet. Wat aan blijft (verborgen achter het pijltje): meldingen,
+// klembord (Meta+V), apparaten (USB-stick veilig verwijderen), printers, toetsenbord, camera, media, klikhulp.
+// Wat alleen in deze KDE-onderdelen zat en dus mee weggaat (snelmenu uit brengt ze terug): VPN aan/uit en de
+// wifi-hotspot (netwerk), slaapstand en schermvergrendeling even tegenhouden (batterij), presentatiemodus (kscreen).
+var UIT = ["org.kde.plasma.volume", "org.kde.plasma.networkmanagement", "org.kde.plasma.bluetooth",
+    "org.kde.plasma.battery", "org.kde.plasma.brightness", "org.kde.plasma.manage-inputmethod",
+    "org.kde.kdeconnect", "org.kde.plasma.weather", "org.kde.plasma.vault", "org.kde.kscreen"];
+function lijst(waarde) {
+    if (typeof waarde == "string") return waarde === "" ? [] : waarde.split(",");
+    var uit = [];
+    for (var i = 0; i < waarde.length; i++) if (waarde[i] !== "" && uit.indexOf(waarde[i]) < 0) uit.push(String(waarde[i]));
+    return uit;
+}
+function zelfde(a, b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) if (a[i] != b[i]) return false;
+    return true;
+}
+// rustig: de UIT-onderdelen uit [General] extraItems halen en in bugosOff onthouden. Niet rustig: precies die
+// terugzetten. Iets wat je zelf uitzette, staat nooit in bugosOff en komt dus niet vanzelf terug. knownItems blijft
+// zoals het is (anders zet Plasma ze zelf weer aan).
+function vakUit(vak, rustig) {
+    var extra = lijst(vak.readConfig("extraItems", []));
+    var uitVorig = lijst(vak.readConfig("bugosOff", [""]));
+    var extraNieuw = [], uitNieuw = [];
+    if (rustig) {
+        uitNieuw = uitVorig.slice();
+        for (var e = 0; e < extra.length; e++) {
+            if (UIT.indexOf(extra[e]) < 0) extraNieuw.push(extra[e]);
+            else if (uitNieuw.indexOf(extra[e]) < 0) uitNieuw.push(extra[e]);
+        }
+    } else {
+        extraNieuw = extra.slice();
+        for (var u = 0; u < uitVorig.length; u++) if (extraNieuw.indexOf(uitVorig[u]) < 0) extraNieuw.push(uitVorig[u]);
+    }
+    if (!zelfde(extra, extraNieuw)) vak.writeConfig("extraItems", extraNieuw);
+    vak.writeConfig("bugosOff", uitNieuw.length ? uitNieuw : [""]);
+}
 function systeemvak(rustig) {
     var ps = panels(), n = 0;
     for (var i = 0; i < ps.length; i++) {
@@ -156,7 +238,7 @@ function systeemvak(rustig) {
             if (vorig.length == 1 && vorig[0] == "-") {
                 var alles = true;
                 for (var a = 0; a < RUSTIG.length; a++) if (oud.indexOf(RUSTIG[a]) < 0) alles = false;
-                vanOns = alles ? RUSTIG : [];
+                vanOns = alles ? RUSTIG_VROEGER : [];
             }
             var nieuw = [], erbij = [];
             for (var k = 0; k < oud.length; k++)
@@ -166,6 +248,50 @@ function systeemvak(rustig) {
                     if (nieuw.indexOf(RUSTIG[r]) < 0) { nieuw.push(RUSTIG[r]); erbij.push(RUSTIG[r]); }
             vak.writeConfig("hiddenItems", nieuw);
             vak.writeConfig("bugosHidden", erbij.length ? erbij : [""]);
+            vakUit(vak, rustig);
+            vak.reloadConfig();
+            n++;
+        }
+    }
+    print(n);
+}
+// Eenmalig na de update (stap 6 van standaard), alleen met het snelmenu aan: de UIT-onderdelen uitzetten en de
+// toetsenbordindeling weer laten zien als BugOS die verborg. Verder blijft hiddenItems zoals het is: wat je zelf
+// weer zichtbaar maakte (bijv. het klembord of de printers), verbergt BugOS niet opnieuw. (systeemvak(true) zou
+// de hele RUSTIG-lijst weer verbergen.)
+function systeemvakNaUpdate() {
+    var ps = panels(), n = 0, kl = "org.kde.plasma.keyboardlayout";
+    for (var i = 0; i < ps.length; i++) {
+        var ws = ps[i].widgets();
+        for (var j = 0; j < ws.length; j++) {
+            if (ws[j].type != "org.kde.plasma.systemtray") continue;
+            var vak = ws[j];
+            vak.currentConfigGroup = ["General"];
+            var oud = vak.readConfig("hiddenItems", []);
+            if (typeof oud == "string") oud = oud === "" ? [] : oud.split(",");
+            var vorig = vak.readConfig("bugosHidden", ["-"]);
+            if (typeof vorig == "string") vorig = vorig.split(",");
+            var nooit = vorig.length == 1 && vorig[0] == "-";
+            var vanOns = vorig;
+            if (nooit) {
+                // Zoals in systeemvak(): staat de hele oude lijst er, dan was die van een oudere BugOS.
+                var alles = true;
+                for (var a = 0; a < RUSTIG_VROEGER.length; a++) if (oud.indexOf(RUSTIG_VROEGER[a]) < 0) alles = false;
+                vanOns = alles ? RUSTIG_VROEGER : [];
+            }
+            if (vanOns.indexOf(kl) >= 0 && oud.indexOf(kl) >= 0) {
+                var nieuw = [];
+                for (var k = 0; k < oud.length; k++) if (oud[k] != kl) nieuw.push(oud[k]);
+                vak.writeConfig("hiddenItems", nieuw);
+            }
+            if (!nooit) {
+                var erbij = [];
+                for (var m = 0; m < vorig.length; m++) if (vorig[m] !== "" && vorig[m] != kl) erbij.push(vorig[m]);
+                vak.writeConfig("bugosHidden", erbij.length ? erbij : [""]);
+            } else if (vanOns.length) {
+                vak.writeConfig("bugosHidden", RUSTIG);
+            }
+            vakUit(vak, true);
             vak.reloadConfig();
             n++;
         }
@@ -220,6 +346,20 @@ function verhouding() {
         }
     }
 }
+// Het rechtermuismenu van het bureaublad zonder KDE-regels (bewerkmodus, terminal, KDE-achtergrondvenster...).
+// Alleen groep 0 (bureaublad); NOOIT groep 1 (paneel): dan verdwijnt het hele taakbalkmenu, ook Taakbeheer
+// (getest). Plasma leest dit bij het opstarten: het werkt vanaf de volgende keer inloggen.
+var BUREAUBLAD_UIT = ["_add panel", "_display_settings", "_lock_screen", "_logout", "_open_terminal", "_run_command",
+    "_wallpaper", "add widgets", "configure", "configure shortcuts", "desktop edit mode", "edit mode",
+    "manage activities", "remove"];
+function bureaubladmenu() {
+    var a = ConfigFile("plasma-org.kde.plasma.desktop-appletsrc", "ActionPlugins");
+    var b = ConfigFile(a, "0");
+    b.writeEntry("RightButton;NoModifier", "org.kde.contextmenu");   // zonder deze regel: helemaal geen menu
+    var c = ConfigFile(b, "RightButton;NoModifier");
+    for (var i = 0; i < BUREAUBLAD_UIT.length; i++) c.writeEntry(BUREAUBLAD_UIT[i], false);
+    print(BUREAUBLAD_UIT.length);
+}
 function heeft(soort) {
     var ps = panels(), n = 0;
     for (var i = 0; i < ps.length; i++) {
@@ -229,6 +369,13 @@ function heeft(soort) {
     print(n > 0 ? "aan" : "uit");
 }
 '
+
+# Na een verandering gaat het slot er weer op, behalve als je zelf 'bugos-panel bewerken aan' deed.
+BEWERKEN="$BUGOS_CONFIG/paneel-bewerken"
+slot_na() { if [ -f "$BEWERKEN" ]; then echo false; else echo true; fi; }
+# Een verandering: slot eraf, veranderen, slot erop. Alles in één script (anders voegt Plasma niets toe), en met
+# finally: gaat de verandering mis, dan gaat het slot er toch weer op.
+plasma_wijzig() { plasma_script "$JS slot(false); try { $1 } finally { slot($(slot_na)); }"; }
 
 status_van() {
     local uit
@@ -240,7 +387,7 @@ status_van() {
 case "$WAT:$ACTIE" in
 startmenu:aan)
     bureaublad_er || niet_bereikbaar
-    uit="$(plasma_script "$JS vervang(\"org.kde.plasma.kickoff\", \"org.bugos.startmenu\", \"\");")" || niet_bereikbaar
+    uit="$(plasma_wijzig "vervang(\"org.kde.plasma.kickoff\", \"org.bugos.startmenu\", \"\");")" || niet_bereikbaar
     # 0: er stond geen KDE-startknop (Kickoff) op een taakbalk, bijv. een ander KDE-menu. Dan niet "staat aan" zeggen (U073).
     if [ "$uit" = 0 ]; then
         melding "$(t "BugOS-startmenu kon niet aan" "BugOS start menu could not be turned on")" \
@@ -252,7 +399,7 @@ startmenu:aan)
     ;;
 startmenu:uit)
     bureaublad_er || niet_bereikbaar
-    plasma_script "$JS vervang(\"org.bugos.startmenu\", \"org.kde.plasma.kickoff\", \"\");" >/dev/null || niet_bereikbaar
+    plasma_wijzig "vervang(\"org.bugos.startmenu\", \"org.kde.plasma.kickoff\", \"\");" >/dev/null || niet_bereikbaar
     ;;
 startmenu:status)
     status_van org.bugos.startmenu
@@ -260,33 +407,34 @@ startmenu:status)
 snelmenu:aan)
     bureaublad_er || niet_bereikbaar
     # Twee aparte keren: Plasma plakt de print()-uitvoer zonder scheiding aan elkaar ("00"), dan zie je de 0 niet (U083).
-    uit="$(plasma_script "$JS vervang(\"\", \"org.bugos.quickmenu\", \"org.kde.plasma.systemtray\");")" || niet_bereikbaar
+    uit="$(plasma_wijzig "vervang(\"\", \"org.bugos.quickmenu\", \"org.kde.plasma.systemtray\");")" || niet_bereikbaar
     if [ "$uit" = 0 ]; then   # geen systeemvak op een taakbalk: het snelmenu kan nergens naast (U073)
         melding "$(t "Snelmenu kon niet aan" "Quick menu could not be turned on")" \
             "$(t "Er staat geen systeemvak op de taakbalk." "There is no system tray on the taskbar.")"
         exit 4
     fi
-    plasma_script "$JS systeemvak(true);" >/dev/null || niet_bereikbaar
+    plasma_wijzig "systeemvak(true);" >/dev/null || niet_bereikbaar
     ;;
 snelmenu:uit)
     bureaublad_er || niet_bereikbaar
     # Zonder snelmenu heb je de KDE-pictogrammen voor geluid, wifi enz. weer nodig.
-    plasma_script "$JS weg(\"org.bugos.quickmenu\"); systeemvak(false);" >/dev/null || niet_bereikbaar
+    plasma_wijzig "weg(\"org.bugos.quickmenu\"); systeemvak(false);" >/dev/null || niet_bereikbaar
     ;;
 systeemvak:rustig)
     bureaublad_er || niet_bereikbaar
-    plasma_script "$JS systeemvak(true);" >/dev/null || niet_bereikbaar
+    plasma_wijzig "systeemvak(true);" >/dev/null || niet_bereikbaar
     ;;
 systeemvak:alles)
     bureaublad_er || niet_bereikbaar
-    plasma_script "$JS systeemvak(false);" >/dev/null || niet_bereikbaar
+    plasma_wijzig "systeemvak(false);" >/dev/null || niet_bereikbaar
     ;;
 snelmenu:status)
     status_van org.bugos.quickmenu
     ;;
 standaard:*)
-    # Eén keer per gebruiker (bij het inloggen): zet het BugOS-startmenu en het snelmenu
-    # op de taakbalk. Daarna beslist de gebruiker zelf in Instellingen; dit draait niet opnieuw.
+    # Bij elk inloggen. Eenmalige stappen (elk met een eigen merkteken): zet het BugOS-startmenu en het snelmenu
+    # op de taakbalk. Daarna beslist de gebruiker zelf in Instellingen; die stappen draaien niet opnieuw.
+    # Altijd (aan het eind): het slot op taakbalk en bureaublad, ook als iets anders het eraf haalde.
     # Stap 2 (later bijgekomen, dus een eigen merkteken): het systeemvak rustig maken,
     # ook voor wie stap 1 al had. Alleen als het snelmenu er staat.
     MARKER="$BUGOS_CONFIG/paneel-standaard-1"
@@ -298,7 +446,14 @@ standaard:*)
     MARKER0="$BUGOS_CONFIG/paneel-hernoemd-1"
     # Stap 4: de verhouding van Windows 11 (strakke taakbalk, kleine klok), ook voor wie al een taakbalk had.
     MARKER4="$BUGOS_CONFIG/paneel-verhouding-1"
-    [ -f "$MARKER0" ] && [ -f "$MARKER" ] && [ -f "$MARKER2" ] && [ -f "$MARKER3" ] && [ -f "$MARKER4" ] && exit 0
+    # Stap 5: het rechtermuismenu van het bureaublad zonder KDE-regels (zichtbaar na de volgende keer inloggen).
+    MARKER5="$BUGOS_CONFIG/paneel-bureaubladmenu-1"
+    # Stap 6: de KDE-onderdelen in het systeemvak die het snelmenu vervangt echt uitzetten (niet alleen verbergen),
+    # en de toetsenbordindeling weer laten zien. Alleen als het snelmenu er staat. Wat je zelf weer zichtbaar
+    # maakte, blijft zichtbaar (systeemvakNaUpdate, niet systeemvak(true)).
+    MARKER6="$BUGOS_CONFIG/paneel-systeemvak-2"
+    # Stap 7: Meta+Q opent niet meer het zijpaneel "Activiteiten" van KDE (alleen als het nog de standaard is).
+    MARKER7="$BUGOS_CONFIG/paneel-sneltoets-1"
     for _ in $(seq 1 30); do
         bureaublad_er && break
         sleep 2
@@ -307,35 +462,86 @@ standaard:*)
     # Een merkteken alleen als de stap echt lukte; anders probeert hij het bij de volgende keer inloggen opnieuw.
     mkdir -p "$BUGOS_CONFIG"
     if [ ! -f "$MARKER0" ]; then
-        plasma_script "$JS hernoemd();" >/dev/null && touch "$MARKER0"
+        plasma_wijzig "hernoemd();" >/dev/null && touch "$MARKER0"
     fi
     if [ ! -f "$MARKER" ]; then
         gelukt=1
         if [ "$(status_van org.kde.plasma.kickoff)" = aan ]; then
-            plasma_script "$JS vervang(\"org.kde.plasma.kickoff\", \"org.bugos.startmenu\", \"\");" >/dev/null || gelukt=0
+            plasma_wijzig "vervang(\"org.kde.plasma.kickoff\", \"org.bugos.startmenu\", \"\");" >/dev/null || gelukt=0
         fi
-        plasma_script "$JS vervang(\"\", \"org.bugos.quickmenu\", \"org.kde.plasma.systemtray\");" >/dev/null || gelukt=0
+        plasma_wijzig "vervang(\"\", \"org.bugos.quickmenu\", \"org.kde.plasma.systemtray\");" >/dev/null || gelukt=0
         [ "$gelukt" = 1 ] && touch "$MARKER"
     fi
     if [ ! -f "$MARKER2" ]; then
         gelukt=1
         if [ "$(status_van org.bugos.quickmenu)" = aan ]; then
-            plasma_script "$JS systeemvak(true);" >/dev/null || gelukt=0
+            plasma_wijzig "systeemvak(true);" >/dev/null || gelukt=0
         fi
         [ "$gelukt" = 1 ] && touch "$MARKER2"
     fi
     if [ ! -f "$MARKER3" ]; then
         # Alleen onthouden als de taakbalkruimte er echt staat: anders (nog geen systeemvak of snelmenu om hem
         # naast te zetten) de volgende keer opnieuw proberen, in plaats van nooit meer.
-        plasma_script "$JS taakbalkruimte();" >/dev/null &&
+        plasma_wijzig "taakbalkruimte();" >/dev/null &&
             [ "$(status_van org.bugos.taskbar)" = aan ] && touch "$MARKER3"
     fi
     if [ ! -f "$MARKER4" ]; then
-        plasma_script "$JS verhouding();" >/dev/null && touch "$MARKER4"
+        plasma_wijzig "verhouding();" >/dev/null && touch "$MARKER4"
     fi
+    if [ ! -f "$MARKER5" ]; then
+        # 14 = alle KDE-regels zijn uitgezet; anders de volgende keer opnieuw.
+        [ "$(plasma_wijzig "bureaubladmenu();")" = 14 ] && touch "$MARKER5"
+    fi
+    if [ ! -f "$MARKER6" ]; then
+        gelukt=1
+        if [ "$(status_van org.bugos.quickmenu)" = aan ]; then
+            plasma_wijzig "systeemvakNaUpdate();" >/dev/null || gelukt=0
+        fi
+        [ "$gelukt" = 1 ] && touch "$MARKER6"
+    fi
+    if [ ! -f "$MARKER7" ]; then
+        ID="['plasmashell','manage activities','plasmashell','Show Activity Switcher']"
+        huidig="$(gdbus call --session --dest org.kde.kglobalaccel --object-path /kglobalaccel \
+            --method org.kde.KGlobalAccel.shortcut "$ID" 2>/dev/null)"
+        case "$huidig" in
+        "([268435537],)")
+            # Meta+Q (het Qt-sleutelgetal), de standaard van KDE: uitzetten.
+            gdbus call --session --dest org.kde.kglobalaccel --object-path /kglobalaccel \
+                --method org.kde.KGlobalAccel.setForeignShortcut "$ID" '@ai []' >/dev/null && touch "$MARKER7"
+            ;;
+        '(['[0-9]*)
+            touch "$MARKER7"   # zelf een andere toets gekozen: niet aankomen
+            ;;
+        *)
+            # Leeg ((@ai [],)): Plasma heeft de sneltoets nog niet aangemeld, of je maakte hem zelf leeg. Niet
+            # onthouden: de volgende keer opnieuw kijken (één D-Bus-vraag); er wordt alleen Meta+Q uitgezet.
+            ;;
+        esac
+    fi
+    # Altijd: het slot erop (goedkoop). Herstelt ook een slot dat KDE's unlock_widgets.js of iets anders eraf haalde.
+    plasma_script "$JS slot($(slot_na));" >/dev/null || true
+    ;;
+# Voor gevorderden (bewust geen knop): het slot eraf, zodat KDE's "Widgets toevoegen..." en "Paneel instellen..."
+# terugkomen. Blijft los, ook na opnieuw inloggen, tot 'bugos-panel bewerken uit'.
+bewerken:aan)
+    bureaublad_er || niet_bereikbaar
+    mkdir -p "$BUGOS_CONFIG"
+    plasma_script "$JS slot(false);" >/dev/null || niet_bereikbaar
+    touch "$BEWERKEN"
+    melding "$(t "Taakbalk en bureaublad zijn los" "Taskbar and desktop are unlocked")" \
+        "$(t "Zet ze weer vast met: bugos-panel bewerken uit" "Lock them again with: bugos-panel bewerken uit")"
+    ;;
+bewerken:uit)
+    bureaublad_er || niet_bereikbaar
+    plasma_script "$JS slot(true);" >/dev/null || niet_bereikbaar
+    rm -f "$BEWERKEN"
+    melding "$(t "Taakbalk en bureaublad staan weer vast" "Taskbar and desktop are locked again")" ""
+    ;;
+bewerken:status)
+    if [ -f "$BEWERKEN" ]; then echo aan; else echo uit; fi
     ;;
 *)
-    echo "Gebruik: bugos-panel startmenu|snelmenu aan|uit|status, bugos-panel systeemvak rustig|alles, of bugos-panel standaard" >&2
+    echo "Gebruik: bugos-panel startmenu|snelmenu aan|uit|status, bugos-panel systeemvak rustig|alles, bugos-panel bewerken aan|uit|status, of bugos-panel standaard" >&2
     exit 2
     ;;
 esac

@@ -42,7 +42,8 @@ PlasmoidItem {
     Component.onCompleted: voerUit("bugos-start-data")
 
     // Rechtermuisknop op Start: de snelle lijst van Windows (Win+X), met Taakbeheer.
-    // Plasma zet zijn eigen regels (aanpassen, verwijderen) er vanzelf onder.
+    // De eigen regels van Plasma (aanpassen, verwijderen) staan er niet onder: taakbalk en bureaublad staan op
+    // slot (bugos-panel, functie slot). Voor gevorderden: 'bugos-panel bewerken aan'.
     function tr(nl, en) { return nederlands ? nl : en }
     function startApp(desktop) { voerUit("bugos-start-data --start " + aanhalen("/usr/share/applications/" + desktop)) }
     Plasmoid.contextualActions: [

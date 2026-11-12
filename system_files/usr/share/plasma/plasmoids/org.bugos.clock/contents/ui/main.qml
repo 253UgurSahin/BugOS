@@ -4,12 +4,15 @@
 // groot als de taakbalk hoog is. In Windows 11 staan tijd en datum klein en even groot onder elkaar; zo
 // doet BugOS het ook. Klik erop voor een kalender (die van KDE, in een eigen bestand: lukt die niet, dan
 // blijft de klok gewoon werken).
+// Rechtermuisknop: "Datum en tijd aanpassen" en "Meldingsinstellingen", zoals Windows 11 (de taakbalk staat op slot,
+// dus zonder deze regels was er helemaal geen menu).
 
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as QQC2
 import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
+import org.kde.plasma.plasma5support as P5Support
 import org.kde.kirigami as Kirigami
 
 PlasmoidItem {
@@ -27,6 +30,28 @@ PlasmoidItem {
         triggeredOnStart: true
         onTriggered: root.nu = new Date()
     }
+
+    // Een pagina van Instellingen los starten, via dezelfde helper als het startmenu (bugos-start-data).
+    P5Support.DataSource {
+        id: opdracht
+        engine: "executable"
+        connectedSources: []
+        onNewData: (bron, data) => disconnectSource(bron)
+    }
+    function voerUit(cmd) { opdracht.connectSource(cmd) }
+
+    Plasmoid.contextualActions: [
+        PlasmaCore.Action {
+            text: root.tr("Datum en tijd aanpassen", "Adjust date and time")
+            icon.name: "preferences-system-time"
+            onTriggered: root.voerUit("bugos-start-data --start instelling:tijd")
+        },
+        PlasmaCore.Action {
+            text: root.tr("Meldingsinstellingen", "Notification settings")
+            icon.name: "preferences-desktop-notification"
+            onTriggered: root.voerUit("bugos-start-data --start instelling:meldingen")
+        }
+    ]
 
     preferredRepresentation: compactRepresentation
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground

@@ -16,6 +16,50 @@ kwriteconfig6 --file /etc/xdg/kdeglobals --group KDE --key SingleClick false
 for actie in help_about_kde help_report_bug help_donate switch_application_language run_command; do
     kwriteconfig6 --file /etc/xdg/kdeglobals --group "KDE Action Restrictions" --key "action/$actie" false
 done
+#  - geen "Configureren..." in de rechtermuismenu's van taakbalk, startknop en apps zolang ze op slot staan
+#    (bugos-panel zet taakbalk en bureaublad op slot). Zonder slot doet deze regel niets. NOOIT de sleutel
+#    plasma/plasmashell/unlockedDesktop gebruiken: dan weigert Plasma de scripts van bugos-panel.
+kwriteconfig6 --file /etc/xdg/kdeglobals --group "KDE Action Restrictions" --key plasma/allow_configure_when_locked false
+# Het rechtermuismenu van het bureaublad voor nieuwe gebruikers: zonder "Bewerkmodus", "Terminal openen",
+# "Scherm vergrendelen", KDE's "Bureaublad en achtergrond" enz. (bestaande gebruikers: bugos-panel standaard).
+# Plasma leest dit bestand niet uit /etc/xdg, dus via /etc/skel. Alleen groep 0 (bureaublad), NOOIT groep 1
+# (paneel): dan verdwijnt het hele taakbalkmenu. De regel "RightButton;NoModifier=org.kde.contextmenu" moet erin,
+# anders heeft het bureaublad helemaal geen menu.
+mkdir -p /etc/skel/.config
+cat >/etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc <<'EOF'
+[ActionPlugins][0]
+RightButton;NoModifier=org.kde.contextmenu
+
+[ActionPlugins][0][RightButton;NoModifier]
+_add panel=false
+_display_settings=false
+_lock_screen=false
+_logout=false
+_open_terminal=false
+_run_command=false
+_wallpaper=false
+add widgets=false
+configure=false
+configure shortcuts=false
+desktop edit mode=false
+edit mode=false
+manage activities=false
+remove=false
+EOF
+# Het rechtermuismenu op een bestand of map (bureaublad, Dolphin): zonder KDE-onderdelen die BugOS niet gebruikt:
+# "Activiteiten >" (Meta+Q gaat ook uit: bugos-panel), "Tags toekennen >", "Via KDE Connect versturen" (KDE Connect
+# start niet vanzelf, zie hieronder) en de kluis (Plasma Vault). /etc/xdg wordt hiervoor wel gelezen (KConfig);
+# de sleutel is de bestandsnaam van de plug-in in /usr/lib64/qt6/plugins/kf6/kfileitemaction (zonder .so).
+# Ook "Openen als beheerder" (kio-admin: Dolphin met beheerdersrechten, een KDE-venster).
+# Wat blijft (KDE, met reden): "Eigenschappen" (het KDE-venster met grootte en rechten; BugOS heeft er nog geen eigen
+# venster voor) en "Openen met <programma>" (de echte naam van het programma).
+for plugin in kactivitymanagerd_fileitem_linking_plugin tagsfileitemaction kdeconnectfileitemaction \
+    plasmavaultfileitemaction kio-admin; do
+    kwriteconfig6 --file /etc/xdg/kservicemenurc --group Show --key "$plugin" false
+done
+# "Gebruiksstatistieken van schijven bekijken" op elke map opent Filelight (KDE; verborgen, zie 4c: Bestanden laat
+# zelf zien wat de meeste ruimte inneemt). Het is een los servicemenu-bestand van het pakket filelight.
+rm -f /usr/share/kio/servicemenus/filelight.desktop
 # Geen Overzicht van KDE als je per ongeluk de muis linksboven in de hoek duwt (net als Windows: daar gebeurt niets).
 kwriteconfig6 --file /etc/xdg/kwinrc --group Effect-overview --key BorderActivate 9
 # KDE Connect (koppelen met je telefoon) start niet vanzelf: het gaf meldingen met "KDE Connect" die niemand vroeg.
@@ -111,6 +155,39 @@ if [ -f "$SCHAKEL/SwitchIndicator.qml" ]; then
     sed -i '/^prefer :\/qt\/qml\/org\/kde\/desktop\/private\/$/d' "$SCHAKEL/qmldir"
     grep -q focusColor "$SCHAKEL/SwitchIndicator.qml" || echo "LET OP: schakelaar-aanpassing paste niet (nieuwe KDE-versie?)"
 fi
+
+# >>> bureaubladmenu (getest door tools/test_native_shell.py)
+# Het rechtermuismenu van het bureaublad: twee BugOS-regels erbij (Scherminstellingen, Achtergrond wijzigen) en
+# Ctrl+Shift+D (opent KDE's "Bureaublad en achtergrond", ook als het bureaublad op slot staat) eraf. De mapweergave
+# van KDE staat als QML op schijf. Breekt de bouw nooit (set -e): elke grep staat in een if of achter ||.
+bureaubladmenu() {
+    local ui="$1" bron="$2"
+    local laag="$ui/FolderViewLayer.qml" hoofd="$ui/main.qml"
+    # 1. Ctrl+Shift+D eraf, los van stap 2: ook als FolderViewLayer.qml in een nieuwe KDE-versie anders is.
+    if [ -f "$hoofd" ]; then
+        sed -i '/^[[:space:]]*shortcut: *"Ctrl+Shift+D"[[:space:]]*$/d' "$hoofd"
+        if grep -q 'Ctrl+Shift+D' "$hoofd"; then
+            echo "LET OP: bureaubladmenu: Ctrl+Shift+D staat nog in main.qml (nieuwe KDE-versie?); dat opent KDE's achtergrondvenster."
+        fi
+    else
+        echo "LET OP: bureaubladmenu: $hoofd ontbreekt (nieuwe KDE-versie?)."
+    fi
+    # 2. De BugOS-regels: één regel achter het scheidingsstreepje dat KDE na zijn eigen regels zet.
+    if [ ! -f "$laag" ] || ! grep -q '^ *Plasmoid\.contextualActions\.push(actionSeparator);$' "$laag"; then
+        echo "LET OP: bureaubladmenu: FolderViewLayer.qml is anders dan verwacht (nieuwe KDE-versie?); geen BugOS-regels in het bureaubladmenu."
+        return 0
+    fi
+    install -m0644 "$bron" "$ui/BugosBureaubladActies.qml"
+    if ! grep -q 'BugosBureaubladActies.qml' "$laag"; then
+        # Plasmoid.isContainment: niet in een losse "Mapweergave" die iemand op een paneel zet.
+        sed -i 's|^\( *\)Plasmoid\.contextualActions\.push(actionSeparator);$|&\n\1if (Plasmoid.isContainment) { const bugosC = Qt.createComponent("BugosBureaubladActies.qml"); const bugosO = bugosC.status === Component.Ready ? bugosC.createObject(folderViewLayerComponent) : null; if (bugosO) { for (const a of bugosO.acties) Plasmoid.contextualActions.push(a); } else { console.warn("BugOS bureaubladmenu:", bugosC.errorString()); } } // BugOS|' "$laag"
+    fi
+    grep -q 'BugosBureaubladActies.qml' "$laag" || echo "LET OP: bureaubladmenu: invoegen in FolderViewLayer.qml lukte niet."
+    return 0
+}
+# <<< bureaubladmenu
+bureaubladmenu /usr/share/plasma/plasmoids/org.kde.desktopcontainment/contents/ui \
+    /usr/share/plasma/plasmoids/org.bugos.taskbar/contents/ui/BureaubladActies.qml
 
 # De kleuren van "BugOS Licht" ook echt in de standaardinstellingen zetten.
 # Alleen de naam van het schema is niet genoeg: programma's zoals de verkenner
@@ -215,7 +292,6 @@ hernoem() {
         { print }
     ' "$f" >"$f.nieuw" && mv "$f.nieuw" "$f"
 }
-hernoem org.kde.discover.desktop "Meer apps" "More apps"
 hernoem org.kde.dolphin.desktop "Dolphin (voor gevorderden)" "Dolphin (advanced)"
 hernoem systemsettings.desktop "Alle instellingen" "All settings"
 hernoem org.kde.partitionmanager.desktop "Schijfbeheer (voor gevorderden)" "Disk management (advanced)"
@@ -254,9 +330,11 @@ for app in kdesystemsettings.desktop htop.desktop nvtop.desktop org.kde.kdebugse
     verberg "$app"
 done
 # Een echt BugOS-gevoel: de KDE-programma's waar BugOS een eigen app (of knop) voor heeft, staan niet in het
-# startmenu. Ze werken gewoon, en de BugOS-apps openen ze waar nodig ("Meer apps" in de Winkel, "Schijfbeheer"
-# in Bestanden, "Geavanceerde instellingen" onder Over deze computer).
-for app in org.kde.discover.desktop org.kde.dolphin.desktop systemsettings.desktop \
+# startmenu. Ze blijven geïnstalleerd en werken gewoon, maar BugOS opent er nog maar één zelf: KDE Instellingen
+# ("Geavanceerde instellingen" onder Over deze computer). Bestanden laat zelf zien wat de meeste ruimte inneemt
+# (dus geen Filelight) en opent geen Dolphin of Schijfbeheer meer. Discover (de Winkel doet dit) blijft verborgen
+# zolang build.sh het nog installeert; haalt de bouw het weg, dan doet verberg hier niets.
+for app in org.kde.discover.desktop org.kde.dolphin.desktop systemsettings.desktop org.kde.filelight.desktop \
     org.kde.partitionmanager.desktop org.kde.plasma-systemmonitor.desktop org.kde.kinfocenter.desktop \
     org.kde.kwalletmanager.desktop org.kde.kwalletmanager5.desktop org.kde.kmenuedit.desktop \
     org.kde.kdeconnect.app.desktop org.kde.kdeconnect.sms.desktop org.kde.kdeconnect_open.desktop \
