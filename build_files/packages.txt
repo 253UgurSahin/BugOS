@@ -33,7 +33,7 @@ ffmpegthumbnailer
 # Firefox als gewoon programma: de fundering heeft geen browser in het systeem, en
 # de taakbalk en het startmenu van BugOS verwijzen naar Firefox.
 firefox
-# (geen KDE Discover: de BugOS Winkel doet alle apps; build.sh haalt Discover weg als de basis hem meebrengt)
+# (geen KDE Discover: de BugOS Winkel doet alle apps; build.sh haalt Discover weg, want de basis brengt hem mee)
 
 # --- Alle talen ---
 glibc-all-langpacks
@@ -41,10 +41,11 @@ glibc-all-langpacks
 # Telefoon en camera (MTP/PTP) openen in Bestanden: KDE geeft dan een gewone map door (U225)
 kio-fuse
 
-# Schijven: USB-sticks leegmaken (exFAT, werkt overal), repareren, en Schijfbeheer voor gevorderden
+# Schijven: USB-sticks leegmaken (exFAT, werkt overal) en repareren, in Bestanden zelf.
+# (Geen KDE Partition Manager meer: geen BugOS-app opent hem nog. De basis brengt hem wel mee, dus alleen hier
+# weglaten helpt niet: build.sh haalt hem weg, met kpmcore.)
 exfatprogs
 dosfstools
-kde-partitionmanager
 
 # --- Eén ontwerptaal: de BugOS-stijl voor alle KDE-programma's (zie tools/design/README.md) ---
 kvantum

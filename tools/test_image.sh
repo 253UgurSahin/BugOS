@@ -92,6 +92,21 @@ klopt '[ -n "$apps" ]' "startmenu: bugos-start-data geeft de apps"
 raar="$(echo "$apps" | grep -E '^K[A-Z]|^K[a-z]+[A-Z]|^Krfb|Kvantum|DOSBox|Firewall|KDE|Dolphin|Discover|Info Center|System Monitor|Menu Editor' | paste -sd, - || true)"
 klopt '[ -z "$raar" ]' "startmenu: geen KDE-namen of hulpjes voor gevorderden tussen de apps ${raar:+($raar)}"
 
+# 5c. Geen KDE Discover en geen KDE Partition Manager (build.sh, stap 2): de BugOS Winkel doet alle apps van Flathub
+#     zelf, ook een .flatpakref uit Firefox (de knop 'Install' op flathub.org) en een flatpak+https://- of
+#     appstream://-link (bijv. 'Uninstall or Manage Add-Ons…' in KDE). Zonder Discover is de Winkel de enige die
+#     ze kent; de standaard staat in /etc/xdg/kde-mimeapps.list. gio leest die (XDG_CURRENT_DESKTOP=KDE), net als
+#     Firefox; LC_ALL=C zodat de zin van gio niet vertaald is, en een lege thuismap zodat alleen BugOS telt.
+weg="$(rpm -qa --qf '%{NAME}\n' | grep -E '^(plasma-discover.*|kde-partitionmanager|kpmcore)$' | paste -sd, - || true)"
+klopt '[ -z "$weg" ]' "pakketten: geen KDE Discover en geen Partition Manager ${weg:+($weg)}"
+klopt '[ ! -e /usr/share/applications/org.kde.discover.desktop ] && [ ! -e /etc/xdg/autostart/org.kde.discover.notifier.desktop ] && [ ! -e /usr/share/solid/actions/open_in_partitionmanager.desktop ]' \
+    "Discover: niet in het startmenu en niet bij het opstarten; geen 'Reformat or Edit with Partition Manager' bij een USB-stick"
+leeg_thuis="$(mktemp -d)"
+for m in application/vnd.flatpak.ref application/vnd.flatpak.repo application/vnd.flatpak x-scheme-handler/flatpak+https x-scheme-handler/appstream; do
+    standaard="$(HOME="$leeg_thuis" XDG_CURRENT_DESKTOP=KDE LC_ALL=C gio mime "$m" 2>/dev/null | sed -n 's/^Default application for .*: //p')"
+    klopt '[ "$standaard" = bugos-store.desktop ]' "openen met: $m opent de BugOS Winkel (${standaard:-niets})"
+done
+
 # 6. Alles laadt met de Qt, KDE en Python van het beeld zelf
 HOME="$(mktemp -d)"
 export QT_QPA_PLATFORM=offscreen PYTHONDONTWRITEBYTECODE=1 HOME

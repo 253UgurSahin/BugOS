@@ -61,11 +61,24 @@ dnf5 install -y --skip-unavailable "${PAKKETTEN[@]}"
 # PackageKit-, systeemupdate- en updatemelder-onderdelen (plasma-discover-notifier werkte Flatpak-apps
 # stilletjes bij, ook bij 'Ik kies zelf wanneer' (U321)). Updates doet BugOS zelf (stap 6).
 # Zonder --nodeps: hangt er ooit iets van Discover af, dan moet de bouw luid stoppen, niet dat pakket breken.
+# Nagegaan op Kinoite 44 (Plasma 6.8.2, 2026-11-12): de basis heeft plasma-discover, -flatpak, -kns, -libs en
+# -notifier; rpm -e --test van precies deze lijst slaagt, en niets anders (ook niets uit packages.txt) heeft ze nodig.
 mapfile -t TEVEEL < <(rpm -q --qf '%{NAME}\n' plasma-discover plasma-discover-flatpak plasma-discover-kns \
     plasma-discover-libs plasma-discover-packagekit plasma-discover-offline-updates plasma-discover-rpm-ostree \
     plasma-discover-notifier 2>/dev/null | grep -v 'not installed' || true)
 if [ "${#TEVEEL[@]}" -gt 0 ]; then
     rpm -e "${TEVEEL[@]}"
+fi
+
+# Geen KDE Partition Manager. De basis (Kinoite) brengt hem mee, maar BugOS opent hem nergens meer: Bestanden maakt
+# zelf USB-sticks leeg en richt een nieuwe schijf zelf in, en het startmenu verbergt hem (style.sh). Toch bleef
+# zijn Solid-actie 'Reformat or Edit with Partition Manager' bij elke USB-stick staan in 'Schijven en apparaten'
+# (het systeemvak). Niets anders heeft kde-partitionmanager of kpmcore nodig (rpm -e --test op Kinoite 44 en op
+# BugOS slaagt). Zelfde aanpak als bij Discover: alleen als hij er is, en zonder --nodeps.
+mapfile -t SCHIJFBEHEER < <(rpm -q --qf '%{NAME}\n' kde-partitionmanager kpmcore 2>/dev/null \
+    | grep -v 'not installed' || true)
+if [ "${#SCHIJFBEHEER[@]}" -gt 0 ]; then
+    rpm -e "${SCHIJFBEHEER[@]}"
 fi
 
 # Steam als echt systeemprogramma (beste voor controllers en game-modus).
