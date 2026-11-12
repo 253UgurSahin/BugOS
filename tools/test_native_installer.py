@@ -1075,8 +1075,26 @@ def test_start(app, live) -> None:
     s.kijk()
     klopt(s.klaar_gezien and wacht(app, lambda: not s.isVisible(), 3),
           "28 (c): backend_ready en het venster: de melding gaat vanzelf weg")
-    browser(False)
     vlag.unlink()
+    # Vangnet: zien we backend_ready nooit (wat de reden ook is), dan toch weg zodra het venster van het
+    # installatieprogramma 2 minuten draait: nooit een melding 'het start nog' achter het installatieprogramma.
+    s2 = live.venster(["start"])
+    s2.timer.stop()
+    s2.NA_KLAAR_MS = 50
+    s2.show()
+    s2.kijk()
+    klopt(s2.isVisible() and s2.venster_sinds is not None and not s2.klaar_gezien,
+          "28 (c): het venster draait net, zonder backend_ready: de melding blijft nog")
+    browser(False)
+    s2.kijk()
+    klopt(s2.venster_sinds is None and s2.isVisible(), "28 (c): venster weer weg: de tijd begint opnieuw")
+    browser(True)
+    s2.kijk()
+    s2.venster_sinds -= s2.VENSTER_S + 1
+    s2.kijk()
+    klopt(s2.klaar_gezien and wacht(app, lambda: not s2.isVisible(), 3),
+          "28 (c): vangnet: het venster draait al 2 minuten, dus de melding gaat weg (ook zonder backend_ready)")
+    browser(False)
     live.PROC, live.ANACONDA_KLAAR = "/proc", "/run/anaconda/backend_ready"
 
     # Op het scherm, in het Engels en het Nederlands (zo start bugos-install hem: de taal van de stick, of LANGUAGE).

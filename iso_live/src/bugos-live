@@ -337,13 +337,18 @@ class Start(Achtergrond):
 
     Waarom: Anaconda heeft even nodig voordat je iets kunt doen (in een VM ruim anderhalve minuut, gemeten op
     2026-11-11). Zonder dit ging het welkomstscherm dicht en zag je al die tijd niets, en dan klik je nog een keer.
-    Het venster sluit zichzelf zodra het installatieprogramma klaar is (installatie_klaar); stopt liveinst eerder,
-    dan sluit bugos-install het. Geen knoppen: er valt niets te kiezen (het kruisje sluit alleen deze melding).
+    Het venster sluit zichzelf zodra het installatieprogramma klaar is (installatie_klaar), en anders uiterlijk als
+    zijn venster al VENSTER_S seconden draait; stopt liveinst eerder, dan sluit bugos-install het. Geen knoppen: er
+    valt niets te kiezen (het kruisje sluit alleen deze melding).
     Duurt het erg lang (trage computer of stick), dan zegt het dat eerlijk, in plaats van te blijven beloven."""
 
     KIJK_MS = 1000       # elke seconde kijken (goedkoop: één rondje door /proc)
     NA_KLAAR_MS = 1500   # nog heel even blijven staan, zodat de eerste pagina getekend is als dit weggaat
     LANG_S = 240         # na 4 minuten: zeggen dat het langer duurt dan normaal
+    # Vangnet: draait het venster van het installatieprogramma al 2 minuten, dan staat het zeker op het scherm (met
+    # zijn eigen 'Initializing...'), ook als we backend_ready om wat voor reden ook niet zien. Dan toch weg, zodat er
+    # nooit een melding 'het start nog' achter het installatieprogramma blijft hangen.
+    VENSTER_S = 120
 
     def __init__(self):
         super().__init__()
@@ -376,6 +381,7 @@ class Start(Achtergrond):
                                 "QProgressBar::chunk{background:rgba(255,255,255,0.70);border-radius:2px;}")
         lay.addWidget(self.balk)
         self.begin = time.monotonic()
+        self.venster_sinds: float | None = None   # sinds wanneer het venster van het installatieprogramma draait
         self.klaar_gezien = False
         self.toon(lang=False)
         self.timer = QTimer(self)
@@ -397,15 +403,23 @@ class Start(Achtergrond):
                                  "again."))
 
     def kijk(self) -> None:
-        """Elke seconde: is het installatieprogramma klaar? Dan nog even blijven staan en dicht."""
+        """Elke seconde: is het installatieprogramma klaar (zie installatie_klaar), of draait zijn venster al
+        VENSTER_S seconden? Dan nog even blijven staan en dicht."""
         if self.klaar_gezien:
             return
-        if installatie_klaar():
+        nu = time.monotonic()
+        venster = installatie_venster()
+        if not venster:
+            self.venster_sinds = None
+        elif self.venster_sinds is None:
+            self.venster_sinds = nu
+        # Zelfde regel als installatie_klaar(), plus het vangnet. ANACONDA_KLAAR pas hier lezen (de test zet hem om).
+        if venster and (os.path.exists(ANACONDA_KLAAR) or nu - self.venster_sinds >= self.VENSTER_S):
             self.klaar_gezien = True
             self.timer.stop()
             QTimer.singleShot(self.NA_KLAAR_MS, self.close)
             return
-        self.toon(lang=time.monotonic() - self.begin >= self.LANG_S)
+        self.toon(lang=nu - self.begin >= self.LANG_S)
 
 
 # bugos-live bitlocker: 0 = doorgaan, STOPPEN = niet installeren. Elke andere code (Python-fout, geen scherm) betekent
