@@ -397,6 +397,21 @@ Section "InputClass"
 EndSection
 EOF
 
+# De klok op de stick: een 24-uursklok en een datum die iedereen goed leest (22:40 en 2026-11-12), in plaats van de
+# Amerikaanse notatie (10:40 PM en 11/12/26; dat laatste leest de halve wereld als 11 december). Alleen LC_TIME: de
+# taal blijft Engels. Alleen op de stick: plasma-localerc in /etc/xdg geldt voor de live-gebruiker (Plasma zet
+# [Formats] bij het inloggen in de omgeving); het geïnstalleerde BugOS komt uit de OCI-map en krijgt dit niet.
+# Waarom en_SE: van de Engelse notaties is dat de enige met ISO-datums én 24 uur (Qt: 'HH:mm' en 'yyyy-MM-dd'), en
+# glibc kent hem (glibc-all-langpacks), dus geen setlocale-waarschuwingen in de terminal.
+# De tijdzone blijft UTC (zie stap 5): BugOS vraagt nooit waar je bent. In het installatieprogramma kies je de echte
+# zone voor de computer (geraden uit je taal). Ontbreekt en_SE ooit, dan blijft de klok zoals hij was (geen fout).
+# grep zonder -q leest alles: met pipefail kan -q 'locale -a' anders een SIGPIPE geven (en dan lijkt het mislukt).
+if locale -a 2>/dev/null | grep -x 'en_SE.utf8' >/dev/null; then
+    printf '[Formats]\nLC_TIME=en_SE.UTF-8\n' >/etc/xdg/plasma-localerc
+else
+    echo "Let op: glibc kent en_SE niet; de klok op de stick blijft in de Amerikaanse notatie" >&2
+fi
+
 # Het installatieprogramma in BugOS-kleuren, met het lieveheersbeestje.
 # Het programma (Anaconda WebUI) haalt zijn logo en kleuren uit de
 # "branding" van Cockpit. Zonder eigen map kreeg je die van Fedora: blauw,

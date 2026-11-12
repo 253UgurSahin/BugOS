@@ -1097,6 +1097,32 @@ def test_start(app, live) -> None:
           f"28 (c): {b}x{h} met titelbalk bij 150 % past op 1280x800 boven een taakbalk van 72 px")
 
 
+# ============================================================================ de klok op de stick (e) ===
+def test_klok() -> None:
+    """29 (e). Op de stick: een 24-uursklok en een datum die iedereen goed leest. Alleen LC_TIME, alleen op de stick."""
+    import re
+    bouw = bron("build.sh").replace("\r\n", "\n")
+    m = re.search(r"printf '(\[Formats\]\\nLC_TIME=([^\\']+)\\n)' >/etc/xdg/plasma-localerc", bouw)
+    klopt(m is not None and m.group(2) == "en_SE.UTF-8",
+          f"29 (e): build.sh zet LC_TIME=en_SE.UTF-8 in /etc/xdg/plasma-localerc ({m.group(1) if m else None})")
+    klopt(m is not None and m.group(1).count("=") == 1,
+          "29 (e): alleen LC_TIME (de taal, getallen en papier blijven van de stick)")
+    voor = bouw[:m.start()] if m else ""
+    klopt("grep -x 'en_SE.utf8' >/dev/null" in voor[-600:] and "grep -qx 'en_SE" not in voor[-600:],
+          "29 (e): alleen als glibc en_SE kent (en zonder grep -q: dat geeft met pipefail een SIGPIPE)")
+    klopt(bouw.index("plasma-localerc") > bouw.index("# 4. De live-omgeving zelf."),
+          "29 (e): het staat bij de live-omgeving (stap 4), niet in de BugOS die op de computer komt")
+    # Wat Qt ervan maakt (de klok op de taakbalk gebruikt Qt.locale()): 24 uur zonder seconden, het jaar vooraan.
+    from PySide6.QtCore import QLocale
+    kort = QLocale.FormatType.ShortFormat
+    se, us = QLocale("en_SE"), QLocale("en_US")
+    tijd, datum = se.timeFormat(kort), se.dateFormat(kort)
+    klopt("HH" in tijd and not re.search(r"[aAsS]", tijd) and datum.startswith("yyyy"),
+          f"29 (e): en_SE in Qt: 24 uur zonder seconden ({tijd!r}), het jaar vooraan ({datum!r})")
+    klopt(re.search(r"[aA]", us.timeFormat(kort)) is not None,
+          f"29 (e): ter vergelijking, en_US (de stick zonder dit): 12 uur met AM/PM ({us.timeFormat(kort)!r})")
+
+
 # =================================================================== --beeld: in de echte live-image (geen ISO nodig) ===
 WEBUI = Path("/usr/share/cockpit/anaconda-webui")
 
@@ -1342,6 +1368,7 @@ def main() -> int:
     test_tijdzone()
     test_voortgang()
     test_install()
+    test_klok()
     test_live()
     shutil.rmtree(TMP, ignore_errors=True)
     print()
