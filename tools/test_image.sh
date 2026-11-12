@@ -101,10 +101,17 @@ weg="$(rpm -qa --qf '%{NAME}\n' | grep -E '^(plasma-discover.*|kde-partitionmana
 klopt '[ -z "$weg" ]' "pakketten: geen KDE Discover en geen Partition Manager ${weg:+($weg)}"
 klopt '[ ! -e /usr/share/applications/org.kde.discover.desktop ] && [ ! -e /etc/xdg/autostart/org.kde.discover.notifier.desktop ] && [ ! -e /usr/share/solid/actions/open_in_partitionmanager.desktop ]' \
     "Discover: niet in het startmenu en niet bij het opstarten; geen 'Reformat or Edit with Partition Manager' bij een USB-stick"
+# Met de mappen van een echte Plasma-sessie: Plasma leest bij het aanmelden /etc/xdg/plasma-workspace/env/*.sh, en
+# env.sh van Fedora (kde-settings-plasma) zet XDG_CONFIG_DIRS op /etc/xdg:/usr/share/kde-settings/kde-profile/default/xdg.
+# Dat kde-profile noemt Discover nog (kde-mimeapps.list, kicker-extra-favoritesrc); /etc/xdg staat vooraan en moet dus
+# winnen. Daarom gio in een eigen bash, zonder XDG_CONFIG_DIRS (zoals bij het aanmelden) en zonder set -u: env.sh
+# leest die variabele zonder standaardwaarde. Is er geen env.sh (een andere basis), dan gewoon met de standaardmappen.
 leeg_thuis="$(mktemp -d)"
 for m in application/vnd.flatpak.ref application/vnd.flatpak.repo application/vnd.flatpak x-scheme-handler/flatpak+https x-scheme-handler/appstream; do
-    standaard="$(HOME="$leeg_thuis" XDG_CURRENT_DESKTOP=KDE LC_ALL=C gio mime "$m" 2>/dev/null | sed -n 's/^Default application for .*: //p')"
-    klopt '[ "$standaard" = bugos-store.desktop ]' "openen met: $m opent de BugOS Winkel (${standaard:-niets})"
+    standaard="$(env -u XDG_CONFIG_DIRS HOME="$leeg_thuis" XDG_CURRENT_DESKTOP=KDE LC_ALL=C bash -c \
+        'for f in /etc/xdg/plasma-workspace/env/*.sh; do [ -r "$f" ] && . "$f"; done; gio mime "$1" 2>/dev/null' _ "$m" \
+        | sed -n 's/^Default application for .*: //p')"
+    klopt '[ "$standaard" = bugos-store.desktop ]' "openen met: $m opent de BugOS Winkel, ook met de mappen van een Plasma-sessie (${standaard:-niets})"
 done
 
 # 6. Alles laadt met de Qt, KDE en Python van het beeld zelf
