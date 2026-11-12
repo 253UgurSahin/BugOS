@@ -4,11 +4,16 @@
 Wat er getest wordt, zonder Plasma en zonder node:
   A. de JavaScript van bugos-panel in een nagebootst Plasma (PySide6 QJSEngine): het slot, eerlijk vervang(),
      het bureaubladmenu, het systeemvak;
-  B. bugos-panel zelf (bash) met nep-programma's (gdbus, qdbus6, notify-send): wat hij naar Plasma stuurt;
+  B. bugos-panel zelf (bash) met nep-programma's (gdbus, qdbus6, notify-send): wat hij naar Plasma stuurt, en
+     welke eenmalige stappen hij onthoudt (merktekens);
   C. de functie bureaubladmenu uit build_files/style.sh op nagemaakte KDE-bestanden;
-  D. style.sh: de kiosk-sleutel, het bestand voor nieuwe gebruikers, het menu op bestanden (kservicemenurc);
+  D. style.sh: de kiosk-sleutel, het bestand voor nieuwe gebruikers, het menu op bestanden (kservicemenurc en het
+     Filelight-servicemenu), Discover en Filelight uit het startmenu (met en zonder Discover in het beeld);
   E. de QML: de eigen regels in de rechtermuismenu's (bureaublad, klok, snelmenu);
-  F. de indeling voor nieuwe gebruikers (look-and-feel) in een nagebootst Plasma.
+  F. de indeling voor nieuwe gebruikers (look-and-feel) in een nagebootst Plasma;
+  G. systeemvakNaUpdate(), de eenmalige stap 6 voor wie al een taakbalk had: wat hij doet, dat twee keer hetzelfde
+     is als één keer, dat hij wacht als Plasma het systeemvak nog niet had ingevuld, en dat geen enkele combinatie
+     van instellingen het systeemvak kapotmaakt.
 Er verandert niets aan je computer: alles gebeurt in een tijdelijke map.
 
 Gebruik:  QT_QPA_PLATFORM=offscreen python3 tools/test_native_shell.py
@@ -284,6 +289,9 @@ if methode.endswith("evaluateScript"):
     if not a.get("plasma", True):
         sys.exit(1)
     oproep = args[-1].rsplit("\n}\n", 1)[-1]
+    # "fout": Plasma geeft een D-Bus-fout (bijv. een fout in het script) op elk script met dat stuk erin.
+    if any(stuk in oproep for stuk in a.get("fout", [])):
+        sys.exit(1)
     uit = "aan" if "heeft(" in oproep else "1"
     for stuk, antwoord in a.get("regels", []):
         if stuk in oproep:
@@ -383,7 +391,8 @@ if shutil.which("bash"):
               f"B4: standaard met alle stappen al gedaan: toch elke keer het slot erop, en verder niets ({sc})")
         for m in ALLE_MERKEN:
             (p.merk / m).unlink()
-        p.antwoorden({"regels": [["bureaubladmenu();", "14"]]})
+        # Een nieuwe gebruiker: Plasma zegt "klaar" op stap 6 (het systeemvak is bijgewerkt).
+        p.antwoorden({"regels": [["bureaubladmenu();", "14"], ["systeemvakNaUpdate();", "klaar"]]})
         p.draai("standaard")
         sc = p.scripts()
         _bm = [x for x in sc if "bureaubladmenu();" in x]
@@ -395,14 +404,51 @@ if shutil.which("bash"):
         p.draai("standaard")
         klopt(not (p.merk / "paneel-bureaubladmenu-1").exists(),
               "B7: lukt het bureaubladmenu niet (Plasma geeft 0), dan de volgende keer opnieuw (geen merkteken)")
+        # Stap 2 verbergt de BugOS-lijst (systeemvak(true)); stap 6 is systeemvakNaUpdate(), juist NIET nog eens
+        # systeemvak(true): die zou bij wie al een taakbalk had alles weer verbergen wat hij zelf zichtbaar maakte.
         _vak = [x for x in sc if "systeemvak(true);" in x]
-        klopt((p.merk / "paneel-systeemvak-2").exists() and len(_vak) == 2,
-              f"B5: standaard (nieuwe gebruiker): systeemvak(true) voor stap 2 en de nieuwe stap 6, allebei onthouden ({_vak})")
+        _na = [x for x in sc if "systeemvakNaUpdate();" in x]
+        klopt((p.merk / "paneel-systeemvak-2").exists() and len(_vak) == 1 and len(_na) == 1
+              and sc.index(_vak[0]) < sc.index(_na[0])
+              and _na[0].strip() == "slot(false); try { systeemvakNaUpdate(); } finally { slot(true); }",
+              f"B5: standaard (nieuwe gebruiker): stap 2 is systeemvak(true), stap 6 is systeemvakNaUpdate() met het slot eraf "
+              f"en er weer op, en stap 6 is onthouden ({_vak}, {_na})")
         (p.merk / "paneel-systeemvak-2").unlink()
         p.antwoorden({"regels": [['heeft("org.bugos.quickmenu")', "uit"]]})
         p.draai("standaard")
-        klopt((p.merk / "paneel-systeemvak-2").exists() and not [x for x in p.scripts() if "systeemvak(" in x],
+        klopt((p.merk / "paneel-systeemvak-2").exists()
+              and not [x for x in p.scripts() if "systeemvak(" in x or "systeemvakNaUpdate(" in x],
               "B5: staat het snelmenu uit, dan blijft het systeemvak zoals het is (en is stap 6 klaar)")
+
+        # B9: stap 6 draait één keer, en alleen een merkteken als het echt lukte. De andere stappen zijn al gedaan.
+        for m in ALLE_MERKEN:
+            (p.merk / m).touch()
+
+        def stap6(antwoorden: dict) -> tuple[list[str], bool]:
+            """standaard met alleen stap 6 nog open (als het merkteken weg is): de scripts met systeemvakNaUpdate()
+            en of het merkteken er daarna staat."""
+            p.antwoorden(antwoorden)
+            p.draai("standaard")
+            return [x for x in p.scripts() if "systeemvakNaUpdate();" in x], (p.merk / "paneel-systeemvak-2").exists()
+
+        (p.merk / "paneel-systeemvak-2").unlink()
+        _s, _m = stap6({"regels": [["systeemvakNaUpdate();", "later"]]})
+        klopt(len(_s) == 1 and not _m and p.scripts()[-1] == " slot(true);",
+              f"B9: Plasma had de onderdelen van het systeemvak nog niet ('later'): geen merkteken, wel het slot erop ({_s})")
+        _s, _m = stap6({"regels": [["systeemvakNaUpdate();", "later"]]})
+        klopt(len(_s) == 1 and not _m, "B9: ... dus bij het volgende inloggen probeert stap 6 het opnieuw")
+        _s, _m = stap6({"regels": [["systeemvakNaUpdate();", "1"]]})
+        klopt(len(_s) == 1 and not _m, "B9: een onverwacht antwoord (bijv. '1' van een oudere bugos-panel) telt niet als klaar")
+        _s, _m = stap6({"fout": ["systeemvakNaUpdate();"]})
+        klopt(len(_s) == 1 and not _m, "B9: een fout van Plasma in stap 6: geen merkteken")
+        _s, _m = stap6({"fout": ['heeft("org.bugos.quickmenu")']})
+        klopt(not _s and not _m,
+              "B9: geen antwoord op de vraag of het snelmenu er staat: niets doen en niets onthouden (niet als 'uit' tellen)")
+        _s, _m = stap6({"regels": [["systeemvakNaUpdate();", "klaar"]]})
+        klopt(len(_s) == 1 and _m, f"B9: 'klaar': stap 6 is onthouden ({_s})")
+        _s, _m = stap6({"regels": [["systeemvakNaUpdate();", "klaar"]]})
+        klopt(not _s and _m and p.scripts() == [" slot(true);"],
+              f"B9: daarna draait stap 6 nooit meer (eenmalig); alleen het slot gaat er weer op ({p.scripts()})")
 
         # Meta+Q (KDE: zijpaneel Activiteiten).
         def sneltoets(antwoord: str) -> list[list[str]]:
@@ -467,19 +513,65 @@ klopt(bool(_skel) and _regels[:2] == ["[ActionPlugins][0]", "RightButton;NoModif
       "D3: nieuwe gebruikers krijgen het bureaubladmenu zonder de 14 KDE-regels (/etc/skel), en niets voor het paneel")
 klopt(bool(_skel) and STYLE_TEKST.index("mkdir -p /etc/skel/.config") < _skel.start(),
       "D3: style.sh maakt /etc/skel/.config eerst")
-_verberg = re.search(r"^for app in org\.kde\.dolphin\.desktop (.*?); do\n    verberg", STYLE_TEKST, re.S | re.M)
-klopt(_verberg is not None and "org.kde.filelight.desktop" in _verberg.group(1) and "org.kde.discover.desktop" not in STYLE_TEKST,
-      "D5: style.sh verbergt Filelight (Bestanden laat zelf de grootste mappen zien) en noemt Discover niet meer (weg uit het beeld)")
+# D5: Discover en Filelight staan niet in het startmenu. Het pakket store haalt Discover uit het beeld (build.sh); dit
+# pakket moet werken met én zonder Discover: zolang de basis hem meebrengt is hij verborgen, is hij weg dan doet
+# verberg niets. En nergens een "Meer apps"-naam die gebruikers naar Discover stuurt.
+_lussen = [m.group(0) for m in re.finditer(r"^for app in .*?\ndone\n", STYLE_TEKST, re.S | re.M)]
+_kde_lus = next((l for l in _lussen if "org.kde.dolphin.desktop" in l and 'verberg "$app"' in l), "")
+_namen = _kde_lus.split(";", 1)[0].replace("\\\n", " ").split()[3:]
+klopt("org.kde.discover.desktop" in _namen and "org.kde.filelight.desktop" in _namen,
+      f"D5: style.sh verbergt Discover (zolang de basis hem meebrengt) en Filelight (Bestanden laat zelf de grootste mappen zien) ({_namen[:4]}...)")
+_style_code = [r for r in STYLE_TEKST.split("\n") if not r.lstrip().startswith("#")]
+klopt(not any("discover" in r.lower() and "hernoem" in r for r in _style_code)
+      and not any("Meer apps" in r or "More apps" in r for r in _style_code),
+      "D5: style.sh geeft Discover geen BugOS-naam meer ('Meer apps'): niets wijst nog naar Discover")
 klopt("Schijfbeheer\" in Bestanden" not in STYLE_TEKST and "\"Meer apps\" in de Winkel" not in STYLE_TEKST,
       "D5: het commentaar in style.sh belooft geen Schijfbeheer in Bestanden en geen 'Meer apps' meer")
+# De echte hulpjes en de echte lus uit style.sh draaien, met set -euo pipefail zoals build.sh (set -ouex pipefail):
+# één keer met Discover (zoals in Kinoite 44: NoDisplay=false) en Filelight erin, één keer zonder.
+_hulp = {n: re.search(rf"^{n}\(\) \{{\n.*?\n\}}\n", STYLE_TEKST, re.S | re.M) for n in ("verberg", "hernoem")}
+DISCOVER = ("[Desktop Entry]\nName=Discover\nExec=plasma-discover %F\nIcon=plasmadiscover\nType=Application\n"
+            "NoDisplay=false\nCategories=Qt;KDE;System;\n\n[Desktop Action Updates]\nName=Updates\n"
+            "Exec=plasma-discover --mode update\n")
+FILELIGHT = "[Desktop Entry]\nName=Filelight\nExec=filelight %u\nIcon=filelight\nType=Application\n"
+ANDER = "[Desktop Entry]\nName=Gwenview\nExec=gwenview %U\nType=Application\n"
+
+
+def draai_verberg(apps: dict[str, str], extra: str = "") -> tuple[subprocess.CompletedProcess, dict[str, str]]:
+    """verberg/hernoem en de KDE-lus uit style.sh op een eigen map met .desktop-bestanden; geeft de uitkomst en de
+    bestanden erna terug."""
+    with tempfile.TemporaryDirectory() as d:
+        for naam, tekst in apps.items():
+            (Path(d) / naam).write_text(tekst, encoding="utf-8", newline="\n")
+        code = "set -euo pipefail\n" + "".join(h.group(0) for h in _hulp.values() if h) + _kde_lus + extra
+        code = code.replace("/usr/share/applications/", d + "/")
+        uit = subprocess.run(["bash", "-c", code], capture_output=True, text=True, timeout=30)
+        return uit, {f.name: f.read_text(encoding="utf-8") for f in Path(d).iterdir()}
+
+
+if all(_hulp.values()) and _kde_lus and shutil.which("bash"):
+    _u, _na = draai_verberg({"org.kde.discover.desktop": DISCOVER, "org.kde.filelight.desktop": FILELIGHT,
+                             "org.kde.gwenview.desktop": ANDER})
+    _disc = _na.get("org.kde.discover.desktop", "").split("\n")
+    klopt(_u.returncode == 0 and "NoDisplay=true" in _disc and "NoDisplay=false" not in _disc
+          and _na.get("org.kde.filelight.desktop", "").startswith("[Desktop Entry]\nNoDisplay=true\n")
+          and _na.get("org.kde.gwenview.desktop") == ANDER,
+          f"D5: met Discover in het beeld: Discover en Filelight krijgen NoDisplay=true, de rest blijft ({_u.returncode}, {_u.stderr.strip()[:200]})")
+    _u, _na = draai_verberg({"org.kde.gwenview.desktop": ANDER}, 'hernoem bestaat-niet.desktop "Naam" "Name"\n')
+    klopt(_u.returncode == 0 and set(_na) == {"org.kde.gwenview.desktop"} and _na["org.kde.gwenview.desktop"] == ANDER,
+          f"D5: zonder Discover en Filelight (pakket store, of een andere basis): geen fout, en er komt niets bij ({_u.returncode}, {sorted(_na)})")
+else:
+    klopt(False, "D5: style.sh heeft de hulpjes verberg en hernoem en de KDE-lus (met Dolphin)")
 klopt(re.search(r"^bureaubladmenu /usr/share/plasma/plasmoids/org\.kde\.desktopcontainment/contents/ui \\\n"
                 r" +/usr/share/plasma/plasmoids/org\.bugos\.taskbar/contents/ui/BureaubladActies\.qml$", STYLE_TEKST, re.M)
       is not None, "D4: style.sh past de mapweergave van KDE aan (org.kde.desktopcontainment) met BureaubladActies.qml")
 
-# D6 (review 1): het menu op een bestand of map op het bureaublad zonder "Activiteiten >", tags, KDE Connect en de
-# kluis. De lus echt draaien met een nagemaakte kwriteconfig6 die opschrijft wat hij krijgt.
+# D6 (review 1): het menu op een bestand of map op het bureaublad zonder "Activiteiten >", tags, KDE Connect, de
+# kluis en "Openen als beheerder" (kio-admin: Dolphin als beheerder, een KDE-venster). De lus echt draaien met een
+# nagemaakte kwriteconfig6 die opschrijft wat hij krijgt. (Nagekeken in Kinoite 44: alle vijf .so-bestanden
+# bestaan, en hun metadata heeft geen eigen Id, dus KIO leest kservicemenurc met de bestandsnaam.)
 BESTANDMENU_UIT = ["kactivitymanagerd_fileitem_linking_plugin", "tagsfileitemaction", "kdeconnectfileitemaction",
-                   "plasmavaultfileitemaction"]
+                   "plasmavaultfileitemaction", "kio-admin"]
 _lus = re.search(r"^for plugin in (.*?); do\n    kwriteconfig6 (.*?)\ndone\n", STYLE_TEKST, re.S | re.M)
 _gekregen: list[list[str]] = []
 if _lus:
@@ -493,9 +585,46 @@ if _lus:
         if _log.exists():
             _gekregen = [r.rstrip("|").split("|") for r in _log.read_text(encoding="utf-8").splitlines() if r]
 klopt(_gekregen == [["--file", "/etc/xdg/kservicemenurc", "--group", "Show", "--key", p, "false"] for p in BESTANDMENU_UIT],
-      f"D6: style.sh zet in /etc/xdg/kservicemenurc [Show] precies de vier KDE-onderdelen van het bestandsmenu uit ({_gekregen})")
-klopt(not any(p in STYLE_TEKST for p in ("sharefileitemaction", "compressfileitemaction", "extractfileitemaction")),
-      "D6: Delen, Inpakken en Uitpakken blijven in het bestandsmenu")
+      f"D6: style.sh zet in /etc/xdg/kservicemenurc [Show] precies de vijf KDE-onderdelen van het bestandsmenu uit ({_gekregen})")
+klopt(not any(p in STYLE_TEKST for p in ("sharefileitemaction", "compressfileitemaction", "extractfileitemaction",
+                                         "wallpaperfileitemaction")),
+      "D6: Delen, Inpakken, Uitpakken en 'Als achtergrond instellen' blijven in het bestandsmenu")
+# De controle in het gebouwde beeld (tools/test_image.sh) moet dezelfde vijf nakijken, anders gaat er bij een
+# wijziging aan één kant iets stil mis.
+TEST_IMAGE_TEKST = lees(ROOT / "tools/test_image.sh")
+_beeld = re.search(r"for p in ([a-z0-9_ -]+); do \[ -f /usr/lib64/qt6/plugins/kf6/kfileitemaction/\$p\.so \]", TEST_IMAGE_TEKST)
+klopt(_beeld is not None and _beeld.group(1).split() == BESTANDMENU_UIT,
+      f"D6: tools/test_image.sh kijkt in het beeld dezelfde vijf plug-ins na ({_beeld.group(1).split() if _beeld else None})")
+
+# D7: de Filelight-regel op mappen ("schijfgebruik bekijken") is een los servicemenu-bestand van het pakket filelight
+# (rpm -ql filelight in Kinoite 44: /usr/share/kio/servicemenus/filelight.desktop). style.sh haalt het weg; dat mag
+# nooit de bouw breken, ook niet als het bestand er niet is. De echte regel uit style.sh draaien, op een eigen map.
+_rm = re.search(r"^rm -f /usr/share/kio/servicemenus/filelight\.desktop$", STYLE_TEKST, re.M)
+klopt(_rm is not None, "D7: style.sh haalt het Filelight-servicemenu weg (rm -f, het pad uit het pakket filelight)")
+if _rm and shutil.which("bash"):
+    for _er in (True, False):
+        with tempfile.TemporaryDirectory() as _d:
+            _menu = Path(_d) / "filelight.desktop"
+            _ander = Path(_d) / "installfont.desktop"   # een ander servicemenu van KDE: moet blijven
+            _ander.write_text("[Desktop Entry]\n", encoding="utf-8")
+            if _er:
+                _menu.write_text("[Desktop Entry]\nActions=filelight\n", encoding="utf-8")
+            _u = subprocess.run(["bash", "-c", "set -euo pipefail\n"
+                                 + _rm.group(0).replace("/usr/share/kio/servicemenus/", _d + "/") + "\n"],
+                                capture_output=True, text=True, timeout=30)
+            klopt(_u.returncode == 0 and not _menu.exists() and _ander.exists(),
+                  f"D7: {'met' if _er else 'zonder'} het Filelight-servicemenu: weg (of er al niet), geen fout, de rest blijft")
+klopt("[ ! -e /usr/share/kio/servicemenus/filelight.desktop ]" in TEST_IMAGE_TEKST,
+      "D7: tools/test_image.sh kijkt in het beeld na dat het Filelight-servicemenu weg is")
+klopt('grep -qx "NoDisplay=true" /usr/share/applications/org.kde.discover.desktop' in TEST_IMAGE_TEKST
+      and 'grep -qx "NoDisplay=true" /usr/share/applications/org.kde.filelight.desktop' in TEST_IMAGE_TEKST,
+      "D7: tools/test_image.sh kijkt in het beeld na dat Discover en Filelight weg of verborgen zijn")
+
+# D8: niets in de shell (taakbalk, startmenu, snelmenu, klok, bureaubladmenu, indeling, bugos-panel) stuurt je naar
+# KDE Discover: de Winkel doet alle apps (pakket store).
+_shell = [PANEEL, INDELING] + sorted(PLASMOIDS.rglob("*.qml")) + sorted(PLASMOIDS.rglob("*.js")) + sorted(PLASMOIDS.rglob("*.json"))
+_naar_discover = [str(f.relative_to(ROOT)) for f in _shell if "discover" in lees(f).lower()]
+klopt(len(_shell) > 5 and not _naar_discover, f"D8: niets in de shell wijst naar Discover ({_naar_discover})")
 
 
 # --- C. style.sh: bureaubladmenu op nagemaakte KDE-bestanden ----------------------------------------------------
@@ -741,6 +870,236 @@ klopt(_v.get("hiddenItems") == _paneel_lijsten[0], "F: de indeling verbergt deze
 klopt(sorted(_v.get("bugosOff", [])) == sorted(_paneel_lijsten[1]), "F: de indeling zet dezelfde lijst uit als bugos-panel (UIT)")
 klopt("org.kde.plasma.keyboardlayout" not in _v.get("hiddenItems", ["org.kde.plasma.keyboardlayout"]),
       "F: de toetsenbordindeling is niet verborgen (met twee of meer indelingen naast de klok)")
+
+
+# --- G. systeemvakNaUpdate(): de eenmalige stap 6 ----------------------------------------------------------------
+# Voor wie al een taakbalk had, en voor een nieuwe gebruiker bij wie Plasma de onderdelen pas na het inloggen
+# invult. Wat de functie moet doen: de KDE-onderdelen die het snelmenu vervangt uitzetten (en onthouden), de
+# toetsenbordindeling weer laten zien als BugOS die verborg, en verder van hiddenItems afblijven. Wat ze nooit mag:
+# een systeemvak slopen (iets kwijtraken, iets verbergen, knownItems of shownItems aanraken), vastlopen op een rare
+# instelling, of een tweede keer iets anders doen dan de eerste keer.
+KL = "org.kde.plasma.keyboardlayout"
+_e = QJSEngine()
+_e.evaluate(JS)
+RUSTIG_JS, VROEGER_JS = json.loads(_e.evaluate("JSON.stringify([RUSTIG, RUSTIG_VROEGER])").toString())
+klopt(sorted(VROEGER_JS) == sorted(_vroeger) and set(VROEGER_JS) - set(RUSTIG_JS) == {KL} and KL not in RUSTIG_JS,
+      "G0: RUSTIG_VROEGER is de lijst van de vorige BugOS (13, met de toetsenbordindeling), RUSTIG dezelfde zonder")
+# knownItems van een echt systeemvak: alles wat Plasma kent, ook wat uit staat (Kinoite 44: 22 onderdelen).
+VM_KNOWN = VM_EXTRA + ["org.kde.plasma.addons.katesessions", "org.kde.plasma.diskquota", "org.kde.plasma.trash"]
+NA_UPDATE = wijzig("systeemvakNaUpdate();")
+
+
+def na_update(cfg: dict, code: str = NA_UPDATE, vooraf: str = "") -> dict:
+    """Stap 6 zoals bugos-panel hem naar Plasma stuurt (slot eraf, try, finally slot erop), op een taakbalk die op
+    slot staat, met één systeemvak met deze instellingen. Geeft de instellingen erna, alles wat geprint is, hoe vaak
+    het systeemvak herladen werd, het slot en een eventuele fout."""
+    r = draai_js("__AppInterface.locked = true; var v = vak(paneel);" + code,
+                 "{cfg: v.cfg, herladen: v.herladen, slot: __AppInterface.locked}",
+                 cfgs={"org.kde.plasma.systemtray": cfg}, vooraf=vooraf)
+    u = r["u"] or {}
+    return {"cfg": u.get("cfg") or {}, "herladen": u.get("herladen"), "slot": u.get("slot"), "gedrukt": r["gedrukt"],
+            "fout": r["fout"]}
+
+
+# G1: de gewone bestaande gebruiker (de vorige BugOS verborg 13 onderdelen, met de toetsenbordindeling).
+_wie = {"hiddenItems": list(_vroeger), "bugosHidden": list(_vroeger), "extraItems": VM_EXTRA + ["mijn.app"],
+        "knownItems": VM_KNOWN + ["mijn.app"], "shownItems": ["mijn.app"]}
+r = na_update(_wie)
+c = r["cfg"]
+klopt(r["fout"] is None and r["gedrukt"] == ["klaar"] and r["slot"] is True and r["herladen"] == 1,
+      f"G1: bestaande gebruiker: één woord 'klaar', één keer herladen, het slot weer erop ({r['gedrukt']}, {r['fout']})")
+klopt(c.get("hiddenItems") == [x for x in _vroeger if x != KL],
+      f"G1: de toetsenbordindeling is weer te zien (BugOS verborg hem); de rest blijft verborgen, in dezelfde volgorde ({c.get('hiddenItems')})")
+klopt(sorted(c.get("bugosHidden", [])) == sorted(RUSTIG_JS),
+      "G1: bugosHidden onthoudt wat BugOS nog verbergt (zonder de toetsenbordindeling), voor 'snelmenu uit'")
+klopt(sorted(c.get("extraItems", [])) == sorted(BLIJFT) and sorted(c.get("bugosOff", [])) == sorted(UIT),
+      f"G1: de KDE-onderdelen die het snelmenu vervangt staan uit en zijn onthouden; de rest (ook je eigen app) blijft aan ({c.get('extraItems')})")
+klopt(c.get("knownItems") == _wie["knownItems"] and c.get("shownItems") == ["mijn.app"],
+      "G1: knownItems en shownItems blijven precies zoals ze waren (anders zet Plasma onderdelen zelf weer aan)")
+
+# G2: wie het klembord en de printers zelf weer zichtbaar maakte, houdt ze zichtbaar.
+_zelf = [x for x in _vroeger if x not in ("org.kde.plasma.clipboard", "org.kde.plasma.printmanager")]
+_cfg2 = {"hiddenItems": _zelf, "bugosHidden": list(_vroeger), "extraItems": list(VM_EXTRA)}
+r = na_update(_cfg2)
+klopt(r["gedrukt"] == ["klaar"] and r["cfg"].get("hiddenItems") == [x for x in _zelf if x != KL],
+      f"G2: wat je zelf weer zichtbaar maakte (klembord, printers), verbergt de update niet opnieuw ({r['cfg'].get('hiddenItems')})")
+r = na_update(_cfg2, wijzig("systeemvak(true);"))
+klopt("org.kde.plasma.clipboard" in r["cfg"].get("hiddenItems", []),
+      "G2: (ter vergelijking: systeemvak(true) verbergt het klembord wél weer; daarom is stap 6 systeemvakNaUpdate)")
+
+# G3: wat je zelf verborg, blijft verborgen.
+r = na_update({"hiddenItems": _vroeger + ["mijn.app"], "bugosHidden": list(_vroeger), "extraItems": list(VM_EXTRA)})
+klopt(r["cfg"].get("hiddenItems") == [x for x in _vroeger if x != KL] + ["mijn.app"],
+      f"G3: je eigen verborgen app blijft verborgen ({r['cfg'].get('hiddenItems')})")
+
+# G4: een oudere BugOS, van voor bugosHidden: de hele lijst staat verborgen, maar er is niets onthouden.
+r = na_update({"hiddenItems": ["mijn.app"] + _vroeger, "extraItems": list(VM_EXTRA)})
+c = r["cfg"]
+klopt(r["gedrukt"] == ["klaar"] and c.get("hiddenItems") == ["mijn.app"] + [x for x in _vroeger if x != KL]
+      and sorted(c.get("bugosHidden", [])) == sorted(RUSTIG_JS) and sorted(c.get("bugosOff", [])) == sorted(UIT),
+      f"G4: oudere BugOS zonder bugosHidden: de toetsenbordindeling weer te zien, de lijst van BugOS onthouden, UIT uit ({c})")
+
+# G5: nooit iets onthouden en wat verborgen staat is niet de lijst van BugOS: dan is het van jou en blijft het.
+r = na_update({"hiddenItems": ["mijn.app", KL], "extraItems": list(VM_EXTRA)})
+c = r["cfg"]
+klopt(r["gedrukt"] == ["klaar"] and c.get("hiddenItems") == ["mijn.app", KL] and "bugosHidden" not in c
+      and sorted(c.get("bugosOff", [])) == sorted(UIT),
+      f"G5: jouw eigen verborgen lijst (ook de toetsenbordindeling) blijft, er wordt niets 'van BugOS' verzonnen ({c})")
+
+# G6: je koos zelf 'bugos-panel systeemvak alles' (BugOS verbergt niets): dan blijven de KDE-onderdelen aan.
+for _leeg in ([""], "", []):
+    _cfg6 = {"hiddenItems": ["mijn.app"], "bugosHidden": _leeg, "extraItems": list(VM_EXTRA), "knownItems": VM_KNOWN}
+    r = na_update(_cfg6)
+    klopt(r["gedrukt"] == ["klaar"] and r["cfg"] == _cfg6 and r["herladen"] == 0 and r["slot"] is True,
+          f"G6: 'systeemvak alles' gekozen (bugosHidden {_leeg!r}): niets verandert, de KDE-onderdelen blijven aan ({r['cfg'] if r['cfg'] != _cfg6 else 'gelijk'})")
+
+# G7: Plasma heeft de onderdelen nog niet ingevuld: niets aanraken (ook geen bugosOff), 'later'.
+for _extra in ("weg", [], [""], "", None):
+    _cfg7 = {"hiddenItems": list(_vroeger), "bugosHidden": list(_vroeger), "knownItems": VM_KNOWN}
+    if _extra != "weg":
+        _cfg7["extraItems"] = _extra
+    r = na_update(_cfg7)
+    klopt(r["gedrukt"] == ["later"] and r["cfg"] == _cfg7 and r["herladen"] == 0 and r["slot"] is True and r["fout"] is None,
+          f"G7: extraItems {_extra!r}: 'later', en er is niets veranderd (de volgende keer begint schoon) ({r})")
+
+# G8: twee keer draaien geeft precies hetzelfde als één keer (en zegt allebei 'klaar').
+for _naam, _cfg in (("G1", _wie), ("G2", _cfg2), ("G4", {"hiddenItems": ["mijn.app"] + _vroeger, "extraItems": list(VM_EXTRA)})):
+    r1, r2 = na_update(_cfg), na_update(_cfg, NA_UPDATE * 2)
+    klopt(r2["cfg"] == r1["cfg"] and r2["gedrukt"] == ["klaar", "klaar"],
+          f"G8: {_naam} twee keer: hetzelfde als één keer")
+
+# G9: een taakbalk zonder systeemvak: niets te doen, dus 'klaar' (anders bij elk inloggen opnieuw).
+r = draai_js(NA_UPDATE, "soorten(paneel)", begin=["org.bugos.startmenu", "org.kde.plasma.icontasks", "org.bugos.quickmenu"])
+klopt(r["gedrukt"] == ["klaar"] and r["fout"] is None, f"G9: geen systeemvak: 'klaar' en geen fout ({r['gedrukt']}, {r['fout']})")
+
+# G10: twee taakbalken met elk een systeemvak; één is nog niet ingevuld. Die wacht ('later'), de andere is al bij.
+_klaar_vak = {"hiddenItems": list(_vroeger), "bugosHidden": list(_vroeger), "extraItems": list(VM_EXTRA)}
+_twee = ("var paneel2 = maakContainment(" + json.dumps(TAAKBALK) + ", " + json.dumps({"org.kde.plasma.systemtray": _klaar_vak})
+         + "); function panels() { return [paneel, paneel2]; }")
+r = draai_js(NA_UPDATE + " var a = JSON.parse(JSON.stringify([vak(paneel).cfg, vak(paneel2).cfg]));"
+             " vak(paneel).cfg.extraItems = " + json.dumps(VM_EXTRA) + ";" + NA_UPDATE
+             + " var b = JSON.parse(JSON.stringify([vak(paneel).cfg, vak(paneel2).cfg]));",
+             "{a: a, b: b}", cfgs={"org.kde.plasma.systemtray": {"hiddenItems": list(_vroeger), "bugosHidden": list(_vroeger)}},
+             vooraf=_twee)
+u = r["u"] or {}
+a, b = u.get("a") or [{}, {}], u.get("b") or [{}, {}]
+klopt(r["gedrukt"] == ["later", "klaar"] and "bugosOff" not in a[0] and sorted(a[1].get("bugosOff", [])) == sorted(UIT)
+      and sorted(b[0].get("bugosOff", [])) == sorted(UIT) and b[1] == a[1],
+      f"G10: twee systeemvakken: wat al kan gebeurt meteen, het andere bij de volgende keer; het eerste verandert dan niet meer ({r['gedrukt']})")
+
+# G11: rare instellingen (lijsten als tekst, dubbel, leeg, null, een getal, een los object): geen fout, iets zinnigs.
+r = na_update({"hiddenItems": "org.kde.plasma.volume,,org.kde.plasma.keyboardlayout,org.kde.plasma.volume",
+               "bugosHidden": "org.kde.plasma.keyboardlayout,org.kde.plasma.volume",
+               "extraItems": ",".join(VM_EXTRA) + ",", "bugosOff": None, "knownItems": VM_KNOWN})
+c = r["cfg"]
+klopt(r["fout"] is None and r["gedrukt"] == ["klaar"] and c.get("hiddenItems") == ["org.kde.plasma.volume"]
+      and c.get("bugosHidden") == ["org.kde.plasma.volume"]
+      and sorted(c.get("extraItems", [])) == sorted(x for x in VM_EXTRA if x not in UIT)
+      and sorted(c.get("bugosOff", [])) == sorted(UIT) and c.get("knownItems") == VM_KNOWN,
+      f"G11: lijsten als tekst met dubbele en lege namen, bugosOff null: gewoon goed bijgewerkt ({c})")
+for _raar in ({"hiddenItems": 5, "extraItems": list(VM_EXTRA)},
+              {"hiddenItems": list(_vroeger), "bugosHidden": {"x": 1}, "extraItems": list(VM_EXTRA)},
+              {"hiddenItems": list(_vroeger), "bugosHidden": list(_vroeger), "extraItems": 7},
+              {"hiddenItems": None, "bugosHidden": None, "extraItems": None, "bugosOff": 3}):
+    r = na_update(_raar)
+    klopt(r["fout"] is None and len(r["gedrukt"]) == 1 and r["gedrukt"][0] in ("klaar", "later") and r["slot"] is True,
+          f"G11: een rare instelling ({json.dumps(_raar)[:90]}): geen fout, één antwoord, het slot erop ({r['gedrukt']}, {r['fout']})")
+
+# G12: het systeemvak kan niet stuk. Alle combinaties van hiddenItems, bugosHidden, extraItems en bugosOff (ook
+# ontbrekend, leeg, als tekst, null) in één keer. Per combinatie: één keer, nog een keer, en daarna 'snelmenu uit'.
+WEG = object()   # de sleutel ontbreekt helemaal
+
+
+def norm(x) -> list[str]:
+    """Zoals lijst() in bugos-panel: tekst splitsen op komma's, lege en dubbele namen weg; geen lijst = leeg."""
+    if isinstance(x, str):
+        x = x.split(",")
+    if not isinstance(x, list):
+        return []
+    uit: list[str] = []
+    for y in x:
+        if y is not None and str(y) and str(y) not in uit:
+            uit.append(str(y))
+    return uit
+
+
+_keuzes = {
+    "hiddenItems": [WEG, [], list(_vroeger), _vroeger + ["mijn.app"], [x for x in _vroeger if x != "org.kde.plasma.clipboard"],
+                    ["mijn.app", KL], ",".join(_vroeger), None],
+    "bugosHidden": [WEG, [""], list(_vroeger), [KL, "org.kde.plasma.volume"], KL + ",org.kde.plasma.volume", None],
+    "extraItems": [WEG, [], VM_EXTRA + ["mijn.app"], ",".join(VM_EXTRA), [x for x in VM_EXTRA if x not in UIT],
+                   VM_EXTRA + [""] + VM_EXTRA[:3]],
+    "bugosOff": [WEG, list(UIT), [""]],
+}
+_scenarios = [{}]
+for _sleutel, _waarden in _keuzes.items():
+    _scenarios = [{**s, _sleutel: w} if w is not WEG else dict(s) for s in _scenarios for w in _waarden]
+for s in _scenarios:
+    s["knownItems"] = VM_KNOWN + ["mijn.app"]
+    s["shownItems"] = ["mijn.app"]
+_HARNAS = ("var uitslagen = [];"
+           "for (var s = 0; s < SCENARIOS.length; s++) {"
+           " paneel = maakContainment(" + json.dumps(TAAKBALK) + ", {\"org.kde.plasma.systemtray\": SCENARIOS[s]});"
+           " __AppInterface.locked = true; var v = vak(paneel); var r = {fout: null};"
+           " gedrukt = []; try { " + NA_UPDATE + " } catch (x) { r.fout = String(x); }"
+           " r.na1 = JSON.parse(JSON.stringify(v.cfg)); r.gedrukt1 = gedrukt.slice(); r.slot1 = __AppInterface.locked;"
+           " gedrukt = []; try { " + NA_UPDATE + " } catch (x) { r.fout = String(x); }"
+           " r.na2 = JSON.parse(JSON.stringify(v.cfg)); r.gedrukt2 = gedrukt.slice();"
+           " gedrukt = []; try { " + wijzig("systeemvak(false);") + " } catch (x) { r.fout = String(x); }"
+           " r.uit = JSON.parse(JSON.stringify(v.cfg)); uitslagen.push(r);"
+           "}")
+r = draai_js(_HARNAS, "uitslagen", vooraf="var SCENARIOS = " + json.dumps(_scenarios) + ";")
+_uitslagen = r["u"] or []
+klopt(len(_uitslagen) == len(_scenarios) == 864 and r["fout"] is None,
+      f"G12: {len(_uitslagen)} van de {len(_scenarios)} combinaties gedraaid ({r['fout']})")
+_mis: dict[str, list[int]] = {}
+
+
+def mis(regel: str, i: int, goed: bool) -> None:
+    if not goed:
+        _mis.setdefault(regel, []).append(i)
+
+
+for i, (voor, u) in enumerate(zip(_scenarios, _uitslagen)):
+    na1, na2, uit_ = u["na1"], u["na2"], u["uit"]
+    alles = "bugosHidden" in voor and norm(voor["bugosHidden"]) == []
+    wacht = not alles and norm(voor.get("extraItems")) == []
+    mis("geen fout, één woord, het slot erop", i, u["fout"] is None and u["slot1"] is True
+        and u["gedrukt1"] in (["klaar"], ["later"]) and u["gedrukt2"] == u["gedrukt1"])
+    mis("'later' precies als Plasma de onderdelen nog niet had", i, (u["gedrukt1"] == ["later"]) == wacht)
+    mis("'later' en 'systeemvak alles': niets veranderd", i, na1 == voor if (wacht or alles) else True)
+    mis("knownItems en shownItems blijven", i, all(na1.get(k) == voor.get(k) for k in ("knownItems", "shownItems")))
+    _h0, _h1 = set(norm(voor.get("hiddenItems"))), set(norm(na1.get("hiddenItems")))
+    mis("niets nieuws verborgen; alleen de toetsenbordindeling mag zichtbaar worden", i, _h1 <= _h0 and _h0 - _h1 <= {KL})
+    _e0, _e1 = set(norm(voor.get("extraItems"))), set(norm(na1.get("extraItems")))
+    mis("alleen UIT-onderdelen gaan uit", i, _e1 <= _e0 and _e0 - _e1 <= set(UIT))
+    mis("wat uitging staat in bugosOff", i, (_e0 - _e1) <= set(norm(na1.get("bugosOff"))))
+    mis("met het snelmenu aan staat geen UIT-onderdeel meer aan", i, wacht or alles or not (_e1 & set(UIT)))
+    mis("twee keer = één keer", i, na2 == na1)
+    mis("'snelmenu uit' daarna: alles is terug", i, _e0 <= set(norm(uit_.get("extraItems"))))
+for _regel in ("geen fout, één woord, het slot erop", "'later' precies als Plasma de onderdelen nog niet had",
+               "'later' en 'systeemvak alles': niets veranderd", "knownItems en shownItems blijven",
+               "niets nieuws verborgen; alleen de toetsenbordindeling mag zichtbaar worden", "alleen UIT-onderdelen gaan uit",
+               "wat uitging staat in bugosOff", "met het snelmenu aan staat geen UIT-onderdeel meer aan", "twee keer = één keer",
+               "'snelmenu uit' daarna: alles is terug"):
+    _fout_bij = _mis.get(_regel, [])
+    klopt(bool(_uitslagen) and not _fout_bij,
+          f"G12: {_regel} (alle {len(_uitslagen)} combinaties)"
+          + (f" - mis bij {len(_fout_bij)}, bijv. {json.dumps(_scenarios[_fout_bij[0]])[:300]}" if _fout_bij else ""))
+
+# G13: een nieuwe gebruiker bij wie Plasma de onderdelen pas na het eerste inloggen invult. De indeling liet alleen
+# hiddenItems achter; stap 2 (systeemvak(true)) en stap 6 bij het eerste inloggen, Plasma vult de lijst, stap 6
+# bij het volgende inloggen.
+r = draai_js(wijzig("systeemvak(true);") + " var s1 = JSON.parse(JSON.stringify(vak(paneel).cfg));" + NA_UPDATE
+             + " var s2 = JSON.parse(JSON.stringify(vak(paneel).cfg)); vak(paneel).cfg.extraItems = " + json.dumps(VM_EXTRA)
+             + ";" + NA_UPDATE, "{s1: s1, s2: s2, s3: vak(paneel).cfg}",
+             cfgs={"org.kde.plasma.systemtray": {"hiddenItems": list(RUSTIG_JS)}})
+u = r["u"] or {}
+klopt(r["gedrukt"] == ["1", "later", "klaar"] and u.get("s2") == u.get("s1")
+      and sorted((u.get("s3") or {}).get("bugosOff", [])) == sorted(UIT)
+      and sorted((u.get("s3") or {}).get("extraItems", [])) == sorted(x for x in VM_EXTRA if x not in UIT)
+      and (u.get("s3") or {}).get("hiddenItems") == RUSTIG_JS,
+      f"G13: nieuwe gebruiker, lijst pas later ingevuld: eerst 'later' (niets veranderd), de volgende keer echt uit ({r['gedrukt']})")
 
 
 print(f"{fouten} fout(en).")
