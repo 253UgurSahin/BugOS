@@ -2,14 +2,22 @@
 """Test van pakket 'tools': Taakbeheer, Hulp en Bestanden openen geen KDE-programma's meer.
 
 - Hulp: 'Netwerk bekijken', 'Printer toevoegen' en 'Laat zien wat ruimte inneemt' gaan naar BugOS zelf.
-- Bestanden: geen 'Openen in Dolphin' en geen 'Schijfbeheer'; wel 'Wat de meeste ruimte inneemt'.
-- Taakbeheer: geen knop 'Systeemmonitor'; wel een eigen pagina Details (alles wat draait, beëindigen met een vraag).
+- Bestanden: geen 'Openen in Dolphin' en geen 'Schijfbeheer'; wel 'Wat de meeste ruimte inneemt' (telt precies
+  zoals 'du -s -x', op de achtergrond, en stopt als je de pagina verlaat), en een interne dataschijf wissen, met
+  het bewijs dat dat nooit de schijf van BugOS, de live-stick, een schijf die het systeem gebruikt of een schijf
+  met een besturingssysteem raakt, en altijd eerst vraagt.
+- Taakbeheer: geen knop 'Systeemmonitor'; wel een eigen pagina Details (alles wat draait, beëindigen met een vraag,
+  geforceerd pas na Beëindigen, nooit wat bij BugOS hoort of niet van jou is).
+- R13: op een scherm van 1280x800 (100 % met grote letters, en 150 %) schuift niets opzij.
 
-Alles met nep-programma's, een nep-/proc en een nep-thuismap: er wordt niets gestopt of gewist. De KDE-programma's
-(plasma-systemmonitor, dolphin, partitionmanager, filelight) staan als nep-programma op PATH, zodat de test bewijst
-dat de sprongen weg zijn, ook als die programma's er wel zijn.
+Alles met nep-programma's (ook udisksctl en gdbus), een nep-/proc, nep-/sys, nep-/etc en een nep-thuismap: er wordt
+niets gestopt of gewist. De KDE-programma's (plasma-systemmonitor, dolphin, partitionmanager, filelight) staan als
+nep-programma op PATH, zodat de test bewijst dat de sprongen weg zijn, ook als die programma's er wel zijn.
+Nodig: GNU du (om mee te vergelijken). Draai als gewone gebruiker (zoals de CI): als root is een map met rechten 000
+gewoon leesbaar, dan test dat stukje minder.
 
 Gebruik:  QT_QPA_PLATFORM=offscreen python3 tools/test_native_tools.py
+          (python3 tools/test_native_tools.py --r13 is alleen voor het eigen proces van de R13-ronde)
 """
 
 from __future__ import annotations
