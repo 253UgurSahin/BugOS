@@ -3,29 +3,40 @@
 
 Jip-en-Janneke: links kies je een onderwerp (Internet, Kantoor, Gamen...),
 rechts zie je bekende, veilige apps. Druk op "Installeren" en klaar.
-Staat wat je zoekt er niet bij? Dan zoek je verder in "Meer apps".
+Staat wat je zoekt er niet bij? Typ de naam: de Winkel zoekt dan ook in alle andere apps van Flathub,
+en laat elke app eerst op een eigen pagina zien (wie hem maakt, voor welke leeftijd, hoe groot).
+Alles gebeurt in de Winkel zelf; er gaat geen ander programma open.
 
   bugos-store                       -> de winkel
   bugos-store appstream://<id>      -> meteen naar die app
   bugos-store --zoek <tekst>        -> meteen zoeken
+  bugos-store <x>.flatpakref        -> de app van dat bestand (de knop 'Install' op flathub.org), alleen van Flathub
+  bugos-store flatpak+https://...   -> idem, als link
+  bugos-store <x>.flatpakrepo       -> uitleg: de Winkel voegt geen andere appwinkel toe
+  bugos-store <x>.flatpak           -> uitleg: geen losse app-bestanden
 """
 
 import json
 import os
+import re
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, "/usr/lib/bugos/python")
 
 from bugos_ui import (  # noqa: E402
-    TAAL, ZIJBALK_BREEDTE, Banner, Chip, Kaart, Knop, Venster, Zoekveld, bestaat, draai, label, maak_app,
-    raster, start, t, uitvoeren, zoeksleutel,
+    TAAL, ZIJBALK_BREEDTE, Banner, Chip, IcoonChip, Kaart, Knop, Venster, Zoekveld, bestaat, draai, label,
+    lijn_icoon, maak_app, raster, start, t, uitvoeren, zoeksleutel,
 )
+from bugos_settings_onderdelen import op_achtergrond  # noqa: E402
+from bugos_ui import px  # noqa: E402
 from PySide6.QtCore import QProcess, QProcessEnvironment, QSize, Qt, QTimer  # noqa: E402
-from PySide6.QtGui import QIcon, QPixmap  # noqa: E402
+from PySide6.QtGui import QIcon, QKeySequence, QPixmap, QShortcut  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QCheckBox, QFrame, QHBoxLayout, QLabel, QMessageBox, QScrollArea, QVBoxLayout, QWidget,
+    QCheckBox, QDialog, QFrame, QHBoxLayout, QLabel, QScrollArea, QStackedWidget, QVBoxLayout, QWidget,
 )
+from bugos_shell import VraagDialoog  # noqa: E402
 
 CATALOGUS = Path("/usr/share/bugos/store.json")
 ICOON_MAPPEN = [
@@ -39,6 +50,8 @@ ICOON_MAPPEN = [
 THEMA_NAMEN = {"org.mozilla.firefox": "firefox", "com.valvesoftware.Steam": "steam"}
 if os.environ.get("BUGOS_APPICONEN"):
     ICOON_MAPPEN.insert(0, Path(os.environ["BUGOS_APPICONEN"]))
+# Een geldig app-id (org.voorbeeld.App): alleen zo'n id gaat ooit naar flatpak. Nooit met '-' vooraan (geen optie).
+APP_ID = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]*(\.[A-Za-z0-9_-]+){2,}$")
 
 
 def app_naam(app: dict) -> str:
@@ -57,6 +70,29 @@ def geinstalleerd() -> set[str]:
         return set()
     _, uit = draai("flatpak", "list", "--app", "--columns=application", timeout=20)
     return {regel.strip() for regel in uit.splitlines() if regel.strip()}
+
+
+def flatpak_lijst() -> dict[str, dict]:
+    """Elke geïnstalleerde Flatpak-app: id -> {'naam': naam, 'bron': waar hij vandaan kwam (meestal 'flathub')}.
+    Zo kan 'Mijn apps' ook apps laten zien die niet uit de BugOS-selectie komen."""
+    if os.environ.get("BUGOS_GEINSTALLEERD") is not None:   # voor screenshots: de naam is het laatste stuk van het id
+        return {i: {"naam": i.rsplit(".", 1)[-1], "bron": "flathub"}
+                for i in filter(None, os.environ["BUGOS_GEINSTALLEERD"].split(","))}
+    if not bestaat("flatpak"):
+        return {}
+    _, uit = draai("flatpak", "list", "--app", "--columns=application,name,origin", timeout=20)
+    lijst = {}
+    for regel in uit.splitlines():
+        delen = [d.strip() for d in regel.split("\t")]
+        if delen and APP_ID.match(delen[0]):
+            lijst[delen[0]] = {"naam": delen[1] if len(delen) > 1 and delen[1] else delen[0].rsplit(".", 1)[-1],
+                               "bron": delen[2] if len(delen) > 2 else ""}
+    return lijst
+
+
+def flatpak_namen() -> dict[str, str]:
+    """id -> naam van elke geïnstalleerde Flatpak-app (uit 'flatpak list')."""
+    return {i: v["naam"] for i, v in flatpak_lijst().items()}
 
 
 # Waar gewone programma's (geen Flatpak) hun .desktop-bestand hebben. Firefox en Steam zitten
@@ -102,6 +138,519 @@ def tekst(app: dict) -> str:
 def past(app: dict, zoek: str) -> bool:
     hooi = zoeksleutel(f"{app['naam']} {app.get('naam_en', '')} {app.get('nl', '')} {app.get('en', '')} {app['id']}")
     return all(w in hooi for w in zoeksleutel(zoek).split())   # (U268)
+
+
+def systeem_ids() -> dict[str, Path]:
+    """Elk programma dat in BugOS zelf zit (een .desktop-bestand, geen Flatpak): id in kleine letters -> bestand.
+    Die biedt de Winkel nooit nog eens aan van Flathub (Dolphin, Kate, Konsole...): dan kwam er een tweede KDE-
+    programma in het startmenu, ook een dat BugOS met opzet verbergt."""
+    gevonden: dict[str, Path] = {}
+    for map_ in reversed(APP_MAPPEN):   # de eerste map wint, net als bij systeem_apps()
+        try:
+            for bestand in map_.glob("*.desktop"):
+                gevonden[bestand.stem.lower()] = bestand
+        except OSError:
+            continue
+    for app_id, namen in SYSTEEM_NAMEN.items():
+        for naam in namen:
+            if naam.lower() in gevonden:
+                gevonden.setdefault(app_id.lower(), gevonden[naam.lower()])
+                break
+    return gevonden
+
+
+def desktop_info(bestand: Path) -> tuple[str, str, bool]:
+    """(naam in jouw taal, pictogram, verborgen) uit een .desktop-bestand. Verborgen = NoDisplay of Hidden."""
+    namen: dict[str, str] = {}
+    icoon_ = ""
+    verborgen = False
+    hoofd = False
+    try:
+        regels = bestand.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        regels = []
+    for regel in regels:
+        regel = regel.strip()
+        if regel.startswith("["):
+            hoofd = regel == "[Desktop Entry]"
+            continue
+        if not hoofd or "=" not in regel:
+            continue
+        sleutel, waarde = (x.strip() for x in regel.split("=", 1))
+        if sleutel in ("Name", "Name[nl]"):
+            namen[sleutel] = waarde
+        elif sleutel == "Icon":
+            icoon_ = waarde
+        elif sleutel in ("NoDisplay", "Hidden") and waarde.lower() == "true":
+            verborgen = True
+    naam = (namen.get("Name[nl]") if TAAL == "nl" else None) or namen.get("Name") or bestand.stem
+    return naam, icoon_, verborgen
+
+
+# ============================================================ alle apps van Flathub ===
+# Flathub's lijst van alle apps (appstream), zoals Flatpak hem op de computer bewaart (voor iedereen dezelfde).
+# De Winkel maakt er één keer een kleine index van (in je eigen cache) en zoekt daarin: snel, ook zonder internet,
+# en niemand buiten je computer ziet wat je typt. Te vervangen in tests.
+APPSTREAM = Path(os.environ.get("BUGOS_APPSTREAM", "/var/lib/flatpak/appstream/flathub/x86_64"))
+INDEX_MAP = Path(os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")) / "bugos"
+INDEX_VERSIE = 1
+VOORBEELD = os.environ.get("BUGOS_INSTELLINGEN_VOORBEELD") == "1" or os.environ.get("BUGOS_WINKEL_VOORBEELD") == "1"
+XL = "{http://www.w3.org/XML/1998/namespace}lang"
+# Geen app met een venster: zo'n id (bijv. uit KRunner of een .rpm) krijgt uitleg, geen 'niet op Flathub'.
+GEEN_APP = {"runtime": "onderdeel", "generic": "onderdeel", "localization": "onderdeel",
+            "console-application": "terminal"}
+
+
+def index_leeg() -> dict:
+    return {"apps": [], "hoort_bij": {}, "geen_app": {}}
+
+
+def index_bron(bron: Path = APPSTREAM) -> tuple[str, Path | None]:
+    """(sleutel, map) van de lijst die nu geldt. 'active' wijst naar een map met een controlegetal als naam; die
+    map lezen we, en geen andere (Flatpak kan 'active' intussen naar een nieuwe map zetten)."""
+    try:
+        doel = (bron / "active").resolve(strict=True)
+    except (OSError, RuntimeError):
+        return "", None
+    if re.fullmatch(r"[0-9a-f]{16,64}", doel.name):
+        return doel.name, doel
+    for naam in ("appstream.xml", "appstream.xml.gz"):   # alleen voor tests: een gewone map
+        try:
+            st = (doel / naam).stat()
+        except OSError:
+            continue
+        return f"{int(st.st_mtime)}-{st.st_size}", doel
+    return "", None
+
+
+def index_sleutel(bron: Path = APPSTREAM) -> str:
+    return index_bron(bron)[0]
+
+
+def _plat(tekst: str | None) -> str:
+    return " ".join((tekst or "").split())
+
+
+def _taal_van(el) -> str:
+    return el.get(XL) or ""
+
+
+def _uitleg(component, taal: str) -> str:
+    """De beschrijving in één taal ('' = de gewone). Niet zomaar de eerste: bij GIMP is dat het Wit-Russisch."""
+    gekozen = next((d for d in component.findall("description") if _taal_van(d) == taal), None)
+    if gekozen is None:
+        return ""
+    regels = []
+    for kind in gekozen:
+        if _taal_van(kind) not in ("", taal):
+            continue
+        if kind.tag == "p":
+            tekst_ = _plat("".join(kind.itertext()))
+            if tekst_:
+                regels.append(tekst_)
+        elif kind.tag in ("ul", "ol"):
+            for li in kind.findall("li"):
+                if _taal_van(li) in ("", taal):
+                    tekst_ = _plat("".join(li.itertext()))
+                    if tekst_:
+                        regels.append("• " + tekst_)
+    uit = "\n".join(regels)
+    if len(uit) > 700:
+        uit = uit[:700].rsplit(" ", 1)[0].rstrip(" ,.;:") + "…"
+    return uit
+
+
+def _zonder_taal(component, pad: str) -> str:
+    return next((_plat(e.text) for e in component.findall(pad) if not _taal_van(e)), "")
+
+
+def _met_taal(component, pad: str, taal: str) -> str:
+    return next((_plat(e.text) for e in component.findall(pad) if _taal_van(e) == taal), "")
+
+
+def _id_van(component) -> str:
+    bundel = next((b.text for b in component.findall("bundle") if b.get("type") == "flatpak" and b.text), "")
+    delen = bundel.strip().split("/")
+    if len(delen) >= 2 and delen[1]:
+        return delen[1]
+    return (component.findtext("id") or "").strip().removesuffix(".desktop")
+
+
+def lees_appstream(map_: Path, extra: dict | None = None) -> list[dict]:
+    """Alle apps (met een venster) uit Flathub's appstream.xml (of .xml.gz) in map_. Stukje voor stukje gelezen
+    (iterparse + clear), nooit het hele bestand van 50 MB in het geheugen.
+    extra: krijgt 'hoort_bij' (uitbreiding -> de app die hij uitbreidt) en 'geen_app' (id -> [naam, soort])."""
+    import gzip
+    import xml.etree.ElementTree as ET
+    hoort_bij: dict[str, str] = {}
+    geen_app: dict[str, list[str]] = {}
+    apps: list[dict] = []
+    gezien: set[str] = set()
+    pad = map_ / "appstream.xml"
+    bestand = open(pad, "rb") if pad.is_file() else gzip.open(map_ / "appstream.xml.gz", "rb")  # noqa: SIM115
+    with bestand:
+        for _gebeurtenis, el in ET.iterparse(bestand, events=("end",)):
+            if el.tag != "component":
+                continue
+            soort = el.get("type") or ""
+            app_id = _id_van(el)
+            if not APP_ID.match(app_id):
+                el.clear()
+                continue
+            if soort == "addon":
+                ouder = (el.findtext("extends") or "").strip().removesuffix(".desktop")
+                if APP_ID.match(ouder):
+                    hoort_bij.setdefault(app_id, ouder)
+            elif soort in GEEN_APP:
+                geen_app.setdefault(app_id, [_zonder_taal(el, "name") or app_id, GEEN_APP[soort]])
+            elif soort in ("desktop-application", "desktop") and app_id.lower() not in gezien:
+                gezien.add(app_id.lower())
+                custom = {v.get("key"): (v.text or "") for v in el.findall("custom/value")}
+                beoordeling = el.find("content_rating")
+                woorden = [_plat(k.text) for ks in el.findall("keywords") if _taal_van(ks) in ("", "nl")
+                           for k in ks.findall("keyword") if _taal_van(k) in ("", "nl") and k.text]
+                iconen = [i for i in el.findall("icon") if i.get("type") == "cached" and i.text]
+                icoon_ = next((i for i in iconen if i.get("height") == "128"), iconen[0] if iconen else None)
+                site = next((_plat(u.text) for u in el.findall("url") if u.get("type") == "homepage"), "")
+                apps.append({
+                    "id": app_id,
+                    "naam": _zonder_taal(el, "name"), "naam_nl": _met_taal(el, "name", "nl"),
+                    "kort": _zonder_taal(el, "summary"), "kort_nl": _met_taal(el, "summary", "nl"),
+                    "uitleg": _uitleg(el, ""), "uitleg_nl": _uitleg(el, "nl"),
+                    # Alleen de naam zonder taal: bij GIMP is de laatste vertaalde naam Cyrillisch.
+                    "maker": _zonder_taal(el, "developer/name") or _zonder_taal(el, "developer_name"),
+                    "icoon": _plat(icoon_.text) if icoon_ is not None else "",
+                    "echt": custom.get("flathub::verification::verified") == "true",
+                    "echt_site": _plat(custom.get("flathub::verification::website")),
+                    "oars": None if beoordeling is None else
+                    {a.get("id"): _plat(a.text) for a in beoordeling.findall("content_attribute") if a.get("id")},
+                    "woorden": " ".join(woorden),
+                    "site": site if site.startswith(("https://", "http://")) else "",
+                })
+            el.clear()
+    if extra is not None:
+        extra["hoort_bij"], extra["geen_app"] = hoort_bij, geen_app
+    return apps
+
+
+def _lees_cache(bestand: Path) -> dict | None:
+    try:
+        data = json.loads(bestand.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict) or data.get("versie") != INDEX_VERSIE or not isinstance(data.get("apps"), list):
+        return None
+    return {"apps": data["apps"], "hoort_bij": data.get("hoort_bij") or {}, "geen_app": data.get("geen_app") or {}}
+
+
+def flathub_index(bron: Path = APPSTREAM, cache: Path = INDEX_MAP, apart: bool = False) -> dict:
+    """De index van alle Flathub-apps: {'apps': [...], 'hoort_bij': {...}, 'geen_app': {...}}.
+    Uit de cache als Flathub's lijst niet veranderd is (0,1 s), anders opnieuw gemaakt (2 s).
+    apart=True: maak hem in een eigen proces, zodat het venster ondertussen vlot blijft reageren."""
+    sleutel, map_ = index_bron(bron)
+    if not sleutel or map_ is None:
+        return index_leeg()
+    bestand = cache / f"store-flathub-{sleutel}.json"
+    oud = _lees_cache(bestand)
+    if oud is not None:
+        return oud
+    if apart and maak_index_apart(bron, cache):
+        oud = _lees_cache(bestand)
+        if oud is not None:
+            return oud
+    try:
+        extra: dict = {}
+        apps = lees_appstream(map_, extra)
+    except Exception:  # noqa: BLE001  kapotte of halve lijst (ParseError, OSError, EOFError): dan geen index
+        return index_leeg()
+    data = {"versie": INDEX_VERSIE, "bron": sleutel, "apps": apps, **extra}
+    try:
+        cache.mkdir(parents=True, exist_ok=True)
+        tijdelijk = cache / f".store-flathub-{sleutel}.{os.getpid()}.tmp"
+        tijdelijk.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        os.replace(tijdelijk, bestand)
+        for ander in cache.glob("store-flathub-*.json"):
+            if ander != bestand:
+                ander.unlink(missing_ok=True)
+    except OSError:   # volle schijf, alleen-lezen thuismap: dan zonder cache
+        pass
+    return {"apps": apps, "hoort_bij": extra.get("hoort_bij", {}), "geen_app": extra.get("geen_app", {})}
+
+
+def maak_index_apart(bron: Path, cache: Path) -> bool:
+    """Maak de index in een eigen Python-proces (dat schrijft de cache). Python kan maar één ding tegelijk: zo
+    hapert het typen niet terwijl de grote lijst gelezen wordt."""
+    import subprocess
+    import bugos_ui
+    code = ("import sys, importlib.machinery as m, importlib.util as u\n"
+            "sys.path.insert(0, sys.argv[2])\n"
+            "l = m.SourceFileLoader('bugos_winkel_index', sys.argv[1])\n"
+            "w = u.module_from_spec(u.spec_from_loader(l.name, l))\n"
+            "l.exec_module(w)\n"
+            "sys.exit(0 if w.flathub_index(w.Path(sys.argv[3]), w.Path(sys.argv[4]))['apps'] else 1)\n")
+    try:
+        r = subprocess.run([sys.executable, "-I", "-c", code, str(Path(__file__).resolve()),
+                            str(Path(bugos_ui.__file__).resolve().parent), str(bron), str(cache)],
+                           stdin=subprocess.DEVNULL, capture_output=True, timeout=120)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return r.returncode == 0
+
+
+def naam_in_taal(e: dict) -> str:
+    return (e.get("naam_nl") if TAAL == "nl" else "") or e.get("naam") or e["id"].rsplit(".", 1)[-1]
+
+
+def kort_in_taal(e: dict) -> str:
+    return (e.get("kort_nl") if TAAL == "nl" else "") or e.get("kort") or ""
+
+
+def hooi_van(apps: list[dict]) -> list[str]:
+    """Waarin gezocht wordt, per app (één keer per index: 36 ms voor 3300 apps)."""
+    return [zoeksleutel(" ".join((e.get("naam", ""), e.get("naam_nl", ""), e.get("kort", ""), e.get("kort_nl", ""),
+                                  e.get("woorden", ""), e["id"]))) for e in apps]
+
+
+def zoek_flathub(apps: list[dict], zoek: str, uitsluiten: set[str], hooi: list[str] | None = None) -> list[dict]:
+    """De apps die bij de zoektekst passen (elk woord moet erin staan, zoals past(), U268), beste eerst."""
+    woorden = zoeksleutel(zoek).split()
+    if len("".join(woorden)) < 2:
+        return []
+    hooi = hooi if hooi is not None and len(hooi) == len(apps) else hooi_van(apps)
+    heel = " ".join(woorden)
+    uit = []
+    for e, h in zip(apps, hooi):
+        if e["id"].lower() in uitsluiten or not all(w in h for w in woorden):
+            continue
+        naam = zoeksleutel(naam_in_taal(e))
+        if naam == heel:
+            score = 100
+        elif naam.startswith(heel):
+            score = 80
+        elif any(d.startswith(woorden[0]) for d in naam.split()):
+            score = 60
+        elif heel in naam:
+            score = 50
+        else:
+            score = 20
+        uit.append((-(score + (5 if e.get("echt") else 0)), naam, e))
+    uit.sort(key=lambda x: (x[0], x[1]))
+    return [e for _s, _n, e in uit]
+
+
+# ---- voor welke leeftijd (OARS, zoals libappstream 1.1 het rekent: geen, mild, matig, heftig) ----
+OARS_LEEFTIJD = {
+    "violence-cartoon": (0, 3, 4, 6), "violence-fantasy": (0, 3, 7, 8), "violence-realistic": (0, 4, 9, 14),
+    "violence-bloodshed": (0, 9, 11, 18), "violence-sexual": (0, 18, 18, 18), "violence-desecration": (0, 13, 15, 18),
+    "violence-slavery": (0, 13, 15, 18), "violence-worship": (0, 13, 15, 18), "drugs-alcohol": (0, 11, 13, 16),
+    "drugs-narcotics": (0, 12, 14, 17), "drugs-tobacco": (0, 10, 13, 13), "sex-nudity": (0, 12, 14, 14),
+    "sex-themes": (0, 13, 14, 15), "sex-homosexuality": (0, 13, 14, 15), "sex-prostitution": (0, 12, 14, 18),
+    "sex-adultery": (0, 8, 10, 18), "sex-appearance": (0, 10, 10, 15), "language-profanity": (0, 8, 11, 14),
+    "language-humor": (0, 3, 8, 14), "language-discrimination": (0, 9, 10, 11), "money-advertising": (0, 7, 8, 10),
+    "money-gambling": (0, 7, 10, 18), "money-purchasing": (0, 12, 14, 15), "social-chat": (0, 4, 10, 13),
+    "social-audio": (0, 15, 15, 15), "social-contacts": (0, 12, 12, 12), "social-info": (0, 0, 13, 13),
+    "social-location": (0, 13, 13, 13),
+}
+STAND = {"none": 0, "mild": 1, "moderate": 2, "intense": 3}
+
+
+def _leeftijden(oars: dict) -> list[tuple[str, int]]:
+    uit = []
+    for sleutel, waarde in (oars or {}).items():
+        rij, stand = OARS_LEEFTIJD.get(str(sleutel)), STAND.get(str(waarde))
+        if rij is not None and stand is not None:
+            uit.append((str(sleutel), rij[stand]))
+    return uit
+
+
+def leeftijd(oars: dict | None) -> int | None:
+    """Vanaf welke leeftijd: None = niet opgegeven, 0 = voor iedereen."""
+    if oars is None:
+        return None
+    return max((n for _s, n in _leeftijden(oars)), default=0)
+
+
+def leeftijd_redenen(oars: dict | None) -> list[str]:
+    """Waarom die leeftijd, in gewone woorden (de groepen die de hoogste leeftijd geven)."""
+    hoogste = leeftijd(oars)
+    if not hoogste:
+        return []
+    groepen = {s.split("-", 1)[0] for s, n in _leeftijden(oars or {}) if n == hoogste}
+    woorden = [("violence", t("geweld", "violence")), ("drugs", t("alcohol, drugs of roken", "alcohol, drugs or smoking")),
+               ("sex", t("seks", "sex")), ("language", t("grove taal", "rude language")),
+               ("money", t("geld uitgeven of gokken", "spending money or gambling")),
+               ("social", t("contact met anderen online", "contact with others online"))]
+    return [w for g, w in woorden if g in groepen]
+
+
+# ---- hoe groot (flatpak remote-ls --cached: werkt zonder internet) ----
+def grootte_bytes(tekst_: str) -> int | None:
+    """'309.7 MB' (met een harde spatie, zo schrijft flatpak het) -> 309700000. GLib rekent met 1000, niet 1024."""
+    m = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)\s*(bytes|kB|MB|GB)", (tekst_ or "").replace(" ", " ").strip())
+    if not m:
+        return None
+    return int(round(float(m.group(1)) * {"bytes": 1, "kB": 1000, "MB": 1000**2, "GB": 1000**3}[m.group(2)]))
+
+
+def lees_groottes(uit: str) -> dict[str, tuple[int | None, int | None, str]]:
+    """ref -> (download, geïnstalleerd, runtime), uit 'remote-ls --columns=ref,download-size,installed-size,runtime'."""
+    groottes = {}
+    for regel in uit.splitlines():
+        delen = regel.split("\t")
+        if len(delen) < 3 or not delen[0].startswith(("app/", "runtime/")):
+            continue
+        groottes[delen[0].strip()] = (grootte_bytes(delen[1]), grootte_bytes(delen[2]),
+                                      delen[3].strip() if len(delen) > 3 else "")
+    return groottes
+
+
+def grootte_tekst(n: int) -> str:
+    if n >= 1000**3:
+        uit = f"{n / 1e9:.1f} GB"
+        return uit.replace(".", ",") if TAAL == "nl" else uit   # 1,2 GB, zoals Back-up (U237)
+    return f"{max(1, round(n / 1e6))} MB"
+
+
+def _draai_c(*cmd: str, timeout: int = 20) -> tuple[int, str]:
+    """Zoals draai(), maar met Engelse uitvoer en punten (zo leest de Winkel flatpak)."""
+    import subprocess
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL,
+                           env={**os.environ, "LC_ALL": "C"})
+        return r.returncode, r.stdout or ""
+    except (OSError, subprocess.SubprocessError):
+        return 127, ""
+
+
+def alle_groottes() -> tuple[dict, set[str]]:
+    """De groottes van alles op Flathub, en welke gedeelde onderdelen (runtimes) er al zijn."""
+    code, uit = _draai_c("flatpak", "remote-ls", "--cached", "--columns=ref,download-size,installed-size,runtime",
+                         "flathub")
+    groottes = lees_groottes(uit) if code == 0 else {}
+    code, uit = _draai_c("flatpak", "list", "--runtime", "--columns=ref")
+    runtimes = {r.strip() for r in uit.splitlines() if r.strip()} if code == 0 else set()
+    return groottes, runtimes
+
+
+# ---- de lijst van Flathub vers houden (ook bij 'Ik kies zelf wanneer') ----
+DAG = 24 * 3600
+
+
+def lijst_oud(bron: Path = APPSTREAM, nu: float | None = None) -> bool:
+    """True als Flathub's lijst er niet is, of al meer dan een dag niet ververst."""
+    nu = time.time() if nu is None else nu
+    actief = bron / "active"
+    if not ((actief / "appstream.xml").is_file() or (actief / "appstream.xml.gz").is_file()):
+        return True
+    try:
+        return nu - (bron / ".timestamp").stat().st_mtime > DAG
+    except OSError:
+        return True
+
+
+def gemeten() -> bool:
+    """Een verbinding die per MB kost (telefoon-hotspot)? Zelfde regel als bugos-update-apps.service: 1 of 3 (U089).
+    Weet NetworkManager het niet, dan niet gemeten."""
+    code, uit = draai("busctl", "get-property", "org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager",
+                      "org.freedesktop.NetworkManager", "Metered", timeout=5)
+    # (draai() geeft ook wat op stderr komt, bijv. een waarschuwing van de shell: kijk alleen naar de regel 'u N')
+    return code == 0 and any(r.split() in (["u", "1"], ["u", "3"]) for r in uit.splitlines())
+
+
+def sessie_actief() -> bool:
+    """Zit je nu echt achter deze computer (de actieve sessie)? Alleen dan mag Flatpak zonder wachtwoord de lijst
+    verversen; anders zou er een wachtwoordvraag kunnen komen. Bij twijfel: nee."""
+    code, uit = draai("busctl", "get-property", "org.freedesktop.login1", "/org/freedesktop/login1/session/auto",
+                      "org.freedesktop.login1.Session", "Active", timeout=5)
+    return code == 0 and any(r.split() == ["b", "true"] for r in uit.splitlines())
+
+
+def automatisch_verversen() -> bool:
+    """Mag de Winkel zelf de lijst verversen? Niet in de voorbeeldstand, niet voor foto's of tests, niet zonder flatpak."""
+    if VOORBEELD or os.environ.get("BUGOS_GEINSTALLEERD") is not None or os.environ.get("BUGOS_WINKEL_GEEN_VERVERS"):
+        return False
+    return bestaat("flatpak")
+
+
+def moet_verversen(bron: Path | None = None) -> bool:
+    """Oud, en je zit achter de computer, en de verbinding kost niets per MB (in een werkdraad: busctl kan even duren)."""
+    return lijst_oud(bron or APPSTREAM) and sessie_actief() and not gemeten()
+
+
+def entry_naar_app(e: dict) -> dict:
+    """Een Flathub-app als 'app' zoals de Winkel die kent (naam, uitleg), zodat installeren en verwijderen
+    hetzelfde werken als voor de BugOS-selectie."""
+    return {"id": e["id"], "naam": e.get("naam_nl") or e.get("naam") or e["id"], "naam_en": e.get("naam") or e["id"],
+            "nl": e.get("kort_nl") or e.get("kort", ""), "en": e.get("kort", ""), "flathub": True}
+
+
+def flathub_icoon(e: dict, maat: int) -> QPixmap:
+    """Het pictogram uit Flathub's lijst (al op de computer), anders het gewone; leeg als er geen is."""
+    if e.get("icoon") and "/" not in e["icoon"]:
+        for sub in ("128x128", "64x64"):
+            bestand = APPSTREAM / "active" / "icons" / sub / e["icoon"]
+            if bestand.is_file():
+                pm = QPixmap(str(bestand))
+                if not pm.isNull():
+                    return pm.scaled(maat, maat, Qt.AspectRatioMode.KeepAspectRatio,
+                                     Qt.TransformationMode.SmoothTransformation)
+    for map_ in ICOON_MAPPEN:
+        for ext in (".png", ".svg"):
+            bestand = map_ / f"{e['id']}{ext}"
+            if bestand.is_file():
+                return QIcon(str(bestand)).pixmap(QSize(maat, maat))
+    if QIcon.hasThemeIcon(e["id"]):
+        return QIcon.fromTheme(e["id"]).pixmap(QSize(maat, maat))
+    return QPixmap()
+
+
+def plaatje_voor(e: dict, maat: int) -> QWidget:
+    """Een QLabel met het pictogram, of een rustig tegeltje als er geen pictogram is (geen leeg vierkant)."""
+    pm = flathub_icoon(e, maat)
+    if pm.isNull():
+        return IcoonChip("lijn:apps", "neutraal", maat=maat, vol=False)
+    w = QLabel()
+    w.setPixmap(pm)
+    w.setFixedSize(maat + 4, maat + 4)
+    return w
+
+
+# Echte voorbeelden uit Flathub's lijst (2026-11-11), voor screenshots en tests: geen echte bestanden, geen flatpak.
+VOORBEELD_FLATHUB = [
+    {"id": "de.haeckerfelix.Shortwave", "naam": "Shortwave", "naam_nl": "", "kort": "Listen to internet radio",
+     "kort_nl": "Beluister internetradio", "maker": "Felix Häcker", "echt": True, "echt_site": "haeckerfelix.de",
+     "oars": {}, "site": "https://apps.gnome.org/Shortwave/", "icoon": "", "woorden": "radio",
+     "uitleg": "Shortwave is an internet radio player that provides access to a station database with over 50,000 "
+               "stations.", "uitleg_nl": "", "grootte": 4_200_000, "onderdeel": 0},
+    {"id": "io.bassi.Amberol", "naam": "Amberol", "naam_nl": "Amberol", "kort": "Plays music, and nothing else",
+     "kort_nl": "Speelt muziek af, en niets anders", "maker": "Emmanuele Bassi", "echt": True, "echt_site": "bassi.io",
+     "oars": {}, "site": "https://gitlab.gnome.org/World/amberol", "icoon": "", "woorden": "music muziek",
+     "uitleg": "Amberol is a music player with no delusions of grandeur.", "uitleg_nl": "", "grootte": 11_800_000,
+     "onderdeel": 0},
+    {"id": "org.strawberrymusicplayer.strawberry", "naam": "Strawberry Music Player", "naam_nl": "",
+     "kort": "A music player and collection organizer", "kort_nl": "", "maker": "Jonas Kvinge", "echt": True,
+     "echt_site": "strawberrymusicplayer.org", "oars": {}, "site": "https://www.strawberrymusicplayer.org/", "icoon": "",
+     "woorden": "music muziek", "uitleg": "Strawberry is a music player and music collection organizer.",
+     "uitleg_nl": "", "grootte": 22_600_000, "onderdeel": 0},
+    {"id": "org.musescore.MuseScore", "naam": "MuseScore", "naam_nl": "",
+     "kort": "Create, play and print beautiful sheet music", "kort_nl": "", "maker": "MuseScore Limited",
+     "echt": False, "echt_site": "", "oars": {}, "site": "https://musescore.org", "icoon": "",
+     "woorden": "music muziek", "uitleg": "", "uitleg_nl": "", "grootte": 300_000_000, "onderdeel": 0},
+    {"id": "com.mastermindzh.tidal-hifi", "naam": "TIDAL Hi-Fi", "naam_nl": "",
+     "kort": "The web version of listen.tidal.com with Hi-Fi (High and Max) support", "kort_nl": "",
+     "maker": "Rick van Lieshout", "echt": True, "echt_site": "mastermindzh.com",
+     "oars": {"social-info": "moderate"},   # voorbeeld: verzonnen, zodat de foto's een leeftijd laten zien
+     "site": "https://github.com/Mastermindzh/tidal-hifi", "icoon": "", "woorden": "music muziek", "uitleg": "",
+     "uitleg_nl": "", "grootte": 373_700_000, "onderdeel": 670_700_000},
+    {"id": "org.gnome.Podcasts", "naam": "Podcasts", "naam_nl": "Podcasts", "kort": "Listen to your favorite shows",
+     "kort_nl": "Luister naar uw favoriete shows", "maker": "The Podcasts developers", "echt": False, "echt_site": "",
+     "oars": {}, "site": "https://apps.gnome.org/Podcasts/", "icoon": "", "woorden": "podcast", "uitleg": "",
+     "uitleg_nl": "", "grootte": 9_000_000, "onderdeel": 0},
+    {"id": "org.nickvision.tubeconverter", "naam": "Parabolic", "naam_nl": "", "kort": "Download web video and audio",
+     "kort_nl": "", "maker": "Nickvision", "echt": True, "echt_site": "nickvision.org",
+     "oars": {}, "site": "https://nickvision.org/parabolic.html", "icoon": "", "woorden": "video download",
+     "uitleg": "", "uitleg_nl": "", "grootte": 120_000_000, "onderdeel": 0},
+]
 
 
 class AppKaart(Kaart):
@@ -174,10 +723,286 @@ class AppKaart(Kaart):
             self.winkel.installeer(self.app)
 
 
+class FlathubKaart(AppKaart):
+    """Een app van Flathub die BugOS niet koos. Even groot als een AppKaart, maar zonder 'Installeren' met één klik:
+    eerst 'Bekijken', zodat je ziet wie hem maakt en dat BugOS hem niet testte."""
+
+    def __init__(self, entry: dict, winkel: "Winkel"):
+        Kaart.__init__(self, marge=18, ruimte=14, richting="h")
+        self.entry = entry
+        self.app = entry_naar_app(entry)
+        self.winkel = winkel
+        naam = naam_in_taal(entry)
+        self.setMinimumHeight(112)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setAccessibleName(naam)
+        self.setAccessibleDescription(t("Meer over deze app", "More about this app"))
+        self.lay.addWidget(plaatje_voor(entry, 56), 0, Qt.AlignmentFlag.AlignTop)
+        blok = QVBoxLayout()
+        blok.setSpacing(4)
+        kop_rij = QHBoxLayout()
+        kop_rij.setSpacing(8)
+        kop_rij.addWidget(label(naam, "kop3"))   # een lange naam mag afbreken: de kaart blijft even breed
+        self.chip = Chip(t("Geïnstalleerd", "Installed"), "goed")
+        kop_rij.addWidget(self.chip, 0, Qt.AlignmentFlag.AlignTop)   # naast de naam, zoals bij de BugOS-apps
+        kop_rij.addStretch(1)
+        blok.addLayout(kop_rij)
+        kort = label(kort_in_taal(entry), "klein")
+        kort.setVisible(bool(kort_in_taal(entry)))   # geen lege regel tussen naam en maker
+        blok.addWidget(kort)
+        maker_rij = QHBoxLayout()
+        maker_rij.setSpacing(4)
+        maker = entry.get("maker") or t("Maker onbekend", "Maker unknown")
+        if entry.get("echt"):
+            vink = QLabel()
+            vink.setPixmap(lijn_icoon("vink", "goed", 14).pixmap(QSize(14, 14)))
+            vink.setToolTip(t("Flathub heeft gecontroleerd dat deze app echt van de maker komt.",
+                              "Flathub checked that this app really comes from its maker."))
+            maker_rij.addWidget(vink)
+        maker_rij.addWidget(label(maker, "klein"), 1)
+        blok.addLayout(maker_rij)
+        blok.addStretch(1)
+        rij = QHBoxLayout()
+        rij.addStretch(1)
+        self.weg = Knop(t("Verwijderen", "Remove"), "stil")
+        self.weg.clicked.connect(lambda _c=False: self.winkel.vraag_verwijderen(self.app))
+        self.weg.setAccessibleDescription(naam)   # (U482)
+        rij.addWidget(self.weg)
+        self.knop = Knop("", "rand")
+        self.knop.setMinimumWidth(124)
+        self.knop.clicked.connect(lambda _c=False: self.klik())
+        self.knop.setAccessibleDescription(naam)   # (U482)
+        rij.addWidget(self.knop)
+        blok.addLayout(rij)
+        self.lay.addLayout(blok, 1)
+        self.ververs()
+
+    def ververs(self) -> None:
+        bezig = self.winkel.bezig_met == self.app["id"]
+        er_al = self.app["id"] in self.winkel.flatpaks
+        self.chip.setVisible(er_al and not bezig)
+        self.weg.setVisible(er_al and not bezig)
+        self.weg.setEnabled(self.winkel.bezig_met is None)
+        if bezig:
+            self.knop.setText(t("Bezig…", "Working…"))
+            self.knop.setEnabled(False)
+        else:
+            self.knop.setText(t("Openen", "Open") if er_al else t("Bekijken", "View"))
+            self.knop.setEnabled(True)
+
+    def klik(self) -> None:
+        if self.app["id"] in self.winkel.flatpaks:
+            start("flatpak", "run", self.app["id"])
+        else:
+            self.winkel.toon_app(self.app["id"], terug_focus=self.knop)
+
+    def mousePressEvent(self, e) -> None:  # noqa: N802
+        if e.button() == Qt.MouseButton.LeftButton:
+            e.accept()   # dan krijgt deze kaart (niet het venster eronder) ook het loslaten
+            return
+        super().mousePressEvent(e)
+
+    def mouseReleaseEvent(self, e) -> None:  # noqa: N802
+        """Een klik op de kaart zelf (niet op een knop): de pagina van de app."""
+        if e.button() == Qt.MouseButton.LeftButton and self.rect().contains(e.position().toPoint()):
+            self.winkel.toon_app(self.app["id"], terug_focus=self.knop)
+            e.accept()
+            return
+        super().mouseReleaseEvent(e)
+
+
+class AppPagina(QWidget):
+    """De pagina van één app die niet in de BugOS-selectie staat. Bovenaan altijd 'Terug', dan de kop (pictogram,
+    naam, één regel, de maker) met rechts de knoppen, een melding, en bij een Flathub-app de feiten.
+
+    soort: 'flathub' (uit Flathub's lijst), 'systeem' (zit in BugOS zelf), 'elders' (geïnstalleerd, niet uit de
+    lijst), 'laden' (de lijst komt nog) of 'niet_gevonden'."""
+
+    def __init__(self, winkel: "Winkel", soort: str, app_id: str, naam: str = "", kort: str = "",
+                 entry: dict | None = None, icoon_naam: str = "", kan_openen: bool = True):
+        super().__init__()
+        self.setObjectName("pagina")
+        self.winkel, self.soort, self.app_id, self.entry = winkel, soort, app_id, entry
+        self.kan_openen = kan_openen
+        if entry is not None:
+            naam, kort = naam_in_taal(entry), kort_in_taal(entry)
+        self.app = entry_naar_app(entry) if entry is not None else \
+            {"id": app_id, "naam": naam or app_id, "naam_en": naam or app_id, "nl": kort, "en": kort}
+        self.lay = QVBoxLayout(self)
+        self.lay.setContentsMargins(36, 26, 36, 28)   # dezelfde marges als de lijst
+        self.lay.setSpacing(16)
+        self.terug = Knop(t("Terug", "Back"), "stil", "lijn:terug")
+        self.terug.clicked.connect(lambda _c=False: winkel.terug())
+        self.lay.addWidget(self.terug, 0, Qt.AlignmentFlag.AlignLeft)
+        self.kop_rij = QHBoxLayout()
+        self.kop_rij.setSpacing(20)
+        if entry is not None:
+            self.plaatje = plaatje_voor(entry, 96)
+        elif icoon_naam and QIcon.hasThemeIcon(icoon_naam):
+            self.plaatje = QLabel()
+            self.plaatje.setPixmap(QIcon.fromTheme(icoon_naam).pixmap(QSize(96, 96)))
+            self.plaatje.setFixedSize(100, 100)
+        else:
+            self.plaatje = IcoonChip("lijn:apps", "neutraal", maat=96, vol=False)
+        self.kop_rij.addWidget(self.plaatje, 0, Qt.AlignmentFlag.AlignTop)
+        kolom = QVBoxLayout()
+        kolom.setSpacing(6)
+        self.naam = label(naam or app_id.rsplit(".", 1)[-1], "titel")
+        kolom.addWidget(self.naam)
+        self.kort = label(kort, "sub")
+        self.kort.setVisible(bool(kort))
+        kolom.addWidget(self.kort)
+        if entry is not None:
+            maker_rij = QHBoxLayout()
+            maker_rij.setSpacing(8)
+            maker_rij.addWidget(label(t("Door {}", "By {}").format(entry["maker"]) if entry.get("maker") else
+                                      t("Maker onbekend", "Maker unknown"), "klein"))
+            if entry.get("echt"):
+                maker_rij.addWidget(Chip(t("Geverifieerde maker", "Verified maker"), "goed"))
+            maker_rij.addStretch(1)
+            kolom.addLayout(maker_rij)
+        kolom.addStretch(1)
+        self.kop_rij.addLayout(kolom, 1)
+        self.knoppen = QVBoxLayout()
+        self.knoppen.setSpacing(8)
+        self.installeer_knop = Knop(t("Installeren", "Install"), "hoofd")
+        self.installeer_knop.setMinimumWidth(140)
+        self.installeer_knop.clicked.connect(lambda _c=False: winkel.installeer(self.app))
+        self.open_knop = Knop(t("Openen", "Open"), "rand")
+        self.open_knop.setMinimumWidth(140)
+        self.open_knop.clicked.connect(lambda _c=False: winkel.open_app(self.app_id))
+        self.weg_knop = Knop(t("Verwijderen", "Remove"), "stil")
+        self.weg_knop.setMinimumWidth(140)
+        self.weg_knop.clicked.connect(lambda _c=False: winkel.vraag_verwijderen(self.app))
+        for k in (self.installeer_knop, self.open_knop, self.weg_knop):
+            k.setAccessibleDescription(self.app["naam"])   # (U482)
+            self.knoppen.addWidget(k)
+        self.knoppen.addStretch(1)
+        self.kop_rij.addLayout(self.knoppen)
+        self.lay.addLayout(self.kop_rij)
+        if soort == "flathub":
+            self.veilig = Banner(t("BugOS heeft deze app niet getest. Hij komt van Flathub, de grote appwinkel voor "
+                                   "Linux. Installeer hem alleen als je de maker vertrouwt.",
+                                   "BugOS has not tested this app. It comes from Flathub, the big app shop for Linux. "
+                                   "Only install it if you trust the maker."), "let_op")
+            self.lay.addWidget(self.veilig)
+        self.melding = Banner()
+        self.lay.addWidget(self.melding)
+        self.einde = QVBoxLayout()
+        self.einde.setSpacing(16)
+        self.lay.addLayout(self.einde)
+        self.grootte_rij: QWidget | None = None
+        if entry is not None:
+            self.maak_feiten(entry)
+        self.lay.addStretch(1)
+        self.ververs()
+
+    def feit(self, kaart: Kaart, kopje: str, waarde: QWidget, midden: bool = False) -> QWidget:
+        rij_w = QWidget()
+        rij = QHBoxLayout(rij_w)
+        rij.setContentsMargins(0, 0, 0, 0)
+        rij.setSpacing(12)
+        k = label(kopje, "klein")
+        k.setFixedWidth(px(110))
+        rij.addWidget(k, 0, Qt.AlignmentFlag.AlignVCenter if midden else Qt.AlignmentFlag.AlignTop)
+        rij.addWidget(waarde, 1)
+        kaart.lay.addWidget(rij_w)
+        return rij_w
+
+    def maak_feiten(self, e: dict) -> None:
+        feiten = Kaart(marge=20, ruimte=10)
+        maker = e.get("maker") or t("Maker onbekend", "Maker unknown")
+        if e.get("echt") and e.get("echt_site"):
+            over_maker = t("{}. Flathub heeft gecontroleerd dat de app echt van {} komt.",
+                           "{}. Flathub checked that the app really comes from {}.").format(maker, e["echt_site"])
+        elif e.get("echt"):
+            over_maker = t("{}. Flathub heeft gecontroleerd dat de app echt van de maker komt.",
+                           "{}. Flathub checked that the app really comes from its maker.").format(maker)
+        else:
+            # Niet gecontroleerd komt veel voor en is geen teken van gevaar (Zoom en Spotify ook niet).
+            over_maker = t("{}. Flathub heeft niet gecontroleerd of de app van de maker zelf komt.",
+                           "{}. Flathub has not checked whether the app comes from the maker itself.").format(maker)
+        self.feit(feiten, t("Maker", "Maker"), label(over_maker))
+        jaar = leeftijd(e.get("oars"))
+        if jaar is None:
+            over_jaar = t("Niet opgegeven", "Not given")
+        elif jaar == 0:
+            over_jaar = t("Voor iedereen", "Everyone")
+        else:
+            over_jaar = t("Vanaf {} jaar", "Ages {} and up").format(jaar)
+            redenen = leeftijd_redenen(e.get("oars"))
+            if redenen:
+                over_jaar += " (" + ", ".join(redenen) + ")"
+        self.feit(feiten, t("Leeftijd", "Age"), label(over_jaar))
+        self.grootte = label("")
+        self.grootte_rij = self.feit(feiten, t("Grootte", "Size"), self.grootte)
+        self.zet_grootte()
+        site = e.get("site") or ""
+        try:
+            from urllib.parse import urlsplit
+            host = urlsplit(site).hostname or "" if site.startswith(("https://", "http://")) else ""
+        except ValueError:
+            host = ""
+        if host:
+            knop = Knop(host, "stil", "lijn:wereld")
+            knop.setToolTip(site)
+            knop.clicked.connect(lambda _c=False, s=site: start("xdg-open", s))
+            houder = QWidget()
+            hl = QHBoxLayout(houder)
+            hl.setContentsMargins(0, 0, 0, 0)
+            # Het pictogram op één lijn met de andere feiten (een stille knop heeft anders 16 px ruimte links).
+            knop.setStyleSheet("QPushButton { padding-left: 2px; padding-right: 10px; }")
+            hl.addWidget(knop)
+            hl.addStretch(1)
+            self.feit(feiten, t("Website", "Website"), houder, midden=True)
+        self.lay.addWidget(feiten)
+        uitleg_ = (e.get("uitleg_nl") if TAAL == "nl" else "") or e.get("uitleg") or ""
+        if uitleg_:
+            over = Kaart(marge=20, ruimte=8)
+            over.lay.addWidget(label(t("Over deze app", "About this app"), "kop3"))
+            over.lay.addWidget(label(uitleg_))
+            self.lay.addWidget(over)
+
+    def zet_grootte(self) -> None:
+        if self.grootte_rij is None:
+            return
+        tekst_ = self.winkel.grootte_tekst_van(self.app_id)
+        self.grootte.setText(tekst_)
+        self.grootte_rij.setVisible(bool(tekst_))
+
+    def ververs(self) -> None:
+        """Na installeren of verwijderen: de juiste knoppen."""
+        w = self.winkel
+        bezig = w.bezig_met == self.app_id
+        er_al = self.app_id in w.flatpaks
+        if self.soort == "flathub":
+            self.installeer_knop.setVisible(not er_al or bezig)
+            self.installeer_knop.setText(t("Bezig…", "Working…") if bezig else t("Installeren", "Install"))
+            self.installeer_knop.setEnabled(w.bezig_met is None)
+        else:
+            self.installeer_knop.hide()
+        open_kan = (er_al and self.soort in ("flathub", "elders")) or (self.soort == "systeem" and self.kan_openen)
+        self.open_knop.setVisible(open_kan and not bezig)
+        self.weg_knop.setVisible(er_al and not bezig and self.soort in ("flathub", "elders"))
+        self.weg_knop.setEnabled(w.bezig_met is None)
+
+
 class Winkel(Venster):
-    def __init__(self, catalogus: dict, begin_zoek: str = "", begin_app: str = ""):
+    def __init__(self, catalogus: dict, begin_zoek: str = "", begin_app: str = "", opdracht: list[str] | None = None):
         scroll = QScrollArea()
-        super().__init__(t("BugOS Winkel", "BugOS Store"), inhoud=scroll, maat=(1180, 800))
+        # Rechts een stapel: 0 = de lijst met apps, 1 = de pagina van één app (Terug brengt je weer naar de lijst).
+        stapel = QStackedWidget()
+        stapel.addWidget(scroll)
+        pagina_scroll = QScrollArea()
+        pagina_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        pagina_scroll.setWidgetResizable(True)
+        pagina_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        stapel.addWidget(pagina_scroll)
+        super().__init__(t("BugOS Winkel", "BugOS Store"), inhoud=stapel, maat=(1180, 800))
+        self.scroll, self.stapel, self.pagina_scroll = scroll, stapel, pagina_scroll
+        self.pagina: AppPagina | None = None
+        self.pagina_id: str | None = None
+        self._terug_naar: tuple[int, QWidget | None] = (0, None)
         self.cat = catalogus
         self.systeem = systeem_apps(self.cat["apps"])
         self.flatpaks = geinstalleerd()
@@ -185,6 +1010,24 @@ class Winkel(Venster):
         self.bezig_met: str | None = None
         self.kaarten: list[AppKaart] = []
         self.kolommen = 2
+        # Alle apps van Flathub: None zolang de index nog geladen wordt.
+        self.flathub: dict | None = None
+        self.hooi: list[str] = []
+        self.op_id: dict[str, dict] = {}
+        self.systeem_ids = systeem_ids()
+        self.meer_kaarten: list[FlathubKaart] = []
+        self.groottes: dict | None = None
+        self.runtimes: set[str] = set()
+        self._ref_van: dict[str, str] = {}
+        self._groottes_bezig = False
+        self.flatpak_info: dict[str, dict] = flatpak_lijst() if self.flatpaks else {}
+        self._wachtend: list[str] | None = None   # installeren/verwijderen dat wacht op het verversen van de lijst
+        self._meer_sleutel: tuple | None = None
+        self._meer_zoek = ""
+        self._niets_voor: str | None = None
+        self.meer_aantal = 20
+        self._wacht_app: str | None = None
+        self.lijst_mislukt = False
 
         # Links: de onderwerpen (de zijbalk komt van de schil)
         self.lijst = self.nav
@@ -192,9 +1035,9 @@ class Winkel(Venster):
             self.lijst.voeg_toe(c["icoon"], c["nl" if TAAL == "nl" else "en"], c["id"])
         if self.installed:
             self.mijn_apps_erbij()
-        self.lijst.currentRowChanged.connect(lambda _: self.toon())
-        self.onder_knop(t("Meer apps zoeken", "Search more apps"), "zoek", self.meer_apps,
-                        tip=t("In de grote winkel (Discover), voor gevorderden", "In the big store (Discover), advanced"))
+        self.lijst.currentRowChanged.connect(lambda _: self.onderwerp_gekozen())
+        self.onder_knop(t("Alle apps doorzoeken", "Search all apps"), "zoek", self.meer_apps,
+                        tip=t("Zoek in alle apps van Flathub", "Search all apps from Flathub"))
 
         # Rechts: zoeken en de apps
         scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -209,6 +1052,15 @@ class Winkel(Venster):
         self.zoek = Zoekveld(t("Zoek een app, bijvoorbeeld \"muziek\" of \"Zoom\"",
                                "Search for an app, for example \"music\" or \"Zoom\""))
         self.zoek.textChanged.connect(lambda _: self.toon())
+        # Ook zoeken in alle apps van Flathub: even wachten tot je klaar bent met typen (2-4 ms per keer, maar de
+        # kaarten maken kost meer).
+        self.meer_timer = QTimer(self)
+        self.meer_timer.setSingleShot(True)
+        self.meer_timer.setInterval(250)
+        self.meer_timer.timeout.connect(self.zoek_meer)
+        self.zoek.textChanged.connect(lambda _: self.meer_timer.start())
+        # Wat een opdracht van buiten zei (een link of bestand dat de Winkel niet opent): weg zodra je zelf typt.
+        self.zoek.textEdited.connect(lambda _: self.opdracht_melding.zet(""))
         rechts.addWidget(self.zoek)
 
         self.held = QWidget()
@@ -223,16 +1075,46 @@ class Winkel(Venster):
 
         self.kop = label("", "kop2")
         rechts.addWidget(self.kop)
+        # Staan er onder de BugOS-apps nog apps van Flathub (buiten beeld bij 150 %)? Dan zeggen we dat hier.
+        self.meer_hint = Knop("", "stil", "lijn:onder")
+        self.meer_hint.clicked.connect(lambda _c=False: self.scroll.verticalScrollBar().setValue(self.meer_blok.y()))
+        self.meer_hint.hide()
+        rechts.addWidget(self.meer_hint, 0, Qt.AlignmentFlag.AlignLeft)
+        self.opdracht_melding = Banner()
+        rechts.addWidget(self.opdracht_melding)
         self.melding = Banner()
         rechts.addWidget(self.melding)
         self.raster_widget, self.raster = raster(2, 14)
         rechts.addWidget(self.raster_widget)
 
-        onder = Kaart("true", marge=20, ruimte=14, richting="h")
-        onder.lay.addWidget(label(t("Niet gevonden wat je zoekt? Er zijn duizenden andere apps.",
-                                    "Didn't find what you need? There are thousands of other apps."), "sub"), 1)
-        meer2 = Knop(t("Meer apps zoeken", "Search more apps"), "rand", "lijn:zoek")
-        meer2.clicked.connect(self.meer_apps)
+        # Onder de BugOS-apps: meer apps van Flathub (alleen tijdens het zoeken).
+        self.meer_blok = QWidget()
+        mb = QVBoxLayout(self.meer_blok)
+        mb.setContentsMargins(0, 10, 0, 0)
+        mb.setSpacing(12)
+        mb.addWidget(label(t("Meer apps van Flathub", "More apps from Flathub"), "kop2"))
+        mb.addWidget(label(t("Niet getest door BugOS. Kijk wie de app maakt voordat je hem installeert.",
+                             "Not tested by BugOS. Check who makes an app before you install it."), "sub"))
+        self.meer_status = label("", "sub")
+        mb.addWidget(self.meer_status)
+        self.meer_knop_ophalen = Knop(t("Nu ophalen", "Get it now"), "rand", "lijn:download")
+        self.meer_knop_ophalen.clicked.connect(lambda _c=False: self.haal_lijst())
+        mb.addWidget(self.meer_knop_ophalen, 0, Qt.AlignmentFlag.AlignLeft)
+        self.meer_raster_widget, self.meer_raster = raster(2, 14)
+        mb.addWidget(self.meer_raster_widget)
+        self.meer_toon_meer = Knop("", "rand")
+        self.meer_toon_meer.clicked.connect(lambda _c=False: self.toon_meer())
+        mb.addWidget(self.meer_toon_meer, 0, Qt.AlignmentFlag.AlignHCenter)
+        self.meer_blok.hide()
+        rechts.addWidget(self.meer_blok)
+
+        self.onder = onder = Kaart("true", marge=20, ruimte=14, richting="h")
+        onder.lay.addWidget(label(t("Niet gevonden wat je zoekt? Typ de naam hierboven: de Winkel zoekt dan ook in "
+                                    "duizenden andere apps van Flathub.",
+                                    "Didn't find what you need? Type its name above: the Store then also searches "
+                                    "thousands of other apps from Flathub."), "sub"), 1)
+        self.onder_zoek = meer2 = Knop(t("Zoeken", "Search"), "rand", "lijn:zoek")
+        meer2.clicked.connect(lambda _c=False: self.meer_apps())
         onder.lay.addWidget(meer2)
         rechts.addWidget(onder)
         rechts.addStretch(1)
@@ -241,33 +1123,445 @@ class Winkel(Venster):
         self.proces = QProcess(self)
         self.proces.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
         self.proces.finished.connect(self.klaar)
+        # Een tweede proces, alleen voor het verversen van Flathub's lijst (nooit self.proces: dat installeert).
+        self.lijst_proces = QProcess(self)
+        self.lijst_proces.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        self.lijst_proces.finished.connect(self._lijst_klaar)
+        self.lijst_proces.errorOccurred.connect(self._lijst_fout)
+        self._lijst_handmatig = False
+        self._index_bezig = False   # na het verversen wordt de index opnieuw gemaakt
+        self._lijst_wacht = QTimer(self)   # na 2 minuten geeft de Winkel het op
+        self._lijst_wacht.setSingleShot(True)
+        self._lijst_wacht.setInterval(120_000)
+        self._lijst_wacht.timeout.connect(self.lijst_proces.kill)
+
+        # Terug naar de lijst: Esc of Alt+Links, zoals in een webbrowser.
+        for toets in (QKeySequence(Qt.Key.Key_Escape), QKeySequence(QKeySequence.StandardKey.Back)):
+            sc = QShortcut(toets, self.pagina_scroll)
+            sc.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+            sc.activated.connect(self.terug)
+
+        if VOORBEELD:   # foto's en tests: echte voorbeelden, geen bestanden, geen flatpak
+            self._index_binnen({"apps": [dict(e) for e in VOORBEELD_FLATHUB], "hoort_bij": {}, "geen_app": {}})
+        else:
+            self.laad_index()
+        if automatisch_verversen():   # even na het openen, zodat het venster eerst snel verschijnt
+            QTimer.singleShot(1500, self.ververs_lijst_als_oud)
 
         self.lijst.setCurrentRow(0)
+        self.lijst.setFocus()
         if begin_zoek:
             self.zoek.setText(begin_zoek)
-        if begin_app:
-            gevonden = next((a for a in self.cat["apps"] if a["id"] == begin_app), None)
-            if gevonden:
-                self.zoek.setText(app_naam(gevonden))
-        self.lijst.setFocus()
+        if opdracht:
+            self.open_opdracht(opdracht)
+        elif begin_app:
+            self.open_opdracht([f"appstream://{begin_app}"])
 
     def tweede_start(self, args: list[str]) -> None:
         """De Winkel was al open en wordt opnieuw gestart, bijv. 'Uit de Winkel halen?' na een .exe (U222)."""
         if getattr(self, "sluit_na", False) and self.proces.state() != QProcess.ProcessState.NotRunning:
             # Weer geopend tijdens het installeren: de Winkel gaat daarna niet meer vanzelf dicht (U233).
-            naam = next((app_naam(a) for a in self.cat["apps"] if a["id"] == self.bezig_met), self.bezig_met)
-            self.melding.zet(self.bezig_tekst(naam), "bezig")
-        zoek, app_id = begin_uit(args)
-        if app_id:
-            app_id = echte_id(self.cat, app_id)
-            gevonden = next((a for a in self.cat["apps"] if a["id"] == app_id), None)
-            if gevonden is None:
-                start("plasma-discover", args[0])   # niet in onze selectie: de grote winkel op die app
-                return
-            zoek = app_naam(gevonden)
-        if zoek:
+            self.meld(self.bezig_tekst(self.naam_van(self.bezig_met)), "bezig", self.bezig_met)
+        self.open_opdracht(args)
+
+    def open_opdracht(self, args: list[str]) -> None:
+        """Wat de Winkel bij het openen moet laten zien: zoeken, een app, of uitleg waarom hij iets niet opent.
+        Alles in de Winkel zelf; er start nooit een ander programma."""
+        zoek, app_id, weiger = opdracht_uit(args)
+        if weiger:
+            self.naar_lijst()
+            if zoek:
+                self.zoek.setText(zoek)
+            tekst_, soort = weiger_tekst(weiger)
+            self.opdracht_melding.zet(tekst_, soort)
+            self.lijst.setFocus()
+        elif app_id:
+            self.toon_app(app_id)
+        elif zoek:
+            self.naar_lijst()
             self.zoek.setText(zoek)
             self.lijst.setFocus()
+
+    # ---------------------------------------------------------------- alle apps van Flathub
+    def laad_index(self) -> None:
+        op_achtergrond(self, lambda: flathub_index(APPSTREAM, INDEX_MAP, apart=True), self._index_binnen)
+
+    def _index_binnen(self, index: dict | None) -> None:
+        if not isinstance(index, dict) or not isinstance(index.get("apps"), list):
+            index = index_leeg()
+        self.flathub = index
+        self.hooi = hooi_van(index["apps"])
+        self.op_id = {e["id"].lower(): e for e in index["apps"]}
+        self._meer_sleutel = None
+        self.zoek_meer()
+        rij = self.lijst.currentRow()
+        if not self.zoek.text().strip() and rij >= 0 and self.lijst.sleutel(rij) == "_mijn":
+            self.toon()   # 'Mijn apps': nu met pictogram, uitleg en maker uit Flathub's lijst
+        if self._wacht_app is not None:   # die pagina wachtte op de index
+            app_id, self._wacht_app = self._wacht_app, None
+            if self.pagina_id == app_id and self.stapel.currentIndex() == 1:
+                self.toon_app(app_id)
+
+    def uitsluiten(self) -> set[str]:
+        """Niet bij 'Meer apps van Flathub': de BugOS-apps (die staan er al boven) en wat in BugOS zelf zit."""
+        return {a["id"].lower() for a in self.cat["apps"]} | (set(self.systeem_ids) - {f.lower() for f in self.flatpaks})
+
+    def zoek_meer(self) -> None:
+        """Zoek in alle apps van Flathub naar de tekst die er NU staat (nooit een oude)."""
+        self.meer_timer.stop()
+        zoek = self.zoek.text().strip()
+        if not zoek:
+            self.meer_blok.hide()
+            self.meer_hint.hide()
+            return
+        picks = len(self.kaarten)
+        self.meer_blok.show()
+        resultaten: list[dict] = []
+        if self.flathub is None:
+            self.zet_meer_status(t("Alle apps van Flathub worden geladen…", "Loading all apps from Flathub…"))
+        elif not self.flathub["apps"]:
+            if self.lijst_bezig() or self._index_bezig:
+                self.zet_meer_status(t("De lijst wordt opgehaald…", "Getting the list…"))
+            elif self.lijst_mislukt:
+                self.zet_meer_status(t("Ophalen lukte niet. Heb je internet? Probeer het later nog eens.",
+                                       "Could not get the list. Are you online? Please try again later."), knop=True)
+            else:
+                self.zet_meer_status(t("De lijst met alle apps is er nog niet. Die komt vanzelf zodra je computer met "
+                                       "internet verbonden is.",
+                                       "The list of all apps is not here yet. It arrives by itself as soon as your "
+                                       "computer is online."), knop=True)
+        else:
+            resultaten = zoek_flathub(self.flathub["apps"], zoek, self.uitsluiten(), self.hooi)
+            if resultaten:
+                self.zet_meer_status("")
+            elif picks:
+                self.zet_meer_status(t("Geen andere apps gevonden voor \"{}\".",
+                                       "No other apps found for \"{}\".").format(zoek))
+            else:
+                self.meer_blok.hide()
+        if zoek != self._meer_zoek:   # een nieuwe zoekopdracht: weer 20 kaarten
+            self._meer_zoek, self.meer_aantal = zoek, 20
+        # De kaarten alleen opnieuw als er iets anders te zien is (niet bij elke toets of elk ververs).
+        sleutel = (self.kolommen, tuple(e["id"] for e in resultaten[:self.meer_aantal]))
+        if sleutel != self._meer_sleutel:
+            self._meer_sleutel = sleutel
+            self.bouw_meer(resultaten)
+        rest = len(resultaten) - len(self.meer_kaarten)
+        self.meer_toon_meer.setText(t("Meer laten zien ({})", "Show more ({})").format(rest))
+        self.meer_toon_meer.setVisible(rest > 0)
+        self._meer_alles = resultaten
+        if picks and resultaten:
+            n = len(resultaten)
+            self.meer_hint.setText(t("Nog 1 app van Flathub staat hieronder.", "1 more app from Flathub is below.")
+                                   if n == 1 else
+                                   t("Nog {} apps van Flathub staan hieronder.",
+                                     "{} more apps from Flathub are below.").format(n))
+            self.meer_hint.show()
+        else:
+            self.meer_hint.hide()
+        # Helemaal niets, ook niet bij Flathub: pas nu zeggen (niet al tijdens het laden of typen).
+        # (Is de lijst van Flathub er nog niet, dan zegt het blok hieronder dat, met 'Nu ophalen': geen 'niets gevonden'.)
+        if not picks and not resultaten and self.flathub is not None and self.flathub["apps"]:
+            self.melding.zet(self.niets_tekst(zoek), "info")
+            self._niets_voor = zoek
+
+    def niets_tekst(self, zoek: str) -> str:
+        return t("Niets gevonden voor \"{}\". Probeer een ander woord, bijvoorbeeld wat de app doet: "
+                 "\"foto's\", \"muziek\" of \"tekenen\".",
+                 "Nothing found for \"{}\". Try another word, for example what the app does: "
+                 "\"photos\", \"music\" or \"drawing\".").format(zoek)
+
+    def zet_meer_status(self, tekst_: str, knop: bool = False) -> None:
+        self.meer_status.setText(tekst_)
+        self.meer_status.setVisible(bool(tekst_))
+        self.meer_knop_ophalen.setVisible(knop)
+
+    def bouw_meer(self, resultaten: list[dict]) -> None:
+        for k in self.meer_kaarten:
+            self.meer_raster.removeWidget(k)
+            k.deleteLater()
+        self.meer_kaarten = []
+        for i, e in enumerate(resultaten[:self.meer_aantal]):
+            kaart = FlathubKaart(e, self)
+            self.meer_kaarten.append(kaart)
+            self.meer_raster.addWidget(kaart, i // self.kolommen, i % self.kolommen)
+        for k in range(3):
+            self.meer_raster.setColumnStretch(k, 1 if k < self.kolommen else 0)
+
+    def toon_meer(self) -> None:
+        """'Meer laten zien': 20 kaarten erbij, en de focus op de eerste nieuwe."""
+        eerder = len(self.meer_kaarten)
+        self.meer_aantal += 20
+        self.zoek_meer()
+        if len(self.meer_kaarten) > eerder:
+            self.meer_kaarten[eerder].knop.setFocus()
+
+    def lijst_bezig(self) -> bool:
+        return self.lijst_proces.state() != QProcess.ProcessState.NotRunning
+
+    def ververs_lijst_als_oud(self) -> None:
+        """Is Flathub's lijst ouder dan een dag? Dan haalt de Winkel stil een nieuwe (zonder wachtwoord, zonder
+        melding). Niet op een verbinding die per MB kost."""
+        op_achtergrond(self, moet_verversen, lambda moet: moet is True and self.start_lijst(handmatig=False))
+
+    def haal_lijst(self) -> None:
+        """'Nu ophalen': je vroeg er zelf om, dus ook op een telefoon-hotspot."""
+        self.lijst_mislukt = False
+        self.start_lijst(handmatig=True)
+        self.zoek_meer()
+
+    def start_lijst(self, handmatig: bool) -> bool:
+        """flatpak update --appstream: alleen Flathub's lijst, geen apps. Nooit tegelijk met installeren of
+        verwijderen (dezelfde map op de computer): die wachten op elkaar."""
+        if self.lijst_bezig() or (not handmatig and (self.proces.state() != QProcess.ProcessState.NotRunning
+                                                      or self._wachtend is not None)):
+            return False
+        if handmatig and self.proces.state() != QProcess.ProcessState.NotRunning:
+            return False
+        self._lijst_handmatig = handmatig
+        omgeving = QProcessEnvironment.systemEnvironment()
+        omgeving.insert("LC_ALL", "C.UTF-8")
+        self.lijst_proces.setProcessEnvironment(omgeving)
+        self.lijst_proces.start("flatpak", ["update", "--appstream", "--noninteractive", "flathub"])
+        self._lijst_wacht.start()
+        self.zoek_meer()   # 'De lijst wordt opgehaald…' en geen knop, ook als het vanzelf gebeurt (I6)
+        return True
+
+    def _lijst_fout(self, fout) -> None:
+        if fout == QProcess.ProcessError.FailedToStart:   # geen flatpak: dan komt er ook geen 'finished'
+            self._lijst_klaar(1, None)
+
+    def _lijst_klaar(self, code: int, _status) -> None:
+        self._lijst_wacht.stop()
+        self.lijst_proces.readAll()
+        handmatig, self._lijst_handmatig = self._lijst_handmatig, False
+        if code == 0:
+            # Een nieuwe lijst: de index opnieuw. Blijft hij leeg (een kapotte lijst), dan zeggen we dat het niet lukte.
+            def binnen(index) -> None:
+                self._index_bezig = False
+                self._index_binnen(index)
+                if handmatig and not (self.flathub or {}).get("apps"):
+                    self.lijst_mislukt = True
+                    self.zoek_meer()
+            self._index_bezig = True
+            op_achtergrond(self, lambda: flathub_index(APPSTREAM, INDEX_MAP, apart=True), binnen)
+        elif handmatig:
+            self.lijst_mislukt = True   # alleen als je er zelf om vroeg; stil mislukt is geen melding waard
+        self.zoek_meer()
+        if self._wachtend is not None:   # een installatie wachtte op de lijst
+            self.start_flatpak(self._wachtend)
+
+    # ---------------------------------------------------------------- de pagina van één app
+    def toon_app(self, app_id: str, terug_focus: QWidget | None = None) -> None:
+        """De pagina van een app. Een app uit de BugOS-selectie heeft geen pagina: dan de lijst met die app (U222)."""
+        pick = next((a for a in self.cat["apps"] if a["id"].lower() == app_id.lower()), None)
+        if pick is not None:
+            self.naar_lijst()
+            self.zoek.setText(app_naam(pick))
+            self.lijst.setFocus()
+            return
+        if self.stapel.currentIndex() == 0:   # onthoud waar je in de lijst was
+            self._terug_naar = (self.scroll.verticalScrollBar().value(), terug_focus or self.focusWidget())
+        flatpak_id = next((f for f in self.flatpaks if f.lower() == app_id.lower()), None)
+        bestand = self.systeem_ids.get(app_id.lower())
+        if bestand is not None and flatpak_id is None:
+            # Zit in BugOS zelf (bijv. Dolphin via KRunner): geen 'Installeren' van een tweede, KDE-versie.
+            naam, icoon_, verborgen = desktop_info(bestand)
+            pagina = AppPagina(self, "systeem", app_id, naam=naam, icoon_naam=icoon_, kan_openen=not verborgen)
+            pagina.melding.zet(t("Dit programma hoort bij BugOS zelf. Het wordt bijgewerkt met BugOS en kan niet los "
+                                 "verwijderd worden.",
+                                 "This program is part of BugOS itself. It is updated with BugOS and cannot be removed "
+                                 "separately."), "info")
+            self.zet_pagina(pagina, app_id)
+            return
+        entry = self.op_id.get(app_id.lower())
+        if entry is not None:
+            self.zet_pagina(AppPagina(self, "flathub", entry["id"], entry=entry), entry["id"])
+            self.laad_groottes()
+            return
+        if self.flathub is None:   # de index komt nog: dan deze pagina opnieuw
+            pagina = AppPagina(self, "laden", app_id)
+            pagina.melding.zet(t("Alle apps van Flathub worden geladen…", "Loading all apps from Flathub…"), "bezig")
+            self._wacht_app = app_id
+            self.zet_pagina(pagina, app_id)
+            return
+        ouder = next((v for k, v in self.flathub["hoort_bij"].items() if k.lower() == app_id.lower()), None)
+        if ouder is not None and ouder.lower() != app_id.lower() and (
+                ouder.lower() in self.op_id or any(a["id"].lower() == ouder.lower() for a in self.cat["apps"])):
+            self.toon_app(ouder, terug_focus)   # een uitbreiding (bijv. GIMP's handleiding): de app zelf
+            return
+        geen = next((v for k, v in self.flathub["geen_app"].items() if k.lower() == app_id.lower()), None)
+        if geen is None and ouder is not None:
+            geen = [app_id.rsplit(".", 1)[-1], "onderdeel"]
+        if geen is not None and flatpak_id is None:
+            naam, soort = (list(geen) + ["onderdeel"])[:2]
+            self.naar_lijst()
+            self.zoek.setText(str(naam))
+            tekst_, s = weiger_tekst("terminal" if soort == "terminal" else "onderdeel")
+            self.opdracht_melding.zet(tekst_, s)
+            self.lijst.setFocus()
+            return
+        if flatpak_id is not None:   # geïnstalleerd, maar niet (meer) in Flathub's lijst
+            info = self.flatpak_info.get(flatpak_id, {})
+            pagina = AppPagina(self, "elders", flatpak_id, naam=info.get("naam") or flatpak_id.rsplit(".", 1)[-1])
+            if info.get("bron") == "flathub":
+                pagina.melding.zet(t("Deze app staat niet (meer) in de lijst van Flathub. Je kunt hem hier openen of "
+                                     "verwijderen.",
+                                     "This app is not (or no longer) in Flathub's list. You can open or remove it "
+                                     "here."), "info")
+            else:
+                pagina.melding.zet(t("Deze app komt niet uit Flathub. Je kunt hem hier openen of verwijderen.",
+                                     "This app does not come from Flathub. You can open or remove it here."), "info")
+            self.zet_pagina(pagina, flatpak_id)
+            return
+        pagina = AppPagina(self, "niet_gevonden", app_id)
+        pagina.melding.zet(t("Deze app staat niet (meer) in Flathub, of de lijst met alle apps is nog niet opgehaald.",
+                             "This app is not (or no longer) on Flathub, or the list of all apps has not been "
+                             "fetched yet."), "info")
+        zoek_knop = Knop(t("Zoek een andere app", "Search for another app"), "hoofd", "lijn:zoek")
+        zoek_knop.clicked.connect(lambda _c=False, z=app_id.rsplit(".", 1)[-1]: self.zoek_vanaf_pagina(z))
+        pagina.einde.addWidget(zoek_knop, 0, Qt.AlignmentFlag.AlignLeft)
+        self.zet_pagina(pagina, app_id)
+
+    def open_app(self, app_id: str) -> None:
+        """Openen vanaf de app-pagina: een Flatpak met 'flatpak run', een programma van BugOS met zijn eigen
+        .desktop-bestand (zoals AppKaart.klik)."""
+        if app_id in self.flatpaks and APP_ID.match(app_id):
+            start("flatpak", "run", app_id)
+            return
+        bestand = self.systeem_ids.get(app_id.lower())
+        if bestand is not None:
+            start("kioclient" if bestaat("kioclient") else "gio", "exec" if bestaat("kioclient") else "launch",
+                  str(bestand))
+
+    def laad_groottes(self) -> None:
+        """De groottes van alle apps, één keer per keer dat de Winkel open is (0,3 s, zonder internet)."""
+        if VOORBEELD or self.groottes is not None or self._groottes_bezig:
+            return
+        self._groottes_bezig = True
+        op_achtergrond(self, alle_groottes, self._groottes_binnen)
+
+    def _groottes_binnen(self, uitkomst) -> None:
+        self._groottes_bezig = False
+        groottes, runtimes = uitkomst if isinstance(uitkomst, tuple) else ({}, set())
+        self.groottes, self.runtimes = groottes, runtimes
+        self._ref_van = {ref.split("/")[1].lower(): ref for ref in groottes if ref.startswith("app/")}
+        if self.pagina is not None and self.stapel.currentIndex() == 1:
+            self.pagina.zet_grootte()
+
+    def grootte_tekst_van(self, app_id: str) -> str:
+        """'Ongeveer 12 MB' (en een gedeeld onderdeel dat er nog niet is), 'Wordt bekeken…', of '' (onbekend)."""
+        er_al = app_id in self.flatpaks
+        if VOORBEELD:
+            e = self.op_id.get(app_id.lower(), {})
+            grootte, onderdeel = int(e.get("grootte") or 0), int(e.get("onderdeel") or 0)
+        else:
+            if self.groottes is None:
+                return t("Wordt bekeken…", "Checking…")
+            ref = self._ref_van.get(app_id.lower())
+            if ref is None:
+                return ""
+            download, erop, runtime = self.groottes[ref]
+            grootte = max(download or 0, erop or 0)   # Zoom: de download is groter (de maker levert er iets bij)
+            onderdeel = 0
+            if runtime and runtime not in self.runtimes:
+                r = self.groottes.get(f"runtime/{runtime}")
+                onderdeel = max((r[0] or 0, r[1] or 0)) if r else 0
+        if not grootte:
+            return ""
+        uit = t("Ongeveer {}", "About {}").format(grootte_tekst(grootte))
+        if onderdeel and not er_al:
+            uit += t(" (plus eenmalig een gedeeld onderdeel van ongeveer {})",
+                     " (plus, once, a shared part of about {})").format(grootte_tekst(onderdeel))
+        return uit
+
+    def ververs_alles(self) -> None:
+        """Elke kaart en de open app-pagina laten zien wat er nu is (na installeren, verwijderen, bezig)."""
+        for k in self.kaarten + self.meer_kaarten:
+            try:
+                k.ververs()
+            except RuntimeError:   # al weg
+                pass
+        if self.pagina is not None:
+            try:
+                self.pagina.ververs()
+            except RuntimeError:
+                pass
+
+    def meld(self, tekst_: str, soort: str, app_id: str | None = None) -> None:
+        """Een melding in de lijst, en op de pagina als die van deze app open is."""
+        self.melding.zet(tekst_, soort)
+        if self.pagina is not None and self.stapel.currentIndex() == 1 and app_id is not None \
+                and (self.pagina_id or "").lower() == app_id.lower():
+            self.pagina.melding.zet(tekst_, soort)
+
+    def naam_van(self, app_id: str | None) -> str:
+        """De naam van een app in jouw taal: uit de BugOS-selectie, uit Flathub's lijst, uit 'flatpak list'."""
+        if not app_id:
+            return ""
+        pick = next((a for a in self.cat["apps"] if a["id"] == app_id), None)
+        if pick is not None:
+            return app_naam(pick)
+        e = self.op_id.get(app_id.lower())
+        if e is not None:
+            return naam_in_taal(e)
+        return self.flatpak_info.get(app_id, {}).get("naam") or app_id
+
+    def entry_van(self, app_id: str) -> dict:
+        """Wat de Winkel van een geïnstalleerde app weet: uit Flathub's lijst, anders alleen de naam uit 'flatpak list'."""
+        e = self.op_id.get(app_id.lower())
+        if e is not None:
+            return e
+        naam = self.flatpak_info.get(app_id, {}).get("naam") or app_id.rsplit(".", 1)[-1]
+        return {"id": app_id, "naam": naam, "naam_nl": "", "kort": "", "kort_nl": "", "uitleg": "", "uitleg_nl": "",
+                "maker": "", "icoon": "", "echt": False, "echt_site": "", "oars": None, "woorden": "", "site": ""}
+
+    def ververs_geinstalleerd(self) -> None:
+        self.flatpaks = geinstalleerd()
+        self.flatpak_info = flatpak_lijst() if self.flatpaks else {}
+
+    def zet_pagina(self, pagina: AppPagina, app_id: str) -> None:
+        oud = self.pagina_scroll.takeWidget()
+        if oud is not None:
+            oud.deleteLater()
+        self.pagina, self.pagina_id = pagina, app_id
+        self.pagina_scroll.setWidget(pagina)
+        self.pagina_scroll.verticalScrollBar().setValue(0)
+        self.stapel.setCurrentIndex(1)
+        pagina.terug.setFocus()
+
+    def naar_lijst(self) -> None:
+        """Zonder iets te onthouden terug naar de lijst (een nieuwe opdracht, een ander onderwerp)."""
+        if self.stapel.currentIndex() != 0:
+            self.stapel.setCurrentIndex(0)
+        self.pagina_id = None
+
+    def terug(self) -> None:
+        """Terug naar de lijst, met dezelfde zoektekst, op dezelfde plek en met de focus op dezelfde knop."""
+        if self.stapel.currentIndex() == 0:
+            return
+        self.naar_lijst()
+        waarde, focus = self._terug_naar
+        QTimer.singleShot(0, lambda: self.scroll.verticalScrollBar().setValue(waarde))
+        try:
+            if focus is not None and focus.isVisibleTo(self):
+                focus.setFocus()
+                return
+        except RuntimeError:   # die kaart is er niet meer
+            pass
+        self.zoek.setFocus()
+
+    def zoek_vanaf_pagina(self, zoek: str) -> None:
+        self.naar_lijst()
+        self.zoek.setText(zoek)
+        self.zoek.setFocus()
+        self.zoek.selectAll()
+
+    def onderwerp_gekozen(self) -> None:
+        """Een onderwerp in de zijbalk: altijd de lijst (ook als er een app-pagina open stond)."""
+        self.naar_lijst()
+        self.opdracht_melding.zet("")
+        self.toon()
 
     # ------------------------------------------------------------------
     def toon(self) -> None:
@@ -285,23 +1579,31 @@ class Winkel(Venster):
         elif cat_id == "_mijn":
             apps = [a for a in self.cat["apps"] if a["id"] in self.installed]
             self.kop.setText(t("Mijn apps", "My apps"))
+            # Daarna elke andere Flatpak-app op deze computer (ook van buiten de BugOS-selectie), op naam (F7).
+            picks = {a["id"].lower() for a in self.cat["apps"]}
+            anderen = [self.entry_van(f) for f in self.flatpaks if f.lower() not in picks and APP_ID.match(f)]
+            apps = apps + sorted(anderen, key=lambda e: zoeksleutel(naam_in_taal(e)))
         else:
             apps = [a for a in self.cat["apps"] if cat_id in a["cat"]]
             item = self.lijst.item(rij)
             self.kop.setText(item.text() if item else "")
         for i, app in enumerate(apps):
-            kaart = AppKaart(app, self)
+            # Een app uit Flathub's lijst (in 'Mijn apps') heeft de velden van de index, geen 'cat'.
+            kaart = FlathubKaart(app, self) if "cat" not in app else AppKaart(app, self)
             self.kaarten.append(kaart)
             self.raster.addWidget(kaart, i // self.kolommen, i % self.kolommen)
         for k in range(3):
             self.raster.setColumnStretch(k, 1 if k < self.kolommen else 0)
-        if not apps:
-            self.melding.zet(t("Niet in de BugOS-selectie. Druk op \"Meer apps zoeken\" om verder te zoeken.",
-                               "Not in the BugOS selection. Press \"Search more apps\" to search further."), "info")
+        self.onder.setVisible(not zoek)
+        if not zoek:
+            self.meer_timer.stop()
+            self.meer_blok.hide()
+            self.meer_hint.hide()
+        if zoek and not apps and self._niets_voor == zoek:
+            pass   # zoek_meer zei al 'niets gevonden' voor precies deze tekst
         elif self.bezig_met is not None and not getattr(self, "sluit_na", False):   # 'gaat vanzelf dicht' laten staan (U344)
             # Wordt er iets geïnstalleerd? Dan die melding terug (een zoekopdracht zonder uitkomst verving hem) (U333).
-            naam = next((app_naam(a) for a in self.cat["apps"] if a["id"] == self.bezig_met), self.bezig_met)
-            self.melding.zet(self.bezig_tekst(naam), "bezig")
+            self.melding.zet(self.bezig_tekst(self.naam_van(self.bezig_met)), "bezig")
         elif not self.melding.tekst.text().startswith("✅"):
             self.melding.zet("")
 
@@ -314,18 +1616,22 @@ class Winkel(Venster):
             self.kolommen = nieuw
             if self.kaarten:
                 self.toon()
+            if self.meer_kaarten:
+                self.zoek_meer()
 
     def closeEvent(self, e) -> None:  # noqa: N802
         # Nooit midden in het installeren stoppen (dan breekt flatpak af): wachten, en daarna vanzelf dicht.
-        if self.proces.state() != QProcess.ProcessState.NotRunning:
+        # (Ook niet als het installeren nog wacht tot de lijst van Flathub binnen is.) Het verversen van die lijst
+        # wacht niet: Flatpak zet een nieuwe lijst pas neer als hij helemaal binnen is.
+        if self.proces.state() != QProcess.ProcessState.NotRunning or self._wachtend is not None:
             self.sluit_na = True
-            naam = next((app_naam(a) for a in self.cat["apps"] if a["id"] == self.bezig_met), self.bezig_met)
-            self.melding.zet(t(f"Even wachten: {naam} wordt nog verwijderd. Daarna gaat de Winkel vanzelf dicht.",
-                               f"One moment: {naam} is still being removed. The Store closes by itself afterwards.")
-                             if getattr(self, "klus", "") == "verwijder" else
-                             t(f"Even wachten: {naam} wordt nog geïnstalleerd. Daarna gaat de Winkel vanzelf dicht.",
-                               f"One moment: {naam} is still being installed. The Store closes by itself afterwards."),
-                             "bezig")
+            naam = self.naam_van(self.bezig_met)
+            self.meld(t(f"Even wachten: {naam} wordt nog verwijderd. Daarna gaat de Winkel vanzelf dicht.",
+                        f"One moment: {naam} is still being removed. The Store closes by itself afterwards.")
+                      if getattr(self, "klus", "") == "verwijder" else
+                      t(f"Even wachten: {naam} wordt nog geïnstalleerd. Daarna gaat de Winkel vanzelf dicht.",
+                        f"One moment: {naam} is still being installed. The Store closes by itself afterwards."),
+                      "bezig", self.bezig_met)
             e.ignore()
             return
         super().closeEvent(e)
@@ -337,29 +1643,42 @@ class Winkel(Venster):
         return t(f"{naam} wordt geïnstalleerd…", f"Installing {naam}…")
 
     def vraag_verwijderen(self, app: dict) -> None:
-        """Eerst vragen; je bestanden van de app (inloggen, instellingen) alleen weg als je dat aanvinkt (U464)."""
-        vraag = QMessageBox(QMessageBox.Icon.Question, t("Verwijderen?", "Remove?"),
-                            t(f"{app_naam(app)} van deze computer verwijderen?", f"Remove {app_naam(app)} from this computer?"),
-                            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel, self)
-        vraag.setDefaultButton(QMessageBox.StandardButton.Cancel)
-        vraag.setCheckBox(QCheckBox(t("Ook de instellingen en bestanden van deze app weggooien",
-                                      "Also delete this app's settings and files")))
-        if vraag.exec() == QMessageBox.StandardButton.Yes:
-            self.verwijder(app, vraag.checkBox().isChecked())
+        """Eerst vragen (de BugOS-vraag; Enter doet niets, want weg is weg); je bestanden van de app (inloggen,
+        instellingen) alleen weg als je dat aanvinkt (U464)."""
+        vraag = VraagDialoog(self, t("Verwijderen?", "Remove?"),
+                             t("{} van deze computer verwijderen?", "Remove {} from this computer?").format(app_naam(app)),
+                             t("Verwijderen", "Remove"), enter_is_nee=True)
+        vraag.vinkje = QCheckBox(t("Ook de instellingen en bestanden van deze app weggooien",
+                                   "Also delete this app's settings and files"))
+        lay = vraag.layout()
+        lay.insertWidget(lay.count() - 2, vraag.vinkje)   # onder de vraag, boven de knoppen
+        if vraag.exec() == QDialog.DialogCode.Accepted:
+            self.verwijder(app, vraag.vinkje.isChecked())
 
     def verwijder(self, app: dict, met_gegevens: bool) -> None:
+        if not APP_ID.match(app["id"]):
+            return
         self.bezig_met = app["id"]
         self.klus = "verwijder"
-        self.melding.zet(t(f"{app_naam(app)} wordt verwijderd…", f"Removing {app_naam(app)}…"), "bezig")
-        for k in self.kaarten:
-            k.ververs()
+        self.meld(t(f"{app_naam(app)} wordt verwijderd…", f"Removing {app_naam(app)}…"), "bezig", app["id"])
+        self.ververs_alles()
+        self.start_flatpak(["uninstall", "-y", app["id"]] + (["--delete-data"] if met_gegevens else []))
+
+    def start_flatpak(self, args: list[str]) -> None:
+        """Installeren of verwijderen. Wordt de lijst van Flathub net ververst (dezelfde map op de computer), dan
+        wacht dit tot dat klaar is."""
+        if self.lijst_bezig():
+            self._wachtend = args
+            return
+        self._wachtend = None
         omgeving = QProcessEnvironment.systemEnvironment()
-        omgeving.insert("LC_ALL", "C.UTF-8")
+        omgeving.insert("LC_ALL", "C.UTF-8")   # we lezen flatpaks fout (bijv. "Not authorized"): in het Engels
         self.proces.setProcessEnvironment(omgeving)
-        self.proces.start("flatpak", ["uninstall", "-y", app["id"]] + (["--delete-data"] if met_gegevens else []))
+        self.proces.start("flatpak", args)
 
     def klaar_verwijderen(self, code: int, uit: str, app_id: str, naam: str) -> None:
-        self.flatpaks = geinstalleerd() - ({app_id} if code == 0 else set())
+        self.ververs_geinstalleerd()
+        self.flatpaks -= {app_id} if code == 0 else set()
         self.installed = self.flatpaks | set(self.systeem)
         # In 'Mijn apps': de lijst opnieuw, zonder de app die weg is (U472).
         rij = self.lijst.currentRow()
@@ -367,29 +1686,26 @@ class Winkel(Venster):
             self.toon()
             self.zoek.setFocus()   # de kaart met de focus is weg: niet de focus kwijt (U482)
         if code == 0:
-            self.melding.zet(t(f"✅ {naam} is verwijderd.", f"✅ {naam} has been removed."), "goed")
+            self.meld(t(f"✅ {naam} is verwijderd.", f"✅ {naam} has been removed."), "goed", app_id)
         elif any(w in uit.lower() for w in ("not authorized", "not allowed", "authentication", "authoriz")):
-            self.melding.zet(t(f"{naam} verwijderen mag alleen met het wachtwoord van een beheerder.",
-                               f"Removing {naam} needs an administrator's password."), "fout")
+            self.meld(t(f"{naam} verwijderen mag alleen met het wachtwoord van een beheerder.",
+                        f"Removing {naam} needs an administrator's password."), "fout", app_id)
         else:
-            self.melding.zet(t(f"{naam} verwijderen lukte niet. Probeer het nog eens.",
-                               f"Removing {naam} did not work. Please try again."), "fout")
-        for k in self.kaarten:
-            k.ververs()
+            self.meld(t(f"{naam} verwijderen lukte niet. Probeer het nog eens.",
+                        f"Removing {naam} did not work. Please try again."), "fout", app_id)
+        self.ververs_alles()
 
     def installeer(self, app: dict) -> None:
+        if not APP_ID.match(app["id"]):   # alleen een echt app-id gaat naar flatpak
+            return
         self.klus = "installeer"
         self.bezig_met = app["id"]
-        self.melding.zet(t(f"{app_naam(app)} wordt geïnstalleerd. Dit kan een paar minuten duren…",
-                           f"Installing {app_naam(app)}. This can take a few minutes…"), "bezig")
-        for k in self.kaarten:
-            k.ververs()
+        self.meld(t(f"{app_naam(app)} wordt geïnstalleerd. Dit kan een paar minuten duren…",
+                    f"Installing {app_naam(app)}. This can take a few minutes…"), "bezig", app["id"])
+        self.ververs_alles()
         # Zonder --noninteractive: dan mag KDE om een wachtwoord vragen (een gezinslid dat geen beheerder is,
         # krijgt anders nooit de vraag en het installeren mislukt stil). -y beantwoordt de rest.
-        omgeving = QProcessEnvironment.systemEnvironment()
-        omgeving.insert("LC_ALL", "C.UTF-8")   # we lezen flatpaks fout (bijv. "Not authorized"): in het Engels
-        self.proces.setProcessEnvironment(omgeving)
-        self.proces.start("flatpak", ["install", "-y", "flathub", app["id"]])
+        self.start_flatpak(["install", "-y", "flathub", app["id"]])
 
     def mijn_apps_erbij(self) -> None:
         """'Mijn apps' in de zijbalk, één keer (ook na je eerste app, zonder de Winkel opnieuw te openen) (U081)."""
@@ -399,7 +1715,7 @@ class Winkel(Venster):
     def klaar(self, code: int, _status) -> None:
         uit = bytes(self.proces.readAll()).decode(errors="ignore")
         app_id = self.bezig_met
-        naam = next((app_naam(a) for a in self.cat["apps"] if a["id"] == app_id), app_id)
+        naam = self.naam_van(app_id)
         self.bezig_met = None
         if getattr(self, "klus", "") == "verwijder":
             self.klus = ""
@@ -410,28 +1726,32 @@ class Winkel(Venster):
                 else:
                     self.sluit_na = False   # mislukt: open laten, zodat je de melding ziet (U472)
             return
-        self.flatpaks = geinstalleerd() | ({app_id} if code == 0 else set())
+        self.ververs_geinstalleerd()
+        self.flatpaks |= {app_id} if code == 0 and app_id else set()
         self.installed = self.flatpaks | set(self.systeem)
         if code == 0:
             self.mijn_apps_erbij()
-            self.melding.zet(t(f"✅ {naam} is geïnstalleerd. Je vindt het in het startmenu.",
-                               f"✅ {naam} is installed. You can find it in the start menu."), "goed")
+            self.meld(t(f"✅ {naam} is geïnstalleerd. Je vindt het in het startmenu.",
+                        f"✅ {naam} is installed. You can find it in the start menu."), "goed", app_id)
         elif any(w in uit.lower() for w in ("not authorized", "not allowed", "authentication", "authoriz")):
-            self.melding.zet(t(f"{naam} installeren mag alleen met het wachtwoord van een beheerder. "
-                               "Vraag het aan wie de computer beheert.",
-                               f"Installing {naam} needs an administrator's password. "
-                               "Ask the person who looks after this computer."), "fout")
+            self.meld(t(f"{naam} installeren mag alleen met het wachtwoord van een beheerder. "
+                        "Vraag het aan wie de computer beheert.",
+                        f"Installing {naam} needs an administrator's password. "
+                        "Ask the person who looks after this computer."), "fout", app_id)
         elif any(w in uit.lower() for w in ("no space left on device", "not enough disk space", "not enough free space", "not enough space")):
             # Een volle computer is geen 'heb je internet?' (U411).
-            self.melding.zet(t(f"{naam} installeren lukte niet: je computer is vol. Maak eerst ruimte (bijv. de "
-                               "prullenbak leegmaken in Bestanden) en probeer het dan opnieuw.",
-                               f"Installing {naam} failed: your computer is full. Make room first (for example empty "
-                               "the trash in Files) and try again."), "fout")
+            self.meld(t(f"{naam} installeren lukte niet: je computer is vol. Maak eerst ruimte (bijv. de "
+                        "prullenbak leegmaken in Bestanden) en probeer het dan opnieuw.",
+                        f"Installing {naam} failed: your computer is full. Make room first (for example empty "
+                        "the trash in Files) and try again."), "fout", app_id)
+        elif "nothing matches" in uit.lower():
+            # Niet (meer) bij Flathub (bijv. een oude link): geen 'heb je internet?'.
+            self.meld(t("{} is niet (meer) te krijgen bij Flathub.",
+                        "{} is not (or no longer) available from Flathub.").format(naam), "fout", app_id)
         else:
-            self.melding.zet(t(f"{naam} installeren lukte niet. Heb je internet? Probeer het nog eens.",
-                               f"Installing {naam} failed. Are you online? Please try again."), "fout")
-        for k in self.kaarten:
-            k.ververs()
+            self.meld(t(f"{naam} installeren lukte niet. Heb je internet? Probeer het nog eens.",
+                        f"Installing {naam} failed. Are you online? Please try again."), "fout", app_id)
+        self.ververs_alles()
         if getattr(self, "sluit_na", False):
             if code == 0:
                 QTimer.singleShot(0, self.close)   # je wilde al sluiten, en het is gelukt
@@ -439,11 +1759,14 @@ class Winkel(Venster):
                 self.sluit_na = False   # mislukt: open laten, zodat je de melding ziet
 
     def meer_apps(self) -> None:
-        zoek = self.zoek.text().strip()
-        if zoek:
-            start("plasma-discover", "--search", zoek)
-        else:
-            start("plasma-discover")
+        """'Alle apps doorzoeken': het zoekveld van de Winkel zelf doorzoekt ook alle apps van Flathub."""
+        self.naar_lijst()
+        self.zoek.setFocus()
+        self.zoek.selectAll()
+        if not self.zoek.text().strip():
+            self.opdracht_melding.zet(t("Typ hierboven wat je zoekt, bijvoorbeeld \"muziek\" of \"Zoom\".",
+                                        "Type above what you are looking for, for example \"music\" or \"Zoom\"."),
+                                      "info")
 
 
 def begin_uit(args: list[str]) -> tuple[str, str]:
@@ -462,17 +1785,159 @@ def echte_id(catalogus: dict, app_id: str) -> str:
     return next((a["id"] for a in catalogus["apps"] if a["id"].lower() == app_id.lower()), app_id)
 
 
+# Flathub zelf (de gewone versie). De Winkel voegt nooit een andere appwinkel toe.
+FLATHUB_URLS = {"https://dl.flathub.org/repo", "https://flathub.org/repo"}
+FLATHUB_BETA = {"https://dl.flathub.org/beta-repo", "https://flathub.org/beta-repo"}
+MAX_BESTAND = 64 * 1024   # een .flatpakref is een paar kB (met de sleutel); meer lezen we niet
+
+
+def _laatste_deel(app_id: str) -> str:
+    return app_id.rsplit(".", 1)[-1] if APP_ID.match(app_id or "") else ""
+
+
+def _lees_ini(pad: Path, sectie: str) -> dict[str, str] | None:
+    """Eén sectie uit een klein ini-bestand (.flatpakref, .flatpakrepo); None als het niet te lezen is.
+    Alleen een gewoon bestand: een 'bestand' dat eigenlijk een pijp is, zou de Winkel voor altijd laten wachten."""
+    import configparser
+    try:
+        if not pad.is_file():
+            return None
+        with open(pad, "rb") as f:
+            tekst_ = f.read(MAX_BESTAND).decode("utf-8", errors="replace")
+        ini = configparser.ConfigParser(interpolation=None, strict=False)
+        ini.read_string(tekst_)
+        if not ini.has_section(sectie):
+            return None
+        return {k: v.strip() for k, v in ini.items(sectie)}
+    except (OSError, ValueError, configparser.Error):
+        return None
+
+
+def _flathub_link(url: str) -> tuple[str, str, str]:
+    """Een link naar een .flatpakref op Flathub (flatpak+https:// of https://). De Winkel downloadt hem nooit:
+    het id staat al in de link."""
+    from urllib.parse import urlsplit
+    try:
+        delen = urlsplit(url)
+        host, pad = (delen.hostname or "").lower(), delen.path
+    except ValueError:
+        return "", "", "kapot"
+    m = re.fullmatch(r"/(repo|beta-repo)/appstream/([^/]+)\.flatpakref", pad)
+    if host in ("dl.flathub.org", "flathub.org") and m and APP_ID.match(m.group(2)):
+        if m.group(1) == "beta-repo":
+            return _laatste_deel(m.group(2)), "", "test_versie"
+        return "", m.group(2), ""
+    return "", "", "andere_bron"
+
+
+def _bestand(pad: Path) -> tuple[str, str, str]:
+    naam = pad.name.lower()
+    if naam.endswith(".flatpakref"):
+        ref = _lees_ini(pad, "Flatpak Ref")
+        if ref is None:
+            return "", "", "kapot"
+        app_id, url = ref.get("name", ""), ref.get("url", "").rstrip("/")
+        if ref.get("isruntime", "").lower() == "true":
+            return "", "", "onderdeel"
+        if url in FLATHUB_URLS:
+            return ("", app_id, "") if APP_ID.match(app_id) else ("", "", "kapot")
+        if url in FLATHUB_BETA:
+            return _laatste_deel(app_id), "", "test_versie"
+        return _laatste_deel(app_id), "", "andere_bron"
+    if naam.endswith(".flatpakrepo"):
+        repo = _lees_ini(pad, "Flatpak Repo")
+        if repo is None:
+            return "", "", "kapot"
+        return "", "", "flathub_al" if repo.get("url", "").rstrip("/") in FLATHUB_URLS else "andere_winkel"
+    if naam.endswith(".flatpak"):
+        return " ".join(re.sub(r"[-_]+", " ", pad.stem).split()), "", "bundel"
+    return "", "", ""
+
+
+def opdracht_uit(args: list[str]) -> tuple[str, str, str]:
+    """(zoektekst, app-id, weigering) uit de opdracht. De weigering is een code voor weiger_tekst().
+
+      --zoek <woorden>                      -> zoeken
+      appstream://<id>, appstream:<id>      -> die app
+      flatpak+https://dl.flathub.org/repo/appstream/<id>.flatpakref (of https://) -> die app
+      <bestand>.flatpakref (of file://...)  -> die app, als hij van Flathub komt
+      <bestand>.flatpakrepo / .flatpak      -> uitleg waarom de Winkel dat niet doet
+    Alleen args[0] telt (zoals altijd)."""
+    zoek, app_id = begin_uit(args)
+    if zoek:
+        return zoek, "", ""
+    if args and args[0].lower().startswith("appstream:"):
+        return ("", app_id, "") if APP_ID.match(app_id) else ("", "", "")
+    if not args:
+        return "", "", ""
+    eerste = args[0]
+    laag = eerste.lower()
+    if laag.startswith(("flatpak+https://", "https://", "http://")):
+        return _flathub_link(eerste)
+    if laag.startswith("file://"):
+        from urllib.parse import unquote, urlsplit
+        try:
+            eerste = unquote(urlsplit(eerste).path)
+        except ValueError:
+            return "", "", "kapot"
+        if not eerste:
+            return "", "", "kapot"
+    elif eerste.startswith("-"):
+        return "", "", ""   # een onbekende optie: gewoon de Winkel
+    return _bestand(Path(eerste))
+
+
+def weiger_tekst(code: str) -> tuple[str, str]:
+    """Waarom de Winkel een link of bestand niet opent, in gewone woorden, met de soort melding."""
+    return {
+        "andere_bron": (t("Deze app komt uit een andere appwinkel dan Flathub. BugOS installeert alleen apps van "
+                          "Flathub, omdat die gecontroleerd en bijgewerkt worden. Zoek de app hier in de Winkel.",
+                          "This app comes from another app shop than Flathub. BugOS only installs apps from Flathub, "
+                          "because those are checked and kept up to date. Look for the app here in the Store."),
+                        "let_op"),
+        "test_versie": (t("Dit is een testversie van een app (Flathub Beta). BugOS installeert alleen de gewone "
+                          "versie, die vanzelf wordt bijgewerkt. Zoek de app hier in de Winkel.",
+                          "This is a test version of an app (Flathub Beta). BugOS only installs the normal version, "
+                          "which is updated by itself. Look for the app here in the Store."), "let_op"),
+        "andere_winkel": (t("Dit bestand wil een andere appwinkel toevoegen. Dat doet BugOS niet: de Winkel gebruikt "
+                            "alleen Flathub, zodat je apps gecontroleerd en bijgewerkt worden.",
+                            "This file wants to add another app shop. BugOS does not do that: the Store only uses "
+                            "Flathub, so your apps are checked and kept up to date."), "let_op"),
+        "flathub_al": (t("Flathub staat al klaar op deze computer. Alle apps van Flathub vind je hier in de Winkel.",
+                         "Flathub is already set up on this computer. You find all Flathub apps here in the Store."),
+                       "info"),
+        "bundel": (t("Dit is een los app-bestand. BugOS installeert alleen apps uit de Winkel, want die worden "
+                     "gecontroleerd en vanzelf bijgewerkt. Zoek de app hier in de Winkel.",
+                     "This is a loose app file. BugOS only installs apps from the Store, because those are checked "
+                     "and updated by themselves. Look for the app here in the Store."), "let_op"),
+        "onderdeel": (t("Dit is een onderdeel voor andere apps, geen app. BugOS haalt zulke onderdelen vanzelf op als "
+                        "een app ze nodig heeft.",
+                        "This is a part for other apps, not an app. BugOS gets such parts by itself when an app "
+                        "needs them."), "info"),
+        "terminal": (t("Dit is een programma voor de opdrachtregel (terminal), geen app met een venster. De Winkel "
+                       "laat alleen apps met een venster zien.",
+                       "This is a program for the command line (terminal), not an app with a window. The Store only "
+                       "shows apps with a window."), "info"),
+        "kapot": (t("De Winkel kan dit bestand niet lezen. Misschien is het niet helemaal gedownload. Download het "
+                    "nog eens.",
+                    "The Store cannot read this file. Maybe it did not download completely. Download it again."),
+                  "fout"),
+    }.get(code, (t("De Winkel kan dit niet openen.", "The Store cannot open this."), "let_op"))
+
+
+def absolute_args(args: list[str]) -> list[str]:
+    """Een bestand als 'Downloads/x.flatpakref' wordt een volledig pad: staat de Winkel al open, dan krijgt die de
+    opdracht door, en die zit in een andere map."""
+    if args and args[0] != "--zoek" and ":" not in args[0].split("/", 1)[0] and not args[0].startswith("-"):
+        return [os.path.abspath(args[0])] + args[1:]
+    return list(args)
+
+
 def main() -> int:
-    args = sys.argv[1:]
-    begin_zoek, begin_app = begin_uit(args)
+    args = absolute_args(sys.argv[1:])
     catalogus = lees_catalogus()
-    begin_app = echte_id(catalogus, begin_app) if begin_app else ""
-    if begin_app and not any(a["id"] == begin_app for a in catalogus["apps"]):
-        # Niet in onze selectie: open de grote winkel op die app.
-        start("plasma-discover", args[0])
-        return 0
-    app = maak_app("bugos-store", "bugos-store", sys.argv, een_keer=True)   # (U208)
-    return uitvoeren(app, Winkel(catalogus, begin_zoek, begin_app))
+    app = maak_app("bugos-store", "bugos-store", [sys.argv[0]] + args, een_keer=True)   # (U208)
+    return uitvoeren(app, Winkel(catalogus, opdracht=args))
 
 
 if __name__ == "__main__":

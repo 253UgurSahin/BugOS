@@ -33,8 +33,7 @@ ffmpegthumbnailer
 # Firefox als gewoon programma: de fundering heeft geen browser in het systeem, en
 # de taakbalk en het startmenu van BugOS verwijzen naar Firefox.
 firefox
-# (KDE Discover voor "Meer apps zoeken" wordt apart geïnstalleerd in build.sh,
-# zonder de "aanbevolen" extra's: die zouden Fedora-pakketten laten zien.)
+# (geen KDE Discover: de BugOS Winkel doet alle apps; build.sh haalt Discover weg als de basis hem meebrengt)
 
 # --- Alle talen ---
 glibc-all-langpacks
