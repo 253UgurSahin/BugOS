@@ -9,7 +9,8 @@ import bugos_config as bi
 import bugos_ui
 from bugos_ui import (Chip, Groep, KeuzeKaart, Knop, Rij, Voortgang, label, leeg_groep, lijn_icoon, schermmaat, sectie,
                       t)
-from bugos_settings_onderdelen import Blad, Keuzes, KiesDialoog, Regelaar, dichtstbij, op_achtergrond, schuifje
+from bugos_settings_onderdelen import (Blad, Doorloop, Keuzes, KiesDialoog, Regelaar, dichtstbij, op_achtergrond,
+                                       schuifje)
 from bugos_settings_systeem import Schakelaars
 from PySide6.QtCore import QProcess, QSize, Qt, QTimer
 from PySide6.QtGui import QPixmap
@@ -964,6 +965,18 @@ class EnergiePagina(Blad):
 
 # ============================================================= uiterlijk ===
 
+# Hoe groot een achtergrond op Uiterlijk staat: 16:9, zoals de achtergronden van BugOS zelf. Zo klein dat de drie
+# naast elkaar passen op een laptop van 1280 x 800, ook bij 150 % (daar is 515 px vrij naast de zijbalk; drie
+# plaatjes met hun rand zijn 498 px). Met 176 x 99 en de knop 'Eigen foto kiezen' ernaast was de rij minstens
+# 800 px breed, met de knop al afgeknipt tot 194 van zijn 227 px: de pagina schoof opzij (8 px bij 100 %, 285 px
+# bij 150 %) (D05).
+PLAATJE = QSize(144, 81)
+# Het plaatje zelf wordt groter gemaakt (en dan door Qt verkleind getekend): scherp op een scherm met 2x scherpte.
+PLAATJE_BRON = QSize(320, 180)
+# De kaarten Licht en Donker worden niet breder dan dit (zo breed als ze bij 100 % altijd waren).
+THEMA_KAART_MAX = 264
+
+
 class UiterlijkPagina(Schakelaars, Blad):
     sleutel, icoon = "uiterlijk", "palet"
     titel_nl, titel_en = "Uiterlijk", "Appearance"
@@ -983,16 +996,24 @@ class UiterlijkPagina(Schakelaars, Blad):
         for donker, (nl, en), (unl, uen) in ((False, ("Licht", "Light"), ("Fris en helder", "Fresh and bright")),
                                              (True, ("Donker", "Dark"), ("Rustig voor je ogen", "Calm for your eyes"))):
             kaart = keuze_kaart("maan" if donker else "zon", t(nl, en), t(unl, uen))
-            kaart.setMinimumWidth(220)
+            # Hoogstens THEMA_KAART_MAX breed: met ruimte genoeg (75-125 %) zijn ze zo breed als altijd en blijft de
+            # rest van de regel leeg. Is er weinig ruimte (150 %, grote letters), dan delen de twee kaarten samen de
+            # hele regel. Eerst stond hier setMinimumWidth(220), maar die won het nooit van de indeling van KeuzeKaart
+            # (SetMinimumSize): toen de plaatjes de pagina niet meer breed hielden, werden de kaarten bij 150 % 168 px
+            # smal terwijl de lege ruimte ernaast een derde van de regel hield (D05).
+            kaart.setMaximumWidth(THEMA_KAART_MAX)
             kaart.clicked.connect(lambda _c=False, d=donker: self.zet_thema(d))
             groep.addButton(kaart)
             self.thema[donker] = kaart
             rij.addWidget(kaart, 1)
-        rij.addStretch(1)
+        # Rekfactor 0: de lege ruimte rechts krijgt pas iets als beide kaarten op hun breedst zijn.
+        rij.addStretch(0)
         self.lay.addLayout(rij)
         self.lay.addWidget(sectie(t("Achtergrond", "Background")))
-        plaatjes = QHBoxLayout()
-        plaatjes.setSpacing(12)
+        # De plaatjes naast elkaar in een Doorloop: passen ze niet meer naast elkaar (150 % met grote letters, of
+        # een smaller gemaakt venster), dan gaat een plaatje naar de volgende regel in plaats van dat de hele pagina
+        # opzij schuift (D05). (self.plaatjes: de test kijkt hoe ze liggen.)
+        self.plaatjes = Doorloop(12)
         groep2 = QButtonGroup(self)
         for naam, pad in bi.bugos_achtergronden():
             k = QPushButton()
@@ -1004,17 +1025,19 @@ class UiterlijkPagina(Schakelaars, Blad):
             # Het pakket (licht en donker): laat zijn eigen voorbeeldplaatje zien.
             beeld = QPixmap(str(Path(pad) / "contents" / "screenshot.jpg") if Path(pad).is_dir() else pad)
             if not beeld.isNull():
-                k.setIcon(beeld.scaled(QSize(320, 180), Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                k.setIcon(beeld.scaled(PLAATJE_BRON, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                                        Qt.TransformationMode.SmoothTransformation))
-                k.setIconSize(QSize(176, 99))
+                k.setIconSize(PLAATJE)
             k.clicked.connect(lambda _c=False, p=pad: self.zet_achtergrond(p))
             groep2.addButton(k)
-            plaatjes.addWidget(k)
-        eigen = Knop(t("Eigen foto kiezen…", "Choose your own photo…"), "gewoon", "lijn:foto")
-        eigen.clicked.connect(self.kies_foto)
-        plaatjes.addWidget(eigen, 0, Qt.AlignmentFlag.AlignVCenter)
-        plaatjes.addStretch(1)
-        self.lay.addLayout(plaatjes)
+            self.plaatjes.addWidget(k)
+        self.lay.addLayout(self.plaatjes)
+        # 'Eigen foto kiezen…' op een eigen regel onder de plaatjes, links (zoals de rest van de pagina). Naast de
+        # plaatjes was hij het eerste wat opzij viel en kreeg hij te weinig ruimte (194 van de 227 px, met grote
+        # letters 194 van de 312): nu krijgt hij altijd zijn hele breedte (D05).
+        self.eigen = Knop(t("Eigen foto kiezen…", "Choose your own photo…"), "gewoon", "lijn:foto")
+        self.eigen.clicked.connect(self.kies_foto)
+        self.lay.addWidget(self.eigen, 0, Qt.AlignmentFlag.AlignLeft)
         g = self.kaart(t("Taakbalk", "Taskbar"))
         for onderdeel, ic, (nl, en), (unl, uen) in (
                 ("startmenu", "apps", ("BugOS-startmenu", "BugOS start menu"),
