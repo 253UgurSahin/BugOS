@@ -551,6 +551,42 @@ def ruim_op(pad: Path) -> None:
         pass
 
 
+def houd_vast(paden: list[Path]) -> list[int]:
+    """Houd de schijven van deze paden 'bezig' zolang een klus loopt: per schijf (st_dev) één O_PATH-ingang op het
+    eerste pad dat erop staat. Zo'n ingang leest en schrijft niets (hij wijst alleen naar die plek), maar zolang hij
+    er is, weigert het systeem die schijf dicht te zetten ('target is busy'). Ook
+    tussen twee bestanden, ook vanuit een ander venster of programma (Veilig verwijderen, Leegmaken, wissen): vroeger
+    was een schijf tussen twee bestanden even 'vrij', en lukte dichtzetten terwijl het kopiëren nog liep (U386).
+    Eén per schijf, niet één per pad: duizend gekozen bestanden geven geen duizend ingangen. Geeft de ingangen
+    (voor laat_los); een pad dat er niet (meer) is of niet te openen is, slaat hij over."""
+    vlag = getattr(os, "O_PATH", None)
+    if vlag is None:   # alleen Linux kent O_PATH; BugOS draait op Linux, dit is voor de zekerheid
+        return []
+    gezien: set[int] = set()
+    ingangen: list[int] = []
+    for pad in paden:
+        try:
+            schijf = os.lstat(pad).st_dev
+            if schijf in gezien:
+                continue
+            # O_NOFOLLOW: een snelkoppeling zelf vasthouden (die staat op de schijf van de klus), niet waar hij heen
+            # wijst. Python maakt de ingang zelf al 'niet doorgeven' aan andere programma's (O_CLOEXEC).
+            ingangen.append(os.open(pad, vlag | os.O_NOFOLLOW))
+            gezien.add(schijf)
+        except OSError:
+            continue
+    return ingangen
+
+
+def laat_los(ingangen: list[int]) -> None:
+    """Sluit de ingangen van houd_vast weer: daarna mag de schijf weer dicht."""
+    for fd in ingangen:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+
+
 class Klus(QThread):
     """Kopiëren of verplaatsen op de achtergrond, zodat het venster niet vastloopt."""
 
@@ -570,6 +606,15 @@ class Klus(QThread):
             self.gestopt = True
 
     def run(self) -> None:
+        # Zolang het kopiëren duurt, kan geen enkel venster of programma de bron- of doelschijf dichtzetten (zie
+        # houd_vast): anders kon dat tussen twee bestanden, en dan was wat nog niet over was weg (wissen) of half.
+        vast = houd_vast([*self.bronnen, self.doelmap])
+        try:
+            self._kopieer_alles()
+        finally:
+            laat_los(vast)
+
+    def _kopieer_alles(self) -> None:
         gelukt, fout, mislukt = 0, "", 0
         n = len(self.bronnen)
         ruim_oude_halve_op(self.doelmap)
@@ -621,6 +666,14 @@ class Weggooien(QThread):
         self.paden = paden
 
     def run(self) -> None:
+        # Net als bij Klus: zolang het weggooien duurt, gaat de stick niet dicht (ook niet vanuit een ander venster).
+        vast = houd_vast(list(self.paden))
+        try:
+            self._gooi_weg()
+        finally:
+            laat_los(vast)
+
+    def _gooi_weg(self) -> None:
         weg, fout = 0, ""
         voorbeelden = voorbeeld_namen()   # één keer lezen (U269)
         for p in self.paden:

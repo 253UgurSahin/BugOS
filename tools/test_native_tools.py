@@ -661,6 +661,21 @@ def _kopie_klaar() -> None:
         venster.klus.wait(15000)
 
 
+def _vaste_ingangen() -> set[str]:
+    """Welke paden houdt dit proces nu 'vast' met een O_PATH-ingang (bugos_files_acties.houd_vast)? Uit
+    /proc/self/fdinfo: alleen ingangen met de vlag O_PATH, niet wat Qt of de test zelf open heeft."""
+    uit: set[str] = set()
+    for fd in os.listdir("/proc/self/fd"):
+        try:
+            info = Path(f"/proc/self/fdinfo/{fd}").read_text(encoding="utf-8")
+            vlaggen = int(next(r.split()[1] for r in info.splitlines() if r.startswith("flags:")), 8)
+            if vlaggen & os.O_PATH:
+                uit.add(os.readlink(f"/proc/self/fd/{fd}"))
+        except (OSError, StopIteration, ValueError, IndexError):
+            continue
+    return uit
+
+
 _acties.kopieer_een = _grote_kopie
 _zet_lsblk(_schijven_lijst())
 venster._zijbalk_sleutels = None
@@ -676,12 +691,20 @@ venster.leegmaak_schijf(_stick_x)   # een stick leegmaken: net zo
 verwerk(300)
 _tijdens = (venster.klus.isRunning(), list(_gezien), _LOG.read_text().splitlines(), set(venster.bezig),
             venster.melding.tekst.text())
+_vast_tijdens = _vaste_ingangen()
 _kopie_klaar()
+_vast_na = _vaste_ingangen()
 klopt(_tijdens[0] and not _tijdens[1] and not _tijdens[2] and not _tijdens[3] and "Even wachten" in _tijdens[4]
       and (THUIS / "Doel" / "fotos" / "foto2.jpg").exists(),
       f"wissen: tijdens een kopie van die schijf (en een stick leegmaken tijdens een kopie): geen vraag, niets dicht, "
       f"niets gewist, 'Even wachten'; de kopie komt helemaal over (vraag {len(_tijdens[1])}, opdrachten {_tijdens[2]}, "
       f"{_tijdens[4]!r})")
+# Ook vanuit een ander venster (een eigen proces) of programma: zolang de kopie loopt, houdt hij de schijf vast met
+# één O_PATH-ingang per schijf (bron en doel staan hier op dezelfde schijf: één). Daarmee weigert het systeem elke
+# gewone 'umount' ('target is busy'), ook tussen twee bestanden. Na de kopie is hij weer los.
+klopt(_vast_tijdens == {str(_fotos)} and not _vast_na,
+      f"kopiëren: de schijf van de kopie wordt vastgehouden zolang hij loopt (één ingang per schijf), daarna los "
+      f"(tijdens {sorted(_vast_tijdens)}, na {sorted(_vast_na)})")
 # Begint de kopie pas na de vraag (terwijl de schijf dichtgaat), dan zegt de laatste controle nee: niets gewist, en
 # de schijf gaat weer open.
 _zet_lsblk(_schijven_lijst())
