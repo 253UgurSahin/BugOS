@@ -266,6 +266,46 @@ def test_woorden() -> None:
     en_w, nl_w = W["Remove all partitions on the selected devices, including existing operating systems."]
     klopt("if it is there" in en_w and "als dat erop staat" in nl_w,
           "11 (I12): de waarschuwing doet niet alsof er altijd Windows op staat")
+    # 11 (b). 'De schijf delen' (de standaard zodra er iets op de schijf staat), het venster om ruimte te maken en
+    # 'Datum en tijd': die zinnen waren stijf Nederlands met 'u' en vakwoorden. Dat elke sleutel letterlijk in de
+    # echte index.js staat, kijkt --beeld na (op een computer zonder image kan dat niet).
+    schijf = ("Share disk with other operating systems", "Share disk with other operating systems: $0",
+              "Keep current disk layout and use available space, to dual-boot with another OS.",
+              "Not enough free space on the selected disks.",
+              "To use this option, resize or remove existing partitions to free up at least $0.",
+              "Reclaim space (required)", "Reclaim additional space", "Mount point assignment",
+              "Assign partitions to mount points. Useful for pre-configured custom layouts.",
+              "Apply mount point assignment and install", "Reclaim space",
+              "Remove or resize existing filesystems to free up space for the installation.",
+              "Available free space: $0. Installation requires: $1.", "Resize", "shrink", "shrink to $0",
+              "Windows partitions with BitLocker encryption cannot be resized", "Not enough space on selected disks.",
+              "The installation needs $0 of disk space; however, the capacity of the selected disks is only $1.",
+              "Show AM/PM", "You must be connected to a network to enable automatic date and time.")
+    klopt(all(k in W for k in schijf),
+          f"11 (b): de zinnen van 'De schijf delen', 'Ruimte maken' en 'Datum en tijd' staan erin "
+          f"({[k for k in schijf if k not in W]})")
+    # Nederlands met 'je', nooit 'u' of 'uw' (Anaconda's eigen Nederlands zei 'verandert u de grootte ...').
+    formeel = [nl for _en, nl in W.values() if re.search(r"\b(u|uw)\b", nl, re.IGNORECASE)]
+    klopt(not formeel, f"11 (b): Nederlands met 'je', nergens 'u' of 'uw' ({formeel[:2]})")
+    # Geen vakwoorden die Anaconda gebruikte (in beide talen): de regel hierboven vangt 'partition' en 'storage' al.
+    vak = [x for v in W.values() for x in v
+           if re.search(r"partitie|aankoppel|terugvorder|bestandssyste|mount point|filesystem|dual-boot|reclaim|\bOS\b",
+                        x, re.IGNORECASE)]
+    klopt(not vak, f"11 (b): geen aankoppelpunten, bestandssystemen, dual-booten of 'terugvorderen' ({vak[:2]})")
+    # Elke $0/$1 uit de sleutel komt terug, in dezelfde volgorde (cockpit zet er de getallen of vette stukjes in).
+    # Alleen bij de klaar-zin laten we $0 bewust weg (review I4: de naam van het systeem is daar niet nodig).
+    weglaten = {"To begin using $0, reboot your system."}
+    kwijt = [(k, x) for k, v in W.items() if k not in weglaten for x in v
+             if re.findall(r"\$\d", x) != re.findall(r"\$\d", k)]
+    klopt(not kwijt, f"11 (b): elke $0/$1 van de sleutel staat ook in de tekst, in dezelfde volgorde ({kwijt[:1]})")
+    en_r, nl_r = W["Removing a filesystem will permanently delete all of the data it contains. Resizing a partition "
+                   "can free up unused space, but is not risk-free. Be sure to have backups of anything important "
+                   "before reclaiming space."]
+    klopt("Install" in en_r and "Installeren" in nl_r and "USB" in en_r and "USB" in nl_r,
+          "11 (b): 'Ruimte maken' zegt dat er pas iets verandert bij Installeren, en waar je eerst een kopie zet")
+    # Die zin klopt alleen als de laatste knop bij 'De schijf delen' ook echt Installeren heet: dat is Anaconda's eigen
+    # 'Install' (getButtonLabel), dus die mag niet in WOORDEN een andere naam krijgen.
+    klopt("Install" not in W, "11 (b): de knop 'Install' houdt zijn naam (de uitleg in 'Ruimte maken' noemt hem)")
 
     # 12. Een heel Engels woordenboek in cockpit-vorm.
     po = w.po_engels()
@@ -314,6 +354,49 @@ def test_woorden() -> None:
     roep = bouw.find('python3 "$SRC/bugos_webui.py"')
     klopt(roep > bouw.find("BugOS requires at least $0 of disk space.") > 0 and "$ENGELS" not in bouw,
           "14: build.sh zet de woorden na de bestaande Nederlandse regels")
+    # 'De schijf delen' staat alleen nog in WOORDEN (met Engels erbij), niet ook nog in de Nederlandse lijst van build.sh.
+    klopt('"Share disk with other operating systems' not in bouw,
+          "14: 'Share disk ...' heeft één bron (WOORDEN), niet ook nog een regel in build.sh")
+
+    # 27. Engels vanaf de eerste pagina. slitherer (het venster van het installatieprogramma) stuurt geen
+    # Accept-Language mee, dus cockpit gaf een lege po.js: onze Engelse woorden kwamen pas als je zelf een taal
+    # aanklikte. index.html laadt nu eerst bugos-en.js (na index.js, vóór po.js).
+    html = w.html_engels(INDEX_HTML)
+    regels = [r.strip() for r in html.splitlines()]
+    klopt(regels.index('<script type="text/javascript" src="index.js"></script>')
+          < regels.index('<script type="text/javascript" src="bugos-en.js"></script>')
+          < regels.index('<script type="text/javascript" src="po.js"></script>'),
+          "27: index.html laadt bugos-en.js na index.js (daar zit cockpit in) en vóór po.js (een echt woordenboek wint)")
+    klopt('\n    <script type="text/javascript" src="bugos-en.js"></script>\n' in html
+          and html.replace('    <script type="text/javascript" src="bugos-en.js"></script>\n', "") == INDEX_HTML,
+          "27: verder blijft index.html precies hetzelfde (zelfde inspringing)")
+    for naam, kapot in (("twee keer", html), ("zonder po.js", INDEX_HTML.replace("po.js", "po-weg.js")),
+                        ("po.js vóór index.js", INDEX_HTML.replace('src="index.js"', 'src="x.js"') + '<script src="index.js">')):
+        try:
+            w.html_engels(kapot)
+            klopt(False, f"27: {naam}: het bouwen stopt (AssertionError)")
+        except AssertionError:
+            klopt(True, f"27: {naam}: het bouwen stopt (AssertionError)")
+    # main() zoals build.sh hem aanroept (maar met --locales en --zone-tab: geen Anaconda op deze computer), op een
+    # map met de echte vormen van de bestanden: alles in één keer, en bugos-en.js is hetzelfde als po.en_US.js.gz.
+    m2 = TMP / "webui-main"
+    m2.mkdir()
+    with gzip.open(m2 / "index.js.gz", "wt", encoding="utf-8") as f:
+        f.write(JS_KLOK + JS_ZET + JS_VAK)
+    with gzip.open(m2 / "po.nl.js.gz", "wt", encoding="utf-8") as f:
+        f.write(PO_NL)
+    (m2 / "index.html").write_text(INDEX_HTML, encoding="utf-8", newline="\n")
+    (TMP / "zone.tab").write_text(ZONE_TAB, encoding="utf-8", newline="\n")
+    code = w.main([str(m2), "--locales", "en_US,en_GB", "--zone-tab", str(TMP / "zone.tab")])
+    lees2 = {p.name: gzip.open(p, "rt", encoding="utf-8").read() for p in m2.glob("*.gz")}
+    klopt(code == 0 and sorted(lees2) == ["bugos-en.js.gz", "index.js.gz", "po.en_GB.js.gz", "po.en_US.js.gz",
+                                         "po.nl.js.gz"] and not list(m2.glob("*.nieuw")),
+          f"27: main() maakt bugos-en.js.gz naast de po-bestanden, niets half achtergelaten ({sorted(lees2)})")
+    klopt(lees2["bugos-en.js.gz"] == lees2["po.en_US.js.gz"] == w.po_engels("en_US")
+          and "bugos-en.js" in (m2 / "index.html").read_text(encoding="utf-8"),
+          "27: bugos-en.js heeft dezelfde Engelse woorden als po.en_US.js, en index.html laadt hem")
+    klopt("bugosTzGok" in lees2["index.js.gz"] and JS_KLOK in lees2["index.js.gz"],
+          "27: main() zet ook de tijdzonegok erin, en laat het klokvak (NTP) staan")
 
 
 # =================================================================================== tijdzone (bugos_webui.py) ===
@@ -321,6 +404,21 @@ def test_woorden() -> None:
 JS_ZET = 'LU=()=>o0("Timezone"),lx=({timezone:t})=>pb("SetTimezoneWithPriority",[t,90]);var ZU=()=>pb("GetAllValidTimezones");'
 JS_VAK = ('var yg=Y.gettext,na="anaconda-screen-date-time",y3=({locale:t,setSectionValid:e,setTimezoneLabel:o})=>{'
           'let[r,l]=(0,oe.useState)(!0),[a,n]=(0,oe.useState)(!1),[i,c]=(0,oe.useState)(!1);return null};')
+# Het vak 'Date and time' erboven (ook letterlijk, ingekort tot het begin): hier is r het vinkje voor de klok (NTP).
+# Het begint met useState(!0), maar de pagina zet het meteen naar wat Anaconda zegt (await uB() = NTPEnabled, standaard
+# True). Dat vinkje moet blijven zoals het is: tijdzone() mag dit stuk niet aanraken (zie bugos_webui.py bovenaan).
+JS_KLOK = ('var Cf=Y.gettext,wf="anaconda-screen-date-time",oq=({locale:t,setSectionValid:e,timezone:o})=>{'
+           'let[r,l]=(0,te.useState)(!0),[a,n]=(0,te.useState)(!0),[i,c]=(0,te.useState)(Se.utc()),'
+           's=(0,te.useContext)(Bn).connected,[d,p]=(0,te.useState)(()=>L3(t)?"24":"ampm");'
+           '(0,te.useEffect)(()=>{(async()=>{let W=await uB();l(!!W);let X=await xB();'
+           'X&&c(Se.fromISO(X,{zone:"utc"}).setZone(o))})()},[o]);return null};'
+           'var uB=()=>o0("NTPEnabled"),hB=({enabled:t})=>vB("NTPEnabled",Y.variant("b",t));')
+# Het begin van de echte index.html van anaconda-webui 68 (met de titel die build.sh erin zet).
+INDEX_HTML = ('<!DOCTYPE html>\n<html lang="en">\n<head>\n    <title>Install BugOS</title>\n    <meta charset="utf-8">\n'
+              '    <link rel="stylesheet" href="index.css">\n    <link rel="stylesheet" href="../../static/branding.css">\n\n'
+              '    <script type="text/javascript" src="index.js"></script>\n'
+              '    <script type="text/javascript" src="po.js"></script>\n</head>\n\n'
+              '<body class="pf-m-redhat-font anaconda">\n    <div class="ct-page-fill" id="app"></div>\n</body>\n</html>\n')
 ZONE_TAB = ("# tzdb timezone descriptions\n#\n"
             "NL\t+5222+00454\tEurope/Amsterdam\n"
             "DE\t+5230+01322\tEurope/Berlin\tmost of Germany\n"
@@ -347,6 +445,22 @@ def test_tijdzone() -> None:
           "7: de gok gebruikt de D-Bus-aanroep van de pagina met prioriteit 30; jouw eigen keuze (90) blijft")
     klopt('{"NL":"Europe/Amsterdam"}' in uit and 'o0("Timezone")' in uit and "useState)(!0),[a,n]" not in uit,
           "7: de tabel staat erin, de D-Bus-naam 'Timezone' is niet aangeraakt, niets meer op (!0)")
+    # 7 (a). Het vinkje 'De klok vanzelf gelijkzetten' (NTP) is een ander vinkje: dat staat aan omdat Anaconda het zo
+    # zegt (NTPEnabled is standaard True), en dat laten we zo. tijdzone() raakt het vak 'Date and time' niet aan.
+    met_klok = w.tijdzone(JS_KLOK + fixture, {"NL": "Europe/Amsterdam"})
+    klopt(met_klok.startswith(JS_KLOK) and met_klok.count("useState)(!1),bugosTzKlaar") == 1
+          and not w.R_VAK.search(JS_KLOK),
+          "7 (a): het klokvak (NTP, leest NTPEnabled) blijft precies zoals het was; alleen het tijdzonevak verandert")
+    # 7 (b). Terugdraaien (voor --beeld, waar index.js al aangepast is): ontdoe_tijdzone(tijdzone(x)) is weer x.
+    klopt(w.ontdoe_tijdzone(uit) == fixture and w.ontdoe_tijdzone(met_klok) == JS_KLOK + fixture
+          and w.ingebouwde_tabel(uit) == {"NL": "Europe/Amsterdam"},
+          "7 (b): ontdoe_tijdzone draait tijdzone() precies terug, en ingebouwde_tabel leest de tabel terug")
+    for naam, js in (("niet aangepast", fixture), ("half (zonder de haak)", uit.replace(",bugosTzKlaar=", ",x="))):
+        try:
+            w.ontdoe_tijdzone(js)
+            klopt(False, f"7 (b): {naam}: ontdoe_tijdzone weigert (AssertionError)")
+        except AssertionError:
+            klopt(True, f"7 (b): {naam}: ontdoe_tijdzone weigert (AssertionError)")
     # 8. Twee keer, of een andere versie van het installatieprogramma: het bouwen stopt.
     for naam, js in (("twee keer", uit), ("zonder SetTimezone", JS_VAK), ("zonder het vak", JS_ZET),
                      ("SetTimezone twee keer", JS_ZET + JS_ZET + JS_VAK)):
