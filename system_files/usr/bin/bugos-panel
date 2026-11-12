@@ -4,7 +4,9 @@
 #   bugos-panel startmenu aan|uit|status
 #   bugos-panel snelmenu  aan|uit|status
 #   bugos-panel standaard          (bij elk inloggen: eenmalige stappen, daarna het slot erop)
-#   bugos-panel systeemvak rustig|alles   (KDE-pictogrammen naast het snelmenu verbergen of terugzetten)
+#   bugos-panel systeemvak rustig|alles   (rustig: de KDE-pictogrammen in het systeemvak verbergen, en staat het
+#                                          snelmenu op de taakbalk, de KDE-onderdelen die het vervangt uitzetten;
+#                                          alles: alles weer zichtbaar en aan)
 #   bugos-panel bewerken aan|uit|status   (voor gevorderden: het slot eraf voor KDE's eigen taakbalkbewerking)
 #
 # Jip-en-Janneke: de startknop linksonder (het lieveheersbeestje) is het
@@ -165,6 +167,16 @@ function weg(soort) {
     }
     print(n);
 }
+// Staat er een widget van die soort op een taakbalk? Geeft true of false en print niets (heeft() print aan/uit;
+// Plasma plakt alle print-uitvoer van een script aan elkaar, dus een functie die iets beslist, print niet).
+function staat(soort) {
+    var ps = panels();
+    for (var i = 0; i < ps.length; i++) {
+        var ws = ps[i].widgets();
+        for (var j = 0; j < ws.length; j++) if (ws[j].type == soort) return true;
+    }
+    return false;
+}
 // Pictogrammen in het systeemvak die het snelmenu al doet (geluid, wifi, bluetooth,
 // helderheid/batterij) of die je bijna nooit nodig hebt. Ze blijven werken (de
 // volumetoetsen, meldingen bij een lege batterij), maar staan niet meer in beeld.
@@ -185,6 +197,8 @@ var RUSTIG_VROEGER = RUSTIG.concat(["org.kde.plasma.keyboardlayout"]);
 // klembord (Meta+V), apparaten (USB-stick veilig verwijderen), printers, toetsenbord, camera, media, klikhulp.
 // Wat alleen in deze KDE-onderdelen zat en dus mee weggaat (snelmenu uit brengt ze terug): VPN aan/uit en de
 // wifi-hotspot (netwerk), slaapstand en schermvergrendeling even tegenhouden (batterij), presentatiemodus (kscreen).
+// Nooit uit: wat je zelf zichtbaar wilde ("Always shown", of na de update wat je weer liet zien; zie vakUit), en
+// niets zolang het snelmenu niet op de taakbalk staat (zie systeemvak).
 var UIT = ["org.kde.plasma.volume", "org.kde.plasma.networkmanagement", "org.kde.plasma.bluetooth",
     "org.kde.plasma.battery", "org.kde.plasma.brightness", "org.kde.plasma.manage-inputmethod",
     "org.kde.kdeconnect", "org.kde.plasma.weather", "org.kde.plasma.vault", "org.kde.kscreen"];
@@ -211,14 +225,25 @@ function zelfde(a, b) {
 // rustig: de UIT-onderdelen uit [General] extraItems halen en in bugosOff onthouden. Niet rustig: precies die
 // terugzetten. Iets wat je zelf uitzette, staat nooit in bugosOff en komt dus niet vanzelf terug. knownItems blijft
 // zoals het is (anders zet Plasma ze zelf weer aan).
-function vakUit(vak, rustig) {
+// Wat je zelf zichtbaar wilde, zet BugOS nooit uit, ook niet rustig. Uitzetten is sterker dan verbergen: het
+// pictogram is dan helemaal weg (ook achter het pijltje), en op slot staat "Configure System Tray..." (van KDE)
+// niet meer in het menu, dus terugzetten zou alleen nog kunnen door het hele snelmenu uit te zetten. Zelf
+// zichtbaar gewild is:
+//  - wat je in KDE "Always shown" gaf: shownItems. Dat schrijft alleen KDE, als jij het kiest; BugOS nooit.
+//  - wat de aanroeper in houden meegeeft (systeemvakNaUpdate: wat BugOS verborg en jij weer liet zien).
+// Zo een onderdeel dat aan staat, gaat ook uit bugosOff: er valt niets terug te zetten, en zet je het later zelf
+// uit, dan zet "snelmenu uit" het niet ongevraagd weer aan. Staat het uit, dan blijft het in bugosOff.
+function vakUit(vak, rustig, houden) {
     var extra = lijst(vak.readConfig("extraItems", []));
     var uitVorig = lijst(vak.readConfig("bugosOff", [""]));
     var extraNieuw = [], uitNieuw = [];
     if (rustig) {
-        uitNieuw = uitVorig.slice();
+        // lijst(): ook hier een rare waarde (null, tekst) zonder fout; houden mag ontbreken.
+        var laten = lijst(vak.readConfig("shownItems", [])).concat(lijst(houden));
+        for (var v = 0; v < uitVorig.length; v++)
+            if (laten.indexOf(uitVorig[v]) < 0 || extra.indexOf(uitVorig[v]) < 0) uitNieuw.push(uitVorig[v]);
         for (var e = 0; e < extra.length; e++) {
-            if (UIT.indexOf(extra[e]) < 0) extraNieuw.push(extra[e]);
+            if (UIT.indexOf(extra[e]) < 0 || laten.indexOf(extra[e]) >= 0) extraNieuw.push(extra[e]);
             else if (uitNieuw.indexOf(extra[e]) < 0) uitNieuw.push(extra[e]);
         }
     } else {
@@ -230,6 +255,11 @@ function vakUit(vak, rustig) {
 }
 function systeemvak(rustig) {
     var ps = panels(), n = 0;
+    // Uitzetten (niet alleen verbergen) alleen als het snelmenu op de taakbalk staat: dat doet dan wat deze
+    // KDE-onderdelen deden. Zonder snelmenu (bijv. "bugos-panel systeemvak rustig" met het snelmenu uit) alleen
+    // verbergen, zoals de vorige BugOS: geluid, netwerk en batterij blijven dan achter het pijltje te zien, en wat
+    // BugOS eerder uitzette, komt terug (anders liet niets op de taakbalk nog netwerk, geluid of batterij zien).
+    var snel = staat("org.bugos.quickmenu");
     for (var i = 0; i < ps.length; i++) {
         var ws = ps[i].widgets();
         for (var j = 0; j < ws.length; j++) {
@@ -259,7 +289,7 @@ function systeemvak(rustig) {
                     if (nieuw.indexOf(RUSTIG[r]) < 0) { nieuw.push(RUSTIG[r]); erbij.push(RUSTIG[r]); }
             vak.writeConfig("hiddenItems", nieuw);
             vak.writeConfig("bugosHidden", erbij.length ? erbij : [""]);
-            vakUit(vak, rustig);
+            vakUit(vak, rustig && snel);
             vak.reloadConfig();
             n++;
         }
@@ -268,7 +298,9 @@ function systeemvak(rustig) {
 }
 // Eenmalig na de update naar deze BugOS (stap 6 van standaard), alleen met het snelmenu aan. Per systeemvak:
 //  1. de KDE-onderdelen die het snelmenu vervangt (UIT) echt uitzetten en onthouden in bugosOff (vakUit), zodat
-//     "snelmenu uit" precies die terugzet;
+//     "snelmenu uit" precies die terugzet. Behalve wat je zelf zichtbaar wilde: wat je "Always shown" gaf, en wat
+//     BugOS verborg en jij weer liet zien ("Shown when relevant"). De vorige BugOS verborg alleen, dus zulke
+//     pictogrammen zag je nog; uitzetten zou ze nu zonder te vragen helemaal weghalen;
 //  2. de toetsenbordindeling weer laten zien, maar alleen als BugOS die verborg (dat deed een oudere BugOS);
 //  3. verder blijft hiddenItems zoals het is: wat je zelf weer zichtbaar maakte (bijv. het klembord of de
 //     printers), verbergt BugOS niet opnieuw. Daarom niet systeemvak(true): die verbergt de hele RUSTIG-lijst weer.
@@ -319,8 +351,13 @@ function systeemvakNaUpdate() {
             } else if (vanOns.length) {
                 vak.writeConfig("bugosHidden", RUSTIG);
             }
-            // 1. De KDE-onderdelen die het snelmenu vervangt uit (en onthouden), daarna laat Plasma het zien.
-            vakUit(vak, true);
+            // 1. De KDE-onderdelen die het snelmenu vervangt uit (en onthouden), daarna laat Plasma het zien. Niet wat
+            //    je zelf weer liet zien: wat BugOS verborg (vanOns) en nu niet meer verborgen staat. "Always shown"
+            //    (shownItems) laat vakUit zelf al aan. oud is hiddenItems zoals het stond, van voor het weghalen van
+            //    de toetsenbordindeling hierboven (die is geen UIT-onderdeel, dus die maakt hier niets uit).
+            var houden = [];
+            for (var h = 0; h < vanOns.length; h++) if (oud.indexOf(vanOns[h]) < 0) houden.push(vanOns[h]);
+            vakUit(vak, true, houden);
             vak.reloadConfig();
         }
     }
@@ -389,12 +426,7 @@ function bureaubladmenu() {
     print(BUREAUBLAD_UIT.length);
 }
 function heeft(soort) {
-    var ps = panels(), n = 0;
-    for (var i = 0; i < ps.length; i++) {
-        var ws = ps[i].widgets();
-        for (var j = 0; j < ws.length; j++) if (ws[j].type == soort) n++;
-    }
-    print(n > 0 ? "aan" : "uit");
+    print(staat(soort) ? "aan" : "uit");
 }
 '
 
@@ -477,8 +509,9 @@ standaard:*)
     # Stap 5: het rechtermuismenu van het bureaublad zonder KDE-regels (zichtbaar na de volgende keer inloggen).
     MARKER5="$BUGOS_CONFIG/paneel-bureaubladmenu-1"
     # Stap 6: de KDE-onderdelen in het systeemvak die het snelmenu vervangt echt uitzetten (niet alleen verbergen),
-    # en de toetsenbordindeling weer laten zien. Alleen als het snelmenu er staat. Wat je zelf weer zichtbaar
-    # maakte, blijft zichtbaar (systeemvakNaUpdate, niet systeemvak(true)). Het merkteken pas als elk systeemvak
+    # en de toetsenbordindeling weer laten zien. Alleen als het snelmenu er staat. Wat je zelf zichtbaar wilde
+    # (weer laten zien, of "Always shown"), blijft zichtbaar en aan: de vorige BugOS verborg alleen, dus dat zag je
+    # nog (systeemvakNaUpdate, niet systeemvak(true)). Het merkteken pas als elk systeemvak
     # echt is bijgewerkt: bij een nieuwe gebruiker vult Plasma de lijst met onderdelen soms pas na het inloggen.
     MARKER6="$BUGOS_CONFIG/paneel-systeemvak-2"
     # Stap 7: Meta+Q opent niet meer het zijpaneel "Activiteiten" van KDE (alleen als het nog de standaard is).

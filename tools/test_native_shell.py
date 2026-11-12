@@ -3,7 +3,8 @@
 
 Wat er getest wordt, zonder Plasma en zonder node:
   A. de JavaScript van bugos-panel in een nagebootst Plasma (PySide6 QJSEngine): het slot, eerlijk vervang(),
-     het bureaubladmenu, het systeemvak;
+     het bureaubladmenu, het systeemvak (KDE-onderdelen alleen uit naast het snelmenu, en nooit wat je in KDE
+     "Always shown" gaf);
   B. bugos-panel zelf (bash) met nep-programma's (gdbus, qdbus6, notify-send): wat hij naar Plasma stuurt, en
      welke eenmalige stappen hij onthoudt (merktekens);
   C. de functie bureaubladmenu uit build_files/style.sh op nagemaakte KDE-bestanden;
@@ -12,8 +13,9 @@ Wat er getest wordt, zonder Plasma en zonder node:
   E. de QML: de eigen regels in de rechtermuismenu's (bureaublad, klok, snelmenu);
   F. de indeling voor nieuwe gebruikers (look-and-feel) in een nagebootst Plasma;
   G. systeemvakNaUpdate(), de eenmalige stap 6 voor wie al een taakbalk had: wat hij doet, dat twee keer hetzelfde
-     is als één keer, dat hij wacht als Plasma het systeemvak nog niet had ingevuld, en dat geen enkele combinatie
-     van instellingen het systeemvak kapotmaakt.
+     is als één keer, dat hij wacht als Plasma het systeemvak nog niet had ingevuld, dat wat je zelf zichtbaar
+     wilde ("Always shown", of weer laten zien) aan blijft, en dat geen enkele combinatie van instellingen het
+     systeemvak kapotmaakt.
 Er verandert niets aan je computer: alles gebeurt in een tijdelijke map.
 
 Gebruik:  QT_QPA_PLATFORM=offscreen python3 tools/test_native_shell.py
@@ -124,6 +126,9 @@ function vak(c) { for (var i = 0; i < c.lijst.length; i++) if (c.lijst[i].type =
 
 TAAKBALK = ["org.bugos.startmenu", "org.kde.plasma.icontasks", "org.bugos.taskbar", "org.kde.plasma.systemtray",
             "org.bugos.clock"]
+# Dezelfde taakbalk met het snelmenu erop (vlak voor het systeemvak), zoals na "snelmenu aan" en bij een nieuwe
+# gebruiker. Alleen dan zet systeemvak(true) de KDE-onderdelen die het snelmenu vervangt ook echt uit (A10).
+TAAKBALK_SNEL = TAAKBALK[:3] + ["org.bugos.quickmenu"] + TAAKBALK[3:]
 
 
 def draai_js(code: str, uitkomst: str, begin: list[str] | None = None, cfgs: dict | None = None,
@@ -210,7 +215,8 @@ klopt(sorted(UIT + BLIJFT) == sorted(VM_EXTRA + ["mijn.app"]),
 _vak = {"org.kde.plasma.systemtray": {"extraItems": VM_EXTRA + ["mijn.app"], "hiddenItems": ["mijn.app"]}}
 r = draai_js("var v = vak(paneel); " + wijzig("systeemvak(true);") + " var a = {extra: v.cfg.extraItems, uit: v.cfg.bugosOff,"
              " verborgen: v.cfg.hiddenItems, herladen: v.herladen}; " + wijzig("systeemvak(false);")
-             + " var b = {extra: v.cfg.extraItems, uit: v.cfg.bugosOff};", "{a: a, b: b, js: UIT}", cfgs=_vak)
+             + " var b = {extra: v.cfg.extraItems, uit: v.cfg.bugosOff};", "{a: a, b: b, js: UIT}", begin=TAAKBALK_SNEL,
+             cfgs=_vak)
 u = r["u"] or {}
 a, b = u.get("a", {}), u.get("b", {})
 klopt(u.get("js") == UIT, f"A7: de UIT-lijst van bugos-panel is de lijst uit het ontwerp ({u.get('js')})")
@@ -223,13 +229,13 @@ klopt("org.kde.plasma.keyboardlayout" not in a.get("verborgen", []) and "org.kde
       "A7: de toetsenbordindeling blijft aan en zichtbaar (zoals Windows 11, met twee of meer indelingen)")
 _zonder = [x for x in VM_EXTRA if x != "org.kde.plasma.weather"]
 r = draai_js(wijzig("systeemvak(true);") + wijzig("systeemvak(false);"), "vak(paneel).cfg.extraItems",
-             cfgs={"org.kde.plasma.systemtray": {"extraItems": _zonder}})
+             begin=TAAKBALK_SNEL, cfgs={"org.kde.plasma.systemtray": {"extraItems": _zonder}})
 klopt(r["u"] is not None and "org.kde.plasma.weather" not in r["u"] and sorted(r["u"]) == sorted(_zonder),
       f"A7: wat je zelf uitzette (Weer) komt niet terug als het snelmenu uit gaat ({r['u']})")
-r = draai_js(wijzig("systeemvak(true);"), "vak(paneel).cfg", cfgs={"org.kde.plasma.systemtray": {}})
+r = draai_js(wijzig("systeemvak(true);"), "vak(paneel).cfg", begin=TAAKBALK_SNEL, cfgs={"org.kde.plasma.systemtray": {}})
 klopt(r["u"] is not None and "extraItems" not in r["u"] and r["u"].get("bugosOff") == [""],
       f"A7: een systeemvak zonder extraItems: er wordt niets uitgezet en niets verzonnen ({r['u']})")
-r = draai_js(wijzig("systeemvak(true);") + wijzig("systeemvak(true);"), "vak(paneel).cfg",
+r = draai_js(wijzig("systeemvak(true);") + wijzig("systeemvak(true);"), "vak(paneel).cfg", begin=TAAKBALK_SNEL,
              cfgs={"org.kde.plasma.systemtray": {"extraItems": ",".join(VM_EXTRA)}})
 klopt(r["u"] is not None and sorted(r["u"].get("bugosOff", [])) == sorted(UIT)
       and not set(UIT) & set(r["u"].get("extraItems", [])),
@@ -253,6 +259,46 @@ r = draai_js(wijzig("systeemvak(true);"), "vak(paneel).cfg.hiddenItems",
                                                  "bugosHidden": ["org.kde.plasma.keyboardlayout", "org.kde.plasma.volume"]}})
 klopt(r["u"] is not None and "org.kde.plasma.keyboardlayout" not in r["u"],
       f"A7: wie de vorige BugOS had: de toetsenbordindeling die BugOS verborg, is weer te zien ({r['u']})")
+
+# A10 (review): zonder snelmenu op de taakbalk (bijv. "bugos-panel systeemvak rustig" met het snelmenu uit) verbergt
+# systeemvak(true) alleen, zoals de vorige BugOS: er gaat niets uit, dus geluid, netwerk en batterij blijven achter
+# het pijltje te zien. Wat BugOS eerder uitzette (het snelmenu ging op een andere manier weg), komt terug.
+r = draai_js(wijzig("systeemvak(true);"), "{cfg: vak(paneel).cfg, rustig: RUSTIG}",
+             cfgs={"org.kde.plasma.systemtray": {"extraItems": VM_EXTRA + ["mijn.app"]}})
+u = r["u"] or {}
+c = u.get("cfg") or {}
+klopt(r["gedrukt"] == ["1"] and "org.bugos.quickmenu" not in TAAKBALK
+      and sorted(c.get("extraItems", [])) == sorted(VM_EXTRA + ["mijn.app"]) and c.get("bugosOff") == [""]
+      and c.get("hiddenItems") == u.get("rustig"),
+      f"A10: zonder snelmenu: systeemvak rustig verbergt de BugOS-lijst, maar zet niets uit ({c})")
+_al_uit = [x for x in VM_EXTRA if x not in UIT]
+r = draai_js(wijzig("systeemvak(true);"), "vak(paneel).cfg",
+             cfgs={"org.kde.plasma.systemtray": {"extraItems": list(_al_uit), "bugosOff": list(UIT)}})
+c = r["u"] or {}
+klopt(sorted(c.get("extraItems", [])) == sorted(_al_uit + UIT) and c.get("bugosOff") == [""],
+      f"A10: zonder snelmenu komt terug wat BugOS eerder uitzette (anders zie je nergens netwerk of geluid) ({c})")
+r = draai_js(wijzig("systeemvak(true);"), "vak(paneel).cfg", begin=TAAKBALK_SNEL,
+             cfgs={"org.kde.plasma.systemtray": {"extraItems": list(VM_EXTRA)}})
+klopt(r["u"] is not None and not set(UIT) & set(r["u"].get("extraItems", [])),
+      "A10: ter vergelijking: staat het snelmenu er wel, dan gaan ze echt uit")
+
+# A11 (review): systeemvak(true) zet nooit uit wat je in KDE "Always shown" gaf (shownItems: dat schrijft alleen
+# KDE, als jij het kiest). Uitzetten haalt het pictogram helemaal weg, en op slot kun je het niet terugzetten. Staat
+# zo een onderdeel nog in bugosOff (BugOS zette het ooit uit, jij zette het weer aan), dan gaat het daar uit, zodat
+# "snelmenu uit" niets terugzet wat je later misschien zelf uitzet. Ook als Plasma shownItems als tekst geeft.
+BAT, NET = "org.kde.plasma.battery", "org.kde.plasma.networkmanagement"
+for _getoond in ([BAT], BAT, [BAT, "mijn.app"]):
+    r = draai_js(wijzig("systeemvak(true);") + " var a = JSON.parse(JSON.stringify(vak(paneel).cfg));"
+                 + wijzig("systeemvak(false);"), "{a: a, b: vak(paneel).cfg}", begin=TAAKBALK_SNEL,
+                 cfgs={"org.kde.plasma.systemtray": {"extraItems": list(VM_EXTRA), "shownItems": _getoond,
+                                                     "bugosOff": [BAT, "org.kde.plasma.vault"]}})
+    u = r["u"] or {}
+    a, b = u.get("a") or {}, u.get("b") or {}
+    klopt(r["fout"] is None and BAT in a.get("extraItems", []) and BAT not in a.get("bugosOff", [])
+          and sorted(a.get("bugosOff", [])) == sorted(x for x in UIT if x != BAT) and a.get("shownItems") == _getoond
+          and sorted(b.get("extraItems", [])) == sorted(VM_EXTRA) and b.get("bugosOff") == [""],
+          f"A11: snelmenu aan laat aan wat je 'Always shown' gaf (shownItems {_getoond!r}), haalt het uit bugosOff, en "
+          f"snelmenu uit zet de rest terug ({a.get('bugosOff')}, {b.get('extraItems')})")
 
 r = draai_js("slot(false); slot(true);", "1")
 klopt(r["gedrukt"] == [], f"A8: slot() print niets (anders klopt de 0/1 van vervang niet meer) ({r['gedrukt']})")
@@ -924,8 +970,8 @@ klopt("org.kde.plasma.keyboardlayout" not in _v.get("hiddenItems", ["org.kde.pla
 # Voor wie al een taakbalk had, en voor een nieuwe gebruiker bij wie Plasma de onderdelen pas na het inloggen
 # invult. Wat de functie moet doen: de KDE-onderdelen die het snelmenu vervangt uitzetten (en onthouden), de
 # toetsenbordindeling weer laten zien als BugOS die verborg, en verder van hiddenItems afblijven. Wat ze nooit mag:
-# een systeemvak slopen (iets kwijtraken, iets verbergen, knownItems of shownItems aanraken), vastlopen op een rare
-# instelling, of een tweede keer iets anders doen dan de eerste keer.
+# een systeemvak slopen (iets kwijtraken, iets verbergen, knownItems of shownItems aanraken, iets uitzetten wat je
+# zelf zichtbaar wilde), vastlopen op een rare instelling, of een tweede keer iets anders doen dan de eerste keer.
 KL = "org.kde.plasma.keyboardlayout"
 _e = QJSEngine()
 _e.evaluate(JS)
@@ -1072,19 +1118,36 @@ def norm(x) -> list[str]:
 
 
 _keuzes = {
+    # Ook een systeemvak waarin je zelf het klembord (geen UIT-onderdeel) of het geluid (wel een UIT-onderdeel) weer
+    # liet zien ("Shown when relevant").
     "hiddenItems": [WEG, [], list(_vroeger), _vroeger + ["mijn.app"], [x for x in _vroeger if x != "org.kde.plasma.clipboard"],
-                    ["mijn.app", KL], ",".join(_vroeger), None],
+                    [x for x in _vroeger if x != "org.kde.plasma.volume"], ["mijn.app", KL], ",".join(_vroeger), None],
     "bugosHidden": [WEG, [""], list(_vroeger), [KL, "org.kde.plasma.volume"], KL + ",org.kde.plasma.volume", None],
     "extraItems": [WEG, [], VM_EXTRA + ["mijn.app"], ",".join(VM_EXTRA), [x for x in VM_EXTRA if x not in UIT],
                    VM_EXTRA + [""] + VM_EXTRA[:3]],
     "bugosOff": [WEG, list(UIT), [""]],
+    # "Always shown" in KDE: alleen je eigen app, ook de batterij, of batterij en netwerk als tekst.
+    "shownItems": [["mijn.app"], ["mijn.app", BAT], BAT + "," + NET],
 }
 _scenarios = [{}]
 for _sleutel, _waarden in _keuzes.items():
     _scenarios = [{**s, _sleutel: w} if w is not WEG else dict(s) for s in _scenarios for w in _waarden]
 for s in _scenarios:
     s["knownItems"] = VM_KNOWN + ["mijn.app"]
-    s["shownItems"] = ["mijn.app"]
+
+
+def zelf_zichtbaar(voor: dict) -> set[str]:
+    """Wat je zelf zichtbaar wilde, zoals systeemvakNaUpdate() het hoort te zien: wat je "Always shown" gaf
+    (shownItems), en wat BugOS verborg (bugosHidden; nooit bewaard: de hele oude lijst als die er nog staat) en nu niet
+    meer verborgen staat."""
+    h0 = norm(voor.get("hiddenItems"))
+    if "bugosHidden" in voor:
+        van_ons = norm(voor["bugosHidden"])
+    else:
+        van_ons = VROEGER_JS if all(x in h0 for x in RUSTIG_JS) else []
+    return set(norm(voor.get("shownItems"))) | (set(van_ons) - set(h0))
+
+
 _HARNAS = ("var uitslagen = [];"
            "for (var s = 0; s < SCENARIOS.length; s++) {"
            " paneel = maakContainment(" + json.dumps(TAAKBALK) + ", {\"org.kde.plasma.systemtray\": SCENARIOS[s]});"
@@ -1098,7 +1161,7 @@ _HARNAS = ("var uitslagen = [];"
            "}")
 r = draai_js(_HARNAS, "uitslagen", vooraf="var SCENARIOS = " + json.dumps(_scenarios) + ";")
 _uitslagen = r["u"] or []
-klopt(len(_uitslagen) == len(_scenarios) == 864 and r["fout"] is None,
+klopt(len(_uitslagen) == len(_scenarios) == 2916 and r["fout"] is None,
       f"G12: {len(_uitslagen)} van de {len(_scenarios)} combinaties gedraaid ({r['fout']})")
 _mis: dict[str, list[int]] = {}
 
@@ -1120,15 +1183,25 @@ for i, (voor, u) in enumerate(zip(_scenarios, _uitslagen)):
     _h0, _h1 = set(norm(voor.get("hiddenItems"))), set(norm(na1.get("hiddenItems")))
     mis("niets nieuws verborgen; alleen de toetsenbordindeling mag zichtbaar worden", i, _h1 <= _h0 and _h0 - _h1 <= {KL})
     _e0, _e1 = set(norm(voor.get("extraItems"))), set(norm(na1.get("extraItems")))
+    _zelf = zelf_zichtbaar(voor) & set(UIT)
+    _uit1 = set(norm(na1.get("bugosOff")))
     mis("alleen UIT-onderdelen gaan uit", i, _e1 <= _e0 and _e0 - _e1 <= set(UIT))
-    mis("wat uitging staat in bugosOff", i, (_e0 - _e1) <= set(norm(na1.get("bugosOff"))))
-    mis("met het snelmenu aan staat geen UIT-onderdeel meer aan", i, wacht or alles or not (_e1 & set(UIT)))
+    mis("wat uitging staat in bugosOff", i, (_e0 - _e1) <= _uit1)
+    # Review: de vorige BugOS verborg alleen, dus wat je "Always shown" gaf of weer liet zien, zag je nog.
+    mis("wat je zelf zichtbaar wilde, blijft aan", i, wacht or alles or (_e0 & _zelf) <= _e1)
+    mis("met het snelmenu aan staat geen ander UIT-onderdeel meer aan", i, wacht or alles or (_e1 & set(UIT)) <= _zelf)
+    mis("wat aan staat, staat niet in bugosOff", i, wacht or alles or not (_e1 & _uit1))
+    # Wat BugOS eerder uitzette en nog uit staat, mag het niet vergeten: anders zet "snelmenu uit" het nooit meer aan.
+    _uit0 = set(norm(voor.get("bugosOff")))
+    mis("wat uit staat en BugOS onthield, blijft onthouden", i, (_uit0 - _e1) <= _uit1)
     mis("twee keer = één keer", i, na2 == na1)
-    mis("'snelmenu uit' daarna: alles is terug", i, _e0 <= set(norm(uit_.get("extraItems"))))
+    mis("'snelmenu uit' daarna: alles is terug", i, (_e0 | _uit0) <= set(norm(uit_.get("extraItems"))))
 for _regel in ("geen fout, één woord, het slot erop", "'later' precies als Plasma de onderdelen nog niet had",
                "'later' en 'systeemvak alles': niets veranderd", "knownItems en shownItems blijven",
                "niets nieuws verborgen; alleen de toetsenbordindeling mag zichtbaar worden", "alleen UIT-onderdelen gaan uit",
-               "wat uitging staat in bugosOff", "met het snelmenu aan staat geen UIT-onderdeel meer aan", "twee keer = één keer",
+               "wat uitging staat in bugosOff", "wat je zelf zichtbaar wilde, blijft aan",
+               "met het snelmenu aan staat geen ander UIT-onderdeel meer aan", "wat aan staat, staat niet in bugosOff",
+               "wat uit staat en BugOS onthield, blijft onthouden", "twee keer = één keer",
                "'snelmenu uit' daarna: alles is terug"):
     _fout_bij = _mis.get(_regel, [])
     klopt(bool(_uitslagen) and not _fout_bij,
@@ -1140,7 +1213,7 @@ for _regel in ("geen fout, één woord, het slot erop", "'later' precies als Pla
 # bij het volgende inloggen.
 r = draai_js(wijzig("systeemvak(true);") + " var s1 = JSON.parse(JSON.stringify(vak(paneel).cfg));" + NA_UPDATE
              + " var s2 = JSON.parse(JSON.stringify(vak(paneel).cfg)); vak(paneel).cfg.extraItems = " + json.dumps(VM_EXTRA)
-             + ";" + NA_UPDATE, "{s1: s1, s2: s2, s3: vak(paneel).cfg}",
+             + ";" + NA_UPDATE, "{s1: s1, s2: s2, s3: vak(paneel).cfg}", begin=TAAKBALK_SNEL,
              cfgs={"org.kde.plasma.systemtray": {"hiddenItems": list(RUSTIG_JS)}})
 u = r["u"] or {}
 klopt(r["gedrukt"] == ["1", "later", "klaar"] and u.get("s2") == u.get("s1")
@@ -1148,6 +1221,52 @@ klopt(r["gedrukt"] == ["1", "later", "klaar"] and u.get("s2") == u.get("s1")
       and sorted((u.get("s3") or {}).get("extraItems", [])) == sorted(x for x in VM_EXTRA if x not in UIT)
       and (u.get("s3") or {}).get("hiddenItems") == RUSTIG_JS,
       f"G13: nieuwe gebruiker, lijst pas later ingevuld: eerst 'later' (niets veranderd), de volgende keer echt uit ({r['gedrukt']})")
+
+# G14 (review): wie op de vorige BugOS zelf de batterij en het netwerk "Always shown" gaf (shownItems, en dus niet
+# meer verborgen), houdt ze na de update aan. De vorige BugOS verborg alleen, dus die pictogrammen zag je nog;
+# uitzetten zou ze zonder te vragen helemaal weghalen, en op slot is er geen "Configure System Tray..." om ze terug
+# te zetten. Daarna snelmenu uit (alles terug) en weer aan (Instellingen): "Always shown" blijft ook dan aan.
+_cfg14 = {"hiddenItems": [x for x in _vroeger if x not in (BAT, NET)], "bugosHidden": list(_vroeger),
+          "extraItems": list(VM_EXTRA), "shownItems": [BAT, NET], "knownItems": VM_KNOWN}
+_snel_uit = wijzig('weg("org.bugos.quickmenu"); systeemvak(false);')
+_snel_aan = wijzig('vervang("", "org.bugos.quickmenu", "org.kde.plasma.systemtray");') + wijzig("systeemvak(true);")
+r = draai_js("__AppInterface.locked = true; var v = vak(paneel);" + NA_UPDATE + " var a = JSON.parse(JSON.stringify(v.cfg));"
+             + NA_UPDATE + " var a2 = JSON.parse(JSON.stringify(v.cfg));" + _snel_uit
+             + " var b = JSON.parse(JSON.stringify(v.cfg)); var sb = soorten(paneel);" + _snel_aan,
+             "{a: a, a2: a2, b: b, sb: sb, c: v.cfg, sc: soorten(paneel), slot: __AppInterface.locked}",
+             begin=TAAKBALK_SNEL, cfgs={"org.kde.plasma.systemtray": _cfg14})
+u = r["u"] or {}
+a, b, c = u.get("a") or {}, u.get("b") or {}, u.get("c") or {}
+_rest = sorted(x for x in UIT if x not in (BAT, NET))
+klopt(r["fout"] is None and r["gedrukt"][:2] == ["klaar", "klaar"] and {BAT, NET} <= set(a.get("extraItems", []))
+      and sorted(a.get("bugosOff", [])) == _rest and a.get("shownItems") == [BAT, NET] and a.get("knownItems") == VM_KNOWN
+      and a.get("hiddenItems") == [x for x in _vroeger if x not in (BAT, NET, KL)] and u.get("a2") == a,
+      f"G14: 'Always shown' (batterij, netwerk) blijft na de update aan en staat niet in bugosOff; de rest van UIT gaat uit; "
+      f"twee keer = één keer ({a.get('extraItems')}, {a.get('bugosOff')}, {r['fout']})")
+klopt(sorted(b.get("extraItems", [])) == sorted(VM_EXTRA) and b.get("bugosOff") == [""] and "org.bugos.quickmenu" not in u.get("sb", []),
+      f"G14: daarna snelmenu uit: alle KDE-onderdelen zijn terug ({b.get('extraItems')})")
+klopt({BAT, NET} <= set(c.get("extraItems", [])) and sorted(c.get("bugosOff", [])) == _rest
+      and "org.bugos.quickmenu" in u.get("sc", []) and u.get("slot") is True,
+      f"G14: en snelmenu weer aan: 'Always shown' blijft aan, de rest van UIT gaat weer uit ({c.get('bugosOff')})")
+
+# G15 (review): wie de batterij op de vorige BugOS weer liet zien ("Shown when relevant": niet meer verborgen, niet in
+# shownItems), houdt hem na de update ook aan. Wat BugOS nooit verborg (de kluis staat niet in RUSTIG), liet je niet
+# zelf zien: dat gaat gewoon uit. Zet je later zelf het snelmenu weer aan (Instellingen), dan maakt dat het systeemvak
+# rustig zoals bij een nieuwe gebruiker (net als het klembord in G2): de batterij verborgen en uit. Alleen "Always
+# shown" blijft dan (G14).
+_cfg15 = {"hiddenItems": [x for x in _vroeger if x != BAT], "bugosHidden": list(_vroeger), "extraItems": list(VM_EXTRA)}
+r1, r2 = na_update(_cfg15), na_update(_cfg15, NA_UPDATE * 2)
+c = r1["cfg"]
+klopt(r1["gedrukt"] == ["klaar"] and BAT in c.get("extraItems", []) and BAT not in c.get("bugosOff", [])
+      and "org.kde.plasma.vault" not in c.get("extraItems", [])
+      and sorted(c.get("bugosOff", [])) == sorted(x for x in UIT if x != BAT) and r2["cfg"] == c,
+      f"G15: wat BugOS verborg en jij weer liet zien (batterij) blijft na de update aan; de kluis gaat uit; twee keer = "
+      f"één keer ({c.get('bugosOff')})")
+r = draai_js(NA_UPDATE + _snel_uit + _snel_aan, "vak(paneel).cfg", begin=TAAKBALK_SNEL,
+             cfgs={"org.kde.plasma.systemtray": _cfg15})
+c = r["u"] or {}
+klopt(BAT in c.get("hiddenItems", []) and BAT not in c.get("extraItems", []) and BAT in c.get("bugosOff", []),
+      f"G15: snelmenu later zelf uit en weer aan: dan is de batterij weer verborgen en uit, zoals bij een nieuwe gebruiker ({c})")
 
 
 print(f"{fouten} fout(en).")
