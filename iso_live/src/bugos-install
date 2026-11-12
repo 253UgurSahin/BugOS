@@ -7,6 +7,8 @@
 # zonder herstelsleutel kom je na het verkleinen misschien niet meer in Windows.
 # Dit draait als de live-gebruiker, dus het venster komt gewoon op het scherm
 # (in de kickstart lukte dat niet).
+# Daarna: een melding "Het installatieprogramma start" zolang Anaconda opstart
+# (bugos-live start), en na een gelukte installatie "Nu opnieuw opstarten".
 
 # Teksten in de taal van de stick (standaard Engels): t "Nederlands" "English".
 # shellcheck source=system_files/usr/share/bugos/lib.sh
@@ -44,7 +46,22 @@ fi
 MERKTEKEN="${BUGOS_INSTALL_MERKTEKEN:-/run/bugos-install/gelukt}"
 begin="$(cut -d. -f1 /proc/uptime 2>/dev/null)"
 case "$begin" in '' | *[!0-9]*) begin=0 ;; esac
+
+# Een rustige melding zolang het installatieprogramma opstart. Dat duurt even (in een VM ruim anderhalve minuut,
+# gemeten op 2026-11-11), en tot nu toe zag je al die tijd niets: het welkomstscherm ging dicht en dan leek er niets
+# te gebeuren (en klik je nog een keer). 'bugos-live start' sluit zichzelf zodra het installatieprogramma klaar is
+# (zie Start in bugos-live). Pas hier, ná de BitLocker-vraag: wie daar 'Stoppen' kiest, krijgt geen melding.
+# Op de achtergrond (&): liveinst moet meteen beginnen, de melding wacht nergens op.
+bugos-live start &
+melding=$!
 liveinst "$@"
+# Ging liveinst weg voordat het installatieprogramma er was (gestopt, een fout, of 'draait al'), dan staat de melding
+# er misschien nog: weg ermee, vóór het venster 'Nu opnieuw opstarten'. Op nummer ($!), dus ook als hij nog maar net
+# gestart is. Alleen als het nog een kind van DIT script is: sloot de melding zichzelf al lang geleden, dan kan dat
+# nummer nu van een ander programma zijn, en dat laten we met rust.
+if [ "$(ps -o ppid= -p "$melding" 2>/dev/null | tr -d ' ')" = "$$" ]; then
+    kill "$melding" 2>/dev/null || true
+fi
 
 # Gelukt in DEZE ronde (niet een merkteken van een eerdere poging)? Dan het BugOS-venster "Nu opnieuw opstarten",
 # in de taal die je in het installatieprogramma koos. Gestopt of mislukt: niets (Anaconda zei het al).

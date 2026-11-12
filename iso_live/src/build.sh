@@ -173,8 +173,7 @@ extra = {
     "About": "Over",
     "Reinstall Fedora": "BugOS opnieuw installeren",
     "Fedora linux requires at least $0 of disk space.": "BugOS heeft minstens $0 schijfruimte nodig.",
-    "Share disk with other operating systems": "De schijf delen met Windows of een ander systeem",
-    "Share disk with other operating systems: $0": "De schijf delen met: $0",
+    # De zinnen van 'De schijf delen' (met en zonder ': $0') staan nu in bugos_webui.py (WOORDEN), met Engels erbij.
     "Use local account": "Account op deze computer",
     "A standard user account with admin access for making system-wide changes.":
         "Een gewoon account dat ook de computer mag instellen.",
@@ -236,7 +235,12 @@ fi
 #   zone, dan blijft die staan.
 # - Gewone woorden, Engels en Nederlands: "Password" in plaats van "Passphrase", "Use the whole disk", "Finish" ...
 #   Engels krijgt een eigen woordenboek (po.en_US.js.gz en de andere Engelse talen van Anaconda); Nederlands komt
-#   achteraan in po.nl.js.gz, na de regels hierboven, zodat onze woorden winnen.
+#   achteraan in po.nl.js.gz, na de regels hierboven, zodat onze woorden winnen. Ook 'De schijf delen' en het venster
+#   om ruimte te maken, in gewone woorden ('je', geen 'partities' of 'aankoppelpunten').
+# - Engels vanaf de eerste pagina: het venster (slitherer) vraagt geen taal aan cockpit, dus po.js bleef leeg tot je
+#   zelf een taal aanklikte. index.html laadt nu eerst bugos-en.js (onze Engelse woorden), daarna pas po.js.
+# - Het vinkje 'De klok vanzelf gelijkzetten (via internet)' (NTP) blijft aan, zoals Anaconda het geeft: dan houdt
+#   chronyd in het geïnstalleerde BugOS de klok gelijk. Het is een ander vinkje dan dat van de tijdzone.
 # Klopt de vorm van een bestand niet meer (nieuwe versie van het installatieprogramma), dan stopt het bouwen hier.
 python3 "$SRC/bugos_webui.py" /usr/share/cockpit/anaconda-webui
 
@@ -249,6 +253,8 @@ install -Dm0755 "$SRC/bugos-install" /usr/bin/bugos-install
 # Wat het installatieprogramma doet.
 # Nooit 'timezone' of 'timesource' in deze kickstart (of in bugos-updates.ks): dan zet Anaconda de zone met voorrang 70,
 # en wint onze gok op basis van de taal (voorrang 30, zie bugos_webui.py) nooit meer. tools/test_native_installer.py let erop.
+# Daardoor blijft ook NTPEnabled op True staan (Anaconda's standaard; 'timesource --ntp-disable' of 'timezone --nontp'
+# zou hem uitzetten): het vinkje 'De klok vanzelf gelijkzetten' staat aan en chronyd houdt straks de klok gelijk.
 mkdir -p /usr/share/anaconda/post-scripts
 cat >>/usr/share/anaconda/interactive-defaults.ks <<EOF
 
@@ -391,6 +397,21 @@ Section "InputClass"
 EndSection
 EOF
 
+# De klok op de stick: een 24-uursklok en een datum die iedereen goed leest (22:40 en 2026-11-12), in plaats van de
+# Amerikaanse notatie (10:40 PM en 11/12/26; dat laatste leest de halve wereld als 11 december). Alleen LC_TIME: de
+# taal blijft Engels. Alleen op de stick: plasma-localerc in /etc/xdg geldt voor de live-gebruiker (Plasma zet
+# [Formats] bij het inloggen in de omgeving); het geïnstalleerde BugOS komt uit de OCI-map en krijgt dit niet.
+# Waarom en_SE: van de Engelse notaties is dat de enige met ISO-datums én 24 uur (Qt: 'HH:mm' en 'yyyy-MM-dd'), en
+# glibc kent hem (glibc-all-langpacks), dus geen setlocale-waarschuwingen in de terminal.
+# De tijdzone blijft UTC (zie stap 5): BugOS vraagt nooit waar je bent. In het installatieprogramma kies je de echte
+# zone voor de computer (geraden uit je taal). Ontbreekt en_SE ooit, dan blijft de klok zoals hij was (geen fout).
+# grep zonder -q leest alles: met pipefail kan -q 'locale -a' anders een SIGPIPE geven (en dan lijkt het mislukt).
+if locale -a 2>/dev/null | grep -x 'en_SE.utf8' >/dev/null; then
+    printf '[Formats]\nLC_TIME=en_SE.UTF-8\n' >/etc/xdg/plasma-localerc
+else
+    echo "Let op: glibc kent en_SE niet; de klok op de stick blijft in de Amerikaanse notatie" >&2
+fi
+
 # Het installatieprogramma in BugOS-kleuren, met het lieveheersbeestje.
 # Het programma (Anaconda WebUI) haalt zijn logo en kleuren uit de
 # "branding" van Cockpit. Zonder eigen map kreeg je die van Fedora: blauw,
@@ -463,7 +484,8 @@ cat >"$BRANDING/branding.css" <<'EOF'
 
 /* Datum en tijd. Geen vinkje 'tijdzone automatisch': BugOS vraagt nooit waar je bent (geen plaatsbepaling),
    dus het vinkje deed niets en hield de keuzelijsten vast (bugos_webui.py zet het uit). De hele regel weg,
-   anders blijft er een lege strook staan. */
+   anders blijft er een lege strook staan. Het vinkje voor de klok zelf (NTP, #...-auto-date-time) blijft wel
+   staan, en aan: dat vraagt alleen de tijd, niet waar je bent. */
 .anaconda .pf-v6-l-stack__item:has(> .pf-v6-l-flex > * > .pf-v6-c-check > #anaconda-screen-date-time-auto-timezone) {
     display: none;
 }

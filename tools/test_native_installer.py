@@ -1,21 +1,28 @@
 #!/usr/bin/env python3
-"""Test van de live-stick en het installatieprogramma (iso_live/src): wifi, woorden, tijdzone, voortgang, klaar.
+"""Test van de live-stick en het installatieprogramma (iso_live/src): wifi, woorden, tijdzone, voortgang, klaar,
+de melding 'Het installatieprogramma start' en de klok op de stick.
 
 Alles gebeurt in een tijdelijke map met nep-programma's vooraan op PATH (nmcli, systemctl, liveinst, bugos-live ...);
 er wordt niets aan de computer veranderd. Dit draait in de CI-container (Python 3.12, PySide6, geen node, geen
-image). Met --beeld draait het IN de live-image (localhost/bugos-live:lokaal) en kijkt het naar de echte bestanden
-van het installatieprogramma (zie beeld() onderaan).
+image). Met --beeld draait het IN de gebouwde live-image (localhost/bugos-live:lokaal) en kijkt het naar de echte
+bestanden van het installatieprogramma (zie beeld() onderaan). Die zijn daar al aangepast door build.sh; de test kijkt
+dus naar het resultaat (en draait de aanpassing in een kopie terug en opnieuw), niet nog een keer aanpassen.
 
 Gebruik:  QT_QPA_PLATFORM=offscreen python3 tools/test_native_installer.py
           podman run --rm --privileged -v <repo>:/repo:ro --entrypoint /usr/bin/bash localhost/bugos-live:lokaal \\
               -c "python3 /repo/tools/test_native_installer.py --beeld"
+          ... --beeld --oud-beeld   voor een beeld dat van een oudere commit gebouwd is: wat de repo sindsdien
+                                    veranderde (nieuwe woorden, nieuwe bestanden) is dan INFO in plaats van FOUT.
 """
 
 from __future__ import annotations
 
+import gzip
 import importlib.machinery
 import importlib.util
+import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -54,6 +61,17 @@ def log() -> list[str]:
         return LOG.read_text(encoding="utf-8").splitlines()
     except OSError:
         return []
+
+
+def leeft(pid: int) -> bool:
+    """Draait dit proces nog? Een zombie telt als weg: die is gestopt, alleen nog niet opgeruimd door zijn ouder.
+    (os.kill(pid, 0) zou een zombie nog als levend zien.)"""
+    try:
+        stat = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    # Na de naam tussen haakjes (die zelf spaties of haakjes kan hebben) komt de toestand: R, S, Z ...
+    return stat.rsplit(")", 1)[-1].split()[:1] != ["Z"]
 
 
 def schoon_pad() -> str:
@@ -218,6 +236,7 @@ def test_live() -> None:
     wacht(app, lambda: not w._bezig, 8)
     w.close()
     test_klaar(app, live)
+    test_start(app, live)
 
 
 # ===================================================================================== woorden (bugos_webui.py) ===
@@ -266,6 +285,46 @@ def test_woorden() -> None:
     en_w, nl_w = W["Remove all partitions on the selected devices, including existing operating systems."]
     klopt("if it is there" in en_w and "als dat erop staat" in nl_w,
           "11 (I12): de waarschuwing doet niet alsof er altijd Windows op staat")
+    # 11 (b). 'De schijf delen' (de standaard zodra er iets op de schijf staat), het venster om ruimte te maken en
+    # 'Datum en tijd': die zinnen waren stijf Nederlands met 'u' en vakwoorden. Dat elke sleutel letterlijk in de
+    # echte index.js staat, kijkt --beeld na (op een computer zonder image kan dat niet).
+    schijf = ("Share disk with other operating systems", "Share disk with other operating systems: $0",
+              "Keep current disk layout and use available space, to dual-boot with another OS.",
+              "Not enough free space on the selected disks.",
+              "To use this option, resize or remove existing partitions to free up at least $0.",
+              "Reclaim space (required)", "Reclaim additional space", "Mount point assignment",
+              "Assign partitions to mount points. Useful for pre-configured custom layouts.",
+              "Apply mount point assignment and install", "Reclaim space",
+              "Remove or resize existing filesystems to free up space for the installation.",
+              "Available free space: $0. Installation requires: $1.", "Resize", "shrink", "shrink to $0",
+              "Windows partitions with BitLocker encryption cannot be resized", "Not enough space on selected disks.",
+              "The installation needs $0 of disk space; however, the capacity of the selected disks is only $1.",
+              "Show AM/PM", "You must be connected to a network to enable automatic date and time.")
+    klopt(all(k in W for k in schijf),
+          f"11 (b): de zinnen van 'De schijf delen', 'Ruimte maken' en 'Datum en tijd' staan erin "
+          f"({[k for k in schijf if k not in W]})")
+    # Nederlands met 'je', nooit 'u' of 'uw' (Anaconda's eigen Nederlands zei 'verandert u de grootte ...').
+    formeel = [nl for _en, nl in W.values() if re.search(r"\b(u|uw)\b", nl, re.IGNORECASE)]
+    klopt(not formeel, f"11 (b): Nederlands met 'je', nergens 'u' of 'uw' ({formeel[:2]})")
+    # Geen vakwoorden die Anaconda gebruikte (in beide talen): de regel hierboven vangt 'partition' en 'storage' al.
+    vak = [x for v in W.values() for x in v
+           if re.search(r"partitie|aankoppel|terugvorder|bestandssyste|mount point|filesystem|dual-boot|reclaim|\bOS\b",
+                        x, re.IGNORECASE)]
+    klopt(not vak, f"11 (b): geen aankoppelpunten, bestandssystemen, dual-booten of 'terugvorderen' ({vak[:2]})")
+    # Elke $0/$1 uit de sleutel komt terug, in dezelfde volgorde (cockpit zet er de getallen of vette stukjes in).
+    # Alleen bij de klaar-zin laten we $0 bewust weg (review I4: de naam van het systeem is daar niet nodig).
+    weglaten = {"To begin using $0, reboot your system."}
+    kwijt = [(k, x) for k, v in W.items() if k not in weglaten for x in v
+             if re.findall(r"\$\d", x) != re.findall(r"\$\d", k)]
+    klopt(not kwijt, f"11 (b): elke $0/$1 van de sleutel staat ook in de tekst, in dezelfde volgorde ({kwijt[:1]})")
+    en_r, nl_r = W["Removing a filesystem will permanently delete all of the data it contains. Resizing a partition "
+                   "can free up unused space, but is not risk-free. Be sure to have backups of anything important "
+                   "before reclaiming space."]
+    klopt("Install" in en_r and "Installeren" in nl_r and "USB" in en_r and "USB" in nl_r,
+          "11 (b): 'Ruimte maken' zegt dat er pas iets verandert bij Installeren, en waar je eerst een kopie zet")
+    # Die zin klopt alleen als de laatste knop bij 'De schijf delen' ook echt Installeren heet: dat is Anaconda's eigen
+    # 'Install' (getButtonLabel), dus die mag niet in WOORDEN een andere naam krijgen.
+    klopt("Install" not in W, "11 (b): de knop 'Install' houdt zijn naam (de uitleg in 'Ruimte maken' noemt hem)")
 
     # 12. Een heel Engels woordenboek in cockpit-vorm.
     po = w.po_engels()
@@ -314,6 +373,49 @@ def test_woorden() -> None:
     roep = bouw.find('python3 "$SRC/bugos_webui.py"')
     klopt(roep > bouw.find("BugOS requires at least $0 of disk space.") > 0 and "$ENGELS" not in bouw,
           "14: build.sh zet de woorden na de bestaande Nederlandse regels")
+    # 'De schijf delen' staat alleen nog in WOORDEN (met Engels erbij), niet ook nog in de Nederlandse lijst van build.sh.
+    klopt('"Share disk with other operating systems' not in bouw,
+          "14: 'Share disk ...' heeft één bron (WOORDEN), niet ook nog een regel in build.sh")
+
+    # 27. Engels vanaf de eerste pagina. slitherer (het venster van het installatieprogramma) stuurt geen
+    # Accept-Language mee, dus cockpit gaf een lege po.js: onze Engelse woorden kwamen pas als je zelf een taal
+    # aanklikte. index.html laadt nu eerst bugos-en.js (na index.js, vóór po.js).
+    html = w.html_engels(INDEX_HTML)
+    regels = [r.strip() for r in html.splitlines()]
+    klopt(regels.index('<script type="text/javascript" src="index.js"></script>')
+          < regels.index('<script type="text/javascript" src="bugos-en.js"></script>')
+          < regels.index('<script type="text/javascript" src="po.js"></script>'),
+          "27: index.html laadt bugos-en.js na index.js (daar zit cockpit in) en vóór po.js (een echt woordenboek wint)")
+    klopt('\n    <script type="text/javascript" src="bugos-en.js"></script>\n' in html
+          and html.replace('    <script type="text/javascript" src="bugos-en.js"></script>\n', "") == INDEX_HTML,
+          "27: verder blijft index.html precies hetzelfde (zelfde inspringing)")
+    for naam, kapot in (("twee keer", html), ("zonder po.js", INDEX_HTML.replace("po.js", "po-weg.js")),
+                        ("po.js vóór index.js", INDEX_HTML.replace('src="index.js"', 'src="x.js"') + '<script src="index.js">')):
+        try:
+            w.html_engels(kapot)
+            klopt(False, f"27: {naam}: het bouwen stopt (AssertionError)")
+        except AssertionError:
+            klopt(True, f"27: {naam}: het bouwen stopt (AssertionError)")
+    # main() zoals build.sh hem aanroept (maar met --locales en --zone-tab: geen Anaconda op deze computer), op een
+    # map met de echte vormen van de bestanden: alles in één keer, en bugos-en.js is hetzelfde als po.en_US.js.gz.
+    m2 = TMP / "webui-main"
+    m2.mkdir()
+    with gzip.open(m2 / "index.js.gz", "wt", encoding="utf-8") as f:
+        f.write(JS_KLOK + JS_ZET + JS_VAK)
+    with gzip.open(m2 / "po.nl.js.gz", "wt", encoding="utf-8") as f:
+        f.write(PO_NL)
+    (m2 / "index.html").write_text(INDEX_HTML, encoding="utf-8", newline="\n")
+    (TMP / "zone.tab").write_text(ZONE_TAB, encoding="utf-8", newline="\n")
+    code = w.main([str(m2), "--locales", "en_US,en_GB", "--zone-tab", str(TMP / "zone.tab")])
+    lees2 = {p.name: gzip.open(p, "rt", encoding="utf-8").read() for p in m2.glob("*.gz")}
+    klopt(code == 0 and sorted(lees2) == ["bugos-en.js.gz", "index.js.gz", "po.en_GB.js.gz", "po.en_US.js.gz",
+                                         "po.nl.js.gz"] and not list(m2.glob("*.nieuw")),
+          f"27: main() maakt bugos-en.js.gz naast de po-bestanden, niets half achtergelaten ({sorted(lees2)})")
+    klopt(lees2["bugos-en.js.gz"] == lees2["po.en_US.js.gz"] == w.po_engels("en_US")
+          and "bugos-en.js" in (m2 / "index.html").read_text(encoding="utf-8"),
+          "27: bugos-en.js heeft dezelfde Engelse woorden als po.en_US.js, en index.html laadt hem")
+    klopt("bugosTzGok" in lees2["index.js.gz"] and JS_KLOK in lees2["index.js.gz"],
+          "27: main() zet ook de tijdzonegok erin, en laat het klokvak (NTP) staan")
 
 
 # =================================================================================== tijdzone (bugos_webui.py) ===
@@ -321,6 +423,21 @@ def test_woorden() -> None:
 JS_ZET = 'LU=()=>o0("Timezone"),lx=({timezone:t})=>pb("SetTimezoneWithPriority",[t,90]);var ZU=()=>pb("GetAllValidTimezones");'
 JS_VAK = ('var yg=Y.gettext,na="anaconda-screen-date-time",y3=({locale:t,setSectionValid:e,setTimezoneLabel:o})=>{'
           'let[r,l]=(0,oe.useState)(!0),[a,n]=(0,oe.useState)(!1),[i,c]=(0,oe.useState)(!1);return null};')
+# Het vak 'Date and time' erboven (ook letterlijk, ingekort tot het begin): hier is r het vinkje voor de klok (NTP).
+# Het begint met useState(!0), maar de pagina zet het meteen naar wat Anaconda zegt (await uB() = NTPEnabled, standaard
+# True). Dat vinkje moet blijven zoals het is: tijdzone() mag dit stuk niet aanraken (zie bugos_webui.py bovenaan).
+JS_KLOK = ('var Cf=Y.gettext,wf="anaconda-screen-date-time",oq=({locale:t,setSectionValid:e,timezone:o})=>{'
+           'let[r,l]=(0,te.useState)(!0),[a,n]=(0,te.useState)(!0),[i,c]=(0,te.useState)(Se.utc()),'
+           's=(0,te.useContext)(Bn).connected,[d,p]=(0,te.useState)(()=>L3(t)?"24":"ampm");'
+           '(0,te.useEffect)(()=>{(async()=>{let W=await uB();l(!!W);let X=await xB();'
+           'X&&c(Se.fromISO(X,{zone:"utc"}).setZone(o))})()},[o]);return null};'
+           'var uB=()=>o0("NTPEnabled"),hB=({enabled:t})=>vB("NTPEnabled",Y.variant("b",t));')
+# Het begin van de echte index.html van anaconda-webui 68 (met de titel die build.sh erin zet).
+INDEX_HTML = ('<!DOCTYPE html>\n<html lang="en">\n<head>\n    <title>Install BugOS</title>\n    <meta charset="utf-8">\n'
+              '    <link rel="stylesheet" href="index.css">\n    <link rel="stylesheet" href="../../static/branding.css">\n\n'
+              '    <script type="text/javascript" src="index.js"></script>\n'
+              '    <script type="text/javascript" src="po.js"></script>\n</head>\n\n'
+              '<body class="pf-m-redhat-font anaconda">\n    <div class="ct-page-fill" id="app"></div>\n</body>\n</html>\n')
 ZONE_TAB = ("# tzdb timezone descriptions\n#\n"
             "NL\t+5222+00454\tEurope/Amsterdam\n"
             "DE\t+5230+01322\tEurope/Berlin\tmost of Germany\n"
@@ -347,6 +464,22 @@ def test_tijdzone() -> None:
           "7: de gok gebruikt de D-Bus-aanroep van de pagina met prioriteit 30; jouw eigen keuze (90) blijft")
     klopt('{"NL":"Europe/Amsterdam"}' in uit and 'o0("Timezone")' in uit and "useState)(!0),[a,n]" not in uit,
           "7: de tabel staat erin, de D-Bus-naam 'Timezone' is niet aangeraakt, niets meer op (!0)")
+    # 7 (a). Het vinkje 'De klok vanzelf gelijkzetten' (NTP) is een ander vinkje: dat staat aan omdat Anaconda het zo
+    # zegt (NTPEnabled is standaard True), en dat laten we zo. tijdzone() raakt het vak 'Date and time' niet aan.
+    met_klok = w.tijdzone(JS_KLOK + fixture, {"NL": "Europe/Amsterdam"})
+    klopt(met_klok.startswith(JS_KLOK) and met_klok.count("useState)(!1),bugosTzKlaar") == 1
+          and not w.R_VAK.search(JS_KLOK),
+          "7 (a): het klokvak (NTP, leest NTPEnabled) blijft precies zoals het was; alleen het tijdzonevak verandert")
+    # 7 (b). Terugdraaien (voor --beeld, waar index.js al aangepast is): ontdoe_tijdzone(tijdzone(x)) is weer x.
+    klopt(w.ontdoe_tijdzone(uit) == fixture and w.ontdoe_tijdzone(met_klok) == JS_KLOK + fixture
+          and w.ingebouwde_tabel(uit) == {"NL": "Europe/Amsterdam"},
+          "7 (b): ontdoe_tijdzone draait tijdzone() precies terug, en ingebouwde_tabel leest de tabel terug")
+    for naam, js in (("niet aangepast", fixture), ("half (zonder de haak)", uit.replace(",bugosTzKlaar=", ",x="))):
+        try:
+            w.ontdoe_tijdzone(js)
+            klopt(False, f"7 (b): {naam}: ontdoe_tijdzone weigert (AssertionError)")
+        except AssertionError:
+            klopt(True, f"7 (b): {naam}: ontdoe_tijdzone weigert (AssertionError)")
     # 8. Twee keer, of een andere versie van het installatieprogramma: het bouwen stopt.
     for naam, js in (("twee keer", uit), ("zonder SetTimezone", JS_VAK), ("zonder het vak", JS_ZET),
                      ("SetTimezone twee keer", JS_ZET + JS_ZET + JS_VAK)):
@@ -555,12 +688,23 @@ def test_install() -> None:
     (sysroot / "etc").mkdir(parents=True)
     nep("lsblk", f'cat \'{TMP}/lsblk\' 2>/dev/null || echo ext4')
     nep("kdialog", "exit 0")
-    nep("bugos-live", f'echo "LANGUAGE=${{LANGUAGE-<leeg>}}" >> \'{LOG}\'; exit "$(cat \'{TMP}/live-code\' 2>/dev/null || echo 0)"')
-    # liveinst: doet wat er in $TMP/liveinst-doe staat (het %post-script draaien, of iets anders).
-    nep("liveinst", f'[ -f \'{TMP}/liveinst-doe\' ] && bash \'{TMP}/liveinst-doe\'; exit 3')
+    # bugos-live: 'start' (de melding) blijft staan tot iemand hem stopt, zoals het echte venster; het schrijft zijn
+    # nummer op, zodat de test kan zien dat hij er was en daarna weg is. Wachten gebeurt in bash zelf (read op een
+    # fifo, geen sleep): dan blijft het één proces dat bugos-live heet, en houdt niets de uitvoer van de test open.
+    nep("bugos-live", f'if [ "$1" = start ]; then echo "$$" > \'{TMP}/start-pid\'; exec >/dev/null 2>&1; '
+                      f'rm -f \'{TMP}/start-fifo\'; mkfifo \'{TMP}/start-fifo\'; read -r -t 20 _ <> \'{TMP}/start-fifo\'; '
+                      f'exit 0; fi\n'
+                      f'echo "LANGUAGE=${{LANGUAGE-<leeg>}}" >> \'{LOG}\'; exit "$(cat \'{TMP}/live-code\' 2>/dev/null || echo 0)"')
+    # liveinst: wacht tot de melding er is (het echte liveinst doet er veel langer over dan het starten van de melding),
+    # en doet dan wat er in $TMP/liveinst-doe staat (het %post-script draaien, of iets anders).
+    nep("liveinst", f'for _ in $(seq 60); do [ -s \'{TMP}/start-pid\' ] && break; sleep 0.05; done\n'
+                    f'[ -f \'{TMP}/liveinst-doe\' ] && bash \'{TMP}/liveinst-doe\'; exit 3')
+    # Per ronde: (was de melding er, en is hij na afloop weg?)
+    meldingen: list[tuple[bool, bool]] = []
 
     def ronde(doe: str | None, locale: str | None = None, post_lang: str = "", oud: str | None = None) -> list[str]:
         LOG.write_text("", encoding="utf-8")
+        (TMP / "start-pid").unlink(missing_ok=True)
         shutil.rmtree(m / "run", ignore_errors=True)
         if oud is not None:   # een merkteken van een eerdere poging
             (m / "run").mkdir()
@@ -579,7 +723,18 @@ def test_install() -> None:
         env.pop("LANGUAGE", None)
         env.pop("LC_ALL", None)
         subprocess.run([str(bin_)], env=env, capture_output=True, text=True, timeout=30)
-        return [r for r in log() if r.startswith(("bugos-live", "LANGUAGE=", "liveinst"))]
+        pid_tekst = (TMP / "start-pid").read_text(encoding="utf-8").strip() if (TMP / "start-pid").exists() else ""
+        weg = True
+        if pid_tekst.isdigit():
+            # bugos-install stuurde hem weg (SIGTERM); geef hem heel even om echt te stoppen.
+            eind = time.monotonic() + 3
+            while leeft(int(pid_tekst)) and time.monotonic() < eind:
+                time.sleep(0.02)
+            weg = not leeft(int(pid_tekst))
+        meldingen.append((pid_tekst.isdigit(), weg))
+        # 'bugos-live start' draait tegelijk met liveinst: in welke volgorde ze in het logboek komen, ligt niet vast.
+        # Die regel hier dus weglaten; meldingen houdt bij of hij er was.
+        return [r for r in log() if r.startswith(("bugos-live", "LANGUAGE=", "liveinst")) and r != "bugos-live start"]
 
     draai_post = f"bash '{post}'\n"
     # 15. Gelukt, Nederlands gekozen. Anaconda schrijft LANG="nl_NL.UTF-8" (met aanhalingstekens, review I1).
@@ -615,6 +770,13 @@ def test_install() -> None:
     klopt(r == ["liveinst ", "bugos-live klaar", "LANGUAGE=<leeg>"], f"18 (I6): alleen regel 1: venster, taal van de stick ({r})")
     r = ronde(f"printf '%s\\n%s\\n' \"{nu}\" 'C.UTF-8' > '{merk}'", oud="")
     klopt(r[-1:] == ["LANGUAGE=<leeg>"], f"18: taal C: geen LANGUAGE ({r})")
+    # 28 (c). Elke ronde hierboven startte liveinst: de melding 'Het installatieprogramma start' kwam er vóór liveinst
+    # (liveinst wachtte erop), en was weg toen bugos-install klaar was: ook als liveinst mislukte of stopte (17, 18),
+    # en vóór het venster 'Nu opnieuw opstarten' (15, 16).
+    klopt(len(meldingen) == 11 and all(er for er, _weg in meldingen),
+          f"28 (c): bij elke start van liveinst komt eerst de melding (bugos-live start) ({meldingen})")
+    klopt(all(weg for _er, weg in meldingen),
+          f"28 (c): na liveinst is de melding altijd weg, gelukt of niet ({meldingen})")
 
     # 19. BitLocker: de BugOS-vraag (bugos-live bitlocker). 0 = doorgaan, 10 = stoppen, iets anders = kon niet vragen.
     (TMP / "lsblk").write_text("\nntfs\nBitLocker\next4\n", encoding="utf-8")
@@ -624,13 +786,17 @@ def test_install() -> None:
         (TMP / "live-code").write_text(str(live_code), encoding="utf-8")
         (TMP / "zen-code").write_text(str(zen_code), encoding="utf-8")
         r = ronde(None)
+        # 'bugos-live start' (de melding) staat hier niet in: die loopt tegelijk met liveinst (zie meldingen).
         return [x.split()[0] + (" " + x.split()[1] if x.startswith("bugos-live") and len(x.split()) > 1 else "")
-                for x in log() if x.startswith(("bugos-live", "liveinst", "zenity", "kdialog"))]
+                for x in log() if x.startswith(("bugos-live", "liveinst", "zenity", "kdialog")) and x != "bugos-live start"]
 
     r = bitlocker(10)
     klopt(r == ["bugos-live bitlocker"], f"19: BitLocker, 'Stop' (of het venster dicht): het installatieprogramma start niet ({r})")
+    klopt(meldingen[-1] == (False, True), f"28 (c): na 'Stop' ook geen melding 'Het installatieprogramma start' ({meldingen[-1]})")
     r = bitlocker(0)
     klopt(r == ["bugos-live bitlocker", "liveinst"], f"19: BitLocker, 'Yes, continue': het installatieprogramma start ({r})")
+    klopt(meldingen[-1] == (True, True),
+          f"28 (c): na 'Yes, continue' komt de melding pas (ná de BitLocker-vraag), en is daarna weg ({meldingen[-1]})")
     r = bitlocker(1, zen_code=1)
     klopt(r == ["bugos-live bitlocker", "zenity", "liveinst"][:2],
           f"19 (I10): het BugOS-venster valt om: de vraag komt via zenity; 'Stop' daar stopt ({r})")
@@ -648,6 +814,12 @@ def test_install() -> None:
     tekst = bron("bugos-install")
     klopt("exec liveinst" not in tekst, "20: bugos-install neemt liveinst niet meer over (exec), zodat het daarna kan kijken")
     klopt("kdialog" not in tekst and "bugos-live bitlocker" in tekst, "20: de BitLocker-vraag is een BugOS-venster, geen kdialog (KDE)")
+    # 28 (c). De volgorde in bugos-install: eerst de BitLocker-vraag, dan de melding (op de achtergrond), dan liveinst,
+    # dan de melding weg (alleen als het nog ons kind is), en pas daarna het venster 'Nu opnieuw opstarten'.
+    volgorde = [tekst.find(x) for x in ("bugos-live bitlocker", "bugos-live start &", "melding=$!", 'liveinst "$@"',
+                                        'ps -o ppid= -p "$melding"', 'kill "$melding"', "exec bugos-live klaar")]
+    klopt(-1 not in volgorde and volgorde == sorted(volgorde),
+          f"28 (c): bugos-install: BitLocker-vraag, melding, liveinst, melding weg, dan pas 'klaar' ({volgorde})")
     bouw = bron("build.sh").replace("\r\n", "\n")
     ks = bouw[bouw.index("interactive-defaults.ks <<EOF"):]
     ks = ks[:ks.index("\nEOF\n")]
@@ -819,34 +991,274 @@ def test_klaar(app, live) -> None:
     klopt(codes == [10, 0], f"F (I10): bugos-live bitlocker: Stop = 10, doorgaan = 0 (anders = 'kon niet vragen') ({codes})")
 
 
+# ======================================================== de melding 'Het installatieprogramma start' (c) ===
+# Zelfde soort meting als MAAT, voor het venster 'start' in beide standen (gewoon, en 'het duurt langer').
+MAAT_START = r'''
+import importlib.machinery, importlib.util, json, os, sys
+sys.path.insert(0, sys.argv[2])
+lader = importlib.machinery.SourceFileLoader("bugos_live", sys.argv[1])
+spec = importlib.util.spec_from_loader("bugos_live", lader)
+live = importlib.util.module_from_spec(spec); lader.exec_module(live)
+app = live.maak_app("bugos-live", "bugos-live", ["bugos-live"])
+from PySide6.QtWidgets import QLabel, QProgressBar
+s = live.venster(["start"])
+s.timer.stop()
+uit = {"klasse": type(s).__name__, "kop": s.kop.text(), "tekst": s.tekst.text(), "fouten": [],
+       "maat": [s.width(), s.height()]}
+s.show()
+for lang in (False, True):
+    s.toon(lang=lang)
+    for _ in range(5):
+        app.processEvents()
+    for w in s.findChildren(QLabel) + s.findChildren(QProgressBar):
+        if not w.isVisible():
+            continue
+        g = w.geometry()
+        if g.left() < 0 or g.top() < 0 or g.right() > s.width() or g.bottom() > s.height():
+            uit["fouten"].append(f"{lang}: {type(w).__name__} valt buiten het venster {g.getRect()}")
+        if isinstance(w, QLabel) and w.wordWrap() and w.text() and w.heightForWidth(w.width()) > w.height():
+            uit["fouten"].append(f"{lang}: {w.text()[:20]!r} afgeknipt ({w.heightForWidth(w.width())} > {w.height()})")
+    if s.balk.geometry().top() <= s.tekst.geometry().bottom():
+        uit["fouten"].append(f"{lang}: het balkje staat over de tekst")
+    uit["lang" if lang else "kort"] = s.tekst.text()
+print(json.dumps(uit))
+'''
+
+
+def test_start(app, live) -> None:
+    """28 (c): bugos-live start. Sluit zichzelf zodra het installatieprogramma klaar is: de vlag backend_ready van
+    Anaconda én het venster met de pagina. Daarvoor een eigen /proc en een eigen vlag (de module-variabelen)."""
+    import json
+
+    proc = TMP / "proc"
+    (proc / "self").mkdir(parents=True)                 # geen getal: overslaan
+    (proc / "7").mkdir()                                # webui-desktop zelf: heeft de pagina NIET op zijn regel
+    (proc / "7" / "cmdline").write_bytes(b"/usr/bin/bash\0/usr/libexec/anaconda/webui-desktop\0-t\0live\0")
+    (proc / "8").mkdir()                                # zonder cmdline (net weg, of niet te lezen): overslaan
+    vlag = TMP / "backend_ready"
+    live.PROC, live.ANACONDA_KLAAR = str(proc), str(vlag)
+    url = b"http://127.0.0.1/cockpit/@localhost/anaconda-webui/index.html"
+
+    def browser(aan: bool) -> None:
+        if aan:
+            (proc / "42").mkdir(exist_ok=True)
+            (proc / "42" / "cmdline").write_bytes(b"slitherer\0" + url + b"\0")
+        else:
+            shutil.rmtree(proc / "42", ignore_errors=True)
+
+    klopt(not live.installatie_venster() and not live.installatie_venster(str(TMP / "bestaat-niet")),
+          "28 (c): geen venster van het installatieprogramma (webui-desktop zelf telt niet; geen /proc: geen fout)")
+    browser(True)
+    klopt(live.installatie_venster() and not live.installatie_klaar(),
+          "28 (c): het venster draait, maar Anaconda is nog niet klaar (geen backend_ready): nog niet klaar")
+    browser(False)
+    vlag.write_text("", encoding="utf-8")
+    klopt(not live.installatie_klaar(), "28 (c): backend_ready, maar (nog) geen venster: nog niet klaar")
+    vlag.unlink()
+
+    s = live.venster(["start"])
+    s.timer.stop()   # de test kiest zelf wanneer er gekeken wordt
+    s.NA_KLAAR_MS = 50
+    s.show()
+    app.processEvents()
+    klopt(isinstance(s, live.Start) and s.kop.text() == "The installer is starting" and "a minute or two" in s.tekst.text()
+          and "no need to click again" in s.tekst.text() and s.balk.maximum() == 0 and s.isVisible(),
+          f"28 (c): 'The installer is starting', hoe lang het ongeveer duurt, en een balkje dat loopt ({s.tekst.text()})")
+    browser(True)
+    s.kijk()
+    klopt(s.isVisible() and not s.klaar_gezien, "28 (c): venster er, Anaconda nog niet klaar: de melding blijft")
+    s.begin = time.monotonic() - s.LANG_S - 1
+    s.kijk()
+    klopt(s.isVisible() and "longer than usual" in s.tekst.text(),
+          f"28 (c): na 4 minuten zegt de melding eerlijk dat het langer duurt ({s.tekst.text()})")
+    vlag.write_text("", encoding="utf-8")
+    s.kijk()
+    klopt(s.klaar_gezien and wacht(app, lambda: not s.isVisible(), 3),
+          "28 (c): backend_ready en het venster: de melding gaat vanzelf weg")
+    vlag.unlink()
+    # Vangnet: zien we backend_ready nooit (wat de reden ook is), dan toch weg zodra het venster van het
+    # installatieprogramma 2 minuten draait: nooit een melding 'het start nog' achter het installatieprogramma.
+    s2 = live.venster(["start"])
+    s2.timer.stop()
+    s2.NA_KLAAR_MS = 50
+    s2.show()
+    s2.kijk()
+    klopt(s2.isVisible() and s2.venster_sinds is not None and not s2.klaar_gezien,
+          "28 (c): het venster draait net, zonder backend_ready: de melding blijft nog")
+    browser(False)
+    s2.kijk()
+    klopt(s2.venster_sinds is None and s2.isVisible(), "28 (c): venster weer weg: de tijd begint opnieuw")
+    browser(True)
+    s2.kijk()
+    s2.venster_sinds -= s2.VENSTER_S + 1
+    s2.kijk()
+    klopt(s2.klaar_gezien and wacht(app, lambda: not s2.isVisible(), 3),
+          "28 (c): vangnet: het venster draait al 2 minuten, dus de melding gaat weg (ook zonder backend_ready)")
+    browser(False)
+    live.PROC, live.ANACONDA_KLAAR = "/proc", "/run/anaconda/backend_ready"
+
+    # Op het scherm, in het Engels en het Nederlands (zo start bugos-install hem: de taal van de stick, of LANGUAGE).
+    metingen = {}
+    for taal in ("en", "nl"):
+        env = dict(os.environ, LANGUAGE=taal, LANG="en_US.UTF-8", QT_QPA_PLATFORM="offscreen")
+        env.pop("LC_ALL", None)
+        r = subprocess.run([sys.executable, "-c", MAAT_START, str(SRC / "bugos-live"), str(PY)], env=env,
+                           capture_output=True, text=True, timeout=60)
+        try:
+            metingen[taal] = json.loads(r.stdout.strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            metingen[taal] = {"fout": r.stderr[-300:]}
+    nl = metingen["nl"]
+    klopt(nl.get("klasse") == "Start" and nl.get("kop") == "Het installatieprogramma start"
+          and "minuut of twee" in nl.get("kort", "") and "langer dan normaal" in nl.get("lang", ""),
+          f"28 (c): in het Nederlands: 'Het installatieprogramma start' ({nl.get('kop')} | {nl.get('kort')})")
+    for taal, mt in metingen.items():
+        klopt("fouten" in mt and not mt["fouten"],
+              f"28 (c): {taal}: in {mt.get('maat')} past alles, in beide standen (niets afgeknipt of eronder) "
+              f"({mt.get('fouten')})")
+    # Past op een laptop van 1280x800 bij 150 %, met titelbalk, boven de taakbalk (zelfde regel als 26).
+    b, h = metingen["en"].get("maat", [9999, 9999])
+    klopt(b * 1.5 <= 1280 and (h + 40) * 1.5 <= 800 - 72,
+          f"28 (c): {b}x{h} met titelbalk bij 150 % past op 1280x800 boven een taakbalk van 72 px")
+
+
+# ============================================================================ de klok op de stick (e) ===
+def test_klok() -> None:
+    """29 (e). Op de stick: een 24-uursklok en een datum die iedereen goed leest. Alleen LC_TIME, alleen op de stick."""
+    import re
+    bouw = bron("build.sh").replace("\r\n", "\n")
+    m = re.search(r"printf '(\[Formats\]\\nLC_TIME=([^\\']+)\\n)' >/etc/xdg/plasma-localerc", bouw)
+    klopt(m is not None and m.group(2) == "en_SE.UTF-8",
+          f"29 (e): build.sh zet LC_TIME=en_SE.UTF-8 in /etc/xdg/plasma-localerc ({m.group(1) if m else None})")
+    klopt(m is not None and m.group(1).count("=") == 1,
+          "29 (e): alleen LC_TIME (de taal, getallen en papier blijven van de stick)")
+    voor = bouw[:m.start()] if m else ""
+    klopt("grep -x 'en_SE.utf8' >/dev/null" in voor[-600:] and "grep -qx 'en_SE" not in voor[-600:],
+          "29 (e): alleen als glibc en_SE kent (en zonder grep -q: dat geeft met pipefail een SIGPIPE)")
+    klopt(bouw.index("plasma-localerc") > bouw.index("# 4. De live-omgeving zelf."),
+          "29 (e): het staat bij de live-omgeving (stap 4), niet in de BugOS die op de computer komt")
+    # Wat Qt ervan maakt (de klok op de taakbalk gebruikt Qt.locale()): 24 uur zonder seconden, het jaar vooraan.
+    from PySide6.QtCore import QLocale
+    kort = QLocale.FormatType.ShortFormat
+    se, us = QLocale("en_SE"), QLocale("en_US")
+    tijd, datum = se.timeFormat(kort), se.dateFormat(kort)
+    klopt("HH" in tijd and not re.search(r"[aAsS]", tijd) and datum.startswith("yyyy"),
+          f"29 (e): en_SE in Qt: 24 uur zonder seconden ({tijd!r}), het jaar vooraan ({datum!r})")
+    klopt(re.search(r"[aA]", us.timeFormat(kort)) is not None,
+          f"29 (e): ter vergelijking, en_US (de stick zonder dit): 12 uur met AM/PM ({us.timeFormat(kort)!r})")
+
+
 # =================================================================== --beeld: in de echte live-image (geen ISO nodig) ===
+# Het beeld is al gebouwd: build.sh heeft index.js, de woordenboeken, index.html en installation.py al aangepast. De
+# test past dus niets opnieuw toe op de echte bestanden (dat weigert bugos_webui.py terecht: 'al aangepast'). Hij kijkt
+# naar het resultaat, draait de aanpassing in een kopie precies terug en weer heen (dan weet je dat de repo op dít
+# anaconda-webui nog past en precies dit beeld oplevert), en laat Firefox en cockpit de echte bestanden lezen.
 WEBUI = Path("/usr/share/cockpit/anaconda-webui")
+OUD_BEELD = "--oud-beeld" in sys.argv[1:]
+
+
+def beeld_en_repo(voorwaarde: bool, wat: str) -> None:
+    """Een controle 'heeft dit beeld wat de repo nu bouwt?'. Die faalt terecht op een beeld dat van een oudere commit
+    gebouwd is (nieuwe woorden of bestanden staan er dan nog niet in). Met --oud-beeld is dat INFO in plaats van FOUT,
+    zodat de rest van de test op zo'n beeld toch iets zegt; alle andere controles blijven streng."""
+    if voorwaarde or not OUD_BEELD:
+        klopt(voorwaarde, wat + ("" if voorwaarde else " - beeld ouder dan de repo? bouw het opnieuw (of --oud-beeld)"))
+    else:
+        print("INFO  " + wat + " - in dit (oudere) beeld nog niet zo; telt niet mee door --oud-beeld")
+
+
+def lees_gz(pad: Path) -> str:
+    with gzip.open(pad, "rt", encoding="utf-8") as f:
+        return f.read()
+
+
+def cockpit_pakket(map_: Path):
+    """De map zoals cockpit-bridge hem aan het venster levert: de echte code uit het beeld (cockpit.packages)."""
+    from cockpit import packages
+    return packages.Package(packages.Manifest(map_, json.loads((map_ / "manifest.json").read_text(encoding="utf-8"))))
+
+
+def geleverd(pakket, pad: str, taal: str | None) -> str:
+    """Wat cockpit levert voor pad, als de browser deze Accept-Language stuurt (None: geen, zoals slitherer)."""
+    doc = pakket.load_path(pad, {} if taal is None else {"Accept-Language": taal})
+    ruw = doc.data.read()
+    return gzip.decompress(ruw).decode() if ruw[:2] == b"\x1f\x8b" else ruw.decode()
+
+
+def woorden_mis(tekst: str, w, taal: int) -> list[str]:
+    """De sleutels van WOORDEN waarvoor dit woordenboek NIET onze tekst geeft (0 = Engels, 1 = Nederlands)."""
+    return [k for k, v in w.WOORDEN.items() if po_woord(tekst, k) != v[taal]]
 
 
 def beeld_woorden(w) -> None:
-    import gzip
-    import json
-    from cockpit import packages
-
-    js = gzip.open(WEBUI / "index.js.gz", "rt", encoding="utf-8").read()
+    js = lees_gz(WEBUI / "index.js.gz")
+    # 1. Elke sleutel van de repo staat letterlijk in deze versie van het installatieprogramma; anders verschijnt hij
+    #    nooit (cockpit zoekt op de precieze Engelse zin).
     weg = [k for k in w.WOORDEN if json.dumps(k) not in js]
-    klopt(not weg, f"beeld: elke sleutel van WOORDEN staat in de echte index.js ({weg})")
+    klopt(not weg, f"beeld: elke sleutel van WOORDEN ({len(w.WOORDEN)}) staat letterlijk in de echte index.js ({weg})")
+
+    # 2. Wat het venster echt vraagt: slitherer stuurt geen Accept-Language. Dan levert cockpit een lege po.js; daarom
+    #    laadt index.html ook bugos-en.js (zie bugos_webui.py). Gemeten met de echte cockpit-code uit het beeld.
+    klopt(geleverd(cockpit_pakket(WEBUI), "po.js", None).strip() == "",
+          "beeld: zonder Accept-Language (zo vraagt slitherer het) levert cockpit een lege po.js; dus bugos-en.js nodig")
+
+    # 3. De woorden van de repo, toegepast zoals build.sh het doet (schrijf + engels_vooraf), op een kopie. index.js
+    #    doet hier niet mee (woorden komen daar niet in). Laadt index.html bugos-en.js al (gebouwd beeld), dan eerst
+    #    terug naar de vorm van anaconda-webui.
     kopie = Path("/tmp/installer-woorden")
     shutil.rmtree(kopie, ignore_errors=True)
     shutil.copytree(WEBUI, kopie / "anaconda-webui")
     d = kopie / "anaconda-webui"
-    klopt(w.main([str(d)]) == 0, "beeld: bugos_webui.py draait zoals build.sh het aanroept (talen van Anaconda zelf)")
-    pakket = packages.Package(packages.Manifest(d, json.loads((d / "manifest.json").read_text())))
-    for al, sleutel, verwacht in (("en-us", "Passphrase", "Password"), ("en-US,en;q=0.5", "Exit to live desktop", "Finish"),
-                                  ("en-au", "Passphrase", "Password"), ("en-gb", "Use entire disk", "Use the whole disk"),
-                                  ("nl-nl", "Passphrase", "Wachtwoord"), ("nl-nl", "Exit to live desktop", "Afronden")):
-        doc = pakket.load_path("po.js", {"Accept-Language": al})
-        ruw = doc.data.read()
-        tekst = gzip.decompress(ruw).decode() if ruw[:2] == b"\x1f\x8b" else ruw.decode()
-        klopt(po_woord(tekst, sleutel) == verwacht, f"beeld: cockpit geeft bij {al!r} voor {sleutel!r}: {po_woord(tekst, sleutel)!r}")
-    de = gzip.decompress(pakket.load_path("po.js", {"Accept-Language": "de-de"}).data.read()).decode()
+    html = (d / "index.html").read_text(encoding="utf-8")
+    (d / "index.html").write_text(re.sub(r'[ \t]*<script[^>]*src="bugos-en\.js"></script>\n', "", html), encoding="utf-8")
+    (d / "bugos-en.js.gz").unlink(missing_ok=True)
+    w.schrijf(str(d), w.engelse_locales())
+    w.engels_vooraf(str(d))
+    pakket = cockpit_pakket(d)
+    html = geleverd(pakket, "index.html", None)
+    klopt(0 <= html.find('src="index.js"') < html.find('src="bugos-en.js"') < html.find('src="po.js"'),
+          "beeld: cockpit levert index.html met bugos-en.js tussen index.js en po.js")
+    vooraf = geleverd(pakket, "bugos-en.js", None)
+    klopt(vooraf == w.po_engels("en_US") and not woorden_mis(vooraf, w, 0),
+          f"beeld: cockpit levert bugos-en.js (ook zonder Accept-Language) met alle {len(w.WOORDEN)} Engelse woorden")
+    for al, taal in (("en-us", 0), ("en-US,en;q=0.5", 0), ("en-au", 0), ("en-gb", 0), ("nl-nl", 1), ("nl", 1)):
+        mis = woorden_mis(geleverd(pakket, "po.js", al), w, taal)
+        klopt(not mis, f"beeld: po.js bij {al!r} heeft alle {len(w.WOORDEN)} woorden van BugOS ({mis[:3]})")
+    de = geleverd(pakket, "po.js", "de-de")
     klopt(po_woord(de, "Passphrase") not in (None, "Password"), "beeld: Duits houdt zijn eigen vertaling")
+    # 3b. In een echte browser (Firefox), in dezelfde volgorde als index.html: de bundel van anaconda-webui zet
+    #     window.cockpit, bugos-en.js geeft de Engelse woorden als po.js leeg is (zo krijgt slitherer hem), en een echt
+    #     woordenboek dat daarna komt (hier Nederlands) wint.
+    m = Path("/tmp/installer-t") / "engels"
+    m.mkdir(parents=True, exist_ok=True)
+    (m / "index.js").write_text(lees_gz(d / "index.js.gz"), encoding="utf-8")
+    (m / "bugos-en.js").write_text(lees_gz(d / "bugos-en.js.gz"), encoding="utf-8")
+    for naam, po, verwacht in (("leeg", "", ["Where to install", "Password", "en_US"]),
+                               ("nl", lees_gz(d / "po.nl.js.gz"), ["Waar installeren", "Wachtwoord", "nl"])):
+        (m / f"po-{naam}.js").write_text(po, encoding="utf-8")
+        html = ('<!doctype html><html><head><meta charset="utf-8"><script src="index.js"></script>'
+                f'<script src="bugos-en.js"></script><script src="po-{naam}.js"></script></head><body>'
+                '<script>var uit=[];try{uit=[cockpit.gettext("Installation method"),cockpit.gettext("Passphrase"),'
+                'cockpit.language]}catch(e){uit=[String(e)]}var goed=JSON.stringify(uit)=='
+                # JSON.stringify schrijft zonder spaties; Python dus ook, en dan als JavaScript-tekst.
+                + json.dumps(json.dumps(verwacht, separators=(",", ":")))
+                + ';document.body.style.margin="0";document.body.style.background=goed?"#00ff00":"#ff0000";'
+                'document.documentElement.style.background=document.body.style.background;'
+                'document.body.textContent=JSON.stringify(uit)</script></body></html>')
+        kleur, png = firefox(html, f"engels/{naam}")
+        klopt(kleur == GROEN, f"beeld: Firefox, index.js + bugos-en.js + po.js ({'leeg' if not po else 'Nederlands'}): "
+                              f"{verwacht} ({kleur}, {png})")
     shutil.rmtree(kopie, ignore_errors=True)
+
+    # 4. Wat er in DIT beeld staat, zoals het gebouwd is: dezelfde woorden als de repo, en bugos-en.js.
+    beeld_en_repo(lees_gz(WEBUI / "po.en_US.js.gz") == w.po_engels("en_US"),
+                  "beeld: po.en_US.js.gz in het beeld heeft precies de Engelse woorden van de repo")
+    mis = woorden_mis(lees_gz(WEBUI / "po.nl.js.gz"), w, 1)
+    beeld_en_repo(not mis, f"beeld: po.nl.js.gz in het beeld heeft alle Nederlandse woorden van de repo "
+                           f"({len(mis)} niet: {mis[:2]})")
+    beeld_en_repo((WEBUI / "bugos-en.js.gz").exists() and lees_gz(WEBUI / "bugos-en.js.gz") == w.po_engels("en_US")
+                  and 'src="bugos-en.js"' in (WEBUI / "index.html").read_text(encoding="utf-8"),
+                  "beeld: het beeld laadt bugos-en.js (Engels vanaf de eerste pagina)")
 
 
 def eerste_pixel(png: Path) -> tuple[int, int, int] | None:
@@ -899,11 +1311,17 @@ def syntax_pagina(js: str) -> str:
 
 
 def beeld_tijdzone(w) -> None:
-    import gzip
-    import json
-
-    js = gzip.open(WEBUI / "index.js.gz", "rt", encoding="utf-8").read()
-    klopt(len(w.R_ZET.findall(js)) == 1 and len(w.R_VAK.findall(js)) == 1, "beeld: beide ankers staan precies één keer in index.js")
+    js = lees_gz(WEBUI / "index.js.gz")
+    aangepast = "bugosTzGok" in js
+    # Het origineel van anaconda-webui: in een gebouwd beeld draaien we tijdzone() precies terug (ontdoe_tijdzone).
+    try:
+        origineel = w.ontdoe_tijdzone(js) if aangepast else js
+    except AssertionError as e:
+        klopt(False, f"beeld: de aangepaste index.js laat zich precies terugdraaien ({e})")
+        return
+    klopt(len(w.R_ZET.findall(origineel)) == 1 and len(w.R_VAK.findall(origineel)) == 1,
+          f"beeld: beide ankers staan precies één keer in index.js van anaconda-webui "
+          f"({'teruggedraaid uit het beeld' if aangepast else 'nog niet aangepast'})")
     zone_tab = Path("/usr/share/zoneinfo/zone.tab").read_text(encoding="utf-8")
     geldig = w.geldige_zones()
     tabel = w.tijdzone_tabel(zone_tab, geldig)
@@ -912,50 +1330,111 @@ def beeld_tijdzone(w) -> None:
           f"beeld: echte zone.tab: {len(tabel)} landen, NL Amsterdam, BE Brussel, DE Berlijn, ES Madrid, VS niet")
     klopt(all(z in geldig for z in tabel.values()) and all(z in geldig for z in w.VOORKEUR.values()),
           "beeld: elke zone uit de tabel staat in de keuzelijsten van Anaconda (ook Europe/Kyiv)")
-    uit = w.tijdzone(js, tabel)
-    print(f"      (index.js +{len(uit) - len(js)} tekens)")
+    uit = w.tijdzone(origineel, tabel)
+    print(f"      (index.js +{len(uit) - len(origineel)} tekens)")
+    if aangepast:
+        # Zelfde code én zelfde tabel als waarmee dit beeld gebouwd is: dan is wat hieronder getest wordt precies het
+        # bestand dat het venster laadt.
+        beeld_en_repo(w.ingebouwde_tabel(js) == tabel,
+                      f"beeld: de tabel in het beeld is de tabel van nu ({len(w.ingebouwde_tabel(js))} landen)")
+        beeld_en_repo(uit == js, "beeld: tijdzone() op het origineel geeft precies de index.js van dit beeld")
+
+    # (a) Het klokvinkje 'De klok vanzelf gelijkzetten' (NTP) is een ander vinkje: de pagina zet het naar NTPEnabled
+    # van Anaconda (standaard True), en tijdzone() laat dat vak staan. Daarom stond het aan in de VM, en dat is goed.
+    ntp = re.search(r'([\w$]+)=\(\)=>[\w$]+\("NTPEnabled"\)', origineel)
+    klokvak = re.search(r'\(\{locale:[\w$]+,setSectionValid:[\w$]+,timezone:[\w$]+\}\)=>\{let\[[\w$]+,([\w$]+)\]='
+                        r'\(0,[\w$]+\.useState\)\(!0\)', origineel)
+    zet = (ntp is not None and klokvak is not None and re.search(
+        r"let ([\w$]+)=await " + re.escape(ntp.group(1)) + r"\(\);" + re.escape(klokvak.group(1)) + r"\(!!\1\)",
+        origineel) is not None)
+    klopt(zet and klokvak.group(0) in uit,
+          "beeld (a): het klokvinkje (NTP) volgt NTPEnabled van Anaconda, en tijdzone() laat dat vak precies staan")
+    pyana = subprocess.run([sys.executable, "-c", "from pyanaconda.modules.timezone.timezone import TimezoneService as T;"
+                            "print(T().ntp_enabled)"], capture_output=True, text=True)
+    klopt(pyana.stdout.strip() == "True", f"beeld (a): Anaconda's Timezone-module staat standaard op NTP aan "
+                                         f"({pyana.stdout.strip()}{pyana.stderr.strip()[-150:]})")
+
+    # Firefox leest de aangepaste index.js zonder fout (in een gebouwd beeld precies het bestand van het beeld).
     kleur, _ = firefox(syntax_pagina(uit), "syntax")
     klopt(kleur == GROEN, f"beeld: Firefox leest de aangepaste index.js zonder fout ({kleur})")
     kleur, _ = firefox(syntax_pagina(uit + "let let;"), "syntax-kapot")
     klopt(kleur == ROOD, f"beeld: tegenproef: een kapotte index.js geeft rood ({kleur})")
 
-    # Draait de gok echt? De aangepaste stukjes met een nep-D-Bus (pb) en een nep-React (oe), in Firefox.
-    proef = w.tijdzone("var Y={gettext:0};var roep=[];var pb=(m,a)=>{roep.push(a);return Promise.reject(1)};"
-                       + JS_ZET + JS_VAK.replace("return null", "return r"), tabel)
-    test = ("var oe={useState:(v)=>[v,()=>0],useEffect:(f,d)=>{f();return void 0}};var uit=[];"
-            "for(const t of ['nl-nl','en-us','en','de-de','sr-rs@latin']){roep=[];var vink=y3({locale:t});"
-            "uit.push(t+'='+(roep.length?roep[0][0]+'@'+roep[0][1]:'-')+(vink?'+vink':''));}"
-            "var goed=uit.join(' ')==" + json.dumps("nl-nl=Europe/Amsterdam@30 en-us=- en=- de-de=Europe/Berlin@30 "
-                                                     "sr-rs@latin=Europe/Belgrade@30") + ";")
-    html = ('<!doctype html><body style="margin:0"><script>try{' + proof_js(proef, test) + '}catch(e){'
+    # Draait de gok echt? De stukjes zoals ze in index.js staan (niet nagebouwd): het blok met de tabel en de
+    # aangepaste haak, met een nep-D-Bus (de echte naam uit R_ZET) en een nep-React, in Firefox.
+    blok = uit[uit.index(w.GOK_BEGIN):uit.index(w.GOK_EIND) + len(w.GOK_EIND)]
+    roep = w.R_ZET.search(uit).group(3)
+    haak = re.search(r'let\[([\w$]+),[\w$]+\]=\(0,([\w$]+)\.useState\)\(!1\),bugosTzKlaar=\(0,\2\.useEffect\)'
+                     r'\(\(\)=>\{bugosTzGok\(([\w$]+)\)\},\[\3\]\)', uit)
+    if haak is None:
+        klopt(False, "beeld: de aangepaste haak staat in index.js")
+        return
+    verwacht = ("nl-nl=SetTimezoneWithPriority:Europe/Amsterdam@30 en-us=- en=- "
+                "de-de=SetTimezoneWithPriority:Europe/Berlin@30 sr-rs@latin=SetTimezoneWithPriority:Europe/Belgrade@30")
+    test = ("var roep=[];var " + roep + "=(m,a)=>{roep.push([m,a]);return Promise.reject(1)};" + blok
+            + "var " + haak.group(2) + "={useState:(v)=>[v,()=>0],useEffect:(f,d)=>{f();return void 0}};"
+            + "function vak(" + haak.group(3) + "){" + haak.group(0) + ";return " + haak.group(1) + "}"
+            + "var uit=[];for(const t of ['nl-nl','en-us','en','de-de','sr-rs@latin']){roep=[];var vink=vak(t);"
+            + "uit.push(t+'='+(roep.length?roep[0][0]+':'+roep[0][1][0]+'@'+roep[0][1][1]:'-')+(vink?'+vink':''));}"
+            + "var goed=uit.join(' ')==" + json.dumps(verwacht) + ";")
+    html = ('<!doctype html><body style="margin:0"><script>try{' + proof_js("", test) + '}catch(e){'
             'document.body.style.background="#ff0000";document.body.textContent=String(e)}</script>')
     kleur, _ = firefox(html, "gok")
-    klopt(kleur == GROEN, f"beeld: in Firefox: nl-nl -> Amsterdam (30), de-de -> Berlijn, en-us -> niets, vinkje uit ({kleur})")
+    klopt(kleur == GROEN, f"beeld: de echte gok in Firefox: nl-nl -> Amsterdam (30), de-de -> Berlijn, en-us -> niets, "
+                          f"vinkje 'tijdzone automatisch' uit ({kleur})")
 
-    # De CSS: het echte index.css van het installatieprogramma + onze branding.css, op dezelfde opbouw als de pagina.
+    # De CSS: het echte index.css van het installatieprogramma + branding.css, op dezelfde opbouw als de pagina. Die
+    # van het beeld (wat het venster nu laadt) en die van de repo (wat de volgende bouw erin zet) moeten allebei werken.
     bouw = bron("build.sh").replace("\r\n", "\n")
-    css = bouw[bouw.index("<<'EOF'\n", bouw.index('cat >"$BRANDING/branding.css"')) + 8:]
-    css = css[:css.index("\nEOF\n")]
+    css_repo = bouw[bouw.index("<<'EOF'\n", bouw.index('cat >"$BRANDING/branding.css"')) + 8:]
+    css_repo = css_repo[:css_repo.index("\nEOF\n")]
+    pad = Path("/etc/cockpit/branding/branding.css")
+    css_beeld = pad.read_text(encoding="utf-8") if pad.exists() else ""
+    beeld_en_repo(css_beeld.rstrip("\n") == css_repo.rstrip("\n"), f"beeld: {pad} is die van build.sh")
     m = Path("/tmp/installer-t")
-    (m / "index.css").write_text(gzip.open(WEBUI / "index.css.gz", "rt", encoding="utf-8").read(), encoding="utf-8")
-    (m / "branding.css").write_text(css, encoding="utf-8")
+    m.mkdir(parents=True, exist_ok=True)
+    (m / "index.css").write_text(lees_gz(WEBUI / "index.css.gz"), encoding="utf-8")
     html = CSS_PAGINA.replace("@VERWACHT@", json.dumps({
         "en": ["none", "0px", "Is this where you live? If not, choose your region and city.", "none"],
         "nl": ["none", "0px", "Woon je hier? Zo niet, kies dan je regio en je stad.", "none"],
         "de": ["none", "0px", "", "none"]}))
-    kleur, png = firefox(html, "css")
-    klopt(kleur == GROEN, f"beeld: CSS: vinkje en NTP weg, lijsten niet ingesprongen, de zin in en/nl, niet in de ({kleur}, {png})")
+    for naam, css in (("van het beeld", css_beeld), ("van de repo", css_repo)):
+        (m / "branding.css").write_text(css, encoding="utf-8")
+        kleur, png = firefox(html, "css")
+        klopt(kleur == GROEN, f"beeld: CSS {naam}: vinkje 'tijdzone automatisch' en NTP-servers weg, lijsten niet "
+                              f"ingesprongen, de zin in en/nl, niet in de ({kleur}, {png})")
 
 
 def beeld_voortgang() -> None:
-    """patch_installatie op een kopie van de echte pyanaconda; daarna moet DeployOSTreeTask.run met_voortgang gebruiken."""
+    """De echte installation.py van Anaconda: in een gebouwd beeld al aangepast (dan precies terugdraaien en opnieuw:
+    moet hetzelfde bestand geven), daarna in een kopie van pyanaconda: DeployOSTreeTask.run gebruikt met_voortgang."""
     import pyanaconda
+    v = laad("bugos_voortgang", SRC / "bugos_voortgang.py")
     ana = Path(pyanaconda.__file__).parent
+    hier = ana / "modules" / "payloads" / "payload" / "rpm_ostree"
+    tekst = (hier / "installation.py").read_text(encoding="utf-8")
+    aangepast = "bugos_voortgang" in tekst
+    origineel = tekst.replace(v.NIEUW, v.OUD) if aangepast else tekst
+    klopt(origineel.count(v.OUD) == 1 and "bugos_voortgang" not in origineel,
+          f"beeld: installation.py van Anaconda heeft het stuk precies één keer "
+          f"({'teruggedraaid uit het beeld' if aangepast else 'nog niet aangepast'})")
+    try:
+        nieuw = v.patch_installatie(origineel)
+    except AssertionError as e:
+        klopt(False, f"beeld: de echte installation.py van Anaconda laat zich aanpassen ({e})")
+        return
+    if aangepast:
+        beeld_en_repo(nieuw == tekst, "beeld: patch_installatie op het origineel geeft precies de installation.py van dit beeld")
+        naast = hier / "bugos_voortgang.py"
+        beeld_en_repo(naast.exists() and naast.read_text(encoding="utf-8") == (SRC / "bugos_voortgang.py").read_text(encoding="utf-8"),
+                      "beeld: bugos_voortgang.py naast Anaconda is die van de repo")
     kopie = Path("/tmp/installer-ana")
     shutil.rmtree(kopie, ignore_errors=True)
     shutil.copytree(ana, kopie / "pyanaconda", ignore=shutil.ignore_patterns("__pycache__"))
     doel = kopie / "pyanaconda" / "modules" / "payloads" / "payload" / "rpm_ostree"
     shutil.copy(SRC / "bugos_voortgang.py", doel / "bugos_voortgang.py")
+    # In de kopie het origineel terugzetten en dan precies zoals build.sh het doet: bugos_voortgang.py patch.
+    (doel / "installation.py").write_text(origineel, encoding="utf-8")
     r = subprocess.run([sys.executable, str(SRC / "bugos_voortgang.py"), "patch", str(doel / "installation.py")],
                        capture_output=True, text=True)
     klopt(r.returncode == 0, f"beeld: de echte installation.py van Anaconda laat zich aanpassen ({r.stderr.strip()[-200:]})")
@@ -966,7 +1445,8 @@ def beeld_voortgang() -> None:
                            env=dict(os.environ, PYTHONPATH=str(kopie)))
         regels = r.stdout.split()
         klopt(r.returncode == 0 and regels[-1:] == ["True"] and str(kopie) in regels[0],
-              f"beeld: DeployOSTreeTask.run gebruikt met_voortgang {' '.join(vlag)} ({r.stdout.strip()} {r.stderr.strip()[-200:]})")
+              f"beeld: DeployOSTreeTask.run gebruikt met_voortgang {' '.join(vlag)} "
+              f"({' '.join(r.stdout.split())} {r.stderr.strip()[-200:]})")
     shutil.rmtree(kopie, ignore_errors=True)
 
 
@@ -1041,6 +1521,71 @@ document.getElementById("uitslag").textContent = uit.join(" | ");
 </script></body></html>"""
 
 
+# Draait IN het beeld, met de BugOS-onderdelen van het beeld (/usr/lib/bugos/python): de melding 'start' en het venster
+# 'klaar' van de repo gaan open, en installatie_venster() vindt in het echte /proc van Fedora een proces met de pagina.
+LIVE_IN_BEELD = r'''
+import importlib.machinery, importlib.util, subprocess, sys, time
+sys.path.insert(0, sys.argv[2])
+lader = importlib.machinery.SourceFileLoader("bugos_live", sys.argv[1])
+live = importlib.util.module_from_spec(importlib.util.spec_from_loader("bugos_live", lader)); lader.exec_module(live)
+app = live.maak_app("bugos-live", "bugos-live", ["bugos-live"])
+s = live.venster(["start"]); s.timer.stop()
+k = live.venster(["klaar"])
+voor = live.installatie_venster()
+# bash met de pagina als argument; 'sleep 20; true' zodat bash zelf blijft draaien (en niet in sleep verandert). De
+# pagina in twee stukken: deze code staat zelf op de opdrachtregel van python (-c), en mag daar niet op lijken.
+p = subprocess.Popen(["bash", "-c", "sleep 20; true", "http://127.0.0.1/cockpit/@localhost/anaconda-" + "webui/index.html"])
+time.sleep(0.5)
+na = live.installatie_venster()
+p.kill(); p.wait()
+print(type(s).__name__, "|", s.kop.text(), "|", type(k).__name__, "|", voor, na, live.installatie_klaar())
+'''
+
+
+def beeld_live() -> None:
+    """(c) en (e) in het echte beeld."""
+    # (c) bugos-live van de repo past bij de BugOS van dit beeld (dezelfde controle als build.sh: anders gaat op de
+    # stick geen enkel venster open), en het vinden van het venster werkt in het /proc van Fedora.
+    r = subprocess.run([sys.executable, "-c", LIVE_IN_BEELD, str(SRC / "bugos-live"), "/usr/lib/bugos/python"],
+                       env=dict(os.environ, QT_QPA_PLATFORM="offscreen"), capture_output=True, text=True, timeout=120)
+    uit = r.stdout.strip().splitlines()[-1:] or [""]
+    klopt(r.returncode == 0 and uit[0] == "Start | The installer is starting | Klaar | False True False",
+          f"beeld (c): de melding en 'klaar' gaan open met de BugOS van het beeld; het venster van het "
+          f"installatieprogramma wordt in /proc gevonden, en zonder Anaconda is het niet klaar ({uit[0]} "
+          f"{r.stderr.strip()[-200:]})")
+    # (c) De regel uit bugos-install die de melding alleen wegstuurt als het nog ons kind is (ps -o ppid=, procps).
+    r = subprocess.run(["bash", "-c", 'sleep 5 & k=$!; [ "$(ps -o ppid= -p "$k" | tr -d " ")" = "$$" ] && echo eigen; '
+                                      'kill "$k"'], capture_output=True, text=True, timeout=30)
+    klopt(r.stdout.strip() == "eigen", f"beeld (c): 'ps -o ppid=' werkt hier zoals bugos-install het gebruikt ({r.stdout.strip()})")
+    for naam in ("bugos-live", "bugos-install"):
+        echt = Path("/usr/bin") / naam
+        beeld_en_repo(echt.exists() and echt.read_bytes().replace(b"\r\n", b"\n") == (SRC / naam).read_bytes().replace(b"\r\n", b"\n"),
+                      f"beeld (c): {echt} is die van de repo")
+
+    # (e) De klok op de stick: glibc kent en_SE (anders zet build.sh niets), date geeft er geen waarschuwing bij,
+    # en Qt (van het beeld) maakt er 24 uur en het jaar vooraan van.
+    r = subprocess.run(["locale", "-a"], capture_output=True, text=True)
+    klopt("en_SE.utf8" in r.stdout.split(), "beeld (e): glibc in het beeld kent en_SE.utf8")
+    r = subprocess.run(["bash", "-c", "date -d '2026-11-12 22:40' '+%x %X'"], env=dict(os.environ, LC_TIME="en_SE.UTF-8"),
+                       capture_output=True, text=True)
+    klopt(r.returncode == 0 and not r.stderr.strip() and r.stdout.strip() == "2026-11-12 22:40:00",
+          f"beeld (e): LC_TIME=en_SE.UTF-8 zonder waarschuwing: {r.stdout.strip()!r} {r.stderr.strip()!r}")
+    r = subprocess.run([sys.executable, "-c", "from PySide6.QtCore import QLocale as L; k=L.FormatType.ShortFormat;"
+                        "s=L('en_SE.UTF-8'); print(s.timeFormat(k), s.dateFormat(k))"], capture_output=True, text=True)
+    klopt(r.stdout.split() == ["HH:mm", "yyyy-MM-dd"], f"beeld (e): Qt van het beeld: {r.stdout.strip()!r} {r.stderr.strip()[-100:]}")
+    rc = Path("/etc/xdg/plasma-localerc")
+    beeld_en_repo(rc.exists() and rc.read_text(encoding="utf-8") == "[Formats]\nLC_TIME=en_SE.UTF-8\n",
+                  "beeld (e): /etc/xdg/plasma-localerc zet alleen LC_TIME=en_SE.UTF-8")
+    if rc.exists() and shutil.which("kreadconfig6"):
+        thuis = Path("/tmp/installer-thuis")
+        (thuis / ".config").mkdir(parents=True, exist_ok=True)
+        r = subprocess.run(["kreadconfig6", "--file", "plasma-localerc", "--group", "Formats", "--key", "LC_TIME"],
+                           env=dict(os.environ, HOME=str(thuis), XDG_CONFIG_HOME=str(thuis / ".config")),
+                           capture_output=True, text=True)
+        klopt(r.stdout.strip() == "en_SE.UTF-8",
+              f"beeld (e): KDE leest het voor een gebruiker zonder eigen instelling ({r.stdout.strip()!r})")
+
+
 def beeld() -> int:
     if not WEBUI.is_dir():
         print("--beeld draait alleen in de live-image (localhost/bugos-live:lokaal)")
@@ -1049,6 +1594,7 @@ def beeld() -> int:
     beeld_woorden(w)
     beeld_tijdzone(w)
     beeld_voortgang()
+    beeld_live()
     if "--echt" in sys.argv[1:]:
         beeld_echt_kopieren()
     print()
@@ -1064,6 +1610,7 @@ def main() -> int:
     test_tijdzone()
     test_voortgang()
     test_install()
+    test_klok()
     test_live()
     shutil.rmtree(TMP, ignore_errors=True)
     print()
