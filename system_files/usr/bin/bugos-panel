@@ -54,6 +54,8 @@ niet_bereikbaar() {
 #   weg(soort): haalt alle widgets van die soort weg
 #   heeft(soort): print aan of uit
 #   slot(dicht): taakbalk en bureaublad op slot (true) of los (false); print niets
+#   systeemvak(rustig): KDE-pictogrammen naast het snelmenu verbergen en uitzetten (true) of terugzetten (false)
+#   systeemvakNaUpdate(): eenmalig na de update het systeemvak bijwerken; print klaar of later
 # Kickoff krijgt altijd de BugOS-instellingen terug; het BugOS-startmenu krijgt de sneltoets Alt+F1.
 # LET OP: geen backslash in dit blok. Via gdbus wordt een script met bijv. een backslash-n een SyntaxError.
 JS='
@@ -186,10 +188,19 @@ var RUSTIG_VROEGER = RUSTIG.concat(["org.kde.plasma.keyboardlayout"]);
 var UIT = ["org.kde.plasma.volume", "org.kde.plasma.networkmanagement", "org.kde.plasma.bluetooth",
     "org.kde.plasma.battery", "org.kde.plasma.brightness", "org.kde.plasma.manage-inputmethod",
     "org.kde.kdeconnect", "org.kde.plasma.weather", "org.kde.plasma.vault", "org.kde.kscreen"];
+// Een lijst uit de instellingen van Plasma, altijd als array zonder lege of dubbele namen. Plasma geeft een lijst
+// soms als tekst ("a,b"). Een ontbrekende of vreemde waarde (null, een getal, een los object) telt als een lege
+// lijst: een rare instelling mag het script nooit laten vastlopen (dan zou het slot wel terugkomen, maar de stap
+// zou bij elk inloggen opnieuw mislukken).
 function lijst(waarde) {
-    if (typeof waarde == "string") return waarde === "" ? [] : waarde.split(",");
+    if (typeof waarde == "string") waarde = waarde.split(",");
+    if (waarde === null || typeof waarde != "object" || typeof waarde.length != "number") return [];
     var uit = [];
-    for (var i = 0; i < waarde.length; i++) if (waarde[i] !== "" && uit.indexOf(waarde[i]) < 0) uit.push(String(waarde[i]));
+    for (var i = 0; i < waarde.length; i++) {
+        if (waarde[i] === null || waarde[i] === undefined) continue;
+        var naam = String(waarde[i]);
+        if (naam !== "" && uit.indexOf(naam) < 0) uit.push(naam);
+    }
     return uit;
 }
 function zelfde(a, b) {
@@ -227,13 +238,13 @@ function systeemvak(rustig) {
             // niet meer in een aparte "containment" (SystrayContainmentId bestaat niet meer).
             var vak = ws[j];
             vak.currentConfigGroup = ["General"];
-            var oud = vak.readConfig("hiddenItems", []);
-            if (typeof oud == "string") oud = oud.split(",");
+            // Via lijst(): ook een lijst als tekst, of een ontbrekende of vreemde waarde (null), zonder fout. Anders
+            // liep "snelmenu uit" daarop vast en kwamen de KDE-onderdelen niet terug (tools/test_native_shell.py G12).
+            var oud = lijst(vak.readConfig("hiddenItems", []));
             // Wat BugOS zelf verborg, onthouden we apart (bugosHidden): wat jij zelf verborg (bijv. KDE Connect),
             // blijft verborgen als je het snelmenu weer uitzet (U456). Nog nooit bewaard? Staat de hele lijst er al
             // (een oudere BugOS zette hem), dan was die van ons; anders is wat er staat van jou.
-            var vorig = vak.readConfig("bugosHidden", ["-"]);
-            if (typeof vorig == "string") vorig = vorig.split(",");
+            var vorig = lijst(vak.readConfig("bugosHidden", ["-"]));
             var vanOns = vorig;
             if (vorig.length == 1 && vorig[0] == "-") {
                 var alles = true;
@@ -255,48 +266,65 @@ function systeemvak(rustig) {
     }
     print(n);
 }
-// Eenmalig na de update (stap 6 van standaard), alleen met het snelmenu aan: de UIT-onderdelen uitzetten en de
-// toetsenbordindeling weer laten zien als BugOS die verborg. Verder blijft hiddenItems zoals het is: wat je zelf
-// weer zichtbaar maakte (bijv. het klembord of de printers), verbergt BugOS niet opnieuw. (systeemvak(true) zou
-// de hele RUSTIG-lijst weer verbergen.)
+// Eenmalig na de update naar deze BugOS (stap 6 van standaard), alleen met het snelmenu aan. Per systeemvak:
+//  1. de KDE-onderdelen die het snelmenu vervangt (UIT) echt uitzetten en onthouden in bugosOff (vakUit), zodat
+//     "snelmenu uit" precies die terugzet;
+//  2. de toetsenbordindeling weer laten zien, maar alleen als BugOS die verborg (dat deed een oudere BugOS);
+//  3. verder blijft hiddenItems zoals het is: wat je zelf weer zichtbaar maakte (bijv. het klembord of de
+//     printers), verbergt BugOS niet opnieuw. Daarom niet systeemvak(true): die verbergt de hele RUSTIG-lijst weer.
+// Twee soorten systeemvak blijven helemaal onaangeroerd:
+//  - Plasma heeft de lijst met onderdelen (extraItems) nog niet ingevuld: dan valt er niets veilig uit te zetten.
+//    Dit systeemvak telt als "later"; bugos-panel probeert het de volgende keer inloggen opnieuw.
+//  - BugOS verbergt er niets (bugosHidden is bekend en leeg): je koos zelf "bugos-panel systeemvak alles", dus
+//    je wilt de KDE-onderdelen juist zien. Dan blijven ze aan.
+// knownItems en shownItems blijven altijd zoals ze zijn (anders zet Plasma onderdelen zelf weer aan).
+// Twee keer draaien geeft hetzelfde als een keer. Print precies een woord (Plasma plakt alle print-uitvoer aan
+// elkaar): "klaar" (elk systeemvak is bijgewerkt of hoefde niet) of "later" (minstens een wacht nog op Plasma).
 function systeemvakNaUpdate() {
-    var ps = panels(), n = 0, kl = "org.kde.plasma.keyboardlayout";
+    var ps = panels(), later = false, kl = "org.kde.plasma.keyboardlayout";
     for (var i = 0; i < ps.length; i++) {
         var ws = ps[i].widgets();
         for (var j = 0; j < ws.length; j++) {
             if (ws[j].type != "org.kde.plasma.systemtray") continue;
             var vak = ws[j];
             vak.currentConfigGroup = ["General"];
-            var oud = vak.readConfig("hiddenItems", []);
-            if (typeof oud == "string") oud = oud === "" ? [] : oud.split(",");
-            var vorig = vak.readConfig("bugosHidden", ["-"]);
-            if (typeof vorig == "string") vorig = vorig.split(",");
+            // Wat BugOS zelf verborg; "-" betekent: nooit bewaard (een BugOS van voor bugosHidden).
+            var vorig = lijst(vak.readConfig("bugosHidden", ["-"]));
             var nooit = vorig.length == 1 && vorig[0] == "-";
+            // Bekend en leeg: BugOS verbergt hier niets, je koos zelf voor alle KDE-pictogrammen. Niets veranderen.
+            if (!nooit && vorig.length == 0) continue;
+            // Nog geen onderdelen: niets schrijven (ook geen bugosOff), zodat de volgende poging schoon begint.
+            if (lijst(vak.readConfig("extraItems", [])).length == 0) { later = true; continue; }
+            var oud = lijst(vak.readConfig("hiddenItems", []));
             var vanOns = vorig;
             if (nooit) {
-                // Zoals in systeemvak(): staat de hele oude lijst er, dan was die van een oudere BugOS.
+                // Zoals in systeemvak(): staat de hele RUSTIG-lijst verborgen, dan deed een oudere BugOS dat (en die
+                // verborg ook de toetsenbordindeling). Anders is alles wat verborgen staat van jou.
                 var alles = true;
-                for (var a = 0; a < RUSTIG_VROEGER.length; a++) if (oud.indexOf(RUSTIG_VROEGER[a]) < 0) alles = false;
+                for (var a = 0; a < RUSTIG.length; a++) if (oud.indexOf(RUSTIG[a]) < 0) alles = false;
                 vanOns = alles ? RUSTIG_VROEGER : [];
             }
+            // 2. De toetsenbordindeling weer zichtbaar, alleen als BugOS hem verborg. Verder niets uit hiddenItems.
             if (vanOns.indexOf(kl) >= 0 && oud.indexOf(kl) >= 0) {
                 var nieuw = [];
                 for (var k = 0; k < oud.length; k++) if (oud[k] != kl) nieuw.push(oud[k]);
                 vak.writeConfig("hiddenItems", nieuw);
             }
+            // Onthouden wat BugOS nu nog verbergt (zonder de toetsenbordindeling): "snelmenu uit" laat precies dat
+            // weer zien. Nooit bewaard en niet van BugOS: niets opschrijven, dan blijft het "van jou".
             if (!nooit) {
                 var erbij = [];
-                for (var m = 0; m < vorig.length; m++) if (vorig[m] !== "" && vorig[m] != kl) erbij.push(vorig[m]);
+                for (var m = 0; m < vorig.length; m++) if (vorig[m] != kl) erbij.push(vorig[m]);
                 vak.writeConfig("bugosHidden", erbij.length ? erbij : [""]);
             } else if (vanOns.length) {
                 vak.writeConfig("bugosHidden", RUSTIG);
             }
+            // 1. De KDE-onderdelen die het snelmenu vervangt uit (en onthouden), daarna laat Plasma het zien.
             vakUit(vak, true);
             vak.reloadConfig();
-            n++;
         }
     }
-    print(n);
+    print(later ? "later" : "klaar");
 }
 // De taakbalkruimte (org.bugos.taskbar) op bestaande taakbalken zetten: op de plek
 // van de oude scheidingsruimte, of anders vlak voor het snelmenu / systeemvak.
@@ -450,7 +478,8 @@ standaard:*)
     MARKER5="$BUGOS_CONFIG/paneel-bureaubladmenu-1"
     # Stap 6: de KDE-onderdelen in het systeemvak die het snelmenu vervangt echt uitzetten (niet alleen verbergen),
     # en de toetsenbordindeling weer laten zien. Alleen als het snelmenu er staat. Wat je zelf weer zichtbaar
-    # maakte, blijft zichtbaar (systeemvakNaUpdate, niet systeemvak(true)).
+    # maakte, blijft zichtbaar (systeemvakNaUpdate, niet systeemvak(true)). Het merkteken pas als elk systeemvak
+    # echt is bijgewerkt: bij een nieuwe gebruiker vult Plasma de lijst met onderdelen soms pas na het inloggen.
     MARKER6="$BUGOS_CONFIG/paneel-systeemvak-2"
     # Stap 7: Meta+Q opent niet meer het zijpaneel "Activiteiten" van KDE (alleen als het nog de standaard is).
     MARKER7="$BUGOS_CONFIG/paneel-sneltoets-1"
@@ -493,11 +522,18 @@ standaard:*)
         [ "$(plasma_wijzig "bureaubladmenu();")" = 14 ] && touch "$MARKER5"
     fi
     if [ ! -f "$MARKER6" ]; then
-        gelukt=1
-        if [ "$(status_van org.bugos.quickmenu)" = aan ]; then
-            plasma_wijzig "systeemvakNaUpdate();" >/dev/null || gelukt=0
+        # Eerst vragen of het snelmenu er staat. Hier niet status_van: die zegt ook "uit" als Plasma geen antwoord
+        # geeft, en dan zou deze eenmalige stap voorgoed overgeslagen worden.
+        snel="$(plasma_script "$JS heeft(\"org.bugos.quickmenu\");")" || snel=""
+        if [ "$snel" = aan ]; then
+            # "klaar": elk systeemvak is bijgewerkt. "later": Plasma had de lijst met onderdelen nog niet ingevuld
+            # (er is dan niets veranderd); geen merkteken, de volgende keer inloggen opnieuw.
+            [ "$(plasma_wijzig "systeemvakNaUpdate();")" = klaar ] && touch "$MARKER6"
+        elif [ "$snel" = uit ]; then
+            # Zonder snelmenu horen de KDE-onderdelen aan te blijven. Zet je het snelmenu later aan, dan zet
+            # 'snelmenu aan' (systeemvak(true)) ze zelf uit.
+            touch "$MARKER6"
         fi
-        [ "$gelukt" = 1 ] && touch "$MARKER6"
     fi
     if [ ! -f "$MARKER7" ]; then
         ID="['plasmashell','manage activities','plasmashell','Show Activity Switcher']"
