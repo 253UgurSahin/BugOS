@@ -41,9 +41,10 @@ jobs:
       - name: Hulpmiddelen voor schijven in BugOS
         run: |
           # Bestanden gebruikt deze om schijven te openen, te ontgrendelen en veilig te verwijderen.
+          # (Niet meer partitionmanager: build.sh haalt KDE Partition Manager uit BugOS, dus hij hoort te ontbreken.)
           sudo podman run --rm --entrypoint /usr/bin/bash "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bugos:${TAG}" \
             -c 'mis=0; for p in lsblk udisksctl gdbus mkfs.exfat; do command -v "$p" >/dev/null || { echo "::error::$p ontbreekt in BugOS"; mis=1; }; done
-                for p in solid-hardware6 eject fsck.exfat mkfs.vfat partitionmanager nmcli bluetoothctl pactl kscreen-doctor powerprofilesctl; do
+                for p in solid-hardware6 eject fsck.exfat mkfs.vfat nmcli bluetoothctl pactl kscreen-doctor powerprofilesctl; do
                   command -v "$p" >/dev/null || echo "::warning::$p ontbreekt in BugOS"; done; echo "Hulpmiddelen gecontroleerd."; exit $mis'
 
       - name: Foto's van de verkenner

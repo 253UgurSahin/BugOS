@@ -564,6 +564,12 @@ bb.ruimte_genoeg = _echt_ruimte
 
 # ============================== U013: de Winkel ziet Firefox en Steam die al in BugOS zitten (geen Flatpak) ===
 os.environ.pop("BUGOS_GEINSTALLEERD", None)
+# De Winkel leest ook Flathub's lijst van alle apps (/var/lib/flatpak/appstream) en ververst die zelf (pakket store).
+# Deze test gaat over de BugOS-selectie: nooit de echte lijst van de computer waarop hij draait lezen (dat maakt hem
+# trager en afhankelijk van die computer), en nooit zelf 'flatpak update --appstream' starten. tools/test_native_store.py
+# test dat deel, met een nep-lijst. (Moet vóór laad(): de Winkel leest BUGOS_APPSTREAM bij het laden.)
+os.environ["BUGOS_APPSTREAM"] = str(TMP / "geen-flathub-lijst")
+os.environ["BUGOS_WINKEL_GEEN_VERVERS"] = "1"
 winkel = laad("bugos_winkel", "bugos-store")
 APPS = TMP / "applications"
 APPS.mkdir()
@@ -1534,12 +1540,13 @@ _ww2.tweede_start(["--zoek", "foto", "bewerken"])
 _z2 = _ww2.zoek.text()
 gestart.clear()
 _ww2.tweede_start(["appstream://org.example.NietBijOns"])
+_pag222 = (_ww2.stapel.currentIndex(), getattr(_ww2, "pagina_id", None))   # de eigen pagina 'niet gevonden'
 # U330: 'appstream:id' zonder // en een id in kleine letters (zo geeft KDE het soms door) vinden toch de app.
 _ww2.tweede_start(["appstream:org.videolan.vlc"])
 klopt(_ww2.zoek.text() == "VLC" and winkel.begin_uit(["appstream:org.videolan.VLC"]) == ("", "org.videolan.VLC"),
       f"U330: een Flathub-link zonder // of in kleine letters vindt toch de app in de Winkel ({_ww2.zoek.text()!r})")
-klopt(_z1 == "Firefox" and _z2 == "foto bewerken" and gestart == [("plasma-discover", "appstream://org.example.NietBijOns")],
-      f"U222: een tweede start van de Winkel gaat naar de gevraagde app of zoekt ({_z1!r}, {_z2!r}, {gestart})")
+klopt(_z1 == "Firefox" and _z2 == "foto bewerken" and gestart == [] and _pag222 == (1, "org.example.NietBijOns"),
+      f"U222: een tweede start van de Winkel gaat naar de gevraagde app of zoekt ({_z1!r}, {_z2!r}, {gestart}, {_pag222})")
 _ww2.deleteLater()
 _tb_tekst = (ROOT / "system_files/usr/bin/bugos-task-manager").read_text()
 klopt("def tweede_start" in _tb_tekst and "venster.tweede_start(sys.argv[1:])" in _tb_tekst,
