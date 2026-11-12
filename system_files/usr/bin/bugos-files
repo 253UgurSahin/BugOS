@@ -27,9 +27,9 @@ from bugos_ui import maak_app, uitvoeren  # noqa: E402
 # Alles hieronder woont nu in /usr/lib/bugos/python/bugos_files_*.py (gesorteerd op klus).
 # Ze staan hier ook, zodat bijvoorbeeld 'bestanden.kopieer_een' in de tests blijft werken.
 from bugos_files_plekken import (  # noqa: E402,F401
-    AFBEELDING, HERKOMST_ROL, INFO_ROL, ODF, PAD_ROL, RUIMTE_SOORTEN, SOORTEN, STOP, VERBERG_EXT, Telsein, Teller,
-    bijzondere_mappen, eigen_ruimte, mapgrootte, plekken, schijf_van, thuis, toon_naam, voorbeeld_ruimte,
-    vrije_ruimte, xdg_map, zit_in,
+    AFBEELDING, HERKOMST_ROL, INFO_ROL, ODF, PAD_ROL, RUIMTE_SOORTEN, SOORTEN, VERBERG_EXT, bijzondere_mappen,
+    eigen_ruimte, mapgrootte, plekken, schijf_van, tel_map, thuis, toon_naam, voorbeeld_ruimte, vrije_ruimte, xdg_map,
+    zit_in,
 )
 from bugos_files_acties import (  # noqa: E402,F401
     Klus, kopieer_een, lees_herkomst, naar_prullenbak, prullenbak, prullenbak_inhoud, prullenbak_legen, ruim_op,

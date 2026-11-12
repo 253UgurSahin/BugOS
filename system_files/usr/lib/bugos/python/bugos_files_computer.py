@@ -7,27 +7,33 @@ venster (Bestanden in bugos_files_venster.py erft het).
 
   bugos-files computer:/          -> Deze computer
   bugos-files computer:/ruimte    -> Deze computer, meteen bij 'Wat de meeste ruimte inneemt' (vanuit Hulp)
+
+Het tellen (tel_thuis) loopt in een eigen draad op de achtergrond: het venster loopt nooit vast, en het stopt zodra
+je de pagina verlaat of het venster sluit (een halve telling wordt weggegooid, nooit getoond). Het telt zoals
+'du -s -x': alleen wat op de schijf van je thuismap staat (geen /proc, /sys, netwerkmappen, andere schijven of de
+apps en BugOS-versies van het systeem zelf, die staan buiten je thuismap), volgt geen snelkoppelingen, slaat over wat
+het niet mag lezen, en telt een bestand met meer namen (hardlinks) één keer.
 """
 
 from __future__ import annotations
 
 import json
 import os
-import re
 import stat as _stat
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
 from bugos_ui import K, Knop, label, lijn, lijn_icoon, lijn_pixmap, platte_tip, px, sectie, sectie_met_knop, start, t
 from bugos_desktop import app_info, mooie_naam
-from bugos_drives import mooie_maat
-from bugos_files_plekken import RUIMTE_SOORTEN, STOP, eigen_ruimte, plekken, thuis, voorbeeld_ruimte
+from bugos_drives import koppelingen, mooie_maat
+from bugos_files_plekken import Afgebroken, RUIMTE_SOORTEN, eigen_ruimte, plekken, tel_map, thuis, voorbeeld_ruimte
 from bugos_files_acties import prullenbak, prullenbak_inhoud
 from bugos_files_onderdelen import RuimteBalk, SchijfRij, stip_icoon
-from PySide6.QtCore import QObject, QRunnable, QSize, Qt, QThreadPool, QTimer, Signal
+from PySide6.QtCore import QObject, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QIcon, QTransform
 from PySide6.QtWidgets import (
     QFrame, QGridLayout, QHBoxLayout, QLabel, QLayout, QMenu, QProgressBar, QPushButton, QVBoxLayout, QWidget,
@@ -100,65 +106,42 @@ def bekende_data() -> dict[str, tuple[str, str, str]]:
     }
 
 
-def tel_map(pad: Path | str, apparaat: int, gezien: set[tuple[int, int]], max_items: int = 500_000,
-            koppel: frozenset[str] | set[str] = frozenset()) -> int:
-    """Hoeveel ruimte een map echt gebruikt (zoals 'du'). Blijft op het apparaat 'apparaat' (geen andere schijf of
-    netwerkmap die er toevallig in hangt, review 4), volgt geen snelkoppelingen, en telt een bestand met meer namen
-    (hardlinks, zoals in Flatpak) maar één keer (review 10). Een map in 'koppel' (daar hangt een andere schijf of
-    netwerkmap aan) wordt niet eens aangeraakt. Stopt als het venster dichtgaat."""
-    totaal, rij, n = 0, [str(pad)], 0
-    while rij and n < max_items and not STOP.is_set():
-        try:
-            with os.scandir(rij.pop()) as inhoud:
-                for e in inhoud:
-                    n += 1
-                    if e.path in koppel:
-                        continue
-                    try:
-                        st = e.stat(follow_symlinks=False)
-                    except OSError:
-                        continue
-                    if st.st_dev != apparaat:
-                        continue
-                    if _stat.S_ISDIR(st.st_mode):
-                        rij.append(e.path)
-                        totaal += st.st_blocks * 512
-                    elif _stat.S_ISREG(st.st_mode):
-                        if st.st_nlink > 1:
-                            sleutel = (st.st_dev, st.st_ino)
-                            if sleutel in gezien:
-                                continue
-                            gezien.add(sleutel)
-                        totaal += st.st_blocks * 512
-        except OSError:
-            continue
-    return totaal
-
-
 def _koppelpunten() -> set[str]:
-    """Waar een andere schijf of netwerkmap aan hangt (uit /proc/self/mountinfo). Zo'n map wordt niet eens geopend:
-    een netwerkmap die niet meer antwoordt, laat 'stat' anders hangen, en dan stopt het tellen nooit (review 4)."""
-    try:
-        tekst = Path("/proc/self/mountinfo").read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return set()
-    plekken_: set[str] = set()
-    for regel in tekst.splitlines():
-        d = regel.split()
-        if len(d) > 4:   # veld 5 is de plek; een spatie staat er als \040
-            plekken_.add(re.sub(r"\\([0-7]{3})", lambda m: chr(int(m.group(1), 8)), d[4]))
-    return plekken_
+    """Waar iets aan hangt (uit /proc/self/mountinfo): een andere schijf, een netwerkmap, een container. Zo'n map
+    wordt niet eens geopend: een netwerkmap die niet meer antwoordt, laat 'stat' anders hangen, en dan stopt het
+    tellen nooit (review 4)."""
+    return {k.plek for k in koppelingen()}
 
 
-def _koppel_in(thuis_: Path) -> frozenset[str]:
-    """De koppelpunten in je thuismap, geschreven zoals de thuismap zelf (/home/x of /var/home/x)."""
-    echt = os.path.realpath(thuis_)
+def _koppel_in(map_: Path, plekken_: set[str] | None = None) -> frozenset[str]:
+    """De koppelpunten ín deze map (niet de map zelf), geschreven zoals de map zelf (/home/x of /var/home/x: op
+    BugOS is /home een snelkoppeling naar /var/home)."""
+    echt = os.path.realpath(map_).rstrip("/")
+    eigen = str(map_).rstrip("/")
     uit = set()
-    for m in _koppelpunten():
-        if m != echt and m.startswith(echt.rstrip("/") + "/"):
-            uit.add(str(thuis_).rstrip("/") + m[len(echt.rstrip("/")):])
+    for m in (_koppelpunten() if plekken_ is None else plekken_):
+        if m.startswith(echt + "/"):
+            uit.add(eigen + m[len(echt):])
             uit.add(m)
     return frozenset(uit)
+
+
+def _koppelpunt_van(pad: str, plekken_: set[str]) -> str:
+    """Aan welk koppelpunt hangt dit pad (het langste dat ervoor past)? Alleen op tekst, zonder het pad aan te
+    raken."""
+    return max((m for m in plekken_ if pad == m or pad.startswith(m.rstrip("/") + "/")), key=len, default="/")
+
+
+def _zelfde_koppeling(pad: Path, thuis_: Path, plekken_: set[str]) -> bool:
+    """Staat 'pad' (buiten je thuismap) op hetzelfde bestandssysteem als je thuismap? Eerst op tekst: hangt hij
+    aan een ander koppelpunt (een netwerkmap, een tweede schijf), dan raken we hem niet aan (een netwerkmap die
+    niet antwoordt, liet anders alles hangen). Daarna pas het apparaatnummer."""
+    if _koppelpunt_van(os.path.normpath(str(pad)), plekken_) != _koppelpunt_van(os.path.realpath(thuis_), plekken_):
+        return False
+    try:
+        return _apparaat_van(pad) == _apparaat_van(thuis_)
+    except OSError:
+        return False
 
 
 def _apparaat_van(pad: Path) -> int:
@@ -174,9 +157,14 @@ def _is_onder(kind: Path, ouder: Path) -> bool:
         return False
 
 
-def tel_thuis(thuis_: Path | None = None) -> tuple[list[Ruimtegebruik], dict[str, int]]:
+def tel_thuis(thuis_: Path | None = None, stop: threading.Event | None = None
+              ) -> tuple[list[Ruimtegebruik], dict[str, int]]:
     """Alles in je thuismap, in regels (ook de kleine), en de grootte van Afbeeldingen, Video's, ... en de
-    prullenbak voor de gekleurde balk: één keer tellen voor allebei (review 17)."""
+    prullenbak voor de gekleurde balk: één keer tellen voor allebei (review 17).
+
+    Samen zijn de regels precies wat 'du -s -x' over je thuismap zegt (zonder de thuismap zelf): elke map, elk
+    bestand en elke snelkoppeling telt één keer, en een bestand met meer namen ook (tools/test_native_tools.py
+    vergelijkt het met du). Gaat 'stop' aan, dan Afgebroken: een halve telling geeft nooit een uitslag."""
     thuis_ = thuis_ or thuis()
     gezien: set[tuple[int, int]] = set()
     rijen: list[Ruimtegebruik] = []
@@ -187,113 +175,137 @@ def tel_thuis(thuis_: Path | None = None) -> tuple[list[Ruimtegebruik], dict[str
     plek_van = {p: (sl, naam, ic) for sl, naam, ic, p in plekken() if sl != "thuis"}
     bak = prullenbak()
     bekend = bekende_data()
-    koppel = _koppel_in(thuis_)
+    alle_koppels = _koppelpunten()
+    koppel = _koppel_in(thuis_, alle_koppels)
     overig = losse = 0
 
-    def map_grootte(p: Path) -> int:
-        """Een map met een andere schijf erin (een tweede schijf, een netwerkmap): die telt niet mee."""
-        if str(p) in koppel:
+    def gestopt() -> bool:
+        return stop is not None and stop.is_set()
+
+    def ruimte_van(p: Path, koppel_: frozenset[str] = koppel) -> int:
+        """Hoeveel ruimte dit ene ding inneemt, met alles erin als het een map is (zoals du). Een koppelpunt (een
+        andere schijf, een netwerkmap) of iets op een ander apparaat: 0, en niet aangeraakt. koppel_: de
+        koppelpunten die eronder kunnen hangen (standaard die in je thuismap)."""
+        if gestopt():
+            raise Afgebroken   # meteen ophouden, ook midden in ~/.var/app of ~/.local/share
+        if str(p) in koppel_:
             return 0
         try:
             st = os.stat(p, follow_symlinks=False)
-            if _apparaat_van(p) != apparaat or not _stat.S_ISDIR(st.st_mode):
-                return 0
+            if _apparaat_van(p) != apparaat:
+                return 0   # (via _apparaat_van, zodat een test een tweede schijf kan nadoen)
         except OSError:
             return 0
-        return tel_map(p, apparaat, gezien, koppel=koppel) + st.st_blocks * 512
+        if _stat.S_ISDIR(st.st_mode):
+            return st.st_blocks * 512 + tel_map(p, apparaat, gezien, koppel=koppel_, stop=stop)
+        if st.st_nlink > 1:
+            if (st.st_dev, st.st_ino) in gezien:
+                return 0   # een tweede naam van een bestand dat al geteld is
+            gezien.add((st.st_dev, st.st_ino))
+        return st.st_blocks * 512
 
-    def kinderen(p: Path):
+    def kinderen(p: Path) -> list[Path]:
         try:
             with os.scandir(p) as inhoud:
-                return [Path(e.path) for e in inhoud]
+                return sorted((Path(e.path) for e in inhoud), key=lambda x: x.name)
         except OSError:
             return []
 
-    try:
-        bovenste = sorted(os.scandir(thuis_), key=lambda e: e.name)
-    except OSError:
-        bovenste = []
-    for e in bovenste:
-        if STOP.is_set():
-            break
-        if e.path in koppel:
-            continue   # een andere schijf of netwerkmap in je thuismap: niet aanraken, telt niet mee
+    def map_van(p: Path) -> bool:
+        """Een echte map (geen snelkoppeling, geen koppelpunt, op dit apparaat)? Alleen dan kijken we erin."""
+        if str(p) in koppel:
+            return False
         try:
-            st = e.stat(follow_symlinks=False)
-            if _stat.S_ISLNK(st.st_mode) or _apparaat_van(Path(e.path)) != apparaat:
-                continue   # een snelkoppeling (naar /usr ...) of een andere schijf in je thuismap: niet volgen
+            st = os.stat(p, follow_symlinks=False)
+            return _stat.S_ISDIR(st.st_mode) and _apparaat_van(p) == apparaat
         except OSError:
-            continue
-        pad = Path(e.path)
-        if _stat.S_ISREG(st.st_mode):
-            if e.name.startswith("."):
-                overig += st.st_blocks * 512
+            return False
+
+    def eigen_blokje(p: Path) -> int:
+        """Alleen de map zelf (zonder wat erin staat): .var, .local en .local/share tellen we per stuk."""
+        try:
+            st = os.stat(p, follow_symlinks=False)
+            return st.st_blocks * 512 if _apparaat_van(p) == apparaat else 0
+        except OSError:
+            return 0
+
+    for pad in kinderen(thuis_):
+        if gestopt():
+            raise Afgebroken
+        naam_ = pad.name
+        if str(pad) in koppel:
+            continue   # een andere schijf of netwerkmap in je thuismap: niet aanraken, telt niet mee
+        if not map_van(pad):
+            # Een bestand of een snelkoppeling (die volgen we nooit, ook niet naar /usr): telt als zichzelf.
+            if naam_.startswith("."):
+                overig += ruimte_van(pad)
             else:
-                losse += st.st_blocks * 512
+                losse += ruimte_van(pad)
             continue
-        if not _stat.S_ISDIR(st.st_mode):
-            continue
-        if e.name == ".var":
+        if naam_ == ".var":
+            overig += eigen_blokje(pad)
             for kind in kinderen(pad):
-                if kind.name == "app":
+                if kind.name == "app" and map_van(kind):
+                    overig += eigen_blokje(kind)
                     for app in kinderen(kind):
                         info = app_info(app.name)
-                        grootte = map_grootte(app)
+                        grootte = ruimte_van(app)
                         if info:
                             rijen.append(Ruimtegebruik("app", info[0], _uitleg("app"), "apps", app, grootte, app.name))
                         else:
                             rijen.append(Ruimtegebruik("wees", mooie_naam(app.name), _uitleg("wees"), "apps", app,
                                                        grootte, app.name))
                 else:
-                    overig += map_grootte(kind)
-        elif e.name == ".local":
+                    overig += ruimte_van(kind)
+        elif naam_ == ".local":
+            overig += eigen_blokje(pad)
             for kind in kinderen(pad):
-                if kind.name != "share":
-                    overig += map_grootte(kind)
+                if kind.name != "share" or not map_van(kind):
+                    overig += ruimte_van(kind)
                     continue
+                overig += eigen_blokje(kind)
                 for data in kinderen(kind):
-                    if data == bak:
+                    if data == bak and map_van(bak):
+                        overig += eigen_blokje(bak)
                         rijen.append(Ruimtegebruik("prullenbak", t("Prullenbak", "Trash"), _uitleg("prullenbak"),
-                                                   "prullenbak", bak, map_grootte(bak / "files")))
+                                                   "prullenbak", bak, ruimte_van(bak / "files")))
                         for rest in kinderen(bak):
                             if rest.name != "files":
-                                overig += map_grootte(rest)
-                    elif data.name == "flatpak":
+                                overig += ruimte_van(rest)   # de briefjes waar het vandaan kwam (info/)
+                    elif data.name == "flatpak" and map_van(data):
                         rijen.append(Ruimtegebruik("apps", t("Apps die alleen voor jou zijn geïnstalleerd",
                                                              "Apps installed for you only"), _uitleg("apps"), "apps",
-                                                   data, map_grootte(data)))
-                    elif data.name in bekend:
+                                                   data, ruimte_van(data)))
+                    elif data.name in bekend and map_van(data):
                         naam, uitleg, ic = bekend[data.name]
-                        rijen.append(Ruimtegebruik("appdata", naam, uitleg, ic, data, map_grootte(data)))
+                        rijen.append(Ruimtegebruik("appdata", naam, uitleg, ic, data, ruimte_van(data)))
                     else:
-                        try:
-                            overig += map_grootte(data) if data.is_dir() and not data.is_symlink() else \
-                                os.stat(data, follow_symlinks=False).st_blocks * 512
-                        except OSError:
-                            pass
-        elif e.name == ".cache":
+                        overig += ruimte_van(data)   # ook een bestand of snelkoppeling: niets volgen
+        elif naam_ == ".cache":
             rijen.append(Ruimtegebruik("cache", t("Tijdelijke bestanden", "Temporary files"), _uitleg("cache"),
-                                       "klok", pad, map_grootte(pad)))
-        elif e.name == ".wine":
+                                       "klok", pad, ruimte_van(pad)))
+        elif naam_ == ".wine":
             rijen.append(Ruimtegebruik("wine", t("Windows-programma's (Wine)", "Windows programs (Wine)"),
-                                       _uitleg("wine"), "apps", pad / "drive_c" if (pad / "drive_c").is_dir() else pad,
-                                       map_grootte(pad)))
-        elif e.name.startswith("."):
-            overig += map_grootte(pad)
+                                       _uitleg("wine"), "apps", pad / "drive_c" if map_van(pad / "drive_c") else pad,
+                                       ruimte_van(pad)))
+        elif naam_.startswith("."):
+            overig += ruimte_van(pad)
         else:
-            sl, naam, ic = plek_van.get(pad, ("", e.name, "map"))
-            rijen.append(Ruimtegebruik("map", naam, "", ic, pad, map_grootte(pad)))
+            sl, naam, ic = plek_van.get(pad, ("", naam_, "map"))
+            rijen.append(Ruimtegebruik("map", naam, "", ic, pad, ruimte_van(pad)))
     rijen.append(Ruimtegebruik("losse", t("Losse bestanden in Thuis", "Loose files in Home"), "", "document", thuis_,
                                losse))
     rijen.append(Ruimtegebruik("overig", t("Instellingen en gegevens van apps", "Settings and data of apps"), "",
                                "schakelaar", None, overig))
-    if not any(r.soort == "prullenbak" for r in rijen):   # de prullenbak staat niet in je thuismap
-        try:
-            rijen.append(Ruimtegebruik("prullenbak", t("Prullenbak", "Trash"), _uitleg("prullenbak"), "prullenbak", bak,
-                                       tel_map(bak / "files", os.stat(bak / "files").st_dev, gezien)))
-        except OSError:
-            pass
-    # Voor de balk bovenaan: Afbeeldingen, Video's ... (staat zo'n map buiten je thuismap, dan apart tellen).
+    if not any(r.soort == "prullenbak" for r in rijen) and not _is_onder(bak, thuis_) \
+            and _zelfde_koppeling(bak, thuis_, alle_koppels):
+        # De prullenbak staat buiten je thuismap (XDG_DATA_HOME), maar wel op dezelfde schijf: die telt mee. Op een
+        # andere schijf of netwerkmap niet: die ruimte gaat niet van deze schijf af.
+        rijen.append(Ruimtegebruik("prullenbak", t("Prullenbak", "Trash"), _uitleg("prullenbak"), "prullenbak", bak,
+                                   ruimte_van(bak / "files", _koppel_in(bak, alle_koppels))))
+    # Voor de balk bovenaan: Afbeeldingen, Video's ... Staat zo'n map buiten je thuismap, dan alleen als hij op
+    # dezelfde schijf staat (een map op de NAS of een tweede schijf neemt hier geen ruimte in, en tellen zou over
+    # het netwerk gaan).
     ruimte: dict[str, int] = {}
     per_pad = {r.pad: r.grootte for r in rijen if r.soort == "map"}
     for sl, _naam, _ic, p in plekken():
@@ -301,14 +313,13 @@ def tel_thuis(thuis_: Path | None = None) -> tuple[list[Ruimtegebruik], dict[str
             continue
         if p in per_pad:
             ruimte[sl] = per_pad[p]
-        elif not _is_onder(p, thuis_):
-            try:
-                ruimte[sl] = tel_map(p, os.stat(p).st_dev, gezien)
-            except OSError:
-                ruimte[sl] = 0
+        elif not _is_onder(p, thuis_) and _zelfde_koppeling(p, thuis_, alle_koppels):
+            ruimte[sl] = ruimte_van(p, _koppel_in(p, alle_koppels))
         else:
             ruimte[sl] = 0
     ruimte["prullenbak"] = next((r.grootte for r in rijen if r.soort == "prullenbak"), 0)
+    if gestopt():
+        raise Afgebroken
     return rijen, ruimte
 
 
@@ -331,14 +342,27 @@ def lees_maat(tekst: str) -> int:
     return int(getal * keer) if keer else 0
 
 
-def systeem_apps() -> list[tuple[str, int]]:
+def systeem_apps(stop: threading.Event | None = None) -> list[tuple[str, int]]:
     """(app-id, grootte) van de apps die voor alle accounts zijn geïnstalleerd (Flatpak, systeem). Die staan niet in
-    je thuismap, maar nemen wel ruimte in op dezelfde schijf (review 2)."""
+    je thuismap, maar nemen wel ruimte in op dezelfde schijf (review 2). Dat vraagt flatpak zelf (we tellen nooit
+    in /var/lib/flatpak of de BugOS-versies in /sysroot/ostree). Hoogstens 20 seconden; gaat 'stop' aan, dan
+    meteen ophouden (flatpak wordt dan gestopt)."""
     try:
-        uit = subprocess.run(["flatpak", "list", "--app", "--system", "--columns=application,size"],
-                             capture_output=True, text=True, timeout=20, env={**os.environ, "LC_ALL": "C"}).stdout
-    except (OSError, subprocess.SubprocessError):
+        proces = subprocess.Popen(["flatpak", "list", "--app", "--system", "--columns=application,size"],
+                                  stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+                                  env={**os.environ, "LC_ALL": "C"})
+    except OSError:
         return []
+    eind = time.monotonic() + 20
+    while True:
+        try:
+            uit, _ = proces.communicate(timeout=0.25)
+            break
+        except subprocess.TimeoutExpired:
+            if (stop is not None and stop.is_set()) or time.monotonic() > eind:
+                proces.kill()
+                proces.communicate()
+                return []
     apps = []
     for regel in uit.splitlines():
         delen = regel.split("\t")
@@ -399,24 +423,44 @@ def in_winkel(app_id: str) -> bool:
 
 
 class Grootsein(QObject):
+    """Brengt de uitslag van een telling naar het venster (de hoofddraad): (teller, uitslag)."""
     klaar = Signal(object)
 
 
-class GrootsteTeller(QRunnable):
-    """Telt op de achtergrond wat de meeste ruimte inneemt (in een grote thuismap duurt dat even)."""
+FOUT = "fout"   # de uitslag van een telling die misging (dan geen lijst, wel een zin)
 
-    def __init__(self, sein: Grootsein):
-        super().__init__()
-        self.sein = sein
+
+class GrootsteTeller(threading.Thread):
+    """Telt op de achtergrond wat de meeste ruimte inneemt (in een grote thuismap duurt dat even).
+
+    Een eigen draad, niet de gedeelde QThreadPool: zo kan hij met een lagere voorrang draaien (de rest van de
+    computer merkt er niets van), houdt hij de voorbeeldjes van Bestanden niet op, en hoeft niemand op hem te wachten
+    als het venster dichtgaat (daemon). Elke telling heeft een eigen 'stop': de pagina verlaten stopt alleen deze.
+    De uitslag is (rijen, ruimte, apps), None als hij gestopt is, of FOUT."""
+
+    def __init__(self, sein: Grootsein, thuis_: Path | None = None):
+        super().__init__(name="bugos-ruimte-tellen", daemon=True)
+        self.sein, self.thuis = sein, thuis_
+        self.stop = threading.Event()
 
     def run(self) -> None:
         try:
-            rijen, ruimte = tel_thuis()
-            apps = systeem_apps()
-        except Exception:  # noqa: BLE001  tellen mag het venster nooit laten vallen
-            rijen, ruimte, apps = [], {}, []
+            # Alleen deze draad zachter (op Linux geldt een nice-waarde per draad).
+            os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), 10)
+        except (AttributeError, OSError):
+            pass
         try:
-            self.sein.klaar.emit((rijen, ruimte, apps))
+            rijen, ruimte = tel_thuis(self.thuis, stop=self.stop)
+            apps = systeem_apps(stop=self.stop)
+            if self.stop.is_set():
+                raise Afgebroken
+            uitslag = (rijen, ruimte, apps)
+        except Afgebroken:
+            uitslag = None
+        except Exception:  # noqa: BLE001  tellen mag het venster nooit laten vallen
+            uitslag = FOUT
+        try:
+            self.sein.klaar.emit((self, uitslag))
         except RuntimeError:  # het venster is al dicht
             pass
 
@@ -544,6 +588,31 @@ class RuimteRij(QFrame):
 class Computer:
     """De pagina 'Deze computer': een stukje van het venster Bestanden."""
 
+    # De pagina staat open of niet. Een eigenschap (geen gewone waarde): elke weg weg van deze pagina (een map
+    # openen, de prullenbak, terug, het venster sluiten) zet in_computer op False, en dan stopt hier het tellen.
+    # Zo telt er nooit iets door voor een pagina die niemand meer ziet.
+    @property
+    def in_computer(self) -> bool:
+        return getattr(self, "_in_computer", False)
+
+    @in_computer.setter
+    def in_computer(self, aan: bool) -> None:
+        was = getattr(self, "_in_computer", False)
+        self._in_computer = bool(aan)
+        if was and not aan:
+            self.stop_tellen()
+
+    def stop_tellen(self) -> None:
+        """Stop de telling die nu loopt (pagina verlaten, venster dicht). Wat hij al had, wordt weggegooid: de
+        vorige uitslag (als die er was) blijft staan, en de volgende keer op deze pagina telt hij opnieuw."""
+        teller = getattr(self, "grootste_teller", None)
+        if teller is not None:
+            teller.stop.set()
+        self.grootste_teller = None
+        if getattr(self, "grootste_bezig", False):
+            self.grootste_bezig = False
+            self.tellen_bezig = False
+
     def open_computer(self, geschiedenis: bool = True) -> None:
         """De pagina 'Deze computer': al je schijven, en hoeveel ruimte er nog is (zoals 'Deze pc' in Windows)."""
         if geschiedenis and not self.in_computer:
@@ -661,8 +730,9 @@ class Computer:
 
     # ------------------------------------------------- wat de meeste ruimte inneemt
     def tel_grootste(self, opnieuw: bool = False) -> None:
-        """Tellen op de achtergrond, als de laatste telling ouder is dan 10 minuten (of als je erom vraagt)."""
-        if getattr(self, "grootste_bezig", False):
+        """Tellen op de achtergrond, als de laatste telling ouder is dan 10 minuten (of als je erom vraagt). Alleen
+        zolang de pagina openstaat (zie in_computer)."""
+        if getattr(self, "grootste_bezig", False) or not self.in_computer:
             return
         oud = time.monotonic() - getattr(self, "grootste_tijd", -1e9) > OPNIEUW_TELLEN
         if voorbeeld_ruimte() or not (opnieuw or oud or getattr(self, "grootste", None) is None):
@@ -672,11 +742,29 @@ class Computer:
             self.grootsein.klaar.connect(self._grootste_geteld)
         self.grootste_bezig = True
         self.tellen_bezig = True     # (de balk bovenaan komt uit dezelfde telling)
-        QThreadPool.globalInstance().start(GrootsteTeller(self.grootsein))
+        self.grootste_fout = False
+        self.grootste_teller = GrootsteTeller(self.grootsein)
+        self.grootste_teller.start()
 
-    def _grootste_geteld(self, uitslag) -> None:
-        rijen, ruimte, apps = uitslag
+    def _grootste_geteld(self, bericht) -> None:
+        """De uitslag van een telling (in de hoofddraad). Alleen die van de telling die nu loopt telt: een gestopte
+        telling (je verliet de pagina) is al vergeten."""
+        teller, uitslag = bericht
+        if teller is not getattr(self, "grootste_teller", None):
+            return
+        self.grootste_teller = None
         self.grootste_bezig = False
+        if uitslag is None or uitslag == FOUT:
+            # Gestopt of misgegaan: niets onthouden (geen half of leeg lijstje dat tien minuten blijft staan).
+            self.tellen_bezig = False
+            self.grootste_fout = uitslag == FOUT
+            if self.in_computer and getattr(self, "grootste_lay", None) is not None:
+                try:
+                    self.vul_grootste()
+                except RuntimeError:
+                    pass
+            return
+        rijen, ruimte, apps = uitslag
         self.grootste, self.grootste_tijd = (rijen, apps), time.monotonic()
         if ruimte:
             self._geteld(ruimte)
@@ -697,8 +785,12 @@ class Computer:
         self.ruimte_rijen: list[RuimteRij] = []
         gegevens = getattr(self, "grootste", None)
         if gegevens is None:
-            bezig = label(t("Bezig met tellen… Dit duurt soms een minuutje.", "Counting… This sometimes takes a minute."),
-                          "klein")
+            if getattr(self, "grootste_fout", False) and not getattr(self, "grootste_bezig", False):
+                tekst = t("Tellen lukte niet. Probeer het later nog eens: Ruimte maken > Zien wat ruimte inneemt.",
+                          "Counting did not work. Try again later: Free up space > See what takes up space.")
+            else:
+                tekst = t("Bezig met tellen… Dit duurt soms een minuutje.", "Counting… This sometimes takes a minute.")
+            bezig = label(tekst, "klein")
             bezig.setContentsMargins(14, 12, 14, 12)
             lay.addWidget(bezig)
             self.meer_knop.hide()

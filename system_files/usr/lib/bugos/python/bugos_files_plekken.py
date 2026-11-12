@@ -8,12 +8,13 @@ een map is. Gedeeld door de andere bugos_files_*-stukjes.
 from __future__ import annotations
 
 import os
+import stat as _stat
 import threading
 from pathlib import Path
 
 from bugos_ui import t
 from bugos_drives import Schijf, mooie_maat
-from PySide6.QtCore import QObject, QRunnable, QStorageInfo, Qt, Signal
+from PySide6.QtCore import QStorageInfo, Qt
 
 
 PAD_ROL = int(Qt.ItemDataRole.UserRole) + 1        # = QFileSystemModel.FilePathRole
@@ -87,53 +88,82 @@ def bijzondere_mappen() -> dict[str, str]:
     return {str(p): ic for sleutel, _n, ic, p in plekken() if sleutel != "thuis"}
 
 
-STOP = threading.Event()  # gaat aan als het venster dichtgaat: dan stopt het tellen meteen
+# ================================================================ ruimte tellen ===
+# Eén manier van tellen voor heel Bestanden, precies zoals 'du -s -x' (de schijfruimte, niet de 'grootte' van een
+# bestand): een leeg 'sparse' bestand neemt niets in, een bestand met meer namen (hardlinks, zoals in Flatpak) telt
+# één keer, en we blijven op het apparaat waar we begonnen (geen andere schijf, netwerkmap, /proc of btrfs-subvolume
+# die er toevallig in hangt). Een snelkoppeling volgen we nooit (die van ~/.wine/dosdevices wijst naar /).
+# tools/test_native_tools.py vergelijkt de uitkomst met de echte du.
+
+_OPEN_MAP = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
 
 
-def mapgrootte(pad: Path, max_items: int = 500_000) -> int:
-    """Hoeveel ruimte gebruikt deze map (met alles erin)? Blijft op dezelfde schijf; volgt geen snelkoppelingen."""
-    try:
-        apparaat = os.stat(pad).st_dev
-    except OSError:
-        return 0
-    totaal, rij, gezien = 0, [str(pad)], 0
-    while rij and gezien < max_items and not STOP.is_set():
+class Afgebroken(Exception):
+    """Het tellen is gestopt (je verliet de pagina, of het venster ging dicht). Een halve telling mag nooit als
+    uitslag gelden: dan stond er tien minuten een te klein getal."""
+
+
+def tel_map(pad: Path | str, apparaat: int, gezien: set[tuple[int, int]], koppel: frozenset[str] | set[str] = frozenset(),
+            stop: threading.Event | None = None) -> int:
+    """Hoeveel ruimte alles ín deze map inneemt (de map zelf niet: die telt wie hem tegenkwam).
+
+    apparaat: alleen wat op dit apparaat (st_dev) staat telt; een map op een ander apparaat wordt niet geopend.
+    gezien: (apparaat, inode) van bestanden met meer namen die al geteld zijn; deel hem tussen tellingen die samen
+    één totaal geven (dan telt een hardlink tussen twee mappen ook één keer, net als 'du map1 map2').
+    koppel: plekken waar iets anders aan hangt (een netwerkmap, een tweede schijf). Die worden niet eens bekeken: een
+    netwerkmap die niet meer antwoordt, laat elke 'stat' anders voor altijd wachten.
+    stop: gaat die aan, dan stopt het tellen meteen (de uitkomst is dan te klein: kijk zelf naar stop).
+
+    Elke map wordt via een eigen 'fd' gelezen (O_NOFOLLOW): dan kijkt stat alleen naar de naam in die map (geen heel
+    pad opzoeken, een derde sneller) en kan een map die intussen een snelkoppeling werd, ons nergens anders heen
+    sturen."""
+    totaal, rij = 0, [os.fspath(pad)]
+    # Alleen in de mappen waar een koppelpunt in zit, hoeven we elke naam na te kijken (dat scheelt veel werk).
+    ouders = {os.path.dirname(k) for k in koppel}
+    while rij:
+        if stop is not None and stop.is_set():
+            break
+        map_ = rij.pop()
         try:
-            with os.scandir(rij.pop()) as inhoud:
+            fd = os.open(map_, _OPEN_MAP)
+        except OSError:
+            continue   # geen toestemming, of net weg: tellen wat we wel kunnen (net als du)
+        try:
+            nakijken = map_ in ouders
+            with os.scandir(fd) as inhoud:
                 for e in inhoud:
-                    gezien += 1
+                    if nakijken and os.path.join(map_, e.name) in koppel:
+                        continue
                     try:
                         st = e.stat(follow_symlinks=False)
                     except OSError:
                         continue
                     if st.st_dev != apparaat:
-                        continue
-                    if e.is_dir(follow_symlinks=False):
-                        rij.append(e.path)
-                    elif e.is_file(follow_symlinks=False):
-                        totaal += st.st_blocks * 512
+                        continue   # een andere schijf of subvolume die hier hangt: niet meetellen, niet in
+                    if _stat.S_ISDIR(st.st_mode):
+                        rij.append(os.path.join(map_, e.name))
+                    elif st.st_nlink > 1:
+                        sleutel = (st.st_dev, st.st_ino)
+                        if sleutel in gezien:
+                            continue   # dit bestand (met een andere naam) is al geteld
+                        gezien.add(sleutel)
+                    totaal += st.st_blocks * 512   # ook mappen en snelkoppelingen nemen een blokje in, zoals bij du
         except OSError:
-            continue
+            pass
+        finally:
+            os.close(fd)
     return totaal
 
 
-class Telsein(QObject):
-    klaar = Signal(object)
-
-
-class Teller(QRunnable):
-    """Telt op de achtergrond hoe groot je Afbeeldingen, Video's, enzovoort zijn."""
-
-    def __init__(self, mappen: list[tuple[str, Path]], sein: Telsein):
-        super().__init__()
-        self.mappen, self.sein = mappen, sein
-
-    def run(self) -> None:
-        uitslag = {sleutel: mapgrootte(pad) for sleutel, pad in self.mappen}
-        try:
-            self.sein.klaar.emit(uitslag)
-        except RuntimeError:  # het venster is al dicht
-            pass
+def mapgrootte(pad: Path) -> int:
+    """Hoeveel ruimte gebruikt deze map, met alles erin (zoals 'du -s -x')? 0 als hij er niet is."""
+    try:
+        st = os.stat(pad, follow_symlinks=False)
+    except OSError:
+        return 0
+    if not _stat.S_ISDIR(st.st_mode):
+        return st.st_blocks * 512
+    return st.st_blocks * 512 + tel_map(pad, st.st_dev, set())
 
 
 def voorbeeld_ruimte() -> list[int] | None:

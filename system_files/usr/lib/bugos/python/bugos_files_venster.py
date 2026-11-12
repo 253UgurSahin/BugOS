@@ -12,7 +12,7 @@ from pathlib import Path
 
 from bugos_ui import ActieBalk, Knop, Melding, Venster, Zijbalk, label, lijn_icoon, px, ronde_knop, t
 from bugos_drives import Schijf, mooie_maat
-from bugos_files_plekken import PAD_ROL, STOP, Telsein, bijzondere_mappen, schijf_van, thuis, vrije_ruimte
+from bugos_files_plekken import PAD_ROL, bijzondere_mappen, schijf_van, thuis, vrije_ruimte
 from bugos_files_acties import Klus
 from bugos_files_tegels import Sorteerder, TegelTekenaar, Voorbeelden
 from bugos_files_onderdelen import Zoekbalk, stijl
@@ -47,9 +47,14 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
         self.bezig: set[str] = set()             # schijven die nu open of dicht gaan
         self.ruimte: dict[str, int] | None = None  # hoe groot Afbeeldingen, Video's, ... zijn (geteld)
         self.ruimte_tijd = 0.0
-        self.telsein = Telsein(self)
-        self.telsein.klaar.connect(self._geteld)
+        # Het tellen van 'Wat de meeste ruimte inneemt' (en de gekleurde balk) loopt op de achtergrond, met een
+        # eigen stopknop per telling: zie bugos_files_computer (Computer.tel_grootste).
         self.tellen_bezig = False
+        self.grootste = None              # (regels, apps) van de laatste hele telling; None: nog niet geteld
+        self.grootste_tijd = -1e9         # wanneer (time.monotonic), voor 'opnieuw na 10 minuten'
+        self.grootste_bezig = False       # er loopt nu een telling
+        self.grootste_teller = None       # die telling (GrootsteTeller), om hem te kunnen stoppen
+        self.grootste_fout = False        # de laatste telling ging mis (dan een zin in plaats van een lijst)
 
         # --- links: plekken, USB-sticks en de prullenbak (de zijbalk komt van de schil)
         self.zijbalk = self.nav
@@ -312,7 +317,7 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
             return
         self.apparaten.stop()
         self.voorbeelden.stop()
-        STOP.set()
+        self.stop_tellen()   # het tellen van dit venster stoppen (andere vensters tellen gewoon door)
         QThreadPool.globalInstance().waitForDone(2000)
         laat_klembord_los()
         super().closeEvent(e)
