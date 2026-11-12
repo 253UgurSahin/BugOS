@@ -7,7 +7,10 @@ Zoals Taakbeheer in Windows (Ctrl+Shift+Esc), maar simpeler:
   'Geforceerd sluiten' (als het niet reageert).
 - Prestaties: processor, geheugen, schijf, internet (en de videokaart) met grafiekjes.
 - Opstarten: programma's die vanzelf meestarten aan- of uitzetten.
+- Details: alles wat draait, ook losse processen (voor wie helpt). Zoeken, sorteren, en beëindigen wat van jou is.
 Bovenaan staat in gewone woorden hoe het gaat, met een tip als het druk is.
+
+  bugos-task-manager [--prestaties | --opstarten | --details]
 """
 
 from __future__ import annotations
@@ -24,14 +27,18 @@ sys.path.insert(0, "/usr/lib/bugos/python")
 
 import bugos_tasks as bt  # noqa: E402
 from bugos_tasks_ui import (  # noqa: E402
-    GESCHIEDENIS, KOLOM_GEHEUGEN, KOLOM_PROCESSOR, Klusdraad, Meetdraad, MeetKaart, OpstartRij, Status, TaakRij, stijl,
+    GESCHIEDENIS, KOLOM_GEHEUGEN, KOLOM_PROCESSOR, REGEL_ROL, Klusdraad, Meetdraad, MeetKaart, OpstartRij, Plooi,
+    ProcesFilter, ProcesModel, ProcesTabel, Status, TaakRij, stijl,
 )
 from bugos_ui import (  # noqa: E402
-    ActieBalk, Kaart, Knop, Pagina, Venster, label, lijn, lijn_icoon, maak_app, px, sectie, t, uitvoeren,
+    ActieBalk, Kaart, Knop, Pagina, Schuif, Venster, Zoekveld, label, lijn, lijn_icoon, maak_app, px, sectie, t,
+    uitvoeren, vraag_ja,
 )
 from PySide6.QtCore import QEvent, Qt, QTimer  # noqa: E402
-from PySide6.QtGui import QKeySequence, QShortcut  # noqa: E402
-from PySide6.QtWidgets import QApplication, QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout  # noqa: E402
+from PySide6.QtGui import QFontMetrics, QKeySequence, QShortcut  # noqa: E402
+from PySide6.QtWidgets import (  # noqa: E402
+    QApplication, QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget,
+)
 
 
 # ================================================================= venster ===
@@ -51,10 +58,8 @@ class Taakbeheer(Venster):
         self.voeg_pagina("programmas", "apps", t("Programma's", "Programs"), self.maak_programmas())
         self.voeg_pagina("prestaties", "grafiek", t("Prestaties", "Performance"), self.maak_prestaties())
         self.voeg_pagina("opstarten", "aan", t("Opstarten", "Startup"), self.maak_opstarten())
-        if shutil.which("plasma-systemmonitor"):
-            self.onder_knop(t("Systeemmonitor", "System Monitor"), "code",
-                            lambda: subprocess.Popen(["plasma-systemmonitor"], start_new_session=True),
-                            tip=t("Alles tot in detail (voor gevorderden)", "Everything in detail (advanced)"))
+        # Details: elk proces los, zoals in Windows. Daarmee is Systeemmonitor van KDE niet meer nodig.
+        self.voeg_pagina("details", "document", t("Details", "Details"), self.maak_details())
 
         # zweeft onderin zodra je een programma kiest
         self.balk = ActieBalk(self)
@@ -63,6 +68,14 @@ class Taakbeheer(Venster):
         self.balk.klaar()
         self.balk.gesloten.connect(lambda: self.kies(None))
         self.pagina_gekozen.connect(lambda _s: self.kies(None))
+        # Details: een eigen balk (de knoppen werken op één proces, niet op een programma).
+        self.details_balk = ActieBalk(self)
+        self.details_balk.knop("beeindigen", "kruis", t("Beëindigen", "End"), self.beeindig_gekozen)
+        self.details_balk.knop("forceren", "uitroep", t("Geforceerd beëindigen", "Force end"),
+                               lambda: self.beeindig_gekozen(hard=True))
+        self.details_balk.klaar()
+        self.details_balk.gesloten.connect(self.tabel.clearSelection)
+        self.pagina_gekozen.connect(self._pagina_weg)
 
         sluit = QShortcut(QKeySequence("Escape"), self)
         sluit.activated.connect(self.escape)
@@ -103,28 +116,43 @@ class Taakbeheer(Venster):
         self.status_regel(p)
         self.programmas = p
         # samenvatting: vier getallen op een rij
+        # Vier getallen op een rij; past dat niet (150 %, grote letters), dan twee rijen van twee (R13).
         samen = Kaart(marge=20, ruimte=0, richting="h")
         self.kort: dict[str, QLabel] = {}
-        for i, (sleutel, naam) in enumerate((("processor", t("Processor", "Processor")),
-                                             ("geheugen", t("Geheugen", "Memory")),
-                                             ("schijf", t("Schijf", "Disk")),
-                                             ("internet", t("Internet", "Internet")))):
-            if i:
-                streep = QFrame()
-                streep.setObjectName("streep")
-                samen.lay.addWidget(streep)
-            blok = QVBoxLayout()
-            blok.setContentsMargins(14 if i else 4, 0, 4, 0)
-            blok.setSpacing(2)
-            blok.addWidget(label(naam, "klein", wrap=False))
+        blokken = []
+        for sleutel, naam in (("processor", t("Processor", "Processor")), ("geheugen", t("Geheugen", "Memory")),
+                              ("schijf", t("Schijf", "Disk")), ("internet", t("Internet", "Internet"))):
+            blok = QWidget()
+            rij = QHBoxLayout(blok)
+            rij.setContentsMargins(0, 0, 0, 0)
+            rij.setSpacing(0)
+            streep = QFrame()
+            streep.setObjectName("streep")
+            rij.addWidget(streep)
+            tekst = QVBoxLayout()
+            tekst.setSpacing(2)
+            tekst.addWidget(label(naam, "klein", wrap=False))
             self.kort[sleutel] = label("–", "kop2", wrap=False)
-            blok.addWidget(self.kort[sleutel])
-            samen.lay.addLayout(blok, 1)
+            tekst.addWidget(self.kort[sleutel])
+            rij.addLayout(tekst, 1)
+            blok.streep, blok.tekst = streep, tekst
+            blokken.append(blok)
+
+        def bij_kolom(blok: QWidget, kolom: int) -> None:
+            blok.streep.setVisible(kolom > 0)   # een streep alleen tussen twee getallen, niet aan het begin
+            blok.tekst.setContentsMargins(14 if kolom else 4, 0, 4, 0)
+
+        self.samen_plooi = Plooi(blokken, 4, ruimte=0, bij_kolom=bij_kolom)
+        self.samen_plooi.rooster.setVerticalSpacing(12)
+        samen.lay.addWidget(self.samen_plooi)
         p.lay.addWidget(samen)
         kop = QHBoxLayout()
         kop.setContentsMargins(4 + 14, 6, 4 + 12, 0)  # dezelfde marges als de regels in de kaart
         kop.setSpacing(14)
-        kop.addWidget(sectie(t("Open programma's. Klik om te kiezen.", "Open programs. Click to choose.")), 1)
+        uitleg = sectie(t("Open programma's. Klik om te kiezen.", "Open programs. Click to choose."))
+        uitleg.setWordWrap(True)          # met grote letters liever twee regels dan een pagina die opzij schuift (R13)
+        uitleg.setMinimumWidth(px(120))
+        kop.addWidget(uitleg, 1, Qt.AlignmentFlag.AlignBottom)
         for tekst, breedte in ((t("Processor", "Processor"), KOLOM_PROCESSOR),
                                (t("Geheugen", "Memory"), KOLOM_GEHEUGEN)):
             k = sectie(tekst)
@@ -150,20 +178,16 @@ class Taakbeheer(Venster):
     def maak_prestaties(self) -> Pagina:
         p = Pagina(t("Prestaties", "Performance"), breedte=1100)
         self.status_regel(p)
-        rooster = QGridLayout()
-        rooster.setSpacing(14)
         self.kaart_processor = MeetKaart(t("Processor", "Processor"))
         self.kaart_geheugen = MeetKaart(t("Geheugen", "Memory"))
         self.kaart_schijf = MeetKaart(t("Schijf", "Disk"), None)
         self.kaart_internet = MeetKaart(t("Internet", "Internet"), None)
         self.kaart_video = MeetKaart(t("Videokaart", "Graphics card"))
         self.kaart_video.hide()
-        for i, k in enumerate((self.kaart_processor, self.kaart_geheugen, self.kaart_schijf, self.kaart_internet,
-                               self.kaart_video)):
-            rooster.addWidget(k, i // 3, i % 3)
-        for kolom in range(3):
-            rooster.setColumnStretch(kolom, 1)
-        p.lay.addLayout(rooster)
+        # Drie kaarten op een rij; past dat niet (150 %, grote letters), dan twee (R13).
+        self.meet_plooi = Plooi([self.kaart_processor, self.kaart_geheugen, self.kaart_schijf, self.kaart_internet,
+                                 self.kaart_video], 3)
+        p.lay.addWidget(self.meet_plooi)
         p.klaar()
         return p
 
@@ -178,6 +202,145 @@ class Taakbeheer(Venster):
         p.klaar()
         p.ververs = self.vul_opstarten
         return p
+
+    def maak_details(self) -> Pagina:
+        p = Pagina(t("Details", "Details"),
+                   t("Alles wat er nu draait, ook de onderdelen van BugOS zelf. Je kunt alleen beëindigen wat van jou is.",
+                     "Everything that is running now, including the parts of BugOS itself. You can only end what is "
+                     "yours."), breedte=1100)
+        self.details = p
+        rij = QHBoxLayout()
+        rij.setSpacing(12)
+        # Kort woord in het vak (past ook bij 150 %), de hele uitleg als tip (review 18).
+        self.details_zoek = Zoekveld(t("Zoeken", "Search"))
+        self.details_zoek.setToolTip(t("Zoek op naam of nummer", "Search by name or number"))
+        self.details_zoek.setAccessibleName(t("Zoek op naam of nummer", "Search by name or number"))
+        self.details_zoek.setMinimumHeight(40)
+        self.details_zoek.setMaximumHeight(40)
+        self.details_zoek.setMaximumWidth(px(320))
+        rij.addWidget(self.details_zoek, 1)
+        rij.addStretch(0)
+        rij.addWidget(label(t("Alleen van jou", "Only yours"), "klein", wrap=False))
+        self.alleen_eigen = Schuif(False)
+        self.alleen_eigen.setAccessibleName(t("Alleen van jou", "Only yours"))
+        rij.addWidget(self.alleen_eigen)
+        rij.addSpacing(8)
+        self.details_aantal = label("", "klein", wrap=False)
+        rij.addWidget(self.details_aantal)
+        p.lay.addLayout(rij)
+        self.proces_model = ProcesModel()
+        self.proces_filter = ProcesFilter()
+        self.proces_filter.setSourceModel(self.proces_model)
+        self.tabel = ProcesTabel(self.proces_filter)
+        p.lay.addWidget(self.tabel, 1)
+        self.details_leeg = label(t("Even kijken…", "Taking a look…"), "sub")
+        self.details_leeg.setContentsMargins(4, 0, 4, 0)
+        p.lay.addWidget(self.details_leeg)
+        # Zolang de knoppenbalk onderin zweeft, maakt dit lege stuk de tabel korter: dan valt er geen regel onder de
+        # balk. (Een QTreeView zet zijn eigen viewport-marges voor de kop, dus dat kan niet in de tabel zelf.)
+        self.details_ruimte = QWidget()
+        self.details_ruimte.hide()
+        p.lay.addWidget(self.details_ruimte)
+        self._keuze: tuple[int, int] | None = None   # (pid, starttijd) van wat je koos
+        self._bijwerken = False
+        self.details_zoek.textChanged.connect(lambda tekst: self._bewaak(lambda: self.proces_filter.zet_zoek(tekst)))
+        self.alleen_eigen.toggled.connect(lambda aan: self._bewaak(lambda: self.proces_filter.zet_eigen(aan)))
+        self.tabel.selectionModel().selectionChanged.connect(lambda *_: self.kies_regel())
+        weg = QShortcut(QKeySequence(QKeySequence.StandardKey.Delete), self.tabel)
+        weg.setContext(Qt.ShortcutContext.WidgetShortcut)
+        weg.activated.connect(self.beeindig_gekozen)   # vraagt eerst (review 1)
+        p.ververs = self.vul_details
+        return p
+
+    def vul_details(self) -> None:
+        if self.laatste is not None:
+            self._bewaak(lambda: self.proces_model.zet(self.laatste.get("processen", [])))
+        self.details_tellen()
+
+    def _bewaak(self, werk) -> None:
+        """Bijwerken (een nieuwe meting, zoeken) zonder dat je keuze naar een ander proces springt: verdwijnt het
+        gekozen proces (of valt het buiten het zoeken), dan is er niets meer gekozen, en de balk is weg."""
+        voor = self._keuze
+        self._bijwerken = True
+        try:
+            werk()
+        finally:
+            self._bijwerken = False
+        nu = self.gekozen_regel()
+        if voor is not None and (nu is None or (nu.pid, nu.start) != voor):
+            self.tabel.clearSelection()
+        self.kies_regel(verschuif=False)
+        self.details_tellen()
+
+    def details_tellen(self) -> None:
+        n, zichtbaar = self.proces_model.rowCount(), self.proces_filter.rowCount()
+        if self.proces_filter.zoek or self.proces_filter.alleen_eigen:
+            self.details_aantal.setText(t("{z} van {n}", "{z} of {n}").replace("{z}", str(zichtbaar))
+                                        .replace("{n}", str(n)))
+        else:
+            self.details_aantal.setText(t("{n} processen", "{n} processes").replace("{n}", str(n)) if n else "")
+        if not n:
+            self.details_leeg.setText(t("Even kijken…", "Taking a look…"))
+        else:
+            self.details_leeg.setText(t("Niets gevonden. Zoek op een deel van de naam, of op het nummer.",
+                                        "Nothing found. Search for part of the name, or for the number."))
+        self.details_leeg.setVisible(not zichtbaar)
+
+    def gekozen_regel(self):
+        sel = self.tabel.selectionModel()
+        rijen = sel.selectedRows() if sel is not None else []
+        return rijen[0].data(REGEL_ROL) if rijen else None
+
+    def kies_regel(self, verschuif: bool = True) -> None:
+        """Een proces gekozen: de balk met Beëindigen en Geforceerd beëindigen (grijs als het niet mag)."""
+        if self._bijwerken:
+            return   # na het bijwerken kijkt _bewaak zelf
+        regel = self.gekozen_regel() if self.huidige() == "details" else None
+        self._keuze = (regel.pid, regel.start) if regel is not None else None
+        if regel is None:
+            self.details_balk.hide()
+            self.ruimte_onder(0)
+            return
+        self.details_balk.toon(1)
+        self.details_balk.aantal.setText(QFontMetrics(self.details_balk.aantal.font()).elidedText(
+            regel.naam, Qt.TextElideMode.ElideRight, px(140)))
+        self.details_balk.aantal.setToolTip(f"{regel.naam} · {regel.pid}")
+        for k in self.details_balk.knoppen.values():
+            k.setEnabled(not regel.beschermd)
+        self.plaats_balk()
+        self.ruimte_onder(self.details_balk.height())
+        if verschuif:   # alleen als je zelf iets kiest, niet bij elke meting (dan kun je nog schuiven)
+            QTimer.singleShot(0, self._naar_keuze)
+
+    def _naar_keuze(self) -> None:
+        rijen = self.tabel.selectionModel().selectedRows()
+        if rijen:
+            self.tabel.scrollTo(rijen[0])
+
+    def ruimte_onder(self, balk: int) -> None:
+        """Ruimte onder de tabel voor de zwevende balk (die staat 14 px boven de rand; de pagina heeft 28 px marge
+        en 14 px tussen de stukken): zo blijft er 8 px tussen de laatste regel en de balk."""
+        hoogte = max(balk - 20, 0)
+        self.details_ruimte.setFixedHeight(hoogte)
+        self.details_ruimte.setVisible(bool(balk))
+
+    def _beschermd_tip(self) -> None:
+        """Waarom de knoppen grijs zijn. Na elke plaats(): die zet bij alleen-icoontjes het woord als tip."""
+        regel = self.gekozen_regel() if not self.details_balk.isHidden() else None
+        if regel is None or not regel.beschermd:
+            return
+        tip = (t("Dit hoort bij BugOS of bij de computer zelf. Dat kun je hier niet beëindigen.",
+                 "This is part of BugOS or of the computer itself. You cannot end it here.") if regel.eigen
+               else t("Dit is niet van jou. Dat kun je hier niet beëindigen.",
+                      "This is not yours. You cannot end it here."))
+        for k in self.details_balk.knoppen.values():
+            k.setToolTip(tip)
+
+    def _pagina_weg(self, sleutel: str) -> None:
+        if sleutel != "details" and hasattr(self, "tabel"):
+            self.tabel.clearSelection()
+            self.details_balk.hide()
+            self.ruimte_onder(0)
 
     def vul_opstarten(self) -> None:
         kaart = self.opstart_kaart
@@ -239,6 +402,9 @@ class Taakbeheer(Venster):
 
     def plaats_balk(self) -> None:
         self.balk.plaats(self.inhoud.geometry())
+        if hasattr(self, "details_balk"):
+            self.details_balk.plaats(self.inhoud.geometry())
+            self._beschermd_tip()
 
     def resizeEvent(self, e) -> None:  # noqa: N802
         super().resizeEvent(e)
@@ -246,7 +412,9 @@ class Taakbeheer(Venster):
             self.plaats_balk()
 
     def escape(self) -> None:
-        if self.gekozen:
+        if self.huidige() == "details" and self.gekozen_regel() is not None:
+            self.tabel.clearSelection()
+        elif self.gekozen:
             self.kies(None)
         else:
             self.close()
@@ -293,8 +461,12 @@ class Taakbeheer(Venster):
                                 if m["buiten"] >= 1000 else t("↑ niets verstuurd", "↑ nothing sent"),   # niet 'rustig verstuurd
                                 m["binnen"] + m["buiten"])
         if m.get("videokaart") is not None:
-            self.kaart_video.show()
+            if self.kaart_video.isHidden():
+                self.kaart_video.show()
+                self.meet_plooi.herschik()
             self.kaart_video.zet(f"{m['videokaart']:.0f}%", t("bezig", "busy"), m["videokaart"])
+        self.samen_plooi.bijwerken()
+        self.meet_plooi.bijwerken()
         # programma's
         self.werk_lijst_bij(self.apps_lay, self.rijen, [x for x in taken if x.soort == "app"], self.geen_apps)
         achter = sorted([x for x in taken if x.soort != "app"],
@@ -306,6 +478,8 @@ class Taakbeheer(Venster):
                                        f"Show background ({n}, advanced)"))
         if self.gekozen and self.taak_van(self.gekozen) is None:
             self.kies(None)  # het gekozen programma is weg
+        if self.huidige() == "details":
+            self._bewaak(lambda: self.proces_model.zet(m.get("processen", [])))
 
     def werk_lijst_bij(self, lay: QVBoxLayout, rijen: dict[str, TaakRij], taken: list[bt.Taak],
                        leeg: QLabel | None) -> None:
@@ -354,6 +528,11 @@ class Taakbeheer(Venster):
         """Netjes sluiten: de vensters dicht, zoals op het kruisje klikken (het programma kan nog vragen
         of je wilt opslaan). Achtergrondtaken krijgen een vriendelijk stopverzoek."""
         sleutel, naam, pids, app = taak.sleutel, taak.naam, list(taak.pids), taak.soort == "app"
+        if self.draad.voorbeeld:
+            # Voorbeeldstand (foto's): de nummers 101, 102 ... zijn op deze computer echte processen. Niets sturen,
+            # ook KWin niets vragen; alleen laten zien hoe het eruitziet (X1, review 11).
+            self.programmas.melding.toon(t(f"{naam} is gesloten.", f"{naam} is closed."), "goed", seconden=5)
+            return
 
         def werk() -> bool:
             if app and self.sluit_vensters(pids):
@@ -394,6 +573,10 @@ class Taakbeheer(Venster):
         if taak.beschermd:
             return
         naam, pids, eenheid = taak.naam, list(taak.pids), taak.eenheid if taak.soort == "app" else ""
+        if self.draad.voorbeeld:   # (X1)
+            self.programmas.melding.toon(t(f"{naam} is geforceerd gesloten.", f"{naam} was force closed."), "goed",
+                                         seconden=5)
+            return
 
         def werk() -> None:
             bt.stop(pids, hard=True)
@@ -406,6 +589,76 @@ class Taakbeheer(Venster):
 
         self.op_achtergrond(werk, lambda _: self.programmas.melding.toon(
             t(f"{naam} is geforceerd gesloten.", f"{naam} was force closed."), "goed", seconden=5))
+
+    # ------------------------------------------------- Details: beëindigen
+    def beeindig_gekozen(self, hard: bool = False) -> None:
+        """Eerst vragen (er kan werk verloren gaan, review 1). Een programma met vensters eerst netjes sluiten,
+        zoals op het kruisje klikken; anders een stopverzoek (TERM). Geforceerd: meteen (KILL)."""
+        regel = self.gekozen_regel()
+        if regel is None or regel.beschermd:
+            return
+        naam = regel.naam
+        if hard:
+            vraag, uitleg, knop = (t("{naam} geforceerd beëindigen?", "Force {naam} to end?"),
+                                   t("Het stopt meteen, zonder iets te vragen. Werk dat niet is opgeslagen gaat "
+                                     "verloren.", "It stops at once, without asking anything. Work that is not saved "
+                                     "will be lost."), t("Geforceerd beëindigen", "Force end"))
+        else:
+            vraag, uitleg, knop = (t("{naam} beëindigen?", "End {naam}?"),
+                                   t("Werk dat niet is opgeslagen, kan verloren gaan.",
+                                     "Work that is not saved may be lost."), t("Beëindigen", "End"))
+        if not vraag_ja(self, vraag.replace("{naam}", naam), uitleg, knop, enter_is_nee=True):
+            return
+        self.beeindig_regel(regel, hard)
+
+    def beeindig_regel(self, regel, hard: bool = False) -> None:
+        naam, melding = regel.naam, self.details.melding
+        if self.draad.voorbeeld:   # voorbeeldstand: niets sturen (X1)
+            melding.toon((t("{naam} is geforceerd beëindigd.", "{naam} was forced to end.") if hard
+                          else t("{naam} is beëindigd.", "{naam} has ended.")).replace("{naam}", naam), "goed",
+                         seconden=5)
+            return
+        netjes = regel.app and not hard
+
+        def werk() -> str:
+            if netjes and self.sluit_vensters([regel.pid]):
+                return "venster"
+            return bt.beeindig(regel, hard)
+
+        def klaar(uitkomst) -> None:
+            if uitkomst in ("klaar", "venster") and hard:
+                melding.toon(t("{naam} is geforceerd beëindigd.", "{naam} was forced to end.").replace("{naam}", naam),
+                             "goed", seconden=5)
+            elif uitkomst in ("klaar", "venster"):
+                QTimer.singleShot(3000, lambda: self.nog_bezig(regel, uitkomst == "venster"))
+            elif uitkomst == "weg":
+                melding.toon(t("{naam} draait al niet meer.", "{naam} is no longer running.").replace("{naam}", naam),
+                             "goed", seconden=5)
+            elif uitkomst == "mag_niet":
+                melding.toon(t("Dat mag niet: dit is niet van jou.", "Not allowed: this is not yours."), "fout")
+            elif uitkomst != "beschermd":
+                melding.toon(t("Beëindigen lukte niet. Probeer het opnieuw.", "Ending did not work. Try again."),
+                             "fout")
+
+        melding.toon(t("{naam} wordt beëindigd…", "Ending {naam}…").replace("{naam}", naam), seconden=6)
+        self.op_achtergrond(werk, klaar)
+
+    def nog_bezig(self, regel, venster: bool) -> None:
+        naam, melding = regel.naam, self.details.melding
+        if not bt.zelfde_proces(regel.pid, regel.start):
+            melding.toon(t("{naam} is beëindigd.", "{naam} has ended.").replace("{naam}", naam), "goed", seconden=5)
+            return
+        if venster:
+            tekst = t("{naam} draait nog. Vraagt het iets, bijvoorbeeld of je wilt opslaan? Kijk dan even in dat "
+                      "venster. Reageert het niet? Beëindig het dan geforceerd.",
+                      "{naam} is still running. Is it asking something, for example whether to save? Then look at "
+                      "that window. Not responding? Then force it to end.")
+        else:
+            tekst = t("{naam} draait nog. Reageert het niet? Beëindig het dan geforceerd.",
+                      "{naam} is still running. Not responding? Then force it to end.")
+        # De knop kijkt bij het klikken opnieuw of het nog precies hetzelfde proces is (bt.beeindig doet dat).
+        melding.toon(tekst.replace("{naam}", naam), "let_op", knop=t("Geforceerd beëindigen", "Force end"),
+                     actie=lambda: self.beeindig_regel(regel, hard=True), seconden=60)
 
     @staticmethod
     def sluit_vensters(pids: list[int]) -> bool:
@@ -443,6 +696,8 @@ class Taakbeheer(Venster):
             self.ga_naar("prestaties")
         elif "--opstarten" in args:
             self.ga_naar("opstarten")
+        elif "--details" in args:
+            self.ga_naar("details")
 
     def closeEvent(self, e) -> None:  # noqa: N802
         self.stop_meten()
