@@ -42,8 +42,8 @@ glibc-all-langpacks
 kio-fuse
 
 # Schijven: USB-sticks leegmaken (exFAT, werkt overal) en repareren, in Bestanden zelf.
-# (Geen KDE Partition Manager meer: geen BugOS-app opent hem nog. De basis brengt hem wel mee, dus alleen hier
-# weglaten helpt niet: build.sh haalt hem weg, met kpmcore.)
+# (Geen KDE Partition Manager meer: Bestanden doet de schijven zelf, met het pakket tools ook een tweede interne
+# schijf wissen. De basis brengt hem wel mee, dus alleen hier weglaten helpt niet: build.sh haalt hem weg, met kpmcore.)
 exfatprogs
 dosfstools
 

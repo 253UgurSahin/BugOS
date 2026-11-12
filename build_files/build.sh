@@ -70,11 +70,14 @@ if [ "${#TEVEEL[@]}" -gt 0 ]; then
     rpm -e "${TEVEEL[@]}"
 fi
 
-# Geen KDE Partition Manager. De basis (Kinoite) brengt hem mee, maar BugOS opent hem nergens meer: Bestanden maakt
-# zelf USB-sticks leeg en richt een nieuwe schijf zelf in, en het startmenu verbergt hem (style.sh). Toch bleef
-# zijn Solid-actie 'Reformat or Edit with Partition Manager' bij elke USB-stick staan in 'Schijven en apparaten'
-# (het systeemvak). Niets anders heeft kde-partitionmanager of kpmcore nodig (rpm -e --test op Kinoite 44 en op
-# BugOS slaagt). Zelfde aanpak als bij Discover: alleen als hij er is, en zonder --nodeps.
+# Geen KDE Partition Manager. De basis (Kinoite) brengt hem mee. Het startmenu verbergt hem al (style.sh), maar zijn
+# Solid-actie 'Reformat or Edit with Partition Manager' stond nog bij elke USB-stick in 'Schijven en apparaten' (het
+# systeemvak). Bestanden maakt zelf USB-sticks leeg en richt een nieuwe schijf zelf in. Een tweede interne schijf
+# wissen kan Bestanden pas met het pakket tools, dat ook de knop 'Schijfbeheer (voor gevorderden)' uit Bestanden
+# haalt. Zonder dat pakket verdwijnt die knop hier vanzelf (Bestanden laat hem alleen zien als partitionmanager er
+# is), en kan BugOS een tweede interne schijf niet meer wissen of indelen: dit hoort dus in hetzelfde beeld als tools.
+# Niets anders heeft kde-partitionmanager of kpmcore nodig (rpm -e --test op Kinoite 44 en op BugOS slaagt).
+# Zelfde aanpak als bij Discover: alleen als hij er is, en zonder --nodeps.
 mapfile -t SCHIJFBEHEER < <(rpm -q --qf '%{NAME}\n' kde-partitionmanager kpmcore 2>/dev/null \
     | grep -v 'not installed' || true)
 if [ "${#SCHIJFBEHEER[@]}" -gt 0 ]; then
