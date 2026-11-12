@@ -17,8 +17,9 @@ from __future__ import annotations
 import importlib.machinery
 import importlib.util
 import os
+import shutil
 import signal
-import stat as _stat
+import subprocess
 import sys
 import tempfile
 import time
@@ -27,6 +28,58 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 LIB = ROOT / "system_files" / "usr" / "lib" / "bugos" / "python"
 sys.path.insert(0, str(LIB))
+
+
+def _r13_kind() -> None:
+    """Het eigen proces van de R13-ronde (zie _r13_ronde verderop): de omgeving (scherm van 1280x800, schaal, taal,
+    voorbeeldstand) komt van de ouder. Bouw Taakbeheer en Bestanden > Deze computer zoals bugos_ui.uitvoeren dat doet
+    (passend op het scherm) en druk per pagina af hoeveel hij opzij schuift: 'PAGINA app pagina pixels'."""
+    import importlib.machinery as _im
+    import importlib.util as _iu
+
+    import bugos_ui
+    if os.environ.get("BUGOS_TEST_GROOT"):
+        bugos_ui.letter_schaal = lambda _f: 1.5   # zoals KDE 'Grote letters' (net als tools/test_native_layout.py)
+    from PySide6.QtCore import QEventLoop, QTimer as _QTimer
+
+    bugos_ui.maak_app("bugos-test", "bugos-test", [sys.argv[0]])
+
+    def wacht(ms: int) -> None:
+        lus = QEventLoop()
+        _QTimer.singleShot(ms, lus.quit)
+        lus.exec()
+
+    def laad_(naam: str, pad: Path):
+        lader = _im.SourceFileLoader(naam, str(pad))
+        module = _iu.module_from_spec(_iu.spec_from_loader(naam, lader))
+        lader.exec_module(module)
+        return module
+
+    taken = laad_("tm_r13", ROOT / "system_files" / "usr" / "bin" / "bugos-task-manager").Taakbeheer()
+    bugos_ui.pas_in_scherm(taken)
+    taken.show()
+    wacht(2600)   # één voorbeeldmeting afwachten (dan staan de getallen er, en zijn de kaarten zo breed als echt)
+    for pg in ("programmas", "prestaties", "opstarten", "details"):
+        taken.ga_naar(pg)
+        wacht(150)
+        print(f"PAGINA tasks {pg} {taken.paginas[pg].horizontalScrollBar().maximum()}", flush=True)
+    taken.draad.stop()
+    taken.draad.wait(3000)
+    bestanden = laad_("bf_r13", ROOT / "system_files" / "usr" / "bin" / "bugos-files").Bestanden()
+    bugos_ui.pas_in_scherm(bestanden)
+    bestanden.show()
+    bestanden.open_computer()
+    wacht(300)
+    print(f"PAGINA files computer {bestanden.computer.horizontalScrollBar().maximum()}", flush=True)
+    bestanden.meer_knop.click()
+    wacht(200)
+    print(f"PAGINA files computer-alles {bestanden.computer.horizontalScrollBar().maximum()}", flush=True)
+    sys.stdout.flush()
+    os._exit(0)   # niet wachten op draadjes die nog lopen
+
+
+if sys.argv[1:2] == ["--r13"]:
+    _r13_kind()
 
 TMP = Path(tempfile.mkdtemp(prefix="bugos-tools-test-"))
 PROC = TMP / "proc"
@@ -116,8 +169,8 @@ bh.start, bh.draai, bh.bestaat, bh.shutil.disk_usage = _echt_hulp
 import bugos_ui  # noqa: E402
 
 app = bugos_ui.maak_app("bugos-test", "bugos-test", [sys.argv[0]])
-from PySide6.QtCore import QPoint, Qt  # noqa: E402
-from PySide6.QtWidgets import QApplication, QDialog, QLabel, QMenu, QPushButton  # noqa: E402
+from PySide6.QtCore import QPoint, Qt, QTimer  # noqa: E402
+from PySide6.QtWidgets import QDialog, QLabel, QMenu, QPushButton  # noqa: E402
 
 import bugos_shell  # noqa: E402
 
@@ -154,8 +207,12 @@ import bugos_files_computer as bfc  # noqa: E402
 
 for _bestand in ("bugos_files_bewerken.py", "bugos_files_computer.py", "bugos_files_schijven.py"):
     _tekst = (LIB / _bestand).read_text(encoding="utf-8")
-    klopt("dolphin" not in _tekst.lower() and "partitionmanager" not in _tekst and "subprocess.Popen" not in _tekst,
-          f"Bestanden: {_bestand} start geen Dolphin of Schijfbeheer (en noemt ze niet)")
+    # Het enige programma dat deze stukjes zelf starten, is 'flatpak list' (de apps voor iedereen tellen): geen
+    # Dolphin, geen Schijfbeheer, geen ander KDE-programma.
+    _starts = [s.split("(", 1)[1][:12] for s in _tekst.split("subprocess.Popen")[1:]]
+    klopt("dolphin" not in _tekst.lower() and "partitionmanager" not in _tekst
+          and all(s.startswith('["flatpak"') for s in _starts),
+          f"Bestanden: {_bestand} start geen Dolphin of Schijfbeheer (en noemt ze niet) ({_starts})")
 klopt("Dolphin" not in (ROOT / "system_files" / "usr" / "bin" / "bugos-files").read_text(encoding="utf-8"),
       "Bestanden: de uitleg bovenin bugos-files noemt Dolphin niet meer")
 _menus: list[list[str]] = []
@@ -211,65 +268,277 @@ klopt(not any("Schijfbeheer" in x or "Disk management" in x for x in _knoppen),
       f"F2: Deze computer: geen knop 'Schijfbeheer (voor gevorderden)' ({_knoppen})")
 
 # Review 8: een tweede schijf in de computer (de oude D:) kun je in Bestanden zelf wissen; de Windows-schijf nooit.
+# Wissen kan niet ongedaan worden, dus hier staat elke 'nee' apart: de schijf van BugOS, de live-stick (als stick én
+# als schijf in een virtuele computer), een btrfs over twee schijven (lsblk noemt er maar één), /etc/fstab en
+# /etc/crypttab, iets wat ergens anders open staat, een dichte schijf, de opstart-vlag en een ander Linux. Alles met
+# een nep-lsblk, een nep-/proc/self/mountinfo, een nep-/sys en een nep-/etc: er wordt niets echt gewist.
 import json as _json  # noqa: E402
 
+import bugos_drives as bd  # noqa: E402
+
 _lsblk = TMP / "lsblk.json"
-_d_schijf = TMP / "oude-d"
-_d_schijf.mkdir()
-_win = TMP / "windows-c"
+_MEDIA = TMP / "media"   # speelt /run/media/<naam> na (waar udisks een schijf voor jou opent)
+_echt_media = bd.MEDIA_WORTELS
+bd.MEDIA_WORTELS = ("/run/media/", str(_MEDIA) + "/")
+_d_schijf, _win, _ander = _MEDIA / "Data", _MEDIA / "Windows", _MEDIA / "Linux"
+for _m in (_d_schijf, _MEDIA / "Boot", _MEDIA / "Wortel", _MEDIA / "Fstab", _MEDIA / "Kluis", _MEDIA / "Ruw",
+           _MEDIA / "Kluis2"):
+    _m.mkdir(parents=True, exist_ok=True)
 (_win / "Windows" / "System32").mkdir(parents=True)
+schrijf(_ander / "etc" / "os-release", 'NAME="Een ander Linux"\n')
 _BASIS = "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7"   # 'gewone gegevens' (Microsoft basic data)
-_lsblk.write_text(_json.dumps({"blockdevices": [
-    {"name": "sdb", "kname": "sdb", "path": "/dev/sdb", "type": "disk", "size": 500107862016, "rm": False,
-     "hotplug": False, "tran": "sata", "children": [
-         {"name": "sdb1", "kname": "sdb1", "path": "/dev/sdb1", "type": "part", "size": 500106813440, "fstype": "ntfs",
-          "label": "Data", "parttype": _BASIS, "fsavail": 400000000000, "fssize": 500106813440,
-          "mountpoints": [str(_d_schijf)]}]},
-    {"name": "nvme0n1", "kname": "nvme0n1", "path": "/dev/nvme0n1", "type": "disk", "size": 256060514304, "rm": False,
-     "hotplug": False, "tran": "nvme", "children": [
-         {"name": "nvme0n1p1", "path": "/dev/nvme0n1p1", "type": "part", "size": 104857600, "fstype": "vfat",
-          "parttype": "c12a7328-f81f-11d2-ba4b-00a0c93ec93b", "mountpoints": [None]},
-         {"name": "nvme0n1p2", "path": "/dev/nvme0n1p2", "type": "part", "size": 16777216, "fstype": None,
-          "parttype": "e3c9e316-0b5c-4db8-817d-f92df00215ae", "mountpoints": [None]},
-         {"name": "nvme0n1p3", "kname": "nvme0n1p3", "path": "/dev/nvme0n1p3", "type": "part", "size": 255000000000,
-          "fstype": "ntfs", "label": "Windows", "parttype": _BASIS, "fsavail": 100000000000, "fssize": 255000000000,
-          "mountpoints": [str(_win)]}]}]}))
+_EFI, _MSR = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b", "e3c9e316-0b5c-4db8-817d-f92df00215ae"
+_LINUX = "0fc63daf-8483-4772-8e79-3d69d8477de4"   # 'Linux-bestanden' (gewone gegevens)
+
+
+def _deel(naam: str, fs: str | None, plek=None, grootte: int = 250_000_000_000, soort: str = _BASIS,
+          label: str | None = None, vlag: str | None = None, kinderen: list | None = None, uuid: str = "") -> dict:
+    """Een stuk (partitie) zoals lsblk -J het geeft."""
+    d = {"name": naam, "kname": naam, "path": f"/dev/{naam}", "type": "part", "size": grootte, "fstype": fs,
+         "label": label, "parttype": soort, "uuid": uuid or f"uuid-{naam}", "partuuid": f"pu-{naam}",
+         "partflags": vlag, "fsavail": 10**11 if plek else None, "fssize": grootte if plek else None,
+         "mountpoints": [str(plek) if plek else None]}
+    if kinderen:
+        d["children"] = kinderen
+    return d
+
+
+def _schijf(naam: str, kinderen: list, grootte: int = 500_107_862_016, tran: str = "sata", los: bool = False,
+            tabel: str = "gpt", fs: str | None = None) -> dict:
+    """Een hele schijf zoals lsblk -J het geeft."""
+    return {"name": naam, "kname": naam, "path": f"/dev/{naam}", "type": "disk", "size": grootte, "rm": los,
+            "hotplug": los, "tran": tran, "pttype": tabel, "ptuuid": f"pt-{naam}", "fstype": fs, "children": kinderen}
+
+
+def _luks(naam: str, dm: str, plek, label: str) -> dict:
+    """Een versleuteld stuk dat open is (slot open, en wat erin staat ook)."""
+    return _deel(naam, "crypto_LUKS", kinderen=[
+        {"name": f"luks-{naam}", "kname": dm, "path": f"/dev/mapper/luks-{naam}", "type": "crypt", "fstype": "ext4",
+         "label": label, "uuid": f"uuid-in-{naam}", "fsavail": 10**11, "fssize": 249 * 10**9,
+         "mountpoints": [str(plek)]}])
+
+
+def _schijven_lijst(d_open: bool = True, d_grootte: int = 500_107_862_016) -> list:
+    return [
+        # De oude D: (NTFS, open bij jou): die mag.
+        _schijf("sdb", [_deel("sdb1", "ntfs", _d_schijf if d_open else None, 500_106_813_440, label="Data")],
+                grootte=d_grootte),
+        # De Windows-schijf: EFI, 'gereserveerd voor Microsoft', en Windows erop. Nooit.
+        _schijf("nvme0n1", [_deel("nvme0n1p1", "vfat", None, 104_857_600, _EFI),
+                            _deel("nvme0n1p2", None, None, 16_777_216, _MSR),
+                            _deel("nvme0n1p3", "ntfs", _win, 255_000_000_000, label="Windows")],
+                grootte=256_060_514_304, tran="nvme"),
+        # BugOS zelf: staat niet eens in Bestanden.
+        _schijf("nvme1n1", [_deel("nvme1n1p1", "vfat", "/boot/efi", 629_145_600, _EFI),
+                            _deel("nvme1n1p2", "ext4", "/boot", 2_147_483_648, _LINUX),
+                            _deel("nvme1n1p3", "btrfs", "/sysroot", 500_000_000_000, _LINUX)], tran="nvme"),
+        # De live-stick waar BugOS van draait (USB), en dezelfde stick als schijf in een virtuele computer.
+        _schijf("sdc", [_deel("sdc1", "iso9660", "/run/initramfs/live", 3_000_000_000, "0x0", label="BugOS-Live"),
+                        _deel("sdc2", "vfat", None, 20_000_000, "0xef")], 32_000_000_000, "usb", True, "dos",
+                "iso9660"),
+        _schijf("sdh", [_deel("sdh1", "iso9660", "/run/initramfs/live", 3_000_000_000, "0x0", label="BugOS-Live"),
+                        _deel("sdh2", "vfat", None, 20_000_000, "0xef")], 3_100_000_000, tabel="dos", fs="iso9660"),
+        # Het systeem op btrfs over twee schijven: lsblk noemt alleen sdd1 als open, sde1 lijkt een dichte schijf.
+        _schijf("sdd", [_deel("sdd1", "btrfs", "/sysroot", soort=_LINUX, uuid="raid-1")]),
+        _schijf("sde", [_deel("sde1", "btrfs", None, soort=_LINUX, uuid="raid-1", label="fedora")]),
+        # Een oude pc met Linux op de oude indeling: de opstart-vlag staat aan (open bij jou, zonder kenmerken).
+        _schijf("sdi", [_deel("sdi1", "ext4", _MEDIA / "Boot", 1_073_741_824, "0x83", vlag="0x80"),
+                        _deel("sdi2", "btrfs", _MEDIA / "Wortel", soort="0x83")], tabel="dos"),
+        # Een dataschijf die het systeem zelf opent (/etc/fstab, op /mnt/backup).
+        _schijf("sdj", [_deel("sdj1", "ext4", "/mnt/backup", soort=_LINUX, label="Backup")]),
+        # Open bij jou, maar /etc/fstab noemt hem (UUID) of /etc/crypttab het slot (met hoofdletters).
+        _schijf("sdk", [_deel("sdk1", "ext4", _MEDIA / "Fstab", soort=_LINUX, label="Fstab")]),
+        _schijf("sdq", [_luks("sdq1", "dm-7", _MEDIA / "Kluis2", "Kluis2")]),
+        # Dicht: BugOS kan niet zien wat erop staat.
+        _schijf("sdl", [_deel("sdl1", "ext4", None, soort=_LINUX, label="Dicht")]),
+        # Een ander Linux, open: herkenbaar aan etc/os-release.
+        _schijf("sdm", [_deel("sdm1", "ext4", _ander, soort=_LINUX, label="Linux")]),
+        # Versleuteld en open bij jou: die mag (dicht, op slot, dan wissen).
+        _schijf("sdn", [_luks("sdn1", "dm-3", _MEDIA / "Kluis", "Kluis")]),
+        # Een stuk zonder herkenbaar bestandssysteem naast een open stuk: niet te zien, dus niet.
+        _schijf("sdo", [_deel("sdo1", "ext4", _MEDIA / "Ruw", soort=_LINUX, label="Ruw"),
+                        _deel("sdo2", None, None, soort=_LINUX)]),
+    ]
+
+
+def _zet_lsblk(lijst: list) -> None:
+    _lsblk.write_text(_json.dumps({"blockdevices": lijst}))
+
+
+_zet_lsblk(_schijven_lijst())
 os.environ["BUGOS_LSBLK"] = str(_lsblk)
+# Wat het draaiende systeem gebruikt: een nep-/proc (mountinfo, swaps), nep-/sys en nep-/etc.
+_PROC2, _SYS2, _ETC2 = TMP / "proc-schijven", TMP / "sys-schijven", TMP / "etc-schijven"
+schrijf(_PROC2 / "self" / "mountinfo", "\n".join([
+    "30 1 0:31 / / ro,relatime shared:1 - overlay composefs ro",
+    "31 30 0:40 / /sysroot rw,relatime shared:2 - btrfs /dev/sdd1 rw,space_cache=v2",
+    "32 30 8:33 / /run/initramfs/live ro,relatime shared:3 - iso9660 /dev/sdc1 ro",
+    "33 30 8:145 / /mnt/backup rw,relatime shared:4 - ext4 /dev/sdj1 rw",
+    f"34 30 8:17 / {_d_schijf} rw,nosuid,nodev shared:5 - ntfs3 /dev/sdb1 rw",
+    f"35 30 8:209 / {_MEDIA}/Mijn\\040Schijf rw shared:6 - ext4 /dev/sdz1 rw",
+]) + "\n")
+schrijf(_PROC2 / "swaps", "Filename\t\tType\t\tSize\tUsed\tPriority\n/dev/sdg2  partition  8388604  0  -2\n"
+                          "/dev/zram0  partition  8388604  0  100\n")
+
+
+def _sys_deel(schijf: str, deel: str, nummer: str = "") -> None:
+    """Een stuk in de nep-/sys: devices/.../block/<schijf>/<deel>/partition, class/block/<naam> en dev/block/M:m."""
+    m = _SYS2 / "devices" / "pci0" / "block" / schijf / deel
+    m.mkdir(parents=True, exist_ok=True)
+    (m / "partition").write_text("1\n")
+    (_SYS2 / "class" / "block").mkdir(parents=True, exist_ok=True)
+    for naam, doel in ((deel, m), (schijf, m.parent)):
+        if not (_SYS2 / "class" / "block" / naam).exists():
+            (_SYS2 / "class" / "block" / naam).symlink_to(doel)
+    if nummer:
+        (_SYS2 / "dev" / "block").mkdir(parents=True, exist_ok=True)
+        (_SYS2 / "dev" / "block" / nummer).symlink_to(m)
+
+
+for _s, _p, _n in (("sdb", "sdb1", "8:17"), ("sdc", "sdc1", "8:33"), ("sdd", "sdd1", "8:49"), ("sde", "sde1", "8:65"),
+                   ("sdj", "sdj1", "8:145"), ("sdg", "sdg2", "8:98"), ("sdn", "sdn1", "8:209")):
+    _sys_deel(_s, _p, _n)
+for _lid in ("sdd1", "sde1"):   # de twee leden van de btrfs van het systeem
+    schrijf(_SYS2 / "fs" / "btrfs" / "1a2b3c" / "devices" / _lid, "")
+schrijf(_ETC2 / "fstab", "UUID=uuid-sdk1  /data  ext4  defaults,nofail  0 2\n# UUID=uuid-sdb1 /oud ntfs 0 0\n")
+schrijf(_ETC2 / "crypttab", "luks-kluis2  UUID=UUID-SDQ1  none  discard\n")
+_echt_omgeving = {k: os.environ.get(k) for k in ("BUGOS_PROC", "BUGOS_SYS", "BUGOS_ETC")}
+os.environ.update(BUGOS_PROC=str(_PROC2), BUGOS_SYS=str(_SYS2), BUGOS_ETC=str(_ETC2))
 import bugos_files_schijven as bfs  # noqa: E402
 
+_kp = {k.plek: k for k in bd.koppelingen()}
+klopt(_kp.get("/sysroot") is not None and _kp["/sysroot"].soort == "btrfs" and _kp["/sysroot"].bron == "/dev/sdd1"
+      and f"{_MEDIA}/Mijn Schijf" in _kp, f"wissen: /proc/self/mountinfo lezen (ook \\040 in een naam) ({sorted(_kp)})")
+_in_gebruik = bd.stations_in_gebruik()
+klopt(_in_gebruik == {"sdd", "sde", "sdc", "sdj", "sdg"},
+      "wissen: het systeem gebruikt sdd (/sysroot), sde (tweede schijf van die btrfs), sdc (de live-stick), sdj "
+      f"(/mnt/backup) en sdg (swap); niet wat bij jou open staat (sdb, sdn) ({sorted(_in_gebruik)})")
+klopt(bd.fstab_sleutels() >= {"UUID=uuid-sdk1", "UUID=uuid-sdq1"} and "UUID=uuid-sdb1" not in bd.fstab_sleutels(),
+      "wissen: /etc/fstab en /etc/crypttab lezen (zonder hoofdletters, zonder wat 'uit' staat met #)")
 venster.vul_zijbalk()
+_stations = {x.station for x in venster.lijst_schijven}
+klopt(not _stations & {"/dev/nvme1n1", "/dev/sdc", "/dev/sdh", "/dev/sdd"} and "/dev/sdb" in _stations,
+      f"wissen: de schijf van BugOS, de live-stick (ook als schijf) en /sysroot staan niet eens in Bestanden "
+      f"({sorted(_stations)})")
+_per_station = {}
+for _x in venster.lijst_schijven:
+    _per_station.setdefault(_x.station, _x)
 _d = next((x for x in venster.lijst_schijven if x.naam == "Data"), None)
 _w = next((x for x in venster.lijst_schijven if x.naam == "Windows"), None)
 klopt(_d is not None and _w is not None and bfs.wisbare_interne_schijf(_d) and not bfs.wisbare_interne_schijf(_w),
       "review 8: de dataschijf (D:) mag gewist worden, de schijf waar Windows van opstart niet")
+_waarom = {s: bfs.wis_bezwaar(_per_station[f"/dev/{s}"]) for s in ("sdb", "sdn", "nvme0n1", "sde", "sdi", "sdj", "sdk",
+                                                                     "sdq", "sdl", "sdm", "sdo")}
+klopt(_waarom["sdb"] == "" and _waarom["sdn"] == "", f"wissen: de oude D: en een open versleutelde schijf mogen ({_waarom})")
+klopt("opstart" in _waarom["nvme0n1"] and "gebruik door het systeem" in _waarom["sde"]
+      and "opstart-vlag" in _waarom["sdi"] and "gebruik door het systeem" in _waarom["sdj"]
+      and "fstab" in _waarom["sdk"] and "fstab" in _waarom["sdq"] and "dicht" in _waarom["sdl"]
+      and "besturingssysteem" in _waarom["sdm"] and "dicht" in _waarom["sdo"],
+      f"wissen: elke 'nee' om de goede reden (Windows, btrfs-lid, opstart-vlag, /mnt, fstab, crypttab, dicht, ander "
+      f"Linux, onleesbaar stuk) ({_waarom})")
+# Ook als iemand een schijf die niet in de lijst staat toch probeert (een oude regel, een andere weg): nee.
+_geforceerd = {naam: bfs.wis_bezwaar(bd.Schijf(f"/dev/{deel}", naam, "intern", f"/dev/{schijf}", f"/dev/{deel}"))
+               for naam, schijf, deel in (("BugOS", "nvme1n1", "nvme1n1p3"), ("live-stick", "sdc", "sdc1"),
+                                          ("live-schijf", "sdh", "sdh1"), ("btrfs", "sdd", "sdd1"))}
+klopt(all(_geforceerd.values()), f"wissen: de schijf van BugOS, de live-stick en de systeem-btrfs nooit ({_geforceerd})")
+_stick = bd.Schijf("/dev/sdc1", "BugOS-Live", "stick", "/dev/sdc", "/dev/sdc1", wortel="/run/initramfs/live",
+                   fs="iso9660")
+klopt(bfs.los_in_gebruik(_stick)
+      and "Leegmaken (alles wissen)…" not in [a.text() for a in venster.schijf_menu(_stick).actions()],
+      "wissen: de stick waar BugOS van draait, kun je ook als stick niet leegmaken")
 klopt("Leegmaken (alles wissen)…" in [a.text() for a in venster.schijf_menu(_d).actions()]
-      and "Leegmaken (alles wissen)…" not in [a.text() for a in venster.schijf_menu(_w).actions()],
-      "review 8: alleen de dataschijf heeft 'Leegmaken (alles wissen)…' in zijn menu")
+      and not any("Leegmaken (alles wissen)…" in [a.text() for a in venster.schijf_menu(_per_station[f"/dev/{s}"]).actions()]
+                  for s in ("nvme0n1", "sde", "sdi", "sdj", "sdk", "sdl", "sdm", "sdo")),
+      "review 8: alleen een schijf die mag, heeft 'Leegmaken (alles wissen)…' in zijn menu")
 _gezien.clear()
 _beheerd: list = []
 _echt_beheer = venster.beheer
-venster.beheer = lambda x, stappen, *a, **k: _beheerd.append((x.station, [" ".join(st) for st in stappen]))
+venster.beheer = lambda x, stappen, *a, **k: _beheerd.append((x.station, list(stappen)))
 bugos_shell.VraagDialoog.exec = lambda self: (_gezien.append(self), QDialog.DialogCode.Rejected)[1]
 venster.wis_interne_schijf(_d)
 klopt(not _beheerd and _gezien and "500 GB" in _gezien[-1].uitleg.text() and "'Data'" in _gezien[-1].uitleg.text()
       and _gezien[-1].standaard == "Annuleren",
       "review 8: wissen vraagt eerst, met de naam en de grootte; Enter = Annuleren; Annuleren wist niets")
-bugos_shell.VraagDialoog.exec = lambda self: QDialog.DialogCode.Accepted
-venster.wis_interne_schijf(_w)
+_gezien.clear()
+bugos_shell.VraagDialoog.exec = lambda self: (_gezien.append(self), QDialog.DialogCode.Accepted)[1]
+for _s in ("nvme0n1", "sde", "sdi", "sdj", "sdk", "sdl", "sdm", "sdo"):
+    venster.wis_interne_schijf(_per_station[f"/dev/{_s}"])
+klopt(not _beheerd and not _gezien, "wissen: een schijf die niet mag, krijgt niet eens de vraag (en er gebeurt niets)")
 venster.wis_interne_schijf(_d)
-bugos_shell.VraagDialoog.exec = _echt_exec
+venster.wis_interne_schijf(_per_station["/dev/sdn"])
+
+
+def _tekst_van(stappen: list) -> list:
+    return ["(controle)" if callable(st) else " ".join(st) for st in stappen]
+
+
+_st = _tekst_van(_beheerd[0][1]) if _beheerd else []
+klopt(len(_beheerd) == 2 and _beheerd[0][0] == "/dev/sdb" and _st[0] == "udisksctl unmount -b /dev/sdb1"
+      and _st[1] == "(controle)" and "block_devices/sdb --method org.freedesktop.UDisks2.Block.Format 'gpt'" in _st[2]
+      and "'ext4'" in _st[3] and _st[4] == "udisksctl mount -b /dev/sdb1" and not any("nvme" in x for x in _st),
+      f"review 8: Alles wissen: eerst dicht, dan de laatste controle, dan nieuwe indeling en ext4 op sdb ({_st})")
+_st_n = _tekst_van(_beheerd[1][1]) if len(_beheerd) > 1 else []
+klopt(_st_n[:3] == ["udisksctl unmount -b /dev/mapper/luks-sdn1", "udisksctl lock -b /dev/sdn1", "(controle)"]
+      and "block_devices/sdn " in _st_n[3], f"wissen: een versleutelde schijf eerst dicht en op slot ({_st_n})")
+# De laatste controle (vlak vóór het wissen): zolang er iets open staat, of het een andere schijf is: nee.
+_controle = _beheerd[0][1][1] if _beheerd else (lambda: True)
+_nog_open = _controle()
+_zet_lsblk(_schijven_lijst(d_open=False))
+_dicht_ok = _controle()
+_zet_lsblk(_schijven_lijst(d_open=False, d_grootte=2_000_398_934_016))   # een andere schijf kreeg de naam /dev/sdb
+_andere = _controle()
+_zet_lsblk(_schijven_lijst(d_open=False))
+schrijf(_ETC2 / "fstab", "UUID=uuid-sdb1  /data  ntfs  defaults  0 0\n")
+_fstab_nu = _controle()
+schrijf(_ETC2 / "fstab", "UUID=uuid-sdk1  /data  ext4  defaults,nofail  0 2\n")
+klopt(_nog_open is False and _dicht_ok is True and _andere is False and _fstab_nu is False,
+      f"wissen: de laatste controle zegt alleen ja als alles dicht is en het dezelfde schijf is "
+      f"(open {_nog_open}, dicht {_dicht_ok}, andere schijf {_andere}, nu in fstab {_fstab_nu})")
 venster.beheer = _echt_beheer
-_st = _beheerd[0][1] if _beheerd else []
-klopt(len(_beheerd) == 1 and _beheerd[0][0] == "/dev/sdb" and _st[0].startswith("udisksctl unmount -b /dev/sdb1")
-      and "block_devices/sdb --method org.freedesktop.UDisks2.Block.Format 'gpt'" in _st[1]
-      and "'ext4'" in _st[2] and _st[3] == "udisksctl mount -b /dev/sdb1" and not any("nvme" in x for x in _st),
-      f"review 8: Alles wissen: eerst dicht, dan nieuwe indeling en ext4 op sdb, nooit op de Windows-schijf ({_st})")
+
+# Van begin tot eind, met het echte draai() (QProcess) en nep-udisksctl en nep-gdbus die opschrijven wat ze moeten
+# doen: (a) dichtzetten lukt echt (lsblk ziet hem daarna dicht): dan wissen; (b) udisksctl zegt 'ok' maar lsblk ziet
+# hem nog open: dan stopt de laatste controle alles, er komt geen enkele opdracht om te wissen.
+_LOG, _NA_DICHT = TMP / "udisks.log", TMP / "lsblk-na-dicht.json"
+schrijf(BIN / "udisksctl", '#!/bin/sh\necho "udisksctl $*" >> "$NEP_LOG"\n'
+                           'if [ "$1" = unmount ] && [ -n "$NEP_NA_DICHT" ]; then cp "$NEP_NA_DICHT" "$BUGOS_LSBLK"; fi\n'
+                           'exit 0\n')
+schrijf(BIN / "gdbus", '#!/bin/sh\necho "gdbus $*" >> "$NEP_LOG"\nexit 0\n')
+for _p in ("udisksctl", "gdbus"):
+    (BIN / _p).chmod(0o755)
+_NA_DICHT.write_text(_json.dumps({"blockdevices": _schijven_lijst(d_open=False)}))
+_uitkomst = {}
+for _geval, _na in (("echt dicht", str(_NA_DICHT)), ("nog open", "")):
+    _zet_lsblk(_schijven_lijst())
+    venster.vul_zijbalk()
+    _d = next((x for x in venster.lijst_schijven if x.naam == "Data"), None)
+    _LOG.write_text("")
+    os.environ.update(NEP_LOG=str(_LOG), NEP_NA_DICHT=_na)
+    venster.wis_interne_schijf(_d)
+    wacht_tot(lambda: not venster.bezig, 15)
+    _uitkomst[_geval] = (_LOG.read_text().splitlines(), venster.melding.tekst.text())
+bugos_shell.VraagDialoog.exec = _echt_exec
+_echt_dicht, _nog_open_log = _uitkomst["echt dicht"][0], _uitkomst["nog open"][0]
+klopt(len(_echt_dicht) == 4 and _echt_dicht[0] == "udisksctl unmount -b /dev/sdb1" and "Block.Format" in _echt_dicht[1]
+      and "CreatePartitionAndFormat" in _echt_dicht[2] and _echt_dicht[3] == "udisksctl mount -b /dev/sdb1"
+      and "is leeg" in _uitkomst["echt dicht"][1],
+      f"wissen (echt draaien): dicht, controle, wissen, klaarmaken, openen ({_echt_dicht})")
+klopt(_nog_open_log == ["udisksctl unmount -b /dev/sdb1"] and "lukte niet" in _uitkomst["nog open"][1],
+      f"wissen (echt draaien): staat hij na 'dicht' nog open, dan wordt er niets gewist ({_nog_open_log})")
+for _p in ("udisksctl", "gdbus"):
+    (BIN / _p).unlink()
+for _k, _v in _echt_omgeving.items():
+    if _v is None:
+        os.environ.pop(_k, None)
+    else:
+        os.environ[_k] = _v
+bd.MEDIA_WORTELS = _echt_media
 os.environ["BUGOS_LSBLK"] = ""
 venster.vul_zijbalk()
 
 # ===================================== Bestanden: 'Wat de meeste ruimte inneemt' ===
-# Echte bytes (een 'sparse' bestand neemt geen ruimte in). Sluit hier nooit een Bestanden-venster: dan gaat STOP
-# aan en telt alles daarna 0 (review 14).
+# Echte bytes (een 'sparse' bestand neemt geen ruimte in). Elke telling heeft een eigen stop: een venster sluiten
+# stopt alleen zijn eigen telling (vroeger zette dat een gedeelde STOP aan en telde alles daarna 0, review 14).
 klopt(wacht_tot(lambda: not getattr(venster, "grootste_bezig", False), 10), "ruimte: de eerste telling is klaar")
 MB = 10**6
 
@@ -341,6 +610,143 @@ klopt(bfc._koppel_in(THUIS) >= {str(THUIS / "NAS")} and str(THUIS) not in bfc._k
       "review 4: koppelpunten in je thuismap worden herkend (niet je thuismap zelf)")
 bfc._koppelpunten = _echt_koppel
 klopt(all(isinstance(x, str) for x in bfc._koppelpunten()), "review 4: /proc/self/mountinfo lezen gaat (of geeft niets)")
+
+# 'Zoals du': alle regels samen zijn precies wat 'du -s -x' over de thuismap zegt (zonder de thuismap zelf). Met alles
+# wat het lastig maakt: hardlinks (ook tussen twee regels), snelkoppelingen (naar een bestand, een map, nergens heen,
+# en een lange die zelf een blokje inneemt), een leeg 'sparse' bestand, een fifo, een map die je niet mag lezen, de
+# prullenbak met zijn briefjes, Flatpak, ~/.var/app, ~/.wine en losse (verborgen) bestanden.
+_DU = TMP / "du-thuis"
+for _m in ("Documenten/diep/dieper", "Videos", "leeg", ".var/app/org.voorbeeld.App/data", ".local/share/Trash/files",
+           ".local/share/Trash/info", ".local/share/flatpak/repo", ".local/state", ".cache/x", ".config",
+           ".wine/drive_c", "geheim"):
+    (_DU / _m).mkdir(parents=True, exist_ok=True)
+vol(_DU / "Documenten" / "a.bin", 300_000)
+vol(_DU / "Documenten" / "diep" / "dieper" / "b.bin", 70_001)
+vol(_DU / "Videos" / "film.bin", 1 * MB)
+os.link(_DU / "Videos" / "film.bin", _DU / "Documenten" / "zelfde-film.bin")   # één bestand in twee regels
+vol(_DU / ".local" / "share" / "flatpak" / "repo" / "obj", 200_000)
+os.link(_DU / ".local" / "share" / "flatpak" / "repo" / "obj", _DU / ".local" / "share" / "flatpak" / "app-obj")
+with open(_DU / "Documenten" / "sparse.img", "wb") as _f:
+    _f.truncate(50 * MB)   # 50 MB groot, maar (bijna) leeg: neemt bijna niets in
+    _f.seek(10 * MB)
+    _f.write(b"x")
+os.symlink(_DU / "Documenten" / "a.bin", _DU / "Documenten" / "naar-a")
+os.symlink("/usr", _DU / "Documenten" / "naar-usr")
+os.symlink("/bestaat/niet", _DU / "Documenten" / "nergens")
+os.symlink("/" + "lang/" * 40 + "doel", _DU / "Documenten" / "lang")
+os.mkfifo(_DU / "Documenten" / "pijp")
+vol(_DU / ".local" / "share" / "Trash" / "files" / "weg.bin", 123_456)
+schrijf(_DU / ".local" / "share" / "Trash" / "info" / "weg.bin.trashinfo", "[Trash Info]\nPath=/x\n")
+vol(_DU / ".cache" / "x" / "c.bin", 40_000)
+vol(_DU / ".config" / "k.conf", 5_000)
+vol(_DU / ".local" / "state" / "s", 9_000)
+vol(_DU / ".var" / "app" / "org.voorbeeld.App" / "data" / "d.bin", 77_000)
+vol(_DU / ".wine" / "drive_c" / "w.exe", 33_000)
+vol(_DU / "geheim" / "niet-te-lezen.bin", 64_000)
+vol(_DU / "los.txt", 1_234)
+vol(_DU / ".verborgen", 2_345)
+os.symlink(_DU / "Videos", _DU / "snelkoppeling-naar-videos")
+(_DU / "geheim").chmod(0o000)
+_xdg_data = os.environ.get("XDG_DATA_HOME", "")
+os.environ["XDG_DATA_HOME"] = str(_DU / ".local" / "share")   # de prullenbak van deze thuismap
+try:
+    _du_rijen, _du_ruimte = bfc.tel_thuis(_DU)
+    _du_kapot = ""
+except Exception as _e:  # noqa: BLE001  (een map die je niet mag lezen, mag het tellen nooit laten vallen)
+    _du_rijen, _du_ruimte, _du_kapot = [], {}, repr(_e)
+os.environ["XDG_DATA_HOME"] = _xdg_data
+
+
+def _du_s(pad: Path) -> int:
+    """De echte du (GNU): -s samen, -x op dit apparaat blijven, -B1 in bytes. Zegt du 'Permission denied' (geheim/),
+    dan is de uitkomst er toch."""
+    uit = subprocess.run(["du", "-s", "-x", "-B1", str(pad)], capture_output=True, text=True)
+    return int(uit.stdout.split()[0]) if uit.stdout.split() else -1
+
+
+_du_totaal = _du_s(_DU) - os.lstat(_DU).st_blocks * 512
+(_DU / "geheim").chmod(0o755)
+_som = sum(r.grootte for r in _du_rijen)
+_du_per = {r.soort: r.grootte for r in _du_rijen}
+klopt(shutil.which("du") is not None and not _du_kapot and _som == _du_totaal,
+      f"ruimte zoals du: alle regels samen zijn precies 'du -s -x' over de thuismap ({_som} = {_du_totaal}) {_du_kapot}")
+klopt(_du_per.get("prullenbak") == _du_s(_DU / ".local" / "share" / "Trash" / "files")
+      and _du_per.get("cache") == _du_s(_DU / ".cache"),
+      f"ruimte zoals du: ook per regel (prullenbak {_du_per.get('prullenbak')}, tijdelijke bestanden {_du_per.get('cache')})")
+klopt(not any(r.naam.startswith("snelkoppeling") for r in _du_rijen)
+      and next((r.grootte for r in _du_rijen if r.naam == "Videos"), -1) < 1 * MB,
+      "ruimte zoals du: een snelkoppeling naar een map telt als snelkoppeling; de film met twee namen telt één keer")
+
+# Een map buiten je thuismap (Afbeeldingen op een NAS of een tweede schijf) neemt op deze schijf geen ruimte in: niet
+# in de balk, en hij wordt niet eens geopend (een NAS die niet antwoordt, liet anders het tellen hangen). Staat hij
+# wel op dezelfde schijf, dan telt hij mee.
+_nas = TMP / "nas" / "Afbeeldingen"
+vol(_nas / "foto.jpg", 1 * MB)
+_echt_plekken, _echt_tel_map = bfc.plekken, bfc.tel_map
+bfc.plekken = lambda: [(sl, n, ic, (_nas if sl == "afbeeldingen" else p)) for sl, n, ic, p in _echt_plekken()]
+_geopend: list = []
+bfc.tel_map = lambda p, *a, **k: (_geopend.append(str(p)), _echt_tel_map(p, *a, **k))[1]
+bfc._koppelpunten = lambda: {str(TMP / "nas")}
+_r_nas = bfc.tel_thuis(THUIS)[1].get("afbeeldingen")
+_nas_geopend = [x for x in _geopend if x.startswith(str(TMP / "nas"))]
+bfc._koppelpunten = lambda: set()
+_r_zelfde = bfc.tel_thuis(THUIS)[1].get("afbeeldingen", 0)
+bfc._koppelpunten, bfc.tel_map, bfc.plekken = _echt_koppel, _echt_tel_map, _echt_plekken
+klopt(_r_nas == 0 and not _nas_geopend and _r_zelfde >= 1 * MB,
+      f"ruimte: Afbeeldingen op een andere schijf of NAS telt niet mee en wordt niet geopend; op dezelfde schijf wel "
+      f"({_r_nas}, {_nas_geopend}, {_r_zelfde})")
+
+# Op de achtergrond, en te stoppen. Met een trage telling (elke map 0,4 s): de pagina staat er meteen, het venster
+# blijft reageren, en weggaan van de pagina stopt de telling meteen, zonder half lijstje. Terug: opnieuw tellen.
+def _traag(p, *a, **k):
+    time.sleep(0.4)
+    return _echt_tel_map(p, *a, **k)
+
+
+bfc.tel_map = _traag
+v4 = bf.Bestanden()
+v4.show()
+_t0 = time.monotonic()
+v4.open_computer()
+_open_duur = time.monotonic() - _t0
+_teller = v4.grootste_teller
+_tikken: list = []
+_tik = QTimer()
+_tik.timeout.connect(lambda: _tikken.append(time.monotonic()))
+_tik.start(20)
+verwerk(400)
+_tik.stop()
+_bezig_tijdens = bool(v4.grootste_bezig and _teller is not None and _teller.is_alive())
+_t1 = time.monotonic()
+v4.ga_naar(THUIS)   # de pagina verlaten
+_gestopt = _teller is not None and wacht_tot(lambda: not _teller.is_alive(), 3)
+_stop_duur = time.monotonic() - _t1
+verwerk(50)
+klopt(_open_duur < 0.5 and _bezig_tijdens and len(_tikken) >= 8,
+      f"ruimte: tellen gaat op de achtergrond: de pagina staat er meteen ({_open_duur:.2f} s), het venster reageert "
+      f"({len(_tikken)} tikken in 0,4 s)")
+klopt(_gestopt and _stop_duur < 1.5 and _teller.stop.is_set() and v4.grootste is None and not v4.grootste_bezig
+      and not v4.tellen_bezig,
+      f"ruimte: de pagina verlaten stopt het tellen meteen ({_stop_duur:.2f} s), en er blijft geen half lijstje staan")
+bfc.tel_map = _echt_tel_map
+v4.open_computer()
+_teller2 = v4.grootste_teller
+klopt(_teller2 is not None and _teller2 is not _teller and wacht_tot(lambda: v4.grootste is not None, 15)
+      and sum(r.grootte for r in v4.grootste[0]) > 10 * MB,
+      "ruimte: terug op de pagina telt hij opnieuw, en dan staat de lijst er wel")
+# Een venster sluiten stopt zijn eigen telling, en alleen die: daarna telt alles gewoon (geen gedeelde STOP meer).
+bfc.tel_map = _traag
+v5 = bf.Bestanden()
+v5.show()
+v5.open_computer()
+_teller5 = v5.grootste_teller
+v5.close()
+_gestopt5 = _teller5 is not None and wacht_tot(lambda: not _teller5.is_alive(), 3)
+bfc.tel_map = _echt_tel_map
+_na_sluiten = sum(r.grootte for r in bfc.tel_thuis(THUIS)[0])
+klopt(_gestopt5 and _teller5.stop.is_set() and _na_sluiten > 10 * MB,
+      f"ruimte: een venster sluiten stopt zijn telling; daarna telt een ander gewoon door ({_na_sluiten // MB} MB)")
+v4.hide()
 
 # Apps voor iedereen (Flatpak, systeem) en de rest: samen precies wat er in gebruik is (review 2).
 klopt(bfc.lees_maat("803.9 MB") == 803_900_000 and bfc.lees_maat("1,2 GB") == 1_200_000_000
@@ -647,8 +1053,21 @@ kies_pid(400)
 klopt(not _knoppen["beeindigen"].isEnabled() and "niet van jou" in _knoppen["forceren"].toolTip(),
       "Details: een proces van een ander account: grijs, 'Dit is niet van jou'")
 kies_pid(100)
-klopt(_knoppen["beeindigen"].isEnabled() and _knoppen["forceren"].isEnabled() and tv.gekozen_regel().pid == 100
-      and tv.details_balk.aantal.text() == "firefox", "Details: Firefox gekozen: beide knoppen werken")
+klopt(_knoppen["beeindigen"].isEnabled() and not _knoppen["forceren"].isEnabled()
+      and "eerst Beëindigen" in _knoppen["forceren"].toolTip() and tv.gekozen_regel().pid == 100
+      and tv.details_balk.aantal.text() == "firefox",
+      "Details: Firefox gekozen: Beëindigen werkt; Geforceerd beëindigen pas na Beëindigen (grijs, met de reden als tip)")
+# Geforceerd zonder eerst Beëindigen (een andere weg dan de knop): geen vraag, en er wordt niets gestuurd.
+_vooraf: list = []
+bugos_shell.VraagDialoog.exec = lambda self: (_vooraf.append(self), QDialog.DialogCode.Accepted)[1]
+_echt_beeindig_vooraf = tm.bt.beeindig
+tm.bt.beeindig = lambda regel, hard=False: (_vooraf.append((regel.pid, hard)), "klaar")[1]
+tv.beeindig_gekozen(hard=True)
+tv.beeindig_regel(tv.gekozen_regel(), hard=True)
+verwerk(50)
+tm.bt.beeindig = _echt_beeindig_vooraf
+bugos_shell.VraagDialoog.exec = _echt_exec
+klopt(not _vooraf, f"Details: Geforceerd beëindigen kan niet vóór Beëindigen, ook niet via een andere weg ({_vooraf})")
 # In-place bijwerken: 101 gekozen, dan is 100 weg en 120 nieuw: 101 blijft gekozen, geen modelReset (review/spec 14).
 kies_pid(101)
 _resets: list = []
@@ -713,6 +1132,8 @@ tv.beeindig_gekozen()
 klopt(wacht_tot(lambda: _venster_vensters == [[100]], 5) and not _beeindigd,
       f"review 1: Firefox zelf (heeft vensters) eerst netjes sluiten, zoals op het kruisje ({_venster_vensters}, {_beeindigd})")
 kies_pid(100)
+klopt(_knoppen["forceren"].isEnabled() and _knoppen["beeindigen"].isEnabled(),
+      "Details: na Beëindigen mag Geforceerd beëindigen (voor precies dit proces)")
 tv.beeindig_gekozen(hard=True)
 klopt(wacht_tot(lambda: _beeindigd == [(100, True)], 5) and "geforceerd" in _vragen[-1].kop.text(),
       f"Details: Geforceerd beëindigen vraagt ook, en stuurt dan meteen KILL ({_beeindigd})")
@@ -723,15 +1144,31 @@ _r101 = next(r for r in tv.proces_model.regels if r.pid == 101)
 tv.nog_bezig(_r101, False)
 klopt(tv.details.melding.knop.isVisible() and tv.details.melding.knop.text() == "Geforceerd beëindigen"
       and "draait nog" in tv.details.melding.tekst.text(), "Details: draait het na 3 s nog, dan 'Geforceerd beëindigen'")
+_beeindigd.clear()
+tv.details.melding.knop.click()   # 101 kreeg al Beëindigen: dan mag geforceerd, meteen (KILL)
+klopt(wacht_tot(lambda: _beeindigd == [(101, True)], 5),
+      f"Details: de knop in die melding beëindigt geforceerd (Beëindigen was al geprobeerd) ({_beeindigd})")
 _sh.rmtree(PROC / "101")
 tv.nog_bezig(_r101, False)
 klopt("is beëindigd" in tv.details.melding.tekst.text(), "Details: is het weg, dan 'is beëindigd'")
+# Wat bij BugOS hoort of niet van jou is, beëindigt beeindig_regel nooit (ook niet als iets anders hem aanroept): er
+# gaat niets naar bt.beeindig en niets naar KWin.
+_beeindigd.clear()
+_venster_vensters.clear()
+kies_pid(210)
+_portaal = tv.gekozen_regel()
+tv.beeindig_regel(_portaal, hard=False)
+tv.beeindig_regel(_portaal, hard=True)
+verwerk(50)
+klopt(_portaal is not None and _portaal.beschermd and not _beeindigd and not _venster_vensters
+      and "niet beëindigen" in tv.details.melding.tekst.text(),
+      f"Details: een beschermd proces (portaal) wordt nooit beëindigd, ook niet via een andere weg ({_beeindigd})")
 tm.bt.beeindig = _echt_beeindig
+# Hoe het afliep, in gewone woorden. Met een eigen, gewoon proces (niet beschermd, geen venster).
+_kate = bt.ProcesRegel(4242, "kate", MIJN, "jij", "", 0.0, 0, True, False, 4242)
 for _uitkomst, _woord in (("weg", "draait al niet meer"), ("mag_niet", "niet van jou"), ("fout", "lukte niet")):
     tm.bt.beeindig = lambda regel, hard=False, u=_uitkomst: u
-    kies_pid(310 if _uitkomst == "mag_niet" else 210)
-    _rg = tv.gekozen_regel()
-    tv.beeindig_regel(_rg, hard=True)
+    tv.beeindig_regel(_kate, hard=False)
     klopt(wacht_tot(lambda w=_woord: w in tv.details.melding.tekst.text(), 5),
           f"Details: uitkomst '{_uitkomst}': '{_woord}' in gewone woorden ({tv.details.melding.tekst.text()!r})")
 tm.bt.beeindig = _echt_beeindig
@@ -755,28 +1192,75 @@ tv.resize(1400, 800)
 verwerk(60)
 klopt(_smal and not tv.tabel.isColumnHidden(3) and not tv.tabel.isColumnHidden(2),
       f"Details: smal venster: 'Hoort bij' verborgen; breed: alles te zien (viewport {tv.tabel.viewport().width()})")
-# R13: met weinig ruimte (150 %, grote letters) gaan de kaarten en getallen naar een volgende rij; de pagina schuift
-# niet opzij.
-def _kolommen() -> tuple[tuple[int, int], dict[str, int]]:
-    """(kaarten op Prestaties, getallen op Programma's) en hoeveel elke pagina opzij schuift; een verborgen pagina
-    krijgt zijn nieuwe breedte pas als je hem opent, dus elke pagina even openen."""
-    schuift = {}
-    for pg in ("prestaties", "programmas"):
-        tv.ga_naar(pg)
-        verwerk(80)
-        schuift[pg] = tv.paginas[pg].horizontalScrollBar().maximum()
-    return (tv.meet_plooi.kolommen, tv.samen_plooi.kolommen), schuift
+# R13: past het niet (150 %, grote letters), dan gaan de kaarten en getallen naar een volgende rij in plaats van dat de
+# pagina opzij schuift. Eerst de plooi zelf, met een breedte die net niet past; daarna echt op 1280x800 (hieronder).
+tv.ga_naar("programmas")
+verwerk(80)
+_sp, _mp = tv.samen_plooi, tv.meet_plooi
 
 
-_breed, _ = _kolommen()
-tv.resize(760, 600)
-_smal, _smalle = _kolommen()
-_strepen = [b.streep.isVisible() for b in tv.samen_plooi.delen]
-klopt(_breed == (3, 4) and _smal[0] < 3 and _smal[1] < 4 and not any(_smalle.values()),
-      f"R13: smal: minder kaarten en getallen per rij, niets schuift opzij ({_breed} -> {_smal}, {_smalle})")
-klopt(_strepen == [False, True, False, True], f"R13: een streep alleen tussen twee getallen op één rij ({_strepen})")
+def _getallen() -> tuple[int, list[bool]]:
+    return _sp.kolommen, [b.streep.isVisible() for b in _sp.delen]
+
+
+_hoog = _sp.height()
+_breed = _getallen()
+_sp.resize(_sp.nodig(4) - 10, _hoog)
+_twee = _getallen()
+_sp.resize(_sp.nodig(2) - 10, _hoog)
+_een = _getallen()
+_sp.resize(_sp.nodig(4) + 40, _hoog)
+_weer = _getallen()
+klopt(_breed == (4, [False, True, True, True]) and _twee == (2, [False, True, False, True])
+      and _een == (1, [False, False, False, False]) and _weer == _breed,
+      f"R13: vier getallen op een rij, anders twee rijen van twee (nooit 3 + 1), anders één per rij; een streep alleen "
+      f"tussen twee getallen op één rij, ook meteen na het openen ({_breed} -> {_twee} -> {_een} -> {_weer})")
+tv.ga_naar("prestaties")
+verwerk(80)
+_mhoog = _mp.height()
+_m = [_mp.kolommen]
+for _b in (_mp.nodig(3) - 10, _mp.nodig(2) - 10, _mp.nodig(3) + 40):
+    _mp.resize(_b, _mhoog)
+    _m.append(_mp.kolommen)
+klopt(_m == [3, 2, 1, 3], f"R13: drie kaarten op een rij, anders twee, anders één ({_m})")
 tv.resize(1400, 800)
-klopt(_kolommen()[0] == (3, 4), "R13: weer breed: drie kaarten en vier getallen")
+verwerk(60)
+
+
+def _r13_ronde(schaal: str, groot: bool) -> dict[str, int]:
+    """Taakbeheer en Bestanden > Deze computer op een scherm van 1280x800, in een eigen proces (QT_SCALE_FACTOR en
+    de lettergrootte kunnen maar één keer per proces): hoeveel schuift elke pagina opzij?"""
+    conf = TMP / f"scherm-{schaal}-{int(groot)}.json"
+    conf.write_text(_json.dumps({"screens": [{"name": "s", "x": 0, "y": 0, "width": 1280, "height": 800,
+                                              "logicalDpi": 96, "logicalBaseDpi": 96, "dpr": 1}]}))
+    thuis_ = TMP / f"r13-thuis-{schaal}-{int(groot)}"
+    for m in (".config", "Desktop", "Documents", "Pictures", "Music", "Videos", "Downloads"):
+        (thuis_ / m).mkdir(parents=True, exist_ok=True)
+    env = dict(os.environ, HOME=str(thuis_), XDG_CONFIG_HOME=str(thuis_ / ".config"),
+               XDG_DATA_HOME=str(thuis_ / ".local" / "share"), BUGOS_TAKEN_VOORBEELD="1", BUGOS_MEERDERE="1",
+               BUGOS_RUIMTE="512000000000,61000000000,38000000000,52000000000,9000000000,14000000000,21000000000",
+               BUGOS_LSBLK="", BUGOS_THEMA="licht", BUGOS_LETTERS=str(ROOT / "system_files/usr/share/fonts/bugos"),
+               LC_ALL="en_US.UTF-8", LANG="en_US.UTF-8", QT_QPA_PLATFORM=f"offscreen:configfile={conf}",
+               QT_SCALE_FACTOR=schaal, BUGOS_TEST_GROOT="1" if groot else "")
+    env.pop("LANGUAGE", None)
+    uit = subprocess.run([sys.executable, str(Path(__file__).resolve()), "--r13"], env=env, capture_output=True,
+                         text=True, timeout=240, cwd=str(TMP))
+    pagina = {}
+    for regel in uit.stdout.splitlines():
+        if regel.startswith("PAGINA "):
+            _, app_, pg, schuift = regel.split()
+            pagina[f"{app_}/{pg}"] = int(schuift)
+    if uit.returncode or len(pagina) != 6:
+        pagina["kapot"] = uit.returncode or -1
+        print(uit.stderr[-800:])
+    return pagina
+
+
+for _schaal, _groot, _naam in (("1", True, "100 % met grote letters"), ("1.5", False, "150 %")):
+    _ronde = _r13_ronde(_schaal, _groot)
+    klopt(len(_ronde) == 6 and not any(v > 1 for v in _ronde.values()),
+          f"R13: 1280x800 bij {_naam}: Taakbeheer (alle vier pagina's) en Deze computer (met 'Wat de meeste ruimte "
+          f"inneemt', ook na 'Meer tonen') schuiven niet opzij ({_ronde})")
 tv.ga_naar("details")
 verwerk(20)
 tv.stop_meten()
