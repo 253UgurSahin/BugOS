@@ -5,7 +5,9 @@
 - Bestanden: geen 'Openen in Dolphin' en geen 'Schijfbeheer'; wel 'Wat de meeste ruimte inneemt' (telt precies
   zoals 'du -s -x', op de achtergrond, en stopt als je de pagina verlaat), en een interne dataschijf wissen, met
   het bewijs dat dat nooit de schijf van BugOS, de live-stick, een schijf die het systeem gebruikt of een schijf
-  met een besturingssysteem raakt, en altijd eerst vraagt.
+  met een besturingssysteem raakt, en altijd eerst vraagt. Ook: niet wissen zolang er nog gekopieerd wordt, de
+  hele schijf is bezig (een ander stuk gaat intussen niet open), en stopt het voordat er iets gewist is
+  (wachtwoord weggeklikt), dan gaat weer open wat dicht ging.
 - Taakbeheer: geen knop 'Systeemmonitor'; wel een eigen pagina Details (alles wat draait, beëindigen met een vraag,
   geforceerd pas na Beëindigen, nooit wat bij BugOS hoort of niet van jou is).
 - R13: op een scherm van 1280x800 (100 % met grote letters, en 150 %) schuift niets opzij.
@@ -481,7 +483,7 @@ klopt("Leegmaken (alles wissen)…" in [a.text() for a in venster.schijf_menu(_d
 _gezien.clear()
 _beheerd: list = []
 _echt_beheer = venster.beheer
-venster.beheer = lambda x, stappen, *a, **k: _beheerd.append((x.station, list(stappen)))
+venster.beheer = lambda x, stappen, *a, **k: _beheerd.append((x.station, list(stappen), k))
 bugos_shell.VraagDialoog.exec = lambda self: (_gezien.append(self), QDialog.DialogCode.Rejected)[1]
 venster.wis_interne_schijf(_d)
 klopt(not _beheerd and _gezien and "500 GB" in _gezien[-1].uitleg.text() and "'Data'" in _gezien[-1].uitleg.text()
@@ -501,10 +503,18 @@ def _tekst_van(stappen: list) -> list:
 
 
 _st = _tekst_van(_beheerd[0][1]) if _beheerd else []
-klopt(len(_beheerd) == 2 and _beheerd[0][0] == "/dev/sdb" and _st[0] == "udisksctl unmount -b /dev/sdb1"
+_k0 = _beheerd[0][2] if _beheerd else {}
+# Na de nieuwe indeling (Block.Format) staat er een controle-stap die onthoudt dat de oude indeling weg is (zie
+# wis_interne_schijf); openen is de slotstap die mag mislukken (laatste).
+klopt(len(_beheerd) == 2 and _beheerd[0][0] == "/dev/sdb" and len(_st) == 5 and _st[0] == "udisksctl unmount -b /dev/sdb1"
       and _st[1] == "(controle)" and "block_devices/sdb --method org.freedesktop.UDisks2.Block.Format 'gpt'" in _st[2]
-      and "'ext4'" in _st[3] and _st[4] == "udisksctl mount -b /dev/sdb1" and not any("nvme" in x for x in _st),
-      f"review 8: Alles wissen: eerst dicht, dan de laatste controle, dan nieuwe indeling en ext4 op sdb ({_st})")
+      and _st[3] == "(controle)" and "'ext4'" in _st[4] and _k0.get("laatste") == ["udisksctl", "mount", "-b", "/dev/sdb1"]
+      and not any("nvme" in x for x in _st),
+      f"review 8: Alles wissen: eerst dicht, dan de laatste controle, dan nieuwe indeling en ext4 op sdb, en tot slot "
+      f"openen ({_st}, laatste {_k0.get('laatste')})")
+klopt(set(_k0.get("ook_bezig") or ()) == {"/dev/sdb", "/dev/sdb1"} and callable(_k0.get("bij_fout")),
+      f"wissen: zolang het duurt, is de hele schijf bezig (de schijf en elk stuk), en een fout heeft een eigen afloop "
+      f"({_k0.get('ook_bezig')})")
 _st_n = _tekst_van(_beheerd[1][1]) if len(_beheerd) > 1 else []
 klopt(_st_n[:3] == ["udisksctl unmount -b /dev/mapper/luks-sdn1", "udisksctl lock -b /dev/sdn1", "(controle)"]
       and "block_devices/sdn " in _st_n[3], f"wissen: een versleutelde schijf eerst dicht en op slot ({_st_n})")
@@ -526,33 +536,246 @@ venster.beheer = _echt_beheer
 
 # Van begin tot eind, met het echte draai() (QProcess) en nep-udisksctl en nep-gdbus die opschrijven wat ze moeten
 # doen: (a) dichtzetten lukt echt (lsblk ziet hem daarna dicht): dan wissen; (b) udisksctl zegt 'ok' maar lsblk ziet
-# hem nog open: dan stopt de laatste controle alles, er komt geen enkele opdracht om te wissen.
-_LOG, _NA_DICHT = TMP / "udisks.log", TMP / "lsblk-na-dicht.json"
+# hem nog open: dan stopt de laatste controle alles, er komt geen enkele opdracht om te wissen, en wat dicht ging,
+# gaat weer open (zonder wachtwoordvraag).
+# De nep-programma's: NEP_NA_DICHT = de lsblk-lijst na 'unmount', NEP_NA_OPEN = de lsblk-lijst na 'mount'. NEP_GDBUS
+# speelt udisks na: 'weggeklikt' (de vraag om het beheerderswachtwoord weggeklikt), 'kapot' (wissen zelf mislukt),
+# 'indeling-fout' (de oude indeling is al weg, het nieuwe stuk lukt niet) en 'wachten' (de wachtwoordvraag staat open
+# tot de test het bestand NEP_LOS maakt, hoogstens 20 s).
+_LOG, _NA_DICHT, _NA_OPEN, _LOS = (TMP / "udisks.log", TMP / "lsblk-na-dicht.json", TMP / "lsblk-na-open.json",
+                                   TMP / "wachtwoord-gegeven")
 schrijf(BIN / "udisksctl", '#!/bin/sh\necho "udisksctl $*" >> "$NEP_LOG"\n'
                            'if [ "$1" = unmount ] && [ -n "$NEP_NA_DICHT" ]; then cp "$NEP_NA_DICHT" "$BUGOS_LSBLK"; fi\n'
+                           'if [ "$1" = mount ] && [ -n "$NEP_NA_OPEN" ]; then cp "$NEP_NA_OPEN" "$BUGOS_LSBLK"; fi\n'
                            'exit 0\n')
-schrijf(BIN / "gdbus", '#!/bin/sh\necho "gdbus $*" >> "$NEP_LOG"\nexit 0\n')
+schrijf(BIN / "gdbus", '#!/bin/sh\necho "gdbus $*" >> "$NEP_LOG"\n'
+                       'case "$NEP_GDBUS:$*" in\n'
+                       '    weggeklikt:*Block.Format*)\n'
+                       '        echo "Error: GDBus.Error:org.freedesktop.UDisks2.Error.NotAuthorizedDismissed: Not '
+                       'authorized to perform operation" >&2\n'
+                       '        exit 1;;\n'
+                       '    kapot:*Block.Format*)\n'
+                       '        echo "Error: GDBus.Error:org.freedesktop.UDisks2.Error.Failed: Error wiping device" >&2\n'
+                       '        exit 1;;\n'
+                       '    indeling-fout:*CreatePartitionAndFormat*)\n'
+                       '        echo "Error: GDBus.Error:org.freedesktop.UDisks2.Error.Failed: Error creating '
+                       'partition" >&2\n'
+                       '        exit 1;;\n'
+                       '    wachten:*Block.Format*)\n'
+                       '        n=0\n'
+                       '        while [ ! -e "$NEP_LOS" ] && [ "$n" -lt 400 ]; do sleep 0.05; n=$((n + 1)); done;;\n'
+                       'esac\n'
+                       'exit 0\n')
 for _p in ("udisksctl", "gdbus"):
     (BIN / _p).chmod(0o755)
 _NA_DICHT.write_text(_json.dumps({"blockdevices": _schijven_lijst(d_open=False)}))
-_uitkomst = {}
-for _geval, _na in (("echt dicht", str(_NA_DICHT)), ("nog open", "")):
-    _zet_lsblk(_schijven_lijst())
-    venster.vul_zijbalk()
-    _d = next((x for x in venster.lijst_schijven if x.naam == "Data"), None)
+_NA_OPEN.write_text(_json.dumps({"blockdevices": _schijven_lijst()}))
+_WEER_OPEN = "udisksctl mount -b /dev/sdb1 --no-user-interaction"   # weer openzetten, zonder wachtwoordvraag
+
+
+def _zet_nep(na_dicht: str = "", gdbus: str = "", na_open: str = "") -> None:
+    """Hoe de nep-udisksctl en nep-gdbus zich gedragen (zie hierboven); het logboek begint leeg."""
     _LOG.write_text("")
-    os.environ.update(NEP_LOG=str(_LOG), NEP_NA_DICHT=_na)
-    venster.wis_interne_schijf(_d)
+    os.environ.update(NEP_LOG=str(_LOG), NEP_NA_DICHT=na_dicht, NEP_GDBUS=gdbus, NEP_NA_OPEN=na_open,
+                      NEP_LOS=str(_LOS))
+
+
+def _wis_echt(na_dicht: str = "", gdbus: str = "", na_open: str = "") -> tuple[list, str, object]:
+    """Wis 'Data' (sdb) één keer echt met draai(): (opdrachten in het logboek, de melding, Data daarna)."""
+    _zet_lsblk(_schijven_lijst())
+    venster._zijbalk_sleutels = None
+    venster.vul_zijbalk()
+    d = next((x for x in venster.lijst_schijven if x.naam == "Data"), None)
+    _zet_nep(na_dicht, gdbus, na_open)
+    venster.wis_interne_schijf(d)
     wacht_tot(lambda: not venster.bezig, 15)
-    _uitkomst[_geval] = (_LOG.read_text().splitlines(), venster.melding.tekst.text())
-bugos_shell.VraagDialoog.exec = _echt_exec
+    na = next((x for x in venster.lijst_schijven if x.naam == "Data"), None)
+    return _LOG.read_text().splitlines(), venster.melding.tekst.text(), na
+
+
+_uitkomst = {"echt dicht": _wis_echt(str(_NA_DICHT)), "nog open": _wis_echt("")}
 _echt_dicht, _nog_open_log = _uitkomst["echt dicht"][0], _uitkomst["nog open"][0]
 klopt(len(_echt_dicht) == 4 and _echt_dicht[0] == "udisksctl unmount -b /dev/sdb1" and "Block.Format" in _echt_dicht[1]
       and "CreatePartitionAndFormat" in _echt_dicht[2] and _echt_dicht[3] == "udisksctl mount -b /dev/sdb1"
       and "is leeg" in _uitkomst["echt dicht"][1],
       f"wissen (echt draaien): dicht, controle, wissen, klaarmaken, openen ({_echt_dicht})")
-klopt(_nog_open_log == ["udisksctl unmount -b /dev/sdb1"] and "lukte niet" in _uitkomst["nog open"][1],
-      f"wissen (echt draaien): staat hij na 'dicht' nog open, dan wordt er niets gewist ({_nog_open_log})")
+klopt(_nog_open_log == ["udisksctl unmount -b /dev/sdb1", _WEER_OPEN] and "niets gewist" in _uitkomst["nog open"][1],
+      f"wissen (echt draaien): staat hij na 'dicht' nog open, dan wordt er niets gewist, en wat dicht ging, gaat weer "
+      f"open ({_nog_open_log}, {_uitkomst['nog open'][1]!r})")
+
+# Het beheerderswachtwoord weggeklikt (udisks: NotAuthorizedDismissed): er is niets gewist, de schijf gaat weer open
+# (zoals bij naam wijzigen en repareren, U141), en de melding zegt dat, niet 'er kan nog iets open zijn'.
+_log_weg, _tekst_weg, _d_weg = _wis_echt(str(_NA_DICHT), "weggeklikt", str(_NA_OPEN))
+klopt(len(_log_weg) == 3 and _log_weg[0] == "udisksctl unmount -b /dev/sdb1" and "Block.Format" in _log_weg[1]
+      and _log_weg[2] == _WEER_OPEN and not any("CreatePartition" in r for r in _log_weg)
+      and "niets gewist" in _tekst_weg and "beheerderswachtwoord" in _tekst_weg
+      and _d_weg is not None and bool(_d_weg.wortel),
+      f"wissen: wachtwoord weggeklikt: niets gewist, de schijf staat weer open ({_log_weg}, {_tekst_weg!r}, "
+      f"open: {bool(_d_weg and _d_weg.wortel)})")
+# Wissen zelf mislukt (niet door het wachtwoord) en de schijf is nog onveranderd: ook dan weer openzetten, met de
+# gewone melding (misschien is er iets weg).
+_log_kapot, _tekst_kapot, _ = _wis_echt(str(_NA_DICHT), "kapot", str(_NA_OPEN))
+klopt(_log_kapot[-1:] == [_WEER_OPEN] and "Wissen lukte niet" in _tekst_kapot,
+      f"wissen: mislukt het wissen zelf, dan gaat de onveranderde schijf weer open ({_log_kapot}, {_tekst_kapot!r})")
+# De nieuwe indeling staat er al (de oude is weg), alleen het nieuwe stuk lukt niet: dan niets 'weer openzetten' (de
+# oude stukken bestaan niet meer), en de melding wijst naar 'In gebruik nemen'.
+_log_ind, _tekst_ind, _ = _wis_echt(str(_NA_DICHT), "indeling-fout", str(_NA_OPEN))
+klopt(len(_log_ind) == 3 and "Block.Format" in _log_ind[1] and "CreatePartitionAndFormat" in _log_ind[2]
+      and "In gebruik nemen" in _tekst_ind,
+      f"wissen: de oude indeling al weg, het nieuwe stuk niet gelukt: niets weer open, wel 'In gebruik nemen' "
+      f"({_log_ind}, {_tekst_ind!r})")
+
+# Review (U386, nu ook voor wissen): loopt er in dit venster nog een kopie VAN de schijf die je wilt wissen (zet eerst
+# over wat je wilt houden), dan niet wissen. Tussen twee bestanden is de schijf even 'vrij'; vroeger lukte het
+# dichtzetten dan en werd de schijf gewist terwijl het kopiëren nog bezig was. Met een echte Klus (kopiëren op de
+# achtergrond) die blijft lopen tot de test hem loslaat.
+import threading  # noqa: E402
+
+import bugos_files_acties as _acties  # noqa: E402
+
+_fotos = _d_schijf / "fotos"
+_fotos.mkdir(exist_ok=True)
+for _i in range(3):
+    (_fotos / f"foto{_i}.jpg").write_bytes(b"x" * 1000)
+_los_klus = threading.Event()
+_echt_kopieer = _acties.kopieer_een
+
+
+def _grote_kopie(*a, **k):
+    """Kopieer één ding, maar pas als de test het zegt: zo loopt de kopie nog terwijl er gewist wordt."""
+    _los_klus.wait(20)
+    return _echt_kopieer(*a, **k)
+
+
+def _start_kopie(doel: Path) -> None:
+    """Een echte kopie op de achtergrond, van de dataschijf (Data) naar de thuismap, zoals Plakken die start."""
+    doel.mkdir(parents=True, exist_ok=True)
+    venster.klus = _acties.Klus([_fotos], doel, False)
+    venster.klus.start()
+
+
+def _kopie_klaar() -> None:
+    """Laat de kopie verder gaan en wacht tot hij klaar is."""
+    _los_klus.set()
+    if venster.klus is not None:
+        venster.klus.wait(15000)
+
+
+_acties.kopieer_een = _grote_kopie
+_zet_lsblk(_schijven_lijst())
+venster._zijbalk_sleutels = None
+venster.vul_zijbalk()
+_d = next((x for x in venster.lijst_schijven if x.naam == "Data"), None)
+_zet_nep(str(_NA_DICHT))
+_los_klus.clear()
+_start_kopie(THUIS / "Doel")
+_gezien.clear()
+venster.wis_interne_schijf(_d)
+_stick_x = bd.Schijf("/dev/sdx1", "Stick", "stick", "/dev/sdx", "/dev/sdx1", fs="exfat")
+venster.leegmaak_schijf(_stick_x)   # een stick leegmaken: net zo
+verwerk(300)
+_tijdens = (venster.klus.isRunning(), list(_gezien), _LOG.read_text().splitlines(), set(venster.bezig),
+            venster.melding.tekst.text())
+_kopie_klaar()
+klopt(_tijdens[0] and not _tijdens[1] and not _tijdens[2] and not _tijdens[3] and "Even wachten" in _tijdens[4]
+      and (THUIS / "Doel" / "fotos" / "foto2.jpg").exists(),
+      f"wissen: tijdens een kopie van die schijf (en een stick leegmaken tijdens een kopie): geen vraag, niets dicht, "
+      f"niets gewist, 'Even wachten'; de kopie komt helemaal over (vraag {len(_tijdens[1])}, opdrachten {_tijdens[2]}, "
+      f"{_tijdens[4]!r})")
+# Begint de kopie pas na de vraag (terwijl de schijf dichtgaat), dan zegt de laatste controle nee: niets gewist, en
+# de schijf gaat weer open.
+_zet_lsblk(_schijven_lijst())
+venster._zijbalk_sleutels = None
+venster.vul_zijbalk()
+_d = next((x for x in venster.lijst_schijven if x.naam == "Data"), None)
+_zet_nep(str(_NA_DICHT), "", str(_NA_OPEN))
+_los_klus.clear()
+venster.wis_interne_schijf(_d)       # 'Alles wissen' gekozen: het dichtzetten loopt al
+_start_kopie(THUIS / "Doel2")         # en nu begin je toch nog te kopiëren
+wacht_tot(lambda: not venster.bezig, 15)
+_log_kopie, _tekst_kopie = _LOG.read_text().splitlines(), venster.melding.tekst.text()
+_kopie_klaar()
+klopt(_log_kopie == ["udisksctl unmount -b /dev/sdb1", _WEER_OPEN] and "niets gewist" in _tekst_kopie
+      and (THUIS / "Doel2" / "fotos" / "foto2.jpg").exists(),
+      f"wissen: een kopie die begint terwijl de schijf dichtgaat: de laatste controle zegt nee, niets gewist, weer open "
+      f"({_log_kopie}, {_tekst_kopie!r})")
+# Een stick leegmaken heeft dezelfde laatste controle, vlak vóór het formatteren (na het dichtzetten).
+_zet_lsblk([_schijf("sdu", [_deel("sdu1", "exfat", _MEDIA / "Stick", 16_000_000_000, "0x07", label="STICK")],
+                    16_000_000_000, "usb", True, "dos")])
+venster._zijbalk_sleutels = None
+venster.vul_zijbalk()
+_stick_u = next((x for x in venster.lijst_schijven if x.naam == "STICK"), None)
+_zet_nep()
+_los_klus.clear()
+if _stick_u is not None:
+    venster.leegmaak_schijf(_stick_u)   # 'Alles wissen' gekozen: het dichtzetten loopt al
+_start_kopie(THUIS / "Doel3")            # en nu begin je toch nog te kopiëren
+wacht_tot(lambda: not venster.bezig, 15)
+_log_stick = _LOG.read_text().splitlines()
+_kopie_klaar()
+klopt(_stick_u is not None and _stick_u.soort == "stick" and _log_stick == ["udisksctl unmount -b /dev/sdu1"]
+      and "lukte niet" in venster.melding.tekst.text(),
+      f"leegmaken: een kopie die begint terwijl de stick dichtgaat: niets geformatteerd ({_log_stick})")
+_acties.kopieer_een = _echt_kopieer
+venster.klus = None
+
+# Review: tijdens het wissen is de hele schijf bezig, niet alleen het stuk waarop je klikte. Een schijf met twee
+# stukken (Data2 en Backup2, allebei open bij jou); je staat in Backup2. Terwijl udisks om het beheerderswachtwoord
+# vraagt (nep-gdbus wacht), klik je op Backup2 in de zijbalk, of probeer je hem te hernoemen of te repareren: er gebeurt
+# niets. Vroeger ging Backup2 dan weer open, op een schijf die net gewist werd.
+for _m in ("Data2", "Backup2"):
+    (_MEDIA / _m).mkdir(exist_ok=True)
+
+
+def _twee_stukken(open_: bool) -> list:
+    return [_schijf("sdr", [_deel("sdr1", "ext4", _MEDIA / "Data2" if open_ else None, soort=_LINUX, label="Data2"),
+                            _deel("sdr2", "ext4", _MEDIA / "Backup2" if open_ else None, soort=_LINUX,
+                                  label="Backup2")])]
+
+
+_zet_lsblk(_twee_stukken(True))
+_NA_DICHT.write_text(_json.dumps({"blockdevices": _twee_stukken(False)}))
+venster._zijbalk_sleutels = None
+venster.vul_zijbalk()
+_d2 = next((x for x in venster.lijst_schijven if x.naam == "Data2"), None)
+venster.ga_naar(_MEDIA / "Backup2")
+_zet_nep(str(_NA_DICHT), "wachten")
+if _LOS.exists():
+    _LOS.unlink()
+_gezien.clear()
+venster.wis_interne_schijf(_d2)
+_niet_meer_in_backup = not str(venster.huidig).startswith(str(_MEDIA / "Backup2"))
+_vraagt = wacht_tot(lambda: "Block.Format" in _LOG.read_text(), 15)   # 'de wachtwoordvraag staat open'
+venster._zijbalk_sleutels = None
+venster.vul_zijbalk()
+_b2 = next((x for x in venster.lijst_schijven if x.naam == "Backup2"), None)
+_bezig_tijdens = set(venster.bezig)
+_menu_aan = [a.text() for a in venster.schijf_menu(_b2).actions() if a.text() and a.isEnabled()] if _b2 else ["?"]
+_item_b2 = next((venster.zijbalk.item(i) for i in range(venster.zijbalk.count())
+                 if venster.zijbalk.item(i).data(Qt.ItemDataRole.UserRole) == "schijf:/dev/sdr2"), None)
+_vragen_voor = len(_gezien)
+if _item_b2 is not None:
+    venster.zijbalk_klik(_item_b2)   # een klik op Backup2 in de zijbalk
+if _b2 is not None:
+    venster.open_schijf(_b2)
+    venster.hernoem_schijf(_b2)
+    venster.repareer_schijf(_b2)
+    venster.wis_interne_schijf(_b2)
+verwerk(300)
+_vragen_tijdens = len(_gezien) - _vragen_voor
+_LOS.write_text("")                  # het wachtwoord is gegeven: udisks wist
+wacht_tot(lambda: not venster.bezig, 15)
+_log_twee = _LOG.read_text().splitlines()
+klopt(_vraagt and _niet_meer_in_backup and {"/dev/sdr", "/dev/sdr1", "/dev/sdr2"} <= _bezig_tijdens
+      and _menu_aan == [] and _item_b2 is not None and _vragen_tijdens == 0
+      and not any(r.startswith("udisksctl mount -b /dev/sdr2") for r in _log_twee) and len(_log_twee) == 5
+      and _log_twee[:2] == ["udisksctl unmount -b /dev/sdr1", "udisksctl unmount -b /dev/sdr2"]
+      and "Block.Format" in _log_twee[2] and "CreatePartitionAndFormat" in _log_twee[3]
+      and _log_twee[4] == "udisksctl mount -b /dev/sdr1",
+      f"wissen: de hele schijf is bezig: je staat niet meer in een ander stuk, dat stuk gaat tijdens de "
+      f"wachtwoordvraag niet open (zijbalk, menu, hernoemen, repareren, nog eens wissen), en daarna wordt alleen het "
+      f"nieuwe stuk geopend (bezig {sorted(_bezig_tijdens)}, menu {_menu_aan}, vragen {_vragen_tijdens}, {_log_twee})")
+bugos_shell.VraagDialoog.exec = _echt_exec
 for _p in ("udisksctl", "gdbus"):
     (BIN / _p).unlink()
 for _k, _v in _echt_omgeving.items():
