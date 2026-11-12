@@ -415,6 +415,10 @@ klopt(_in_gebruik == {"sdd", "sde", "sdc", "sdj", "sdg"},
       f"(/mnt/backup) en sdg (swap); niet wat bij jou open staat (sdb, sdn) ({sorted(_in_gebruik)})")
 klopt(bd.fstab_sleutels() >= {"UUID=uuid-sdk1", "UUID=uuid-sdq1"} and "UUID=uuid-sdb1" not in bd.fstab_sleutels(),
       "wissen: /etc/fstab en /etc/crypttab lezen (zonder hoofdletters, zonder wat 'uit' staat met #)")
+klopt(bd.fstab_noemt({"path": "/dev/sdk1", "uuid": "AbC-1"}, {"UUID=abc-1"})
+      and bd.fstab_noemt({"kname": "dm-9", "path": "/dev/mapper/kluis"}, {"/dev/dm-9"})
+      and not bd.fstab_noemt({"path": "/dev/sdk1", "uuid": "abc-2"}, {"UUID=abc-1", "/dev/sdk2"}),
+      "wissen: fstab herkent een stuk aan UUID (ook met hoofdletters) en aan zijn apparaat (ook /dev/dm-N)")
 venster.vul_zijbalk()
 _stations = {x.station for x in venster.lijst_schijven}
 klopt(not _stations & {"/dev/nvme1n1", "/dev/sdc", "/dev/sdh", "/dev/sdd"} and "/dev/sdb" in _stations,

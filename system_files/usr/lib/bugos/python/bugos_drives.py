@@ -275,6 +275,9 @@ def fstab_sleutels() -> set[str]:
                 uit.add(f"{soort.upper()}={rest.strip(chr(34)).lower()}")
             elif waarde.startswith("/dev/"):
                 uit.add(waarde)
+                # /dev/disk/by-id/ata-..., /dev/disk/by-path/... en /dev/mapper/... zijn snelkoppelingen naar het
+                # apparaat zelf (/dev/sdb1, /dev/dm-0): ook dat apparaat telt dus.
+                uit.add(os.path.realpath(waarde))
                 # /dev/disk/by-uuid/<uuid> en /dev/disk/by-partuuid/<id> zijn dezelfde sleutels in een andere vorm.
                 m = re.fullmatch(r"/dev/disk/by-(uuid|partuuid|label|partlabel)/(.+)", waarde)
                 if m:
@@ -297,6 +300,8 @@ def fstab_noemt(a: dict, sleutels: set[str]) -> bool:
                                         ("PARTLABEL", "partlabel")) if a.get(veld)}
     if a.get("path"):
         kandidaten.add(str(a["path"]))
+    if a.get("kname"):
+        kandidaten.add(f"/dev/{a['kname']}")   # een versleuteld stuk: /dev/mapper/luks-... is /dev/dm-N
     return bool(kandidaten & sleutels)
 
 
