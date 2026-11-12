@@ -2,6 +2,7 @@
 """BugOS Live - de vensters van de USB-stick.
 
     bugos-live          eerste scherm op de stick: proberen of installeren?
+    bugos-live start    terwijl het installatieprogramma opstart (bugos-install): "Het installatieprogramma start"
     bugos-live klaar    na het installeren (bugos-install): "BugOS staat op je computer" met "Nu opnieuw opstarten"
     bugos-live bitlocker  vóór het installeren (bugos-install), bij een BitLocker-schijf: doorgaan (0) of stoppen (10)
 """
@@ -17,7 +18,7 @@ from bugos_settings_onderdelen import op_achtergrond  # noqa: E402
 from bugos_ui import Chip, Knop, achtergrond_pad, draai, label, maak_app, t, uitvoeren, vraag_ja  # noqa: E402
 from PySide6.QtCore import QProcess, QRectF, QTimer  # noqa: E402
 from PySide6.QtGui import QColor, QIcon, QLinearGradient, QPainter, QPixmap  # noqa: E402
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget  # noqa: E402
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QProgressBar, QVBoxLayout, QWidget  # noqa: E402
 
 
 def geheugen_gb() -> float:
@@ -291,6 +292,122 @@ class Klaar(Achtergrond):
             self.toon("mislukt")
 
 
+# ===================================================================================== bugos-live start ===
+# Waaraan we zien dat het installatieprogramma klaar is (zie Start). Namen uit Anaconda 44 (pyanaconda/core/constants.py
+# BACKEND_READY_FLAG_FILE, liveinst en /usr/libexec/anaconda/webui-desktop). Module-variabelen, zodat de test ze naar
+# een eigen map kan zetten.
+ANACONDA_KLAAR = "/run/anaconda/backend_ready"
+PROC = "/proc"
+# webui-desktop start het venster (slitherer, of Firefox) met de pagina van het installatieprogramma als argument:
+# http://127.0.0.1/cockpit/@localhost/anaconda-webui/index.html. Geen ander programma heeft dat op zijn opdrachtregel.
+PAGINA = b"/anaconda-webui/index.html"
+
+
+def installatie_venster(proc: str | None = None) -> bool:
+    """Draait het venster van het installatieprogramma? Kijkt in /proc of een programma de pagina van Anaconda als
+    argument heeft. Een proces dat net weg is of dat we niet mogen lezen, slaan we over (nooit een fout)."""
+    proc = proc or PROC
+    try:
+        namen = os.listdir(proc)
+    except OSError:
+        return False
+    for naam in namen:
+        if not naam.isdigit():
+            continue
+        try:
+            with open(os.path.join(proc, naam, "cmdline"), "rb") as f:
+                if PAGINA in f.read():
+                    return True
+        except OSError:
+            continue
+    return False
+
+
+def installatie_klaar(klaar: str | None = None, proc: str | None = None) -> bool:
+    """Kun je het installatieprogramma nu gebruiken? Twee dingen samen:
+    - Anaconda heeft backend_ready gemaakt (alles gestart; tot dan toont de pagina zelf alleen 'Initializing...');
+    - het venster met de pagina draait.
+    Alleen de vlag is niet genoeg (het venster kan dan nog komen), alleen het venster ook niet (dat toont eerst lang
+    'Initializing...', en dan zou de melding al weg zijn terwijl er nog niets te doen is)."""
+    return os.path.exists(klaar or ANACONDA_KLAAR) and installatie_venster(proc)
+
+
+class Start(Achtergrond):
+    """'Het installatieprogramma start': bugos-install toont dit vlak voordat het liveinst start.
+
+    Waarom: Anaconda heeft even nodig voordat je iets kunt doen (in een VM ruim anderhalve minuut, gemeten op
+    2026-11-11). Zonder dit ging het welkomstscherm dicht en zag je al die tijd niets, en dan klik je nog een keer.
+    Het venster sluit zichzelf zodra het installatieprogramma klaar is (installatie_klaar); stopt liveinst eerder,
+    dan sluit bugos-install het. Geen knoppen: er valt niets te kiezen (het kruisje sluit alleen deze melding).
+    Duurt het erg lang (trage computer of stick), dan zegt het dat eerlijk, in plaats van te blijven beloven."""
+
+    KIJK_MS = 1000       # elke seconde kijken (goedkoop: één rondje door /proc)
+    NA_KLAAR_MS = 1500   # nog heel even blijven staan, zodat de eerste pagina getekend is als dit weggaat
+    LANG_S = 240         # na 4 minuten: zeggen dat het langer duurt dan normaal
+
+    def __init__(self):
+        super().__init__()
+        # Kleiner en rustiger dan het welkomstscherm: het is een melding, geen keuze. Past bij 150 % op 1280x800.
+        self.resize(620, 320)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(44, 40, 44, 36)
+        lay.setSpacing(14)
+        logo = QLabel()
+        logo.setPixmap(QIcon("/usr/share/bugos/logo-dark.svg").pixmap(56, 56))
+        lay.addWidget(logo)
+        # 'titel' (28 px) in plaats van 'groot' (40 px): de Nederlandse kop past dan op één regel.
+        self.kop = label(t("Het installatieprogramma start", "The installer is starting"), "titel")
+        self.kop.setStyleSheet("color:#FFFFFF;")
+        lay.addWidget(self.kop)
+        self.tekst = label("", "sub")
+        self.tekst.setStyleSheet("color:rgba(255,255,255,0.78);font-size:15px;")
+        self.tekst.setWordWrap(True)
+        self.tekst.setMaximumWidth(510)
+        lay.addWidget(self.tekst)
+        lay.addStretch(1)
+        # Een dun, rustig balkje dat heen en weer loopt: geen percentage, want hoe ver Anaconda is weten we niet.
+        # Wit op de donkere achtergrond (rood is in BugOS alleen voor de hoofdknop).
+        self.balk = QProgressBar()
+        self.balk.setRange(0, 0)
+        self.balk.setTextVisible(False)
+        self.balk.setFixedHeight(4)
+        self.balk.setStyleSheet("QProgressBar{background:rgba(255,255,255,0.12);border:none;border-radius:2px;"
+                                "min-height:4px;max-height:4px;}"
+                                "QProgressBar::chunk{background:rgba(255,255,255,0.70);border-radius:2px;}")
+        lay.addWidget(self.balk)
+        self.begin = time.monotonic()
+        self.klaar_gezien = False
+        self.toon(lang=False)
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.kijk)
+        self.timer.start(self.KIJK_MS)
+
+    def toon(self, lang: bool) -> None:
+        """De uitleg: eerst hoe lang het ongeveer duurt; na LANG_S seconden dat het langer duurt dan normaal.
+        'Een minuut of twee' en niet 'een minuut': gemeten was het ruim anderhalve minuut."""
+        if lang:
+            self.tekst.setText(t("Het duurt langer dan normaal, maar het installatieprogramma start nog. Op een trage "
+                                 "computer of USB-stick kan dat een aantal minuten duren.",
+                                 "This is taking longer than usual, but the installer is still starting. On a slow "
+                                 "computer or USB stick that can take several minutes."))
+        else:
+            self.tekst.setText(t("Dit duurt een minuut of twee. Het gaat vanzelf open, dus je hoeft niet nog een keer "
+                                 "te klikken.",
+                                 "This takes a minute or two. It opens by itself, so there is no need to click "
+                                 "again."))
+
+    def kijk(self) -> None:
+        """Elke seconde: is het installatieprogramma klaar? Dan nog even blijven staan en dicht."""
+        if self.klaar_gezien:
+            return
+        if installatie_klaar():
+            self.klaar_gezien = True
+            self.timer.stop()
+            QTimer.singleShot(self.NA_KLAAR_MS, self.close)
+            return
+        self.toon(lang=time.monotonic() - self.begin >= self.LANG_S)
+
+
 # bugos-live bitlocker: 0 = doorgaan, STOPPEN = niet installeren. Elke andere code (Python-fout, geen scherm) betekent
 # voor bugos-install 'kon het niet vragen', en dan vraagt het op een andere manier (review I10).
 STOPPEN = 10
@@ -310,7 +427,10 @@ def vraag_bitlocker() -> bool:
 
 
 def venster(args: list[str]) -> QWidget:
-    """Welk venster: 'klaar' na het installeren, anders het welkomstscherm."""
+    """Welk venster: 'start' terwijl het installatieprogramma opstart, 'klaar' na het installeren, anders het
+    welkomstscherm."""
+    if args[:1] == ["start"]:
+        return Start()
     if args[:1] == ["klaar"]:
         return Klaar()
     return Live()

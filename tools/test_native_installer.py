@@ -56,6 +56,17 @@ def log() -> list[str]:
         return []
 
 
+def leeft(pid: int) -> bool:
+    """Draait dit proces nog? Een zombie telt als weg: die is gestopt, alleen nog niet opgeruimd door zijn ouder.
+    (os.kill(pid, 0) zou een zombie nog als levend zien.)"""
+    try:
+        stat = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    # Na de naam tussen haakjes (die zelf spaties of haakjes kan hebben) komt de toestand: R, S, Z ...
+    return stat.rsplit(")", 1)[-1].split()[:1] != ["Z"]
+
+
 def schoon_pad() -> str:
     """PATH zonder de echte BugOS-programma's (bugos-*, liveinst): op een BugOS-computer staan die in /usr/bin, en dan
     zou de test die vinden in plaats van zijn eigen nep-versies. Per map een schaduwmap met al het andere."""
@@ -218,6 +229,7 @@ def test_live() -> None:
     wacht(app, lambda: not w._bezig, 8)
     w.close()
     test_klaar(app, live)
+    test_start(app, live)
 
 
 # ===================================================================================== woorden (bugos_webui.py) ===
@@ -669,12 +681,23 @@ def test_install() -> None:
     (sysroot / "etc").mkdir(parents=True)
     nep("lsblk", f'cat \'{TMP}/lsblk\' 2>/dev/null || echo ext4')
     nep("kdialog", "exit 0")
-    nep("bugos-live", f'echo "LANGUAGE=${{LANGUAGE-<leeg>}}" >> \'{LOG}\'; exit "$(cat \'{TMP}/live-code\' 2>/dev/null || echo 0)"')
-    # liveinst: doet wat er in $TMP/liveinst-doe staat (het %post-script draaien, of iets anders).
-    nep("liveinst", f'[ -f \'{TMP}/liveinst-doe\' ] && bash \'{TMP}/liveinst-doe\'; exit 3')
+    # bugos-live: 'start' (de melding) blijft staan tot iemand hem stopt, zoals het echte venster; het schrijft zijn
+    # nummer op, zodat de test kan zien dat hij er was en daarna weg is. Wachten gebeurt in bash zelf (read op een
+    # fifo, geen sleep): dan blijft het één proces dat bugos-live heet, en houdt niets de uitvoer van de test open.
+    nep("bugos-live", f'if [ "$1" = start ]; then echo "$$" > \'{TMP}/start-pid\'; exec >/dev/null 2>&1; '
+                      f'rm -f \'{TMP}/start-fifo\'; mkfifo \'{TMP}/start-fifo\'; read -r -t 20 _ <> \'{TMP}/start-fifo\'; '
+                      f'exit 0; fi\n'
+                      f'echo "LANGUAGE=${{LANGUAGE-<leeg>}}" >> \'{LOG}\'; exit "$(cat \'{TMP}/live-code\' 2>/dev/null || echo 0)"')
+    # liveinst: wacht tot de melding er is (het echte liveinst doet er veel langer over dan het starten van de melding),
+    # en doet dan wat er in $TMP/liveinst-doe staat (het %post-script draaien, of iets anders).
+    nep("liveinst", f'for _ in $(seq 60); do [ -s \'{TMP}/start-pid\' ] && break; sleep 0.05; done\n'
+                    f'[ -f \'{TMP}/liveinst-doe\' ] && bash \'{TMP}/liveinst-doe\'; exit 3')
+    # Per ronde: (was de melding er, en is hij na afloop weg?)
+    meldingen: list[tuple[bool, bool]] = []
 
     def ronde(doe: str | None, locale: str | None = None, post_lang: str = "", oud: str | None = None) -> list[str]:
         LOG.write_text("", encoding="utf-8")
+        (TMP / "start-pid").unlink(missing_ok=True)
         shutil.rmtree(m / "run", ignore_errors=True)
         if oud is not None:   # een merkteken van een eerdere poging
             (m / "run").mkdir()
@@ -693,7 +716,18 @@ def test_install() -> None:
         env.pop("LANGUAGE", None)
         env.pop("LC_ALL", None)
         subprocess.run([str(bin_)], env=env, capture_output=True, text=True, timeout=30)
-        return [r for r in log() if r.startswith(("bugos-live", "LANGUAGE=", "liveinst"))]
+        pid_tekst = (TMP / "start-pid").read_text(encoding="utf-8").strip() if (TMP / "start-pid").exists() else ""
+        weg = True
+        if pid_tekst.isdigit():
+            # bugos-install stuurde hem weg (SIGTERM); geef hem heel even om echt te stoppen.
+            eind = time.monotonic() + 3
+            while leeft(int(pid_tekst)) and time.monotonic() < eind:
+                time.sleep(0.02)
+            weg = not leeft(int(pid_tekst))
+        meldingen.append((pid_tekst.isdigit(), weg))
+        # 'bugos-live start' draait tegelijk met liveinst: in welke volgorde ze in het logboek komen, ligt niet vast.
+        # Die regel hier dus weglaten; meldingen houdt bij of hij er was.
+        return [r for r in log() if r.startswith(("bugos-live", "LANGUAGE=", "liveinst")) and r != "bugos-live start"]
 
     draai_post = f"bash '{post}'\n"
     # 15. Gelukt, Nederlands gekozen. Anaconda schrijft LANG="nl_NL.UTF-8" (met aanhalingstekens, review I1).
@@ -729,6 +763,13 @@ def test_install() -> None:
     klopt(r == ["liveinst ", "bugos-live klaar", "LANGUAGE=<leeg>"], f"18 (I6): alleen regel 1: venster, taal van de stick ({r})")
     r = ronde(f"printf '%s\\n%s\\n' \"{nu}\" 'C.UTF-8' > '{merk}'", oud="")
     klopt(r[-1:] == ["LANGUAGE=<leeg>"], f"18: taal C: geen LANGUAGE ({r})")
+    # 28 (c). Elke ronde hierboven startte liveinst: de melding 'Het installatieprogramma start' kwam er vóór liveinst
+    # (liveinst wachtte erop), en was weg toen bugos-install klaar was: ook als liveinst mislukte of stopte (17, 18),
+    # en vóór het venster 'Nu opnieuw opstarten' (15, 16).
+    klopt(len(meldingen) == 11 and all(er for er, _weg in meldingen),
+          f"28 (c): bij elke start van liveinst komt eerst de melding (bugos-live start) ({meldingen})")
+    klopt(all(weg for _er, weg in meldingen),
+          f"28 (c): na liveinst is de melding altijd weg, gelukt of niet ({meldingen})")
 
     # 19. BitLocker: de BugOS-vraag (bugos-live bitlocker). 0 = doorgaan, 10 = stoppen, iets anders = kon niet vragen.
     (TMP / "lsblk").write_text("\nntfs\nBitLocker\next4\n", encoding="utf-8")
@@ -738,13 +779,17 @@ def test_install() -> None:
         (TMP / "live-code").write_text(str(live_code), encoding="utf-8")
         (TMP / "zen-code").write_text(str(zen_code), encoding="utf-8")
         r = ronde(None)
+        # 'bugos-live start' (de melding) staat hier niet in: die loopt tegelijk met liveinst (zie meldingen).
         return [x.split()[0] + (" " + x.split()[1] if x.startswith("bugos-live") and len(x.split()) > 1 else "")
-                for x in log() if x.startswith(("bugos-live", "liveinst", "zenity", "kdialog"))]
+                for x in log() if x.startswith(("bugos-live", "liveinst", "zenity", "kdialog")) and x != "bugos-live start"]
 
     r = bitlocker(10)
     klopt(r == ["bugos-live bitlocker"], f"19: BitLocker, 'Stop' (of het venster dicht): het installatieprogramma start niet ({r})")
+    klopt(meldingen[-1] == (False, True), f"28 (c): na 'Stop' ook geen melding 'Het installatieprogramma start' ({meldingen[-1]})")
     r = bitlocker(0)
     klopt(r == ["bugos-live bitlocker", "liveinst"], f"19: BitLocker, 'Yes, continue': het installatieprogramma start ({r})")
+    klopt(meldingen[-1] == (True, True),
+          f"28 (c): na 'Yes, continue' komt de melding pas (ná de BitLocker-vraag), en is daarna weg ({meldingen[-1]})")
     r = bitlocker(1, zen_code=1)
     klopt(r == ["bugos-live bitlocker", "zenity", "liveinst"][:2],
           f"19 (I10): het BugOS-venster valt om: de vraag komt via zenity; 'Stop' daar stopt ({r})")
@@ -762,6 +807,12 @@ def test_install() -> None:
     tekst = bron("bugos-install")
     klopt("exec liveinst" not in tekst, "20: bugos-install neemt liveinst niet meer over (exec), zodat het daarna kan kijken")
     klopt("kdialog" not in tekst and "bugos-live bitlocker" in tekst, "20: de BitLocker-vraag is een BugOS-venster, geen kdialog (KDE)")
+    # 28 (c). De volgorde in bugos-install: eerst de BitLocker-vraag, dan de melding (op de achtergrond), dan liveinst,
+    # dan de melding weg (alleen als het nog ons kind is), en pas daarna het venster 'Nu opnieuw opstarten'.
+    volgorde = [tekst.find(x) for x in ("bugos-live bitlocker", "bugos-live start &", "melding=$!", 'liveinst "$@"',
+                                        'ps -o ppid= -p "$melding"', 'kill "$melding"', "exec bugos-live klaar")]
+    klopt(-1 not in volgorde and volgorde == sorted(volgorde),
+          f"28 (c): bugos-install: BitLocker-vraag, melding, liveinst, melding weg, dan pas 'klaar' ({volgorde})")
     bouw = bron("build.sh").replace("\r\n", "\n")
     ks = bouw[bouw.index("interactive-defaults.ks <<EOF"):]
     ks = ks[:ks.index("\nEOF\n")]
@@ -931,6 +982,119 @@ def test_klaar(app, live) -> None:
         if r.returncode not in (0, 10):
             print(r.stderr[-600:])
     klopt(codes == [10, 0], f"F (I10): bugos-live bitlocker: Stop = 10, doorgaan = 0 (anders = 'kon niet vragen') ({codes})")
+
+
+# ======================================================== de melding 'Het installatieprogramma start' (c) ===
+# Zelfde soort meting als MAAT, voor het venster 'start' in beide standen (gewoon, en 'het duurt langer').
+MAAT_START = r'''
+import importlib.machinery, importlib.util, json, os, sys
+sys.path.insert(0, sys.argv[2])
+lader = importlib.machinery.SourceFileLoader("bugos_live", sys.argv[1])
+spec = importlib.util.spec_from_loader("bugos_live", lader)
+live = importlib.util.module_from_spec(spec); lader.exec_module(live)
+app = live.maak_app("bugos-live", "bugos-live", ["bugos-live"])
+from PySide6.QtWidgets import QLabel, QProgressBar
+s = live.venster(["start"])
+s.timer.stop()
+uit = {"klasse": type(s).__name__, "kop": s.kop.text(), "tekst": s.tekst.text(), "fouten": [],
+       "maat": [s.width(), s.height()]}
+s.show()
+for lang in (False, True):
+    s.toon(lang=lang)
+    for _ in range(5):
+        app.processEvents()
+    for w in s.findChildren(QLabel) + s.findChildren(QProgressBar):
+        if not w.isVisible():
+            continue
+        g = w.geometry()
+        if g.left() < 0 or g.top() < 0 or g.right() > s.width() or g.bottom() > s.height():
+            uit["fouten"].append(f"{lang}: {type(w).__name__} valt buiten het venster {g.getRect()}")
+        if isinstance(w, QLabel) and w.wordWrap() and w.text() and w.heightForWidth(w.width()) > w.height():
+            uit["fouten"].append(f"{lang}: {w.text()[:20]!r} afgeknipt ({w.heightForWidth(w.width())} > {w.height()})")
+    if s.balk.geometry().top() <= s.tekst.geometry().bottom():
+        uit["fouten"].append(f"{lang}: het balkje staat over de tekst")
+    uit["lang" if lang else "kort"] = s.tekst.text()
+print(json.dumps(uit))
+'''
+
+
+def test_start(app, live) -> None:
+    """28 (c): bugos-live start. Sluit zichzelf zodra het installatieprogramma klaar is: de vlag backend_ready van
+    Anaconda én het venster met de pagina. Daarvoor een eigen /proc en een eigen vlag (de module-variabelen)."""
+    import json
+
+    proc = TMP / "proc"
+    (proc / "self").mkdir(parents=True)                 # geen getal: overslaan
+    (proc / "7").mkdir()                                # webui-desktop zelf: heeft de pagina NIET op zijn regel
+    (proc / "7" / "cmdline").write_bytes(b"/usr/bin/bash\0/usr/libexec/anaconda/webui-desktop\0-t\0live\0")
+    (proc / "8").mkdir()                                # zonder cmdline (net weg, of niet te lezen): overslaan
+    vlag = TMP / "backend_ready"
+    live.PROC, live.ANACONDA_KLAAR = str(proc), str(vlag)
+    url = b"http://127.0.0.1/cockpit/@localhost/anaconda-webui/index.html"
+
+    def browser(aan: bool) -> None:
+        if aan:
+            (proc / "42").mkdir(exist_ok=True)
+            (proc / "42" / "cmdline").write_bytes(b"slitherer\0" + url + b"\0")
+        else:
+            shutil.rmtree(proc / "42", ignore_errors=True)
+
+    klopt(not live.installatie_venster() and not live.installatie_venster(str(TMP / "bestaat-niet")),
+          "28 (c): geen venster van het installatieprogramma (webui-desktop zelf telt niet; geen /proc: geen fout)")
+    browser(True)
+    klopt(live.installatie_venster() and not live.installatie_klaar(),
+          "28 (c): het venster draait, maar Anaconda is nog niet klaar (geen backend_ready): nog niet klaar")
+    browser(False)
+    vlag.write_text("", encoding="utf-8")
+    klopt(not live.installatie_klaar(), "28 (c): backend_ready, maar (nog) geen venster: nog niet klaar")
+    vlag.unlink()
+
+    s = live.venster(["start"])
+    s.timer.stop()   # de test kiest zelf wanneer er gekeken wordt
+    s.NA_KLAAR_MS = 50
+    s.show()
+    app.processEvents()
+    klopt(isinstance(s, live.Start) and s.kop.text() == "The installer is starting" and "a minute or two" in s.tekst.text()
+          and "no need to click again" in s.tekst.text() and s.balk.maximum() == 0 and s.isVisible(),
+          f"28 (c): 'The installer is starting', hoe lang het ongeveer duurt, en een balkje dat loopt ({s.tekst.text()})")
+    browser(True)
+    s.kijk()
+    klopt(s.isVisible() and not s.klaar_gezien, "28 (c): venster er, Anaconda nog niet klaar: de melding blijft")
+    s.begin = time.monotonic() - s.LANG_S - 1
+    s.kijk()
+    klopt(s.isVisible() and "longer than usual" in s.tekst.text(),
+          f"28 (c): na 4 minuten zegt de melding eerlijk dat het langer duurt ({s.tekst.text()})")
+    vlag.write_text("", encoding="utf-8")
+    s.kijk()
+    klopt(s.klaar_gezien and wacht(app, lambda: not s.isVisible(), 3),
+          "28 (c): backend_ready en het venster: de melding gaat vanzelf weg")
+    browser(False)
+    vlag.unlink()
+    live.PROC, live.ANACONDA_KLAAR = "/proc", "/run/anaconda/backend_ready"
+
+    # Op het scherm, in het Engels en het Nederlands (zo start bugos-install hem: de taal van de stick, of LANGUAGE).
+    metingen = {}
+    for taal in ("en", "nl"):
+        env = dict(os.environ, LANGUAGE=taal, LANG="en_US.UTF-8", QT_QPA_PLATFORM="offscreen")
+        env.pop("LC_ALL", None)
+        r = subprocess.run([sys.executable, "-c", MAAT_START, str(SRC / "bugos-live"), str(PY)], env=env,
+                           capture_output=True, text=True, timeout=60)
+        try:
+            metingen[taal] = json.loads(r.stdout.strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            metingen[taal] = {"fout": r.stderr[-300:]}
+    nl = metingen["nl"]
+    klopt(nl.get("klasse") == "Start" and nl.get("kop") == "Het installatieprogramma start"
+          and "minuut of twee" in nl.get("kort", "") and "langer dan normaal" in nl.get("lang", ""),
+          f"28 (c): in het Nederlands: 'Het installatieprogramma start' ({nl.get('kop')} | {nl.get('kort')})")
+    for taal, mt in metingen.items():
+        klopt("fouten" in mt and not mt["fouten"],
+              f"28 (c): {taal}: in {mt.get('maat')} past alles, in beide standen (niets afgeknipt of eronder) "
+              f"({mt.get('fouten')})")
+    # Past op een laptop van 1280x800 bij 150 %, met titelbalk, boven de taakbalk (zelfde regel als 26).
+    b, h = metingen["en"].get("maat", [9999, 9999])
+    klopt(b * 1.5 <= 1280 and (h + 40) * 1.5 <= 800 - 72,
+          f"28 (c): {b}x{h} met titelbalk bij 150 % past op 1280x800 boven een taakbalk van 72 px")
 
 
 # =================================================================== --beeld: in de echte live-image (geen ISO nodig) ===
