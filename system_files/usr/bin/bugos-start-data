@@ -125,8 +125,9 @@ EIGEN_NAMEN = {
     "org.kde.ark.desktop": ("Uitpakken", "Archives", "Zip-bestanden openen en maken", "Open and make zip files"),
     "org.kde.elisa.desktop": ("Muziek", "Music", "Je muziek afspelen", "Play your music"),
     "org.kde.haruna.desktop": ("Video's", "Videos", "Video's afspelen", "Play videos"),
-    "org.kde.filelight.desktop": ("Wat neemt ruimte in", "What uses space", "Zien welke mappen het grootst zijn",
-                                  "See which folders are the biggest"),
+    # (Filelight staat hier niet meer: 'Wat de meeste ruimte inneemt' zit nu in Bestanden > Deze computer, Hulp
+    # opent dat, en het startmenu laat Filelight niet meer zien. Installeer je hem zelf uit de Winkel, dan heet hij
+    # gewoon Filelight, zoals je hem koos.)
     "org.kde.kcharselect.desktop": ("Speciale tekens", "Special characters", "Tekens als é, ß of ©",
                                     "Characters like é, ß or ©"),
 }
