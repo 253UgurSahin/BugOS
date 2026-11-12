@@ -35,6 +35,37 @@ if [ -d "$REPO/system_files" ]; then
 fi
 klopt '[ -z "$anders" ]' "bestanden: alles uit system_files staat er ongeschonden in${anders:0:300}"
 
+# 1c. Ook wat de bouw zelf schrijft (cat >, printf >, kwriteconfig6) moet heel zijn. In een lokale bouw met
+#     fuse-overlayfs bleef van bestanden die al in de fundering stonden alleen de oude inhoud over, aangevuld met
+#     nul-bytes tot de nieuwe lengte (/usr/lib/plasmalogin/defaults.conf: inlogscherm met de achtergrond van KDE;
+#     /etc/xdg/kcm-about-distrorc: 'Over deze computer'). Zo'n tekstbestand eindigt op nul-bytes: dat mag nergens
+#     in /etc of in de mappen waar de bouw schrijft. (/etc/selinux heeft echte binaire bestanden met nullen.)
+kapot="$(python3 - <<'EOF'
+import os
+plekken = ["/etc", "/usr/lib/plasmalogin", "/usr/share/kde-settings", "/usr/share/plasma/look-and-feel",
+           "/usr/share/plasma/shells", "/usr/share/sddm", "/usr/share/bugos"]
+kapot = []
+for plek in plekken:
+    for map_, mappen, bestanden in os.walk(plek):
+        mappen[:] = [m for m in mappen if os.path.join(map_, m) != "/etc/selinux"]
+        for b in bestanden:
+            p = os.path.join(map_, b)
+            try:
+                if os.path.islink(p) or not 0 < os.path.getsize(p) < 2_000_000:
+                    continue
+                with open(p, "rb") as h:
+                    data = h.read()
+            except OSError:
+                continue
+            # Tekst (geen nul-byte in het begin) met nul-bytes aan het eind: de oude inhoud, opgevuld.
+            romp = data.rstrip(b"\0")
+            if romp != data and romp and b"\0" not in romp:
+                kapot.append(p)
+print(" ".join(kapot[:10]))
+EOF
+)"
+klopt '[ -z "$kapot" ]' "bestanden: geen tekstbestand dat eindigt op nul-bytes (half geschreven) ${kapot}"
+
 # 2. Rechten (build.sh): programma's uitvoerbaar, de rest niet, geen wereld-schrijfbare bestanden
 slecht="$(find /usr/bin -maxdepth 1 -name 'bugos-*' ! -perm 0755 | head -5)"
 klopt '[ -z "$slecht" ]' "rechten: elk /usr/bin/bugos-* is 0755 ${slecht}"
@@ -67,6 +98,10 @@ klopt 'grep -q "^AutomaticUpdatePolicy=stage" /etc/rpm-ostreed.conf' "updates: r
 # IPv6, connect, not running: meldingen van de bouwcontainer zelf, geen fouten in de diensten.
 uit="$(systemd-analyze verify /usr/lib/systemd/system/bugos-*.service /usr/lib/systemd/system/bugos-*.timer 2>&1 | grep -v -E 'Failed to (connect|open)|Cannot|not running|IPv6' || true)"
 klopt '[ -z "$uit" ]' "diensten: systemd-analyze verify vindt geen fouten ${uit:+($uit)}"
+# systemd-remount-fs mislukte na elke start (composefs-wortel); onze aanvulling laat die ene mislukking niet als fout
+# tellen. Het programma moet op de plek staan die de aanvulling noemt, anders start de dienst helemaal niet meer.
+klopt 'grep -qx "ExecStart=-/usr/lib/systemd/systemd-remount-fs" /usr/lib/systemd/system/systemd-remount-fs.service.d/50-bugos-composefs.conf && [ -x /usr/lib/systemd/systemd-remount-fs ] && grep -q "^enabled *= *yes" /usr/lib/ostree/prepare-root.conf' \
+    "dienst: systemd-remount-fs telt het niet-opnieuw-koppelen van de composefs-wortel niet als fout"
 for p in /usr/share/polkit-1/actions/org.bugos.*.policy; do
     klopt 'python3 -c "import sys, xml.etree.ElementTree as E; E.parse(sys.argv[1])" "$p"' "polkit: $(basename "$p") is geldige XML"
 done
