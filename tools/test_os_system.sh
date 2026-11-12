@@ -15,6 +15,14 @@ klopt() { if eval "$1"; then echo "OK    $2"; else echo "FOUT  $2"; fouten=$((fo
 nep() { printf '#!/usr/bin/bash\n%s\n' "$2" >"$TMP/bin/$1"; chmod +x "$TMP/bin/$1"; }
 # Een script met lib.sh uit deze map (niet die van de computer).
 kopie() { sed "s|/usr/share/bugos|$ROOT/system_files/usr/share/bugos|g" "$BIN/$1" >"$TMP/$1"; }
+# Zelfde, maar ook /etc/bugos en /var/lib/bugos in de tijdelijke map. bugos-updates bewaart daar de keuze
+# 'vanzelf'/'zelf updaten'. Met de gewone kopie schreef de test in de echte mappen van de computer: dat lukt alleen
+# als root (en verandert dan de computer), en als gewone gebruiker (de GitHub-runner) faalde de test.
+kopie_updates() {
+    mkdir -p "$TMP/etc-bugos" "$TMP/var-bugos"
+    sed -e "s|/usr/share/bugos|$ROOT/system_files/usr/share/bugos|g" -e "s|/etc/bugos|$TMP/etc-bugos|g" \
+        -e "s|/var/lib/bugos|$TMP/var-bugos|g" "$BIN/bugos-updates" >"$TMP/bugos-updates"
+}
 # Draai een gekopieerd script met de nep-programma's, in het Engels (C.UTF-8: die taal is er altijd); geeft de afsluitcode.
 draai() {
     local naam="$1"
@@ -29,7 +37,7 @@ for p in notify-send kdialog pkexec systemctl; do nep "$p" 'exit 0'; done
 nep id 'echo 0'   # doe alsof we beheerder zijn, dan vraagt bugos-updates geen wachtwoord
 
 # U005: "Nu updaten" mag niet "klaar" zeggen als de systeem-update mislukt.
-kopie bugos-updates
+kopie_updates
 nep flatpak 'exit 0'
 nep rpm-ostree 'exit 1'
 draai bugos-updates nu
@@ -47,12 +55,13 @@ klopt '[ $code -ne 0 ] && ! grep -q Done "$TMP/uit"' "updates terug: rollback mi
 nep rpm-ostree 'exit 0'
 draai bugos-updates terug
 klopt '[ $code -eq 0 ] && grep -q Done "$TMP/uit"' "updates terug: rollback gelukt -> 'Done'"
+# De 'terug' hierboven bewaarde 'zelf updaten' in de tijdelijke mappen. De controles hieronder beginnen met een
+# computer die nog nooit iets koos, dus die keuze weer weg.
+rm -rf "$TMP/etc-bugos" "$TMP/var-bugos"
 
 # U033/U034: "terug" zet automatische updates uit (anders komt de nieuwe versie terug), en twee keer
 # "terug" gaat niet weer vooruit.
-sed -e "s|/usr/share/bugos|$ROOT/system_files/usr/share/bugos|g" -e "s|/etc/bugos|$TMP/etc-bugos|g" \
-    -e "s|/var/lib/bugos|$TMP/var-bugos|g" "$BIN/bugos-updates" >"$TMP/bugos-updates"
-mkdir -p "$TMP/etc-bugos"
+kopie_updates
 echo UPDATES=auto >"$TMP/etc-bugos/updates.conf"
 nep systemctl 'echo "$*" >>"'"$TMP"'/systemctl"'
 nep rpm-ostree 'case "$1" in status) cat "'"$TMP"'/status.json";; rollback) echo rollback >>"'"$TMP"'/rollback";; esac'
@@ -164,7 +173,7 @@ printf '{"deployments":[{"booted":true,"timestamp":2000}]}' >"$TMP/status.json"
 draai bugos-updates nu
 klopt '[ $code -eq 0 ] && ! grep -q bugos-update-klaar "$TMP/uit"' "U041: nu, een update die nu pas binnenkomt: gewoon 'klaar', niet 'stond al klaar'"
 nep systemctl 'exit 0'
-kopie bugos-updates
+kopie_updates
 
 # U024: na "terug naar de vorige versie" staat de oude versie bovenaan; dat is geen nieuwe update.
 kopie bugos-updatecheck
@@ -470,7 +479,7 @@ klopt '! grep -q "^ *systemctl --global mask flatpak-user-update" "$ROOT/build_f
 # U117: 'Updates vanzelf' aan/uit zet ook de app-updates per gebruiker aan/uit (niet voor altijd uit in de bouw).
 mkdir -p "$TMP/user-units"
 touch "$TMP/user-units/flatpak-user-update.timer"
-kopie bugos-updates
+kopie_updates
 nep systemctl 'echo "$*" >>"'"$TMP"'/systemctl-log"'
 : >"$TMP/systemctl-log"
 BUGOS_SYSTEMD_USER="$TMP/user-units" draai bugos-updates hand
