@@ -1,9 +1,12 @@
 // BugOS snelmenu - koppeling met de taakbalk van Plasma.
 // Het eigenlijke paneel staat in QuickMenu.qml.
+// Rechtermuisknop: "Wifi en internet", "Geluidsinstellingen" en "Instellingen openen" (de taakbalk staat op slot,
+// dus zonder deze regels was er helemaal geen menu).
 
 import QtQuick
 import QtQuick.Layouts
 import org.kde.plasma.plasmoid
+import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasma5support as P5Support
 import org.kde.kirigami as Kirigami
 
@@ -12,6 +15,7 @@ PlasmoidItem {
 
     property var status: ({})
     readonly property bool nederlands: Qt.locale().name.indexOf("nl") === 0
+    function tr(nl, en) { return nederlands ? nl : en }
 
     preferredRepresentation: compactRepresentation
     toolTipMainText: nederlands ? "Snelmenu" : "Quick menu"
@@ -32,6 +36,25 @@ PlasmoidItem {
     function voerUit(cmd) { opdracht.connectSource(cmd) }
     // De opdracht gaat via een shell: zet elke waarde tussen enkele aanhalingstekens (zoals het startmenu).
     function aanhalen(tekst) { return "'" + String(tekst).replace(/'/g, "'\\''") + "'" }
+
+    // Niet "Alle instellingen": die naam heeft KDE Instellingen al (build_files/style.sh).
+    Plasmoid.contextualActions: [
+        PlasmaCore.Action {
+            text: root.tr("Wifi en internet", "Wi-Fi and internet")
+            icon.name: "network-wireless"
+            onTriggered: root.voerUit("bugos-start-data --start instelling:wifi")
+        },
+        PlasmaCore.Action {
+            text: root.tr("Geluidsinstellingen", "Sound settings")
+            icon.name: "audio-volume-high"
+            onTriggered: root.voerUit("bugos-start-data --start instelling:geluid")
+        },
+        PlasmaCore.Action {
+            text: root.tr("Instellingen openen", "Open Settings")
+            icon.name: "bugos-settings"
+            onTriggered: root.voerUit("bugos-start-data --start instelling:")
+        }
+    ]
 
     Component.onCompleted: voerUit("bugos-start-data --snel")
     onExpandedChanged: if (expanded) voerUit("bugos-start-data --snel")

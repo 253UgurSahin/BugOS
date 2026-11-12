@@ -56,6 +56,10 @@ Then restart the computer. Want to go back? Use Settings > Updates and info, or 
 - [ ] The **quick menu** (two sliders, next to the system tray): turn Wi-Fi off and on; the little arrow next to Wi-Fi opens Settings
 - [ ] Shut down from the start menu: you see the **BugOS shutdown screen** with big tiles; "Cancel" takes you back
 - [ ] Rather have the KDE menu? Settings → Display and appearance → Appearance → Taskbar: turn the BugOS start menu off and on again
+- [ ] The taskbar and desktop are **locked**: right-click an empty spot on the desktop, the taskbar, the start button, the clock and the quick menu. Nowhere "Enter Edit Mode", "Add Widgets…" or "Configure…". The desktop menu ends with "Display settings" and "Change background", the clock's with "Adjust date and time" and "Notification settings", the quick menu's with "Wi-Fi and internet", "Sound settings" and "Open Settings"; each opens the right page in Settings
+- [ ] Everyday things still work while it is locked: right-click a running app on the taskbar → "Pin to Task Manager", drag the pinned apps into another order, unpin one; drag a file from Files onto the desktop, move it, rename it (F2); right-click an image → "Set as Wallpaper"; click the clock (the calendar opens and closes again)
+- [ ] For advanced users: `bugos-panel bewerken aan` unlocks (a notification says how to lock again; KDE's "Add Widgets…" is back, also after signing out and in), `bugos-panel bewerken uit` locks again
+- [ ] Coming from an older BugOS where you set the battery or network icon in the system tray to "Always shown": after the update it is still there, next to the quick menu. Turning the quick menu off (Settings → Appearance → Taskbar) brings back all KDE tray icons, turning it on again puts the quick menu back
 - [ ] Start the "try it first" stick: does the welcome screen appear with "Try first" and "Install BugOS"?
 - [ ] Is there no "Aurora" or "Fedora" anywhere on the stick (no "Welcome Center", one install button, English texts (or your chosen language))?
 - [ ] Install BugOS **without internet** (cable out, Wi-Fi off): does it work, and does BugOS start afterwards?
