@@ -45,6 +45,20 @@ mkdir -p "$UIT"
 # In een container is /proc/sys soms alleen-lezen; podman-in-podman wil erin schrijven.
 mount -o remount,rw /proc/sys 2>/dev/null || true
 
+# Opslag van podman: de overlay van de kernel, niet fuse-overlayfs. Het beeld quay.io/podman/stable (waarin deze
+# lokale bouw meestal draait) gebruikt standaard fuse-overlayfs. Daarmee kwamen bestanden die de bouw over een
+# bestaand bestand uit de fundering schreef, half in het beeld: wel de nieuwe lengte, maar de oude inhoud met
+# nul-bytes erachter (gezien in /usr/lib/plasmalogin/defaults.conf, /etc/xdg/kcm-about-distrorc,
+# /etc/xdg/user-dirs.defaults en /etc/xdg/PlasmaDiscoverUpdates; tools/test_image.sh 1c vangt dat nu).
+# De bouw op GitHub gebruikt de overlay van de kernel al. Die werkt hier ook: de opslag (/var/lib/containers) staat
+# op een gewone schijf (een Docker-volume), niet zelf op een overlay.
+if grep -q '^mount_program *= *"/usr/bin/fuse-overlayfs"' /etc/containers/storage.conf 2>/dev/null; then
+    sed -e 's|^mount_program *=.*|# mount_program: uit (zie tools/iso-local.sh)|' -e 's|^mountopt *=.*|mountopt = "nodev"|' \
+        /etc/containers/storage.conf >/tmp/bugos-storage.conf
+    export CONTAINERS_STORAGE_CONF=/tmp/bugos-storage.conf
+fi
+stap "Opslag van podman: $(podman info --format '{{.Store.GraphDriverName}} {{.Store.GraphOptions}}' 2>&1 | head -c 300)"
+
 stap "1. BugOS bouwen (fundering: $BASIS)"
 podman build \
     --build-arg BASE_IMAGE="$BASIS" \
