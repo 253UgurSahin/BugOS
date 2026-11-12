@@ -828,6 +828,54 @@ klopt(_en.get("log") == ["bugos-start-data --start instelling:scherm", "bugos-st
 klopt(_en.get("iconen") == ["preferences-desktop-display", "preferences-desktop-wallpaper"],
       f"E1: bureaublad: met de pictogrammen van scherm en achtergrond ({_en.get('iconen')})")
 
+
+def bureaubladregel_in_qml(regel: str, taal: str) -> dict:
+    """E5: de regel die style.sh in KDE's FolderViewLayer.qml zet (C1), echt draaien in de QML van Qt 6, niet alleen
+    als losse JavaScript: met BugosBureaubladActies.qml ernaast (zoals de bouw hem neerzet), een item met dezelfde
+    id als KDE (folderViewLayerComponent) en een nagemaakt Plasmoid (isContainment, contextualActions). Zo is ook
+    nagekeken dat 'for (const a of bugosO.acties)' over een list<QtObject> loopt en dat Qt.createComponent het
+    bestand naast de mapweergave vindt."""
+    from PySide6.QtCore import QLocale, QUrl
+    from PySide6.QtQml import QQmlComponent, QQmlEngine, QQmlExpression
+    with tempfile.TemporaryDirectory() as t:
+        t = Path(t)
+        core = t / "org/kde/plasma/core"
+        p5 = t / "org/kde/plasma/plasma5support"
+        core.mkdir(parents=True)
+        p5.mkdir(parents=True)
+        (core / "qmldir").write_text("module org.kde.plasma.core\nAction 1.0 Action.qml\nIcon 1.0 Icon.qml\n", encoding="utf-8")
+        (core / "Icon.qml").write_text("import QtQuick\nQtObject { property string name }\n", encoding="utf-8")
+        (core / "Action.qml").write_text(STUB_ACTION, encoding="utf-8")
+        (p5 / "qmldir").write_text("module org.kde.plasma.plasma5support\nDataSource 1.0 DataSource.qml\n", encoding="utf-8")
+        (p5 / "DataSource.qml").write_text(STUB_DATASOURCE, encoding="utf-8")
+        (t / "BugosBureaubladActies.qml").write_text(lees(BRON), encoding="utf-8", newline="\n")
+        # Een Plasmoid als bureaublad (isContainment) en een als losse "Mapweergave" op een paneel (geen BugOS-regels).
+        (t / "Laag.qml").write_text(
+            "import QtQuick\nItem {\n    id: folderViewLayerComponent\n    property var gevonden: []\n"
+            "    property int inPaneel: -1\n    function draai(Plasmoid) {\n" + regel + "\n    }\n"
+            "    Component.onCompleted: {\n"
+            "        var p = { isContainment: true, contextualActions: [\"KDE\"] };\n        draai(p);\n"
+            "        gevonden = p.contextualActions.map(function (a) { return typeof a == \"string\" ? a : a.text; });\n"
+            "        var q = { isContainment: false, contextualActions: [] };\n        draai(q);\n"
+            "        inPaneel = q.contextualActions.length;\n    }\n}\n", encoding="utf-8", newline="\n")
+        QLocale.setDefault(QLocale(taal))
+        engine = QQmlEngine()
+        engine.addImportPath(str(t))
+        comp = QQmlComponent(engine, QUrl.fromLocalFile(str(t / "Laag.qml")))
+        obj = comp.create()
+        if obj is None:
+            return {"fout": "; ".join(e.toString() for e in comp.errors())}
+        uit = QQmlExpression(engine.rootContext(), obj, "JSON.stringify({g: gevonden, p: inPaneel})").evaluate()
+        obj.deleteLater()
+        return json.loads(uit[0] if isinstance(uit, tuple) else uit)
+
+
+_regel = globals().get("ingevoegd", "")
+_q = bureaubladregel_in_qml(_regel, "en_US") if _regel else {"fout": "geen ingevoegde regel uit C1"}
+klopt(_q.get("g") == ["KDE", "Display settings", "Change background"] and _q.get("p") == 0,
+      f"E5: de regel in KDE's mapweergave werkt echt in QML: na KDE's eigen regels komen 'Display settings' en "
+      f"'Change background', en niets in een losse mapweergave op een paneel ({_q})")
+
 klopt("import org.kde.plasma.plasma5support as P5Support" in lees(PLASMOIDS / "org.bugos.clock/contents/ui/main.qml")
       and "id: opdracht" in lees(PLASMOIDS / "org.bugos.clock/contents/ui/main.qml"),
       "E3: de klok kan een opdracht starten (P5Support.DataSource)")
