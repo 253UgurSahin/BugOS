@@ -1226,6 +1226,28 @@ def beeld_woorden(w) -> None:
         klopt(not mis, f"beeld: po.js bij {al!r} heeft alle {len(w.WOORDEN)} woorden van BugOS ({mis[:3]})")
     de = geleverd(pakket, "po.js", "de-de")
     klopt(po_woord(de, "Passphrase") not in (None, "Password"), "beeld: Duits houdt zijn eigen vertaling")
+    # 3b. In een echte browser (Firefox), in dezelfde volgorde als index.html: de bundel van anaconda-webui zet
+    #     window.cockpit, bugos-en.js geeft de Engelse woorden als po.js leeg is (zo krijgt slitherer hem), en een echt
+    #     woordenboek dat daarna komt (hier Nederlands) wint.
+    m = Path("/tmp/installer-t") / "engels"
+    m.mkdir(parents=True, exist_ok=True)
+    (m / "index.js").write_text(lees_gz(d / "index.js.gz"), encoding="utf-8")
+    (m / "bugos-en.js").write_text(lees_gz(d / "bugos-en.js.gz"), encoding="utf-8")
+    for naam, po, verwacht in (("leeg", "", ["Where to install", "Password", "en_US"]),
+                               ("nl", lees_gz(d / "po.nl.js.gz"), ["Waar installeren", "Wachtwoord", "nl"])):
+        (m / f"po-{naam}.js").write_text(po, encoding="utf-8")
+        html = ('<!doctype html><html><head><meta charset="utf-8"><script src="index.js"></script>'
+                f'<script src="bugos-en.js"></script><script src="po-{naam}.js"></script></head><body>'
+                '<script>var uit=[];try{uit=[cockpit.gettext("Installation method"),cockpit.gettext("Passphrase"),'
+                'cockpit.language]}catch(e){uit=[String(e)]}var goed=JSON.stringify(uit)=='
+                # JSON.stringify schrijft zonder spaties; Python dus ook, en dan als JavaScript-tekst.
+                + json.dumps(json.dumps(verwacht, separators=(",", ":")))
+                + ';document.body.style.margin="0";document.body.style.background=goed?"#00ff00":"#ff0000";'
+                'document.documentElement.style.background=document.body.style.background;'
+                'document.body.textContent=JSON.stringify(uit)</script></body></html>')
+        kleur, png = firefox(html, f"engels/{naam}")
+        klopt(kleur == GROEN, f"beeld: Firefox, index.js + bugos-en.js + po.js ({'leeg' if not po else 'Nederlands'}): "
+                              f"{verwacht} ({kleur}, {png})")
     shutil.rmtree(kopie, ignore_errors=True)
 
     # 4. Wat er in DIT beeld staat, zoals het gebouwd is: dezelfde woorden als de repo, en bugos-en.js.
