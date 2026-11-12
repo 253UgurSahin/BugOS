@@ -865,7 +865,8 @@ class AppPagina(QWidget):
     naam, één regel, de maker) met rechts de knoppen, een melding, en bij een Flathub-app de feiten.
 
     soort: 'flathub' (uit Flathub's lijst), 'systeem' (zit in BugOS zelf), 'elders' (geïnstalleerd, niet uit de
-    lijst), 'laden' (de lijst komt nog) of 'niet_gevonden'."""
+    lijst), 'laden' (de lijst is er nog niet of komt net opnieuw: zie Winkel.wacht_op_lijst) of 'niet_gevonden'
+    (er is een lijst, en de app staat er niet in)."""
 
     def __init__(self, winkel: "Winkel", soort: str, app_id: str, naam: str = "", kort: str = "",
                  entry: dict | None = None, icoon_naam: str = "", kan_openen: bool = True):
@@ -1085,8 +1086,12 @@ class Winkel(Venster):
         self._meer_zoek = ""
         self._niets_voor: str | None = None
         self.meer_aantal = 20
+        # Een app-pagina die op Flathub's lijst wacht (zie wacht_op_lijst): het id, of None.
         self._wacht_app: str | None = None
         self.lijst_mislukt = False
+        # True vanaf het openen tot de Winkel besloten heeft of hij de lijst zelf ververst (ververs_lijst_als_oud):
+        # in die anderhalve seconde zegt hij nog niet 'de lijst is er nog niet', want hij komt er misschien zo aan.
+        self._lijst_straks = False
 
         # Links: de onderwerpen (de zijbalk komt van de schil)
         self.lijst = self.nav
@@ -1205,6 +1210,8 @@ class Winkel(Venster):
         else:
             self.laad_index()
         if automatisch_verversen():   # even na het openen, zodat het venster eerst snel verschijnt
+            # Vóór open_opdracht: een pagina die nu al op de lijst wacht, moet weten dat er misschien een komt.
+            self._lijst_straks = True
             QTimer.singleShot(1500, self.ververs_lijst_als_oud)
 
         self.lijst.setCurrentRow(0)
@@ -1252,10 +1259,20 @@ class Winkel(Venster):
         rij = self.lijst.currentRow()
         if not self.zoek.text().strip() and rij >= 0 and self.lijst.sleutel(rij) == "_mijn":
             self.toon()   # 'Mijn apps': nu met pictogram, uitleg en maker uit Flathub's lijst
-        if self._wacht_app is not None:   # die pagina wachtte op de index
-            app_id, self._wacht_app = self._wacht_app, None
-            if self.pagina_id == app_id and self.stapel.currentIndex() == 1:
-                self.toon_app(app_id)
+        self._toon_wachtende()   # een pagina die op deze index wachtte: nu de app zelf (of wat er nu waar is)
+
+    def _toon_wachtende(self) -> None:
+        """Wachtte er een app-pagina op Flathub's lijst (wacht_op_lijst)? Bouw hem dan opnieuw op met wat er nu waar
+        is: de app zelf als hij nu in de lijst staat, anders wat de Winkel nu doet ('wordt opgehaald…', 'is er nog
+        niet', 'lukte niet'). Wordt aangeroepen bij elke verandering: de index komt binnen, het verversen begint, het
+        lukt niet, of de Winkel besluit niet te verversen.
+        Alleen als die pagina nog open is: ging je intussen terug naar de lijst (of naar een andere app), dan springt
+        de Winkel nergens heen."""
+        if self._wacht_app is None:
+            return
+        app_id, self._wacht_app = self._wacht_app, None   # toon_app zet hem weer als er nog steeds gewacht wordt
+        if self.pagina_id == app_id and self.stapel.currentIndex() == 1:
+            self.toon_app(app_id)
 
     def uitsluiten(self) -> set[str]:
         """Niet bij 'Meer apps van Flathub': de BugOS-apps (die staan er al boven) en wat in BugOS zelf zit."""
@@ -1277,6 +1294,10 @@ class Winkel(Venster):
         elif not self.flathub["apps"]:
             if self.lijst_bezig() or self._index_bezig:
                 self.zet_meer_status(t("De lijst wordt opgehaald…", "Getting the list…"))
+            elif self._lijst_straks:
+                # Het stille verversen bij het openen moet nog beginnen (1,5 s): nog geen 'is er nog niet' met een
+                # knop, want op een computer met internet komt de lijst er zo aan. Zelfde zin als op de app-pagina.
+                self.zet_meer_status(t("Alle apps van Flathub worden geladen…", "Loading all apps from Flathub…"))
             elif self.lijst_mislukt:
                 self.zet_meer_status(t("Ophalen lukte niet. Heb je internet? Probeer het later nog eens.",
                                        "Could not get the list. Are you online? Please try again later."), knop=True)
@@ -1353,10 +1374,27 @@ class Winkel(Venster):
     def lijst_bezig(self) -> bool:
         return self.lijst_proces.state() != QProcess.ProcessState.NotRunning
 
+    def lijst_onderweg(self) -> bool:
+        """Komt er zo een (nieuwe) lijst van Flathub? Het stille verversen bij het openen moet nog beginnen, flatpak
+        haalt hem nu op, of de index wordt er opnieuw van gemaakt. Dan zegt een app-pagina nog niet 'staat niet in
+        Flathub' (zie wacht_op_lijst)."""
+        return self._lijst_straks or self.lijst_bezig() or self._index_bezig
+
     def ververs_lijst_als_oud(self) -> None:
         """Is Flathub's lijst ouder dan een dag? Dan haalt de Winkel stil een nieuwe (zonder wachtwoord, zonder
         melding). Niet op een verbinding die per MB kost."""
-        op_achtergrond(self, moet_verversen, lambda moet: moet is True and self.start_lijst(handmatig=False))
+        op_achtergrond(self, moet_verversen, self._na_lijst_keuze)
+
+    def _na_lijst_keuze(self, moet) -> None:
+        """Het antwoord van moet_verversen (in een werkdraad gevraagd; None als dat misging)."""
+        self._lijst_straks = False
+        if moet is True and self.start_lijst(handmatig=False):
+            return   # start_lijst laat het zelf zien ('De lijst wordt opgehaald…')
+        # Geen verversen: de lijst is nog vers, of een telefoon-hotspot, of niet je actieve sessie, of er wordt net
+        # iets geïnstalleerd. Wat tot nu toe 'worden geladen…' zei (de zoekresultaten, een wachtende app-pagina),
+        # zegt nu wat er wél is: de gewone uitkomst, of 'de lijst is er nog niet' met 'Nu ophalen'.
+        self.zoek_meer()
+        self._toon_wachtende()
 
     def haal_lijst(self) -> None:
         """'Nu ophalen': je vroeg er zelf om, dus ook op een telefoon-hotspot."""
@@ -1379,6 +1417,7 @@ class Winkel(Venster):
         self.lijst_proces.start("flatpak", ["update", "--appstream", "--noninteractive", "flathub"])
         self._lijst_wacht.start()
         self.zoek_meer()   # 'De lijst wordt opgehaald…' en geen knop, ook als het vanzelf gebeurt (I6)
+        self._toon_wachtende()   # een wachtende app-pagina zegt dat nu ook (in plaats van 'Nu ophalen')
         return True
 
     def _lijst_fout(self, fout) -> None:
@@ -1389,20 +1428,27 @@ class Winkel(Venster):
         self._lijst_wacht.stop()
         self.lijst_proces.readAll()
         handmatig, self._lijst_handmatig = self._lijst_handmatig, False
-        # Na 2 minuten stopt _lijst_wacht flatpak met kill: dat is mislukt, wat de code ook is (Qt geeft dan het
-        # nummer van het signaal als code en CrashExit als status). Alleen een gewoon einde met 0 is gelukt.
+        # Na 2 minuten stopt _lijst_wacht flatpak met kill. Qt geeft dan code 9 (het signaal) en CrashExit (nagegaan
+        # met PySide6), dus 'code == 0' zegt al dat het mislukt is; de status is extra zekerheid. Alleen een gewoon
+        # einde met 0 is gelukt.
         if code == 0 and status != QProcess.ExitStatus.CrashExit:
             # Een nieuwe lijst: de index opnieuw. Blijft hij leeg (een kapotte lijst), dan zeggen we dat het niet lukte.
             def binnen(index) -> None:
                 self._index_bezig = False
-                self._index_binnen(index)
-                if handmatig and not (self.flathub or {}).get("apps"):
+                # Eerst 'lukte niet' onthouden, dan pas de index laten zien: _index_binnen zet de zoekresultaten en
+                # een wachtende app-pagina neer, en die moeten het al weten. (Zelfde controle als _index_binnen.)
+                apps = index.get("apps") if isinstance(index, dict) else None
+                if handmatig and not (isinstance(apps, list) and apps):
                     self.lijst_mislukt = True
-                    self.zoek_meer()
+                self._index_binnen(index)
             self._index_bezig = True
             op_achtergrond(self, lambda: flathub_index(APPSTREAM, INDEX_MAP, apart=True), binnen)
-        elif handmatig:
-            self.lijst_mislukt = True   # alleen als je er zelf om vroeg; stil mislukt is geen melding waard
+        else:
+            if handmatig:
+                self.lijst_mislukt = True   # alleen als je er zelf om vroeg; stil mislukt is geen melding waard
+            # Een app-pagina die op de lijst wachtte, zegt niet langer 'wordt opgehaald…' (wel als het stil
+            # mislukte: dan 'de lijst is er nog niet' met 'Nu ophalen', zonder foutmelding).
+            self._toon_wachtende()
         self.zoek_meer()
         if self._wachtend is not None:   # een installatie wachtte op de lijst
             self.start_flatpak(self._wachtend)
@@ -1436,10 +1482,7 @@ class Winkel(Venster):
             self.laad_groottes()
             return
         if self.flathub is None:   # de index komt nog: dan deze pagina opnieuw
-            pagina = AppPagina(self, "laden", app_id)
-            pagina.melding.zet(t("Alle apps van Flathub worden geladen…", "Loading all apps from Flathub…"), "bezig")
-            self._wacht_app = app_id
-            self.zet_pagina(pagina, app_id)
+            self.wacht_op_lijst(app_id)
             return
         ouder = next((v for k, v in self.flathub["hoort_bij"].items() if k.lower() == app_id.lower()), None)
         if ouder is not None and ouder.lower() != app_id.lower() and (
@@ -1470,13 +1513,55 @@ class Winkel(Venster):
                                      "This app does not come from Flathub. You can open or remove it here."), "info")
             self.zet_pagina(pagina, flatpak_id)
             return
+        if not self.flathub["apps"] or self.lijst_onderweg():
+            # Niet in de lijst, maar er is nog geen lijst, of er komt zo een nieuwe: dan nog niet 'staat niet in
+            # Flathub' (een vers geïnstalleerde BugOS heeft de lijst nog niet; zie wacht_op_lijst).
+            self.wacht_op_lijst(app_id)
+            return
+        # Wel een lijst, en er komt geen nieuwe: dan staat hij er echt niet in (een oude link, een typfout).
         pagina = AppPagina(self, "niet_gevonden", app_id)
-        pagina.melding.zet(t("Deze app staat niet (meer) in Flathub, of de lijst met alle apps is nog niet opgehaald.",
-                             "This app is not (or no longer) on Flathub, or the list of all apps has not been "
-                             "fetched yet."), "info")
+        pagina.melding.zet(t("Deze app staat niet (meer) in de lijst van Flathub.",
+                             "This app is not (or no longer) in Flathub's list."), "info")
         zoek_knop = Knop(t("Zoek een andere app", "Search for another app"), "hoofd", "lijn:zoek")
         zoek_knop.clicked.connect(lambda _c=False, z=app_id.rsplit(".", 1)[-1]: self.zoek_vanaf_pagina(z))
         pagina.einde.addWidget(zoek_knop, 0, Qt.AlignmentFlag.AlignLeft)
+        self.zet_pagina(pagina, app_id)
+
+    def wacht_op_lijst(self, app_id: str) -> None:
+        """De pagina van een app die nog niet in Flathub's lijst te vinden is, terwijl die lijst er nog niet is of
+        net ververst wordt.
+
+        Waarom: op een vers geïnstalleerde BugOS staat de lijst nog niet op de computer (bugos-first-boot installeert
+        alleen apps, en dat zet geen lijst neer; de dagelijkse update draait pas 's nachts). Juist dan klik je op
+        'Install' op flathub.org (een .flatpakref) of op een appstream://-link. De Winkel haalt de lijst zelf op
+        (1,5 s na het openen), maar deze pagina zei eerst 'staat niet in Flathub' en bleef dat zeggen, zonder
+        Installeren. Nu zegt hij wat de Winkel doet, onthoudt hij de app (_wacht_app), en bouwt _toon_wachtende de
+        pagina opnieuw op bij elke verandering: zodra de lijst er is, staat de app zelf hier."""
+        pagina = AppPagina(self, "laden", app_id)
+        if self.flathub is None or self._lijst_straks:
+            # De index wordt nog gelezen, of de Winkel kijkt nog of hij de lijst zelf gaat verversen: nog niets te
+            # beloven (op een telefoon-hotspot ververst hij niet vanzelf).
+            pagina.melding.zet(t("Alle apps van Flathub worden geladen…", "Loading all apps from Flathub…"), "bezig")
+        elif self.lijst_bezig() or self._index_bezig:
+            pagina.melding.zet(t("De lijst met alle apps van Flathub wordt opgehaald… Zodra die er is, zie je hier "
+                                 "deze app.",
+                                 "Getting the list of all apps from Flathub… Once it is here, this page shows the "
+                                 "app."), "bezig")
+        else:
+            # Er komt niets vanzelf (geen internet, een telefoon-hotspot, of het ophalen lukte niet): zeg het rustig,
+            # met dezelfde zinnen als bij het zoeken, en laat je de lijst zelf ophalen.
+            if self.lijst_mislukt:
+                pagina.melding.zet(t("Ophalen lukte niet. Heb je internet? Probeer het later nog eens.",
+                                     "Could not get the list. Are you online? Please try again later."), "fout")
+            else:
+                pagina.melding.zet(t("De lijst met alle apps is er nog niet. Die komt vanzelf zodra je computer met "
+                                     "internet verbonden is.",
+                                     "The list of all apps is not here yet. It arrives by itself as soon as your "
+                                     "computer is online."), "info")
+            ophalen = Knop(t("Nu ophalen", "Get it now"), "hoofd", "lijn:download")
+            ophalen.clicked.connect(lambda _c=False: self.haal_lijst())
+            pagina.einde.addWidget(ophalen, 0, Qt.AlignmentFlag.AlignLeft)
+        self._wacht_app = app_id
         self.zet_pagina(pagina, app_id)
 
     def open_app(self, app_id: str) -> None:

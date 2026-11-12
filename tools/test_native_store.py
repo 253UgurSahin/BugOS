@@ -34,7 +34,8 @@ os.environ["BUGOS_APPSTREAM"] = str(TMP / "appstream")
 os.environ["LC_ALL"] = "nl_NL.UTF-8"   # de test kijkt naar de Nederlandse teksten
 os.environ["BUGOS_MEERDERE"] = "1"
 for _weg in ("LANGUAGE", "BUGOS_GEINSTALLEERD", "BUGOS_INSTELLINGEN_VOORBEELD", "BUGOS_WINKEL_VOORBEELD",
-             "BUGOS_WINKEL_GEEN_VERVERS", "BUGOS_TEST_GEEN_CACHE", "BUGOS_TEST_GEEN_NET"):
+             "BUGOS_WINKEL_GEEN_VERVERS", "BUGOS_TEST_GEEN_CACHE", "BUGOS_TEST_GEEN_NET", "BUGOS_TEST_VERVERS_HANGT",
+             "BUGOS_TEST_LIJST_NAAR", "BUGOS_TEST_LIJST_XML"):
     os.environ.pop(_weg, None)
 
 NEP = TMP / "nep-bin"
@@ -49,38 +50,50 @@ def nep_programma(naam: str, inhoud: str) -> None:
 
 
 # Een nep-flatpak: schrijft elke opdracht in flatpak.log en antwoordt zoals de echte (TAB tussen de kolommen).
+# (Het script springt in met 4 spaties per stap, zoals alle code in BugOS.)
 nep_programma("flatpak", f'''echo "$*" >> "{LOG}"
 case "$1 $2 $3" in
-  "list --app --columns=application") printf 'org.voorbeeld.Oud\\n'; exit 0 ;;
-  "list --app --columns=application,name,origin") printf 'org.voorbeeld.Oud\\tOud\\tflathub\\n'; exit 0 ;;
-  "list --runtime --columns=ref") printf 'org.gnome.Platform/x86_64/49\\n'; exit 0 ;;
+    "list --app --columns=application") printf 'org.voorbeeld.Oud\\n'; exit 0 ;;
+    "list --app --columns=application,name,origin") printf 'org.voorbeeld.Oud\\tOud\\tflathub\\n'; exit 0 ;;
+    "list --runtime --columns=ref") printf 'org.gnome.Platform/x86_64/49\\n'; exit 0 ;;
 esac
 if [ "$1" = remote-ls ]; then
-  # Zo zegt de echte flatpak het (nagegaan op Kinoite 44): een gewone gebruiker zonder eigen cache krijgt bij
-  # --cached 'No cached summary'; zonder --cached haalt hij de samenvatting op, en zonder internet faalt dat.
-  if [ "$2" = --cached ] && [ -n "$BUGOS_TEST_GEEN_CACHE" ]; then
-    echo "error: Unable to load summary from remote flathub: No cached summary for remote 'flathub'" >&2; exit 1
-  fi
-  if [ "$2" != --cached ] && [ -n "$BUGOS_TEST_GEEN_NET" ]; then
-    echo "error: Unable to load summary from remote flathub: [6] Could not resolve hostname" >&2; exit 1
-  fi
-  printf 'app/org.voorbeeld.Radio/x86_64/stable\\t5.5\\302\\240MB\\t12.3\\302\\240MB\\torg.gnome.Platform/x86_64/49\\n'
-  printf 'app/org.voorbeeld.Groot/x86_64/stable\\t50.0\\302\\240MB\\t120.4\\302\\240MB\\torg.freedesktop.Platform/x86_64/25.08\\n'
-  printf 'app/org.voorbeeld.Oud/x86_64/stable\\t309.7\\302\\240MB\\t15.9\\302\\240MB\\torg.freedesktop.Platform/x86_64/25.08\\n'
-  printf 'runtime/org.freedesktop.Platform/x86_64/25.08\\t260.1\\302\\240MB\\t670.7\\302\\240MB\\t\\n'
-  printf 'runtime/org.gnome.Platform/x86_64/49\\t418.8\\302\\240MB\\t1.1\\302\\240GB\\t\\n'
-  exit 0
+    # Zo zegt de echte flatpak het (nagegaan op Kinoite 44): een gewone gebruiker zonder eigen cache krijgt bij
+    # --cached 'No cached summary'; zonder --cached haalt hij de samenvatting op, en zonder internet faalt dat.
+    if [ "$2" = --cached ] && [ -n "$BUGOS_TEST_GEEN_CACHE" ]; then
+        echo "error: Unable to load summary from remote flathub: No cached summary for remote 'flathub'" >&2; exit 1
+    fi
+    if [ "$2" != --cached ] && [ -n "$BUGOS_TEST_GEEN_NET" ]; then
+        echo "error: Unable to load summary from remote flathub: [6] Could not resolve hostname" >&2; exit 1
+    fi
+    printf 'app/org.voorbeeld.Radio/x86_64/stable\\t5.5\\302\\240MB\\t12.3\\302\\240MB\\torg.gnome.Platform/x86_64/49\\n'
+    printf 'app/org.voorbeeld.Groot/x86_64/stable\\t50.0\\302\\240MB\\t120.4\\302\\240MB\\torg.freedesktop.Platform/x86_64/25.08\\n'
+    printf 'app/org.voorbeeld.Oud/x86_64/stable\\t309.7\\302\\240MB\\t15.9\\302\\240MB\\torg.freedesktop.Platform/x86_64/25.08\\n'
+    printf 'runtime/org.freedesktop.Platform/x86_64/25.08\\t260.1\\302\\240MB\\t670.7\\302\\240MB\\t\\n'
+    printf 'runtime/org.gnome.Platform/x86_64/49\\t418.8\\302\\240MB\\t1.1\\302\\240GB\\t\\n'
+    exit 0
 fi
 if [ "$1" = install ]; then
-  /usr/bin/sleep 0.3
-  [ "${{BUGOS_TEST_FLATPAK:-0}}" = 9 ] && echo "error: Not authorized" && exit 1
-  [ "${{BUGOS_TEST_FLATPAK:-0}}" = 8 ] && echo "error: No space left on device" && exit 1
-  [ "${{BUGOS_TEST_FLATPAK:-0}}" = 7 ] && echo "error: Nothing matches $4 in remote flathub" && exit 1
-  exit "${{BUGOS_TEST_FLATPAK:-0}}"
+    /usr/bin/sleep 0.3
+    [ "${{BUGOS_TEST_FLATPAK:-0}}" = 9 ] && echo "error: Not authorized" && exit 1
+    [ "${{BUGOS_TEST_FLATPAK:-0}}" = 8 ] && echo "error: No space left on device" && exit 1
+    [ "${{BUGOS_TEST_FLATPAK:-0}}" = 7 ] && echo "error: Nothing matches $4 in remote flathub" && exit 1
+    exit "${{BUGOS_TEST_FLATPAK:-0}}"
 fi
 if [ "$1" = update ]; then
-  [ -n "$BUGOS_TEST_VERVERS_SLAAP" ] && /usr/bin/sleep "$BUGOS_TEST_VERVERS_SLAAP"
-  exit "${{BUGOS_TEST_VERVERS:-0}}"
+    # Een verbinding die blijft haperen: flatpak komt niet terug. Met exec, zodat de kill van de Winkel (na 2
+    # minuten, in de test korter) precies dit proces raakt, zoals bij de echte flatpak.
+    [ -n "$BUGOS_TEST_VERVERS_HANGT" ] && exec /usr/bin/sleep 30
+    [ -n "$BUGOS_TEST_VERVERS_SLAAP" ] && /usr/bin/sleep "$BUGOS_TEST_VERVERS_SLAAP"
+    # Gelukt en een lijst gevraagd (test 16): zet hem neer zoals flatpak dat doet, in een map met een controlegetal
+    # als naam, 'active' wijst ernaar, en .timestamp wordt nu.
+    if [ "${{BUGOS_TEST_VERVERS:-0}}" = 0 ] && [ -n "$BUGOS_TEST_LIJST_XML" ]; then
+        /usr/bin/mkdir -p "$BUGOS_TEST_LIJST_NAAR/{"c" * 64}"
+        /usr/bin/cp "$BUGOS_TEST_LIJST_XML" "$BUGOS_TEST_LIJST_NAAR/{"c" * 64}/appstream.xml"
+        /usr/bin/ln -sfn "{"c" * 64}" "$BUGOS_TEST_LIJST_NAAR/active"
+        /usr/bin/touch "$BUGOS_TEST_LIJST_NAAR/.timestamp"
+    fi
+    exit "${{BUGOS_TEST_VERVERS:-0}}"
 fi
 exit 0
 ''')
@@ -720,15 +733,20 @@ w.close()
 winkel.APPSTREAM = _echt_bron
 os.environ.pop("BUGOS_TEST_VERVERS_SLAAP")
 os.environ["BUGOS_WINKEL_GEEN_VERVERS"] = "1"
-# Na 2 minuten stopt de Winkel flatpak (kill). Qt geeft dan CrashExit (en het nummer van het signaal als code): dat is
-# mislukt, ook als de code 0 zou zijn. Dus geen nieuwe index, en 'lukte niet' als je er zelf om vroeg.
-from PySide6.QtCore import QProcess  # noqa: E402
-
-w = winkel_start(BUGOS_TEST_VERVERS="0")
-w._lijst_handmatig = True
-w._lijst_klaar(0, QProcess.ExitStatus.CrashExit)
-klopt(w.lijst_mislukt and not w._index_bezig,
-      "9: verversen gestopt na 2 minuten (CrashExit): geen nieuwe index, en 'Ophalen lukte niet' als je erom vroeg")
+# Blijft flatpak hangen (een haperende verbinding), dan stopt de Winkel hem na 2 minuten (kill). Hier de echte weg:
+# een flatpak die niet terugkomt, en de wachttijd ingekort tot 0,3 s. Qt geeft na kill() code 9 en CrashExit
+# (nagegaan met PySide6): mislukt, dus geen nieuwe index, en 'lukte niet' omdat je er zelf om vroeg.
+w = winkel_start(BUGOS_TEST_VERVERS="0", BUGOS_TEST_VERVERS_HANGT="1")
+w._lijst_wacht.setInterval(300)   # in plaats van 120_000 ms
+_klok9 = time.monotonic()
+w.haal_lijst()
+_bezig9 = w.lijst_bezig()
+wacht(lambda: not w.lijst_bezig(), 5000)
+_duur9 = time.monotonic() - _klok9
+even(50)
+klopt(_bezig9 and _duur9 < 3 and w.lijst_mislukt and not w._index_bezig and not w._lijst_wacht.isActive(),
+      f"9: flatpak blijft hangen: na de wachttijd gestopt ({_duur9:.1f} s, niet 30), geen nieuwe index, 'lukte niet'")
+os.environ.pop("BUGOS_TEST_VERVERS_HANGT")
 w.close()
 
 # ============================================================== 10. de voorbeeldstand (foto's) ===
@@ -871,6 +889,182 @@ klopt(all(p in _stap2 for p in ("plasma-discover-libs", "plasma-discover-kns", "
 _pakketten = (ROOT / "build_files/packages.txt").read_text(encoding="utf-8")
 klopt(not re.search(r"^\s*(plasma-discover|kde-partitionmanager|kpmcore)", _pakketten, re.M),
       "15: packages.txt installeert Discover en Partition Manager niet (meer)")
+
+# ============================================================== 16. een link terwijl de lijst er nog niet is ===
+# Een vers geïnstalleerde BugOS heeft Flathub's lijst nog niet: bugos-first-boot installeert alleen apps (dat zet geen
+# lijst neer, nagegaan op Kinoite 44) en de dagelijkse update draait pas 's nachts. Juist dan klik je op 'Install' op
+# flathub.org (een .flatpakref) of op een appstream://-link. De Winkel haalt de lijst dan zelf (1,5 s na het openen).
+# Eerst zei de pagina 'staat niet (meer) in Flathub' en bleef dat zeggen, zonder Installeren, ook toen de lijst er was.
+# Nu: zeggen wat de Winkel doet, en zodra de lijst er is de app zelf. Alles nep (flatpak, busctl), zoals hierboven.
+import shutil  # noqa: E402
+
+VERS = TMP / "verse-computer"   # waar Flathub's lijst zou staan (/var/lib/flatpak/appstream/flathub/x86_64)
+LIJST16 = TMP / "lijst16.xml"   # wat de nep-flatpak bij 'update --appstream' neerzet: Radio en Teken
+LIJST16.write_text('<?xml version="1.0" encoding="UTF-8"?>\n<components version="0.8" origin="flathub">' + RADIO
+                   + GIMPACHTIG + "</components>\n", encoding="utf-8")
+winkel.APPSTREAM = VERS
+os.environ.pop("BUGOS_WINKEL_GEEN_VERVERS", None)   # nu juist wel zelf verversen, zoals op een echte computer
+os.environ.update(BUGOS_TEST_METERED="4", BUGOS_TEST_VERVERS="0", BUGOS_TEST_VERVERS_SLAAP="0.5",
+                  BUGOS_TEST_LIJST_NAAR=str(VERS), BUGOS_TEST_LIJST_XML=str(LIJST16))
+os.environ.pop("BUGOS_TEST_ACTIEF", None)
+RADIO_REF = bestand("radio16.flatpakref", ZOOM.replace("us.zoom.Zoom", "org.voorbeeld.Radio"))
+
+
+def vers_begin(oude_lijst: list[str] | None = None, dagen: float = 0) -> None:
+    """Weer een computer zonder lijst en zonder index, zoals net geïnstalleerd. Met oude_lijst: wel een lijst (met
+    die apps), van 'dagen' geleden."""
+    shutil.rmtree(VERS, ignore_errors=True)
+    for f in CACHE.glob("*.json"):
+        f.unlink()
+    if oude_lijst is not None:
+        som = "d" * 64
+        (VERS / som).mkdir(parents=True)
+        (VERS / som / "appstream.xml").write_text('<?xml version="1.0" encoding="UTF-8"?>\n<components version="0.8" '
+                                                  'origin="flathub">' + "".join(oude_lijst) + "</components>\n",
+                                                  encoding="utf-8")
+        (VERS / "active").symlink_to(som)
+        (VERS / ".timestamp").touch()
+        os.utime(VERS / ".timestamp", (time.time() - dagen * 86400,) * 2)
+    LOG.write_text("")
+
+
+def open16(opdracht: list[str]) -> "winkel.Winkel":
+    """De Winkel zoals main() hem opent: met de opdracht (de link of het bestand) meteen erbij."""
+    v = winkel.Winkel(CAT, opdracht=opdracht)
+    v.resize(1180, 760)
+    v.show()
+    return v
+
+
+def staat16(v) -> tuple[str, str, list[str]]:
+    """(soort pagina, de melding op de pagina, de knoppen die je ziet) van de open app-pagina."""
+    p = v.pagina
+    if p is None or v.stapel.currentIndex() != 1:
+        return "", "", []
+    return p.soort, p.melding.tekst.text(), [k.text() for k in p.findChildren(winkel.Knop) if k.isVisibleTo(p)]
+
+
+def nu_ophalen(v) -> None:
+    next(k for k in v.pagina.findChildren(winkel.Knop) if k.text() == "Nu ophalen").click()
+
+
+def onthoud16(v, gezien: set[str]) -> None:
+    """Onthoud de melding die de pagina nu laat zien (goedkoop: dit draait bij elke ronde van wacht())."""
+    if v.pagina is not None:
+        gezien.add(v.pagina.melding.tekst.text())
+
+
+# 16a. de link en het .flatpakref-bestand op een verse computer met internet: eerst 'worden geladen', dan 'wordt
+#      opgehaald', en dan de app met Installeren. Nooit 'staat niet in Flathub'.
+for _opdracht in (["appstream://org.voorbeeld.Radio"], [RADIO_REF]):
+    vers_begin()
+    v = open16(_opdracht)
+    _gezien: set[str] = set()   # elke melding die de pagina onderweg liet zien
+    _meteen = staat16(v)
+    wacht(lambda: v.flathub is not None, 3000)
+    _na_index = staat16(v)
+    wacht(lambda: onthoud16(v, _gezien) or v.lijst_bezig(), 4000)
+    _tijdens = staat16(v)
+    wacht(lambda: onthoud16(v, _gezien) or (v.pagina is not None and v.pagina.soort == "flathub"), 8000)
+    _eind = staat16(v)
+    _soort = "link" if _opdracht[0].startswith("appstream") else ".flatpakref"
+    klopt(_meteen[0] == "laden" and "worden geladen" in _meteen[1] and _na_index[0] == "laden"
+          and "worden geladen" in _na_index[1] and "Nu ophalen" not in _na_index[2],
+          f"16a ({_soort}): geen lijst, de Winkel kijkt nog: 'worden geladen…', geen 'Nu ophalen' ({_na_index})")
+    klopt(_tijdens[0] == "laden" and "wordt opgehaald" in _tijdens[1] and "Nu ophalen" not in _tijdens[2],
+          f"16a ({_soort}): tijdens het verversen: 'De lijst … wordt opgehaald…' ({_tijdens[1]!r})")
+    klopt(_eind[0] == "flathub" and v.pagina_id == "org.voorbeeld.Radio" and "Installeren" in _eind[2] and ververst()
+          and not any("staat niet" in m for m in _gezien | {_meteen[1], _na_index[1], _eind[1]}),
+          f"16a ({_soort}): zodra de lijst er is: de pagina van de app, met Installeren; nooit 'staat niet' "
+          f"({_eind[0]}, {_eind[2]})")
+    v.close()
+
+# 16b. geen internet: het stille verversen mislukt. Rustig 'de lijst is er nog niet' met 'Nu ophalen' (geen fout);
+#      zelf ophalen zonder internet: 'lukte niet'; weer online en nog eens: de app.
+vers_begin()
+os.environ["BUGOS_TEST_VERVERS"] = "1"
+v = open16(["appstream://org.voorbeeld.Radio"])
+wacht(lambda: v.lijst_bezig(), 4000)
+wacht(lambda: not v.lijst_onderweg(), 4000)
+even(50)
+_stil = staat16(v)
+klopt(_stil[0] == "laden" and "is er nog niet" in _stil[1] and "Nu ophalen" in _stil[2] and "lukte niet" not in _stil[1]
+      and "staat niet" not in _stil[1],
+      f"16b: offline, stil mislukt: 'De lijst met alle apps is er nog niet' met 'Nu ophalen' ({_stil[1]!r}, {_stil[2]})")
+nu_ophalen(v)
+_zelf = staat16(v)
+wacht(lambda: not v.lijst_onderweg(), 4000)
+even(50)
+_mis = staat16(v)
+klopt("wordt opgehaald" in _zelf[1] and "Nu ophalen" not in _zelf[2] and "Ophalen lukte niet" in _mis[1]
+      and "Nu ophalen" in _mis[2] and _mis[0] == "laden",
+      f"16b: 'Nu ophalen' zonder internet: eerst 'wordt opgehaald', dan 'Ophalen lukte niet' met de knop ({_mis[1]!r})")
+os.environ["BUGOS_TEST_VERVERS"] = "0"
+nu_ophalen(v)
+klopt(wacht(lambda: staat16(v)[0] == "flathub", 8000) and "Installeren" in staat16(v)[2],
+      f"16b: weer online, 'Nu ophalen': de pagina van de app, met Installeren ({staat16(v)[0]})")
+v.close()
+
+# 16c. een telefoon-hotspot: de Winkel ververst niet vanzelf (dat kost geld), maar zegt het en laat je kiezen.
+vers_begin()
+os.environ["BUGOS_TEST_METERED"] = "1"
+v = open16(["appstream://org.voorbeeld.Radio"])
+wacht(lambda: not v._lijst_straks, 4000)
+even(50)
+_hotspot = staat16(v)
+klopt(not ververst() and _hotspot[0] == "laden" and "is er nog niet" in _hotspot[1] and "Nu ophalen" in _hotspot[2],
+      f"16c: hotspot: niet vanzelf ophalen; 'is er nog niet' met 'Nu ophalen' ({_hotspot[1]!r})")
+nu_ophalen(v)
+klopt(wacht(lambda: staat16(v)[0] == "flathub", 8000) and ververst(),
+      "16c: ... en 'Nu ophalen' (je vraagt het zelf) haalt hem toch, en dan de app")
+v.close()
+os.environ["BUGOS_TEST_METERED"] = "4"
+
+# 16d. terug naar de lijst terwijl de pagina wacht: als de lijst er is, springt de Winkel niet terug naar die pagina.
+vers_begin()
+v = open16(["appstream://org.voorbeeld.Radio"])
+wacht(lambda: v.flathub is not None, 3000)
+v.terug()
+wacht(lambda: ververst() and not v.lijst_onderweg(), 8000)
+even(50)
+v.zoek.setText("radio")
+v.zoek_meer()
+klopt(v.stapel.currentIndex() == 0 and v._wacht_app is None and any(k.app["id"] == "org.voorbeeld.Radio"
+                                                                   for k in v.meer_kaarten),
+      "16d: terug naar de lijst tijdens het wachten: geen sprong terug, en de app staat wel in de zoekresultaten")
+v.close()
+
+# 16e. wel een lijst, maar van twee dagen geleden en zonder deze app (vandaag op Flathub gekomen): eerst de nieuwe
+#      lijst, dan de app. En een lijst van vandaag zonder de app: dan staat hij er echt niet in.
+vers_begin([GIMPACHTIG], dagen=2)
+v = open16(["appstream://org.voorbeeld.Radio"])
+wacht(lambda: v.flathub is not None, 3000)
+_oud16 = staat16(v)
+klopt(_oud16[0] == "laden" and wacht(lambda: staat16(v)[0] == "flathub", 8000) and ververst(),
+      f"16e: een oude lijst zonder de app: wachten op de nieuwe lijst, dan de app ({_oud16[0]}, {staat16(v)[0]})")
+v.close()
+vers_begin([GIMPACHTIG], dagen=0)
+v = open16(["appstream://org.voorbeeld.Radio"])
+wacht(lambda: not v._lijst_straks, 4000)
+even(50)
+_echt_niet = staat16(v)
+klopt(not ververst() and _echt_niet[0] == "niet_gevonden" and "staat niet (meer) in de lijst van Flathub" in _echt_niet[1]
+      and "Zoek een andere app" in _echt_niet[2],
+      f"16e: een verse lijst zonder de app: 'staat niet (meer) in de lijst van Flathub', met zoeken ({_echt_niet[1]!r})")
+v.close()
+
+# 16f. zonder het stille verversen (zoals bij foto's en tests): meteen 'is er nog niet' met 'Nu ophalen'.
+vers_begin()
+os.environ["BUGOS_WINKEL_GEEN_VERVERS"] = "1"
+v = open16(["appstream://org.voorbeeld.Radio"])
+wacht(lambda: v.flathub is not None, 3000)
+even(50)
+_zonder = staat16(v)
+klopt(_zonder[0] == "laden" and "is er nog niet" in _zonder[1] and "Nu ophalen" in _zonder[2] and not ververst(),
+      f"16f: niet vanzelf verversen: meteen 'is er nog niet' met 'Nu ophalen' ({_zonder[1]!r})")
+v.close()
+for _weg in ("BUGOS_TEST_LIJST_NAAR", "BUGOS_TEST_LIJST_XML", "BUGOS_TEST_VERVERS_SLAAP"):
+    os.environ.pop(_weg, None)
 
 print()
 print("Fouten:", fouten)
