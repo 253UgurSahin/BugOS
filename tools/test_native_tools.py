@@ -427,6 +427,22 @@ klopt(bd.fstab_noemt({"path": "/dev/sdk1", "uuid": "AbC-1"}, {"UUID=abc-1"})
       and bd.fstab_noemt({"kname": "dm-9", "path": "/dev/mapper/kluis"}, {"/dev/dm-9"})
       and not bd.fstab_noemt({"path": "/dev/sdk1", "uuid": "abc-2"}, {"UUID=abc-1", "/dev/sdk2"}),
       "wissen: fstab herkent een stuk aan UUID (ook met hoofdletters) en aan zijn apparaat (ook /dev/dm-N)")
+# fstab schrijft een spatie als \040 (fstab(5)); mount leest 'LABEL=Mijn\040Data' als het label 'Mijn Data'. Ook met
+# aanhalingstekens ('LABEL="Kwoot"'). Zo'n schijf is dus 'van het systeem', ook al staat hij nu open bij jou. Zonder
+# die regel in fstab mag dezelfde schijf wel: het 'nee' komt echt van fstab.
+_fstab_echt = (_ETC2 / "fstab").read_text(encoding="utf-8")
+_spatie = _schijf("sds", [_deel("sds1", "ext4", _MEDIA / "Mijn Data", soort=_LINUX, label="Mijn Data")])
+_kwoot = _schijf("sdt", [_deel("sdt1", "ext4", _MEDIA / "Kwoot", soort=_LINUX, label="Kwoot")])
+schrijf(_ETC2 / "fstab", "LABEL=Mijn\\040Data  /data  ext4  defaults,nofail  0 2\n"
+                         "LABEL='Kwoot'  /kwoot\\040map  ext4  defaults,nofail  0 2\n")
+_sl_spatie = bd.fstab_sleutels()
+_bez_spatie, _bez_kwoot = bfs._bezwaar(_spatie), bfs._bezwaar(_kwoot)
+schrijf(_ETC2 / "fstab", _fstab_echt)
+_bez_zonder = (bfs._bezwaar(_spatie), bfs._bezwaar(_kwoot))
+klopt("LABEL=mijn data" in _sl_spatie and "LABEL=kwoot" in _sl_spatie and "fstab" in _bez_spatie
+      and "fstab" in _bez_kwoot and _bez_zonder == ("", ""),
+      f"wissen: fstab met \\040 (een spatie) en met aanhalingstekens herkent het label ('Mijn Data', 'Kwoot'); zonder "
+      f"die regels mogen ze ({sorted(_sl_spatie)}, {_bez_spatie!r}, {_bez_kwoot!r}, zonder {_bez_zonder})")
 venster.vul_zijbalk()
 _stations = {x.station for x in venster.lijst_schijven}
 klopt(not _stations & {"/dev/nvme1n1", "/dev/sdc", "/dev/sdh", "/dev/sdd"} and "/dev/sdb" in _stations,

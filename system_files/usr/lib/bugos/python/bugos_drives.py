@@ -257,7 +257,11 @@ def stations_in_gebruik() -> set[str]:
 def fstab_sleutels() -> set[str]:
     """Wat /etc/fstab en /etc/crypttab noemen: 'UUID=...', 'PARTUUID=...', 'LABEL=...', 'PARTLABEL=...' en
     apparaten ('/dev/sdb1'). Een schijf die daarin staat, start het systeem zelf op (of probeert dat): wissen
-    zou het opstarten laten mislukken. In een test: BUGOS_ETC in plaats van /etc."""
+    zou het opstarten laten mislukken. In een test: BUGOS_ETC in plaats van /etc.
+
+    fstab schrijft een spatie als \\040 (fstab(5); mount leest 'LABEL=Mijn\\040Data' als het label 'Mijn Data'),
+    net als mountinfo. Daarom telt elke waarde twee keer: zoals hij er staat, en met die tekens weer gewoon
+    (_ontsnap). Een sleutel te veel kan alleen een 'nee' te veel geven, nooit een schijf te veel gewist."""
     etc = Path(os.environ.get("BUGOS_ETC", "/etc"))
     uit: set[str] = set()
     for naam, kolom in (("fstab", 0), ("crypttab", 1)):
@@ -269,20 +273,27 @@ def fstab_sleutels() -> set[str]:
             d = regel.split("#", 1)[0].split()
             if len(d) <= kolom:
                 continue
-            waarde = d[kolom]
-            if "=" in waarde:
-                soort, _, rest = waarde.partition("=")
-                uit.add(f"{soort.upper()}={rest.strip(chr(34)).lower()}")
-            elif waarde.startswith("/dev/"):
-                uit.add(waarde)
-                # /dev/disk/by-id/ata-..., /dev/disk/by-path/... en /dev/mapper/... zijn snelkoppelingen naar het
-                # apparaat zelf (/dev/sdb1, /dev/dm-0): ook dat apparaat telt dus.
-                uit.add(os.path.realpath(waarde))
-                # /dev/disk/by-uuid/<uuid> en /dev/disk/by-partuuid/<id> zijn dezelfde sleutels in een andere vorm.
-                m = re.fullmatch(r"/dev/disk/by-(uuid|partuuid|label|partlabel)/(.+)", waarde)
-                if m:
-                    uit.add(f"{m.group(1).upper()}={_ontsnap_udev(m.group(2)).lower()}")
+            for waarde in {d[kolom], _ontsnap(d[kolom])}:
+                _voeg_sleutels_toe(waarde, uit)
     return uit
+
+
+def _voeg_sleutels_toe(waarde: str, uit: set[str]) -> None:
+    """Eén waarde uit fstab of crypttab ('UUID=...', 'LABEL="Data"', '/dev/sdb1', '/dev/disk/by-label/...') als
+    sleutels in 'uit' (zie fstab_sleutels en fstab_noemt)."""
+    if "=" in waarde:
+        soort, _, rest = waarde.partition("=")
+        # LABEL="Data" en LABEL='Data' zijn ook goed (libblkid haalt de aanhalingstekens weg).
+        uit.add(f"{soort.upper()}={rest.strip(chr(34) + chr(39)).lower()}")
+    elif waarde.startswith("/dev/"):
+        uit.add(waarde)
+        # /dev/disk/by-id/ata-..., /dev/disk/by-path/... en /dev/mapper/... zijn snelkoppelingen naar het
+        # apparaat zelf (/dev/sdb1, /dev/dm-0): ook dat apparaat telt dus.
+        uit.add(os.path.realpath(waarde))
+        # /dev/disk/by-uuid/<uuid> en /dev/disk/by-partuuid/<id> zijn dezelfde sleutels in een andere vorm.
+        m = re.fullmatch(r"/dev/disk/by-(uuid|partuuid|label|partlabel)/(.+)", waarde)
+        if m:
+            uit.add(f"{m.group(1).upper()}={_ontsnap_udev(m.group(2)).lower()}")
 
 
 def _ontsnap_udev(tekst: str) -> str:
