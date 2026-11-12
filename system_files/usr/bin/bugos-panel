@@ -180,7 +180,8 @@ function staat(soort) {
 // Pictogrammen in het systeemvak die het snelmenu al doet (geluid, wifi, bluetooth,
 // helderheid/batterij) of die je bijna nooit nodig hebt. Ze blijven werken (de
 // volumetoetsen, meldingen bij een lege batterij), maar staan niet meer in beeld.
-// Wie ze toch wil: het pijltje in het systeemvak, of "bugos-panel systeemvak alles".
+// Wie ze toch wil: het pijltje in het systeemvak (voor wat alleen verborgen is; wat naast het snelmenu uit staat,
+// zie UIT hieronder, zit daar niet), of "bugos-panel systeemvak alles" (alles weer zichtbaar en aan).
 // Niet (meer) in de lijst: de toetsenbordindeling. Met twee of meer indelingen zie je die naast de klok, zoals in
 // Windows 11 ("EN", "BE"); met één indeling laat KDE hem zelf weg.
 var RUSTIG = ["org.kde.plasma.volume", "org.kde.plasma.networkmanagement", "org.kde.plasma.bluetooth",
