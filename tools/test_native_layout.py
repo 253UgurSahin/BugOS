@@ -845,8 +845,8 @@ for _breed in range(800, 904, 8):
         _ys.append(_k100.mapTo(w, QPoint(0, 0)).y())
     if len(set(_ys[2:])) > 1:
         _schommel.append(f"{_breed}: {_ys}")
-klopt(not _schommel, "Scherm schommelt niet (schuifbalk aan/uit) bij 800-900 x 700" + "".join(f"
-        {x}" for x in _schommel))
+klopt(not _schommel, "Scherm schommelt niet (schuifbalk aan/uit) bij 800-900 x 700"
+      + "".join(f"\n        {x}" for x in _schommel))
 w.setMinimumSize(_min15)
 w.resize(_maat15)
 verwerk()
