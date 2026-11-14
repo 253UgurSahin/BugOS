@@ -231,9 +231,14 @@ kwriteconfig6 --file /etc/xdg/dolphinrc --group General --key BrowseThroughArchi
 kwriteconfig6 --file /etc/xdg/ksplashrc --group KSplash --key Engine KSplashQML
 kwriteconfig6 --file /etc/xdg/ksplashrc --group KSplash --key Theme org.bugos.desktop
 
-# Vergrendelscherm en inlogscherm: de BugOS-achtergrond
+# Vergrendelscherm en inlogscherm: de BugOS-achtergrond.
+# Het vergrendelscherm altijd met de DONKERE versie van Stip (A-16): KDE's vergrendelscherm zet de klok en de
+# datum in wit met een dunne schaduw. Op de lichte Stip (bijna wit waar de klok staat) waren die in lichte modus
+# nauwelijks te lezen. Op de donkere versie zijn ze in licht en donker goed leesbaar (zoals Windows 11, dat zijn
+# vergrendelscherm ook niet laat meekleuren). Een vast bestand in plaats van de map: met de map kiest KDE zelf
+# licht of donker bij het kleurenschema.
 kwriteconfig6 --file /etc/xdg/kscreenlockerrc --group Greeter --group Wallpaper --group org.kde.image --group General \
-    --key Image "file:///usr/share/wallpapers/bugos/"
+    --key Image "file:///usr/share/wallpapers/bugos/contents/images_dark/3840x2160.jpg"
 kwriteconfig6 --file /etc/xdg/kscreenlockerrc --group Greeter --group Wallpaper --group org.kde.image --group General \
     --key PreviewImage "file:///usr/share/wallpapers/bugos/contents/screenshot.jpg"
 # Het inlogscherm. Fedora 44 gebruikt "Plasma Login Manager" (niet meer

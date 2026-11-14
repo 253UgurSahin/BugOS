@@ -529,6 +529,33 @@ nep kwriteconfig6 'echo "$*" >>"'"$TMP"'/kw-thema"'
 : >"$TMP/kw-thema"
 draai bugos-theme donker
 klopt '! grep -q "AccentColor --delete" "$TMP/kw-thema"' "U373: licht/donker omzetten laat je eigen accentkleur staan"
+# A-01: open KDE-programma's (wachtwoordvraag van polkit, bureaubladmenu, klok-instellingen) hielden de lichte
+# Kvantum-knoppen bij donker. bugos-theme wisselt nu de stijlnaam (kvantum <-> kvantum-dark) en stuurt KDE's
+# StyleChanged-signaal, zodat ze de stijl opnieuw laden. Nep-KDE: widgetStyle in een bestand, gdbus schrijft een log.
+echo kvantum >"$TMP/stijl"
+nep kreadconfig6 'case "$*" in *ColorScheme*) cat "'"$TMP"'/schema" 2>/dev/null ;; *widgetStyle*) cat "'"$TMP"'/stijl" ;; esac'
+nep kwriteconfig6 'echo "$*" >>"'"$TMP"'/kw-thema"; case "$*" in *widgetStyle*) printf "%s" "${!#}" >"'"$TMP"'/stijl" ;; esac'
+nep gdbus 'echo "$*" >>"'"$TMP"'/gdbus-log"'
+: >"$TMP/gdbus-log"
+draai bugos-theme donker
+klopt '[ "$(cat "$TMP/stijl")" = kvantum-dark ] && grep -q "org.kde.KGlobalSettings.notifyChange 2 0" "$TMP/gdbus-log"' \
+    "A-01: donker: stijl kvantum-dark en open KDE-programma's horen het (StyleChanged)"
+: >"$TMP/gdbus-log"
+draai bugos-theme licht
+klopt '[ "$(cat "$TMP/stijl")" = kvantum ] && grep -q "notifyChange 2 0" "$TMP/gdbus-log"' \
+    "A-01: licht: stijl weer kvantum, en open programma's horen het ook"
+# Zelf een andere stijl gekozen (Breeze): bugos-theme laat die staan.
+echo Breeze >"$TMP/stijl"
+draai bugos-theme donker
+klopt '[ "$(cat "$TMP/stijl")" = Breeze ]' "A-01: een zelf gekozen stijl (Breeze) blijft staan bij licht/donker"
+# Al donker met de oude naam 'kvantum' (van vóór deze wissel): bij het inloggen 'kvantum-dark'.
+echo kvantum >"$TMP/stijl"
+echo BugOSDark >"$TMP/schema"
+nep flatpak 'exit 0'
+draai bugos-theme inloggen
+klopt '[ "$(cat "$TMP/stijl")" = kvantum-dark ]' "A-01: inloggen in donker zet de oude stijlnaam kvantum om naar kvantum-dark"
+rm -f "$TMP/bin/gdbus"
+nep kreadconfig6 'case "$*" in *ColorScheme*) cat "'"$TMP"'/schema" 2>/dev/null ;; esac'
 nep kwriteconfig6 'exit 0'
 # U302: van vóór de Engelse namen: 'BugOSDonker' wordt 'BugOSDark', en het oude game-modusbestand gaat weg.
 echo BugOSDonker >"$TMP/schema"

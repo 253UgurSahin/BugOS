@@ -31,6 +31,43 @@ kvantum_zet() {
     kwriteconfig6 --file "$KVANTUM" --group General --key theme "$1"
 }
 
+# De programmastijl van KDE (kdeglobals [KDE] widgetStyle) bij licht/donker: "kvantum" of "kvantum-dark" (A-01).
+#
+# Waarom twee namen voor dezelfde stijl: Kvantum leest zijn thema (BugOS / BugOSDark) maar één keer, als een
+# programma start. Programma's die de hele sessie open blijven (de wachtwoordvraag van polkit, plasmashell met
+# het bureaubladmenu en de instellingenvensters van widgets zoals de klok) hielden daardoor de lichte knoppen
+# en velden, terwijl hun tekst wél het donkere kleurenschema volgde: lichte tekst op lichte knoppen, witte
+# wachtwoordvelden met witte stippen. KDE laadt de stijl van een open programma alleen opnieuw als de NAAM
+# van de stijl verandert (plasma-integration, KHintsSettings: StyleChanged doet niets bij dezelfde naam).
+# Kvantum heeft twee namen: "kvantum" en "kvantum-dark" (die zoekt eerst naar <thema>Dark). Door bij donker
+# "kvantum-dark" en bij licht "kvantum" te zetten verandert de naam bij elke wissel, en maken alle open
+# KDE-programma's een nieuwe Kvantum aan die het nieuwe thema leest.
+#   stijl_zet licht|donker [melden]
+# melden: ook open programma's laten weten dat de stijl veranderde (bij het omzetten; bij het inloggen niet
+# nodig, dan start alles toch nieuw).
+stijl_zet() {
+    local nu nieuw=kvantum
+    [ "$1" = donker ] && nieuw=kvantum-dark
+    nu="$(kreadconfig6 --file kdeglobals --group KDE --key widgetStyle 2>/dev/null)"
+    case "$nu" in
+    "" | kvantum | kvantum-dark) ;;
+    *) return 0 ;;   # iemand koos zelf een andere stijl (bijv. Breeze of Oxygen): laten staan
+    esac
+    if [ "$nu" != "$nieuw" ]; then
+        kwriteconfig6 --file kdeglobals --group KDE --key widgetStyle --notify "$nieuw" 2>/dev/null ||
+            kwriteconfig6 --file kdeglobals --group KDE --key widgetStyle "$nieuw"
+    fi
+    [ "${2:-}" = melden ] || return 0
+    # Hetzelfde signaal dat KDE's eigen Instellingen sturen na een andere stijl: KGlobalSettings.notifyChange
+    # met 2 (StyleChanged). Elk open KDE-programma leest dan widgetStyle opnieuw. gdbus zit in glib2 (altijd
+    # aanwezig); dbus-send als reserve. Lukt geen van beide (geen sessiebus), dan is dat geen fout: nieuwe
+    # programma's krijgen de goede stijl toch.
+    gdbus emit --session --object-path /KGlobalSettings \
+        --signal org.kde.KGlobalSettings.notifyChange 2 0 >/dev/null 2>&1 ||
+        dbus-send --session --type=signal /KGlobalSettings \
+            org.kde.KGlobalSettings.notifyChange int32:2 int32:0 >/dev/null 2>&1 || true
+}
+
 huidig() {
     local schema achter r g b
     schema="$(kreadconfig6 --file kdeglobals --group General --key ColorScheme 2>/dev/null)"
@@ -171,6 +208,8 @@ licht | donker)
     fi
     plasma-apply-colorscheme "$schema" >/dev/null 2>&1
     kvantum_zet "$kv"
+    # Ook de KDE-programma's die al open zijn (wachtwoordvraag, bureaubladmenu, klok-instellingen): zie stijl_zet.
+    stijl_zet "$1" melden
     terminal_zet "$1"
     # De Plasma-stijl "bugos" volgt het kleurenschema; zet hem alleen terug als er
     # nog een Breeze-stijl van vroeger stond (BugOS zette toen default/breeze-dark).
@@ -190,6 +229,9 @@ inloggen)
     gtk_laag
     flatpak_toegang
     terminal_zet "$(huidig)"
+    # Wie al donker had met de oude naam "kvantum": nu "kvantum-dark", anders verandert de naam bij de volgende
+    # wissel naar licht niet en blijven open programma's donker (A-01). Zelf gekozen stijlen blijven staan.
+    stijl_zet "$(huidig)"
     exec "$0" eerste-keer
     ;;
 eerste-keer)
@@ -205,7 +247,10 @@ eerste-keer)
     # koos (bijv. Oxygen of Papirus), houdt dat.
     stijl="$(kreadconfig6 --file kdeglobals --group KDE --key widgetStyle 2>/dev/null)"
     case "$stijl" in
-    "" | Breeze | breeze) kwriteconfig6 --file kdeglobals --group KDE --key widgetStyle kvantum || gelukt=0 ;;
+    "" | Breeze | breeze)
+        # Donker: "kvantum-dark", licht: "kvantum" (zie stijl_zet: zo volgen open programma's een wissel).
+        if [ "$(huidig)" = donker ]; then nieuw_stijl=kvantum-dark; else nieuw_stijl=kvantum; fi
+        kwriteconfig6 --file kdeglobals --group KDE --key widgetStyle "$nieuw_stijl" || gelukt=0 ;;
     esac
     iconen="$(kreadconfig6 --file kdeglobals --group Icons --key Theme 2>/dev/null)"
     case "$iconen" in
