@@ -45,6 +45,7 @@ def op_achtergrond(ouder: QObject, werk, klaar) -> None:
 # ============================================================ onderdelen ===
 
 def stijl() -> str:
+    # (QFrame#melding: een dun randje, want de melding zweeft over de pagina, B-15.)
     return schaal_css(f"""
 QFrame#snel {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-radius: 16px; }}
 QPushButton#keus {{ background: transparent; border: none; border-radius: 9px; padding: 8px 14px; font-size: 14px;
@@ -53,6 +54,7 @@ QPushButton#keus:hover {{ color: {K['tekst']}; }}
 QPushButton#keus:checked {{ background: {K['accent_zacht']}; color: {K['accent_gekozen']}; }}
 QPushButton#keus:focus {{ border: 2px solid {K['accent']}; padding: 6px 12px; }}
 QPushButton#keus:disabled {{ color: {K['tekst3']}; }}
+QFrame#melding {{ border: 1px solid {K['rand']}; }}
 QFrame#keuzes {{ background: {K['knop']}; border-radius: 12px; }}
 QPushButton#plaatje {{ background: transparent; border: 2px solid transparent; border-radius: 16px; padding: 3px; }}
 QPushButton#plaatje:hover {{ border: 2px solid {K['rand_sterk']}; }}
@@ -377,6 +379,44 @@ class Blad(Pagina):
             meer.clicked.connect(lambda _c=False: kde_instelling(self.kde))
             self.lay.addWidget(meer, 0, Qt.AlignmentFlag.AlignLeft)
         self.klaar()
+        self.melding_zwevend()
+
+    # ------------------------------------------------------------- de melding zweeft (B-15) ---
+    MELDING_BOVEN = 12   # px tussen de bovenkant van de pagina en de melding
+
+    def melding_zwevend(self) -> None:
+        """De groene of rode melding ('Klaar…', 'Dat lukte niet') zweeft bovenaan over de pagina, in plaats van ertussen.
+
+        Waarom: stond hij in de pagina, dan schoof alles eronder ~60 px omlaag als hij verscheen, en weer omhoog als
+        hij na een paar seconden verdween. Een klik op '100%' viel dan net naast de knop (B-15). Nu blijft alles op
+        zijn plek; de melding ligt over de titel (daar valt niets te klikken) en verdwijnt vanzelf."""
+        self.lay.removeWidget(self.melding)
+        self.melding.setParent(self)        # een kind van het schuifvlak zelf: hij schuift niet mee met de pagina
+        self.melding.installEventFilter(self)
+        self.melding.hide()
+
+    def plaats_melding(self) -> None:
+        """Zet de melding bovenaan, zo breed als de inhoud van de pagina (met dezelfde marges als de kaarten)."""
+        m = getattr(self, "melding", None)
+        if m is None or m.parentWidget() is not self or m.isHidden():
+            return
+        inhoud = self.lay.parentWidget()
+        marge = self.lay.contentsMargins()
+        vp = self.viewport().geometry()
+        links = vp.x() + max(0, inhoud.mapTo(self.viewport(), QPoint(0, 0)).x()) + marge.left()
+        breed = max(px(200), min(inhoud.width() - marge.left() - marge.right(), vp.right() - links - marge.right()))
+        hoog = m.heightForWidth(breed) if m.hasHeightForWidth() else m.sizeHint().height()
+        hoog = max(hoog, m.minimumSizeHint().height())
+        doel = QRect(links, vp.y() + px(self.MELDING_BOVEN), breed, hoog)
+        if m.geometry() != doel:
+            m.setGeometry(doel)
+        m.raise_()
+
+    def eventFilter(self, obj, e) -> bool:  # noqa: N802
+        # De melding verschijnt of krijgt een andere tekst (dus misschien een andere hoogte): opnieuw neerleggen.
+        if obj is getattr(self, "melding", None) and e.type() in (QEvent.Type.Show, QEvent.Type.LayoutRequest):
+            self.plaats_melding()
+        return super().eventFilter(obj, e)
 
     @classmethod
     def naam(cls) -> str:
@@ -394,6 +434,7 @@ class Blad(Pagina):
         m = self.lay.contentsMargins()
         if m.left() != zijkant:
             self.lay.setContentsMargins(zijkant, m.top(), zijkant, m.bottom())
+        self.plaats_melding()
 
 
 # ================================================================ kiezen ===

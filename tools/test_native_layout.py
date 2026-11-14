@@ -803,6 +803,27 @@ klopt(all(not (k.focusPolicy().value & Qt.FocusPolicy.ClickFocus.value) for k in
       "B-13: een tabje krijgt alleen met Tab de focus (de rode focusrand), niet met de muis")
 w.zoekveld.setText("")
 verwerk()
+# B-15: de groene melding ('Klaar…') zweeft bovenaan over de pagina: de knoppen eronder blijven op hun plek als hij
+# verschijnt en weer verdwijnt (eerst schoof alles ~60 px omlaag, en viel een klik op '100%' naast de knop).
+w.ga_naar("scherm")
+verwerk()
+_sch = w.paginas["scherm"]
+_k100 = _sch.grootte.knoppen[1.0]
+_voor = _k100.mapTo(w, QPoint(0, 0))
+_sch.melding.toon("Done. Some programs only change after you open them again.", "goed")
+verwerk()
+_tijdens = _k100.mapTo(w, QPoint(0, 0))
+_mg = _sch.melding.geometry()
+_eerste_kaart = min(g.mapTo(_sch, QPoint(0, 0)).y() for g in _sch.findChildren(Groep) if g.isVisible())
+klopt(_sch.melding.isVisible() and _voor == _tijdens,
+      f"B-15: de melding verschijnt en de knop '100%' blijft op zijn plek ({_voor.y()} -> {_tijdens.y()})")
+klopt(_sch.melding.parentWidget() is _sch and _mg.top() >= 0 and _mg.bottom() < _eerste_kaart
+      and _mg.left() == _sch.titel.mapTo(_sch, QPoint(0, 0)).x() and _mg.width() > 300,
+      f"B-15: de melding ligt bovenaan over de titel, op één lijn met de pagina, boven de eerste kaart ({_mg.getRect()}, "
+      f"kaart op y={_eerste_kaart})")
+_sch.melding.hide()
+verwerk()
+klopt(_k100.mapTo(w, QPoint(0, 0)) == _voor, "B-15: de melding verdwijnt en de knop '100%' blijft op zijn plek")
 # B-02: Kolommen (Start: vier snelle schuifjes, Energie: drie kaarten). Breed: alles naast elkaar; smal: 4 -> 2 -> 1,
 # nooit 3 + 1; een verborgen kaart laat geen gat achter.
 _kol = inst.Kolommen(12)
