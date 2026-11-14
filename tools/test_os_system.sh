@@ -668,5 +668,30 @@ klopt '[ "$(HOME="$TMP/thuis" PATH="$TMP/bin:$PATH" bash "$TMP/bugos-theme" stat
 nep kreadconfig6 'case "$*" in *ColorScheme*) echo BreezeDark ;; *BackgroundNormal*) echo 32,35,38,255 ;; esac'
 klopt '[ "$(HOME="$TMP/thuis" PATH="$TMP/bin:$PATH" bash "$TMP/bugos-theme" status 2>/dev/null)" = donker ]' \
     "U331: een donkere kleur met doorzichtigheid (r,g,b,a) telt ook als donker"
+# B-04: bugos-tijd (de klok, als beheerder via pkexec met een Nederlandse zin van BugOS). Als root roept het alleen
+# timedatectl aan, en alleen met een tijdzone die timedatectl zelf kent en een tijd in de goede vorm.
+kopie bugos-tijd
+nep id 'echo 0'
+nep timedatectl 'case "$1" in list-timezones) printf "Europe/Amsterdam\nEurope/Athens\n" ;; *) echo "$*" >>"'"$TMP"'/timedatectl" ;; esac'
+rm -f "$TMP/timedatectl"
+draai bugos-tijd vanzelf uit
+klopt '[ $code -eq 0 ] && grep -qx "set-ntp false" "$TMP/timedatectl"' "B-04: bugos-tijd vanzelf uit -> timedatectl set-ntp false"
+draai bugos-tijd zone Europe/Athens
+klopt '[ $code -eq 0 ] && grep -qx "set-timezone Europe/Athens" "$TMP/timedatectl"' "B-04: bugos-tijd zone -> timedatectl set-timezone"
+rm -f "$TMP/timedatectl"
+draai bugos-tijd zone "../../etc/shadow"
+klopt '[ $code -eq 2 ] && [ ! -f "$TMP/timedatectl" ]' "B-04: bugos-tijd weigert een rare tijdzone (draait als root)"
+draai bugos-tijd zone Mars/Olympus
+klopt '[ $code -eq 2 ] && [ ! -f "$TMP/timedatectl" ]' "B-04: bugos-tijd weigert een tijdzone die timedatectl niet kent"
+draai bugos-tijd klok "2026-11-14 13:05:00"
+klopt '[ $code -eq 0 ] && grep -qx "set-time 2026-11-14 13:05:00" "$TMP/timedatectl"' "B-04: bugos-tijd klok -> timedatectl set-time"
+rm -f "$TMP/timedatectl"
+draai bugos-tijd klok "morgen; rm -rf /"
+klopt '[ $code -eq 2 ] && [ ! -f "$TMP/timedatectl" ]' "B-04: bugos-tijd weigert een tijd in een andere vorm"
+nep id 'echo 1000'
+nep pkexec 'echo "$*" >"'"$TMP"'/pkexec"'
+draai bugos-tijd vanzelf aan
+klopt 'grep -qx "/usr/bin/bugos-tijd vanzelf aan" "$TMP/pkexec"' "B-04: als gewone gebruiker vraagt bugos-tijd het wachtwoord via pkexec (de eigen polkit-regel)"
+nep id 'echo 0'
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

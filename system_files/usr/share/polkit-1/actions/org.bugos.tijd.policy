@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- BugOS Instellingen > Tijd en taal: de klok vanzelf gelijkzetten, de tijdzone en de klok met de hand gaan via
+     pkexec /usr/bin/bugos-tijd. Zo staat er een gewone Nederlandse zin in het wachtwoordvenster, in plaats van de
+     Engelse van systemd ('Authentication is required to control whether network time synchronization shall be
+     enabled.') (B-04). auth_admin_keep, net als systemd zelf voor deze dingen doet (timedate1.set-ntp,
+     set-timezone, set-time). -->
+<policyconfig>
+  <vendor>BugOS</vendor>
+  <action id="org.bugos.tijd">
+    <description>Change the clock of this computer</description>
+    <description xml:lang="nl">De klok van deze computer veranderen</description>
+    <message>Enter your password to change the clock or the time zone</message>
+    <message xml:lang="nl">Typ je wachtwoord om de klok of de tijdzone te veranderen</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/bugos-tijd</annotate>
+  </action>
+</policyconfig>

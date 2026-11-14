@@ -71,7 +71,6 @@ STAD_NL = {
 
 def _met_spaties(naam: str) -> str:
     """'EasterIsland' -> 'Easter Island', 'Port_of_Spain' -> 'Port of Spain' (B-17)."""
-    import re
     return re.sub(r"(?<=[a-z])(?=[A-Z])", " ", naam.replace("_", " "))
 
 
@@ -104,19 +103,35 @@ def tijdzones() -> list[str]:
     return [z for z in zones if "/" in z and z.split("/", 1)[0] in WERELDDEEL]
 
 
+TIJD_HULP = "/usr/bin/bugos-tijd"
+
+
+def tijd_opdracht(wat: str, waarde: str) -> tuple[str, ...]:
+    """De opdracht om de klok te veranderen. Via pkexec en bugos-tijd: dan staat er in het wachtwoordvenster een
+    gewone Nederlandse zin van BugOS, niet de Engelse van systemd ('Authentication is required to control whether
+    network time synchronization shall be enabled.') (B-04). Is het hulpje er niet, dan timedatectl zelf (zoals eerst).
+    wat: 'vanzelf' (waarde aan/uit), 'zone' of 'klok'."""
+    if shutil.which("bugos-tijd") or Path(TIJD_HULP).exists():
+        return ("pkexec", TIJD_HULP, wat, waarde)
+    if wat == "vanzelf":
+        return ("timedatectl", "set-ntp", "true" if waarde == "aan" else "false")
+    return ("timedatectl", "set-timezone" if wat == "zone" else "set-time", waarde)
+
+
 def zet_tijdzone(zone: str) -> bool:
-    """Via timedatectl; KDE vraagt het wachtwoord, net als Windows."""
+    """Via bugos-tijd (of timedatectl); BugOS vraagt het wachtwoord, net als Windows."""
     if _c.VOORBEELD:
         _c._VB["zone"] = zone
         return True
-    return _c.draai("timedatectl", "set-timezone", zone, timeout=60)[0] == 0
+    # Lang genoeg om rustig je wachtwoord te typen (pkexec wacht daarop).
+    return _c.draai(*tijd_opdracht("zone", zone), timeout=600)[0] == 0
 
 
 def zet_tijd_auto(aan: bool) -> bool:
     if _c.VOORBEELD:
         _c._VB["tijd_auto"] = aan
         return True
-    return _c.draai("timedatectl", "set-ntp", "true" if aan else "false", timeout=60)[0] == 0
+    return _c.draai(*tijd_opdracht("vanzelf", "aan" if aan else "uit"), timeout=600)[0] == 0
 
 
 def zet_klok(wanneer: datetime) -> tuple[bool, str]:
@@ -129,7 +144,7 @@ def zet_klok(wanneer: datetime) -> tuple[bool, str]:
     if tijd().auto:
         return False, "auto"
     begin, t0 = datetime.now(), time.monotonic()
-    if _c.draai("timedatectl", "set-time", wanneer.strftime("%Y-%m-%d %H:%M:%S"), timeout=120)[0] == 0:
+    if _c.draai(*tijd_opdracht("klok", wanneer.strftime("%Y-%m-%d %H:%M:%S")), timeout=600)[0] == 0:
         return True, ""
     # timedatectl geeft het na 25 s op, ook als je dan nog in het wachtwoordvenster zit; de klok gaat daarna toch
     # gewoon. Dus nog even kijken: loopt de klok nu zoals gevraagd (2 minuten speling)? Alleen als je hem echt

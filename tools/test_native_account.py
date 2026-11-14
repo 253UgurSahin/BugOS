@@ -69,16 +69,24 @@ def _ntp(aan: bool):
     return antwoord
 
 
+# (B-04: de klok gaat via pkexec bugos-tijd, met een Nederlandse zin van BugOS in het wachtwoordvenster.)
+KLOK_ZETTEN = ("pkexec", "/usr/bin/bugos-tijd", "klok")
 _o14, _u14 = vang(bi.zet_klok, datetime(2026, 11, 11, 9, 30), antwoord=_ntp(False))
-klopt(_u14 == (True, "") and ("timedatectl", "set-time", "2026-11-11 09:30:00") in _o14,
-      f"14: klok zetten via timedatectl set-time, plaatselijke tijd ({_o14})")
+klopt(_u14 == (True, "") and KLOK_ZETTEN + ("2026-11-11 09:30:00",) in _o14,
+      f"14: klok zetten via bugos-tijd klok (timedatectl set-time), plaatselijke tijd ({_o14})")
 _o14b, _u14b = vang(bi.zet_klok, datetime(2026, 11, 11, 9, 30), antwoord=_ntp(True))
-klopt(_u14b == (False, "auto") and not any(c[:2] == ("timedatectl", "set-time") for c in _o14b),
+klopt(_u14b == (False, "auto") and not any(c[:3] == KLOK_ZETTEN for c in _o14b),
       f"14: tijd gaat nog vanzelf: 'auto', en geen set-time ({_u14b})")
+# B-04: ook 'vanzelf gelijkzetten' en de tijdzone gaan via bugos-tijd (geen Engelse vraag van systemd meer).
+_o04, _u04 = vang(bi.zet_tijd_auto, False)
+_o04z, _u04z = vang(bi.zet_tijdzone, "Europe/Athens")
+klopt(_u04 and _o04 == [("pkexec", "/usr/bin/bugos-tijd", "vanzelf", "uit")]
+      and _o04z == [("pkexec", "/usr/bin/bugos-tijd", "zone", "Europe/Athens")],
+      f"B-04: tijd vanzelf en tijdzone via pkexec bugos-tijd ({_o04}, {_o04z})")
 
 
 def _weigert(cmd):
-    if cmd[:2] == ("timedatectl", "set-time"):
+    if cmd[:3] == KLOK_ZETTEN:
         return 1, ""
     return _ntp(False)(cmd)
 
@@ -491,6 +499,27 @@ klopt(_kd.datum.displayFormat().count("y") == 4 and _kd.sizeHint().height() <= 4
 tp.toon((ca.Tijd("Europe/Amsterdam", True, False), "nl"))
 klopt("Wacht op internet" in tp.klok_rij.uitleg.text() and tp.zelf_rij.isHidden(),
       f"F: tijd vanzelf, maar nog niet gelijk: 'wacht op internet' ({tp.klok_rij.uitleg.text()!r})")
+# B-04: zolang het wachtwoord gevraagd wordt, staat het schuifje 'tijd vanzelf' op slot (eerst stond het al op 'uit'
+# terwijl de vraag nog open was), en daarna mag het weer.
+import threading as _th04  # noqa: E402
+
+_los04 = _th04.Event()
+_oud04 = bi.zet_tijd_auto
+bi.zet_tijd_auto = lambda aan: (_los04.wait(5), True)[1]   # alsof de wachtwoordvraag nog open staat
+tp.zet_auto(False)
+app.processEvents()
+_op_slot04 = not tp.auto.isEnabled() and "wachtwoord" in tp.klok_rij.uitleg.text()
+_los04.set()
+wacht()
+bi.zet_tijd_auto = _oud04
+klopt(_op_slot04 and tp.auto.isEnabled(), "B-04: tijdens de wachtwoordvraag staat het schuifje op slot, daarna weer los")
+# B-04: het wachtwoordvenster zegt waarom, in gewone woorden: de eigen polkit-regel van bugos-tijd.
+_pol04 = (ROOT / "system_files/usr/share/polkit-1/actions/org.bugos.tijd.policy").read_text(encoding="utf-8")
+_hulp04 = ROOT / "system_files/usr/bin/bugos-tijd"
+klopt('<message xml:lang="nl">Typ je wachtwoord om de klok of de tijdzone te veranderen</message>' in _pol04
+      and '"org.freedesktop.policykit.exec.path">/usr/bin/bugos-tijd<' in _pol04 and _hulp04.exists()
+      and "exec pkexec /usr/bin/bugos-tijd" in _hulp04.read_text(encoding="utf-8"),
+      "B-04: bugos-tijd met een eigen polkit-regel en een Nederlandse zin in het wachtwoordvenster")
 
 _bron_alles = (PY / "bugos_settings_account.py").read_text(encoding="utf-8")
 # 25: de kaart Andere mensen (voorbeeldstand).

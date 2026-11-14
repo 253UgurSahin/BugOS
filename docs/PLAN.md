@@ -80,6 +80,7 @@ The most important idea: **BugOS can't break.**
 | Task Manager | `bugos-task-manager` | Like Task Manager in Windows (Ctrl+Shift+Esc), but simpler: at the top, in plain words, how things are going (with a tip when it is busy), open programs with 'Close' (politely, and forced if it doesn't respond), performance with small graphs (processor with temperature, memory, disk, internet, graphics card) and programs that start with the computer on/off. You can't stop parts of BugOS itself by accident. |
 | Open drives | `bugos-open-drives` | After signing in, opens the drives inside the computer so they are always there (like D: in Windows). No password needed for administrators (polkit rule). |
 | Sign in without a password | `bugos-login` | Sets the sign-in screen (SDDM) to 'sign in automatically' for one user, or turns it off again. Settings calls it through pkexec; KDE asks for your password once (polkit action org.bugos.login). |
+| Change the clock | `bugos-tijd` | Automatic time on or off, the time zone and the clock by hand, for Settings > Time and language. Settings calls it through pkexec, so the password window gives a plain Dutch reason (polkit action org.bugos.tijd) instead of systemd's English sentence. |
 | More apps, Disks, Dolphin | (KDE) | KDE programs with a simple BugOS name. Dolphin is the file explorer for advanced users. |
 
 ### What happens in the background
