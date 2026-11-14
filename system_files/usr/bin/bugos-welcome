@@ -446,6 +446,18 @@ class Jij(Pagina):
                                  "be in the start menu soon."), "klein")
         self.steam_nog.hide()
         self.lay.addWidget(self.steam_nog)
+        # A-10: Steam start niet meer meteen. Vroeger kwamen er midden in Welkom Engelse vensters ('Steam setup',
+        # 'Updating Steam...') en daarna vanzelf een Engels inlogvenster. Nu zetten we Steam pas klaar als je Welkom
+        # afsluit ('Aan de slag'), stil in het systeemvak, en zeggen we hier vooraf wat er gaat gebeuren.
+        self.steam_straks: tuple = ()   # de opdracht om Steam stil klaar te zetten, of () als dat niet hoeft
+        self.steam_uitleg = label(t("Steam wordt klaargezet zodra je op 'Aan de slag' drukt. Steam haalt eerst een "
+                                    "update op (ongeveer 500 MB), op de achtergrond. Daarna vind je Steam in het "
+                                    "startmenu; daar log je in met je Steam-account.",
+                                    "Steam will be set up as soon as you press 'Let's go'. Steam first downloads an "
+                                    "update (about 500 MB), in the background. After that you will find Steam in the "
+                                    "start menu; sign in there with your Steam account."), "klein")
+        self.steam_uitleg.hide()
+        self.lay.addWidget(self.steam_uitleg)
         # Wat al aan staat (de lichte stand zet zichzelf aan op een oudere pc), staat hier ook aan (U179).
         for naam, rij, script in (("oud", self.oud, "bugos-light-mode"), ("dev", self.dev, "bugos-developer")):
             try:
@@ -461,17 +473,29 @@ class Jij(Pagina):
 
     def bij_volgende(self) -> None:
         for naam, rij, opdracht in (("dev", self.dev, ("bugos-developer", "aan")),
-                                    ("oud", self.oud, ("bugos-light-mode", "aan")),
-                                    ("gamer", self.gamer, steam_opdracht()
-                                     if self.gamer.schuif.isChecked() and "gamer" not in self.gestart else ())):
-            if naam == "gamer" and rij.schuif.isChecked() and not opdracht and naam not in self.gestart:
-                self.steam_nog.show()   # (U181)
-            if naam in self.gestart or not rij.schuif.isChecked() or not opdracht:
+                                    ("oud", self.oud, ("bugos-light-mode", "aan"))):
+            if naam in self.gestart or not rij.schuif.isChecked():
                 continue
             start(*opdracht)
             self.gestart.add(naam)
             rij.schuif.setEnabled(False)   # niet meer uit te zetten hier: het loopt al
             self.al_bezig.show()
+        # Gamen: Steam starten we hier niet meer (A-10), dat gebeurt pas bij 'Aan de slag' (Welkom.steam_klaarzetten),
+        # stil. Er loopt dus nog niets: het schuifje blijft vrij, en via Terug kun je het weer uitzetten.
+        if self.gamer.schuif.isChecked():
+            opdracht = steam_opdracht()
+            if opdracht:
+                self.steam_straks = steam_stil(opdracht)
+                self.steam_uitleg.show()
+                self.steam_nog.hide()
+            else:
+                self.steam_straks = ()
+                self.steam_uitleg.hide()
+                self.steam_nog.show()   # Steam is er (nog) niet: zeg dat hij nog komt (U181)
+        else:
+            self.steam_straks = ()
+            self.steam_uitleg.hide()
+            self.steam_nog.hide()
 
 
 def steam_opdracht() -> tuple:
@@ -485,6 +509,25 @@ def steam_opdracht() -> tuple:
     except (OSError, subprocess.SubprocessError):
         pass
     return ()
+
+
+# Steam kent zijn eigen taalnamen (de optie -language): de BugOS-talen die Steam ook heeft. Zo is het inlogvenster
+# straks Nederlands voor wie BugOS in het Nederlands gebruikt (A-10; de tester zag 'steamwebhelper -lang=en_US').
+STEAM_TALEN = {"nl": "dutch", "en": "english", "de": "german", "fr": "french", "es": "spanish", "it": "italian",
+               "pt": "portuguese", "pl": "polish", "tr": "turkish", "sv": "swedish", "da": "danish", "fi": "finnish",
+               "nb": "norwegian", "no": "norwegian", "cs": "czech", "hu": "hungarian", "ro": "romanian",
+               "uk": "ukrainian", "ru": "russian", "el": "greek", "bg": "bulgarian", "ja": "japanese",
+               "ko": "koreana", "zh": "schinese", "th": "thai", "vi": "vietnamese", "id": "indonesian"}
+
+
+def steam_stil(opdracht: tuple) -> tuple:
+    """De Steam-opdracht, maar stil: '-silent' start Steam in het systeemvak zonder het (Engelse) inlogvenster, zodat
+    Steam zijn grote eerste update op de achtergrond kan ophalen. '-language' geeft Steam de taal van BugOS.
+    Wie Steam daarna opent (startmenu of systeemvak), krijgt gewoon het inlogvenster (A-10)."""
+    if not opdracht:
+        return ()
+    taal = STEAM_TALEN.get(bugos_ui.TAAL, "")   # een taal die Steam niet kent: Steam kiest zelf
+    return tuple(opdracht) + ("-silent",) + (("-language", taal) if taal else ())
 
 
 class Klaar(Pagina):
@@ -592,10 +635,26 @@ class Welkom(QWidget):
                     QThread.msleep(50)
                 CONFIG.mkdir(parents=True, exist_ok=True)
                 KLAAR.touch()
+                self.steam_klaarzetten()
                 self.close()
                 return
         self.stapels.setCurrentIndex(max(0, min(len(self.paginas) - 1, nu + richting)))
         self.ververs()
+
+    def steam_klaarzetten(self) -> None:
+        """Koos je 'Ik ga gamen'? Dan nu (Welkom is klaar) Steam stil starten, en met een melding zeggen wat er
+        gebeurt: Steam is een eigen programma dat eerst een flinke update ophaalt (A-10)."""
+        jij = next((p for p in self.paginas if isinstance(p, Jij)), None)
+        if jij is None or not jij.steam_straks:
+            return
+        start(*jij.steam_straks)
+        jij.steam_straks = ()   # maar één keer
+        QProcess.startDetached("notify-send", ["-a", "BugOS", "-i", "steam",
+                                               t("Steam wordt klaargezet", "Steam is being set up"),
+                                               t("Steam haalt eerst een update op (ongeveer 500 MB). Daarna open je "
+                                                 "Steam in het startmenu en log je in.",
+                                                 "Steam first downloads an update (about 500 MB). Then open Steam "
+                                                 "from the start menu and sign in.")])
 
     def ververs(self) -> None:
         nu = self.stapels.currentIndex()
