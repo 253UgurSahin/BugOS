@@ -124,6 +124,12 @@ jobs:
         run: QT_QPA_PLATFORM=offscreen python3 tools/test_native_printers.py
       - name: Native geluid en scherm testen (microfoon, schermen, 'Beeld houden?', batterijtijd)
         run: QT_QPA_PLATFORM=offscreen python3 tools/test_native_sound_display.py
+      - name: Native bureaublad testen (taakbalk vast, eigen rechtsklikregels, systeemvak eenmalig bijwerken)
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_native_shell.py
+      - name: Native Winkel testen (heel Flathub, app-pagina, Mijn apps, .flatpakref; zonder KDE Discover)
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_native_store.py
+      - name: Native gereedschap testen (grootste mappen, schijf wissen, Taakbeheer Details; heeft GNU du nodig)
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_native_tools.py
       - name: Uitzetscherm testen (laadt het, en kloppen de knoppen per situatie)
         run: |
           if [ -f tools/test_logout.py ]; then

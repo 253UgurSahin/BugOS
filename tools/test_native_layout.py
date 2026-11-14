@@ -50,13 +50,8 @@ TITELBALK_ECHT = 30   # de titelbalk die KWin (Breeze, zonder randen) boven een 
 # precies: (ronde of None, app, staat, het begin van de melding, iets wat er verderop in moet staan, reden). Een
 # ánder probleem op dezelfde pagina telt dus gewoon als fout. Komt een regel in geen enkele ronde meer voor, dan
 # meldt de test 'OPGELOST?': dan mag hij hier weg (zo blijft de lijst niet stilletjes iets toestaan).
-# (Opgelost en weggehaald: D05 Uiterlijk, D13 Welkom, R03 Back-up en Overstap.)
-BEKEND = [
-    ("1 grote letters", "tasks", "programmas", "schuift opzij", "(Pagina)",
-     "R13: Taakbeheer met grote letters (pakket tools): de kaart met kolomkoppen is minstens 640 px breed"),
-    ("1 grote letters", "tasks", "prestaties", "schuift opzij", "(Pagina)",
-     "R13: Taakbeheer met grote letters (pakket tools): de pagina Prestaties is minstens 737 px breed"),
-]
+# (Opgelost en weggehaald: D05 Uiterlijk, D13 Welkom, R03 Back-up en Overstap, R13 Taakbeheer met grote letters.)
+BEKEND: list = []   # nu leeg: alles wat hier stond is opgelost
 
 
 # Welke regels van BEKEND deze keer echt voorkwamen (hun plek in de lijst). De rest is opgelost: 'OPGELOST?'.
@@ -84,13 +79,7 @@ ZELFDE_MAG = {
 # Nederlandse namen in de voorbeeldstand die andere pakketten nog vertalen (D08 in het verslag). Tot dan: gemeld,
 # geen fout. Zodra ze vertaald zijn, verschijnen ze vanzelf niet meer (en meldt de test 'OPGELOST?': haal ze weg).
 # (De namen van wifi, bluetooth, printers en programma's zijn vertaald en staan nu vast in D08_VOORBEELD, onderaan.)
-NL_BEKEND = {
-    "Bestanden": "D08 tools: bugos_tasks_ui.py:111",
-    "Bureaublad (Plasma)": "D08 tools: bugos_tasks_ui.py:113",
-    "Vensters (KWin)": "D08 tools: bugos_tasks_ui.py:115",
-    "Zoeken in je bestanden": "D08 tools: bugos_tasks_ui.py:117",
-    "Netwerk": "D08 tools: bugos_tasks_ui.py:119",
-}
+NL_BEKEND: dict = {}   # nu leeg: ook de namen van Taakbeheer (D08 tools) zijn vertaald
 
 
 def omgeving(thuis: Path) -> dict:
@@ -827,10 +816,7 @@ klopt(all(k.maximumWidth() == 264 for k in _ui.thema.values()),
 # elkaar (Energie: drie profielen) tellen per regel: de linkse moet op de lijn staan (D06: 9 px ingesprongen).
 from bugos_ui import KeuzeKaart as _KK  # noqa: E402
 
-BEKEND_UITLIJNING = {   # precies deze melding; elke andere scheve kaart is een fout
-    "energie: titel op x=40, kaarten op x=[49]":
-        "D06: bugos_settings_scherm.py:183 (pakket sound-display): rij.setContentsMargins(0, 0, 0, 0)",
-}
+BEKEND_UITLIJNING: dict = {}   # nu leeg: D06 (Energie) is opgelost
 _uitlijning_gezien: set[str] = set()   # welke bekende meldingen er deze keer echt waren
 _scheef = []
 for _klasse in inst.PAGINAS:
