@@ -10,7 +10,7 @@ from datetime import datetime
 import bugos_config as bi
 from bugos_ui import TAAL, K, Knop, Rij, label, leeg_groep, ronde_pixmap, t, vraag_ja, vraag_tekst
 from bugos_settings_onderdelen import (
-    Blad, Keuzes, KiesDialoog, WachtwoordDialoog, dichtstbij, meer_knop, op_achtergrond, schuifje,
+    Blad, Doorloop, Keuzes, KiesDialoog, WachtwoordDialoog, dichtstbij, meer_knop, op_achtergrond, schuifje,
 )
 from PySide6.QtCore import QDate, QDateTime, QLocale, Qt, QTime, QTimer
 from PySide6.QtGui import QIcon, QImage, QPixmap
@@ -643,9 +643,11 @@ class InloggenPagina(Blad):
         self.mensen_rijen: list[Rij] = []
         g = self.kaart()
         rechts = QWidget()
-        rl = QHBoxLayout(rechts)
+        # Doorloop: op een half scherm (640 px) komt '…' onder 'Wachtwoord wijzigen' in plaats van dat de knop
+        # afgeknipt wordt (B-02).
+        rl = Doorloop(8)
+        rechts.setLayout(rl)
         rl.setContentsMargins(0, 0, 0, 0)
-        rl.setSpacing(8)
         ww = Knop(t("Wachtwoord wijzigen…", "Change password…"), "gewoon", "lijn:slot")
         ww.clicked.connect(self.wijzig_wachtwoord)
         rl.addWidget(ww)

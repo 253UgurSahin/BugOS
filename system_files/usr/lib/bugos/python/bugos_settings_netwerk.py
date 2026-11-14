@@ -7,7 +7,7 @@ from pathlib import Path
 import bugos_config as bi
 from bugos_ui import (K, Banner, Groep, Knop, Rij, label, leeg_groep, lijn_icoon, schermmaat, schuifbaar,
                       sectie_met_knop, t, vraag_tekst)
-from bugos_settings_onderdelen import Blad, Keuzes, meer_knop, op_achtergrond, schuifje
+from bugos_settings_onderdelen import Blad, Doorloop, Keuzes, meer_knop, op_achtergrond, schuifje
 from PySide6.QtCore import ClassInfo, QEventLoop, QObject, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (QDialog, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QStackedWidget,
@@ -628,11 +628,11 @@ class WifiPagina(Blad):
         # Een verborgen netwerk van school of werk (met gebruikersnaam): hetzelfde venster als eduroam, met een naamveld.
         self.school = Knop(t("Netwerk van school of werk…", "School or work network…"), "stil", "lijn:leren")
         self.school.clicked.connect(lambda _c=False: self.open_zakelijk("", verborgen=True))
-        onder = QHBoxLayout()
-        onder.setSpacing(8)
+        # Een Doorloop: op een half scherm (640 px) komt de tweede knop onder de eerste, in plaats van dat de pagina
+        # opzij schuift (B-02).
+        onder = Doorloop(8)
         onder.addWidget(self.ander)
         onder.addWidget(self.school)
-        onder.addStretch(1)
         self.lay.addLayout(onder)
 
     def ververs(self, opnieuw: bool = False) -> None:

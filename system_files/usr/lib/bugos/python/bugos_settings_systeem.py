@@ -13,7 +13,7 @@ from pathlib import Path
 
 import bugos_config as bi
 from bugos_ui import Kaart, Knop, Rij, bestaat, draai, label, start, t, vraag_ja
-from bugos_settings_onderdelen import Blad, Sein, op_achtergrond, schuifje
+from bugos_settings_onderdelen import Blad, Doorloop, Sein, op_achtergrond, schuifje
 from PySide6.QtCore import QProcess, Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QVBoxLayout, QWidget
@@ -175,7 +175,10 @@ class UpdatesPagina(Schakelaars, Blad):
                    t("Aan: BugOS houdt zichzelf stil bij. Uit: jij kiest wanneer.",
                      "On: BugOS quietly keeps itself up to date. Off: you choose when."), self.auto))
         knoppen = QWidget()
-        kr = QHBoxLayout(knoppen)
+        # Een Doorloop: op een half scherm (640 px) komt 'Terug naar de vorige versie' onder 'Nu updaten', en springt
+        # de rij minder in, in plaats van dat de pagina opzij schuift (B-02). 52 px: onder de tekst van de regel.
+        kr = Doorloop(8, smal_links=14)
+        knoppen.setLayout(kr)
         kr.setContentsMargins(52, 4, 14, 12)
         self.nu = Knop(t("Nu updaten", "Update now"), "gewoon", "lijn:verversen")
         self.nu.clicked.connect(lambda _c=False: None if bi.VOORBEELD else self.updates("nu"))
@@ -183,7 +186,6 @@ class UpdatesPagina(Schakelaars, Blad):
         self.terug.clicked.connect(lambda _c=False: None if bi.VOORBEELD else self.vraag_terug())
         kr.addWidget(self.nu)
         kr.addWidget(self.terug)
-        kr.addStretch(1)
         g.lay.addWidget(knoppen)
         self.bouw_rest()
 

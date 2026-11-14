@@ -270,9 +270,12 @@ class Voortgang(QProgressBar):
         self.setTextVisible(False)
 
 
-def sectie(tekst: str) -> QLabel:
-    """Een klein kopje boven een kaart, in een gewone zin (geen hoofdletters)."""
-    lab = label(tekst, "sectie", wrap=False)
+def sectie(tekst: str, wrap: bool = False) -> QLabel:
+    """Een klein kopje boven een kaart, in een gewone zin (geen hoofdletters).
+    wrap=True: een lang kopje ('Waar komt het geluid uit? Klik om te kiezen.') breekt af op een smalle pagina, in
+    plaats van de pagina breder te maken dan het venster (Instellingen op een half scherm, B-02). Alleen in een
+    kolom onder elkaar: naast een knop (sectie_met_knop) blijft het één regel."""
+    lab = label(tekst, "sectie", wrap=wrap)
     lab.setContentsMargins(4, 6, 0, 0)
     return lab
 

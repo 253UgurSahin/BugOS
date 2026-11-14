@@ -31,14 +31,14 @@ from bugos_settings_netwerk import BluetoothPagina, WifiPagina  # noqa: E402
 # Doorloop (tabjes die naar een tweede regel gaan) staat in bugos_settings_onderdelen, zodat de pagina's hem ook
 # kunnen gebruiken (Uiterlijk, D05); hier blijft hij onder dezelfde naam te vinden (de test kijkt naar inst.Doorloop).
 from bugos_settings_onderdelen import (  # noqa: E402,F401  (KiesDialoog en WachtwoordDialoog: voor de test)
-    Blad, Doorloop, KiesDialoog, Regelaar, WachtwoordDialoog, op_achtergrond, stijl,
+    Blad, Doorloop, KiesDialoog, Kolommen, Regelaar, WachtwoordDialoog, op_achtergrond, pagina_marge, stijl,
 )
 from bugos_settings_scherm import EnergiePagina, GeluidPagina, SchermPagina, UiterlijkPagina  # noqa: E402
 from bugos_settings_systeem import OverPagina, SpelenPagina, UpdatesPagina  # noqa: E402
 from bugos_settings_zien import MuisPagina, ZienPagina  # noqa: E402
 from PySide6.QtCore import QEvent, Qt, QTimer  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
+    QButtonGroup, QFrame, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 
@@ -51,15 +51,15 @@ class StartPagina(Blad):
     uitleg_en = "Everything in one place, in plain words."
 
     def bouw(self) -> None:
-        # snel: de schuifjes die je het vaakst nodig hebt
-        rooster = QGridLayout()
-        rooster.setSpacing(12)
+        # snel: de schuifjes die je het vaakst nodig hebt. In Kolommen: vier naast elkaar, en op een half scherm
+        # (640 px) twee en twee in plaats van dat de pagina opzij schuift (B-02).
+        self.snel_rij = Kolommen(12)
         self.snel: dict[str, Schuif] = {}
         self.snel_uitleg: dict[str, QLabel] = {}
-        for i, (sleutel, ic, naam) in enumerate((("wifi", "wifi", t("Wifi", "Wi-Fi")),
+        for sleutel, ic, naam in (("wifi", "wifi", t("Wifi", "Wi-Fi")),
                                                  ("bt", "bluetooth", "Bluetooth"),
                                                  ("nacht", "maan", t("Nachtlicht", "Night light")),
-                                                 ("donker", "palet", t("Donker", "Dark")))):
+                                  ("donker", "palet", t("Donker", "Dark"))):
             vak = QFrame()
             vak.setObjectName("snel")
             vl = QVBoxLayout(vak)
@@ -79,14 +79,14 @@ class StartPagina(Blad):
             vl.addWidget(uitleg)
             self.snel[sleutel] = schuif
             self.snel_uitleg[sleutel] = uitleg
-            rooster.addWidget(vak, 0, i)
-        self.lay.addLayout(rooster)
+            self.snel_rij.voeg(vak)
+        self.lay.addWidget(self.snel_rij)
         g = self.kaart()
         self.volume = Regelaar(50)
         self.volume.veranderd.connect(lambda w: op_achtergrond(self, lambda: bi.zet_volume(w), lambda _u: None))
         g.voeg(Rij("geluid", t("Volume", "Volume"), "", self.volume))
         # zoeken
-        self.zoek_kop = sectie(t("Gevonden", "Found"))
+        self.zoek_kop = sectie(t("Gevonden", "Found"), wrap=True)
         self.zoek_kop.hide()
         self.lay.addWidget(self.zoek_kop)
         self.zoek_kaart = Groep()
@@ -225,6 +225,7 @@ class GroepPagina(QWidget):
         # Naast elkaar; passen ze niet (grote letters, 150 %), dan gaat een tabje naar een tweede regel.
         rij = Doorloop(4)
         rij.setContentsMargins(*TABS_MARGE)
+        self.tab_rij = rij
         self.tabs: dict[str, QPushButton] = {}
         knoppen = QButtonGroup(self)
         for b in bladen:
@@ -244,6 +245,13 @@ class GroepPagina(QWidget):
             self.stapel.addWidget(b)
         lay.addWidget(self.stapel, 1)
         self.toon(bladen[0].sleutel, ververs=False)
+
+    def resizeEvent(self, e) -> None:  # noqa: N802
+        """De tabjes springen even ver in als de pagina eronder: smal (half scherm) minder (B-02)."""
+        super().resizeEvent(e)
+        zijkant = pagina_marge(self.width())
+        if self.tab_rij.contentsMargins().left() != zijkant:
+            self.tab_rij.setContentsMargins(zijkant, TABS_MARGE[1], zijkant, TABS_MARGE[3])
 
     @property
     def sleutel(self) -> str:   # wat er nu echt open is (voor Instellingen.huidige en de tests)

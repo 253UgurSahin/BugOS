@@ -6,10 +6,10 @@ from __future__ import annotations
 
 from bugos_ui import (K, Knop, Pagina, Schuif, StreepKnop, Venster, Zoekveld, kde_instelling, label, lijn_icoon, ronde_knop,
                       px, schaal_css, schermmaat, t, zoeksleutel)
-from PySide6.QtCore import QObject, QPoint, QRect, QRunnable, QSize, Qt, QThreadPool, QTimer, Signal
+from PySide6.QtCore import QEvent, QObject, QPoint, QRect, QRunnable, QSize, Qt, QThreadPool, QTimer, Signal
 from PySide6.QtWidgets import (
-    QAbstractItemView, QButtonGroup, QDialog, QFrame, QHBoxLayout, QLayout, QLineEdit, QListWidget, QListWidgetItem,
-    QMenu, QPushButton, QSlider, QVBoxLayout, QWidget,
+    QAbstractItemView, QButtonGroup, QDialog, QFrame, QGridLayout, QHBoxLayout, QLayout, QLineEdit, QListWidget,
+    QListWidgetItem, QMenu, QPushButton, QSlider, QVBoxLayout, QWidget,
 )
 
 
@@ -52,6 +52,7 @@ QPushButton#keus {{ background: transparent; border: none; border-radius: 9px; p
 QPushButton#keus:hover {{ color: {K['tekst']}; }}
 QPushButton#keus:checked {{ background: {K['accent_zacht']}; color: {K['accent_gekozen']}; }}
 QPushButton#keus:focus {{ border: 2px solid {K['accent']}; padding: 6px 12px; }}
+QPushButton#keus:disabled {{ color: {K['tekst3']}; }}
 QFrame#keuzes {{ background: {K['knop']}; border-radius: 12px; }}
 QPushButton#plaatje {{ background: transparent; border: 2px solid transparent; border-radius: 16px; padding: 3px; }}
 QPushButton#plaatje:hover {{ border: 2px solid {K['rand_sterk']}; }}
@@ -65,6 +66,20 @@ QListWidget#keuzelijst::item:selected {{ background: {K['accent_zacht']}; color:
 """)
 
 
+def verborgen(w: QWidget) -> bool:
+    """Is dit onderdeel echt verborgen (hide())? Niet: nog niet getoond omdat het venster nog niet open is.
+    (Qt's isHidden() is ook True voor een onderdeel dat nog nooit getoond is; dan telde een Doorloop of Kolommen bij
+    het bouwen niets mee, en bleef de eerste maat fout: de keuzes gingen dan niet onder de tekst, B-02.) Dezelfde
+    regel als Qt zelf gebruikt om te kiezen of een kind mee verschijnt met zijn ouder."""
+    return w.isHidden() and w.testAttribute(Qt.WidgetAttribute.WA_WState_ExplicitShowHide)
+
+
+def leeg(item) -> bool:
+    """Telt dit stukje van een indeling niet mee (een verborgen onderdeel)?"""
+    w = item.widget()
+    return verborgen(w) if w is not None else item.isEmpty()
+
+
 class Doorloop(QLayout):
     """Onderdelen naast elkaar, links uitgelijnd; wat niet meer past, gaat naar de volgende regel (zoals tekst).
 
@@ -74,11 +89,15 @@ class Doorloop(QLayout):
     plaatjes van de achtergrond op Uiterlijk (D05). Hij stond eerst in bugos-settings zelf; hier kunnen de pagina's
     hem ook gebruiken (bugos-settings haalt hem hier vandaan, dus 'Doorloop' bestaat daar nog steeds)."""
 
-    def __init__(self, ruimte: int = 4):
+    def __init__(self, ruimte: int = 4, smal_links: int | None = None):
         super().__init__()
         self._items: list = []
         # Dezelfde ruimte tussen twee onderdelen naast elkaar én tussen twee regels.
         self.setSpacing(ruimte)
+        # smal_links: past het breedste onderdeel niet meer met de gewone linkermarge (bijv. de knoppen onder Updates,
+        # die 52 px inspringen zodat ze onder de tekst van de regel staan), dan deze kleinere marge. Anders werd de
+        # pagina op een half scherm (640 px) breder dan het venster en schoof hij opzij (B-02).
+        self.smal_links = smal_links
 
     # --- de gewone QLayout-functies: een eenvoudige lijst met onderdelen ---
 
@@ -114,7 +133,7 @@ class Doorloop(QLayout):
     def sizeHint(self) -> QSize:  # noqa: N802
         """Alles op één regel."""
         m = self.contentsMargins()
-        zichtbaar = [i.sizeHint() for i in self._items if not i.isEmpty()]
+        zichtbaar = [i.sizeHint() for i in self._items if not leeg(i)]
         breed = sum(z.width() for z in zichtbaar) + self.spacing() * max(0, len(zichtbaar) - 1)
         hoog = max((z.height() for z in zichtbaar), default=0)
         return QSize(breed + m.left() + m.right(), hoog + m.top() + m.bottom())
@@ -125,15 +144,21 @@ class Doorloop(QLayout):
         z = QSize()
         for i in self._items:
             z = z.expandedTo(i.minimumSize())
-        return QSize(z.width() + m.left() + m.right(), z.height() + m.top() + m.bottom())
+        links = m.left() if self.smal_links is None else min(m.left(), self.smal_links)
+        return QSize(z.width() + links + m.right(), z.height() + m.top() + m.bottom())
 
     def _leg(self, r: QRect, alleen_meten: bool = False) -> int:
         """Leg de onderdelen neer in r (of meet alleen) en geef de hoogte die daarvoor nodig is."""
         m = self.contentsMargins()
         links, rechts = r.x() + m.left(), r.right() - m.right()
+        if self.smal_links is not None:
+            # Het breedste onderdeel moet heel blijven: past het niet met de gewone marge, dan de kleine.
+            breedst = max((i.sizeHint().width() for i in self._items if not leeg(i)), default=0)
+            if rechts - links + 1 < breedst:
+                links = r.x() + min(m.left(), self.smal_links)
         x, y, regel = links, r.y() + m.top(), 0
         for item in self._items:
-            if item.isEmpty():     # verborgen onderdelen tellen niet mee
+            if leeg(item):     # verborgen onderdelen tellen niet mee
                 continue
             z = item.sizeHint()
             if x > links and x + z.width() - 1 > rechts:   # past niet meer: volgende regel
@@ -146,6 +171,92 @@ class Doorloop(QLayout):
         return y + regel + m.bottom() - r.y()
 
 
+class Kolommen(QWidget):
+    """Kaarten naast elkaar en even breed (Energie: zuinig, gebalanceerd, snel; Start: de vier snelle schuifjes).
+
+    Past dat niet meer (Instellingen op de helft van het scherm, 150 %, grote letters), dan komen er minder op één
+    regel: 4 -> 2 -> 1, of 3 -> 2 -> 1. Waarom: een QHBoxLayout wordt nooit smaller dan alles naast elkaar. Op een
+    half scherm (640 px) werd de pagina daardoor breder dan het venster: een balk om opzij te schuiven en de kaart
+    'Snel' half weg (B-02). Verborgen kaarten (geen wifi, geen bluetooth) tellen niet mee en laten geen gat achter."""
+
+    def __init__(self, ruimte: int = 12):
+        super().__init__()
+        self._rooster = QGridLayout(self)
+        self._rooster.setContentsMargins(0, 0, 0, 0)
+        self._rooster.setSpacing(ruimte)
+        # Het rooster mag de breedte van alles-naast-elkaar niet als minimum vastleggen: dat bepalen we zelf
+        # (minimumSizeHint hieronder), anders wordt de kaart nooit smaller.
+        self._rooster.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)
+        self._items: list[QWidget] = []
+        self.kolommen = 0      # hoeveel kaarten er nu naast elkaar staan (de test kijkt hiernaar)
+
+    def voeg(self, w: QWidget) -> QWidget:
+        self._items.append(w)
+        # Wordt een kaart verborgen of weer getoond, dan opnieuw neerleggen (anders blijft er een gat).
+        w.installEventFilter(self)
+        self._leg(self._aantal(self.width()) if self.width() > 0 else len(self.zichtbaar()) or 1)
+        return w
+
+    def zichtbaar(self) -> list[QWidget]:
+        return [w for w in self._items if not verborgen(w)]
+
+    def _smalst(self) -> int:
+        """De breedte die de breedste kaart minstens nodig heeft."""
+        return max((max(w.minimumSizeHint().width(), w.minimumWidth()) for w in self.zichtbaar()), default=0)
+
+    def _aantal(self, breed: int) -> int:
+        """Hoeveel kaarten passen er naast elkaar in deze breedte? Bij vier nooit drie (dan staat er één alleen)."""
+        n = len(self.zichtbaar())
+        if n <= 1:
+            return 1
+        nodig, ruimte = self._smalst(), self._rooster.spacing()
+        for k in range(n, 0, -1):
+            if k > 1 and n > 3 and n % k:
+                continue      # 4 kaarten: 4 of 2 naast elkaar, niet 3 + 1
+            if k == 1 or k * nodig + (k - 1) * ruimte <= breed:
+                return k
+        return 1
+
+    def _leg(self, k: int) -> None:
+        """Leg de zichtbare kaarten neer in k kolommen, even breed."""
+        while self._rooster.count():
+            self._rooster.takeAt(0)        # (de kaarten zelf blijven bestaan; ze komen er zo weer in)
+        for i in range(max(self._rooster.columnCount(), len(self._items))):
+            self._rooster.setColumnStretch(i, 0)
+        for i, w in enumerate(self.zichtbaar()):
+            self._rooster.addWidget(w, i // k, i % k)
+        for i in range(k):
+            self._rooster.setColumnStretch(i, 1)
+        self.kolommen = k
+        self._rooster.invalidate()
+        self.updateGeometry()
+
+    def herschik(self) -> None:
+        """Opnieuw tellen wat er past (na het verbergen of tonen van een kaart, of een andere breedte)."""
+        self._leg(self._aantal(self.width()))
+
+    def eventFilter(self, obj, e) -> bool:  # noqa: N802
+        if e.type() in (QEvent.Type.ShowToParent, QEvent.Type.HideToParent) and obj in self._items:
+            # Pas na deze gebeurtenis is isHidden() bijgewerkt: dan pas opnieuw neerleggen.
+            QTimer.singleShot(0, self.herschik)
+        return False
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        """Zo smal als de breedste kaart (dan staan ze onder elkaar); zo hoog als ze nu liggen."""
+        return QSize(self._smalst(), self._rooster.minimumSize().height())
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        z = self.zichtbaar()
+        breed = sum(w.sizeHint().width() for w in z) + self._rooster.spacing() * max(0, len(z) - 1)
+        return QSize(breed, self._rooster.sizeHint().height())
+
+    def resizeEvent(self, e) -> None:  # noqa: N802
+        super().resizeEvent(e)
+        k = self._aantal(self.width())
+        if k != self.kolommen:
+            self._leg(k)
+
+
 class Keuzes(QFrame):
     """Een paar knoppen naast elkaar waarvan er één gekozen is (zoals 100% · 125% · 150%)."""
 
@@ -154,9 +265,12 @@ class Keuzes(QFrame):
     def __init__(self, opties: list[tuple[object, str]]):
         super().__init__()
         self.setObjectName("keuzes")
-        lay = QHBoxLayout(self)
+        # Een Doorloop, geen QHBoxLayout: past een rij keuzes niet (Instellingen op een half scherm, 640 px), dan gaan
+        # de laatste naar een tweede regel. Met een QHBoxLayout werd de pagina breder dan het venster en vielen
+        # '200%', 'Omgekeerd' en 'Nooit' rechts weg (B-02).
+        lay = Doorloop(2)
+        self.setLayout(lay)
         lay.setContentsMargins(3, 3, 3, 3)
-        lay.setSpacing(2)
         self.groep = QButtonGroup(self)
         self.knoppen: dict[object, QPushButton] = {}
         for waarde, tekst in opties:
@@ -186,7 +300,9 @@ class Regelaar(QWidget):
         self.balk = QSlider(Qt.Orientation.Horizontal)
         self.balk.setRange(0, 100)
         self.balk.setValue(waarde)
-        self.balk.setMinimumWidth(220)
+        # Smaller mag tot 120 px (was 220): op een half scherm (640 px) hield de schuifbalk de pagina anders breder
+        # dan het venster (B-02). Met ruimte genoeg wordt hij gewoon breder (rekfactor 1).
+        self.balk.setMinimumWidth(px(120))
         self.balk.setCursor(Qt.CursorShape.PointingHandCursor)
         lay.addWidget(self.balk, 1)
         self.getal = label(f"{waarde}%", "kop3", wrap=False)
@@ -230,6 +346,14 @@ def meer_knop(items_maker) -> QPushButton:
 
 TOON_KDE_KNOP = False
 
+PAGINA_MARGE, PAGINA_MARGE_SMAL = 40, 20   # links en rechts van een pagina; smal: onder SMAL_VANAF px breed
+SMAL_VANAF = 480
+
+
+def pagina_marge(breed: int) -> int:
+    """De marge links en rechts van een pagina (en van de tabjes erboven) bij deze breedte (B-02)."""
+    return PAGINA_MARGE_SMAL if breed < px(SMAL_VANAF) else PAGINA_MARGE
+
 
 class Blad(Pagina):
     """Een pagina van Instellingen: titel, uitleg, kaarten, en onderaan de weg naar KDE voor gevorderden."""
@@ -260,6 +384,16 @@ class Blad(Pagina):
 
     def bouw(self) -> None:
         pass
+
+    def resizeEvent(self, e) -> None:  # noqa: N802
+        """Op een smalle pagina (Instellingen op de helft van het scherm) een kleinere marge links en rechts, zoals
+        Windows 11: dan past een rij keuzes of knoppen nog naast elkaar in plaats van dat de pagina opzij schuift
+        (B-02). Boven en onder blijven zoals ze zijn (onder de tabjes is de bovenmarge kleiner)."""
+        super().resizeEvent(e)
+        zijkant = pagina_marge(self.viewport().width())
+        m = self.lay.contentsMargins()
+        if m.left() != zijkant:
+            self.lay.setContentsMargins(zijkant, m.top(), zijkant, m.bottom())
 
 
 # ================================================================ kiezen ===

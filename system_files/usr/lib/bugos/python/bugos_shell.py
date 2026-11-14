@@ -416,7 +416,7 @@ class Pagina(QScrollArea):
     def kaart(self, kopje: str = "") -> Groep:
         """Een kaart met regels, eventueel met een kopje erboven."""
         if kopje:
-            self.lay.addWidget(sectie(kopje))
+            self.lay.addWidget(sectie(kopje, wrap=True))   # breekt af op een smalle pagina (B-02)
         g = Groep()
         g.lay.setContentsMargins(4, 4, 4, 4)
         self.lay.addWidget(g)

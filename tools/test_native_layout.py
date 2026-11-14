@@ -107,9 +107,15 @@ def omgeving(thuis: Path) -> dict:
 
 # ===================================================================== schermtest (in een eigen proces) ===
 
-def pas(schaal: str, groot: bool = False, teksten: bool = False) -> int:
+HALF_SCHERM = 640   # Instellingen naast een ander venster (Windows-toets + pijl links): de helft van 1280 px (B-02)
+
+
+def pas(schaal: str, groot: bool = False, teksten: bool = False, smal: bool = False) -> int:
     """Bouw elke app op een scherm van 1280 x 800 bij deze schaal en druk af wat niet past ('PAS app staat wat').
-    groot: met 'Grote letters' (1,5x). teksten: druk in plaats daarvan elke zichtbare tekst af ('TEKST app staat x')."""
+    groot: met 'Grote letters' (1,5x). teksten: druk in plaats daarvan elke zichtbare tekst af ('TEKST app staat x').
+    smal: alleen Instellingen, op de helft van het scherm (640 px breed), zoals na Windows-toets + pijl links (B-02).
+    De VM-test zag toen op Energie, Scherm, Uiterlijk en Geluid een balk om opzij te schuiven en afgeknipte knoppen;
+    de gewone ronde zag dat niet, want daar is het venster 1120 px breed."""
     from PySide6.QtCore import QEventLoop, QTimer
     from PySide6.QtWidgets import (
         QAbstractButton, QAbstractItemView, QAbstractScrollArea, QApplication, QLabel, QPushButton, QWidget,
@@ -170,7 +176,17 @@ def pas(schaal: str, groot: bool = False, teksten: bool = False) -> int:
             meldingen.append(f"PAS {app_naam} {staat} {f}")
 
     def staten(app_naam: str, venster: QWidget, g: dict) -> None:
-        if app_naam == "settings":
+        if app_naam == "settings" and smal:
+            # Zoals KWin het venster tegen de linkerkant zet: de helft van het scherm breed, zo hoog als er vrij is.
+            # KWin houdt zich daarbij niet aan de kleinste maat van het venster, dus die zetten we hier ook opzij.
+            venster.setMinimumSize(0, 0)
+            scherm = venster.screen() or QApplication.primaryScreen()
+            venster.resize(HALF_SCHERM, scherm.geometry().height() - TAAKBALK_ECHT - TITELBALK_ECHT)
+            wacht(200)
+            for klasse in g["PAGINAS"]:
+                venster.ga_naar(klasse.sleutel)
+                kijk(app_naam, f"{klasse.sleutel}@{HALF_SCHERM}", venster)
+        elif app_naam == "settings":
             for klasse in g["PAGINAS"]:
                 venster.ga_naar(klasse.sleutel)
                 kijk(app_naam, klasse.sleutel, venster)
@@ -204,6 +220,8 @@ def pas(schaal: str, groot: bool = False, teksten: bool = False) -> int:
             "backup": "bugos-backup", "switch": "bugos-switch", "tasks": "bugos-task-manager", "files": "bugos-files"}
     if teksten:
         APPS = {k: APPS[k] for k in ("settings", "tasks")}
+    if smal:
+        APPS = {"settings": APPS["settings"]}
     echt_uitvoeren = bugos_ui.uitvoeren
     for app_naam, programma in APPS.items():
         g: dict = {}
@@ -262,17 +280,21 @@ def kind(schaal: str, *extra: str, taal: str = "en_US.UTF-8") -> list[str]:
 
 
 def schermtest() -> list[tuple[str, list[str], list[str]]]:
-    """Elke schaal, en 100 % met grote letters: (naam, problemen, klaar-gemelde apps)."""
+    """Elke schaal, en 100 % met grote letters: (naam, problemen, klaar-gemelde apps).
+    Daarna Instellingen op een half scherm (640 px, B-02), in het Nederlands (zoals de VM-test, en de Nederlandse
+    woorden zijn vaak langer) en in het Engels."""
     uit = []
-    for schaal, extra, naam in [(s, (), s) for s in SCALES] + [("1", ("--groot",), "1 grote letters")]:
-        regels = kind(schaal, *extra)
+    rondes = [(s, (), s, "en_US.UTF-8") for s in SCALES] + [("1", ("--groot",), "1 grote letters", "en_US.UTF-8")]
+    rondes += [("1", ("--smal",), "1 half scherm nl", "nl_NL.UTF-8"), ("1", ("--smal",), "1 half scherm en", "en_US.UTF-8")]
+    for schaal, extra, naam, taal in rondes:
+        regels = kind(schaal, *extra, taal=taal)
         uit.append((naam, [r for r in regels if r.startswith("PAS ")],
                     [r.split()[1] for r in regels if r.startswith("KLAAR ")]))
     return uit
 
 
 if len(sys.argv) > 2 and sys.argv[1] == "--pas":
-    sys.exit(pas(sys.argv[2], groot="--groot" in sys.argv, teksten="--teksten" in sys.argv))
+    sys.exit(pas(sys.argv[2], groot="--groot" in sys.argv, teksten="--teksten" in sys.argv, smal="--smal" in sys.argv))
 
 
 # ============================================================================================ in dit proces ===
@@ -741,6 +763,32 @@ klopt(isinstance(_dl, inst.Doorloop) and _smal > _breed
       f"({_breed} -> {_smal} px hoog)")
 _dl.setGeometry(QRect(0, 0, 2000, _breed))
 klopt(len({k.y() for k in _ab}) == 1, "R07: met ruimte staan alle tabjes op één regel")
+# B-02: Kolommen (Start: vier snelle schuifjes, Energie: drie kaarten). Breed: alles naast elkaar; smal: 4 -> 2 -> 1,
+# nooit 3 + 1; een verborgen kaart laat geen gat achter.
+_kol = inst.Kolommen(12)
+_kaartjes = []
+for _i in range(4):
+    _kj = QWidget()
+    _kj.setMinimumWidth(120)
+    _kaartjes.append(_kol.voeg(_kj))
+_kol.show()
+for _breed, _verwacht in ((600, 4), (500, 2), (260, 2), (200, 1)):
+    _kol.resize(_breed, 300)
+    verwerk()
+    klopt(_kol.kolommen == _verwacht, f"B-02: Kolommen met vier kaarten op {_breed} px: {_verwacht} naast elkaar "
+                                      f"({_kol.kolommen})")
+_kol.resize(600, 300)
+_kaartjes[1].hide()
+verwerk()
+klopt(_kol.kolommen == 3 and _kaartjes[2].x() < _kaartjes[3].x() and _kaartjes[0].x() < _kaartjes[2].x(),
+      "B-02: een verborgen kaart (geen wifi) laat geen gat achter: de andere drie schuiven op")
+klopt(_kol.minimumSizeHint().width() == 120, "B-02: Kolommen wordt zo smal als de breedste kaart (dan onder elkaar)")
+_kol.hide()
+# B-02: een rij keuzes loopt door naar een tweede regel in plaats van de pagina breder te maken.
+_kz = Keuzes([(1, "5 min"), (2, "10 min"), (3, "30 min"), (4, "1 hour"), (0, "Never")])
+klopt(isinstance(_kz.layout(), inst.Doorloop) and _kz.minimumSizeHint().width() < _kz.sizeHint().width() // 2
+      and _kz.heightForWidth(_kz.minimumSizeHint().width()) > _kz.heightForWidth(_kz.sizeHint().width()),
+      "B-02: Keuzes zijn smaller te maken dan alles naast elkaar (dan meer regels)")
 w.ga_naar("wifi")
 verwerk()
 _enkel = w.paginas["wifi"].titel.mapTo(w, QPoint(0, 0)).y()
@@ -860,7 +908,9 @@ verwerk()
 
 # ------------------------------------------------------------------------- past elk venster? (T-FIT) ---
 for _naam, _problemen, _klaar in schermtest():
-    klopt(len(_klaar) == 8, f"T-FIT {_naam}: alle acht apps zijn gebouwd en bekeken ({', '.join(_klaar)})")
+    # De ronde 'half scherm' bouwt alleen Instellingen (B-02); de andere rondes alle acht apps.
+    klopt(len(_klaar) == (1 if "half" in _naam else 8),
+          f"T-FIT {_naam}: alle apps van deze ronde zijn gebouwd en bekeken ({', '.join(_klaar)})")
     _echt = []
     for _p in _problemen:
         _reden = bekend(_p, _naam)

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import bugos_config as bi
 from bugos_ui import Groep, Knop, Rij, sectie, t
-from bugos_settings_onderdelen import Blad, Regelaar, op_achtergrond, schuifje
-from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
+from bugos_settings_onderdelen import Blad, Doorloop, Regelaar, op_achtergrond, schuifje
+from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 
 # ======================================================= makkelijker zien ===
@@ -37,9 +37,10 @@ class ZienPagina(Blad):
                    self.schud))
         g2 = self.kaart(t("Vergrootglas", "Magnifier"))
         knoppen = QWidget()
-        kl = QHBoxLayout(knoppen)
+        # Doorloop: op een half scherm (640 px) gaat 'Gewoon' naar een tweede regel (B-02).
+        kl = Doorloop(8)
+        knoppen.setLayout(kl)
         kl.setContentsMargins(0, 0, 0, 0)
-        kl.setSpacing(8)
         for tekst, stap in ((t("Dichterbij", "Closer"), 1), (t("Verder weg", "Further"), -1), (t("Gewoon", "Normal"), 0)):
             k = Knop(tekst, "gewoon")
             k.clicked.connect(lambda _c=False, s=stap: self.zoom(s))
