@@ -33,6 +33,10 @@ ffmpegthumbnailer
 # Firefox als gewoon programma: de fundering heeft geen browser in het systeem, en
 # de taakbalk en het startmenu van BugOS verwijzen naar Firefox.
 firefox
+# 'Teksteditor' in het startmenu is KWrite: de eenvoudige teksteditor van KDE (zoals Kladblok), uit dezelfde familie
+# als Kate. Kate zelf (met LSP, projecten, git en sessies) is voor programmeurs en heet in het startmenu gewoon Kate
+# (A-14). Brengt de basis KWrite al mee, dan doet deze regel niets.
+kwrite
 # (geen KDE Discover: de BugOS Winkel doet alle apps; build.sh haalt Discover weg, want de basis brengt hem mee)
 
 # --- Alle talen ---

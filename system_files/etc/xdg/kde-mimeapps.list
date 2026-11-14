@@ -24,6 +24,8 @@ image/bmp=org.kde.gwenview.desktop
 image/tiff=org.kde.gwenview.desktop
 image/avif=org.kde.gwenview.desktop
 application/pdf=org.kde.okular.desktop
+# Een .txt opent in de eenvoudige Teksteditor (KWrite), niet in Kate voor programmeurs (A-14).
+text/plain=org.kde.kwrite.desktop
 
 [Added Associations]
 inode/directory=bugos-files.desktop;org.kde.dolphin.desktop;

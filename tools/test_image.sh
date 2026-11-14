@@ -138,6 +138,9 @@ for a in json.load(sys.stdin)["apps"]:
 klopt '[ -n "$apps" ]' "startmenu: bugos-start-data geeft de apps"
 raar="$(echo "$apps" | grep -E '^K[A-Z]|^K[a-z]+[A-Z]|^Krfb|Kvantum|DOSBox|Firewall|KDE|Dolphin|Discover|Info Center|System Monitor|Menu Editor' | paste -sd, - || true)"
 klopt '[ -z "$raar" ]' "startmenu: geen KDE-namen of hulpjes voor gevorderden tussen de apps ${raar:+($raar)}"
+# A-14: 'Teksteditor' is de eenvoudige KWrite (in het beeld, niet verborgen), Kate heet gewoon Kate.
+klopt '[ -f /usr/share/applications/org.kde.kwrite.desktop ] && ! grep -qx "NoDisplay=true" /usr/share/applications/org.kde.kwrite.desktop && grep -qx "Name\[nl\]=Teksteditor" /usr/share/applications/org.kde.kwrite.desktop' \
+    "startmenu: Teksteditor is KWrite (de eenvoudige), niet Kate voor programmeurs"
 
 # 5c. Geen KDE Discover en geen KDE Partition Manager (build.sh, stap 2): de BugOS Winkel doet alle apps van Flathub
 #     zelf, ook een .flatpakref uit Firefox (de knop 'Install' op flathub.org) en een flatpak+https://- of

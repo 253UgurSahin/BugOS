@@ -323,6 +323,27 @@ klopt(sd.niet_storen_tot_in_toekomst(_kde(datetime.now() + timedelta(hours=1)))
       and not sd.niet_storen_tot_in_toekomst(_kde(_u - timedelta(hours=2)) + ",UTC"),
       "U072: snelmenu leest 'niet storen tot' met komma-seconden en tijdzone goed")
 
+# A-14: 'Teksteditor' in het startmenu is de eenvoudige KWrite; Kate (voor programmeurs) houdt zijn eigen naam.
+# Is KWrite er niet, dan blijft Kate de Teksteditor (anders is er geen). sd.TAAL bepaalt de taal van t().
+_a14 = TMP / "a14" / "applications"
+_a14.mkdir(parents=True)
+(_a14 / "org.kde.kate.desktop").write_text("[Desktop Entry]\nType=Application\nName=Kate\nExec=kate %U\n")
+_kate_alleen = sd.lees_desktop(_a14 / "org.kde.kate.desktop") or {}
+klopt(_kate_alleen.get("naam") in ("Teksteditor", "Text editor"),
+      f"A-14: zonder KWrite blijft Kate de Teksteditor ({_kate_alleen.get('naam')!r})")
+(_a14 / "org.kde.kwrite.desktop").write_text("[Desktop Entry]\nType=Application\nName=KWrite\nExec=kwrite %U\n")
+_kwrite = sd.lees_desktop(_a14 / "org.kde.kwrite.desktop") or {}
+_kate = sd.lees_desktop(_a14 / "org.kde.kate.desktop") or {}
+klopt(_kwrite.get("naam") in ("Teksteditor", "Text editor") and _kate.get("naam", "").startswith("Kate (")
+      and "kwrite" in _kwrite.get("zoek", "") and "kate" in _kate.get("zoek", ""),
+      f"A-14: met KWrite is die de Teksteditor en heet Kate gewoon Kate ({_kwrite.get('naam')!r}, {_kate.get('naam')!r})")
+_mime = (ROOT / "system_files/etc/xdg/kde-mimeapps.list").read_text(encoding="utf-8")
+_pakk = (ROOT / "build_files/packages.txt").read_text(encoding="utf-8").split("\n")
+_stijl = (ROOT / "build_files/style.sh").read_text(encoding="utf-8")
+klopt("text/plain=org.kde.kwrite.desktop" in _mime and "kwrite" in _pakk
+      and 'hernoem org.kde.kwrite.desktop "Teksteditor"' in _stijl and "org.kde.kwrite.desktop org.kde.khelpcenter" not in _stijl,
+      "A-14: KWrite zit in het beeld, opent .txt-bestanden, heet Teksteditor en is niet meer verborgen")
+
 shutil.rmtree(TMP, ignore_errors=True)
 print()
 print("Alles goed." if not fouten else f"{fouten} fout(en).")

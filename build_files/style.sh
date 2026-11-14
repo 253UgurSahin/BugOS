@@ -346,7 +346,7 @@ for app in org.kde.discover.desktop org.kde.dolphin.desktop systemsettings.deskt
     org.kde.kwalletmanager.desktop org.kde.kwalletmanager5.desktop org.kde.kmenuedit.desktop \
     org.kde.kdeconnect.app.desktop org.kde.kdeconnect.sms.desktop org.kde.kdeconnect_open.desktop \
     org.kde.kdeconnect-settings.desktop org.kde.kdeconnect.nonplasma.desktop org.kde.plasma.emojier.desktop \
-    winetricks.desktop org.kde.kwrite.desktop org.kde.khelpcenter.desktop org.kde.plasma-welcome.desktop \
+    winetricks.desktop org.kde.khelpcenter.desktop org.kde.plasma-welcome.desktop \
     org.freedesktop.MalcontentControl.desktop; do
     verberg "$app"
 done
@@ -358,7 +358,15 @@ for app in org.dosbox-staging.dosbox-staging.desktop firewall-config.desktop org
     verberg "$app"
 done
 hernoem org.kde.spectacle.desktop "Schermafbeelding" "Screenshot"
-hernoem org.kde.kate.desktop "Teksteditor" "Text editor"
+# 'Teksteditor' is de eenvoudige KWrite (zoals Kladblok), niet Kate: Kate is een editor voor programmeurs, met
+# LSP, projecten, git en sessies, en dat schrikt af (A-14). Kate blijft er, onder zijn eigen naam. Is KWrite er
+# (onverwacht) niet, dan blijft Kate de Teksteditor, anders is er helemaal geen.
+if [ -f /usr/share/applications/org.kde.kwrite.desktop ]; then
+    hernoem org.kde.kwrite.desktop "Teksteditor" "Text editor"
+    hernoem org.kde.kate.desktop "Kate (voor programmeurs)" "Kate (for programmers)"
+else
+    hernoem org.kde.kate.desktop "Teksteditor" "Text editor"
+fi
 hernoem org.kde.kcharselect.desktop "Speciale tekens" "Special characters"
 
 # 4d. Eigen pictogramnamen voor KDE-programma's waarvan de standaardnaam ook in

@@ -139,8 +139,10 @@ _VB_APPS = {"internet": ("firefox.desktop", [("firefox.desktop", "Firefox"), ("o
                         [("org.libreoffice.LibreOffice.calc.desktop",
                           t("LibreOffice Calc (rekenbladen)", "LibreOffice Calc (spreadsheets)"))]),
             "zip": ("org.kde.ark.desktop", [("org.kde.ark.desktop", "Ark")]),
-            "tekst": ("org.kde.kate.desktop", [("org.kde.kate.desktop", t("Kate (tekst)", "Kate (text)")),
-                                               ("org.kde.kwrite.desktop", "KWrite")])}
+            # (voorbeeld) Tekstbestanden openen standaard in de eenvoudige Teksteditor, KWrite (A-14).
+            "tekst": ("org.kde.kwrite.desktop", [("org.kde.kwrite.desktop", t("Teksteditor", "Text editor")),
+                                                 ("org.kde.kate.desktop", t("Kate (voor programmeurs)",
+                                                                            "Kate (for programmers)"))])}
 
 
 def app_mappen() -> list[Path]:
