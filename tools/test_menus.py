@@ -310,8 +310,11 @@ klopt(_beg.property("contentY") == 0, "A-05: bij het openen staat de beginpagina
 _s2.findChild(QObject, "stapel").setProperty("currentIndex", 1)
 wacht(150)
 _al = _s2.findChild(QQuickItem, "alleLijst")
-# Een regel van de lijst herkennen we aan zijn type (AppRegel, een inline component van StartMenu.qml).
-_regels = [c for c in _al.findChildren(QQuickItem) if "AppRegel" in c.metaObject().className()]
+# Een regel van de lijst (AppRegel) herkennen we aan zijn eigen eigenschap 'gemarkeerd' (de typenaam is in Qt een
+# gegenereerde naam zoals AbstractButton_QMLTYPE_12, daar valt niet op te zoeken).
+# Via childItems van de contentItem: de regels zijn daar visueel kind van, maar niet als QObject (findChildren).
+_regels = [c for c in _al.property("contentItem").childItems()
+           if isinstance(c.property("gemarkeerd"), bool) and c.height() > 0]
 _rh = _regels[0].height() if _regels else 0
 klopt(_al.property("count") > 10 and _rh > 0 and _al.height() / _rh >= 6,
       f"A-06: 'Alle apps' toont minstens 6 regels tegelijk ({_al.height():.0f} / {_rh:.0f}, {len(_regels)} regels gemaakt)")
