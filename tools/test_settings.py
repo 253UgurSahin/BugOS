@@ -311,6 +311,28 @@ _ca._c.kde_lees, _ca._c.kde_schrijf, _ca._c.VOORBEELD = _lees, _schrijf, _vb
 klopt(all(_uit.values()) and _nl == "nl_NL.UTF-8",
       f"U229/U232/U242: Engels in Europa geeft dag/maand (en_IE); buiten de eurolanden blijven papier en geld van je land; Nederlands blijft nl_NL ({_uit}, {_nl})")
 
+# B-05: het tandwiel op de proefmelding opent niet de technische meldingenpagina van KDE: de melding heeft een eigen
+# 'settings'-actie (dan stuurt Plasma die terug), en dan opent Instellingen zijn eigen pagina Meldingen.
+_opd05 = bi.proefmelding_opdracht("Hallo", "Tekst", "Meldingen instellen")
+klopt("--action=settings=Meldingen instellen" in _opd05 and _opd05[0] == "notify-send",
+      f"B-05: de proefmelding heeft een eigen tandwiel-actie 'settings' ({_opd05})")
+_gedraaid05: list = []
+_oud05 = (bi.VOORBEELD, bi.draai)
+bi.VOORBEELD = False
+bi.draai = lambda *cmd, **kw: (_gedraaid05.append(cmd), (0, "settings\n"))[1]
+_uit05 = bi.proefmelding("Hallo", "Tekst", "Meldingen instellen")
+bi.draai = lambda *cmd, **kw: (0, "")
+_uit05b = bi.proefmelding("Hallo", "Tekst", "Meldingen instellen")
+bi.VOORBEELD, bi.draai = _oud05
+klopt(_uit05 == "settings" and _uit05b == "" and any("--action=settings=Meldingen instellen" in c for c in _gedraaid05),
+      f"B-05: klik op het tandwiel geeft 'settings', weggeveegd geeft niets ({_uit05!r}, {_uit05b!r})")
+venster.ga_naar("start")
+venster.paginas["meldingen"].na_proef("settings")
+klopt(venster.huidige() == "meldingen", f"B-05: na het tandwiel staat Instellingen op Meldingen ({venster.huidige()})")
+venster.ga_naar("start")
+venster.paginas["meldingen"].na_proef("")
+klopt(venster.huidige() == "start", "B-05: een melding die je wegveegt, verandert niets in Instellingen")
+
 print()
 print("Alles goed." if not fouten else f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)

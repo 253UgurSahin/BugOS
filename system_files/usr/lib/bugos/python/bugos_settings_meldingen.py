@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 import bugos_config as bi
 from bugos_ui import (TAAL, Banner, Chip, Groep, Knop, Rij, label, leeg_groep, px, schermmaat, sectie, sectie_met_knop,
                       start, t, vraag_ja, vraag_tekst)
-from bugos_settings_onderdelen import Blad, KiesDialoog, Keuzes, meer_knop, menu_bij, op_achtergrond, schuifje
+from bugos_settings_onderdelen import Blad, KiesDialoog, Keuzes, Sein, meer_knop, menu_bij, op_achtergrond, schuifje
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QDialog, QFileDialog, QFrame, QHBoxLayout, QLineEdit, QScrollArea, QVBoxLayout, QWidget
 
@@ -36,12 +37,10 @@ class MeldingenPagina(Blad):
         g.voeg(Rij("geluid", t("Geluidje bij een melding", "Sound with a notification"), "", self.geluidje))
         g2 = self.kaart()
         proef = Knop(t("Proefmelding", "Test notification"), "gewoon", "lijn:bel")
-        proef.clicked.connect(lambda _c=False: bi.proefmelding(
-            t("Hallo van BugOS", "Hello from BugOS"),
-            t("Zo ziet een melding eruit. Klik erop, of veeg hem weg.", "This is what a notification looks like. Click it, or swipe it away.")))
+        proef.clicked.connect(lambda _c=False: self.proef())
         g2.voeg(Rij("bel", t("Zo ziet een melding eruit", "See what a notification looks like"), "", proef))
         # Per app aan of uit (zoals Windows op dezelfde pagina); alleen apps die al eens een melding gaven.
-        self.apps_kop = sectie(t("Meldingen van apps", "Notifications from apps"))
+        self.apps_kop = sectie(t("Meldingen van apps", "Notifications from apps"), wrap=True)
         self.lay.addWidget(self.apps_kop)
         self.apps_uitleg = label(t("Zet een app uit als je zijn berichtjes niet meer wilt zien.",
                                    "Turn an app off if you no longer want to see its messages."), "klein")
@@ -50,6 +49,40 @@ class MeldingenPagina(Blad):
         self.app_schuifjes: dict[str, object] = {}
         for w in (self.apps_kop, self.apps_uitleg, self.apps):
             w.hide()
+
+    def proef(self) -> None:
+        """Een proefmelding. Klik je op het tandwiel erop, dan kom je hier terug (op deze pagina van BugOS), niet in
+        de technische meldingenpagina van KDE (B-05). notify-send wacht tot de melding weg is: daarom in een eigen
+        draad (niet de gedeelde rij van op_achtergrond, die is voor korte klusjes)."""
+        sein = Sein(self)
+        sein.klaar.connect(self.na_proef)
+        titel = t("Hallo van BugOS", "Hello from BugOS")
+        tekst = t("Zo ziet een melding eruit. Klik erop, of veeg hem weg.",
+                  "This is what a notification looks like. Click it, or swipe it away.")
+        label_tandwiel = t("Meldingen instellen", "Notification settings")
+
+        def werk() -> None:
+            try:
+                uitkomst = bi.proefmelding(titel, tekst, label_tandwiel)
+            except Exception:  # noqa: BLE001  een melding mag Instellingen nooit laten vallen
+                uitkomst = ""
+            try:
+                sein.klaar.emit(uitkomst)
+            except RuntimeError:   # Instellingen is al dicht
+                pass
+        threading.Thread(target=werk, daemon=True).start()
+
+    def na_proef(self, uitkomst) -> None:
+        if uitkomst != bi.TANDWIEL:
+            return
+        venster = self.window()
+        venster.ga_naar(self.sleutel)
+        # Naar voren, ook als je Instellingen intussen klein maakte.
+        if venster.isMinimized():
+            venster.showNormal()
+        venster.show()
+        venster.raise_()
+        venster.activateWindow()
 
     def ververs(self) -> None:
         op_achtergrond(self, lambda: (bi.niet_storen(), bi.stil_bij_games(), bi.meldingsgeluid(),
