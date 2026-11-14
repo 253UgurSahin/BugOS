@@ -654,8 +654,22 @@ class SchermPagina(Blad):
         # Op een klein scherm (1366×768) is 200% maar 683×384: dan past niets meer, ook de knop terug niet. Alleen
         # groottes aanbieden waarbij minstens 1024×700 overblijft (de huidige blijft altijd te kiezen) (U397).
         grens = self.grens()
+        te_groot = []
         for waarde, knop in self.grootte.knoppen.items():
-            knop.setEnabled(waarde <= max(grens, schaal + 0.01))
+            mag = waarde <= max(grens, schaal + 0.01)
+            knop.setEnabled(mag)
+            # Een grijze knop zonder uitleg leek kapot: op een laptop van 1280 x 800 deed 125 % 'niets' (B-03).
+            # Nu zegt de knop zelf (tip) en de regel eronder waarom het niet kan.
+            knop.setToolTip("" if mag else t("Te groot voor dit scherm: dan past niets meer.",
+                                             "Too big for this screen: nothing would fit any more."))
+            if not mag:
+                te_groot.append(waarde)
+        uitleg = t("Tekst, knoppen en vensters", "Text, buttons and windows")
+        if te_groot:
+            grootste = max(w for w in self.grootte.knoppen if w not in te_groot)
+            uitleg += ". " + t("Groter dan {p} past niet op dit scherm.",
+                               "Bigger than {p} does not fit on this screen.").format(p=f"{grootste:.0%}")
+        self.grootte_rij.zet_uitleg(uitleg)
 
     def gekozen_scherm(self):
         schermen = getattr(self, "_schermen", None)

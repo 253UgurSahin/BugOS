@@ -1139,6 +1139,14 @@ _sp2 = venster.paginas["scherm"]
 _sp2.toon((None, False, 1.0))
 _aan = {w: k.isEnabled() for w, k in _sp2.grootte.knoppen.items()}
 klopt(_aan[1.0] and not _aan[2.0] and not _aan[1.5], f"U397: op een klein scherm geen 150-200% (dan past niets meer) ({_aan})")
+# B-03: en dat staat er ook: de regel zegt waarom, en elke grijze knop heeft een tip (eerst gebeurde er gewoon niets).
+_uitleg03 = _sp2.grootte_rij.uitleg.text()
+klopt("past niet op dit scherm" in _uitleg03 and "100%" in _uitleg03
+      and all(k.toolTip() for w, k in _sp2.grootte.knoppen.items() if not k.isEnabled())
+      and not _sp2.grootte.knoppen[1.0].toolTip(),
+      f"B-03: de regel zegt waarom 125-200% niet kan, en de grijze knoppen hebben een tip ({_uitleg03!r})")
+klopt("QPushButton#keus:disabled" in mod_onderdelen.stijl(),
+      "B-03: een keuze die niet kan, is grijs (niet net zo als een knop die wel werkt)")
 # U407: een grootte kiezen vraagt de huidige schaal niet opnieuw (kscreen-doctor, tot 8 s): het venster blijft vlot.
 _oud407 = sys.modules["bugos_settings_scherm"].bi.schaal
 _gevraagd407 = []
