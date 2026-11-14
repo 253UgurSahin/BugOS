@@ -23,8 +23,9 @@ sys.path.insert(0, "/usr/lib/bugos/python")
 import bugos_config as bi  # noqa: E402
 from bugos_ui import (  # noqa: E402
     K, Groep, Rij, Schuif, StreepKnop, Venster, label, leeg_groep, lijn_icoon, maak_app, px, schaal_css, sectie, start,
-    t, uitvoeren, zoeksleutel,
+    t, uitvoeren, zet_label_icoon, zoeksleutel,
 )
+import bugos_ui  # noqa: E402  (DONKER en zet_thema via de module: ze veranderen terwijl de app open is)
 from bugos_settings_account import InloggenPagina, TijdPagina  # noqa: E402
 from bugos_settings_meldingen import MeldingenPagina, PrintersPagina, ProgrammasPagina  # noqa: E402
 from bugos_settings_netwerk import BluetoothPagina, WifiPagina  # noqa: E402
@@ -67,7 +68,7 @@ class StartPagina(Blad):
             vl.setSpacing(10)
             boven = QHBoxLayout()
             ik = QLabel()
-            ik.setPixmap(lijn_icoon(ic, "tekst", 22, gekozen=None).pixmap(22, 22))
+            zet_label_icoon(ik, lijn_icoon(ic, "tekst", 22, gekozen=None), 22)   # kleurt mee met licht/donker
             boven.addWidget(ik)
             boven.addStretch(1)
             schuif = Schuif(False)
@@ -138,7 +139,20 @@ class StartPagina(Blad):
     def zet_snel(self, sleutel: str, aan: bool) -> None:
         werk = {"wifi": lambda: bi.zet_wifi(aan), "bt": lambda: bi.zet_bt(aan),
                 "nacht": lambda: bi.zet_nachtlicht(aan), "donker": lambda: bi.zet_donker(aan)}[sleutel]
-        op_achtergrond(self, werk, lambda _u: QTimer.singleShot(1200, self.ververs))
+
+        def klaar(uitkomst) -> None:
+            # Donker gelukt: Instellingen zelf kleurt meteen mee (B-10), niet pas na opnieuw openen.
+            if sleutel == "donker" and uitkomst:
+                bugos_ui.zet_thema(aan)
+            QTimer.singleShot(1200, self.ververs)
+        op_achtergrond(self, werk, klaar)
+
+    def thema_veranderd(self) -> None:
+        # Ergens anders omgezet (snelmenu, Welkom): de tegel 'Donker' zegt meteen wat er echt aan staat (A-03).
+        # bugos_ui.DONKER is net door zet_thema gezet uit kdeglobals, dezelfde bron als bi.donker().
+        if "donker" in getattr(self, "snel", {}):   # (nog niet gebouwd: dan zet ververs() het later)
+            self.snel["donker"].zet_stil(bugos_ui.DONKER)
+            self.snel_uitleg["donker"].setText(t("Aan", "On") if bugos_ui.DONKER else t("Uit", "Off"))
 
     def zoek(self, tekst: str) -> None:
         woorden = zoeksleutel(tekst).split()   # (U268)
@@ -301,6 +315,11 @@ class Instellingen(Venster):
         begin = OUDE_NAMEN.get(begin, begin)
         self.ga_naar(begin if begin in self.paginas else "start")
         self.nav.setFocus()  # niet meteen in het zoekveld
+
+    def thema_veranderd(self) -> None:
+        # Het eigen stijlblad van dit venster heeft de kleuren van toen het gemaakt werd: opnieuw maken bij een
+        # wissel van licht/donker (A-03, B-10; bugos_ui.zet_thema roept dit aan).
+        self.setStyleSheet(stijl() + tab_stijl())
 
     def open_blad(self):
         """De pagina die je nu ziet (in een groep: die van het gekozen tabje)."""

@@ -88,6 +88,10 @@ class Taakbeheer(Venster):
 
     def stop_meten(self) -> None:
         self.draad.stop()
+
+    def thema_veranderd(self) -> None:
+        # Het eigen stijlblad opnieuw maken bij een wissel van licht/donker (A-03; bugos_ui.zet_thema).
+        self.setStyleSheet(stijl())
         self.draad.wait(3000)
 
     def changeEvent(self, e) -> None:  # noqa: N802

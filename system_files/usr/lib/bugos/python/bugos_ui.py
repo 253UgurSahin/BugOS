@@ -24,9 +24,10 @@ import re
 from collections.abc import Sequence
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QRect, Qt
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QGuiApplication, QIcon, QPainter, QPalette, QPixmap
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtCore import QByteArray, QRect, QSize, Qt
+from PySide6.QtGui import (QColor, QFont, QFontDatabase, QGuiApplication, QIcon, QIconEngine, QPainter, QPalette,
+                           QPixmap)
+from PySide6.QtWidgets import QApplication, QLabel, QStyleOption, QWidget
 
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "bugos"
 
@@ -129,6 +130,62 @@ def _kies_thema(app: QApplication) -> bool:
     except AttributeError:
         pass
     return app.palette().color(QPalette.ColorRole.Window).lightness() < 128
+
+
+def _lees_kdeglobals(pad: Path) -> dict[str, dict[str, str]]:
+    """De groepen en sleutels van één kdeglobals-bestand ({groep: {sleutel: waarde}}).
+
+    Een eigen kleine lezer (geen kreadconfig6): hij draait in de app zelf, elke keer dat kdeglobals verandert,
+    en mag dan niet wachten op een ander programma. KDE schrijft [Groep] en sleutel=waarde; een sleutel kan een
+    achtervoegsel zoals [$i] hebben, dat laten we weg. Kan het bestand niet gelezen worden: leeg."""
+    groepen: dict[str, dict[str, str]] = {}
+    groep = ""
+    try:
+        regels = pad.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return groepen
+    for regel in regels:
+        regel = regel.strip()
+        if not regel or regel.startswith("#"):
+            continue
+        if regel.startswith("[") and regel.endswith("]"):
+            groep = regel[1:-1]
+            continue
+        if "=" in regel:
+            sleutel, waarde = regel.split("=", 1)
+            sleutel = re.sub(r"\[\$[a-z]+\]$", "", sleutel.strip())
+            groepen.setdefault(groep, {})[sleutel] = waarde.strip()
+    return groepen
+
+
+def systeem_donker() -> bool | None:
+    """Staat het systeem (KDE) nu op donker? Dezelfde regel als 'bugos-theme status' en Instellingen (U325):
+    BugOSDark is donker, BugOSLight of niets is licht, een ander schema is donker als de vensters donker zijn.
+
+    Leest ~/.config/kdeglobals en daarna de systeembestanden (/etc/xdg), net als KDE. None: er is geen
+    kdeglobals (bijvoorbeeld in een test buiten KDE), dan weten we het niet en verandert er niets."""
+    config = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+    mappen = [config] + [Path(m) for m in (os.environ.get("XDG_CONFIG_DIRS") or "/etc/xdg").split(":") if m]
+    bestanden = [m / "kdeglobals" for m in mappen if (m / "kdeglobals").is_file()]
+    if not bestanden:
+        return None
+
+    def lees(groep: str, sleutel: str) -> str | None:
+        # Het eerste bestand dat de sleutel heeft, wint (het eigen bestand gaat voor dat van het systeem).
+        for b in bestanden:
+            waarde = _lees_kdeglobals(b).get(groep, {}).get(sleutel)
+            if waarde is not None:
+                return waarde
+        return None
+
+    schema = lees("General", "ColorScheme") or ""
+    if schema in ("BugOSDark", "BugOSLight", ""):
+        return schema == "BugOSDark"
+    try:
+        r, g, b = (int(x) for x in (lees("Colors:Window", "BackgroundNormal") or "").split(",")[:3])
+    except ValueError:
+        return False
+    return r * 299 + g * 587 + b * 114 < 128000
 
 
 def _laad_lettertypes() -> None:
@@ -434,7 +491,130 @@ def maak_app(naam: str, bureaublad_bestand: str, args: Sequence[str], een_keer: 
     # De teksten van BugOS zijn Nederlands of Engels, dus van links naar rechts. Zonder dit draait Qt het hele
     # venster om zodra KDE een Arabische vertaling laadt: pijlen en schuifjes de verkeerde kant op (U275).
     app.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+    # Licht/donker live volgen: zet iemand het om (snelmenu, Instellingen, Welkom), dan kleurt dit venster
+    # meteen mee in plaats van pas na opnieuw openen (A-03, B-10).
+    app.setProperty("bugos_stijl", _stijl_adres(app))   # onze stijl, zie zet_thema
+    _volg_systeem(app)
     return app
+
+
+# ========================================================= licht/donker live ===
+# Een BugOS-app kiest zijn kleuren bij het starten (maak_app). Zet iemand daarna licht/donker om, dan volgt de
+# app nu meteen (A-03, B-10): zet_thema() vult K opnieuw, zet het palet en het stijlblad van de app opnieuw, en
+# vraagt elk venster en onderdeel dat zijn kleuren zelf 'vastlegde' om ze opnieuw te zetten.
+#
+# Hoe een onderdeel meedoet: geef het een methode thema_veranderd(). zet_thema() roept die aan bij elk
+# onderdeel dat er een heeft (bijvoorbeeld een venster dat zijn eigen stijlblad maakt, of een Chip met een
+# vaste kleur). Wat in paintEvent K leest, hoeft niets te doen: dat tekent bij de volgende keer vanzelf goed.
+# De BugOS-lijnicoontjes (lijn_icoon) tekenen zichzelf ook live; een QLabel met een icoontje krijgt het via
+# zet_label_icoon(), dan tekent zet_thema() het opnieuw.
+
+
+def _stijl_adres(app: QApplication) -> int:
+    """Het geheugenadres van de stijl van de app (0 zonder stijl): zo zien we of iemand anders hem verving."""
+    import shiboken6
+    stijl = app.style()
+    return int(shiboken6.getCppPointer(stijl)[0]) if stijl is not None else 0
+
+
+def zet_thema(donker: bool, app: QApplication | None = None) -> bool:
+    """Zet de kleuren van deze app op licht of donker, terwijl hij open is. True als er iets veranderde.
+
+    Ook als het thema hetzelfde bleef, zetten we de stijl (Fusion) en het palet terug: KDE kan bij een wissel
+    van de programmastijl (bugos-theme stuurt StyleChanged, A-01) zijn eigen stijl en palet in de app zetten."""
+    global DONKER
+    app = app or QApplication.instance()
+    if app is None:
+        return False
+    if _stijl_adres(app) != app.property("bugos_stijl"):
+        # KDE zette (na StyleChanged) een andere stijl in de app (Kvantum); BugOS-apps tekenen op Fusion.
+        # Herkennen aan het adres van de stijl: met een stijlblad is app.style() Qt's stijlblad-laag (zonder
+        # naam), en die maakt Qt alleen nieuw als er een andere stijl onder komt.
+        app.setStyle("Fusion")
+        app.setStyleSheet(_stijlblad(K))
+        app.setProperty("bugos_stijl", _stijl_adres(app))
+    if donker == DONKER:
+        app.setPalette(_palet(K))
+        return False
+    DONKER = donker
+    K.clear()
+    K.update(KLEUREN["donker" if donker else "licht"])
+    app.setPalette(_palet(K))
+    app.setStyleSheet(_stijlblad(K))
+    app.setProperty("bugos_stijl", _stijl_adres(app))   # ons eigen nieuwe stijlblad is geen vreemde stijl
+    _LIJN_CACHE.clear()
+    for w in app.allWidgets():
+        doe = getattr(w, "thema_veranderd", None)
+        if callable(doe):
+            try:
+                doe()
+            except RuntimeError:   # het onderdeel is net weggegooid (C++ al weg): overslaan
+                pass
+            except Exception:  # noqa: BLE001  (één onderdeel dat faalt, mag de rest van het venster niet tegenhouden)
+                import traceback
+                traceback.print_exc()
+        bewaard = getattr(w, "_bugos_icoon", None)
+        if bewaard is not None and isinstance(w, QLabel):
+            try:
+                zet_label_icoon(w, *bewaard)
+            except RuntimeError:
+                pass
+    for w in app.allWidgets():
+        w.update()   # opnieuw tekenen: paintEvent leest de nieuwe K, lijnicoontjes de nieuwe kleur
+    return True
+
+
+def _volg_systeem(app: QApplication) -> None:
+    """Houd kdeglobals in de gaten: verandert het kleurenschema, dan zet_thema().
+
+    Waarom het bestand en niet alleen Qt's colorSchemeChanged: BugOS-apps zetten hun eigen palet, en Qt meldt
+    niet altijd een wissel tussen twee schema's van KDE. Het bestand is de plek waar bugos-theme (en KDE) de
+    keuze opschrijft. KDE schrijft kdeglobals door een nieuw bestand op zijn plek te zetten; dan raakt de
+    wachter het bestand kwijt, dus na elke melding zetten we hem opnieuw. Een korte timer (300 ms) voegt de
+    meldingen van één wissel samen (kleurenschema, stijl, Plasma-stijl schrijven allemaal in kdeglobals).
+    BUGOS_THEMA=licht/donker (voorbeelden, tests): vast thema, niet volgen."""
+    if os.environ.get("BUGOS_THEMA") in ("licht", "donker"):
+        return
+    from PySide6.QtCore import QFileSystemWatcher, QTimer
+    config = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+    bestand = config / "kdeglobals"
+    wachter = QFileSystemWatcher(app)
+    timer = QTimer(app)
+    timer.setSingleShot(True)
+    timer.setInterval(300)
+
+    def bewaak() -> None:
+        # Het bestand als het er is; anders de map (dan zien we het verschijnen).
+        if bestand.is_file():
+            if str(bestand) not in wachter.files():
+                wachter.addPath(str(bestand))
+        elif config.is_dir() and str(config) not in wachter.directories():
+            wachter.addPath(str(config))
+
+    def kijk() -> None:
+        bewaak()
+        nu = systeem_donker()
+        if nu is not None:
+            zet_thema(nu, app)
+
+    wachter.fileChanged.connect(lambda _p: timer.start())
+    wachter.directoryChanged.connect(lambda _p: timer.start())
+    timer.timeout.connect(kijk)
+    try:   # Qt 6.5+: KDE meldt ook zelf een wissel van licht/donker
+        app.styleHints().colorSchemeChanged.connect(lambda *_a: timer.start())
+    except AttributeError:
+        pass
+    bewaak()
+    app._bugos_thema_wachter = (wachter, timer)   # bewaren: anders ruimt Python ze op
+
+
+def zet_label_icoon(lbl: QLabel, ic, maat: int | QSize) -> None:
+    """Zet een icoontje als plaatje in een QLabel, en onthoud het zodat zet_thema() het opnieuw tekent.
+
+    ic: een QIcon, of een functie die er een geeft (zoals logo_icoon: in donker een ander logo)."""
+    lbl._bugos_icoon = (ic, maat)
+    icoon_ = ic() if callable(ic) else ic
+    lbl.setPixmap(icoon_.pixmap(maat if isinstance(maat, QSize) else QSize(maat, maat)))
 
 
 # ========================================================= op het scherm ===
@@ -601,15 +781,79 @@ def lijn_pixmap(naam: str, kleur_: str | QColor, px: int, dikte: float = 2.0) ->
     return pm
 
 
+# Getekende lijnicoontjes, zodat een knop niet bij elke keer tekenen de SVG opnieuw maakt. De sleutel bevat de
+# echte kleur (#rrggbb), dus na een wissel van licht/donker tekent alles vanzelf in de nieuwe kleur.
+_LIJN_CACHE: dict[tuple, QPixmap] = {}
+# Python-kant van de icoon-tekenaars bewaren: QIcon houdt alleen de C++-kant vast. Ruimt Python de Python-kant
+# op, dan kan Qt onze pixmap() niet meer aanroepen (en tekent hij niets). Een paar honderd kleine objecten.
+_LIJN_TEKENAARS: list = []
+
+
+class _LijnTekenaar(QIconEngine):
+    """Tekent een BugOS-lijnicoon op het moment dat Qt hem nodig heeft, in de kleur van NU (A-03).
+
+    Eerst maakte lijn_icoon vaste plaatjes in de kleur van het moment van maken: na een wissel naar donker
+    bleven de icoontjes in de open app donkergrijs op donker. kleur_ en gekozen zijn een naam uit K
+    ('tekst2', 'accent') of een vaste kleur; een naam wordt bij elke keer tekenen opnieuw opgezocht."""
+
+    def __init__(self, naam: str, kleur_: str | QColor, gekozen: str | QColor | None):
+        super().__init__()
+        self.naam, self.kleur_, self.gekozen = naam, kleur_, gekozen
+        _LIJN_TEKENAARS.append(self)
+
+    def _pixmap(self, size: QSize, mode: QIcon.Mode, schaal: float = 1.0) -> QPixmap:
+        # De gekozen stand (in een lijst) in 'gekozen'; zonder 'gekozen' gewoon de normale kleur.
+        kleur_ = self.gekozen if (mode == QIcon.Mode.Selected and self.gekozen is not None) else self.kleur_
+        n = max(1, round(min(size.width(), size.height()) * schaal))
+        echt = QColor(K.get(kleur_, kleur_) if isinstance(kleur_, str) else kleur_).name()
+        sleutel = (self.naam, echt, n, mode == QIcon.Mode.Disabled)
+        pm = _LIJN_CACHE.get(sleutel)
+        if pm is None:
+            if len(_LIJN_CACHE) > 2000:   # nooit onbeperkt groeien (veel maten bij inzoomen)
+                _LIJN_CACHE.clear()
+            pm = lijn_pixmap(self.naam, echt, n)
+            if mode == QIcon.Mode.Disabled:
+                # Uitgeschakeld: zoals Qt dat met een gewoon icoon doet (grijzer), via de stijl van de app.
+                app = QApplication.instance()
+                if app is not None and app.style() is not None:
+                    pm = app.style().generatedIconPixmap(QIcon.Mode.Disabled, pm, QStyleOption())
+            _LIJN_CACHE[sleutel] = pm
+        pm = QPixmap(pm)   # een kopie: de beeldpuntverhouding hieronder mag de bewaarde niet veranderen
+        pm.setDevicePixelRatio(schaal)
+        return pm
+
+    def pixmap(self, size, mode, state):  # noqa: ARG002 (state: een lijnicoon heeft geen aan/uit-stand)
+        return self._pixmap(size, mode)
+
+    def scaledPixmap(self, size, mode, state, scale):  # noqa: N802, ARG002 (Qt-naam)
+        # Qt vraagt bij 150 % of 200 % om een scherp plaatje: size in logische punten, scale de verhouding.
+        return self._pixmap(size, mode, scale or 1.0)
+
+    def paint(self, painter, rect, mode, state):  # noqa: ARG002
+        apparaat = painter.device()
+        schaal = apparaat.devicePixelRatioF() if apparaat is not None else 1.0
+        painter.drawPixmap(rect, self._pixmap(rect.size(), mode, schaal))
+
+    def actualSize(self, size, mode, state):  # noqa: N802, ARG002
+        # Een lijnicoon is vierkant en kan elke maat aan.
+        kant = min(size.width(), size.height())
+        return QSize(kant, kant)
+
+    def clone(self):
+        return _LijnTekenaar(self.naam, self.kleur_, self.gekozen)
+
+    def key(self):
+        return "bugos-lijn"
+
+
 def lijn_icoon(naam: str, kleur_: str | QColor = "tekst2", maat: int = 20,
                gekozen: str | QColor | None = "accent") -> QIcon:
-    """Een QIcon van een lijnicoon; de gekozen stand (in een lijst) is rood."""
-    ic = QIcon()
-    for schaal in (1, 2, 3):
-        ic.addPixmap(lijn_pixmap(naam, kleur_, maat * schaal), QIcon.Mode.Normal)
-        if gekozen is not None:
-            ic.addPixmap(lijn_pixmap(naam, gekozen, maat * schaal), QIcon.Mode.Selected)
-    return ic
+    """Een QIcon van een lijnicoon; de gekozen stand (in een lijst) is rood.
+
+    Het icoon tekent zichzelf bij elke keer tekenen in de kleur van dat moment (licht of donker), zie
+    _LijnTekenaar. maat is de gewone maat; Qt vraagt zelf om grotere plaatjes bij een hogere schaal."""
+    del maat   # alleen nog voor de leesbaarheid van de aanroepen: de tekenaar kan elke maat aan
+    return QIcon(_LijnTekenaar(naam, kleur_, gekozen))
 
 
 def icoon(naam: str) -> QIcon:

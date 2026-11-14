@@ -286,6 +286,72 @@ _ca._c.kde_lees, _ca._c.kde_schrijf, _ca._c.VOORBEELD = _lees, _schrijf, _vb
 klopt(all(_uit.values()) and _nl == "nl_NL.UTF-8",
       f"U229/U232/U242: Engels in Europa geeft dag/maand (en_IE); buiten de eurolanden blijven papier en geld van je land; Nederlands blijft nl_NL ({_uit}, {_nl})")
 
+
+# A-03 / B-10: een open Instellingen volgt licht/donker meteen, ook als het ergens anders wordt omgezet (snelmenu).
+# Zoals bugos-theme het doet: KDE schrijft een nieuw kdeglobals (een nieuw bestand op dezelfde plek). bugos_ui houdt
+# dat bestand in de gaten en kleurt het venster om: palet, stijlbladen, de tegel 'Donker' en de lijnicoontjes.
+import bugos_ui  # noqa: E402
+from PySide6.QtCore import QEventLoop, QTimer  # noqa: E402
+
+
+def _wacht(ms: int) -> None:
+    lus = QEventLoop()
+    QTimer.singleShot(ms, lus.quit)
+    lus.exec()
+
+
+def _kdeglobals(schema: str) -> None:
+    _cfg = Path(os.environ.get("XDG_CONFIG_HOME") or Path(os.environ["HOME"]) / ".config")
+    _cfg.mkdir(parents=True, exist_ok=True)
+    (_cfg / "kdeglobals.nieuw").write_text(f"[General]\nColorScheme={schema}\n", encoding="utf-8")
+    os.replace(_cfg / "kdeglobals.nieuw", _cfg / "kdeglobals")
+
+
+def _donkerste_lijn(ic) -> int:
+    """De lichtheid van de donkerste stip van een lijnicoon (licht thema: donker icoon, donker thema: licht icoon)."""
+    beeld = ic.pixmap(20, 20).toImage()
+    return min((beeld.pixelColor(x, y).lightness() for x in range(beeld.width()) for y in range(beeld.height())
+                if beeld.pixelColor(x, y).alpha() > 200), default=999)
+
+
+_kdeglobals("BugOSLight")
+_wacht(600)
+_start = venster.paginas["start"]
+_uiterlijk = venster.paginas["uiterlijk"]
+_icoon = bugos_ui.lijn_icoon("vink", "tekst", 20)
+_licht_icoon = _donkerste_lijn(_icoon)
+_kdeglobals("BugOSDark")
+_wacht(1200)
+klopt(bugos_ui.DONKER and app.palette().window().color().name().lower() == bugos_ui.KLEUREN["donker"]["achter"].lower(),
+      "A-03: donker ergens anders aangezet: het open venster krijgt meteen de donkere kleuren")
+klopt(bugos_ui.KLEUREN["donker"]["vlak"] in venster.styleSheet() and bugos_ui.KLEUREN["licht"]["vlak"] not in venster.styleSheet(),
+      "A-03: het eigen stijlblad van Instellingen is opnieuw gemaakt in donker")
+klopt(_start.snel["donker"].isChecked() and _start.snel_uitleg["donker"].text() == "Aan",
+      "A-03: de tegel 'Donker' op Start zegt meteen 'Aan' (niet pas na opnieuw openen)")
+klopt(not hasattr(_uiterlijk, "thema") or _uiterlijk.thema[True].isChecked(),
+      "A-03: op Uiterlijk is meteen 'Donker' gekozen")
+klopt(_licht_icoon < 80 and _donkerste_lijn(_icoon) > 180,
+      f"A-03: een lijnicoon kleurt mee (licht: {_licht_icoon}, donker: {_donkerste_lijn(_icoon)})")
+# En terug, via de eigen tegel 'Donker' (B-10): zonder te wachten op kdeglobals wordt het venster licht.
+_start.zet_snel("donker", False)
+_wacht(800)
+klopt(not bugos_ui.DONKER and bugos_ui.KLEUREN["licht"]["vlak"] in venster.styleSheet(),
+      "B-10: de eigen tegel 'Donker' uit: Instellingen zelf wordt meteen licht")
+_kdeglobals("BugOSLight")
+_wacht(600)
+# A-01: KDE zet na een stijlwissel (StyleChanged) zijn eigen stijl in de app; BugOS-apps zetten Fusion terug.
+app.setStyle("Windows")
+bugos_ui.zet_thema(bugos_ui.DONKER)
+klopt(app.property("bugos_stijl") == bugos_ui._stijl_adres(app),
+      "A-01: een stijl van buiten (KDE's StyleChanged) wordt vervangen door de eigen BugOS-stijl")
+# Hetzelfde voorschrift als bugos-theme en Instellingen: een ander donker schema telt als donker.
+_cfg_dir = Path(os.environ.get("XDG_CONFIG_HOME") or Path(os.environ["HOME"]) / ".config")
+(_cfg_dir / "kdeglobals").write_text("[General]\nColorScheme=BreezeDark\n\n[Colors:Window]\nBackgroundNormal=32,35,38\n",
+                                     encoding="utf-8")
+klopt(bugos_ui.systeem_donker() is True, "A-03: Breeze Dark (ander schema met donkere vensters) telt als donker")
+_kdeglobals("BugOSLight")
+_wacht(600)
+
 print()
 print("Alles goed." if not fouten else f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)
