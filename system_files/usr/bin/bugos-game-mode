@@ -101,6 +101,15 @@ fps_uit() {
     fi
 }
 
+# Korte tekst midden op het scherm via de schermmelding (OSD) van Plasma, dezelfde die je ziet bij het volume of de
+# helderheid. Hij verdwijnt vanzelf na een paar tellen en 'niet storen' houdt hem niet tegen (het is geen melding).
+# Via gdbus: dat is er altijd (qdbus6 bestaat niet op Fedora 44). Geeft een fout terug als Plasma niet antwoordt
+# (bijv. buiten een Plasma-sessie); dan doet de aanroeper een gewone melding.
+scherm_melding() {
+    gdbus call --session --dest org.kde.plasmashell --object-path /org/kde/osdService \
+        --method org.kde.osdService.showText input-gamepad "$1" >/dev/null 2>&1
+}
+
 aan() {
     # Staat hij al aan? Dan niets doen: anders onthouden we "volle kracht" en "niet storen" als hoe
     # het eerst was, en zet 'uit' ze nooit meer terug.
@@ -122,13 +131,20 @@ aan() {
     # "FPS-teller meteen klaar" aan: dan zetten we hem hier gewoon zichtbaar).
     # (Ook als je de keuze net uitzette: deze sessie leest ons bestand nog tot je opnieuw inlogt.)
     { [ -f "$FPS_METEEN" ] || fps_meteen_actief; } && mangohud_bestand zichtbaar
+    # A-04 (VM-test): een gewone melding hield Plasma toch vast, want 'niet storen' gaat hieronder meteen aan. Je zag
+    # dan niets bij 'aan', en pas bij 'uit' kwam 'staat aan' boven op 'staat uit'. Daarom eerst de schermmelding van
+    # Plasma (zoals bij het volume): die telt niet als melding en 'niet storen' houdt hem dus niet tegen. Alleen als
+    # die er niet is (geen Plasma), de gewone melding zoals vroeger.
     if [ "${MANGOHUD:-}" = 1 ]; then
-        melding "$(t "Game-modus staat aan" "Game mode is on")" \
-            "$(t "Volle kracht, meldingen stil, FPS-teller in games." "Full power, notifications muted, FPS counter in games.")"
+        scherm_melding "$(t "Game-modus staat aan" "Game mode is on")" ||
+            melding "$(t "Game-modus staat aan" "Game mode is on")" \
+                "$(t "Volle kracht, meldingen stil, FPS-teller in games." "Full power, notifications muted, FPS counter in games.")"
     else
-        melding "$(t "Game-modus staat aan" "Game mode is on")" \
-            "$(t "Volle kracht, meldingen stil. De FPS-teller in games komt na opnieuw inloggen." \
-                "Full power, notifications muted. The FPS counter in games appears after you log in again.")"
+        scherm_melding "$(t "Game-modus staat aan. De FPS-teller komt na opnieuw inloggen." \
+            "Game mode is on. The FPS counter appears after you log in again.")" ||
+            melding "$(t "Game-modus staat aan" "Game mode is on")" \
+                "$(t "Volle kracht, meldingen stil. De FPS-teller in games komt na opnieuw inloggen." \
+                    "Full power, notifications muted. The FPS counter in games appears after you log in again.")"
     fi
     niet_storen_status >"$STOREN_MARKER"
     # Ook de echte eindtijd bewaren ('1 uur niet storen'): anders wordt dat na de game-modus 'voor altijd' (U124).

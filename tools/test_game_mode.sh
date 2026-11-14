@@ -123,5 +123,23 @@ if [ -e "$TMP/bin/powerprofilesctl" ] || nep powerprofilesctl 'case "$1" in get)
     klopt '[ "$(cat "$TMP/profiel")" = balanced ]' "U420/U435: merkjes van gewiste accounts, van root of nagemaakt houden de pc niet op volle kracht ($(cat "$TMP/profiel"))"
     rm -f "$BUGOS_GAMER_MAP/bugos-spelmodus-0" "$BUGOS_GAMER_MAP/bugos-spelmodus-1888"
 fi
+
+# A-04 (VM-test): 'aan' laat zich zien via de schermmelding van Plasma (OSD), die 'niet storen' niet tegenhoudt.
+# Een gewone melding hield Plasma vast tot 'uit' (dan zag je 'staat aan' en 'staat uit' tegelijk).
+nep gdbus 'printf "%s\n" "gdbus $*" >>"'"$TMP"'/a04.log"; exit 0'
+nep notify-send 'printf "%s\n" "notify-send $*" >>"'"$TMP"'/a04.log"; exit 0'
+: >"$TMP/a04.log"
+LANGUAGE=nl LC_ALL=nl_NL.UTF-8 draai aan
+klopt 'grep -q "osdService.showText input-gamepad Game-modus staat aan" "$TMP/a04.log" && ! grep -q "notify-send.*staat aan" "$TMP/a04.log"' \
+    "A-04: game-modus aan toont 'Game-modus staat aan' als schermmelding (geen melding die 'niet storen' vasthoudt)"
+draai uit
+# Zonder Plasma (gdbus faalt): gewoon de melding zoals vroeger, zodat je toch iets ziet.
+nep gdbus 'exit 1'
+: >"$TMP/a04.log"
+LANGUAGE=nl LC_ALL=nl_NL.UTF-8 draai aan
+klopt 'grep -q "notify-send.*Game-modus staat aan" "$TMP/a04.log"' "A-04: zonder schermmelding van Plasma: de gewone melding"
+draai uit
+nep gdbus 'exit 0'
+nep notify-send 'exit 0'
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
