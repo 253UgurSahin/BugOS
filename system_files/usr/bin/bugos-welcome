@@ -192,13 +192,16 @@ class Internet(Pagina):
             self.kop.setText(t("Je bent verbonden", "You are connected"))
             self.sub.setText(t("Mooi zo. Je kunt verder.", "Great. You can continue."))
             self.status.setText(t("Online", "Online"))
-            self.status.setStyleSheet(Chip("", "goed").styleSheet())
+            # De soort onthouden (niet alleen de kleuren): dan kleurt hij mee bij een wissel van licht/donker.
+            self.status.soort = "goed"
+            self.status.thema_veranderd()
         else:
             self.kop.setText(t("Nog geen internet", "No internet yet"))
             self.sub.setText(t("Kies je wifi, of steek een netwerkkabel in. Overslaan mag ook.",
                                "Choose your Wi-Fi, or plug in a network cable. Skipping is fine too."))
             self.status.setText(t("Offline", "Offline"))
-            self.status.setStyleSheet(Chip("", "let_op").styleSheet())
+            self.status.soort = "let_op"
+            self.status.thema_veranderd()
 
 
 def voorbeeld(donker: bool, b: int = 300, h: int = 176) -> QPixmap:
@@ -280,6 +283,13 @@ class Uiterlijk(Pagina):
     def kies(self, donker: bool) -> None:
         # Eén plek voor licht/donker: kleuren, KDE-programma's en de Plasma-stijl.
         start("bugos-theme", "donker" if donker else "licht")
+        # Welkom zelf kleurt meteen mee (A-03): eerst bleef de inhoud wit terwijl het bureaublad donker werd.
+        # (bugos_ui houdt kdeglobals ook in de gaten; dit is alleen sneller, en zonder KDE in de test.)
+        bugos_ui.zet_thema(donker)
+
+    def thema_veranderd(self) -> None:
+        # Ergens anders omgezet (snelmenu): de gekozen kaart bij wat nu echt aan staat.
+        self.knoppen[bugos_ui.DONKER].setChecked(True)
 
 
 class Updates(Pagina):

@@ -175,6 +175,11 @@ class IcoonChip(QWidget):
         self.icoon_maat = icoon_maat or int(maat * (0.5 if vol else 0.62))
         self.setFixedSize(maat, maat)
 
+    def thema_veranderd(self) -> None:
+        # Een neutraal tegeltje heeft de grijze tekstkleur van het thema: die verschilt tussen licht en donker.
+        if self.neutraal:
+            self.tint = QColor(K["tekst2"])
+
     def _wit(self, m: int) -> QPixmap:
         dpr = self.devicePixelRatioF()
         bron = self.icoon.pixmap(QSize(m, m), dpr)
@@ -256,14 +261,19 @@ class Chip(QLabel):
 
     def __init__(self, tekst: str, soort: str = "accent"):
         super().__init__(tekst)
+        self.soort = soort
+        self.thema_veranderd()
+        self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+
+    def thema_veranderd(self) -> None:
+        """Kleuren zetten (bij het maken, en opnieuw bij een wissel van licht/donker: zie bugos_ui.zet_thema)."""
         voor, achter = {
             "accent": (K["accent_gekozen"], K["accent_zacht"]), "goed": (K["goed"], K["goed_zacht"]),
             "let_op": (K["let_op"], K["let_op_zacht"]), "fout": (K["fout"], K["fout_zacht"]),
             "grijs": (K["tekst2"], K["knop"]),
-        }.get(soort, (K["accent_gekozen"], K["accent_zacht"]))
+        }.get(self.soort, (K["accent_gekozen"], K["accent_zacht"]))
         self.setStyleSheet(f"background:{achter};color:{voor};border-radius:10px;padding:3px 10px;"
                            f"font-size:{bugos_ui.px(12)}px;font-weight:600;")
-        self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
 
 
 class Banner(QFrame):
@@ -280,16 +290,25 @@ class Banner(QFrame):
         lay.addWidget(self.tekst, 1)
         self.zet(tekst, soort)
 
-    def zet(self, tekst: str, soort: str = "info") -> None:
+    def _kleuren(self) -> None:
+        """Kleuren en teken bij self.soort (ook opnieuw bij een wissel van licht/donker)."""
         voor, achter, icoon = {
             "info": (K["tekst"], K["knop"], "dialog-information"),
             "goed": (K["goed"], K["goed_zacht"], "emblem-success"),
             "let_op": (K["let_op"], K["let_op_zacht"], "dialog-warning"),
             "fout": (K["fout"], K["fout_zacht"], "dialog-error"),
             "bezig": (K["accent_gekozen"], K["accent_zacht"], "view-refresh"),   # 4,5:1 (U282)
-        }.get(soort, (K["tekst"], K["knop"], "dialog-information"))
+        }.get(self.soort, (K["tekst"], K["knop"], "dialog-information"))
         self.setStyleSheet(f"QFrame{{background:{achter};border-radius:12px;}} QLabel{{color:{voor};font-size:{bugos_ui.px(14)}px;}}")
         self.teken.setPixmap(QIcon.fromTheme(icoon).pixmap(20, 20))
+
+    def thema_veranderd(self) -> None:
+        # Alleen de kleuren: de tekst blijft, en de schermlezer hoeft het niet nog eens te zeggen.
+        self._kleuren()
+
+    def zet(self, tekst: str, soort: str = "info") -> None:
+        self.soort = soort
+        self._kleuren()
         self.tekst.setText(tekst)
         self.setVisible(bool(tekst))
         # De schermlezer zegt het ook ('VLC is verwijderd', 'lukte niet'): anders bleef Orca stil (U482).

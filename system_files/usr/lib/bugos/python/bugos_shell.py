@@ -34,7 +34,7 @@ def app_kop(naam: str) -> QWidget:
     lay.setContentsMargins(8, 0, 0, 6)
     lay.setSpacing(10)
     beeld = QLabel()
-    beeld.setPixmap(logo_icoon().pixmap(QSize(22, 22)))
+    bugos_ui.zet_label_icoon(beeld, logo_icoon, 22)   # volgt licht/donker, ook na een wissel (A-03)
     beeld.setFixedSize(22, 22)
     lay.addWidget(beeld)
     lay.addWidget(label(naam, "appnaam", wrap=False), 1)
@@ -109,7 +109,7 @@ class Rij(QFrame):
             pijl = klikbaar and rechts is None
         if pijl:
             self.pijl = QLabel()
-            self.pijl.setPixmap(lijn_icoon("rechts", "tekst3", 16, gekozen=None).pixmap(16, 16))
+            bugos_ui.zet_label_icoon(self.pijl, lijn_icoon("rechts", "tekst3", 16, gekozen=None), 16)
             lay.addWidget(self.pijl, 0, Qt.AlignmentFlag.AlignVCenter)
         self._gestapeld = False
         if self._kan_stapelen():
@@ -179,7 +179,8 @@ class Rij(QFrame):
         else:
             naam = naam[5:] if naam.startswith("lijn:") else naam
             ic = lijn_icoon(naam, "tekst2", 22, gekozen=None) if naam in LIJN else QIcon.fromTheme(naam)
-        self.icoon.setPixmap(ic.pixmap(QSize(22, 22)))
+        # Via zet_label_icoon: bij een wissel van licht/donker tekent bugos_ui het opnieuw (A-03).
+        bugos_ui.zet_label_icoon(self.icoon, ic, 22)
 
     def zet_uitleg(self, tekst: str) -> None:
         self.uitleg.setText(tekst)
@@ -319,7 +320,12 @@ class ActieBalk(QFrame):
         schaduw.setOffset(0, 10)
         schaduw.setColor(QColor(0, 0, 0, 150 if bugos_ui.DONKER else 46))
         self.setGraphicsEffect(schaduw)
+        self._schaduw = schaduw
         self.hide()
+
+    def thema_veranderd(self) -> None:
+        # In donker een zwaardere schaduw (anders zie je hem niet), ook na een wissel van licht/donker (A-03).
+        self._schaduw.setColor(QColor(0, 0, 0, 150 if bugos_ui.DONKER else 46))
 
     def knop(self, sleutel: str, icoon_naam: str, tekst: str, actie) -> QPushButton:
         k = QPushButton(tekst)

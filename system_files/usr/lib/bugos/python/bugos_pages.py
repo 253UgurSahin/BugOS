@@ -181,6 +181,13 @@ class Zijbalk(QListWidget):
         self.addItem(it)
         return it
 
+    def thema_veranderd(self) -> None:
+        # De kopjes (niet aan te klikken) kregen een vaste grijze kleur: zet die bij het nieuwe thema (A-03).
+        for rij in range(self.count()):
+            it = self.item(rij)
+            if it.flags() == Qt.ItemFlag.NoItemFlags:
+                it.setForeground(QColor(K["tekst3"]))
+
     def sleutel(self, rij: int) -> str:
         it = self.item(rij)
         return it.data(Qt.ItemDataRole.UserRole) if it else ""
@@ -205,7 +212,7 @@ def merk_label(maat: int = 28, met_tekst: bool = True) -> QWidget:
     lay.setContentsMargins(0, 0, 0, 0)
     lay.setSpacing(10)
     logo = QLabel()
-    logo.setPixmap(logo_icoon().pixmap(maat, maat))
+    bugos_ui.zet_label_icoon(logo, logo_icoon, maat)   # in donker een ander logo, ook na een wissel (A-03)
     lay.addWidget(logo)
     if met_tekst:
         tekst = QLabel("BugOS")
@@ -234,6 +241,10 @@ class Held(QFrame):
         self.lay = QHBoxLayout(self)
         self.lay.setContentsMargins(marge, marge, marge, marge)
         self.lay.setSpacing(18)
+
+    def thema_veranderd(self) -> None:
+        # De lichte of de donkere Stip, bij het thema van nu (A-03).
+        self.beeld = QPixmap(achtergrond_pad())
 
     def paintEvent(self, _e):  # noqa: N802
         p = QPainter(self)

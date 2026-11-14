@@ -1052,11 +1052,19 @@ class UiterlijkPagina(Schakelaars, Blad):
         op_achtergrond(self, bi.donker, lambda d: self.thema[bool(d)].setChecked(True))
         self.ververs_schakels()
 
+    def thema_veranderd(self) -> None:
+        # Ergens anders omgezet (snelmenu, Welkom): de gekozen kaart zegt meteen wat er echt aan staat (A-03).
+        # (Nog niet gebouwd, dan doet ververs() het later.)
+        if getattr(self, "thema", None):
+            self.thema[bugos_ui.DONKER].setChecked(True)
+
     def zet_thema(self, donker: bool) -> None:
         def klaar(ok) -> None:
             if ok:
-                self.melding.toon(t("Klaar. Open programma's krijgen de nieuwe kleuren als je ze opnieuw opent.",
-                                    "Done. Open programs get the new colors when you open them again."), "goed")
+                # Instellingen zelf kleurt meteen mee (A-03, B-10), net als de andere BugOS-apps en (via
+                # bugos-theme) de KDE-programma's die open zijn. Dus geen 'opnieuw openen' meer nodig.
+                bugos_ui.zet_thema(donker)
+                self.melding.toon(t("Klaar.", "Done."), "goed")
             else:   # niet 'Klaar' zeggen als het niet lukte; de knoppen weer zoals het echt is (U336)
                 self.melding.toon(t("Dat lukte niet. Probeer het nog eens.", "That did not work. Try again."), "fout")
                 self.ververs()

@@ -241,6 +241,11 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
         if kies:
             QTimer.singleShot(400, lambda: self.selecteer(kies))
 
+    def thema_veranderd(self) -> None:
+        # Het eigen stijlblad opnieuw maken bij een wissel van licht/donker (A-03; bugos_ui.zet_thema). De tegels
+        # tekenen zichzelf met K, die volgen vanzelf.
+        self.setStyleSheet(stijl())
+
     # ----------------------------------------------------------- inhoud
     def ververs_staat(self) -> None:
         if self.in_computer:

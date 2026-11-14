@@ -548,6 +548,12 @@ _code = "\n".join(r for r in STYLE_TEKST.split("\n") if not r.lstrip().startswit
 klopt("unlockedDesktop" not in _code, "D2: style.sh gebruikt plasma/plasmashell/unlockedDesktop niet (breekt bugos-panel)")
 _code = "\n".join(r for r in PANEEL_TEKST.split("\n") if not r.lstrip().startswith("#"))
 klopt("unlockedDesktop" not in _code, "D2: bugos-panel gebruikt unlockedDesktop niet")
+# A-16: het vergrendelscherm gebruikt de donkere Stip, zodat de witte klok en datum ook in lichte modus leesbaar
+# zijn (op de lichte Stip stonden ze op bijna wit). Het bestand moet ook echt bestaan.
+_slot = re.search(r"kscreenlockerrc .*?--key Image \"file://([^\"]+)\"", STYLE_TEKST, re.S)
+klopt(bool(_slot) and "images_dark" in _slot.group(1)
+      and (ROOT / "system_files" / _slot.group(1).lstrip("/")).is_file(),
+      "D2b (A-16): het vergrendelscherm gebruikt de donkere Stip (bestaand bestand), niet de lichte")
 
 
 _skel = re.search(r"cat >/etc/skel/\.config/plasma-org\.kde\.plasma\.desktop-appletsrc <<'EOF'\n(.*?)\nEOF\n", STYLE_TEKST, re.S)
