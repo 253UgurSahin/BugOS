@@ -25,6 +25,7 @@ from bugos_widgets import Groep, Knop, label
 
 LEESBREEDTE = 880      # breder wordt de inhoud van een pagina niet: dat leest rustiger
 ZIJBALK_BREEDTE = 248
+RIJ_SPELING = 24        # px: een gestapelde Rij gaat pas weer naast elkaar met zoveel ruimte over (tegen schommelen)
 
 
 def app_kop(naam: str) -> QWidget:
@@ -152,7 +153,11 @@ class Rij(QFrame):
         titel = self._titel_breedte()
         vast = m.left() + m.right() + 24 + 14
         rechts = 14 + self.rechts.sizeHint().width() + (30 if self.pijl else 0)
-        stapel = self.width() < vast + min(titel, bugos_ui.px(240)) + rechts
+        nodig = vast + min(titel, bugos_ui.px(240)) + rechts
+        # Weer naast elkaar pas als er duidelijk ruimte is (een schuifbalk breed extra). Zonder die marge schommelde
+        # een pagina op sommige maten (Scherm bij 840 x 700): naast elkaar -> past -> geen schuifbalk -> breder ...
+        # en met de schuifbalk 10 px smaller -> onder elkaar -> te hoog -> schuifbalk: de regels sprongen steeds.
+        stapel = self.width() < (nodig + bugos_ui.px(RIJ_SPELING) if self._gestapeld else nodig)
         # De titel breekt af als hij niet op één regel past: naast wat rechts staat, of (gestapeld) over de hele regel.
         afbreken = self.width() < vast + titel + (0 if stapel else rechts)
         if afbreken != self.titel.wordWrap():
@@ -422,7 +427,7 @@ class Pagina(QScrollArea):
     def kaart(self, kopje: str = "") -> Groep:
         """Een kaart met regels, eventueel met een kopje erboven."""
         if kopje:
-            self.lay.addWidget(sectie(kopje))
+            self.lay.addWidget(sectie(kopje, wrap=True))   # breekt af op een smalle pagina (B-02)
         g = Groep()
         g.lay.setContentsMargins(4, 4, 4, 4)
         self.lay.addWidget(g)

@@ -93,11 +93,30 @@ def zet_meldingsgeluid(aan: bool) -> None:
     _c.kde_schrijf("plasmanotifyrc", "DoNotDisturb", "NotificationSoundsMuted", "false" if aan else "true")
 
 
-def proefmelding(titel: str, tekst: str) -> bool:
+# Het tandwiel op een melding: Plasma opent dan zijn eigen (technische) pagina 'Meldingen - Systeeminstellingen'.
+# Geeft de melding zelf een actie met de naam 'settings', dan stuurt Plasma die actie terug in plaats daarvan
+# (libnotificationmanager: hasConfigureAction -> invokeAction("settings")). Zo blijf je in BugOS (B-05).
+TANDWIEL = "settings"
+
+
+def proefmelding_opdracht(titel: str, tekst: str, label_tandwiel: str) -> tuple[str, ...]:
+    """notify-send met een eigen 'settings'-actie (het tandwiel). notify-send wacht dan tot de melding weg is, en
+    zegt op stdout welke actie je koos."""
+    return ("notify-send", "-a", "BugOS", "-i", "bugos-logo", "--hint=string:desktop-entry:bugos-settings",   # (U323)
+            f"--action={TANDWIEL}={label_tandwiel}", titel, tekst)
+
+
+def proefmelding(titel: str, tekst: str, label_tandwiel: str = "") -> str | bool:
+    """Toon een proefmelding. Met label_tandwiel: wacht tot hij weg is en geef 'settings' als je op het tandwiel
+    klikte ('' anders). Zonder: zoals vroeger, alleen tonen (True als het lukte)."""
     if _c.VOORBEELD:
-        return True
-    return _c.draai("notify-send", "-a", "BugOS", "-i", "bugos-logo", "--hint=string:desktop-entry:bugos-settings",
-                    titel, tekst, timeout=5)[0] == 0   # (U323)
+        return "" if label_tandwiel else True
+    if not label_tandwiel:
+        return _c.draai("notify-send", "-a", "BugOS", "-i", "bugos-logo", "--hint=string:desktop-entry:bugos-settings",
+                        titel, tekst, timeout=5)[0] == 0   # (U323)
+    # Een melding blijft hoogstens zo lang staan; daarna wachten we niet meer (de lijst bewaart hem wel).
+    code, uit = _c.draai(*proefmelding_opdracht(titel, tekst, label_tandwiel), timeout=900)
+    return TANDWIEL if code == 0 and TANDWIEL in uit.split() else ""
 
 
 # ====================================================== standaardprogramma's ===

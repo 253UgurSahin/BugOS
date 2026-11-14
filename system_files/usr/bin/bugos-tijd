@@ -1,0 +1,45 @@
+#!/usr/bin/bash
+# bugos-tijd - de klok van de computer veranderen, als beheerder (Instellingen > Tijd en taal).
+#
+#   bugos-tijd vanzelf aan|uit        -> de klok vanzelf gelijkzetten via internet (NTP)
+#   bugos-tijd zone Europe/Amsterdam  -> de tijdzone
+#   bugos-tijd klok "2026-11-14 13:05:00"  -> de klok met de hand (plaatselijke tijd)
+#
+# Waarom een eigen hulpje: timedatectl vraagt het wachtwoord via systemd, en dan staat er een Engelse, technische zin
+# in het venster ('Authentication is required to control whether network time synchronization shall be enabled.').
+# Via pkexec en /usr/share/polkit-1/actions/org.bugos.tijd.policy zegt BugOS zelf waarom, in gewone woorden, net als
+# bij de updates (B-04). Als root vraagt timedatectl daarna niets meer.
+set -euo pipefail
+
+if [ "$(id -u)" -ne 0 ]; then
+    # Altijd het echte programma: niet een gelijknamig bestand ergens anders op je PATH (zoals bugos-updates).
+    exec pkexec /usr/bin/bugos-tijd "$@"
+fi
+
+case "${1:-}" in
+vanzelf)
+    case "${2:-}" in
+    aan) exec timedatectl set-ntp true ;;
+    uit) exec timedatectl set-ntp false ;;
+    esac
+    ;;
+zone)
+    ZONE="${2:-}"
+    # Alleen een naam zoals timedatectl ze zelf kent (geen paden, geen rare tekens): dit draait als root.
+    if [[ "$ZONE" =~ ^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+){0,2}$ ]] && timedatectl list-timezones | grep -qxF -- "$ZONE"; then
+        exec timedatectl set-timezone "$ZONE"
+    fi
+    echo "Onbekende tijdzone: '$ZONE'" >&2
+    exit 2
+    ;;
+klok)
+    # Precies 'JJJJ-MM-DD UU:MM:SS', zoals Instellingen het geeft.
+    if [[ "${2:-}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}$ ]]; then
+        exec timedatectl set-time "$2"
+    fi
+    echo "Geen geldige tijd: '${2:-}'" >&2
+    exit 2
+    ;;
+esac
+echo "Gebruik: bugos-tijd vanzelf aan|uit | zone <Werelddeel/Stad> | klok 'JJJJ-MM-DD UU:MM:SS'" >&2
+exit 2

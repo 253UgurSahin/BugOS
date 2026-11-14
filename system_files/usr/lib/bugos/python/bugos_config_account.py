@@ -53,14 +53,44 @@ WERELDDEEL = {"Europe": ("Europa", "Europe"), "America": ("Amerika", "America"),
               "Arctic": ("Noordpool", "Arctic")}
 
 
+# De Nederlandse naam van steden die in het Nederlands anders heten (B-17: 'Athene' gaf eerst een lege lijst, en
+# 'Brussel' vond alleen toevallig 'Brussels'). Alleen waar het echt anders is; de rest blijft zoals tzdata het zegt.
+STAD_NL = {
+    "Athens": "Athene", "Brussels": "Brussel", "London": "Londen", "Paris": "Parijs", "Berlin": "Berlijn",
+    "Lisbon": "Lissabon", "Copenhagen": "Kopenhagen", "Moscow": "Moskou", "Prague": "Praag", "Vienna": "Wenen",
+    "Warsaw": "Warschau", "Bucharest": "Boekarest", "Belgrade": "Belgrado", "Kyiv": "Kiev", "Kiev": "Kiev",
+    "Luxembourg": "Luxemburg", "Zurich": "Zürich", "Vatican": "Vaticaanstad", "Tirane": "Tirana",
+    "Canary": "Canarische Eilanden", "Azores": "Azoren",
+    "Faroe": "Faeröer",
+    "Mexico City": "Mexico-Stad", "Sao Paulo": "São Paulo", "Curacao": "Curaçao",
+    "Shanghai": "Sjanghai", "Tehran": "Teheran", "Baghdad": "Bagdad", "Riyadh": "Riyad", "Jerusalem": "Jeruzalem",
+    "Kolkata": "Calcutta", "Seoul": "Seoel",
+    "Cairo": "Caïro", "Easter": "Paaseiland", "Galapagos": "Galápagos",
+}
+
+
+def _met_spaties(naam: str) -> str:
+    """'EasterIsland' -> 'Easter Island', 'Port_of_Spain' -> 'Port of Spain' (B-17)."""
+    return re.sub(r"(?<=[a-z])(?=[A-Z])", " ", naam.replace("_", " "))
+
+
 def mooie_zone(zone: str, nl: bool = True) -> str:
-    """'Europe/Amsterdam' -> 'Amsterdam (Europa)'."""
+    """'Europe/Amsterdam' -> 'Amsterdam (Europa)'; in het Nederlands 'Europe/Athens' -> 'Athene (Europa)'."""
     if "/" not in zone:
         return zone
     deel, stad = zone.split("/", 1)
-    stad = stad.replace("_", " ").replace("/", " / ")
+    delen = [_met_spaties(d) for d in stad.split("/")]
+    if nl:
+        delen[-1] = STAD_NL.get(delen[-1], delen[-1])
+    stad = " / ".join(delen)
     naam = WERELDDEEL.get(deel)
     return f"{stad} ({naam[0] if nl else naam[1]})" if naam else f"{stad} ({deel})"
+
+
+def zone_zoekwoorden(zone: str) -> str:
+    """Waarop je een tijdzone ook vindt: de Engelse en de Nederlandse naam, en de naam van tzdata zelf. Zo vindt
+    'Athene' Athens en 'Athens' Athene (B-17)."""
+    return f"{mooie_zone(zone, True)} {mooie_zone(zone, False)} {zone.replace('_', ' ')}"
 
 
 def tijdzones() -> list[str]:
@@ -68,22 +98,40 @@ def tijdzones() -> list[str]:
         return ["Europe/Amsterdam", "Europe/Brussels", "Europe/Berlin", "Europe/London", "Europe/Istanbul",
                 "America/New_York", "America/Curacao", "Asia/Tokyo", "Australia/Sydney"]
     zones = [z.strip() for z in _c.draai("timedatectl", "list-timezones", timeout=5)[1].splitlines()]
-    return [z for z in zones if "/" in z and not z.startswith("Etc/")]
+    # Alleen de echte namen (Werelddeel/Stad). Oude bijnamen als 'Chile/EasterIsland' of 'US/Eastern' staan ook in de
+    # lijst; die gaven 'EasterIsland (Chile)' naast 'Easter (Stille Oceaan)' (B-17).
+    return [z for z in zones if "/" in z and z.split("/", 1)[0] in WERELDDEEL]
+
+
+TIJD_HULP = "/usr/bin/bugos-tijd"
+
+
+def tijd_opdracht(wat: str, waarde: str) -> tuple[str, ...]:
+    """De opdracht om de klok te veranderen. Via pkexec en bugos-tijd: dan staat er in het wachtwoordvenster een
+    gewone Nederlandse zin van BugOS, niet de Engelse van systemd ('Authentication is required to control whether
+    network time synchronization shall be enabled.') (B-04). Is het hulpje er niet, dan timedatectl zelf (zoals eerst).
+    wat: 'vanzelf' (waarde aan/uit), 'zone' of 'klok'."""
+    if shutil.which("bugos-tijd") or Path(TIJD_HULP).exists():
+        return ("pkexec", TIJD_HULP, wat, waarde)
+    if wat == "vanzelf":
+        return ("timedatectl", "set-ntp", "true" if waarde == "aan" else "false")
+    return ("timedatectl", "set-timezone" if wat == "zone" else "set-time", waarde)
 
 
 def zet_tijdzone(zone: str) -> bool:
-    """Via timedatectl; KDE vraagt het wachtwoord, net als Windows."""
+    """Via bugos-tijd (of timedatectl); BugOS vraagt het wachtwoord, net als Windows."""
     if _c.VOORBEELD:
         _c._VB["zone"] = zone
         return True
-    return _c.draai("timedatectl", "set-timezone", zone, timeout=60)[0] == 0
+    # Lang genoeg om rustig je wachtwoord te typen (pkexec wacht daarop).
+    return _c.draai(*tijd_opdracht("zone", zone), timeout=600)[0] == 0
 
 
 def zet_tijd_auto(aan: bool) -> bool:
     if _c.VOORBEELD:
         _c._VB["tijd_auto"] = aan
         return True
-    return _c.draai("timedatectl", "set-ntp", "true" if aan else "false", timeout=60)[0] == 0
+    return _c.draai(*tijd_opdracht("vanzelf", "aan" if aan else "uit"), timeout=600)[0] == 0
 
 
 def zet_klok(wanneer: datetime) -> tuple[bool, str]:
@@ -96,7 +144,7 @@ def zet_klok(wanneer: datetime) -> tuple[bool, str]:
     if tijd().auto:
         return False, "auto"
     begin, t0 = datetime.now(), time.monotonic()
-    if _c.draai("timedatectl", "set-time", wanneer.strftime("%Y-%m-%d %H:%M:%S"), timeout=120)[0] == 0:
+    if _c.draai(*tijd_opdracht("klok", wanneer.strftime("%Y-%m-%d %H:%M:%S")), timeout=600)[0] == 0:
         return True, ""
     # timedatectl geeft het na 25 s op, ook als je dan nog in het wachtwoordvenster zit; de klok gaat daarna toch
     # gewoon. Dus nog even kijken: loopt de klok nu zoals gevraagd (2 minuten speling)? Alleen als je hem echt

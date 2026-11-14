@@ -155,9 +155,14 @@ class Zoekveld(QLineEdit):
 class Zijbalk(QListWidget):
     """Navigatie aan de linkerkant (zoals bij Instellingen in Windows)."""
 
+    # Je klikt op het onderdeel dat al gekozen is. (currentRowChanged komt dan niet: er verandert niets.) Instellingen
+    # kijkt dan opnieuw hoe het ervoor staat, zoals je zou verwachten (B-07: de kabel bleef 'Verbonden' zeggen).
+    opnieuw_gekozen = Signal(int)
+
     def __init__(self):
         super().__init__()
         self.setObjectName("zijbalk")
+        self._was_gekozen = -1
         self.setIconSize(QSize(20, 20))
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
@@ -187,6 +192,19 @@ class Zijbalk(QListWidget):
             it = self.item(rij)
             if it.flags() == Qt.ItemFlag.NoItemFlags:
                 it.setForeground(QColor(K["tekst3"]))
+
+    def mousePressEvent(self, e) -> None:  # noqa: N802
+        # Vóór de klik: was dit onderdeel al gekozen? (Na de klik is hij dat altijd.)
+        rij = self.indexAt(e.position().toPoint()).row()
+        self._was_gekozen = rij if rij >= 0 and rij == self.currentRow() else -1
+        super().mousePressEvent(e)
+
+    def mouseReleaseEvent(self, e) -> None:  # noqa: N802
+        super().mouseReleaseEvent(e)
+        rij = self.indexAt(e.position().toPoint()).row()
+        if rij >= 0 and rij == self._was_gekozen == self.currentRow():
+            self.opnieuw_gekozen.emit(rij)
+        self._was_gekozen = -1
 
     def sleutel(self, rij: int) -> str:
         it = self.item(rij)
@@ -281,9 +299,12 @@ class Voortgang(QProgressBar):
         self.setTextVisible(False)
 
 
-def sectie(tekst: str) -> QLabel:
-    """Een klein kopje boven een kaart, in een gewone zin (geen hoofdletters)."""
-    lab = label(tekst, "sectie", wrap=False)
+def sectie(tekst: str, wrap: bool = False) -> QLabel:
+    """Een klein kopje boven een kaart, in een gewone zin (geen hoofdletters).
+    wrap=True: een lang kopje ('Waar komt het geluid uit? Klik om te kiezen.') breekt af op een smalle pagina, in
+    plaats van de pagina breder te maken dan het venster (Instellingen op een half scherm, B-02). Alleen in een
+    kolom onder elkaar: naast een knop (sectie_met_knop) blijft het één regel."""
+    lab = label(tekst, "sectie", wrap=wrap)
     lab.setContentsMargins(4, 6, 0, 0)
     return lab
 

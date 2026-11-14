@@ -9,8 +9,8 @@ import bugos_config as bi
 import bugos_ui
 from bugos_ui import (Chip, Groep, KeuzeKaart, Knop, Rij, Voortgang, label, leeg_groep, lijn_icoon, schermmaat, sectie,
                       t)
-from bugos_settings_onderdelen import (Blad, Doorloop, Keuzes, KiesDialoog, Regelaar, dichtstbij, op_achtergrond,
-                                       schuifje)
+from bugos_settings_onderdelen import (Blad, Doorloop, Keuzes, KiesDialoog, Kolommen, Regelaar, dichtstbij,
+                                       op_achtergrond, schuifje)
 from bugos_settings_systeem import Schakelaars
 from PySide6.QtCore import QProcess, QSize, Qt, QTimer
 from PySide6.QtGui import QPixmap
@@ -55,7 +55,7 @@ class GeluidPagina(Blad):
                                   "Where does the sound come from? Click to choose."))
         # De microfoon, helemaal in BugOS (niet meer het geluidscherm van KDE). Een eigen kopje 'Microfoon', zodat
         # 'Volume' kort blijft en de regel ook op 150 % past (review I7); zoeken op 'microfoon' komt hier (U166).
-        self.lay.addWidget(sectie(t("Microfoon", "Microphone")))
+        self.lay.addWidget(sectie(t("Microfoon", "Microphone"), wrap=True))
         self.mic_kaart = kaart_zonder_kop(self.lay)
         self.mic_regelaar = Regelaar(80)
         self.mic_regelaar.veranderd.connect(
@@ -89,7 +89,8 @@ class GeluidPagina(Blad):
         self._vb_klok = QTimer(self)          # voorbeeldstand: een balk die beweegt, zonder microfoon
         self._vb_klok.setInterval(80)
         self._vb_klok.timeout.connect(self._vb_stukje)
-        self.mic_lijst_kop = sectie(t("Waar praat je in? Klik om te kiezen.", "What do you talk into? Click to choose."))
+        self.mic_lijst_kop = sectie(t("Waar praat je in? Klik om te kiezen.", "What do you talk into? Click to choose."),
+                                    wrap=True)   # breekt af op een smalle pagina (B-02)
         self.lay.addWidget(self.mic_lijst_kop)
         self.mic_lijst = kaart_zonder_kop(self.lay)
 
@@ -463,7 +464,7 @@ class SchermPagina(Blad):
                    t("'s Avonds warmer licht, prettiger voor je ogen", "Warmer light in the evening, easier on your eyes"),
                    self.nacht))
         # Je schermen: alleen met twee of meer (een laptop met een tv, twee monitoren).
-        self.schermen_kop = sectie(t("Je schermen", "Your screens"))
+        self.schermen_kop = sectie(t("Je schermen", "Your screens"), wrap=True)
         self.lay.addWidget(self.schermen_kop)
         self.schermen_kaart = kaart_zonder_kop(self.lay)
         titel_stand = t("Meer dan één scherm", "More than one screen")
@@ -479,7 +480,7 @@ class SchermPagina(Blad):
         self.schermen_kop.hide()
         self.schermen_kaart.hide()
         # Het beeld van (het gekozen) scherm. Zonder gegevens van kscreen-doctor alleen de grootte, zoals vroeger.
-        self.beeld_kop = sectie(t("Grootte", "Size"))
+        self.beeld_kop = sectie(t("Grootte", "Size"), wrap=True)
         self.lay.addWidget(self.beeld_kop)
         self.beeld_kaart = kaart_zonder_kop(self.lay)
         hoofd = QWidget()
@@ -552,6 +553,12 @@ class SchermPagina(Blad):
         # Zonder schermen (oude vorm, of kscreen-doctor werkt niet): de grens van Qt, zoals vroeger (U397, I13).
         self._schermen = rest[0] if rest else None
         self.helder_rij.setVisible(helder is not None)
+        # Kan dit scherm niet feller of donkerder (een pc met een losse monitor, de VM), dan ook de uitleg bovenaan
+        # niet over 'Helderheid' laten beginnen (B-21).
+        if self.sub is not None:
+            self.sub.setText(t(self.uitleg_nl, self.uitleg_en) if helder is not None else
+                             t("Warm licht voor de avond, en hoe groot alles is.",
+                               "Warm light for the evening, and how big everything is."))
         if helder is not None:
             self.helder.zet(helder)
         self.nacht.zet_stil(nacht)
@@ -653,8 +660,22 @@ class SchermPagina(Blad):
         # Op een klein scherm (1366×768) is 200% maar 683×384: dan past niets meer, ook de knop terug niet. Alleen
         # groottes aanbieden waarbij minstens 1024×700 overblijft (de huidige blijft altijd te kiezen) (U397).
         grens = self.grens()
+        te_groot = []
         for waarde, knop in self.grootte.knoppen.items():
-            knop.setEnabled(waarde <= max(grens, schaal + 0.01))
+            mag = waarde <= max(grens, schaal + 0.01)
+            knop.setEnabled(mag)
+            # Een grijze knop zonder uitleg leek kapot: op een laptop van 1280 x 800 deed 125 % 'niets' (B-03).
+            # Nu zegt de knop zelf (tip) en de regel eronder waarom het niet kan.
+            knop.setToolTip("" if mag else t("Te groot voor dit scherm: dan past niets meer.",
+                                             "Too big for this screen: nothing would fit any more."))
+            if not mag:
+                te_groot.append(waarde)
+        uitleg = t("Tekst, knoppen en vensters", "Text, buttons and windows")
+        if te_groot:
+            grootste = max(w for w in self.grootte.knoppen if w not in te_groot)
+            uitleg += ". " + t("Groter dan {p} past niet op dit scherm.",
+                               "Bigger than {p} does not fit on this screen.").format(p=f"{grootste:.0%}")
+        self.grootte_rij.zet_uitleg(uitleg)
 
     def gekozen_scherm(self):
         schermen = getattr(self, "_schermen", None)
@@ -835,7 +856,8 @@ def groot_genoeg() -> float:
 
 PROFIEL_TEKST = {
     "power-saver": (("Zuinig", "Saver"), ("Batterij gaat langer mee", "Battery lasts longer"), "batterij"),
-    "balanced": (("Gebalanceerd", "Balanced"), ("Aanbevolen", "Recommended"), "vink"),
+    # Geen vinkje als icoon: dat leek naast de rode rand van een andere keuze een tweede aangevinkte keuze (B-14).
+    "balanced": (("Gebalanceerd", "Balanced"), ("Aanbevolen", "Recommended"), "weegschaal"),
     "performance": (("Snel", "Fast"), ("Volle kracht, voor games", "Full power, for games"), "spel"),
 }
 
@@ -849,8 +871,10 @@ def keuze_kaart(icoon_naam: str, naam: str, uitleg_tekst: str) -> KeuzeKaart:
     plaatje.setPixmap(lijn_icoon(icoon_naam, "tekst", 24, gekozen=None).pixmap(24, 24))
     il.addWidget(plaatje)
     il.addWidget(label(naam, "kop3", wrap=False))
-    il.addWidget(label(uitleg_tekst, "klein"))
+    uitleg_label = label(uitleg_tekst, "klein")
+    il.addWidget(uitleg_label)
     kaart = KeuzeKaart(inhoud)
+    kaart.uitleg_label = uitleg_label   # (Energie zet een andere uitleg op een pc zonder batterij, B-21)
     kaart.setMinimumHeight(112)
     return kaart
 
@@ -868,10 +892,10 @@ class EnergiePagina(Blad):
         self.batterij_kaart = self.kaart()
         self.batterij = Rij("batterij", t("Batterij", "Battery"), "")
         self.batterij_kaart.voeg(self.batterij)
-        self.lay.addWidget(sectie(t("Hoe moet je computer werken?", "How should your computer work?")))
-        rij = QHBoxLayout()
-        rij.setSpacing(12)
-        rij.setContentsMargins(0, 0, 0, 0)   # op één lijn met de titel en de andere kaarten (D06)
+        self.lay.addWidget(sectie(t("Hoe moet je computer werken?", "How should your computer work?"), wrap=True))
+        # Kolommen (zonder marge: op één lijn met de titel en de andere kaarten, D06): drie naast elkaar, en op een
+        # half scherm (640 px) minder per regel in plaats van dat 'Snel' rechts wegvalt (B-02).
+        self.profiel_rij = Kolommen(12)
         self.profielen: dict[str, KeuzeKaart] = {}
         groep = QButtonGroup(self)
         for profiel in bi.PROFIELEN:
@@ -880,9 +904,7 @@ class EnergiePagina(Blad):
             kaart.clicked.connect(lambda _c=False, p=profiel: self.zet_profiel(p))
             groep.addButton(kaart)
             self.profielen[profiel] = kaart
-            rij.addWidget(kaart, 1)
-        self.profiel_rij = QWidget()
-        self.profiel_rij.setLayout(rij)
+            self.profiel_rij.voeg(kaart)
         self.lay.addWidget(self.profiel_rij)
         self.geen_profiel = label(t("Deze computer kan niet wisselen tussen zuinig en snel.",
                                     "This computer cannot switch between saving and fast."), "sub")
@@ -940,6 +962,16 @@ class EnergiePagina(Blad):
         self.slaap_rij.zet_uitleg(slaap + uitleg[len(t("Even met de muis bewegen en het is terug",
                                                        "Move the mouse and it is back")):])
         self.batterij_kaart.setVisible(bat is not None)
+        # Een pc zonder batterij: niet over de batterij praten, bovenaan niet en op de kaart 'Zuinig' niet (B-21).
+        if self.sub is not None:
+            self.sub.setText(t(self.uitleg_nl, self.uitleg_en) if bat is not None else
+                             t("Zuinig of snel, en wanneer het scherm uitgaat.",
+                               "Saving or fast, and when the screen turns off."))
+        zuinig = self.profielen.get("power-saver")
+        if zuinig is not None and hasattr(zuinig, "uitleg_label"):
+            tekst = t(*PROFIEL_TEKST["power-saver"][1]) if bat is not None else                 t("Gebruikt minder stroom", "Uses less power")
+            zuinig.uitleg_label.setText(tekst)
+            zuinig.setAccessibleDescription(tekst)
         if bat is not None:
             staat = t("vol", "full") if bat.vol else t("wordt opgeladen", "charging") if bat.laadt else \
                 t("aan de lader, laadt niet", "plugged in, not charging") if bat.aan_lader else t("op batterij", "on battery")
@@ -988,7 +1020,7 @@ class UiterlijkPagina(Schakelaars, Blad):
     kde = "kcm_colors"
 
     def bouw(self) -> None:
-        self.lay.addWidget(sectie(t("Licht of donker", "Light or dark")))
+        self.lay.addWidget(sectie(t("Licht of donker", "Light or dark"), wrap=True))
         rij = QHBoxLayout()
         rij.setSpacing(12)
         groep = QButtonGroup(self)
@@ -1009,7 +1041,7 @@ class UiterlijkPagina(Schakelaars, Blad):
         # Rekfactor 0: de lege ruimte rechts krijgt pas iets als beide kaarten op hun breedst zijn.
         rij.addStretch(0)
         self.lay.addLayout(rij)
-        self.lay.addWidget(sectie(t("Achtergrond", "Background")))
+        self.lay.addWidget(sectie(t("Achtergrond", "Background"), wrap=True))
         # De plaatjes naast elkaar in een Doorloop: passen ze niet meer naast elkaar (150 % met grote letters, of
         # een smaller gemaakt venster), dan gaat een plaatje naar de volgende regel in plaats van dat de hele pagina
         # opzij schuift (D05). (self.plaatjes: de test kijkt hoe ze liggen.)

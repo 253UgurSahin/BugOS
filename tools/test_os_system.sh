@@ -110,6 +110,30 @@ printf '{"deployments":[{"booted":true,"timestamp":2000}]}' >"$TMP/status.json"
 rm -f "$TMP/rollback"
 draai bugos-updates terug
 klopt '[ $code -eq 3 ] && [ ! -f "$TMP/rollback" ] && grep -q "no older version" "$TMP/uit"' "U041: terug zonder vorige versie: zegt dat (code 3)"
+# B-24: 'kan-terug' zegt dat al vóór de waarschuwing in Instellingen, zonder wachtwoord (geen pkexec, als gewone
+# gebruiker), en precies zoals 'terug' het zou zien.
+nep id 'echo 1000'
+nep pkexec 'echo "$*" >>"'"$TMP"'/pkexec"; exit 0'
+rm -f "$TMP/pkexec"
+draai bugos-updates kan-terug
+klopt '[ $code -eq 3 ] && [ ! -f "$TMP/rollback" ] && [ ! -f "$TMP/pkexec" ] && grep -q "no older version" "$TMP/uit"' \
+    "B-24: kan-terug met maar één versie: nee (code 3), zonder wachtwoord"
+for _st in '{"deployments":[{"booted":true,"timestamp":2000},{"booted":false,"timestamp":1000}]}' \
+    '{"deployments":[{"booted":false,"timestamp":1000},{"booted":true,"timestamp":2000}]}' \
+    '{"deployments":[{"booted":false,"timestamp":2000},{"booted":true,"timestamp":1000}]}'; do
+    printf '%s' "$_st" >"$TMP/status.json"
+    draai bugos-updates kan-terug
+    klopt '[ $code -eq 0 ] && [ ! -f "$TMP/pkexec" ]' "B-24: kan-terug: ja bij een oudere versie, 'terug' al gekozen of vastzetten ($_st)"
+done
+printf '{"deployments":[{"booted":true,"timestamp":1000},{"booted":false,"timestamp":2000}]}' >"$TMP/status.json"
+draai bugos-updates kan-terug
+klopt '[ $code -eq 3 ]' "B-24: kan-terug terwijl de oudste al draait (U044): nee, zoals 'terug'"
+: >"$TMP/status.json"
+draai bugos-updates kan-terug
+klopt '[ $code -eq 0 ]' "B-24: kan-terug zonder antwoord van rpm-ostree: ja (dan vraagt Instellingen het gewoon)"
+nep id 'echo 0'
+nep pkexec 'exit 0'
+printf '{"deployments":[{"booted":true,"timestamp":2000}]}' >"$TMP/status.json"
 # U044: al teruggegaan en opnieuw opgestart (de oudere draait, de nieuwere staat erna): niet weer vooruit.
 printf '{"deployments":[{"booted":true,"timestamp":1000},{"booted":false,"timestamp":2000}]}' >"$TMP/status.json"
 rm -f "$TMP/rollback"
@@ -674,5 +698,30 @@ klopt '[ "$(HOME="$TMP/thuis" PATH="$TMP/bin:$PATH" bash "$TMP/bugos-theme" stat
 nep kreadconfig6 'case "$*" in *ColorScheme*) echo BreezeDark ;; *BackgroundNormal*) echo 32,35,38,255 ;; esac'
 klopt '[ "$(HOME="$TMP/thuis" PATH="$TMP/bin:$PATH" bash "$TMP/bugos-theme" status 2>/dev/null)" = donker ]' \
     "U331: een donkere kleur met doorzichtigheid (r,g,b,a) telt ook als donker"
+# B-04: bugos-tijd (de klok, als beheerder via pkexec met een Nederlandse zin van BugOS). Als root roept het alleen
+# timedatectl aan, en alleen met een tijdzone die timedatectl zelf kent en een tijd in de goede vorm.
+kopie bugos-tijd
+nep id 'echo 0'
+nep timedatectl 'case "$1" in list-timezones) printf "Europe/Amsterdam\nEurope/Athens\n" ;; *) echo "$*" >>"'"$TMP"'/timedatectl" ;; esac'
+rm -f "$TMP/timedatectl"
+draai bugos-tijd vanzelf uit
+klopt '[ $code -eq 0 ] && grep -qx "set-ntp false" "$TMP/timedatectl"' "B-04: bugos-tijd vanzelf uit -> timedatectl set-ntp false"
+draai bugos-tijd zone Europe/Athens
+klopt '[ $code -eq 0 ] && grep -qx "set-timezone Europe/Athens" "$TMP/timedatectl"' "B-04: bugos-tijd zone -> timedatectl set-timezone"
+rm -f "$TMP/timedatectl"
+draai bugos-tijd zone "../../etc/shadow"
+klopt '[ $code -eq 2 ] && [ ! -f "$TMP/timedatectl" ]' "B-04: bugos-tijd weigert een rare tijdzone (draait als root)"
+draai bugos-tijd zone Mars/Olympus
+klopt '[ $code -eq 2 ] && [ ! -f "$TMP/timedatectl" ]' "B-04: bugos-tijd weigert een tijdzone die timedatectl niet kent"
+draai bugos-tijd klok "2026-11-14 13:05:00"
+klopt '[ $code -eq 0 ] && grep -qx "set-time 2026-11-14 13:05:00" "$TMP/timedatectl"' "B-04: bugos-tijd klok -> timedatectl set-time"
+rm -f "$TMP/timedatectl"
+draai bugos-tijd klok "morgen; rm -rf /"
+klopt '[ $code -eq 2 ] && [ ! -f "$TMP/timedatectl" ]' "B-04: bugos-tijd weigert een tijd in een andere vorm"
+nep id 'echo 1000'
+nep pkexec 'echo "$*" >"'"$TMP"'/pkexec"'
+draai bugos-tijd vanzelf aan
+klopt 'grep -qx "/usr/bin/bugos-tijd vanzelf aan" "$TMP/pkexec"' "B-04: als gewone gebruiker vraagt bugos-tijd het wachtwoord via pkexec (de eigen polkit-regel)"
+nep id 'echo 0'
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

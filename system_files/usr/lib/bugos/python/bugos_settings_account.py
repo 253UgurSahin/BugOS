@@ -10,7 +10,7 @@ from datetime import datetime
 import bugos_config as bi
 from bugos_ui import TAAL, K, Knop, Rij, label, leeg_groep, ronde_pixmap, t, vraag_ja, vraag_tekst
 from bugos_settings_onderdelen import (
-    Blad, Keuzes, KiesDialoog, WachtwoordDialoog, dichtstbij, meer_knop, op_achtergrond, schuifje,
+    Blad, Doorloop, Keuzes, KiesDialoog, WachtwoordDialoog, dichtstbij, meer_knop, op_achtergrond, schuifje,
 )
 from PySide6.QtCore import QDate, QDateTime, QLocale, Qt, QTime, QTimer
 from PySide6.QtGui import QIcon, QImage, QPixmap
@@ -351,8 +351,19 @@ class TijdPagina(Blad):
 
     def zet_auto(self, aan: bool) -> None:
         # Ook als het niet lukte (bijv. Annuleren bij het wachtwoord) opnieuw lezen: dan springt het schuifje terug.
-        op_achtergrond(self, lambda: bi.zet_tijd_auto(aan), lambda ok: (self.ververs(), None if ok else self.melding.toon(
-            t("Dat lukte niet.", "That did not work."), "fout")))
+        # Zolang het wachtwoord gevraagd wordt, staat het schuifje op slot en zegt de regel wat er gebeurt: eerst stond
+        # het al op 'uit' terwijl de vraag nog open was (B-04).
+        self.auto.setEnabled(False)
+        self.klok_rij.zet_uitleg(t("Even geduld… BugOS vraagt misschien je wachtwoord.",
+                                   "One moment… BugOS may ask for your password."))
+
+        def klaar(ok) -> None:
+            self.auto.setEnabled(True)
+            self.ververs()
+            if not ok:
+                self.melding.toon(t("Dat lukte niet. Er is niets veranderd.", "That did not work. Nothing changed."),
+                                  "fout")
+        op_achtergrond(self, lambda: bi.zet_tijd_auto(aan), klaar)
 
     def klok_zetten(self) -> None:
         d = KlokDialoog(self)
@@ -386,9 +397,11 @@ class TijdPagina(Blad):
             return
         nl = TAAL == "nl"
         huidig, zones = uitkomst
+        # Op de naam in jouw taal, en ook op de Engelse naam (Athene en Athens) (B-17).
         d = KiesDialoog(self, t("Waar ben je?", "Where are you?"),
                         [(z, bi.mooie_zone(z, nl)) for z in zones], huidig,
-                        t("Zoek een stad, bijvoorbeeld Amsterdam", "Search a city, for example London"))
+                        t("Zoek een stad, bijvoorbeeld Amsterdam", "Search a city, for example London"),
+                        zoekwoorden=bi.zone_zoekwoorden)
         if not d.exec() or d.gekozen == huidig:
             return
         zone = d.gekozen
@@ -643,9 +656,11 @@ class InloggenPagina(Blad):
         self.mensen_rijen: list[Rij] = []
         g = self.kaart()
         rechts = QWidget()
-        rl = QHBoxLayout(rechts)
+        # Doorloop: op een half scherm (640 px) komt '…' onder 'Wachtwoord wijzigen' in plaats van dat de knop
+        # afgeknipt wordt (B-02).
+        rl = Doorloop(8)
+        rechts.setLayout(rl)
         rl.setContentsMargins(0, 0, 0, 0)
-        rl.setSpacing(8)
         ww = Knop(t("Wachtwoord wijzigen…", "Change password…"), "gewoon", "lijn:slot")
         ww.clicked.connect(self.wijzig_wachtwoord)
         rl.addWidget(ww)
@@ -831,7 +846,9 @@ class InloggenPagina(Blad):
     def menu_voor(self, p: bi.Persoon) -> list:
         items = [("slot", t("Nieuw wachtwoord…", "Set a new password…"), lambda: self.nieuw_wachtwoord_voor(p))]
         if p.beheerder:
-            items.append(("persoon", t("Gewone gebruiker maken", "Make standard user"), lambda: self.zet_soort(p, False)))
+            # Hetzelfde woord als in de lijst en bij Iemand toevoegen: "Standaard" (B-22).
+            items.append(("persoon", t("Standaardgebruiker maken", "Make standard user"),
+                          lambda: self.zet_soort(p, False)))
         else:
             items.append(("persoon", t("Beheerder maken", "Make administrator"), lambda: self.zet_soort(p, True)))
         if not bi.laatste_beheerder(p, self.mensen):
@@ -885,7 +902,7 @@ class InloggenPagina(Blad):
             ok, reden = uitkomst if isinstance(uitkomst, tuple) else (False, "fout")
             if ok:
                 tekst = (t("{naam} is nu beheerder.", "{naam} is now an administrator.") if beheerder else
-                         t("{naam} is nu een gewone gebruiker.", "{naam} is now a standard user.")).format(naam=naam)
+                         t("{naam} is nu een standaardgebruiker.", "{naam} is now a standard user.")).format(naam=naam)
                 if p.ingelogd:
                     tekst += t(" Dat geldt vanaf de volgende keer dat die inlogt.",
                                " It counts from the next time they log in.")
