@@ -1,0 +1,16 @@
+# BugOS: geen KDE-meldingen 'Netwerkbeheer: Verbinding Bekabelde verbinding 1 geactiveerd/gedeactiveerd' (B-25).
+#
+# Waarom: bij elke kabel eruit/erin (of wifi aan/uit) kwam er een KDE-popje met de technische naam van de verbinding.
+# BugOS laat zelf zien of je online bent (het netwerkpictogram op de taakbalk, Instellingen > Wifi en internet), dus
+# die meldingen zeggen niets nieuws en schrikken alleen af.
+#
+# Hoe: KDE (KNotification) leest per gebeurtenis eerst dit bestand (networkmanagement.notifyrc in de config-mappen,
+# /etc/xdg hoort daarbij), en pas daarna de standaard van plasma-nm (/usr/share/knotifications6/). 'Action=None' (zoals KDE het zelf schrijft voor uit)
+# betekent: niets doen, geen popje en geen geluid. Alleen deze twee gewone gebeurtenissen: echte problemen (bijv.
+# 'verbinden mislukt', een verkeerd wifi-wachtwoord) meldt KDE nog wel. Wie het in KDE's eigen instellingen weer
+# aanzet, schrijft dat in ~/.config en dat gaat voor.
+[Event/ConnectionActivated]
+Action=None
+
+[Event/ConnectionDeactivated]
+Action=None
