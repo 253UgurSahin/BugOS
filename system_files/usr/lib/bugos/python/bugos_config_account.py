@@ -53,14 +53,45 @@ WERELDDEEL = {"Europe": ("Europa", "Europe"), "America": ("Amerika", "America"),
               "Arctic": ("Noordpool", "Arctic")}
 
 
+# De Nederlandse naam van steden die in het Nederlands anders heten (B-17: 'Athene' gaf eerst een lege lijst, en
+# 'Brussel' vond alleen toevallig 'Brussels'). Alleen waar het echt anders is; de rest blijft zoals tzdata het zegt.
+STAD_NL = {
+    "Athens": "Athene", "Brussels": "Brussel", "London": "Londen", "Paris": "Parijs", "Berlin": "Berlijn",
+    "Lisbon": "Lissabon", "Copenhagen": "Kopenhagen", "Moscow": "Moskou", "Prague": "Praag", "Vienna": "Wenen",
+    "Warsaw": "Warschau", "Bucharest": "Boekarest", "Belgrade": "Belgrado", "Kyiv": "Kiev", "Kiev": "Kiev",
+    "Luxembourg": "Luxemburg", "Zurich": "Zürich", "Vatican": "Vaticaanstad", "Tirane": "Tirana",
+    "Canary": "Canarische Eilanden", "Azores": "Azoren",
+    "Faroe": "Faeröer",
+    "Mexico City": "Mexico-Stad", "Sao Paulo": "São Paulo", "Curacao": "Curaçao",
+    "Shanghai": "Sjanghai", "Tehran": "Teheran", "Baghdad": "Bagdad", "Riyadh": "Riyad", "Jerusalem": "Jeruzalem",
+    "Kolkata": "Calcutta", "Seoul": "Seoel",
+    "Cairo": "Caïro", "Easter": "Paaseiland", "Galapagos": "Galápagos",
+}
+
+
+def _met_spaties(naam: str) -> str:
+    """'EasterIsland' -> 'Easter Island', 'Port_of_Spain' -> 'Port of Spain' (B-17)."""
+    import re
+    return re.sub(r"(?<=[a-z])(?=[A-Z])", " ", naam.replace("_", " "))
+
+
 def mooie_zone(zone: str, nl: bool = True) -> str:
-    """'Europe/Amsterdam' -> 'Amsterdam (Europa)'."""
+    """'Europe/Amsterdam' -> 'Amsterdam (Europa)'; in het Nederlands 'Europe/Athens' -> 'Athene (Europa)'."""
     if "/" not in zone:
         return zone
     deel, stad = zone.split("/", 1)
-    stad = stad.replace("_", " ").replace("/", " / ")
+    delen = [_met_spaties(d) for d in stad.split("/")]
+    if nl:
+        delen[-1] = STAD_NL.get(delen[-1], delen[-1])
+    stad = " / ".join(delen)
     naam = WERELDDEEL.get(deel)
     return f"{stad} ({naam[0] if nl else naam[1]})" if naam else f"{stad} ({deel})"
+
+
+def zone_zoekwoorden(zone: str) -> str:
+    """Waarop je een tijdzone ook vindt: de Engelse en de Nederlandse naam, en de naam van tzdata zelf. Zo vindt
+    'Athene' Athens en 'Athens' Athene (B-17)."""
+    return f"{mooie_zone(zone, True)} {mooie_zone(zone, False)} {zone.replace('_', ' ')}"
 
 
 def tijdzones() -> list[str]:
@@ -68,7 +99,9 @@ def tijdzones() -> list[str]:
         return ["Europe/Amsterdam", "Europe/Brussels", "Europe/Berlin", "Europe/London", "Europe/Istanbul",
                 "America/New_York", "America/Curacao", "Asia/Tokyo", "Australia/Sydney"]
     zones = [z.strip() for z in _c.draai("timedatectl", "list-timezones", timeout=5)[1].splitlines()]
-    return [z for z in zones if "/" in z and not z.startswith("Etc/")]
+    # Alleen de echte namen (Werelddeel/Stad). Oude bijnamen als 'Chile/EasterIsland' of 'US/Eastern' staan ook in de
+    # lijst; die gaven 'EasterIsland (Chile)' naast 'Easter (Stille Oceaan)' (B-17).
+    return [z for z in zones if "/" in z and z.split("/", 1)[0] in WERELDDEEL]
 
 
 def zet_tijdzone(zone: str) -> bool:

@@ -386,9 +386,11 @@ class TijdPagina(Blad):
             return
         nl = TAAL == "nl"
         huidig, zones = uitkomst
+        # Op de naam in jouw taal, en ook op de Engelse naam (Athene en Athens) (B-17).
         d = KiesDialoog(self, t("Waar ben je?", "Where are you?"),
                         [(z, bi.mooie_zone(z, nl)) for z in zones], huidig,
-                        t("Zoek een stad, bijvoorbeeld Amsterdam", "Search a city, for example London"))
+                        t("Zoek een stad, bijvoorbeeld Amsterdam", "Search a city, for example London"),
+                        zoekwoorden=bi.zone_zoekwoorden)
         if not d.exec() or d.gekozen == huidig:
             return
         zone = d.gekozen

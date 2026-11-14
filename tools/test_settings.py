@@ -243,6 +243,31 @@ zichtbaar = [d.lijst.item(i).text() for i in range(d.lijst.count()) if not d.lij
 klopt(zichtbaar == ["Tokyo (Azië)"], "kiezen: zoeken in de lijst met tijdzones")
 d.accept()
 klopt(d.gekozen == "Asia/Tokyo", "kiezen: Enter kiest wat je gevonden hebt")
+# B-17: Nederlandse stadsnamen, spaties in aan elkaar geschreven namen, oude bijnamen weg, en zoeken op beide namen.
+klopt(bi.mooie_zone("Europe/Athens") == "Athene (Europa)" and bi.mooie_zone("Europe/Athens", False) == "Athens (Europe)"
+      and bi.mooie_zone("Europe/Brussels") == "Brussel (Europa)" and bi.mooie_zone("Pacific/Easter", False) ==
+      "Easter (Pacific)" and bi.mooie_zone("Chile/EasterIsland", False) == "Easter Island (Chile)",
+      "B-17: tijdzones met Nederlandse stadsnamen (Athene, Brussel) en spaties ('Easter Island')")
+import bugos_config_account as _acc17  # noqa: E402
+
+_echt17 = _acc17._c.draai
+_acc17._c.draai = lambda *a, **k: (0, "Europe/Athens\nChile/EasterIsland\nUS/Eastern\nPacific/Easter\nEtc/GMT+1\nUTC\n")
+_vb17, _acc17._c.VOORBEELD = _acc17._c.VOORBEELD, False
+_zones17 = bi.tijdzones()
+_acc17._c.VOORBEELD = _vb17
+_acc17._c.draai = _echt17
+klopt(_zones17 == ["Europe/Athens", "Pacific/Easter"], f"B-17: oude bijnamen (Chile/, US/, Etc/) staan niet in de lijst ({_zones17})")
+d = mod.KiesDialoog(venster, "Test", [(z, bi.mooie_zone(z)) for z in ["Europe/Athens", "Europe/Brussels", "Asia/Tokyo"]],
+                    "Europe/Brussels", "zoek", zoekwoorden=bi.zone_zoekwoorden)
+for _zoek, _verwacht in (("Athene", ["Athene (Europa)"]), ("athens", ["Athene (Europa)"]), ("brussels", ["Brussel (Europa)"])):
+    d.filter(_zoek)
+    _zicht = [d.lijst.item(i).text() for i in range(d.lijst.count()) if not d.lijst.item(i).isHidden()]
+    klopt(_zicht == _verwacht and d.niets.isHidden() and d.ok.isEnabled(),
+          f"B-17: zoeken op '{_zoek}' vindt {_verwacht} (Nederlandse en Engelse naam) ({_zicht})")
+d.filter("Atlantis")
+klopt(not d.niets.isHidden() and not d.ok.isEnabled(), "B-17: niets gevonden: dat staat er, en 'Kiezen' kan niet")
+d.filter("")
+klopt(d.niets.isHidden() and d.ok.isEnabled(), "B-17: zoekveld weer leeg: alles is er weer")
 w = mod.WachtwoordDialoog(venster)
 w.een.setText("geheim1")
 w.twee.setText("geheim2")

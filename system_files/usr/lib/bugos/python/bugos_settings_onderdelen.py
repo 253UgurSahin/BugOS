@@ -443,7 +443,9 @@ class KiesDialoog(QDialog):
     """Een lijst om één ding uit te kiezen (tijdzone, taal), met een zoekveld als de lijst lang is."""
 
     def __init__(self, ouder: QWidget, titel_tekst: str, items: list[tuple[object, str]], huidig: object = None,
-                 zoek_hint: str = ""):
+                 zoek_hint: str = "", zoekwoorden=None):
+        """zoekwoorden: een functie waarde -> extra tekst waarop je die keuze ook vindt (bijv. de Engelse naam van een
+        stad naast de Nederlandse, B-17)."""
         super().__init__(ouder)
         self.setWindowTitle(titel_tekst)
         self.setMinimumWidth(460)
@@ -465,12 +467,19 @@ class KiesDialoog(QDialog):
         for waarde, tekst in items:
             it = QListWidgetItem(tekst)
             it.setData(Qt.ItemDataRole.UserRole, waarde)
+            # Waarop je zoekt: de tekst, en wat zoekwoorden() erbij geeft (één keer uitgerekend, niet bij elke letter).
+            extra = zoekwoorden(waarde) if zoekwoorden is not None else ""
+            it.setData(Qt.ItemDataRole.UserRole + 1, zoeksleutel(f"{tekst} {extra}"))
             it.setSizeHint(QSize(0, 40))
             self.lijst.addItem(it)
             if waarde == huidig:
                 self.lijst.setCurrentItem(it)
         self.lijst.itemDoubleClicked.connect(lambda _it: self.accept())
         lay.addWidget(self.lijst, 1)
+        # Zoek je iets wat er niet is, dan zeggen we dat (eerst bleef de lijst gewoon leeg, B-17).
+        self.niets = label(t("Niets gevonden. Probeer een ander woord.", "Nothing found. Try another word."), "klein")
+        self.niets.hide()
+        lay.addWidget(self.niets)
         knoppen = QHBoxLayout()
         knoppen.addStretch(1)
         weg = Knop(t("Annuleren", "Cancel"), "stil")
@@ -478,6 +487,7 @@ class KiesDialoog(QDialog):
         ok = Knop(t("Kiezen", "Choose"), "hoofd")
         ok.clicked.connect(self.accept)
         ok.setDefault(True)
+        self.ok = ok
         knoppen.addWidget(weg)
         knoppen.addWidget(ok)
         lay.addLayout(knoppen)
@@ -486,9 +496,16 @@ class KiesDialoog(QDialog):
 
     def filter(self, tekst: str) -> None:
         woorden = zoeksleutel(tekst).split()   # (U268)
+        gevonden = 0
         for i in range(self.lijst.count()):
             it = self.lijst.item(i)
-            it.setHidden(not all(w in zoeksleutel(it.text()) for w in woorden))
+            bron = it.data(Qt.ItemDataRole.UserRole + 1) or zoeksleutel(it.text())
+            past = all(w in bron for w in woorden)
+            it.setHidden(not past)
+            gevonden += past
+        # Niets gevonden: dat zeggen, en 'Kiezen' kan dan niet (er is niets om te kiezen) (B-17).
+        self.niets.setVisible(gevonden == 0)
+        self.ok.setEnabled(gevonden > 0)
 
     def accept(self) -> None:  # noqa: N802
         it = self.lijst.currentItem()
