@@ -584,12 +584,17 @@ def _volg_systeem(app: QApplication) -> None:
     timer.setInterval(300)
 
     def bewaak() -> None:
-        # Het bestand als het er is; anders de map (dan zien we het verschijnen).
+        # Het bestand als het er is; anders de dichtstbijzijnde map die er al is (een nieuw account heeft soms
+        # nog geen ~/.config): dan zien we het bestand of de map verschijnen en kijken we daarna verder.
         if bestand.is_file():
             if str(bestand) not in wachter.files():
                 wachter.addPath(str(bestand))
-        elif config.is_dir() and str(config) not in wachter.directories():
-            wachter.addPath(str(config))
+            return
+        map_ = config
+        while not map_.is_dir() and map_.parent != map_:
+            map_ = map_.parent
+        if map_.is_dir() and str(map_) not in wachter.directories():
+            wachter.addPath(str(map_))
 
     def kijk() -> None:
         bewaak()
