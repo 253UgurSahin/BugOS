@@ -11,6 +11,25 @@ from bugos_settings_onderdelen import Blad, KiesDialoog, Keuzes, meer_knop, menu
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QDialog, QFileDialog, QFrame, QHBoxLayout, QLineEdit, QScrollArea, QVBoxLayout, QWidget
 
+# Het scanprogramma dat Instellingen aanraadt (Flathub-id): 'Iets scannen' opent meteen zijn pagina in de Winkel (B-11).
+SCAN_APP = "org.kde.skanpage"
+
+# Standaardprogramma's zonder enig programma voor die soort: waar de Winkel dan naar zoekt (B-19). Woorden die zowel
+# in de BugOS-selectie (Nederlandse en Engelse uitleg) als in de beschrijvingen op Flathub (meestal Engels) staan:
+# 'mail' vindt 'E-mail en agenda' (Thunderbird) én 'email client' op Flathub.
+WINKEL_ZOEK = {
+    "internet": "browser",
+    "mail": "mail",
+    "fotos": t("foto", "photo"),
+    "muziek": t("muziek", "music"),
+    "videos": "video",
+    "pdf": "pdf",
+    "kantoor": "office",
+    "rekenen": t("rekenblad", "spreadsheet"),
+    "zip": t("uitpakken", "archive"),
+    "tekst": t("tekst", "text editor"),
+}
+
 
 # =============================================================== meldingen ===
 
@@ -125,8 +144,12 @@ class ProgrammasPagina(Blad):
         huidig = bi.standaard_app(sleutel)
         items = [("vink" if app == huidig else "apps", naam, (lambda a=app: self.kies(sleutel, a)))
                  for app, naam in bi.apps_voor(sleutel, TAAL)]
-        return items or [("kruis", t("Geen programma gevonden. Kijk in de BugOS Winkel.",
-                                     "No program found. Have a look in the BugOS Store."), lambda: start("bugos-store"))]
+        # Nog geen enkel programma (bijv. geen mailprogramma): de Winkel meteen laten zoeken naar zulke apps, niet
+        # de voorpagina (B-19). Het zoekwoord past op de BugOS-selectie én op Flathub (zie WINKEL_ZOEK).
+        zoek = WINKEL_ZOEK.get(sleutel)
+        return items or [("kruis", t("Geen programma gevonden. Zoek er een in de BugOS Winkel.",
+                                     "No program found. Find one in the BugOS Store."),
+                          (lambda: start("bugos-store", "--zoek", zoek)) if zoek else (lambda: start("bugos-store")))]
 
     def kies(self, sleutel: str, app: str) -> None:
         op_achtergrond(self, lambda: bi.zet_standaard_app(sleutel, app), lambda ok: (
@@ -695,8 +718,8 @@ class PrintersPagina(Blad):
         self.wachtrij_rijen(wacht, taken, namen)
         self.scanprogramma = scan
         self.scan_rij.zet_uitleg(t("Opent het scanprogramma", "Opens the scanning program") if scan else
-                                 t("Geen scanprogramma gevonden. Klik om Skanpage in de BugOS Winkel te zoeken.",
-                                   "No scanning program found. Click to find Skanpage in the BugOS Store."))
+                                 t("Nog geen scanprogramma. Klik om Skanpage te installeren uit de BugOS Winkel.",
+                                   "No scanning program yet. Click to install Skanpage from the BugOS Store."))
 
     def wachtrij_rijen(self, wacht: int, taken: list, namen: dict | None = None) -> None:
         """De wachtrij: hoeveel er wacht ('Alles annuleren'), en daaronder je eigen documenten, elk met 'Annuleren'."""
@@ -809,4 +832,7 @@ class PrintersPagina(Blad):
             else:
                 start(self.scanprogramma)
         elif not self.scanprogramma:
-            start("bugos-store", "--zoek", "Skanpage")   # de Winkel zoekt meteen (niet de voorpagina)
+            # Meteen de pagina van Skanpage in de Winkel, met 'Installeren': één klik (B-11). Eerst zocht de Winkel
+            # op 'Skanpage' en zei 'Niet in de BugOS-selectie'. Is Flathub's lijst er nog niet, dan wacht die pagina
+            # zelf tot hij er is (Winkel.wacht_op_lijst). Na het installeren vindt scanprogramma() de Flatpak (U159).
+            start("bugos-store", f"appstream://{SCAN_APP}")
