@@ -52,7 +52,9 @@ PlasmoidItem {
         PlasmaCore.Action {
             text: root.tr("Instellingen openen", "Open Settings")
             icon.name: "bugos-settings"
-            onTriggered: root.voerUit("bugos-start-data --start instelling:")
+            // 'start' = de startpagina. Leeg ('instelling:') liet een open Instellingen op de pagina waar het
+            // stond (bugos-settings tweede_start wisselt alleen als er een pagina meekomt) (B-23, VM-test).
+            onTriggered: root.voerUit("bugos-start-data --start instelling:start")
         }
     ]
 
@@ -115,7 +117,10 @@ PlasmoidItem {
             // "instellingen" = de startpagina van BugOS Instellingen, anders één pagina (wifi, geluid, ...).
             // Via bugos-start-data (zoals het startmenu): dat start Instellingen los van Plasma, zodat het
             // niet meegaat als het snelmenu stopt, en een tweede klik ook weer werkt.
-            const pagina = wat === "instellingen" ? "" : wat
+            // Altijd een pagina meesturen, ook voor de startpagina ('start'): stond Instellingen al open (bijv. op
+            // Geluid), dan wisselt bugos-settings alleen van pagina als er een meekomt. Met '' bleef het op Geluid
+            // staan in plaats van de startpagina te tonen (B-23, VM-test).
+            const pagina = wat === "instellingen" ? "start" : wat
             root.voerUit("bugos-start-data --start " + root.aanhalen("instelling:" + pagina))
             root.expanded = false
         }

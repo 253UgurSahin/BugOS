@@ -3,6 +3,7 @@
 
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Window   // Screen: de hoogte van het scherm, voor de hoogte van het menu (A-05)
 import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasma5support as P5Support
@@ -108,11 +109,17 @@ PlasmoidItem {
         id: menu
         schaal: Kirigami.Theme.defaultFont.pointSize > 0
             ? Math.min(1.5, Math.max(1, Kirigami.Theme.defaultFont.pointSize / 10)) : 1
-        // Verhouding zoals het startmenu van Windows 11: breed, en zo hoog als de inhoud (tussen 24 en 34 regels).
+        // Verhouding zoals het startmenu van Windows 11: breed en een vaste ruime hoogte (StartMenu.qml, vasteHoogte).
         Layout.preferredWidth: Kirigami.Units.gridUnit * 36
         Layout.preferredHeight: implicitHeight
         Layout.minimumWidth: Kirigami.Units.gridUnit * 24
-        Layout.minimumHeight: 420
+        // Ook het minimum op de echte hoogte (A-05/A-06, VM-test): met 'minimumHeight: 420' maakte Plasma de pop-up
+        // in de VM maar ~450 px hoog (de voorkeurshoogte telde niet mee), en dan viel 'Recent geopend' eronder weg.
+        Layout.minimumHeight: implicitHeight
+        Layout.maximumHeight: implicitHeight
+        // Nooit hoger dan het scherm min de taakbalk en wat ruimte: 680 op 1280x800, op een groter scherm hooguit 720.
+        // Screen is het scherm waar het menu op staat (0 zolang Plasma dat nog niet weet: dan 680).
+        maxHoogte: Screen.height > 0 ? Math.max(420, Math.min(720, Screen.height - 120)) : 680
         gegevens: root.gegevens
         nederlands: root.nederlands
         color: "transparent"

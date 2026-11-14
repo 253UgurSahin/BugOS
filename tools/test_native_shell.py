@@ -750,6 +750,8 @@ if _f and shutil.which("bash"):
 SLEUTELS = set()
 for _f in (ROOT / "system_files/usr/lib/bugos/python").glob("bugos_settings_*.py"):
     SLEUTELS.update(re.findall(r'sleutel, icoon = "(\w+)"', lees(_f)))
+# De startpagina ('start') staat in bugos-settings zelf, niet in een bugos_settings_*.py (B-23: het snelmenu opent hem).
+SLEUTELS.update(re.findall(r'sleutel, icoon = "(\w+)"', lees(ROOT / "system_files/usr/bin/bugos-settings")))
 APPS = {f.name for f in (ROOT / "system_files/usr/share/applications").glob("*.desktop")} | {"org.kde.konsole.desktop"}
 # Woorden die in het Nederlands en het Engels hetzelfde zijn (dan mag de vertaling gelijk zijn).
 ZELFDE = {"Terminal"}
@@ -812,7 +814,7 @@ klopt([x["wat"] for x in ALLE_ACTIES["org.bugos.clock"]]
       "E3: klok: precies 'Datum en tijd aanpassen' en 'Meldingsinstellingen', zoals Windows 11")
 klopt([x["wat"] for x in ALLE_ACTIES["org.bugos.quickmenu"]]
       == ["bugos-start-data --start instelling:wifi", "bugos-start-data --start instelling:geluid",
-          "bugos-start-data --start instelling:"]
+          "bugos-start-data --start instelling:start"]
       and "All settings" not in [x["en"] for x in ALLE_ACTIES["org.bugos.quickmenu"]],
       "E3: snelmenu: precies 'Wifi en internet', 'Geluidsinstellingen' en 'Instellingen openen' (niet 'Alle instellingen': dat is KDE)")
 STUB_ACTION = """import QtQuick

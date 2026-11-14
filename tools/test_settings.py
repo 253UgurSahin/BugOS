@@ -224,6 +224,17 @@ klopt(venster.huidige() == "bluetooth" and venster.nav.sleutel(venster.nav.curre
       "groepen: 'bluetooth' opent de groep Apparaten met het tabje Bluetooth")
 klopt(mod.begin_pagina(["-qwindowgeometry", "1180x740+0+0", "wifi"]) == "wifi" and mod.begin_pagina([]) == "start",
       "startpagina: het woord 'wifi' wordt gevonden, ook na Qt-opties")
+# B-23 (VM-test): Instellingen staat open op Geluid, je klikt op het tandwiel van het snelmenu. Dat stuurt nu
+# 'start' mee (bugos-settings start); dan moet het open venster naar de startpagina, niet op Geluid blijven.
+venster.ga_naar("geluid")
+app.processEvents()
+venster.tweede_start(["start"])
+app.processEvents()
+klopt(venster.huidige() == "start", f"B-23: 'bugos-settings start' terwijl Instellingen open is: naar de startpagina ({venster.huidige()})")
+# A-17 (VM-test): het gebruikerstegeltje van het startmenu opent 'inloggen' (Account): dat woord moet een pagina zijn.
+venster.tweede_start(["inloggen"])
+app.processEvents()
+klopt(venster.huidige() == "inloggen", f"A-17: 'bugos-settings inloggen' opent Account > Inloggen en wachtwoord ({venster.huidige()})")
 muis_p = venster.paginas["muis"]
 klopt(len(muis_p.vak.findChildren(mod.Groep)) == 2 and len(muis_p.vak.findChildren(mod.Regelaar)) == 2,
       "muis-pagina: een kaart voor de muis en een voor het touchpad, elk met een snelheidsschuif")
