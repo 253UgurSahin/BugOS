@@ -1,0 +1,78 @@
+#!/usr/bin/bash
+# bugos-hide-system-drives - de systeemdelen van BugOS niet als 'schijf' tonen in KDE-bestandsvensters (B-06).
+#
+# Waarom: in elk KDE-venster 'Bestand kiezen/opslaan' (Instellingen > Eigen foto kiezen, Kate/KWrite > Opslaan...)
+# stonden onder 'Apparaten' een schijf zonder naam met een helemaal volle, rode balk, '2,0 GiB intern...' en 'bugos'.
+# Dat zijn de alleen-lezen wortel (composefs, altijd 100% 'vol'), /boot, de EFI-partitie en het btrfs-volume van het
+# systeem. Wie dat ziet, denkt dat de computer vol is. BugOS Bestanden laat ze al niet zien; dit doet hetzelfde voor
+# KDE, met de twee manieren die KDE (Solid) zelf kent:
+#
+#   1. UDISKS_IGNORE=1 (een udev-regel): udisks zet dan HintIgnore, en Solid/KDE slaat het volume over.
+#      Alleen voor de volumes waar /, /sysroot, /boot, /boot/efi of /efi echt op staan (gevonden met findmnt, plus
+#      een eventuele versleutelde laag eronder via lsblk -s). Nooit op naam of soort partitie: een tweede schijf met
+#      jouw foto's (ook ext4 of btrfs) blijft dus gewoon te zien.
+#   2. x-gvfs-hide voor de composefs-wortel: die komt niet via udisks maar via Solids 'fstab'-deel, dat alleen naar
+#      die koppeloptie kijkt. De kernel kent x-*-opties niet; libmount bewaart ze in /run/mount/utab, en Solid leest
+#      de koppeltabel via libmount (mnt_table_parse_mtab), dus daar zetten we hem bij. Hetzelfde doet 'mount -o
+#      x-gvfs-hide' zelf; opnieuw koppelen kan hier niet (composefs weigert elke wijziging).
+#
+# Alles staat in /run: na elke start opnieuw, en er verandert niets blijvends. Draait als bugos-hide-system-drives.service.
+# Voor de test kunnen de paden anders: BUGOS_UDEV_REGELS en BUGOS_UTAB.
+set -u
+
+REGELS="${BUGOS_UDEV_REGELS:-/run/udev/rules.d/90-bugos-systeemschijven.rules}"
+UTAB="${BUGOS_UTAB:-/run/mount/utab}"
+
+# --- 1. de volumes onder de systeemmappen ---
+# (Niet /var en niet /var/home: staat je thuismap op een eigen schijf, dan is dat jouw schijf, die blijft zichtbaar.)
+uuids=()
+for map in / /sysroot /boot /boot/efi /efi; do
+    # -v (--nofsroot): '/dev/sda3' in plaats van '/dev/sda3[/root]' bij een btrfs-subvolume.
+    bron="$(findmnt -n -v -o SOURCE -M "$map" 2>/dev/null | head -n 1)"
+    case "$bron" in
+        /dev/*) ;;
+        *) continue ;;   # geen echt apparaat (bijv. composefs voor /): dat doet stap 2
+    esac
+    # lsblk -s: het apparaat zelf en alles eronder (een LUKS-laag, de partitie). De schijf zelf heeft geen UUID.
+    while read -r uuid; do
+        [ -n "$uuid" ] || continue
+        case " ${uuids[*]-} " in
+            *" $uuid "*) ;;
+            *) uuids+=("$uuid") ;;
+        esac
+    done < <(lsblk -s -n -o UUID "$bron" 2>/dev/null)
+done
+
+if [ "${#uuids[@]}" -gt 0 ]; then
+    mkdir -p "$(dirname "$REGELS")"
+    {
+        echo "# BugOS (bugos-hide-system-drives): de systeemdelen niet als schijf tonen in KDE (B-06)."
+        for uuid in "${uuids[@]}"; do
+            echo "SUBSYSTEM==\"block\", ENV{ID_FS_UUID}==\"$uuid\", ENV{UDISKS_IGNORE}=\"1\""
+        done
+    } >"$REGELS.nieuw" && mv -f "$REGELS.nieuw" "$REGELS"
+    # udev de nieuwe regel laten lezen en precies deze volumes opnieuw laten bekijken; udisks neemt het dan over.
+    udevadm control --reload 2>/dev/null || true
+    for uuid in "${uuids[@]}"; do
+        udevadm trigger --action=change --subsystem-match=block --property-match=ID_FS_UUID="$uuid" 2>/dev/null || true
+    done
+    udevadm settle --timeout=10 2>/dev/null || true
+fi
+
+# --- 2. de composefs-wortel ---
+# Alleen als / een overlay is (composefs): Solid laat een overlay op / anders altijd zien.
+soort="$(findmnt -n -o FSTYPE -M / 2>/dev/null | head -n 1)"
+bron="$(findmnt -n -v -o SOURCE -M / 2>/dev/null | head -n 1)"
+if [ "$soort" = overlay ] && [ -n "$bron" ]; then
+    regel="SRC=$bron TARGET=/ ROOT=/ OPTS=x-gvfs-hide"
+    mkdir -p "$(dirname "$UTAB")"
+    # Met het slot van libmount zelf (utab.lock), zodat we niet tegelijk met mount/systemd schrijven. Staat de regel er
+    # al (de dienst draaide al eens sinds het opstarten), dan niets doen.
+    (
+        command -v flock >/dev/null 2>&1 && flock -w 10 9
+        if ! grep -qxF "$regel" "$UTAB" 2>/dev/null; then
+            echo "$regel" >>"$UTAB"
+        fi
+    ) 9>"$UTAB.lock"
+fi
+exit 0

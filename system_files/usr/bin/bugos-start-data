@@ -120,7 +120,12 @@ EIGEN_NAMEN = {
                                   "Take a picture of your screen"),
     "org.kde.konsole.desktop": ("Terminal", "Terminal", "Opdrachten typen (voor gevorderden)",
                                 "Type commands (for advanced users)"),
-    "org.kde.kate.desktop": ("Teksteditor", "Text editor", "Platte tekst en code schrijven", "Write plain text and code"),
+    # 'Teksteditor' is KWrite, de eenvoudige (zoals Kladblok); Kate is voor programmeurs en houdt zijn eigen naam
+    # (A-14). Zonder KWrite blijft Kate de Teksteditor: zie lees_desktop().
+    "org.kde.kwrite.desktop": ("Teksteditor", "Text editor", "Gewone tekst schrijven, zoals Kladblok",
+                               "Write plain text, like Notepad"),
+    "org.kde.kate.desktop": ("Kate (voor programmeurs)", "Kate (for programmers)", "Code en tekst bewerken",
+                             "Edit code and text"),
     "org.kde.kcalc.desktop": ("Rekenmachine", "Calculator", "Rekenen", "Do sums"),
     "org.kde.ark.desktop": ("Uitpakken", "Archives", "Zip-bestanden openen en maken", "Open and make zip files"),
     "org.kde.elisa.desktop": ("Muziek", "Music", "Je muziek afspelen", "Play your music"),
@@ -166,6 +171,9 @@ def lees_desktop(pad: Path) -> dict | None:
         uitleg = lokaal("Comment") if lokaal("Comment").strip().lower() != naam.strip().lower() else ""
     if pad.name in EIGEN_NAMEN:
         nl, en, unl, uen = EIGEN_NAMEN[pad.name]
+        # Kate zonder KWrite ernaast (zelfde map): dan is Kate toch de Teksteditor, anders is er geen (A-14).
+        if pad.name == "org.kde.kate.desktop" and not (pad.parent / "org.kde.kwrite.desktop").exists():
+            nl, en, unl, uen = "Teksteditor", "Text editor", "Platte tekst en code schrijven", "Write plain text and code"
         oude_naam, naam, uitleg = naam, t(nl, en), t(unl, uen)
     cats = [c for c in d.get("Categories", "").split(";") if c]
     groep = next((t(nl, en) for c, nl, en in CATEGORIE if c in cats), t("Overig", "Other"))

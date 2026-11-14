@@ -925,6 +925,16 @@ agent.annuleer()
 klopt(verstuurd[_n:] == [("fout", "org.bluez.Error.Canceled")], "agent: venster dicht tijdens een vraag: 'Canceled'")
 agent.koppelaar = None
 
+# B-25: geen KDE-popjes 'Verbinding Bekabelde verbinding 1 geactiveerd/gedeactiveerd': BugOS toont de netwerkstand
+# zelf. Alleen die twee gewone gebeurtenissen gaan uit (Action=None, zoals KDE zelf voor uit), fouten meldt KDE nog wel.
+import configparser  # noqa: E402
+_nm = configparser.ConfigParser(interpolation=None)
+_nm.read(ROOT / "system_files/etc/xdg/networkmanagement.notifyrc", encoding="utf-8")
+klopt(_nm.get("Event/ConnectionActivated", "Action", fallback=None) == "None"
+      and _nm.get("Event/ConnectionDeactivated", "Action", fallback=None) == "None"
+      and [s for s in _nm.sections() if s.startswith("Event/")] == ["Event/ConnectionActivated", "Event/ConnectionDeactivated"],
+      "B-25: KDE meldt 'verbinding geactiveerd/gedeactiveerd' niet meer; andere netwerkmeldingen (fouten) blijven")
+
 # ==================================================================== eind ===
 venster.close()
 shutil.rmtree(TMP, ignore_errors=True)

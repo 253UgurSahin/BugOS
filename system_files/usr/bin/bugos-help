@@ -239,7 +239,8 @@ def controle_updates() -> Uitslag:
                                      "/LogoutPrompt", "--method", "org.kde.LogoutPrompt.promptReboot"),
                        t("Nu herstarten", "Restart now"))
     # Hulp kijkt niet online: zeg alleen wat we weten (U092). Bij 'zelf doen' kan er online wel iets nieuws zijn.
-    modus = draai("bugos-updates", "status", timeout=5)[1].strip() if bestaat("bugos-updates") else "auto"
+    # --kort: het ene woord auto/hand (de zin is alleen voor mensen in een terminal, A-15).
+    modus = draai("bugos-updates", "status", "--kort", timeout=5)[1].strip() if bestaat("bugos-updates") else "auto"
     if modus == "hand":
         return Uitslag(naam, OK, t("Er wacht geen update op een herstart. Je updatet zelf, met 'Nu updaten'.",
                                    "No update is waiting for a restart. You update yourself, with 'Update now'."),

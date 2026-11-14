@@ -94,6 +94,28 @@ klopt '[ $code -ne 0 ]' "U300: de oudere versie (met 'auto' in zijn eigen /etc) 
 for f in system/bugos-update-apps.service system/rpm-ostreed-automatic.service.d/50-bugos-keuze.conf user/flatpak-user-update.service.d/50-bugos-keuze.conf; do
     klopt 'grep -q "^ExecCondition=/usr/bin/bugos-updates mag-vanzelf" "$ROOT/system_files/usr/lib/systemd/'"$f"'"' "U300/U301: $f werkt alleen bij 'Updates vanzelf'"
 done
+# A-15: 'bugos-updates status' in een terminal liet alleen het interne woord 'hand' zien. Nu: een mens krijgt een zin,
+# een programma (geen terminal, of --kort) houdt het ene woord. (Hier staat de keuze op 'hand', zie hierboven.)
+draai bugos-updates status --kort
+klopt '[ $code -eq 0 ] && [ "$(cat "$TMP/uit")" = hand ]' "A-15: 'status --kort' geeft precies het woord 'hand' (voor scripts)"
+draai bugos-updates status
+klopt '[ "$(cat "$TMP/uit")" = hand ]' "A-15: 'status' zonder terminal (een programma leest het) geeft nog steeds alleen 'hand'"
+draai bugos-updates status --zin
+klopt 'grep -q "you choose when" "$TMP/uit" && ! grep -qx hand "$TMP/uit"' "A-15: 'status --zin' is een gewone zin, niet het woord 'hand'"
+# Een echte terminal nadoen kan met 'script' (util-linux); zonder dat programma slaan we dit ene stuk over.
+if command -v script >/dev/null 2>&1; then
+    HOME="$TMP/thuis" PATH="$TMP/bin:$PATH" LC_ALL=C.UTF-8 script -qec "bash '$TMP/bugos-updates' status" /dev/null >"$TMP/uit" 2>&1
+    klopt 'grep -q "you choose when" "$TMP/uit"' "A-15: 'status' in een terminal is een zin voor mensen"
+fi
+draai bugos-updates help
+klopt '[ $code -eq 0 ] && grep -q "Settings > Updates" "$TMP/uit" && ! grep -q "mag-vanzelf" "$TMP/uit"' \
+    "A-15: 'help' legt het uit voor mensen, zonder het interne 'mag-vanzelf'"
+draai bugos-updates onzin
+klopt '[ $code -eq 2 ] && ! grep -q "mag-vanzelf" "$TMP/uit"' "A-15: een onbekende keuze noemt 'mag-vanzelf' niet"
+# Elke aanroeper die het woord vergelijkt, vraagt er nu uitdrukkelijk om (--kort): zo hangt het niet af van een terminal.
+for f in bugos-updatecheck bugos-help bugos-welcome; do
+    klopt 'grep -Eq "bugos-updates status --kort|\"bugos-updates\", \"status\", \"--kort\"" "$BIN/'"$f"'"' "A-15: $f leest 'status --kort'"
+done
 rm -f "$TMP/var-bugos/updates.conf"
 printf '{"deployments":[{"booted":false,"timestamp":1000},{"booted":true,"timestamp":2000}]}' >"$TMP/status.json"
 rm -f "$TMP/rollback"
@@ -723,5 +745,35 @@ nep pkexec 'echo "$*" >"'"$TMP"'/pkexec"'
 draai bugos-tijd vanzelf aan
 klopt 'grep -qx "/usr/bin/bugos-tijd vanzelf aan" "$TMP/pkexec"' "B-04: als gewone gebruiker vraagt bugos-tijd het wachtwoord via pkexec (de eigen polkit-regel)"
 nep id 'echo 0'
+# B-06: KDE-bestandsvensters toonden de systeemdelen (composefs-wortel 100% vol, /boot, EFI, het btrfs-volume) als
+# schijven. bugos-hide-system-drives verbergt precies de volumes onder /, /sysroot, /boot en /boot/efi (udev:
+# UDISKS_IGNORE) en de composefs-wortel (x-gvfs-hide in utab), nooit een andere schijf. Met nep-findmnt/lsblk/udevadm.
+nep findmnt 'm=""; s=0; while [ $# -gt 0 ]; do case "$1" in -M) m="$2"; shift ;; FSTYPE) s=1 ;; esac; shift; done
+case "$m" in
+    /) if [ $s = 1 ]; then echo overlay; else echo composefs; fi ;;
+    /sysroot) echo /dev/sda3 ;;
+    /boot) echo /dev/sda2 ;;
+    /boot/efi) echo /dev/sda1 ;;
+    *) exit 1 ;;
+esac'
+nep lsblk 'for a; do d="$a"; done; case "$d" in /dev/sda1) printf "AAAA-1111\n\n" ;; /dev/sda2) printf "boot-uuid\n\n" ;; /dev/sda3) printf "bugos-btrfs\n\n" ;; esac'
+nep udevadm 'echo "$*" >>"'"$TMP"'/udevadm"'
+cp "$ROOT/system_files/usr/libexec/bugos-hide-system-drives" "$TMP/bugos-hide-system-drives"
+export BUGOS_UDEV_REGELS="$TMP/run/udev/90-bugos.rules" BUGOS_UTAB="$TMP/run/mount/utab"
+mkdir -p "$TMP/run/mount"
+echo "SRC=/dev/sdb1 TARGET=/run/media/test/FOTOS ROOT=/ OPTS=uhelper=udisks2" >"$BUGOS_UTAB"   # iets van udisks zelf
+draai bugos-hide-system-drives
+draai bugos-hide-system-drives   # twee keer: de regel in utab maar één keer
+klopt '[ $code -eq 0 ] && grep -q "ID_FS_UUID}==\"AAAA-1111\", ENV{UDISKS_IGNORE}=\"1\"" "$BUGOS_UDEV_REGELS" && grep -q "boot-uuid" "$BUGOS_UDEV_REGELS" && grep -q "bugos-btrfs" "$BUGOS_UDEV_REGELS"' \
+    "B-06: EFI, /boot en het systeemvolume krijgen UDISKS_IGNORE (niet meer als schijf in KDE)"
+klopt '[ "$(grep -c UDISKS_IGNORE "$BUGOS_UDEV_REGELS")" -eq 3 ] && ! grep -q "sdb\|FOTOS" "$BUGOS_UDEV_REGELS"' \
+    "B-06: alleen de systeemvolumes, nooit een andere schijf (zoals een schijf met foto's)"
+klopt '[ "$(grep -cxF "SRC=composefs TARGET=/ ROOT=/ OPTS=x-gvfs-hide" "$BUGOS_UTAB")" -eq 1 ] && grep -q "FOTOS" "$BUGOS_UTAB"' \
+    "B-06: de composefs-wortel krijgt x-gvfs-hide (één keer), wat er al in utab stond blijft"
+klopt 'grep -q "trigger --action=change --subsystem-match=block --property-match=ID_FS_UUID=boot-uuid" "$TMP/udevadm"' \
+    "B-06: udev bekijkt de systeemvolumes opnieuw, zodat udisks (en KDE) het meteen weten"
+klopt 'grep -qx "systemctl enable bugos-hide-system-drives.service" "$ROOT/build_files/build.sh" && grep -q "/usr/libexec/bugos-hide-system-drives" "$ROOT/build_files/build.sh"' \
+    "B-06: de dienst staat aan en het script is uitvoerbaar in het beeld"
+unset BUGOS_UDEV_REGELS BUGOS_UTAB
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

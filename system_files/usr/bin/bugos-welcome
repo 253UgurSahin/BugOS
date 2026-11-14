@@ -56,6 +56,28 @@ def heeft_internet() -> bool:
     return code == 0 and uit.strip() == "full"
 
 
+def netwerk_soort() -> tuple[bool, bool]:
+    """(heeft deze pc wifi?, is de kabel verbonden?) - uit 'nmcli -t -f TYPE,STATE device'.
+
+    Waarom: op een pc met alleen een kabel (en geen wifi-kaart) bleef de grote rode knop 'Wifi kiezen' staan, met een
+    wifi-teken, terwijl je al online was (A-09). Hiermee weten we of er wifi is, en of de verbinding via de kabel loopt.
+    'wifi-p2p' (Wi-Fi Direct) telt niet als wifi: daar kies je geen netwerk mee. Lukt nmcli niet, dan nemen we aan dat
+    er wifi is (zoals vroeger): liever een knop te veel dan iemand met wifi zonder knop.
+    """
+    code, uit = draai("nmcli", "-t", "-f", "TYPE,STATE", "device", timeout=5)
+    if code != 0:
+        return True, False
+    heeft_wifi = kabel = False
+    for regel in uit.splitlines():
+        soort, _, staat = regel.strip().partition(":")
+        if soort == "wifi":
+            heeft_wifi = True
+        # 'connected', of 'connected (externally)' als iets anders hem verbond; 'connecting' telt (nog) niet.
+        elif soort == "ethernet" and staat.startswith("connected"):
+            kabel = True
+    return heeft_wifi, kabel
+
+
 # ============================================================== pagina's ===
 
 class Pagina(QWidget):
@@ -126,13 +148,15 @@ class Hallo(Pagina):
 class Kijker(QThread):
     """Kijkt op de achtergrond of er internet is (nmcli kan even duren), zodat het venster niet hapert."""
 
-    klaar = Signal(bool)
+    # (online?, heeft de pc wifi?, loopt de verbinding via de kabel?)  (A-09)
+    klaar = Signal(bool, bool, bool)
 
     def run(self) -> None:
         try:
-            self.klaar.emit(bool(heeft_internet()))
+            heeft_wifi, kabel = netwerk_soort()
+            self.klaar.emit(bool(heeft_internet()), heeft_wifi, kabel)
         except Exception:  # noqa: BLE001
-            self.klaar.emit(False)
+            self.klaar.emit(False, True, False)   # niets bekend: zoals vroeger (met de wifi-knop)
 
 
 class Internet(Pagina):
@@ -154,11 +178,12 @@ class Internet(Pagina):
         kaart.lay.addWidget(self.status)
         self.lay.addWidget(kaart)
         rij = QHBoxLayout()
-        kies = Knop(t("Wifi kiezen", "Choose Wi-Fi"), "hoofd", "lijn:wifi", groot=True)
-        kies.clicked.connect(lambda: start("bugos-settings", "wifi"))   # de eenvoudige wifi-pagina van BugOS (U334)
+        # self.kies: verborgen op een pc zonder wifi; dan is 'Volgende' (onderaan) de enige grote knop (A-09).
+        self.kies = Knop(t("Wifi kiezen", "Choose Wi-Fi"), "hoofd", "lijn:wifi", groot=True)
+        self.kies.clicked.connect(lambda: start("bugos-settings", "wifi"))   # de eenvoudige wifi-pagina van BugOS (U334)
         opnieuw = Knop(t("Opnieuw kijken", "Check again"), "stil", "lijn:verversen")
         opnieuw.clicked.connect(self.ververs)
-        rij.addWidget(kies)
+        rij.addWidget(self.kies)
         rij.addWidget(opnieuw)
         rij.addStretch(1)
         self.lay.addLayout(rij)
@@ -187,18 +212,35 @@ class Internet(Pagina):
         self.kijker.klaar.connect(self.toon)
         self.kijker.start()
 
-    def toon(self, online: bool) -> None:
+    def toon(self, online: bool, heeft_wifi: bool = True, kabel: bool = False) -> None:
+        """Laat zien of je online bent, en hoe. heeft_wifi/kabel komen van netwerk_soort() (A-09):
+        - via de kabel: een kabel-teken en 'Verbonden via de kabel', geen wifi-teken;
+        - geen wifi-kaart: de knop 'Wifi kiezen' weg (die pagina zou alleen 'deze computer heeft geen wifi' zeggen),
+          zodat 'Volgende' de enige grote knop is;
+        - wel wifi: de knop blijft, ook als je al via de kabel online bent (misschien wil je straks zonder kabel)."""
+        self.kies.setVisible(heeft_wifi)
+        # Het teken: een kabel als die de verbinding geeft, of als er geen wifi is om te kiezen; anders wifi.
+        self.chip_icoon.lijn = "kabel" if (kabel and online) or not heeft_wifi else "wifi"
+        self.chip_icoon.update()
         if online:
-            self.kop.setText(t("Je bent verbonden", "You are connected"))
-            self.sub.setText(t("Mooi zo. Je kunt verder.", "Great. You can continue."))
+            if kabel:
+                self.kop.setText(t("Verbonden via de kabel", "Connected by cable"))
+                self.sub.setText(t("Mooi zo. Druk op Volgende om verder te gaan.", "Great. Press Next to continue."))
+            else:
+                self.kop.setText(t("Je bent verbonden", "You are connected"))
+                self.sub.setText(t("Mooi zo. Je kunt verder.", "Great. You can continue."))
             self.status.setText(t("Online", "Online"))
             # De soort onthouden (niet alleen de kleuren): dan kleurt hij mee bij een wissel van licht/donker.
             self.status.soort = "goed"
             self.status.thema_veranderd()
         else:
             self.kop.setText(t("Nog geen internet", "No internet yet"))
-            self.sub.setText(t("Kies je wifi, of steek een netwerkkabel in. Overslaan mag ook.",
-                               "Choose your Wi-Fi, or plug in a network cable. Skipping is fine too."))
+            if heeft_wifi:
+                self.sub.setText(t("Kies je wifi, of steek een netwerkkabel in. Overslaan mag ook.",
+                                   "Choose your Wi-Fi, or plug in a network cable. Skipping is fine too."))
+            else:
+                self.sub.setText(t("Deze computer heeft geen wifi. Steek een netwerkkabel in. Overslaan mag ook.",
+                                   "This computer has no Wi-Fi. Plug in a network cable. Skipping is fine too."))
             self.status.setText(t("Offline", "Offline"))
             self.status.soort = "let_op"
             self.status.thema_veranderd()
@@ -312,7 +354,8 @@ class Updates(Pagina):
                                 False)
         huidig = "auto"
         if bestaat("bugos-updates"):
-            huidig = (draai("bugos-updates", "status", timeout=5)[1].strip() or "auto")
+            # --kort: het ene woord auto/hand (de zin is alleen voor mensen in een terminal, A-15).
+            huidig = (draai("bugos-updates", "status", "--kort", timeout=5)[1].strip() or "auto")
         self.begin = huidig
         (self.hand if huidig == "hand" else self.auto).setChecked(True)
         # Lukte het kiezen niet (Annuleren bij het wachtwoord)? Dan zeggen we dat hier en met een melding (U412).
@@ -413,6 +456,18 @@ class Jij(Pagina):
                                  "be in the start menu soon."), "klein")
         self.steam_nog.hide()
         self.lay.addWidget(self.steam_nog)
+        # A-10: Steam start niet meer meteen. Vroeger kwamen er midden in Welkom Engelse vensters ('Steam setup',
+        # 'Updating Steam...') en daarna vanzelf een Engels inlogvenster. Nu zetten we Steam pas klaar als je Welkom
+        # afsluit ('Aan de slag'), stil in het systeemvak, en zeggen we hier vooraf wat er gaat gebeuren.
+        self.steam_straks: tuple = ()   # de opdracht om Steam stil klaar te zetten, of () als dat niet hoeft
+        self.steam_uitleg = label(t("Steam wordt klaargezet zodra je op 'Aan de slag' drukt. Steam haalt eerst een "
+                                    "update op (ongeveer 500 MB), op de achtergrond. Daarna vind je Steam in het "
+                                    "startmenu; daar log je in met je Steam-account.",
+                                    "Steam will be set up as soon as you press 'Let's go'. Steam first downloads an "
+                                    "update (about 500 MB), in the background. After that you will find Steam in the "
+                                    "start menu; sign in there with your Steam account."), "klein")
+        self.steam_uitleg.hide()
+        self.lay.addWidget(self.steam_uitleg)
         # Wat al aan staat (de lichte stand zet zichzelf aan op een oudere pc), staat hier ook aan (U179).
         for naam, rij, script in (("oud", self.oud, "bugos-light-mode"), ("dev", self.dev, "bugos-developer")):
             try:
@@ -428,17 +483,29 @@ class Jij(Pagina):
 
     def bij_volgende(self) -> None:
         for naam, rij, opdracht in (("dev", self.dev, ("bugos-developer", "aan")),
-                                    ("oud", self.oud, ("bugos-light-mode", "aan")),
-                                    ("gamer", self.gamer, steam_opdracht()
-                                     if self.gamer.schuif.isChecked() and "gamer" not in self.gestart else ())):
-            if naam == "gamer" and rij.schuif.isChecked() and not opdracht and naam not in self.gestart:
-                self.steam_nog.show()   # (U181)
-            if naam in self.gestart or not rij.schuif.isChecked() or not opdracht:
+                                    ("oud", self.oud, ("bugos-light-mode", "aan"))):
+            if naam in self.gestart or not rij.schuif.isChecked():
                 continue
             start(*opdracht)
             self.gestart.add(naam)
             rij.schuif.setEnabled(False)   # niet meer uit te zetten hier: het loopt al
             self.al_bezig.show()
+        # Gamen: Steam starten we hier niet meer (A-10), dat gebeurt pas bij 'Aan de slag' (Welkom.steam_klaarzetten),
+        # stil. Er loopt dus nog niets: het schuifje blijft vrij, en via Terug kun je het weer uitzetten.
+        if self.gamer.schuif.isChecked():
+            opdracht = steam_opdracht()
+            if opdracht:
+                self.steam_straks = steam_stil(opdracht)
+                self.steam_uitleg.show()
+                self.steam_nog.hide()
+            else:
+                self.steam_straks = ()
+                self.steam_uitleg.hide()
+                self.steam_nog.show()   # Steam is er (nog) niet: zeg dat hij nog komt (U181)
+        else:
+            self.steam_straks = ()
+            self.steam_uitleg.hide()
+            self.steam_nog.hide()
 
 
 def steam_opdracht() -> tuple:
@@ -452,6 +519,25 @@ def steam_opdracht() -> tuple:
     except (OSError, subprocess.SubprocessError):
         pass
     return ()
+
+
+# Steam kent zijn eigen taalnamen (de optie -language): de BugOS-talen die Steam ook heeft. Zo is het inlogvenster
+# straks Nederlands voor wie BugOS in het Nederlands gebruikt (A-10; de tester zag 'steamwebhelper -lang=en_US').
+STEAM_TALEN = {"nl": "dutch", "en": "english", "de": "german", "fr": "french", "es": "spanish", "it": "italian",
+               "pt": "portuguese", "pl": "polish", "tr": "turkish", "sv": "swedish", "da": "danish", "fi": "finnish",
+               "nb": "norwegian", "no": "norwegian", "cs": "czech", "hu": "hungarian", "ro": "romanian",
+               "uk": "ukrainian", "ru": "russian", "el": "greek", "bg": "bulgarian", "ja": "japanese",
+               "ko": "koreana", "zh": "schinese", "th": "thai", "vi": "vietnamese", "id": "indonesian"}
+
+
+def steam_stil(opdracht: tuple) -> tuple:
+    """De Steam-opdracht, maar stil: '-silent' start Steam in het systeemvak zonder het (Engelse) inlogvenster, zodat
+    Steam zijn grote eerste update op de achtergrond kan ophalen. '-language' geeft Steam de taal van BugOS.
+    Wie Steam daarna opent (startmenu of systeemvak), krijgt gewoon het inlogvenster (A-10)."""
+    if not opdracht:
+        return ()
+    taal = STEAM_TALEN.get(bugos_ui.TAAL, "")   # een taal die Steam niet kent: Steam kiest zelf
+    return tuple(opdracht) + ("-silent",) + (("-language", taal) if taal else ())
 
 
 class Klaar(Pagina):
@@ -559,10 +645,26 @@ class Welkom(QWidget):
                     QThread.msleep(50)
                 CONFIG.mkdir(parents=True, exist_ok=True)
                 KLAAR.touch()
+                self.steam_klaarzetten()
                 self.close()
                 return
         self.stapels.setCurrentIndex(max(0, min(len(self.paginas) - 1, nu + richting)))
         self.ververs()
+
+    def steam_klaarzetten(self) -> None:
+        """Koos je 'Ik ga gamen'? Dan nu (Welkom is klaar) Steam stil starten, en met een melding zeggen wat er
+        gebeurt: Steam is een eigen programma dat eerst een flinke update ophaalt (A-10)."""
+        jij = next((p for p in self.paginas if isinstance(p, Jij)), None)
+        if jij is None or not jij.steam_straks:
+            return
+        start(*jij.steam_straks)
+        jij.steam_straks = ()   # maar één keer
+        QProcess.startDetached("notify-send", ["-a", "BugOS", "-i", "steam",
+                                               t("Steam wordt klaargezet", "Steam is being set up"),
+                                               t("Steam haalt eerst een update op (ongeveer 500 MB). Daarna open je "
+                                                 "Steam in het startmenu en log je in.",
+                                                 "Steam first downloads an update (about 500 MB). Then open Steam "
+                                                 "from the start menu and sign in.")])
 
     def ververs(self) -> None:
         nu = self.stapels.currentIndex()

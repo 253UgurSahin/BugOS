@@ -1022,14 +1022,27 @@ bi.app_meldingen = _oud_am
 klopt(mp.apps.isHidden() and mp.apps_kop.isHidden() and mp.apps_uitleg.isHidden(),
       "meldingen: nog geen enkele app gaf een melding: dan geen kop en geen lege kaart")
 bi._VB.pop("app_meldingen", None)
-# Scannen: geen scanprogramma -> de Winkel zoekt meteen naar Skanpage (niet de voorpagina).
+# Scannen: geen scanprogramma -> de Winkel opent meteen de pagina van Skanpage, met 'Installeren' (B-11: eerst
+# zocht hij op 'Skanpage' en zei 'Niet in de BugOS-selectie', een stap extra).
 _gestart: list = []
 _echt_start = sm.start
 sm.start = lambda *c: _gestart.append(c)
 pp.scanprogramma = None
 pp.scan()
+klopt(_gestart == [("bugos-store", "appstream://org.kde.skanpage")],
+      f"B-11: scannen zonder scanprogramma: de Winkel opent meteen Skanpage om te installeren ({_gestart})")
+# B-19: Standaardprogramma's zonder enig mailprogramma: 'Geen programma gevonden' laat de Winkel zoeken naar
+# mail-apps, niet de voorpagina.
+_gestart.clear()
+_echt_apps_voor = sm.bi.apps_voor
+sm.bi.apps_voor = lambda sleutel, taal="nl": []
+_items19 = venster.paginas["programmas"].keuzes("mail")
+sm.bi.apps_voor = _echt_apps_voor
+_items19[0][2]()
 sm.start = _echt_start
-klopt(_gestart == [("bugos-store", "--zoek", "Skanpage")], f"scannen: de Winkel zoekt meteen naar Skanpage ({_gestart})")
+klopt(len(_items19) == 1 and _gestart == [("bugos-store", "--zoek", "mail")] and "Winkel" in _items19[0][1],
+      f"B-19: geen mailprogramma: de Winkel zoekt meteen naar mail-apps ({_gestart})")
+klopt(set(sm.WINKEL_ZOEK) == {s[0] for s in sm.bi.SOORTEN}, "B-19: elke soort heeft een zoekwoord voor de Winkel")
 _bron = (PY / "bugos_settings_meldingen.py").read_text(encoding="utf-8")
 klopt("kcm_" not in _bron and "kde_instelling" not in _bron
       and sm.MeldingenPagina.kde == sm.ProgrammasPagina.kde == sm.PrintersPagina.kde == "",

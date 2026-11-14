@@ -7,7 +7,8 @@
 # shellcheck source=system_files/usr/share/bugos/lib.sh
 . /usr/share/bugos/lib.sh
 
-[ "$(bugos-updates status 2>/dev/null)" = hand ] || exit 0
+# --kort: altijd het ene woord (auto/hand), ook als iemand dit script in een terminal draait (A-15).
+[ "$(bugos-updates status --kort 2>/dev/null)" = hand ] || exit 0
 
 STATUS="$(rpm-ostree status --json 2>/dev/null)" || exit 0
 

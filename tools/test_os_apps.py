@@ -718,6 +718,30 @@ for pagina in (welkom.Uiterlijk(), welkom.Updates()):
     namen = [lezer(k)[1] for k in kaarten]
     klopt(kaarten and all(namen), f"U016: Welkom ({type(pagina).__name__}): elke keuze heeft een naam: {namen}")
 
+# A-09: Welkom > Internet op een pc met alleen een kabel (geen wifi-kaart): geen rode 'Wifi kiezen' meer en geen
+# wifi-teken, maar 'Verbonden via de kabel'. Mét wifi blijft de knop er gewoon.
+_oud_draai = welkom.draai
+welkom.draai = lambda *a, **k: (0, "ethernet:connected\nloopback:connected (externally)\n")
+klopt(welkom.netwerk_soort() == (False, True), f"A-09: alleen een kabel: geen wifi, wel kabel ({welkom.netwerk_soort()})")
+welkom.draai = lambda *a, **k: (0, "wifi:disconnected\nwifi-p2p:disconnected\nethernet:connecting (getting IP configuration)\n")
+klopt(welkom.netwerk_soort() == (True, False), "A-09: wifi-kaart, kabel nog aan het verbinden: wifi ja, kabel (nog) niet")
+welkom.draai = lambda *a, **k: (0, "wifi-p2p:disconnected\n")
+klopt(welkom.netwerk_soort() == (False, False), "A-09: alleen Wi-Fi Direct (wifi-p2p) telt niet als wifi om te kiezen")
+welkom.draai = lambda *a, **k: (8, "")
+klopt(welkom.netwerk_soort() == (True, False), "A-09: nmcli werkt niet: zoals vroeger, met de wifi-knop")
+welkom.draai = _oud_draai
+_inet = welkom.Internet()
+_inet.toon(True, False, True)
+klopt(_inet.kies.isHidden() and _inet.chip_icoon.lijn == "kabel"
+      and _inet.kop.text() in ("Verbonden via de kabel", "Connected by cable"),
+      f"A-09: kabel, geen wifi: geen 'Wifi kiezen', een kabel-teken en 'Verbonden via de kabel' ({_inet.kop.text()!r})")
+_inet.toon(False, False, False)
+klopt(_inet.kies.isHidden() and ("geen wifi" in _inet.sub.text() or "no Wi-Fi" in _inet.sub.text()),
+      f"A-09: offline zonder wifi-kaart: geen wifi-knop, en de pagina zegt dat er geen wifi is ({_inet.sub.text()!r})")
+_inet.toon(True, True, False)
+klopt(not _inet.kies.isHidden() and _inet.chip_icoon.lijn == "wifi", "A-09: online via wifi: de wifi-knop en het wifi-teken blijven")
+klopt("kabel" in bugos_ui.LIJN, "A-09: het lijn-icoon 'kabel' bestaat")
+
 # U074: Welkom > 'Wat ga je doen?': Volgende, Terug, Volgende start niets twee keer, en uitzetten na het starten kan
 # hier niet meer (het loopt al), dat zegt de pagina.
 _gestart: list = []
@@ -733,10 +757,34 @@ jij.bij_volgende()
 jij.oud.schuif.setChecked(True)
 jij.bij_volgende()
 welkom.start = _oud_start
-klopt(_gestart == [("bugos-developer", "aan"), ("bugos-light-mode", "aan"), ("steam",)] or
-      _gestart == [("bugos-developer", "aan"), ("steam",), ("bugos-light-mode", "aan")]
+klopt(_gestart == [("bugos-developer", "aan"), ("bugos-light-mode", "aan")]
       and not jij.dev.schuif.isEnabled() and not jij.al_bezig.isHidden(),
       f"U074: Welkom start elke keuze maar één keer, en zegt dat het al loopt ({_gestart})")
+# A-10: 'Ik ga gamen' start Steam niet meer midden in Welkom (Engelse vensters, en daarna vanzelf het inlogvenster).
+# Pas bij 'Aan de slag', stil (-silent), in de taal van BugOS, en de pagina zegt vooraf wat er gebeurt.
+klopt(jij.steam_straks[:2] == ("steam", "-silent") and not jij.steam_uitleg.isHidden() and jij.gamer.schuif.isEnabled(),
+      f"A-10: Steam wordt pas later stil klaargezet, met uitleg vooraf; het schuifje blijft vrij ({jij.steam_straks})")
+klopt(welkom.steam_stil(("steam",))[-2:] == ("-language", welkom.STEAM_TALEN.get(bugos_ui.TAAL, ""))
+      if bugos_ui.TAAL in welkom.STEAM_TALEN else welkom.steam_stil(("steam",)) == ("steam", "-silent"),
+      f"A-10: Steam krijgt de taal van BugOS mee ({welkom.steam_stil(('steam',))})")
+klopt(welkom.STEAM_TALEN["nl"] == "dutch" and welkom.steam_stil(()) == (), "A-10: Nederlands heet in Steam 'dutch'; geen Steam: niets")
+jij.gamer.schuif.setChecked(False)
+jij.bij_volgende()
+klopt(jij.steam_straks == () and jij.steam_uitleg.isHidden(), "A-10: via Terug 'gamen' weer uit: dan wordt Steam ook niet gestart")
+# Welkom afsluiten met 'gamen' aan: nu pas start Steam, één keer.
+_gestart.clear()
+welkom.start = lambda *a: _gestart.append(a)
+_wk_a10 = welkom.Welkom()
+_jij_a10 = next(p for p in _wk_a10.paginas if isinstance(p, welkom.Jij))
+_jij_a10.gamer.schuif.setChecked(True)
+_jij_a10.bij_volgende()
+_voor_a10 = list(_gestart)
+_wk_a10.steam_klaarzetten()
+_wk_a10.steam_klaarzetten()
+welkom.start = _oud_start
+klopt(not _voor_a10 and len(_gestart) == 1 and _gestart[0][:2] == ("steam", "-silent"),
+      f"A-10: Steam start pas bij 'Aan de slag', stil en maar één keer (ervoor {_voor_a10}, daarna {_gestart})")
+_wk_a10.deleteLater()
 # U130: geen Steam (ook niet als Flatpak): het schuifje gaat niet op slot met 'wordt klaargezet'.
 welkom.steam_opdracht = lambda: ()
 welkom.start = lambda *a: _gestart.append(a)
