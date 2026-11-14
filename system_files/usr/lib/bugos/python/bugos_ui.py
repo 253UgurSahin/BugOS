@@ -583,6 +583,10 @@ LIJN = {
     "letter": '<path d="M5 19 12 4.5 19 19M7.6 13.5h8.8"/>',
     "telefoon": '<rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M10.5 18.5h3"/>',
     "microfoon": '<rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5M9 20.5h6"/>',
+    # Een weegschaal: 'Gebalanceerd' op Energie. Daar stond eerst een vinkje, zodat het leek alsof er twee keuzes
+    # aangevinkt waren als je 'Zuinig' koos (B-14).
+    "weegschaal": '<path d="M12 4v16M8.5 20h7M5 7h14"/><path d="M5 7l-2.5 6h5zM19 7l-2.5 6h5z"/>'
+                  '<path d="M2.5 13a2.5 2.5 0 0 0 5 0M16.5 13a2.5 2.5 0 0 0 5 0"/>',
 }
 
 

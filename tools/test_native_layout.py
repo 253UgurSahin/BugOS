@@ -391,8 +391,8 @@ klopt(_sk.height() == 48 and _knop.minimumHeight() == 48, "R06: het kopje met kn
 bugos_ui.SCHAAL = 1.0
 
 # ------------------------------------------------------------------------------------ twee nieuwe iconen ---
-for _naam in ("telefoon", "microfoon"):
-    klopt(_naam in LIJN, f"lijn-icoon '{_naam}' bestaat (voor wifi/bluetooth en geluid)")
+for _naam in ("telefoon", "microfoon", "weegschaal"):
+    klopt(_naam in LIJN, f"lijn-icoon '{_naam}' bestaat (voor wifi/bluetooth, geluid en energie)")
     _beeld: QImage = bugos_ui.lijn_pixmap(_naam, "#000000", 96).toImage()
     _xs, _ys = [], []
     for _y in range(_beeld.height()):
@@ -404,6 +404,14 @@ for _naam in ("telefoon", "microfoon"):
     # Even groot als de buren (computer, muis): tussen 50 en 90 % van het vak hoog.
     _hoog = (max(_ys) - min(_ys)) / 96 if _xs else 0
     klopt(_ok and 0.5 <= _hoog <= 0.92, f"lijn-icoon '{_naam}' tekent binnen het 24-raster, zo groot als de rest ({_hoog:.2f})")
+
+# B-14: op Energie heeft geen van de drie kaarten een vinkje als icoon. 'Gebalanceerd' had er een, zodat er na een klik
+# op 'Zuinig' twee keuzes aangevinkt leken (de rode rand en het vinkje).
+import bugos_settings_scherm as _bss  # noqa: E402
+
+klopt(all(_ic != "vink" and _ic in LIJN for _n, _u, _ic in _bss.PROFIEL_TEKST.values())
+      and _bss.PROFIEL_TEKST["balanced"][2] == "weegschaal",
+      "B-14: Energie: geen vinkje als icoon op een keuzekaart ('Gebalanceerd' heeft een weegschaal)")
 
 # ------------------------------------------------------------------------- R11 schijf-tegeltje (Back-up) ---
 _sk_kiezer = bugos_ui.SchijfKiezer("Plug in a USB stick")
@@ -763,6 +771,38 @@ klopt(isinstance(_dl, inst.Doorloop) and _smal > _breed
       f"({_breed} -> {_smal} px hoog)")
 _dl.setGeometry(QRect(0, 0, 2000, _breed))
 klopt(len({k.y() for k in _ab}) == 1, "R07: met ruimte staan alle tabjes op één regel")
+# B-13: zoek 'printer' en klik het resultaat: alleen het gekozen tabje ('Printers') ziet er gekozen uit. Eerst kreeg
+# het eerste tabje ('Bluetooth') de focus (en een rode rand), omdat het aangeklikte resultaat verdween.
+w.ga_naar("start")
+w.activateWindow()
+verwerk()
+if QApplication.activeWindow() is not w and hasattr(QApplication, "setActiveWindow"):
+    QApplication.setActiveWindow(w)    # zonder scherm (offscreen) wordt een venster niet vanzelf actief
+    verwerk()
+klopt(QApplication.activeWindow() is w, "B-13: het venster is actief (anders kan de test de focus niet zien)")
+w.zoekveld.setText("printer")
+verwerk()
+_resultaat = next((r for r in w.paginas["start"].zoek_kaart.findChildren(Rij) if r.isVisible()
+                   and r.titel.text() == w.paginas["printers"].naam()), None)
+klopt(_resultaat is not None, "B-13: zoeken op 'printer' vindt Printers")
+if _resultaat is not None:
+    if hasattr(QApplication, "setActiveWindow"):
+        QApplication.setActiveWindow(w)   # (offscreen: nog een keer, het zoeken kan het actief-zijn kwijtraken)
+    _resultaat.setFocus(Qt.FocusReason.MouseFocusReason)
+    verwerk()
+    _resultaat.geklikt.emit()
+    verwerk()
+    _focus = QApplication.focusWidget()
+    _tabs_app = list(w.groepen["apparaten"].tabs.values())
+    klopt(w.huidige() == "printers" and not (_focus in _tabs_app and not _focus.isChecked()),
+          f"B-13: na het zoekresultaat heeft geen ander tabje dan 'Printers' de focus ({type(_focus).__name__}"
+          f" {getattr(_focus, 'text', lambda: '')()!r})")
+# (Qt haalt zelf 'Tab' weg bij de tabjes die niet gekozen zijn: in een groep komt alleen het gekozen tabje in de
+# Tab-volgorde, zoals keuzerondjes. Daarom hier alleen: klikken geeft nooit de focus.)
+klopt(all(not (k.focusPolicy().value & Qt.FocusPolicy.ClickFocus.value) for k in _tabs),
+      "B-13: een tabje krijgt alleen met Tab de focus (de rode focusrand), niet met de muis")
+w.zoekveld.setText("")
+verwerk()
 # B-02: Kolommen (Start: vier snelle schuifjes, Energie: drie kaarten). Breed: alles naast elkaar; smal: 4 -> 2 -> 1,
 # nooit 3 + 1; een verborgen kaart laat geen gat achter.
 _kol = inst.Kolommen(12)

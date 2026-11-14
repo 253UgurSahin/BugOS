@@ -836,7 +836,8 @@ def groot_genoeg() -> float:
 
 PROFIEL_TEKST = {
     "power-saver": (("Zuinig", "Saver"), ("Batterij gaat langer mee", "Battery lasts longer"), "batterij"),
-    "balanced": (("Gebalanceerd", "Balanced"), ("Aanbevolen", "Recommended"), "vink"),
+    # Geen vinkje als icoon: dat leek naast de rode rand van een andere keuze een tweede aangevinkte keuze (B-14).
+    "balanced": (("Gebalanceerd", "Balanced"), ("Aanbevolen", "Recommended"), "weegschaal"),
     "performance": (("Snel", "Fast"), ("Volle kracht, voor games", "Full power, for games"), "spel"),
 }
 

@@ -38,7 +38,7 @@ from bugos_settings_systeem import OverPagina, SpelenPagina, UpdatesPagina  # no
 from bugos_settings_zien import MuisPagina, ZienPagina  # noqa: E402
 from PySide6.QtCore import QEvent, Qt, QTimer  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QButtonGroup, QFrame, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
+    QApplication, QButtonGroup, QFrame, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 
@@ -232,6 +232,9 @@ class GroepPagina(QWidget):
             # Stille tabjes zoals in Windows 11: geen tweede rode knop naast de rode hoofdknop van de pagina.
             k = StreepKnop(b.naam(), "tab")
             k.setMinimumHeight(px(TAB_HOOGTE))
+            # Alleen met Tab krijgt een tabje de focus (en de rode focusrand), niet met de muis: anders stond er na
+            # een klik een rode rand om het ene en het zachtrode vlak op het andere tabje (B-13).
+            k.setFocusPolicy(Qt.FocusPolicy.TabFocus)
             k.clicked.connect(lambda _c=False, s=b.sleutel: self.toon(s))
             knoppen.addButton(k)
             rij.addWidget(k)
@@ -261,8 +264,21 @@ class GroepPagina(QWidget):
         blad = self.bladen[sleutel]
         self.stapel.setCurrentWidget(blad)
         self.tabs[sleutel].setChecked(True)
+        self.focus_op_gekozen()
         if ververs:
             blad.ververs()
+
+    def focus_op_gekozen(self) -> None:
+        """Staat de focus op een ander tabje dan het gekozen, dan naar het gekozen tabje.
+
+        Waarom: open je een pagina via het zoeken ('printer', 'achtergrond'), dan verdwijnt het resultaat waar je op
+        klikte, en geeft Qt de focus aan het volgende in de rij: het eerste tabje. Dat kreeg dan een rode rand, naast
+        het zachtrode gekozen tabje: twee tabjes leken gekozen (B-13). Wie met Tab door de tabjes loopt, merkt hier
+        niets van: dan is het tabje met de focus niet het gekozen, maar dat verandert alleen bij een keuze."""
+        focus = QApplication.focusWidget()
+        gekozen = next((k for k in self.tabs.values() if k.isChecked()), None)
+        if gekozen is not None and focus in self.tabs.values() and focus is not gekozen:
+            gekozen.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def ververs(self) -> None:
         self.stapel.currentWidget().ververs()
@@ -333,6 +349,9 @@ class Instellingen(Venster):
         else:
             groep.toon(sleutel, ververs=False)
             super().ga_naar(g.sleutel)   # opent de groep (en ververst het gekozen tabje)
+            # Pas nu staat de groep in beeld: kwam de focus (van een verdwenen zoekresultaat) op een ander tabje, dan
+            # naar het gekozen tabje (B-13).
+            groep.focus_op_gekozen()
 
     def tweede_start(self, args: list[str]) -> None:
         """Instellingen was al open en wordt opnieuw gestart (bijv. vanuit het snelmenu): naar die pagina (U208)."""
