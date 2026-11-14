@@ -147,8 +147,10 @@ klopt '[ -f /usr/share/applications/org.kde.kwrite.desktop ] && ! grep -qx "NoDi
 #     appstream://-link (bijv. 'Uninstall or Manage Add-Ons…' in KDE). Zonder Discover is de Winkel de enige die
 #     ze kent; de standaard staat in /etc/xdg/kde-mimeapps.list. gio leest die (XDG_CURRENT_DESKTOP=KDE), net als
 #     Firefox; LC_ALL=C zodat de zin van gio niet vertaald is, en een lege thuismap zodat alleen BugOS telt.
-weg="$(rpm -qa --qf '%{NAME}\n' | grep -E '^(plasma-discover.*|kde-partitionmanager|kpmcore)$' | paste -sd, - || true)"
-klopt '[ -z "$weg" ]' "pakketten: geen KDE Discover en geen Partition Manager ${weg:+($weg)}"
+weg="$(rpm -qa --qf '%{NAME}\n' | grep -E '^(plasma-discover.*|kde-partitionmanager|kpmcore|xwaylandvideobridge)$' | paste -sd, - || true)"
+klopt '[ -z "$weg" ]' "pakketten: geen KDE Discover, geen Partition Manager en geen Xwayland Video Bridge ${weg:+($weg)}"
+# A-12: de Video Bridge stond als technisch icoon in het systeemvak; bewust weggehaald (zie build.sh).
+klopt '[ ! -e /etc/xdg/autostart/org.kde.xwaylandvideobridge.desktop ]' "systeemvak: geen 'Xwayland Video Bridge' meer bij het opstarten (A-12)"
 klopt '[ ! -e /usr/share/applications/org.kde.discover.desktop ] && [ ! -e /etc/xdg/autostart/org.kde.discover.notifier.desktop ] && [ ! -e /usr/share/solid/actions/open_in_partitionmanager.desktop ]' \
     "Discover: niet in het startmenu en niet bij het opstarten; geen 'Reformat or Edit with Partition Manager' bij een USB-stick"
 # Met de mappen van een echte Plasma-sessie: Plasma leest bij het aanmelden /etc/xdg/plasma-workspace/env/*.sh, en

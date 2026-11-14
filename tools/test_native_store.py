@@ -884,8 +884,8 @@ _stap2 = _bouw.split("# Geen KDE Discover")[1].split("# Steam als echt")[0]
 _rpm_e = [r.strip() for r in _stap2.splitlines() if r.strip().startswith("rpm -e")]
 klopt(all(p in _stap2 for p in ("plasma-discover-libs", "plasma-discover-kns", "plasma-discover-flatpak",
                                 "plasma-discover-notifier", "kde-partitionmanager", "kpmcore"))
-      and len(_rpm_e) == 2 and not any("--nodeps" in r for r in _rpm_e) and "dnf5 install" not in _stap2,
-      f"15: build.sh haalt Discover en Partition Manager weg, met rpm -e zonder --nodeps ({_rpm_e})")
+      and len(_rpm_e) == 3 and "xwaylandvideobridge" in _stap2 and not any("--nodeps" in r for r in _rpm_e) and "dnf5 install" not in _stap2,
+      f"15: build.sh haalt Discover, Partition Manager en de Xwayland Video Bridge weg, met rpm -e zonder --nodeps ({_rpm_e})")
 _pakketten = (ROOT / "build_files/packages.txt").read_text(encoding="utf-8")
 klopt(not re.search(r"^\s*(plasma-discover|kde-partitionmanager|kpmcore)", _pakketten, re.M),
       "15: packages.txt installeert Discover en Partition Manager niet (meer)")
