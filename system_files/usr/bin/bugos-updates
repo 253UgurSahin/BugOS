@@ -3,9 +3,15 @@
 #
 #   bugos-updates auto     -> stil op de achtergrond (standaard)
 #   bugos-updates hand     -> BugOS meldt "er zijn updates", jij kiest wanneer
-#   bugos-updates status   -> laat zien wat nu is ingesteld
+#   bugos-updates status   -> laat zien wat nu is ingesteld (in een terminal: een gewone zin)
 #   bugos-updates nu       -> nu meteen updaten
 #   bugos-updates terug    -> terug naar de vorige versie (bij problemen)
+#   bugos-updates help     -> korte uitleg voor mensen
+#
+# Voor scripts (Instellingen, Welkom, Hulp, bugos-updatecheck):
+#   bugos-updates status --kort  -> altijd precies één woord: 'auto' of 'hand'
+#   (Zonder terminal, dus als een programma de uitvoer leest, geeft 'status' ook dat ene woord. Zo blijven oudere
+#   aanroepers werken; alleen een mens achter een terminal krijgt de zin te zien (A-15).)
 #
 # Een update wordt altijd pas actief na opnieuw opstarten. Gaat er iets mis,
 # dan kies je bij het opstarten gewoon de vorige versie.
@@ -176,7 +182,39 @@ terug)
     fi
     ;;
 status)
-    lees_keuze
+    # A-15: in de terminal stond hier alleen 'hand', een intern woord. Een mens krijgt nu een gewone zin met
+    # dezelfde woorden als Instellingen; programma's houden het ene woord.
+    #   --kort  -> altijd het woord (voor scripts; zo hangt niets af van wel of geen terminal)
+    #   --zin   -> altijd de zin (handig om te testen, of als je de zin in een script wilt tonen)
+    #   niets   -> zin als de uitvoer naar een terminal gaat ([ -t 1 ]), anders het woord
+    MODUS="$(lees_keuze)"
+    VORM="${2:-}"
+    if [ -z "$VORM" ]; then
+        if [ -t 1 ]; then VORM=--zin; else VORM=--kort; fi
+    fi
+    if [ "$VORM" = --zin ]; then
+        if [ "$MODUS" = hand ]; then
+            t "Updates: je kiest zelf wanneer. BugOS meldt het als er een nieuwe versie is (Instellingen > Updates)." \
+                "Updates: you choose when. BugOS tells you when a new version is available (Settings > Updates)."
+        else
+            t "Updates gaan vanzelf, stil op de achtergrond (Instellingen > Updates)." \
+                "Updates are automatic, quietly in the background (Settings > Updates)."
+        fi
+    else
+        echo "$MODUS"
+    fi
+    ;;
+help | -h | --help)
+    # Uitleg voor mensen, in hun taal. 'mag-vanzelf' (alleen voor de update-diensten) noemen we hier niet: dat is
+    # geen keuze voor de gebruiker (A-15).
+    # Eén t per regel: de vertaalverzamelaar leest zinnen per regel, en zo blijft de uitlijning in elke taal gelijk.
+    t "Gebruik: bugos-updates <keuze>" "Usage: bugos-updates <choice>"
+    printf '  status   '; t "laat zien hoe updates nu gaan" "show how updates work now"
+    printf '  auto     '; t "updates gaan vanzelf, stil op de achtergrond" "updates are automatic, quietly in the background"
+    printf '  hand     '; t "je kiest zelf wanneer; BugOS meldt een nieuwe versie" "you choose when; BugOS tells you about a new version"
+    printf '  nu       '; t "nu meteen updaten" "update right now"
+    printf '  terug    '; t "terug naar de vorige versie (bij problemen)" "go back to the previous version (if there are problems)"
+    t "Hetzelfde kan ook in Instellingen > Updates." "You can do the same in Settings > Updates."
     ;;
 mag-vanzelf)
     # Voor de update-diensten (ExecCondition): alleen bij 'vanzelf' bijwerken. Zo is deze ene keuze de baas,
@@ -184,7 +222,9 @@ mag-vanzelf)
     [ "$(lees_keuze)" = auto ]
     ;;
 *)
-    echo "Gebruik: bugos-updates auto|hand|status|nu|terug|mag-vanzelf" >&2
+    # Onbekende keuze: dezelfde zin als 'help' (zonder het interne 'mag-vanzelf'), op stderr, met code 2.
+    t "Gebruik: bugos-updates status|auto|hand|nu|terug (meer uitleg: bugos-updates help)" \
+        "Usage: bugos-updates status|auto|hand|nu|terug (more help: bugos-updates help)" >&2
     exit 2
     ;;
 esac

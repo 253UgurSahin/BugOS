@@ -302,7 +302,8 @@ class Updates(Pagina):
                                 False)
         huidig = "auto"
         if bestaat("bugos-updates"):
-            huidig = (draai("bugos-updates", "status", timeout=5)[1].strip() or "auto")
+            # --kort: het ene woord auto/hand (de zin is alleen voor mensen in een terminal, A-15).
+            huidig = (draai("bugos-updates", "status", "--kort", timeout=5)[1].strip() or "auto")
         self.begin = huidig
         (self.hand if huidig == "hand" else self.auto).setChecked(True)
         # Lukte het kiezen niet (Annuleren bij het wachtwoord)? Dan zeggen we dat hier en met een melding (U412).

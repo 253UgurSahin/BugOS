@@ -27,6 +27,7 @@ def status_van(script: str, *voor: str) -> bool:
         return script in ("bugos-updates", "bugos-panel")
     if not bestaat(script):
         return False
+    # draai() vangt de uitvoer op (geen terminal): bugos-updates geeft dan het ene woord, geen zin voor mensen (A-15).
     _, uit = draai(script, *voor, "status", timeout=5)
     return uit.strip().endswith(("aan", "auto"))
 

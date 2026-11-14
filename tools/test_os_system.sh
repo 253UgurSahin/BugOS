@@ -94,6 +94,28 @@ klopt '[ $code -ne 0 ]' "U300: de oudere versie (met 'auto' in zijn eigen /etc) 
 for f in system/bugos-update-apps.service system/rpm-ostreed-automatic.service.d/50-bugos-keuze.conf user/flatpak-user-update.service.d/50-bugos-keuze.conf; do
     klopt 'grep -q "^ExecCondition=/usr/bin/bugos-updates mag-vanzelf" "$ROOT/system_files/usr/lib/systemd/'"$f"'"' "U300/U301: $f werkt alleen bij 'Updates vanzelf'"
 done
+# A-15: 'bugos-updates status' in een terminal liet alleen het interne woord 'hand' zien. Nu: een mens krijgt een zin,
+# een programma (geen terminal, of --kort) houdt het ene woord. (Hier staat de keuze op 'hand', zie hierboven.)
+draai bugos-updates status --kort
+klopt '[ $code -eq 0 ] && [ "$(cat "$TMP/uit")" = hand ]' "A-15: 'status --kort' geeft precies het woord 'hand' (voor scripts)"
+draai bugos-updates status
+klopt '[ "$(cat "$TMP/uit")" = hand ]' "A-15: 'status' zonder terminal (een programma leest het) geeft nog steeds alleen 'hand'"
+draai bugos-updates status --zin
+klopt 'grep -q "you choose when" "$TMP/uit" && ! grep -qx hand "$TMP/uit"' "A-15: 'status --zin' is een gewone zin, niet het woord 'hand'"
+# Een echte terminal nadoen kan met 'script' (util-linux); zonder dat programma slaan we dit ene stuk over.
+if command -v script >/dev/null 2>&1; then
+    HOME="$TMP/thuis" PATH="$TMP/bin:$PATH" LC_ALL=C.UTF-8 script -qec "bash '$TMP/bugos-updates' status" /dev/null >"$TMP/uit" 2>&1
+    klopt 'grep -q "you choose when" "$TMP/uit"' "A-15: 'status' in een terminal is een zin voor mensen"
+fi
+draai bugos-updates help
+klopt '[ $code -eq 0 ] && grep -q "Settings > Updates" "$TMP/uit" && ! grep -q "mag-vanzelf" "$TMP/uit"' \
+    "A-15: 'help' legt het uit voor mensen, zonder het interne 'mag-vanzelf'"
+draai bugos-updates onzin
+klopt '[ $code -eq 2 ] && ! grep -q "mag-vanzelf" "$TMP/uit"' "A-15: een onbekende keuze noemt 'mag-vanzelf' niet"
+# Elke aanroeper die het woord vergelijkt, vraagt er nu uitdrukkelijk om (--kort): zo hangt het niet af van een terminal.
+for f in bugos-updatecheck bugos-help bugos-welcome; do
+    klopt 'grep -Eq "bugos-updates status --kort|\"bugos-updates\", \"status\", \"--kort\"" "$BIN/'"$f"'"' "A-15: $f leest 'status --kort'"
+done
 rm -f "$TMP/var-bugos/updates.conf"
 printf '{"deployments":[{"booted":false,"timestamp":1000},{"booted":true,"timestamp":2000}]}' >"$TMP/status.json"
 rm -f "$TMP/rollback"
