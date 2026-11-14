@@ -84,6 +84,16 @@ if [ "${#SCHIJFBEHEER[@]}" -gt 0 ]; then
     rpm -e "${SCHIJFBEHEER[@]}"
 fi
 
+# Geen Xwayland Video Bridge. Het stond als technisch icoontje ("Xwayland Video Bridge") onder het pijltje in het
+# systeemvak, en Plasma kan dat soort icoon niet verbergen (VM-test A-12). Het enige wat het doet: schermdelen naar
+# oude X11-programma's (zoals de oude Discord-app). Bewuste keuze van de eigenaar (2026-11-14): weg ermee. Wie
+# schermdelen in zo'n programma mist: de Flatpak-versies uit de Winkel delen het scherm via de portal, zonder brug.
+# Niets heeft het pakket nodig (rpm -q --whatrequires op BugOS, 2026-11-14). Zelfde aanpak: alleen als het er is.
+mapfile -t BRUG < <(rpm -q --qf '%{NAME}\n' xwaylandvideobridge 2>/dev/null | grep -v 'not installed' || true)
+if [ "${#BRUG[@]}" -gt 0 ]; then
+    rpm -e "${BRUG[@]}"
+fi
+
 # Steam als echt systeemprogramma (beste voor controllers en game-modus).
 # Lukt dat niet, dan zet bugos-first-boot.service Steam later als Flatpak neer.
 dnf5 install -y --skip-unavailable steam || true
