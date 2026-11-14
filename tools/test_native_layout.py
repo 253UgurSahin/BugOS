@@ -916,7 +916,7 @@ D08_VOORBEELD = [
     ("programmas", "Gwenview (foto's bekijken)", "Gwenview (view photos)"),   # bugos_config_meldingen.py: _VB_APPS
     ("programmas", "Elisa (muziek)", "Elisa (music)"),
     ("programmas", "Okular (documenten)", "Okular (documents)"),
-    ("programmas", "Kate (tekst)", "Kate (text)"),
+    ("programmas", "Teksteditor", "Text editor"),   # tekstbestanden: de eenvoudige KWrite (A-14)
 ]
 _d08 = [f"{_pagina}: {_nl!r} -> {_en!r}" for _pagina, _nl, _en in D08_VOORBEELD
         if ("settings", _pagina, _en) not in _talen["en"] or any(x[2] == _nl for x in _talen["en"])]
