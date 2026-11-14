@@ -52,7 +52,13 @@ else
 fi
 rm -rf "$STICK_OCI"
 mkdir -p "$(dirname "$STICK_OCI")"
-skopeo copy "${SKOPEO_ARGS[@]}" "docker://${BRON_REF}" "oci:${STICK_OCI}"
+# Lokale bouw (tools/iso-local.sh): IMAGE_SOURCE=oci:<map> is een OCI-map die als volume in deze bouwstap zit. Dan
+# een gewone kopie van map naar map, zonder registry en zonder netwerk. Anders (iso.yml): uit de registry.
+if [[ "${IMAGE_SOURCE:-}" == oci:* ]]; then
+    skopeo copy "$IMAGE_SOURCE" "oci:${STICK_OCI}"
+else
+    skopeo copy "${SKOPEO_ARGS[@]}" "docker://${BRON_REF}" "oci:${STICK_OCI}"
+fi
 # Controle: kan het installatieprogramma hem lezen, en is het een bootc-beeld?
 skopeo inspect "oci:${STICK_OCI}" --format '{{index .Labels "containers.bootc"}}' | grep -qx 1
 du -sh "$STICK_OCI"
