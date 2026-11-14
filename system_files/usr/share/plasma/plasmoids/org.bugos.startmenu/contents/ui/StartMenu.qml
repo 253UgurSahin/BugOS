@@ -118,14 +118,25 @@ Rectangle {
         zoekveld.text = ""
         stapel.currentIndex = 0
         datumTekst = datum()
+        // Elke keer bovenaan beginnen: anders bleef de beginpagina gescrold staan en was de bovenste rij
+        // vastgezette apps half weg ('LibreOffice Writer' afgeknipt) (A-05, VM-test).
+        begin.contentY = 0
+        alleLijst.positionViewAtBeginning()
         zoekveld.forceActiveFocus()
     }
 
     implicitWidth: 660
-    // Plasma maakt de pop-up zo hoog als dit: dus de echte hoogte van de inhoud, met een minimum en maximum.
-    implicitHeight: Math.max(420, Math.min(680, gewensteHoogte))
-    // Zo hoog als de beginpagina nodig heeft (vastgezet + recent), zoals Windows 11: geen groot leeg vlak
-    // onder twee rijen apps. main.qml houdt een minimum en een maximum aan (dan scrolt de beginpagina).
+    // Hoogte van de pop-up (A-05/A-06, VM-test). Vroeger zo hoog als de beginpagina nodig had, met 420 als minimum.
+    // In de VM werd de pop-up dan maar ~450 px: 'Recent geopend' viel onder de rand en 'Alle apps' liet ~3 regels zien.
+    // Nu, zoals het startmenu van Windows 11, een vaste ruime hoogte die bij beginpagina, 'Alle apps' en zoeken
+    // gelijk blijft (geen menu dat verspringt als je van pagina wisselt): vasteHoogte. Is de inhoud hoger (grote
+    // letters), dan groeit hij mee, maar nooit hoger dan maxHoogte: main.qml zet die naar het scherm, zodat het
+    // menu op 1280x800 boven de taakbalk past. Past het dan nog niet, dan scrolt de beginpagina (met een zichtbare
+    // schuifbalk).
+    property int maxHoogte: 680
+    readonly property int vasteHoogte: 640
+    implicitHeight: Math.min(maxHoogte, Math.max(vasteHoogte, gewensteHoogte))
+    // Wat de beginpagina helemaal nodig heeft (vastgezet + recent), om te kunnen groeien bij grote letters.
     readonly property int gewensteHoogte: 22 * 2 + kopRij.implicitHeight + zoekveld.implicitHeight
         + beginKolom.implicitHeight + 1 + onderRij.implicitHeight + 16 * 4
     color: palette.window
@@ -218,6 +229,8 @@ Rectangle {
                 app: modelData
                 gemarkeerd: ListView.isCurrentItem
             }
+            // Meer treffers dan er passen ('LibreOffice': Writer stond onderaan buiten beeld): laat het zien (A-06).
+            ScrollBar.vertical: ScrollBar { policy: zoekLijst.contentHeight > zoekLijst.height ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff }
             Label {
                 anchors.centerIn: parent
                 visible: zoekLijst.count === 0
@@ -242,7 +255,9 @@ Rectangle {
                 contentWidth: width
                 contentHeight: beginKolom.implicitHeight
                 boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: ScrollBar { policy: begin.contentHeight > begin.height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff }
+                // Altijd zichtbaar als er meer is dan past: 'AsNeeded' toont hem pas tijdens het scrollen, en dan zag
+                // je niet dat er onder 'Vastgezet' nog 'Recent geopend' stond (A-05, VM-test).
+                ScrollBar.vertical: ScrollBar { policy: begin.contentHeight > begin.height ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff }
                 ColumnLayout {
                     id: beginKolom
                     width: begin.width
@@ -328,7 +343,8 @@ Rectangle {
                         leftPadding: 8
                     }
                     delegate: AppRegel { width: alleLijst.width; app: modelData; gemarkeerd: ListView.isCurrentItem && alleLijst.activeFocus }
-                    ScrollBar.vertical: ScrollBar {}
+                    // Een lange lijst: de schuifbalk altijd laten zien, dan weet je dat er meer is (A-06, VM-test).
+                    ScrollBar.vertical: ScrollBar { policy: alleLijst.contentHeight > alleLijst.height ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff }
                 }
             }
         }
@@ -343,49 +359,73 @@ Rectangle {
             id: onderRij
             Layout.fillWidth: true
             spacing: 8
-            Rectangle {
-                id: avatar
-                width: 32; height: 32; radius: 16
-                readonly property string foto: (menu.gegevens.gebruiker && menu.gegevens.gebruiker.foto) ? menu.gegevens.gebruiker.foto : ""
-                gradient: Gradient {
-                    GradientStop { position: 0.0; color: menu.o.verloopBegin }
-                    GradientStop { position: 1.0; color: menu.o.verloopEind }
+            // Jij (foto/letter en naam) als één knop: opent Instellingen > Account (de pagina 'inloggen': naam,
+            // foto en wachtwoord), zoals de accountknop van Windows 11. Vroeger deed een klik hierop niets (A-17).
+            AbstractButton {
+                id: ikKnop
+                objectName: "ikKnop"
+                Layout.fillWidth: true
+                implicitHeight: 40
+                hoverEnabled: true
+                Accessible.name: menu.tr("Account-instellingen", "Account settings")
+                ToolTip.visible: hovered
+                ToolTip.text: Accessible.name
+                onClicked: { menu.start("instelling:inloggen"); menu.sluiten() }
+                Keys.onReturnPressed: clicked()
+                Keys.onEnterPressed: clicked()
+                background: Rectangle {
+                    radius: menu.o.rKnop
+                    color: ikKnop.hovered || ikKnop.activeFocus ? menu.zweef : "transparent"
+                    border.width: ikKnop.activeFocus ? 2 : 0   // ook met het toetsenbord goed te zien (U135)
+                    border.color: menu.rood
                 }
-                Label {
-                    anchors.centerIn: parent
-                    visible: fotoBeeld.status !== Image.Ready
-                    text: ((menu.gegevens.gebruiker && menu.gegevens.gebruiker.naam) || "?").charAt(0).toUpperCase()
-                    color: "white"
-                    font.family: menu.display
-                    font.weight: Font.DemiBold
-                    font.pixelSize: Math.round(14 * menu.schaal)
-                }
-                // Eigen foto (als die er is): in een rond venstertje
-                Item {
-                    anchors.fill: parent
-                    clip: true
-                    visible: fotoBeeld.status === Image.Ready
-                    Image {
-                        id: fotoBeeld
-                        anchors.fill: parent
-                        // De tijd erachter: een nieuwe foto onder dezelfde naam wordt dan echt opnieuw geladen (U112).
-                        source: avatar.foto === "" ? "" : "file://" + avatar.foto + "?" + (menu.gegevens.gebruiker.foto_tijd || 0)
-                        cache: false
-                        fillMode: Image.PreserveAspectCrop
-                        sourceSize.width: 76
-                        sourceSize.height: 76
-                        asynchronous: true
+                contentItem: RowLayout {
+                    spacing: 8
+                    Rectangle {
+                        id: avatar
+                        width: 32; height: 32; radius: 16
+                        readonly property string foto: (menu.gegevens.gebruiker && menu.gegevens.gebruiker.foto) ? menu.gegevens.gebruiker.foto : ""
+                        gradient: Gradient {
+                            GradientStop { position: 0.0; color: menu.o.verloopBegin }
+                            GradientStop { position: 1.0; color: menu.o.verloopEind }
+                        }
+                        Label {
+                            anchors.centerIn: parent
+                            visible: fotoBeeld.status !== Image.Ready
+                            text: ((menu.gegevens.gebruiker && menu.gegevens.gebruiker.naam) || "?").charAt(0).toUpperCase()
+                            color: "white"
+                            font.family: menu.display
+                            font.weight: Font.DemiBold
+                            font.pixelSize: Math.round(14 * menu.schaal)
+                        }
+                        // Eigen foto (als die er is): in een rond venstertje
+                        Item {
+                            anchors.fill: parent
+                            clip: true
+                            visible: fotoBeeld.status === Image.Ready
+                            Image {
+                                id: fotoBeeld
+                                anchors.fill: parent
+                                // De tijd erachter: een nieuwe foto onder dezelfde naam wordt dan echt opnieuw geladen (U112).
+                                source: avatar.foto === "" ? "" : "file://" + avatar.foto + "?" + (menu.gegevens.gebruiker.foto_tijd || 0)
+                                cache: false
+                                fillMode: Image.PreserveAspectCrop
+                                sourceSize.width: 76
+                                sourceSize.height: 76
+                                asynchronous: true
+                            }
+                        }
+                        Rectangle { anchors.fill: parent; radius: 19; color: "transparent"; border.width: 1; border.color: menu.lijnkleur }
+                    }
+                    Label {
+                        text: (menu.gegevens.gebruiker && menu.gegevens.gebruiker.naam) || ""
+                        color: menu.tekst
+                        font.pixelSize: Math.round(14 * menu.schaal)
+                        font.weight: Font.Medium
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
                     }
                 }
-                Rectangle { anchors.fill: parent; radius: 19; color: "transparent"; border.width: 1; border.color: menu.lijnkleur }
-            }
-            Label {
-                text: (menu.gegevens.gebruiker && menu.gegevens.gebruiker.naam) || ""
-                color: menu.tekst
-                font.pixelSize: Math.round(14 * menu.schaal)
-                font.weight: Font.Medium
-                Layout.fillWidth: true
-                elide: Text.ElideRight
             }
             OnderKnop { icoon: "configure"; tekst: menu.tr("Instellingen", "Settings"); onGeklikt: { menu.start("/usr/share/applications/bugos-settings.desktop"); menu.sluiten() } }
             OnderKnop { icoon: "system-lock-screen"; tekst: menu.tr("Vergrendelen", "Lock"); onGeklikt: { menu.aanUit("slot"); menu.sluiten() } }
@@ -476,7 +516,9 @@ Rectangle {
         id: regel
         property var app
         property bool gemarkeerd: false
-        implicitHeight: 54
+        // 48 (was 54): iets compacter, zodat 'Alle apps' en de zoekresultaten meer regels tegelijk tonen (A-06).
+        // Past nog steeds: een pictogram van 32 en twee regels tekst (14 + 12 px).
+        implicitHeight: Math.round(48 * menu.schaal)
         hoverEnabled: true
         Accessible.name: app.naam
         onClicked: { menu.start(app.pad); menu.sluiten() }

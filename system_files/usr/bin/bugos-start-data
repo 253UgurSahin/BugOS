@@ -253,6 +253,30 @@ def favorieten(apps: list[dict]) -> list[dict]:
     return uit
 
 
+def map_naam(map_pad: Path) -> str:
+    """Een gewone naam voor de map van een recent bestand, zoals Windows: 'Documenten', niet '/var/home/jan/Documenten'.
+
+    - In je thuismap: het stukje na de thuismap ('Documenten', 'Documenten/Werk'); de thuismap zelf heet 'Thuismap'.
+    - Daarbuiten (een USB-stick, /tmp): het hele pad, want dan is dat wel nodig om te weten waar het staat.
+    Op Fedora Kinoite is /home een koppeling naar /var/home: HOME zegt '/home/jan', maar de lijst van recente
+    bestanden (recently-used.xbel) schrijft vaak '/var/home/jan/...'. Vroeger keken we alleen naar het begin van
+    HOME, en dan bleef het lange technische pad staan (A-07, VM-test). Daarom beide paden eerst 'echt' maken
+    (os.path.realpath volgt de koppeling), en ook nog de letterlijke HOME proberen (als realpath faalt).
+    Alleen het begin van het pad telt, nooit een map verderop die toevallig zo heet (U352).
+    """
+    kandidaten = []
+    for thuis in (os.path.realpath(HOME), str(HOME)):
+        if thuis not in kandidaten:
+            kandidaten.append(thuis)
+    for pad in (os.path.realpath(map_pad), str(map_pad)):
+        for thuis in kandidaten:
+            if pad == thuis:
+                return t("Thuismap", "Home folder")
+            if pad.startswith(thuis.rstrip(os.sep) + os.sep):
+                return pad[len(thuis.rstrip(os.sep)) + 1:]
+    return str(map_pad)
+
+
 def recente_bestanden(max_aantal: int = 8) -> list[dict]:
     # Ook die van apps uit de Winkel (Flatpak: LibreOffice, VLC, ...): die schrijven hun lijst in hun eigen map (U113).
     lijsten = [Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share")) / "recently-used.xbel"]
@@ -277,11 +301,7 @@ def recente_bestanden(max_aantal: int = 8) -> list[dict]:
         if pad in gezien:
             continue
         gezien.add(pad)
-        # Alleen het begin van het pad wordt '~' (niet ook een map die toevallig zo heet) (U352).
-        ouder = str(pad.parent)
-        if ouder == str(HOME) or ouder.startswith(str(HOME) + os.sep):
-            ouder = "~" + ouder[len(str(HOME)):]
-        uit.append({"naam": pad.name, "pad": str(pad), "map": ouder})
+        uit.append({"naam": pad.name, "pad": str(pad), "map": map_naam(pad.parent)})
         if len(uit) >= max_aantal:
             break
     return uit

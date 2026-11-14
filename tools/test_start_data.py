@@ -323,6 +323,36 @@ klopt(sd.niet_storen_tot_in_toekomst(_kde(datetime.now() + timedelta(hours=1)))
       and not sd.niet_storen_tot_in_toekomst(_kde(_u - timedelta(hours=2)) + ",UTC"),
       "U072: snelmenu leest 'niet storen tot' met komma-seconden en tijdzone goed")
 
+# A-07 (VM-test): op Kinoite is /home een koppeling naar /var/home. HOME zegt '/home/test', recently-used.xbel
+# '/var/home/test/Documenten/...'. Het startmenu moet dan gewoon 'Documenten' tonen, niet het technische pad.
+_echt = TMP / "a07" / "var" / "home" / "test"
+(_echt / "Documenten" / "Werk").mkdir(parents=True)
+(TMP / "a07" / "home").symlink_to(_echt.parent)   # zoals Kinoite: /home -> var/home
+_oud_home = sd.HOME
+sd.HOME = TMP / "a07" / "home" / "test"
+try:
+    _namen = {
+        "via /var/home": sd.map_naam(_echt / "Documenten"),
+        "via /home": sd.map_naam(sd.HOME / "Documenten"),
+        "dieper": sd.map_naam(_echt / "Documenten" / "Werk"),
+        "thuismap": sd.map_naam(_echt),
+        "buiten": sd.map_naam(Path("/tmp")),
+        "lijkt erop": sd.map_naam(_echt.parent / "testen"),   # '/var/home/testen' is niet de thuismap van 'test'
+    }
+finally:
+    sd.HOME = _oud_home
+klopt(_namen["via /var/home"] == "Documenten" and _namen["via /home"] == "Documenten"
+      and _namen["dieper"] == "Documenten/Werk" and _namen["thuismap"] in ("Thuismap", "Home folder")
+      and _namen["buiten"] == "/tmp" and _namen["lijkt erop"].endswith("/testen"),
+      f"A-07: recente bestanden tonen 'Documenten', ook als het pad via /var/home loopt ({_namen})")
+
+# A-11 (VM-test): 'Game mode' (twee woorden), 'gamemode' en 'gamen' vinden ook 'Game-modus aan/uit', niet alleen
+# de pagina van Instellingen. Het startmenu zoekt elk woord los in 'zoek', dus elk woord moet erin staan.
+_spel = sd.lees_desktop(ROOT / "system_files/usr/share/applications/bugos-game-mode.desktop")
+_mist = [z for z in ("game mode", "gamemode", "gamen", "game-modus", "spelmodus")
+         if not _spel or not all(w in _spel["zoek"] for w in sd.zoeksleutel(z).split())]
+klopt(not _mist, f"A-11: zoeken op 'game mode', 'gamemode' en 'gamen' vindt 'Game-modus aan/uit' (mist: {_mist})")
+
 shutil.rmtree(TMP, ignore_errors=True)
 print()
 print("Alles goed." if not fouten else f"{fouten} fout(en).")

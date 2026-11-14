@@ -355,9 +355,12 @@ rm -f "$TMP/bin/nproc"
 kopie bugos-game-mode
 nep powerprofilesctl 'echo balanced'
 nep notify-send 'echo "$*" >>"'"$TMP"'/meldingen"'
-rm -rf "$TMP/thuis/.config/bugos" "$TMP/meldingen"
+rm -rf "$TMP/thuis/.config/bugos" "$TMP/meldingen" "$TMP/dbus"
 draai bugos-game-mode aan
-klopt 'grep -q "log in again" "$TMP/meldingen"' "game-modus aan: zegt dat de FPS-teller na opnieuw inloggen komt"
+# 'aan' zegt het sinds A-04 (VM-test) via de schermmelding van Plasma (gdbus, osdService), zodat 'niet storen'
+# hem niet tegenhoudt; zonder Plasma via een gewone melding. Een van de twee moet het zeggen.
+klopt 'grep -q "log in again" "$TMP/meldingen" 2>/dev/null || grep -q "osdService.showText.*log in again" "$TMP/dbus" 2>/dev/null' \
+    "game-modus aan: zegt dat de FPS-teller na opnieuw inloggen komt"
 rm -f "$TMP/meldingen"
 MANGOHUD=1 draai bugos-game-mode uit
 klopt 'grep -q "log in again" "$TMP/meldingen"' "game-modus uit: zegt dat de FPS-teller na opnieuw inloggen weggaat"

@@ -7,5 +7,7 @@ Comment[nl]=Volle kracht, meldingen stil en FPS-teller
 Exec=bugos-game-mode wissel
 Icon=bugos-game-mode
 Categories=Game;
-Keywords=game;gaming;spel;fps;
+# Zoekwoorden voor het startmenu: ook 'game mode', 'gamemode' en 'gamen' moeten deze knop vinden (A-11, VM-test).
+Keywords=game;gaming;game mode;gamemode;gaming mode;performance;full power;fps;mangohud;gamen;game-modus;spelmodus;
+Keywords[nl]=game;gamen;gamer;game-modus;game mode;gamemode;spel;spelen;spelmodus;prestaties;volle kracht;fps;mangohud;
 Terminal=false
