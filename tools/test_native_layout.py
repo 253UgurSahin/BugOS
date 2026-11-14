@@ -806,9 +806,18 @@ verwerk()
 # B-15: de groene melding ('Klaar…') zweeft bovenaan over de pagina: de knoppen eronder blijven op hun plek als hij
 # verschijnt en weer verdwijnt (eerst schoof alles ~60 px omlaag, en viel een klik op '100%' naast de knop).
 w.ga_naar("scherm")
-verwerk()
+from PySide6.QtCore import QThreadPool as _Pool15  # noqa: E402
+
+_Pool15.globalInstance().waitForDone(5000)   # eerst wat de pagina leest (dat verandert de uitleg bovenaan)
+verwerk(5)
 _sch = w.paginas["scherm"]
 _k100 = _sch.grootte.knoppen[1.0]
+# Op een vaste maat waarop de pagina stil ligt. (Op sommige maten, bijv. 840 x 700, schommelt de pagina Scherm zelf al:
+# de schuifbalk gaat aan en uit en de regels springen. Dat is ouder dan deze test en staat los van de melding.)
+_maat15, _min15 = w.size(), w.minimumSize()
+w.setMinimumSize(0, 0)
+w.resize(900, 552)
+verwerk(10)
 _voor = _k100.mapTo(w, QPoint(0, 0))
 _sch.melding.toon("Done. Some programs only change after you open them again.", "goed")
 verwerk()
@@ -824,6 +833,23 @@ klopt(_sch.melding.parentWidget() is _sch and _mg.top() >= 0 and _mg.bottom() < 
 _sch.melding.hide()
 verwerk()
 klopt(_k100.mapTo(w, QPoint(0, 0)) == _voor, "B-15: de melding verdwijnt en de knop '100%' blijft op zijn plek")
+# En de pagina schommelt niet: op 840 x 700 ging de schuifbalk steeds aan en uit en sprongen de regels (de regel
+# 'Draaien' ging onder en naast de tekst). Nu gaat een Rij pas weer naast elkaar met wat ruimte over (RIJ_SPELING).
+_schommel = []
+for _breed in range(800, 904, 8):
+    w.resize(_breed, 700)
+    verwerk(3)
+    _ys = []
+    for _ in range(6):
+        verwerk(3)
+        _ys.append(_k100.mapTo(w, QPoint(0, 0)).y())
+    if len(set(_ys[2:])) > 1:
+        _schommel.append(f"{_breed}: {_ys}")
+klopt(not _schommel, "Scherm schommelt niet (schuifbalk aan/uit) bij 800-900 x 700" + "".join(f"
+        {x}" for x in _schommel))
+w.setMinimumSize(_min15)
+w.resize(_maat15)
+verwerk()
 # B-02: Kolommen (Start: vier snelle schuifjes, Energie: drie kaarten). Breed: alles naast elkaar; smal: 4 -> 2 -> 1,
 # nooit 3 + 1; een verborgen kaart laat geen gat achter.
 _kol = inst.Kolommen(12)
