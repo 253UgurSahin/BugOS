@@ -1,0 +1,15 @@
+# BugOS: de systeemdelen (alleen-lezen wortel, /boot, EFI, het systeemvolume) niet als 'schijf' tonen in
+# KDE-bestandsvensters, waar ze als volle, rode schijven stonden (B-06). Zie /usr/libexec/bugos-hide-system-drives.
+# Vóór het inlogscherm, zodat KDE ze vanaf het begin niet ziet. Alles staat in /run: na elke start opnieuw.
+[Unit]
+Description=BugOS: systeemdelen niet als schijf tonen
+After=local-fs.target systemd-udevd.service
+Wants=systemd-udevd.service
+Before=display-manager.service systemd-user-sessions.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/bugos-hide-system-drives
+
+[Install]
+WantedBy=multi-user.target
