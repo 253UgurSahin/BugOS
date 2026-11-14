@@ -68,11 +68,20 @@ mount -o remount,rw /proc/sys 2>/dev/null || true
 # traag: één fuse-proces met 20 GB geheugen op één kern, uren lang. De bouw op GitHub gebruikt de overlay van de
 # kernel al. Die werkt hier ook: de opslag (/var/lib/containers) staat op een gewone schijf (een Docker-volume).
 if grep -q '^mount_program *= *"/usr/bin/fuse-overlayfs"' /etc/containers/storage.conf 2>/dev/null; then
+    # Een eigen map voor de opslag (storage-kernel), niet de oude: een opslag die ooit met fuse-overlayfs is
+    # aangemaakt, onthoudt dat (overlay/.has-mount-program) en blijft het dan stilletjes gebruiken, ook zonder
+    # mount_program. De fundering wordt in de nieuwe map één keer opnieuw opgehaald.
     sed -e 's|^mount_program *=.*|# mount_program: uit (zie tools/iso-local.sh)|' -e 's|^mountopt *=.*|mountopt = "nodev"|' \
+        -e 's|^graphroot *=.*|graphroot = "/var/lib/containers/storage-kernel"|' \
         /etc/containers/storage.conf >/tmp/bugos-storage.conf
     export CONTAINERS_STORAGE_CONF=/tmp/bugos-storage.conf
 fi
-stap "Opslag van podman: $(podman info --format '{{.Store.GraphDriverName}} {{.Store.GraphOptions}}' 2>&1 | head -c 300)"
+stap "Opslag van podman: $(podman info --format '{{.Store.GraphRoot}} {{.Store.GraphDriverName}} {{.Store.GraphOptions}}' 2>&1 | head -c 300)"
+# Controle: met de overlay van de kernel meldt podman "Native Overlay Diff:true"; met fuse-overlayfs niet.
+if ! podman info --format '{{.Store.GraphStatus}}' 2>/dev/null | grep -q 'Native Overlay Diff:true'; then
+    echo "De opslag gebruikt nog fuse-overlayfs: dan komen bestanden half in het beeld. Gestopt." >&2
+    exit 1
+fi
 
 # Werkmap op dezelfde schijf als de opslag (niet in /tmp van de container): de OCI-map (~6 GB) en de ISO (~11 GB)
 # passen dan, en verplaatsen is daar een hernoeming in plaats van een kopie.
