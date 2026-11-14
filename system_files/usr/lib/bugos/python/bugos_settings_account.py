@@ -846,7 +846,9 @@ class InloggenPagina(Blad):
     def menu_voor(self, p: bi.Persoon) -> list:
         items = [("slot", t("Nieuw wachtwoord…", "Set a new password…"), lambda: self.nieuw_wachtwoord_voor(p))]
         if p.beheerder:
-            items.append(("persoon", t("Gewone gebruiker maken", "Make standard user"), lambda: self.zet_soort(p, False)))
+            # Hetzelfde woord als in de lijst en bij Iemand toevoegen: "Standaard" (B-22).
+            items.append(("persoon", t("Standaardgebruiker maken", "Make standard user"),
+                          lambda: self.zet_soort(p, False)))
         else:
             items.append(("persoon", t("Beheerder maken", "Make administrator"), lambda: self.zet_soort(p, True)))
         if not bi.laatste_beheerder(p, self.mensen):
@@ -900,7 +902,7 @@ class InloggenPagina(Blad):
             ok, reden = uitkomst if isinstance(uitkomst, tuple) else (False, "fout")
             if ok:
                 tekst = (t("{naam} is nu beheerder.", "{naam} is now an administrator.") if beheerder else
-                         t("{naam} is nu een gewone gebruiker.", "{naam} is now a standard user.")).format(naam=naam)
+                         t("{naam} is nu een standaardgebruiker.", "{naam} is now a standard user.")).format(naam=naam)
                 if p.ingelogd:
                     tekst += t(" Dat geldt vanaf de volgende keer dat die inlogt.",
                                " It counts from the next time they log in.")

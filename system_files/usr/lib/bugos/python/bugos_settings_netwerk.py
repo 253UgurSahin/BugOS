@@ -588,6 +588,9 @@ class OpgeslagenDialoog(QDialog):
         op_achtergrond(self, lambda: bi.vergeet_opgeslagen(o), klaar)
 
 
+KABEL_KIJKEN_MS = 3000   # zo vaak kijkt de pagina Wifi en internet of de kabel er nog in zit (B-07)
+
+
 class WifiPagina(Blad):
     sleutel, icoon = "wifi", "wifi"
     titel_nl, titel_en = "Wifi en internet", "Wi-Fi and internet"
@@ -610,6 +613,13 @@ class WifiPagina(Blad):
                          self.kabel_knop)
         self.kabel.hide()
         self.kabel_apparaat = ""
+        # De kabel volgt de werkelijkheid vanzelf: zolang deze pagina open is, kijken we om de paar seconden (alleen
+        # 'nmcli device', niet opnieuw naar wifi zoeken). Eerst bleef 'Verbonden met een netwerkkabel' staan nadat je
+        # de kabel eruit trok, tot je een andere pagina opende (B-07).
+        self.kabel_klok = QTimer(self)
+        self.kabel_klok.setInterval(KABEL_KIJKEN_MS)
+        self.kabel_klok.timeout.connect(self.kijk_kabel)
+        self._kabel_bezig = False
         # Opgeslagen netwerken, vlak onder de schakelaar (zoals 'Bekende netwerken beheren' in Windows): daar vergeet je
         # ook een oud netwerk dat nu niet in de buurt is.
         self.opgeslagen = Rij("slot", t("Opgeslagen netwerken", "Saved networks"),
@@ -620,7 +630,9 @@ class WifiPagina(Blad):
         g.voeg(self.kabel)
         self.zoek_knop = Knop(t("Opnieuw zoeken", "Search again"), "stil", "lijn:verversen")
         self.zoek_knop.clicked.connect(lambda _c=False: self.ververs(True))
-        self.lay.addWidget(sectie_met_knop(t("Netwerken in de buurt", "Networks nearby"), self.zoek_knop))
+        # (self.buurt_kop: zonder wifi gaat het kopje mee weg, anders stond het er leeg, B-21.)
+        self.buurt_kop = sectie_met_knop(t("Netwerken in de buurt", "Networks nearby"), self.zoek_knop)
+        self.lay.addWidget(self.buurt_kop)
         self.lijst = self.kaart()
         # Een netwerk dat zijn naam niet laat zien (een 'verborgen' netwerk) (U109).
         self.ander = Knop(t("Ander netwerk…", "Other network…"), "stil", "lijn:plus")
@@ -638,6 +650,26 @@ class WifiPagina(Blad):
     def ververs(self, opnieuw: bool = False) -> None:
         self.hoofd.zet_uitleg(t("Even zoeken…", "Searching…"))
         op_achtergrond(self, lambda: (bi.wifi_aan(), bi.netwerken(opnieuw), bi.kabel(), bi.heeft_wifi()), self.toon)
+
+    def showEvent(self, e) -> None:  # noqa: N802
+        super().showEvent(e)
+        self.kabel_klok.start()
+
+    def hideEvent(self, e) -> None:  # noqa: N802
+        super().hideEvent(e)
+        self.kabel_klok.stop()   # niet kijken als niemand het ziet
+
+    def kijk_kabel(self) -> None:
+        """Alleen de kabel opnieuw lezen (op de achtergrond, nooit twee keer tegelijk)."""
+        if self._kabel_bezig:
+            return
+        self._kabel_bezig = True
+
+        def klaar(kabel) -> None:
+            self._kabel_bezig = False
+            if kabel is not None:
+                self.toon_kabel(kabel)
+        op_achtergrond(self, bi.kabel, klaar)
 
     def toon_kabel(self, kabel) -> None:
         """kabel: (stand, apparaat) uit bi.kabel(), of (oud) True = verbonden, False = niet te zien."""
@@ -663,7 +695,8 @@ class WifiPagina(Blad):
         self.schakel.zet_stil(aan)
         self.toon_kabel(kabel)
         # Zonder wifi in de computer: dat zeggen, en geen schakelaar of lijst die niets doen (U111).
-        for w in (self.schakel, self.zoek_knop, self.lijst, self.ander, self.school, self.opgeslagen):
+        # Het kopje 'Netwerken in de buurt' hoort erbij: een kopje zonder iets eronder is verwarrend (B-21).
+        for w in (self.schakel, self.buurt_kop, self.zoek_knop, self.lijst, self.ander, self.school, self.opgeslagen):
             w.setVisible(wifi)
         if not wifi:
             self.hoofd.zet_uitleg(t("Deze computer heeft geen wifi", "This computer has no Wi-Fi"))
@@ -1643,7 +1676,9 @@ class BluetoothPagina(Blad):
         g.voeg(self.hoofd)
         nieuw = self.nieuw = Knop(t("Nieuw apparaat koppelen", "Pair a new device"), "stil", "lijn:map-plus")
         nieuw.clicked.connect(lambda _c=False: self.koppel_nieuw())
-        self.lay.addWidget(sectie_met_knop(t("Jouw apparaten", "Your devices"), nieuw))
+        # (self.apparaten_kop: zonder bluetooth gaat het kopje mee weg, B-21.)
+        self.apparaten_kop = sectie_met_knop(t("Jouw apparaten", "Your devices"), nieuw)
+        self.lay.addWidget(self.apparaten_kop)
         self.lijst = self.kaart()
 
     def ververs(self) -> None:
@@ -1657,7 +1692,8 @@ class BluetoothPagina(Blad):
         heeft = rest[0] if rest else True
         hard = bool(rest[1]) if len(rest) > 1 else False
         # Geen bluetooth in de computer: dat zeggen, geen schakelaar en knop die niets doen (U157).
-        for w in (self.schakel, self.nieuw, self.lijst):
+        # Ook het kopje 'Jouw apparaten': anders stond het leeg boven niets (B-21).
+        for w in (self.schakel, self.apparaten_kop, self.nieuw, self.lijst):
             w.setVisible(heeft)
         if not heeft:
             self.hoofd.zet_uitleg(t("Deze computer heeft geen bluetooth", "This computer has no Bluetooth"))

@@ -155,9 +155,14 @@ class Zoekveld(QLineEdit):
 class Zijbalk(QListWidget):
     """Navigatie aan de linkerkant (zoals bij Instellingen in Windows)."""
 
+    # Je klikt op het onderdeel dat al gekozen is. (currentRowChanged komt dan niet: er verandert niets.) Instellingen
+    # kijkt dan opnieuw hoe het ervoor staat, zoals je zou verwachten (B-07: de kabel bleef 'Verbonden' zeggen).
+    opnieuw_gekozen = Signal(int)
+
     def __init__(self):
         super().__init__()
         self.setObjectName("zijbalk")
+        self._was_gekozen = -1
         self.setIconSize(QSize(20, 20))
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
@@ -180,6 +185,19 @@ class Zijbalk(QListWidget):
         it.setSizeHint(QSize(0, 36))
         self.addItem(it)
         return it
+
+    def mousePressEvent(self, e) -> None:  # noqa: N802
+        # Vóór de klik: was dit onderdeel al gekozen? (Na de klik is hij dat altijd.)
+        rij = self.indexAt(e.position().toPoint()).row()
+        self._was_gekozen = rij if rij >= 0 and rij == self.currentRow() else -1
+        super().mousePressEvent(e)
+
+    def mouseReleaseEvent(self, e) -> None:  # noqa: N802
+        super().mouseReleaseEvent(e)
+        rij = self.indexAt(e.position().toPoint()).row()
+        if rij >= 0 and rij == self._was_gekozen == self.currentRow():
+            self.opnieuw_gekozen.emit(rij)
+        self._was_gekozen = -1
 
     def sleutel(self, rij: int) -> str:
         it = self.item(rij)

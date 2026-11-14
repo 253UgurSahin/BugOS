@@ -211,15 +211,16 @@ STAAT_TEKST = {"klaar": ("Klaar om te printen", "Ready to print"), "bezig": ("Aa
                "gestopt": ("Gestopt · staat hij aan en zit de kabel erin? Kies dan Verder printen in het menu.",
                            "Stopped · is it on and plugged in? Then choose Resume printing in the menu."),
                "gepauzeerd": ("Gepauzeerd", "Paused"),
-               "wacht": ("Wacht op de printer · staat hij aan en zit hij op dezelfde wifi?",
-                         "Waiting for the printer · is it on and on the same Wi-Fi?")}
+               "wacht": ("Wacht op de printer · staat hij aan en zit hij op hetzelfde netwerk?",
+                         "Waiting for the printer · is it on and on the same network?")}
 
-# Wat er misging, in gewone woorden (nooit de foutmelding van CUPS zelf).
+# Wat er misging, in gewone woorden (nooit de foutmelding van CUPS zelf). "Hetzelfde netwerk", niet "dezelfde wifi":
+# een pc aan een kabel heeft geen wifi (B-21).
 FOUT_TEKST = {
     "geweigerd": ("Niets gedaan: er was geen toestemming.", "Nothing done: permission was not given."),
     "verboden": ("Dat mag alleen een beheerder van deze computer.", "Only an administrator of this computer can do that."),
-    "onbereikbaar": ("BugOS kan de printer niet bereiken. Staat hij aan en zit hij op dezelfde wifi als deze computer?",
-                     "BugOS cannot reach the printer. Is it on, and on the same Wi-Fi as this computer?"),
+    "onbereikbaar": ("BugOS kan de printer niet bereiken. Staat hij aan en zit hij op hetzelfde netwerk als deze computer?",
+                     "BugOS cannot reach the printer. Is it on, and on the same network as this computer?"),
     "bestaat_niet": ("Die printer bestaat niet meer. De lijst wordt bijgewerkt.",
                      "That printer no longer exists. The list is updated."),
     "anders": ("Dat lukte niet. Probeer het nog eens.", "That did not work. Try again."),
@@ -562,9 +563,9 @@ class PrinterToevoegen(QDialog):
             self.lijst.voeg(Rij("printer", g.naam, plek_tekst(g), rechts))
         if not gevonden:
             self.lijst.voeg(Rij("printer", t("Geen printer gevonden", "No printer found"),
-                                t("Staat de printer aan en zit hij op dezelfde wifi? Of zit de kabel erin? Zoek dan "
+                                t("Staat de printer aan en zit hij op hetzelfde netwerk? Of zit de kabel erin? Zoek dan "
                                   "opnieuw, of kies 'Mijn printer staat er niet bij'.",
-                                  "Is the printer on and on the same Wi-Fi? Or is the cable plugged in? Then search "
+                                  "Is the printer on and on the same network? Or is the cable plugged in? Then search "
                                   "again, or choose 'My printer is not in the list'.")))
         self.opnieuw.setEnabled(True)
         if self.kabel is not None:

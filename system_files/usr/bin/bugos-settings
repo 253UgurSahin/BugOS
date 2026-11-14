@@ -83,7 +83,8 @@ class StartPagina(Blad):
         self.lay.addWidget(self.snel_rij)
         g = self.kaart()
         self.volume = Regelaar(50)
-        self.volume.veranderd.connect(lambda w: op_achtergrond(self, lambda: bi.zet_volume(w), lambda _u: None))
+        self.volume.veranderd.connect(self.zet_volume)
+        self.luidspreker = ""   # de naam van de luidspreker die nu gebruikt wordt (voor de regel 'Geluid en meldingen')
         g.voeg(Rij("geluid", t("Volume", "Volume"), "", self.volume))
         # zoeken
         self.zoek_kop = sectie(t("Gevonden", "Found"), wrap=True)
@@ -109,7 +110,7 @@ class StartPagina(Blad):
         def lees():
             return {"wifi": bi.wifi_aan(), "netwerken": bi.netwerken(), "bt": bi.bt_aan(), "nacht": bi.nachtlicht(),
                     "donker": bi.donker(), "geluid": bi.geluid(), "heeft_wifi": bi.heeft_wifi(),
-                    "heeft_bt": bi.VOORBEELD or bi.bt_hardware()}
+                    "heeft_bt": bi.VOORBEELD or bi.bt_hardware(), "kabel": bi.kabel()}
         op_achtergrond(self, lees, self.toon)
 
     def toon(self, s) -> None:
@@ -129,11 +130,33 @@ class StartPagina(Blad):
         self.snel["bt"].parentWidget().setVisible(s.get("heeft_bt", True))   # ook geen Bluetooth zonder Bluetooth (U157)
         volume, _stil, uitgangen = s["geluid"]
         self.volume.zet(volume)
-        if nu:
-            self.rijen["wifi"].zet_uitleg(t(f"Verbonden met {nu.naam}", f"Connected to {nu.naam}"))
+        self.rijen["wifi"].zet_uitleg(self.netwerk_uitleg(nu, s))
         gebruikt = next((u for u in uitgangen if u.standaard), None)
+        self.luidspreker = gebruikt.omschrijving if gebruikt else ""
         if gebruikt:
             self.rijen["geluid"].zet_uitleg(f"{volume}% · {gebruikt.omschrijving}")
+
+    @staticmethod
+    def netwerk_uitleg(nu, s: dict) -> str:
+        """Wat de regel 'Wifi en internet' zegt. Eerst stond er op een pc aan een kabel (zonder wifi) 'Klik op een
+        netwerk om te verbinden.' (B-20)."""
+        if nu:
+            return t(f"Verbonden met {nu.naam}", f"Connected to {nu.naam}")
+        kabel = s.get("kabel")
+        stand = kabel[0] if isinstance(kabel, tuple) else ""
+        if stand == "verbonden":
+            return t("Verbonden met een netwerkkabel", "Connected by cable")
+        if not s.get("heeft_wifi", True):
+            return t("Geen wifi in deze computer · gebruik een netwerkkabel",
+                     "No Wi-Fi in this computer · use a network cable")
+        return GROEPEN[1].uitleg()
+
+    def zet_volume(self, waarde: int) -> None:
+        """Het volume veranderen, en de regel 'Geluid en meldingen' meteen mee (eerst bleef daar het oude getal staan
+        tot je de pagina opnieuw opende, B-20)."""
+        op_achtergrond(self, lambda: bi.zet_volume(waarde), lambda _u: None)
+        if self.luidspreker:
+            self.rijen["geluid"].zet_uitleg(f"{waarde}% · {self.luidspreker}")
 
     def zet_snel(self, sleutel: str, aan: bool) -> None:
         werk = {"wifi": lambda: bi.zet_wifi(aan), "bt": lambda: bi.zet_bt(aan),
@@ -322,6 +345,8 @@ class Instellingen(Venster):
                 self.paginas[b.sleutel] = b   # elke pagina blijft op zijn eigen sleutel te vinden
         self.setStyleSheet(self.styleSheet() + tab_stijl())
         self.zoekveld.textChanged.connect(self.zoeken)
+        # Klik je op het onderdeel dat al open is, dan kijkt de pagina opnieuw (B-07).
+        self.nav.opnieuw_gekozen.connect(lambda _rij: self.ga_naar(self.huidige()))
         begin = OUDE_NAMEN.get(begin, begin)
         self.ga_naar(begin if begin in self.paginas else "start")
         self.nav.setFocus()  # niet meteen in het zoekveld

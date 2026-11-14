@@ -553,6 +553,12 @@ class SchermPagina(Blad):
         # Zonder schermen (oude vorm, of kscreen-doctor werkt niet): de grens van Qt, zoals vroeger (U397, I13).
         self._schermen = rest[0] if rest else None
         self.helder_rij.setVisible(helder is not None)
+        # Kan dit scherm niet feller of donkerder (een pc met een losse monitor, de VM), dan ook de uitleg bovenaan
+        # niet over 'Helderheid' laten beginnen (B-21).
+        if self.sub is not None:
+            self.sub.setText(t(self.uitleg_nl, self.uitleg_en) if helder is not None else
+                             t("Warm licht voor de avond, en hoe groot alles is.",
+                               "Warm light for the evening, and how big everything is."))
         if helder is not None:
             self.helder.zet(helder)
         self.nacht.zet_stil(nacht)
@@ -865,8 +871,10 @@ def keuze_kaart(icoon_naam: str, naam: str, uitleg_tekst: str) -> KeuzeKaart:
     plaatje.setPixmap(lijn_icoon(icoon_naam, "tekst", 24, gekozen=None).pixmap(24, 24))
     il.addWidget(plaatje)
     il.addWidget(label(naam, "kop3", wrap=False))
-    il.addWidget(label(uitleg_tekst, "klein"))
+    uitleg_label = label(uitleg_tekst, "klein")
+    il.addWidget(uitleg_label)
     kaart = KeuzeKaart(inhoud)
+    kaart.uitleg_label = uitleg_label   # (Energie zet een andere uitleg op een pc zonder batterij, B-21)
     kaart.setMinimumHeight(112)
     return kaart
 
@@ -954,6 +962,16 @@ class EnergiePagina(Blad):
         self.slaap_rij.zet_uitleg(slaap + uitleg[len(t("Even met de muis bewegen en het is terug",
                                                        "Move the mouse and it is back")):])
         self.batterij_kaart.setVisible(bat is not None)
+        # Een pc zonder batterij: niet over de batterij praten, bovenaan niet en op de kaart 'Zuinig' niet (B-21).
+        if self.sub is not None:
+            self.sub.setText(t(self.uitleg_nl, self.uitleg_en) if bat is not None else
+                             t("Zuinig of snel, en wanneer het scherm uitgaat.",
+                               "Saving or fast, and when the screen turns off."))
+        zuinig = self.profielen.get("power-saver")
+        if zuinig is not None and hasattr(zuinig, "uitleg_label"):
+            tekst = t(*PROFIEL_TEKST["power-saver"][1]) if bat is not None else                 t("Gebruikt minder stroom", "Uses less power")
+            zuinig.uitleg_label.setText(tekst)
+            zuinig.setAccessibleDescription(tekst)
         if bat is not None:
             staat = t("vol", "full") if bat.vol else t("wordt opgeladen", "charging") if bat.laadt else \
                 t("aan de lader, laadt niet", "plugged in, not charging") if bat.aan_lader else t("op batterij", "on battery")

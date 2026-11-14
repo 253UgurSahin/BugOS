@@ -333,6 +333,80 @@ venster.ga_naar("start")
 venster.paginas["meldingen"].na_proef("")
 klopt(venster.huidige() == "start", "B-05: een melding die je wegveegt, verandert niets in Instellingen")
 
+from PySide6.QtCore import QThreadPool as _Pool  # noqa: E402
+from PySide6.QtWidgets import QApplication as _App  # noqa: E402
+
+
+def _klaar_werk() -> None:
+    """Wacht tot het werk op de achtergrond klaar is en verwerk de antwoorden."""
+    _Pool.globalInstance().waitForDone(5000)
+    for _ in range(5):
+        _App.processEvents()
+
+
+# B-07: de regel 'Kabel' volgt de werkelijkheid vanzelf zolang de pagina open is, en een klik op het onderdeel dat
+# al open is, kijkt opnieuw.
+venster.show()
+venster.ga_naar("wifi")
+_klaar_werk()
+_wp = venster.paginas["wifi"]
+klopt(_wp.kabel_klok.isActive() and _wp.kabel_klok.interval() <= 5000,
+      "B-07: zolang Wifi en internet open is, kijkt de pagina om de paar seconden naar de kabel")
+_oud_kabel = bi.kabel
+bi.kabel = lambda: ("los", "enp0s3")
+_wp.kijk_kabel()
+_klaar_werk()
+klopt("Niet aangesloten" in _wp.kabel.uitleg.text(), f"B-07: kabel eruit: de regel zegt het vanzelf ({_wp.kabel.uitleg.text()!r})")
+bi.kabel = lambda: ("verbonden", "enp0s3")
+_wp.kijk_kabel()
+_klaar_werk()
+klopt("Verbonden" in _wp.kabel.uitleg.text(), "B-07: kabel er weer in: 'Verbonden' komt vanzelf terug")
+bi.kabel = _oud_kabel
+_ververst07: list = []
+_oud_ververs07 = _wp.ververs
+_wp.ververs = lambda *a: _ververst07.append(1)
+venster.nav.opnieuw_gekozen.emit(venster.nav.currentRow())
+_wp.ververs = _oud_ververs07
+klopt(_ververst07 == [1], "B-07: klik op het onderdeel dat al open is: de pagina kijkt opnieuw")
+venster.ga_naar("start")
+_klaar_werk()
+klopt(not _wp.kabel_klok.isActive(), "B-07: weg van de pagina: niet meer kijken")
+
+# B-20: de regels op Start volgen wat je verandert.
+_st = venster.paginas["start"]
+_klaar_werk()
+_st.zet_volume(73)
+klopt(_st.rijen["geluid"].uitleg.text().startswith("73%"),
+      f"B-20: volume op Start verschoven: de regel 'Geluid en meldingen' zegt meteen 73% ({_st.rijen['geluid'].uitleg.text()!r})")
+klopt(_st.netwerk_uitleg(None, {"kabel": ("verbonden", "enp0s3"), "heeft_wifi": False}) == "Verbonden met een netwerkkabel"
+      and "Geen wifi" in _st.netwerk_uitleg(None, {"kabel": ("los", "enp0s3"), "heeft_wifi": False}),
+      "B-20: op een pc aan een kabel zegt de regel 'Wifi en internet' dat, niet 'Klik op een netwerk'")
+
+# B-21: geen lege kopjes en geen praat over wat de computer niet heeft.
+_wp.toon((True, [], ("verbonden", "enp0s3"), False))
+klopt(_wp.buurt_kop.isHidden() and not _wp.kabel.isHidden(), "B-21: zonder wifi geen leeg kopje 'Netwerken in de buurt'")
+_bp = venster.paginas["bluetooth"]
+_bp.toon((False, [], False, False))
+klopt(_bp.apparaten_kop.isHidden(), "B-21: zonder bluetooth geen leeg kopje 'Jouw apparaten'")
+_sp21 = venster.paginas["scherm"]
+_sp21.toon((None, False, 1.0))
+klopt(not _sp21.sub.text().startswith("Helderheid"), f"B-21: zonder helderheid begint de uitleg er niet mee ({_sp21.sub.text()!r})")
+_ep = venster.paginas["energie"]
+_ep.toon((None, "balanced", 600, 1800, bi.KNOP_VRAGEN, bi.KNOP_SLAPEN))
+klopt("batterij" not in _ep.sub.text().lower() and "atterij" not in _ep.profielen["power-saver"].uitleg_label.text(),
+      f"B-21: een pc zonder batterij: Energie praat niet over de batterij ({_ep.sub.text()!r}, "
+      f"{_ep.profielen['power-saver'].uitleg_label.text()!r})")
+_bron21 = (ROOT / "system_files/usr/lib/bugos/python/bugos_settings_meldingen.py").read_text(encoding="utf-8")
+klopt("op dezelfde wifi" not in _bron21 and "hetzelfde netwerk" in _bron21, "B-21: de printerteksten vragen naar 'hetzelfde netwerk', niet 'dezelfde wifi'")
+
+# B-22: in het menu bij een beheerder hetzelfde woord als in de lijst: 'Standaard'.
+_inl = venster.paginas["inloggen"]
+_beheerder = next((p for p in bi.mensen() if p.beheerder), None)
+_menu22 = [tekst for _i, tekst, _f in _inl.menu_voor(_beheerder)] if _beheerder else []
+klopt("Standaardgebruiker maken" in _menu22 and not any("ewone" in x for x in _menu22),
+      f"B-22: 'Standaardgebruiker maken', niet 'Gewone gebruiker maken' ({_menu22})")
+venster.hide()
+
 print()
 print("Alles goed." if not fouten else f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)
