@@ -110,6 +110,30 @@ printf '{"deployments":[{"booted":true,"timestamp":2000}]}' >"$TMP/status.json"
 rm -f "$TMP/rollback"
 draai bugos-updates terug
 klopt '[ $code -eq 3 ] && [ ! -f "$TMP/rollback" ] && grep -q "no older version" "$TMP/uit"' "U041: terug zonder vorige versie: zegt dat (code 3)"
+# B-24: 'kan-terug' zegt dat al vóór de waarschuwing in Instellingen, zonder wachtwoord (geen pkexec, als gewone
+# gebruiker), en precies zoals 'terug' het zou zien.
+nep id 'echo 1000'
+nep pkexec 'echo "$*" >>"'"$TMP"'/pkexec"; exit 0'
+rm -f "$TMP/pkexec"
+draai bugos-updates kan-terug
+klopt '[ $code -eq 3 ] && [ ! -f "$TMP/rollback" ] && [ ! -f "$TMP/pkexec" ] && grep -q "no older version" "$TMP/uit"' \
+    "B-24: kan-terug met maar één versie: nee (code 3), zonder wachtwoord"
+for _st in '{"deployments":[{"booted":true,"timestamp":2000},{"booted":false,"timestamp":1000}]}' \
+    '{"deployments":[{"booted":false,"timestamp":1000},{"booted":true,"timestamp":2000}]}' \
+    '{"deployments":[{"booted":false,"timestamp":2000},{"booted":true,"timestamp":1000}]}'; do
+    printf '%s' "$_st" >"$TMP/status.json"
+    draai bugos-updates kan-terug
+    klopt '[ $code -eq 0 ] && [ ! -f "$TMP/pkexec" ]' "B-24: kan-terug: ja bij een oudere versie, 'terug' al gekozen of vastzetten ($_st)"
+done
+printf '{"deployments":[{"booted":true,"timestamp":1000},{"booted":false,"timestamp":2000}]}' >"$TMP/status.json"
+draai bugos-updates kan-terug
+klopt '[ $code -eq 3 ]' "B-24: kan-terug terwijl de oudste al draait (U044): nee, zoals 'terug'"
+: >"$TMP/status.json"
+draai bugos-updates kan-terug
+klopt '[ $code -eq 0 ]' "B-24: kan-terug zonder antwoord van rpm-ostree: ja (dan vraagt Instellingen het gewoon)"
+nep id 'echo 0'
+nep pkexec 'exit 0'
+printf '{"deployments":[{"booted":true,"timestamp":2000}]}' >"$TMP/status.json"
 # U044: al teruggegaan en opnieuw opgestart (de oudere draait, de nieuwere staat erna): niet weer vooruit.
 printf '{"deployments":[{"booted":true,"timestamp":1000},{"booted":false,"timestamp":2000}]}' >"$TMP/status.json"
 rm -f "$TMP/rollback"

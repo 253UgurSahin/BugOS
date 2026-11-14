@@ -996,6 +996,67 @@ _up.klaar_met("nu", 1, "error: Writing objects: No space left on device\n")
 klopt("vol" in _up.melding.tekst.text() and "online" not in _up.melding.tekst.text(),
       f"U411: updaten met een volle computer: dat wordt gezegd ({_up.melding.tekst.text()!r})")
 
+# B-01: 'Nu updaten' lukt niet omdat de updateserver deze versie niet kent (de VM: een image met de tag 'lokaal'):
+# niet 'Ben je online?' zeggen, want het internet werkt. Wel 'niet online' als dat echt zo is.
+_reg = ("error: Upgrading: Preparing import: Fetching manifest: failed to invoke method OpenImage: unable to retrieve "
+        "auth token: invalid username/password: unauthorized: authentication required\n")
+_dns = "error: pinging container registry ghcr.io: Get \"https://ghcr.io/v2/\": dial tcp: lookup ghcr.io: no such host\n"
+_uf = _sys.update_fout
+klopt("updateserver" in _uf(_reg) and "online?" not in _uf(_reg) and "updateserver" in _uf(_reg, True),
+      f"B-01: de updateserver kent deze versie niet: dat wordt gezegd, niet 'Ben je online?' ({_uf(_reg)!r})")
+klopt("niet online" in _uf(_dns) and "niet online" in _uf("error: x\n", False) and "niet online" in _uf(_reg, False),
+      f"B-01: geen internet (in de uitvoer, of NetworkManager zegt het): 'je computer is niet online' ({_uf(_dns)!r})")
+klopt("internet wel werkt" in _uf("error: something else\n", True) and "online?" in _uf("error: something else\n"),
+      "B-01: een andere fout terwijl het internet werkt: dat zeggen; weten we niets, dan de oude vraag")
+_oud_online = _sys.online
+_sys.online = lambda: True
+_up.klaar_met("nu", 1, _reg)
+_eerst01 = _up.melding.tekst.text()
+QThreadPool.globalInstance().waitForDone(5000)
+for _ in range(5):
+    app.processEvents()
+klopt("updateserver" in _eerst01 and "updateserver" in _up.melding.tekst.text() and _up.melding.property("soort") == "fout",
+      f"B-01: Instellingen zegt na 'Nu updaten' dat de updateserver deze versie niet kent ({_up.melding.tekst.text()!r})")
+_up.klaar_met("nu", 1, "error: something else\n")
+QThreadPool.globalInstance().waitForDone(5000)
+for _ in range(5):
+    app.processEvents()
+klopt("internet wel werkt" in _up.melding.tekst.text(),
+      f"B-01: daarna gevraagd: het internet werkt, dus geen 'Ben je online?' ({_up.melding.tekst.text()!r})")
+_sys.online = _oud_online
+
+# B-24: 'Terug naar de vorige versie' op een computer met maar één versie: meteen zeggen dat er geen oudere is, zonder
+# eerst de ernstige waarschuwing (wachtwoord, gebruikers en wifi gaan terug).
+from bugos_shell import VraagDialoog as _QDialog24  # noqa: E402  (de vraag van BugOS zelf)
+
+_gevraagd24: list = []
+_echt_exec24 = _QDialog24.exec
+_QDialog24.exec = lambda self: (_gevraagd24.append(self), 0)[1]   # Annuleren
+_oud_kt, _oud_vb = _sys.kan_terug, bi.VOORBEELD
+_sys.kan_terug = lambda: False
+bi.VOORBEELD = False
+_up.melding.hide()
+_up.vraag_terug()
+QThreadPool.globalInstance().waitForDone(5000)
+for _ in range(5):
+    app.processEvents()
+klopt(not _gevraagd24 and "geen oudere versie" in _up.melding.tekst.text() and _up.terug.isEnabled(),
+      f"B-24: geen vorige versie: meteen gezegd, zonder waarschuwing ({_up.melding.tekst.text()!r})")
+_sys.kan_terug = lambda: True
+_up.vraag_terug()
+QThreadPool.globalInstance().waitForDone(5000)
+for _ in range(5):
+    app.processEvents()
+klopt(len(_gevraagd24) == 1, "B-24: is er wel een vorige versie, dan eerst de waarschuwing (zoals altijd)")
+_sys.kan_terug = lambda: None
+_up.vraag_terug()
+QThreadPool.globalInstance().waitForDone(5000)
+for _ in range(5):
+    app.processEvents()
+klopt(len(_gevraagd24) == 2, "B-24: weten we het niet (rpm-ostree zegt niets), dan ook de waarschuwing")
+_sys.kan_terug, bi.VOORBEELD = _oud_kt, _oud_vb
+_QDialog24.exec = _echt_exec24
+
 # U445: de klok in het Engels volgt je regio: 2:05 PM in de VS, 9 November met 24 uur in Ierland.
 _uit445 = {}
 for _l445 in ("en_US.UTF-8", "en_IE.UTF-8", "de_DE.UTF-8"):
