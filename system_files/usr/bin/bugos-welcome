@@ -56,6 +56,28 @@ def heeft_internet() -> bool:
     return code == 0 and uit.strip() == "full"
 
 
+def netwerk_soort() -> tuple[bool, bool]:
+    """(heeft deze pc wifi?, is de kabel verbonden?) - uit 'nmcli -t -f TYPE,STATE device'.
+
+    Waarom: op een pc met alleen een kabel (en geen wifi-kaart) bleef de grote rode knop 'Wifi kiezen' staan, met een
+    wifi-teken, terwijl je al online was (A-09). Hiermee weten we of er wifi is, en of de verbinding via de kabel loopt.
+    'wifi-p2p' (Wi-Fi Direct) telt niet als wifi: daar kies je geen netwerk mee. Lukt nmcli niet, dan nemen we aan dat
+    er wifi is (zoals vroeger): liever een knop te veel dan iemand met wifi zonder knop.
+    """
+    code, uit = draai("nmcli", "-t", "-f", "TYPE,STATE", "device", timeout=5)
+    if code != 0:
+        return True, False
+    heeft_wifi = kabel = False
+    for regel in uit.splitlines():
+        soort, _, staat = regel.strip().partition(":")
+        if soort == "wifi":
+            heeft_wifi = True
+        # 'connected', of 'connected (externally)' als iets anders hem verbond; 'connecting' telt (nog) niet.
+        elif soort == "ethernet" and staat.startswith("connected"):
+            kabel = True
+    return heeft_wifi, kabel
+
+
 # ============================================================== pagina's ===
 
 class Pagina(QWidget):
@@ -126,13 +148,15 @@ class Hallo(Pagina):
 class Kijker(QThread):
     """Kijkt op de achtergrond of er internet is (nmcli kan even duren), zodat het venster niet hapert."""
 
-    klaar = Signal(bool)
+    # (online?, heeft de pc wifi?, loopt de verbinding via de kabel?)  (A-09)
+    klaar = Signal(bool, bool, bool)
 
     def run(self) -> None:
         try:
-            self.klaar.emit(bool(heeft_internet()))
+            heeft_wifi, kabel = netwerk_soort()
+            self.klaar.emit(bool(heeft_internet()), heeft_wifi, kabel)
         except Exception:  # noqa: BLE001
-            self.klaar.emit(False)
+            self.klaar.emit(False, True, False)   # niets bekend: zoals vroeger (met de wifi-knop)
 
 
 class Internet(Pagina):
@@ -154,11 +178,12 @@ class Internet(Pagina):
         kaart.lay.addWidget(self.status)
         self.lay.addWidget(kaart)
         rij = QHBoxLayout()
-        kies = Knop(t("Wifi kiezen", "Choose Wi-Fi"), "hoofd", "lijn:wifi", groot=True)
-        kies.clicked.connect(lambda: start("bugos-settings", "wifi"))   # de eenvoudige wifi-pagina van BugOS (U334)
+        # self.kies: verborgen op een pc zonder wifi; dan is 'Volgende' (onderaan) de enige grote knop (A-09).
+        self.kies = Knop(t("Wifi kiezen", "Choose Wi-Fi"), "hoofd", "lijn:wifi", groot=True)
+        self.kies.clicked.connect(lambda: start("bugos-settings", "wifi"))   # de eenvoudige wifi-pagina van BugOS (U334)
         opnieuw = Knop(t("Opnieuw kijken", "Check again"), "stil", "lijn:verversen")
         opnieuw.clicked.connect(self.ververs)
-        rij.addWidget(kies)
+        rij.addWidget(self.kies)
         rij.addWidget(opnieuw)
         rij.addStretch(1)
         self.lay.addLayout(rij)
@@ -187,16 +212,33 @@ class Internet(Pagina):
         self.kijker.klaar.connect(self.toon)
         self.kijker.start()
 
-    def toon(self, online: bool) -> None:
+    def toon(self, online: bool, heeft_wifi: bool = True, kabel: bool = False) -> None:
+        """Laat zien of je online bent, en hoe. heeft_wifi/kabel komen van netwerk_soort() (A-09):
+        - via de kabel: een kabel-teken en 'Verbonden via de kabel', geen wifi-teken;
+        - geen wifi-kaart: de knop 'Wifi kiezen' weg (die pagina zou alleen 'deze computer heeft geen wifi' zeggen),
+          zodat 'Volgende' de enige grote knop is;
+        - wel wifi: de knop blijft, ook als je al via de kabel online bent (misschien wil je straks zonder kabel)."""
+        self.kies.setVisible(heeft_wifi)
+        # Het teken: een kabel als die de verbinding geeft, of als er geen wifi is om te kiezen; anders wifi.
+        self.chip_icoon.lijn = "kabel" if (kabel and online) or not heeft_wifi else "wifi"
+        self.chip_icoon.update()
         if online:
-            self.kop.setText(t("Je bent verbonden", "You are connected"))
-            self.sub.setText(t("Mooi zo. Je kunt verder.", "Great. You can continue."))
+            if kabel:
+                self.kop.setText(t("Verbonden via de kabel", "Connected by cable"))
+                self.sub.setText(t("Mooi zo. Druk op Volgende om verder te gaan.", "Great. Press Next to continue."))
+            else:
+                self.kop.setText(t("Je bent verbonden", "You are connected"))
+                self.sub.setText(t("Mooi zo. Je kunt verder.", "Great. You can continue."))
             self.status.setText(t("Online", "Online"))
             self.status.setStyleSheet(Chip("", "goed").styleSheet())
         else:
             self.kop.setText(t("Nog geen internet", "No internet yet"))
-            self.sub.setText(t("Kies je wifi, of steek een netwerkkabel in. Overslaan mag ook.",
-                               "Choose your Wi-Fi, or plug in a network cable. Skipping is fine too."))
+            if heeft_wifi:
+                self.sub.setText(t("Kies je wifi, of steek een netwerkkabel in. Overslaan mag ook.",
+                                   "Choose your Wi-Fi, or plug in a network cable. Skipping is fine too."))
+            else:
+                self.sub.setText(t("Deze computer heeft geen wifi. Steek een netwerkkabel in. Overslaan mag ook.",
+                                   "This computer has no Wi-Fi. Plug in a network cable. Skipping is fine too."))
             self.status.setText(t("Offline", "Offline"))
             self.status.setStyleSheet(Chip("", "let_op").styleSheet())
 
