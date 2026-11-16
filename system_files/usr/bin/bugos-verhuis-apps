@@ -1,0 +1,90 @@
+#!/usr/bin/bash
+# bugos-verhuis-apps: je Firefox en je Steam verhuizen naar de losse app (Flatpak), zodat je niets kwijt bent.
+#
+# Jip-en-Janneke: Firefox en Steam zaten vroeger in BugOS zelf. Nu zijn het losse apps (Flatpak), zodat je ze kunt
+# verwijderen (keuze van de eigenaar, 2026-11-16). Een Flatpak bewaart zijn spullen in zijn eigen map:
+#   Firefox: ~/.mozilla/firefox          ->  ~/.var/app/org.mozilla.firefox/.mozilla/firefox
+#   Steam:   ~/.local/share/Steam        ->  ~/.var/app/com.valvesoftware.Steam/.local/share/Steam
+# Zonder verhuizen opende de nieuwe Firefox leeg (geen bladwijzers, geschiedenis, inlog) en moest je in Steam
+# opnieuw inloggen en al je spellen opnieuw downloaden. Dit script verhuist de oude map één keer, bij het inloggen.
+#
+# Hoe: met 'mv' binnen dezelfde schijf (je thuismap): dat is meteen klaar, ook bij 200 GB aan spellen, en er wordt
+# niets gekopieerd of dubbel opgeslagen. Op de oude plek komt een verwijzing (symlink) naar de nieuwe, zodat alles
+# wat de oude plek nog zoekt (ook 'Haal alles van je oude pc') het vindt.
+#
+# Wanneer NIET (nooit iets overschrijven of samenvoegen):
+#   - de losse app staat er (nog) niet: dan later (de volgende keer inloggen);
+#   - de losse app heeft al eigen spullen (je startte hem al en maakte iets nieuws): dan laten we allebei staan;
+#   - de app draait nu (een profiel verhuizen terwijl Firefox het gebruikt, gaat mis);
+#   - de oude plek is al een verwijzing (al verhuisd) of bestaat niet.
+# Een bibliotheek met spellen op een ANDERE schijf (Steam > Instellingen > Opslag) blijft waar hij is; Steam vraagt
+# daar dan één keer toegang voor.
+#
+# Voor de test: BUGOS_GEEN_FLATPAKCHECK=1 slaat het kijken naar 'flatpak info' over (er is dan geen flatpak).
+set -u
+
+THUIS="${HOME:?}"
+KLAAR="${XDG_DATA_HOME:-$THUIS/.local/share}/bugos"
+
+# Staat de Flatpak-app er? (systeem of gebruiker)
+heeft_app() {
+    [ -n "${BUGOS_GEEN_FLATPAKCHECK:-}" ] && return 0
+    command -v flatpak >/dev/null 2>&1 && flatpak info "$1" >/dev/null 2>&1
+}
+
+# Draait de app nu (dan niet verhuizen)?
+draait() {
+    command -v pgrep >/dev/null 2>&1 || return 1
+    local naam
+    for naam in "$@"; do
+        pgrep -u "$(id -u)" -x "$naam" >/dev/null 2>&1 && return 0
+    done
+    return 1
+}
+
+# Is een map leeg of bestaat hij niet? (Flatpak maakt soms al lege mappen aan.)
+leeg_of_weg() {
+    [ ! -e "$1" ] && return 0
+    [ -d "$1" ] && [ -z "$(find "$1" -mindepth 1 -print -quit 2>/dev/null)" ]
+}
+
+# verhuis <naam> <app-id> <oude map> <nieuwe map> <procesnamen...>
+verhuis() {
+    local naam="$1" app="$2" oud="$3" nieuw="$4"
+    shift 4
+    [ -e "$KLAAR/verhuisd-$app" ] && return 0
+    # Niets om te verhuizen: oude plek bestaat niet, of is al een verwijzing.
+    if [ ! -d "$oud" ] || [ -L "$oud" ]; then
+        return 0
+    fi
+    heeft_app "$app" || return 0
+    if draait "$@"; then
+        echo "BugOS: $naam draait nu; de verhuizing gebeurt de volgende keer dat je inlogt."
+        return 0
+    fi
+    if ! leeg_of_weg "$nieuw"; then
+        # De losse app heeft al eigen spullen: niet samenvoegen of overschrijven. Allebei laten staan, en niet
+        # elke keer opnieuw proberen.
+        echo "BugOS: $naam had al eigen spullen in de losse app; de oude map blijft ook staan: $oud"
+        mkdir -p "$KLAAR" && : >"$KLAAR/verhuisd-$app"
+        return 0
+    fi
+    mkdir -p "$(dirname "$nieuw")"
+    # Een lege map die Flatpak al maakte, eerst weg (mv kan niet over een bestaande map heen).
+    [ -d "$nieuw" ] && rmdir "$nieuw" 2>/dev/null
+    if mv -T -- "$oud" "$nieuw"; then
+        ln -s -- "$nieuw" "$oud"
+        echo "BugOS: $naam verhuisd naar de losse app ($nieuw)"
+        mkdir -p "$KLAAR" && : >"$KLAAR/verhuisd-$app"
+    else
+        echo "BugOS: $naam verhuizen lukte niet; alles staat nog op de oude plek ($oud)" >&2
+    fi
+}
+
+verhuis "Firefox" org.mozilla.firefox \
+    "$THUIS/.mozilla/firefox" "$THUIS/.var/app/org.mozilla.firefox/.mozilla/firefox" \
+    firefox firefox-bin
+verhuis "Steam" com.valvesoftware.Steam \
+    "$THUIS/.local/share/Steam" "$THUIS/.var/app/com.valvesoftware.Steam/.local/share/Steam" \
+    steam steamwebhelper
+exit 0

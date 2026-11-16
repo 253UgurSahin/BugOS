@@ -94,6 +94,7 @@ The most important idea: **BugOS can't break.**
 | Developer mode | `bugos-developer` | VS Code, containers and a dev box with programming languages. |
 | Light mode | `bugos-light-mode` | Turns off the heavy effects on old PCs by itself. |
 | First start | `bugos-first-boot` | Sets up Firefox, LibreOffice, VLC, Gwenview (photos), Okular (PDFs) and Steam as normal Flatpak apps from Flathub (`standaard-apps.txt`), so you can remove them. No internet yet? It tries again later (every 5 minutes, and a timer). An app you removed yourself never comes back by itself. |
+| Move apps | `bugos-verhuis-apps` | At sign-in, once: moves the old Firefox profile (`~/.mozilla/firefox`) and Steam folder with your games (`~/.local/share/Steam`) to the Firefox and Steam apps, so an update to Flatpak loses nothing. Instant (same disk), a link stays at the old place, and it never merges with or overwrites what the new app already has. |
 | Translations | `translations/*.json` | Any language can be added without writing code (see [TRANSLATING.md](TRANSLATING.md)). |
 | Style | `look-and-feel`, `color-schemes`, `bugos_ui.py` | Taskbar at the bottom, BugOS colors for light and dark, the fonts, the logo, the "Stip" background, the boot, sign-in and lock screens, and pinned favorites in the start menu. All BugOS apps use the same design (`bugos_ui.py`). See [BRAND.md](BRAND.md). The window title bar: Breeze border with BugOS colours (no line between bar and window), big round buttons, a red round close button, title on the left. |
 

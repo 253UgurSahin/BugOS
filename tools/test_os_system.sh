@@ -923,5 +923,26 @@ if command -v shellcheck >/dev/null 2>&1; then
     klopt 'shellcheck "$TS"' "Taal: shellcheck vindt niets in bugos-taal-standaard"
 fi
 
+# Firefox en Steam werden Flatpaks: hun oude map moet mee (anders lege Firefox en alle spellen opnieuw downloaden).
+VA="$ROOT/system_files/usr/bin/bugos-verhuis-apps"
+VH="$TMP/verhuis-thuis"; rm -rf "$VH"
+mkdir -p "$VH/.mozilla/firefox/abc.default" "$VH/.local/share/Steam/steamapps"
+echo bladwijzers >"$VH/.mozilla/firefox/abc.default/places.sqlite"
+echo spel >"$VH/.local/share/Steam/steamapps/spel.acf"
+mkdir -p "$VH/.var/app/com.valvesoftware.Steam/.local/share/Steam"   # leeg, zoals Flatpak hem soms al maakt
+HOME="$VH" XDG_DATA_HOME="$VH/.local/share" BUGOS_GEEN_FLATPAKCHECK=1 PATH="$TMP/geen-pgrep:/usr/bin:/bin" bash "$VA" >/dev/null 2>&1
+klopt '[ "$(cat "$VH/.var/app/org.mozilla.firefox/.mozilla/firefox/abc.default/places.sqlite")" = bladwijzers ] && [ -L "$VH/.mozilla/firefox" ]'     "Verhuizen: het Firefox-profiel staat bij de losse Firefox, met een verwijzing op de oude plek"
+klopt '[ "$(cat "$VH/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/spel.acf")" = spel ] && [ -L "$VH/.local/share/Steam" ]'     "Verhuizen: Steam met je spellen staat bij de losse Steam (een lege map van Flatpak telt niet als 'al iets')"
+VH2="$TMP/verhuis-thuis2"; rm -rf "$VH2"
+mkdir -p "$VH2/.mozilla/firefox/oud.default" "$VH2/.var/app/org.mozilla.firefox/.mozilla/firefox/nieuw.default"
+HOME="$VH2" XDG_DATA_HOME="$VH2/.local/share" BUGOS_GEEN_FLATPAKCHECK=1 bash "$VA" >/dev/null 2>&1
+klopt '[ -d "$VH2/.mozilla/firefox/oud.default" ] && [ ! -L "$VH2/.mozilla/firefox" ] && [ -d "$VH2/.var/app/org.mozilla.firefox/.mozilla/firefox/nieuw.default" ]'     "Verhuizen: had de losse Firefox al een eigen profiel, dan blijft alles staan (nooit samenvoegen of overschrijven)"
+HOME="$VH" XDG_DATA_HOME="$VH/.local/share" BUGOS_GEEN_FLATPAKCHECK=1 bash "$VA" >/dev/null 2>&1
+klopt '[ -L "$VH/.mozilla/firefox" ] && [ -e "$VH/.local/share/bugos/verhuisd-org.mozilla.firefox" ]' "Verhuizen: een tweede keer doet niets"
+klopt 'grep -qx "Exec=/usr/bin/bugos-verhuis-apps" "$ROOT/system_files/etc/xdg/autostart/bugos-verhuis-apps.desktop"'     "Verhuizen: draait bij het inloggen"
+if command -v shellcheck >/dev/null 2>&1; then
+    klopt 'shellcheck "$VA"' "Verhuizen: shellcheck vindt niets in bugos-verhuis-apps"
+fi
+
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

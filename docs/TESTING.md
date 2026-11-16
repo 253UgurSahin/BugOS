@@ -110,6 +110,7 @@ Then restart the computer. Want to go back? Use Settings > Updates and info, or 
 - [ ] Open the **BugOS Store** and install something
 - [ ] After installing BugOS (with internet): Firefox, LibreOffice, VLC, Gwenview, Okular and Steam arrive by themselves within a few minutes, and Firefox opens web links. Firefox has the normal window title bar (no buttons in the tab bar)
 - [ ] Install BugOS **without internet**, sign in (it must not wait), then connect: within about 5 minutes the apps arrive (`systemctl status bugos-first-boot`)
+- [ ] A BugOS from before Firefox and Steam were Flatpaks, after the update and signing in: Firefox has your bookmarks and history, Steam still knows you and your games
 - [ ] Store → **My apps**: every app has **Remove** (also Firefox and Steam). Remove Firefox, restart twice: it does not come back by itself. Install it again from the Store: it is back
 - [ ] Settings → Apps and gaming → **Installed apps**: the same list, each with **Remove**; removing asks first and then the app is gone from the list
 - [ ] The ladybug at the bottom left is the **BugOS start menu**: search for "wifi" and open the page; the Windows key opens the menu
