@@ -73,6 +73,25 @@ if command -v node >/dev/null 2>&1; then
     klopt '[ "$(tail -1 <<<"$UIT")" = "verborgen:mijn.app" ]' "U456: na een oudere BugOS: snelmenu uit laat de BugOS-lijst weer zien ($(tail -1 <<<"$UIT"))"
     UIT="$(HIDDEN="mijn.app" node "$ROOT/tools/panel-sim.js" "$TMP/paneel.js" "org.kde.plasma.systemtray" 'systeemvak(true);')"
     klopt 'grep -q "verborgen:mijn.app,org.kde.plasma.volume" <<<"$UIT"' "U456: snelmenu aan verbergt de BugOS-lijst erbij ($(tail -1 <<<"$UIT"))"
+    # 'Vastmaken aan taakbalk' uit het startmenu: achteraan erbij, één keer; losmaken haalt hem weg, ook als KDE
+    # hem als file:// had opgeslagen. De rest van de lijst blijft precies staan.
+    UIT="$(LAUNCHERS="applications:bugos-files.desktop,preferred://browser" node "$ROOT/tools/panel-sim.js" "$TMP/paneel.js" \
+        "org.bugos.startmenu,org.kde.plasma.icontasks" 'taakbalkApp("tr.desktop", true); taakbalkApp("tr.desktop", true);')"
+    klopt '[ "$(tail -1 <<<"$UIT")" = "applications:bugos-files.desktop,preferred://browser,applications:tr.desktop" ]' \
+        "taakbalk: vastmaken zet de app achteraan, en maar één keer ($(tail -1 <<<"$UIT"))"
+    UIT="$(LAUNCHERS="applications:bugos-files.desktop,file:///usr/share/applications/tr.desktop,applications:steam.desktop" \
+        node "$ROOT/tools/panel-sim.js" "$TMP/paneel.js" "org.kde.plasma.icontasks" 'taakbalkApp("tr.desktop", false);')"
+    klopt '[ "$(tail -1 <<<"$UIT")" = "applications:bugos-files.desktop,applications:steam.desktop" ]' \
+        "taakbalk: losmaken haalt de app weg, ook als file:// ($(tail -1 <<<"$UIT"))"
 fi
+# De shell laat alleen een gewone naam door naar het JavaScript van Plasma (geen ' " ; of spaties).
+nep qdbus6 'echo "$*" >>"'"$TMP"'/plasma"; echo ok:'
+: >"$TMP/plasma"
+HOME="$TMP/thuis" XDG_CONFIG_HOME="$TMP/thuis/.config" PATH="$TMP/bin:$PATH" bash "$TMP/paneel" taakbalk vastmaken 'x");weg("org.kde.plasma.icontasks' >/dev/null 2>&1
+code=$?
+klopt '[ $code -eq 2 ] && [ ! -s "$TMP/plasma" ]' "taakbalk: een vreemde naam komt niet in het script van Plasma (code $code)"
+UIT="$(HOME="$TMP/thuis" XDG_CONFIG_HOME="$TMP/thuis/.config" PATH="$TMP/bin:$PATH" bash "$TMP/paneel" taakbalk vastmaken org.mozilla.firefox.desktop 2>/dev/null)"
+klopt 'grep -q "taakbalkApp(\"org.mozilla.firefox.desktop\", true)" "$TMP/plasma" && [ "$UIT" = "ok:" ]' \
+    "taakbalk: vastmaken vraagt Plasma om taakbalkApp en geeft zijn antwoord door ($UIT)"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
