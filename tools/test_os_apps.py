@@ -1663,8 +1663,9 @@ klopt(all(k.accessibleName() and "…" not in k.accessibleName() for k in _kr) a
       f"U281: elk stukje van het pad heeft voor een schermlezer de hele naam ({[k.accessibleName() for k in _kr]})")
 # U282/U283: 'bezig'-meldingen halen 4,5:1, en de Plasma-schakelaar 'uit' 3:1 (staat in het gemaakte switch.svg).
 _bk = bugos_ui.KLEUREN
-klopt(all(_contrast(_bk[t]["accent_gekozen"], _bk[t]["accent_zacht"]) >= 4.5 for t in _bk)
-      and 'K["accent_gekozen"], K["accent_zacht"], "view-refresh"' in (ROOT / "system_files/usr/lib/bugos/python/bugos_widgets.py").read_text()
+# (C-11: de 'bezig'-melding is nu rustig grijs, geen rood-roze dat op een fout leek; ook dat haalt 4,5:1.)
+klopt(all(_contrast(_bk[t]["tekst"], _bk[t]["knop"]) >= 4.5 for t in _bk)
+      and '"bezig": (K["tekst"], K["knop"], "view-refresh")' in (ROOT / "system_files/usr/lib/bugos/python/bugos_widgets.py").read_text()
       and "A_SCHAKELAAR = 0.45" in (ROOT / "tools/plasma/buttons_draw.py").read_text(),
       "U282/U283: de 'bezig'-melding en de schakelaar 'uit' van Plasma halen genoeg contrast")
 _pv.close()

@@ -74,6 +74,11 @@ if [ "$1" = remote-ls ]; then
     exit 0
 fi
 if [ "$1" = install ]; then
+    # C-11: zoals de echte flatpak zonder terminal: een regel met hoe ver het is, bijgewerkt met \\r.
+    if [ -n "$BUGOS_TEST_VOORTGANG" ]; then
+        printf 'Installing 1/2… ████▌      45%%  1.2 MB/s  00:05\\r'
+        /usr/bin/sleep 1.5
+    fi
     /usr/bin/sleep 0.3
     [ "${{BUGOS_TEST_FLATPAK:-0}}" = 9 ] && echo "error: Not authorized" && exit 1
     [ "${{BUGOS_TEST_FLATPAK:-0}}" = 8 ] && echo "error: No space left on device" && exit 1
@@ -287,14 +292,16 @@ klopt("org.voorbeeld.Radio" in _ids and OUD_ID in _ids and "org.videolan.VLC" in
       f"F1: alleen apps met een venster, met een goed id, elk één keer ({len(_ids)} apps)")
 radio = next(a for a in apps if a["id"] == "org.voorbeeld.Radio")
 klopt(set(radio) == {"id", "naam", "naam_nl", "kort", "kort_nl", "uitleg", "uitleg_nl", "maker", "icoon", "echt",
-                     "echt_site", "oars", "woorden", "site"}, "F1: elke app heeft precies de afgesproken velden")
+                     "echt_site", "oars", "woorden", "site", "plaatjes"},
+      "F1: elke app heeft precies de afgesproken velden (C-13: ook 'plaatjes')")
 klopt(radio["naam"] == "Radio" and radio["naam_nl"] == "Radio NL" and radio["kort_nl"] == "Radio luisteren"
       and radio["maker"] == "Radiomakers", f"F1: namen per taal, en de maker zonder taal (niet het Cyrillisch): {radio['maker']!r}")
 klopt(radio["uitleg"] == "Radio is a radio player.\n• Many stations\n• Small" and radio["uitleg_nl"] == "",
       f"F1: de gewone beschrijving (niet de Wit-Russische), lijstjes met '• ': {radio['uitleg']!r}")
 _teken = next(a for a in apps if a["id"] == "org.voorbeeld.Teken")
-klopt(len(_teken["uitleg"]) <= 701 and _teken["uitleg"].endswith("…") and "Перш" not in _teken["uitleg"],
-      f"F1: een lange beschrijving wordt netjes afgekapt ({len(_teken['uitleg'])} tekens)")
+# C-13: de beschrijving staat er (bijna) helemaal in; de pagina toont eerst een stuk met 'Lees meer'.
+klopt(len(_teken["uitleg"]) > 701 and len(_teken["uitleg"]) <= winkel.UITLEG_MAX + 1 and "Перш" not in _teken["uitleg"],
+      f"F1/C-13: een lange beschrijving staat er helemaal in ({len(_teken['uitleg'])} tekens)")
 klopt(radio["woorden"] == "stream" and radio["echt"] and radio["echt_site"] == "radio.example.org"
       and radio["oars"] == {"social-chat": "intense", "money-purchasing": "mild"} and radio["icoon"] == "org.voorbeeld.Radio.png"
       and radio["site"] == "https://radio.example.org/",
@@ -571,7 +578,8 @@ klopt("install -y flathub org.voorbeeld.Radio" in _log and "--noninteractive" no
       f"F4/U059: installeren met flatpak, zonder --noninteractive ({_log.strip().splitlines()[-1:]})")
 klopt(w.pagina.open_knop.isVisibleTo(w.pagina) and w.pagina.weg_knop.isVisibleTo(w.pagina)
       and not w.pagina.installeer_knop.isVisibleTo(w.pagina)
-      and w.pagina.melding.tekst.text().startswith("✅") and w.melding.tekst.text().startswith("✅"),
+      and "is geïnstalleerd" in w.pagina.melding.tekst.text() and w.melding.soort == "goed"
+      and "✅" not in w.melding.tekst.text(),   # C-12: één vinkje (dat van de melding), geen ✅ erbij
       f"F4: daarna Openen en Verwijderen, en de melding op de pagina en in de lijst ({w.pagina.melding.tekst.text()!r})")
 for _code, _woord in (("9", "beheerder"), ("8", "vol"), ("7", "niet (meer) te krijgen")):
     os.environ["BUGOS_TEST_FLATPAK"] = _code
@@ -630,6 +638,107 @@ w.zoek.setText("muziek")
 wacht(lambda: bool(w.meer_kaarten), 2000)
 klopt(max(k.minimumSizeHint().width() for k in w.meer_kaarten) <= max(k.minimumSizeHint().width() for k in w.kaarten),
       "12: een kaart van Flathub is niet breder dan een kaart van BugOS (de rasters lopen gelijk)")
+
+# ============================================================== C: bevindingen uit de VM-test (tester C2) ===
+# C-10: zoeken en dan op een onderwerp klikken (ook het onderwerp dat al gekozen was): het zoeken gaat weg.
+w.zoek.setText("muziek")
+even(50)
+_rij_aanb = 0
+w.lijst.itemClicked.emit(w.lijst.item(w.lijst.currentRow()))   # hetzelfde onderwerp nog eens
+klopt(w.zoek.text() == "" and not zichtbaar(w.meer_blok) and w.kop.text() == w.lijst.item(w.lijst.currentRow()).text(),
+      f"C-10: klik op het gekozen onderwerp tijdens het zoeken: het onderwerp, niet de zoekresultaten ({w.kop.text()!r})")
+w.zoek.setText("muziek")
+even(50)
+w.lijst.setCurrentRow(_rij_mijn)
+klopt(w.zoek.text() == "" and w.kop.text() == "Mijn apps",
+      f"C-10: tijdens het zoeken 'Mijn apps' kiezen laat Mijn apps zien ({w.kop.text()!r})")
+w.lijst.setCurrentRow(0)
+# C-12: een melding 'gelukt' blijft na het opnieuw tekenen, maar gaat weg bij een nieuwe zoekopdracht; geen ✅.
+w.meld("Radio NL is geïnstalleerd. Je vindt het in het startmenu.", "goed")
+w.toon()
+_bleef = w.melding.isVisibleTo(w)
+w.zoek.setText("radio")
+klopt(_bleef and not w.melding.isVisibleTo(w) and "✅" not in BRONTEKST,
+      "C-12: 'gelukt' blijft bij opnieuw tekenen, weg bij een nieuwe zoekopdracht, en zonder een tweede vinkje (✅)")
+w.zoek.setText("")
+# C-11: hoe ver installeren is, uit wat flatpak schrijft; en 'bezig' is geen rode foutkleur.
+klopt(winkel.flatpak_voortgang("Installing 1/2… ████▌ 45%  1.2 MB/s  00:05\rInstalling 1/2… █████ 52%  1.0 MB/s")
+      == (52, 1, 2) and winkel.flatpak_voortgang("Looking for matches…\n") is None
+      and winkel.flatpak_voortgang("Installing… 100%") == (100, 1, 1),
+      "C-11: de voortgang van flatpak wordt gelezen (procent, stap van stappen)")
+import bugos_widgets  # noqa: E402
+
+_bz = bugos_widgets.Banner("x", "bezig")
+klopt(bugos_ui.K["accent_zacht"] not in _bz.styleSheet() and bugos_ui.K["knop"] in _bz.styleSheet(),
+      "C-11: een 'bezig'-melding is rustig grijs, niet rood-roze zoals een fout")
+os.environ["BUGOS_TEST_VOORTGANG"] = "1"
+w.toon_app("org.voorbeeld.Radio")
+if w.pagina.installeer_knop.isVisibleTo(w.pagina):
+    w.pagina.installeer_knop.click()
+    _gezien = wacht(lambda: w.voortgang is not None, 4000)
+    _knop = w.pagina.installeer_knop.text()
+    _mt = w.melding.tekst.text()
+    wacht(lambda: w.bezig_met is None and w.proces.state() == w.proces.ProcessState.NotRunning)
+    klopt(_gezien and "45%" in _knop and "stap 1 van 2, 45%" in _mt and w.voortgang is None,
+          f"C-11: tijdens installeren staat er hoe ver het is ({_knop!r}, {_mt!r})")
+else:
+    klopt(False, "C-11: (Radio stond al geïnstalleerd: test kon niet)")
+os.environ.pop("BUGOS_TEST_VOORTGANG", None)
+w.terug()
+# C-13: een kaart van de BugOS-selectie opent een eigen pagina (met de feiten uit Flathub's lijst als die er zijn).
+w.lijst.setCurrentRow(0)
+_vlc = next(k for k in w.kaarten if k.app["id"] == "org.videolan.VLC")
+QTest.mouseClick(_vlc, Qt.MouseButton.LeftButton, pos=QPoint(20, 100))
+klopt(w.stapel.currentIndex() == 1 and w.pagina.soort == "bugos" and w.pagina.naam.text() == "VLC"
+      and "uitgekozen" in w.pagina.veilig.tekst.text(),
+      f"C-13: een klik op een BugOS-kaart (VLC) opent zijn pagina ({w.stapel.currentIndex()}, {w.pagina_id})")
+w.terug()
+# C-13: schermafbeeldingen (pas geladen als de pagina opent) en 'Lees meer' bij een lange beschrijving.
+import xml.etree.ElementTree as _ET  # noqa: E402
+
+_comp = _ET.fromstring('<component><screenshots><screenshot><image type="source">https://x/b.png</image>'
+                       '<image type="thumbnail" width="224">https://x/k.png</image>'
+                       '<image type="thumbnail" width="624">https://x/m.png</image></screenshot>'
+                       '<screenshot type="default"><image type="thumbnail" width="624">https://x/eerst.png</image>'
+                       '</screenshot><screenshot><image>file:///etc/passwd</image></screenshot></screenshots>'
+                       '</component>')
+klopt(winkel._plaatjes(_comp) == ["https://x/eerst.png", "https://x/m.png"],
+      f"C-13: schermafbeeldingen uit de lijst: de standaard eerst, ~624 px breed, alleen https ({winkel._plaatjes(_comp)})")
+from PySide6.QtGui import QImage  # noqa: E402
+
+_png = TMP / "scherm.png"
+_img = QImage(64, 40, QImage.Format.Format_RGB32)
+_img.fill(0x336699)
+_img.save(str(_png))
+winkel.PLAATJE_SCHEMAS = ("https://", "file://")
+_e = w.op_id["org.voorbeeld.teken"]
+_e["plaatjes"] = ["file://" + str(_png)]
+w.toon_app("org.voorbeeld.Teken")
+_lab = next(iter(w.pagina.plaatje_labels.values()))
+wacht(lambda: _lab.pixmap() is not None and not _lab.pixmap().isNull(), 4000)
+klopt(_lab.pixmap() is not None and not _lab.pixmap().isNull(),
+      "C-13: de schermafbeelding wordt geladen als de pagina opent")
+_kort = w.pagina.uitleg_label.text()
+w.pagina.lees_meer.click()
+klopt(w.pagina.lees_meer.isVisibleTo(w.pagina) and _kort.endswith("…") and len(w.pagina.uitleg_label.text()) > len(_kort),
+      "C-13: een lange beschrijving eerst ingekort, 'Lees meer' laat de rest zien")
+winkel.PLAATJE_SCHEMAS = ("https://",)
+w.terug()
+# C-14: bij dezelfde naam staat de app van een nagegane maker eerst, en de maker staat onder de naam.
+_drie = [{"id": f"org.v{i}.Reken", "naam": "Rekenmachine", "naam_nl": "", "kort": "", "kort_nl": "", "woorden": "",
+          "maker": m, "echt": e} for i, (m, e) in enumerate((("", False), ("Iemand", False), ("GNOME", True)))]
+klopt([x["maker"] for x in winkel.zoek_flathub(_drie, "rekenmachine", set())] == ["GNOME", "Iemand", ""],
+      "C-14: drie keer 'Rekenmachine': eerst de nagegane maker, dan een bekende, dan de rest")
+w.zoek.setText("muziekspeler")
+wacht(lambda: bool(w.meer_kaarten), 2000)
+klopt(all(k.maker_label.text().startswith(("Door ", "Maker onbekend")) for k in w.meer_kaarten),
+      "C-14: op een kaart van Flathub staat de maker direct onder de naam ('Door …')")
+w.zoek.setText("")
+# C-09e: 'bugos-store --mijn-apps' (vanuit Bestanden > Deze computer) opent meteen Mijn apps.
+w.lijst.setCurrentRow(0)
+w.tweede_start(["--mijn-apps"])
+klopt(w.lijst.sleutel(w.lijst.currentRow()) == "_mijn" and w.kop.text() == "Mijn apps" and w.stapel.currentIndex() == 0,
+      f"C-09e: --mijn-apps opent Mijn apps ({w.kop.text()!r})")
 w.close()
 
 # ============================================================== 9. de lijst van Flathub vers houden ===
