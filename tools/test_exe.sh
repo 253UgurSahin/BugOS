@@ -98,9 +98,11 @@ klopt '[ "$(cat "$TMP/wineboot" 2>/dev/null)" = "DISPLAY=weg WAYLAND=weg" ] && g
 
 # Een half klaargezette Windows-map (zonder kernel32.dll, van een eerste keer die halverwege stopte) wordt opzij gezet
 # en opnieuw gemaakt; een complete map blijft gewoon staan (VM-test 2026-11-16: "could not load kernel32.dll").
-nep wineboot 'mkdir -p "$WINEPREFIX/drive_c/windows/system32" && touch "$WINEPREFIX/drive_c/windows/system32/kernel32.dll" "$WINEPREFIX/system.reg"'
+nep wineboot 'mkdir -p "$WINEPREFIX/drive_c/windows/system32" "$WINEPREFIX/drive_c/windows/syswow64" && touch "$WINEPREFIX/drive_c/windows/system32/kernel32.dll" "$WINEPREFIX/drive_c/windows/syswow64/kernel32.dll" "$WINEPREFIX/system.reg"'
 rm -rf "$TMP/thuis/.local"
-mkdir -p "$TMP/thuis/.local/share/bugos/windows/drive_c"          # half: geen kernel32.dll, geen system.reg
+mkdir -p "$TMP/thuis/.local/share/bugos/windows/drive_c/windows/system32" "$TMP/thuis/.local/share/bugos/windows/drive_c/windows/syswow64"
+# half, zoals in de VM: de 64-bits helft en system.reg wel, de 32-bits helft (syswow64) leeg
+touch "$TMP/thuis/.local/share/bugos/windows/drive_c/windows/system32/kernel32.dll" "$TMP/thuis/.local/share/bugos/windows/system.reg"
 touch "$TMP/thuis/.local/share/bugos/windows/mijn-spul"
 code="$(draai "$TMP/spel.exe")"
 klopt '[ "$code" = 0 ] && [ -f "$TMP/thuis/.local/share/bugos/windows/drive_c/windows/system32/kernel32.dll" ] && ls -d "$TMP"/thuis/.local/share/bugos/windows-onaf-* >/dev/null 2>&1 && [ -f "$(ls -d "$TMP"/thuis/.local/share/bugos/windows-onaf-* | head -1)/mijn-spul" ]' \
