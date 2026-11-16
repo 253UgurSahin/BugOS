@@ -93,9 +93,7 @@ def zet_lettertypen(bron: Path, i: dict) -> list[ot.Uitslag]:
     doel = lettertypen_map()
     nieuw = 0
     try:
-        if not doel.exists():
-            doel.mkdir(parents=True)
-            lb.onthoud("map", pad=str(doel))
+        lb.maak_map(doel)   # ook ~/.local/share/fonts, als die er nog niet was
         for p in lijst:
             plek = doel / p.name
             if plek.exists():
@@ -248,9 +246,7 @@ def zet_outlook(bron: Path, i: dict, documenten: Path) -> list[ot.Uitslag]:
             if "Outlook" not in p.relative_to(bron).parts[:1]:
                 namen.append(p.name)   # stond in Documents: is al met je bestanden meegekomen
                 continue
-            if not doel.exists():
-                doel.mkdir(parents=True)
-                lb.onthoud("map", pad=str(doel))
+            lb.maak_map(doel)
             plek = doel / p.name
             if plek.exists() and plek.stat().st_size == p.stat().st_size:
                 namen.append(p.name)
@@ -281,8 +277,11 @@ def cloud_uitslag(i: dict) -> list[ot.Uitslag]:
     if not isinstance(aantal, int) or isinstance(aantal, bool) or aantal <= 0 or c.get("meegenomen") is True:
         return []
     voorbeelden = [n for n in (ot._tekst(v, 80) for v in ot._lijst(c.get("voorbeelden"))) if n]
-    tekst = t("{n} bestanden stonden alleen in OneDrive en zijn niet meegekomen{v}. Ze staan nog in OneDrive: open ze "
-              "in Firefox via onedrive.live.com.", "{n} files were only in OneDrive and did not come along{v}. They are "
-              "still in OneDrive: open them in Firefox at onedrive.live.com.").format(
+    tekst = (t("{n} bestanden stonden alleen in OneDrive en zijn niet meegekomen{v}. Ze staan nog in OneDrive: open "
+               "ze in Firefox via onedrive.live.com.", "{n} files were only in OneDrive and did not come along{v}. They "
+               "are still in OneDrive: open them in Firefox at onedrive.live.com.") if aantal != 1 else
+             t("1 bestand stond alleen in OneDrive en is niet meegekomen{v}. Het staat nog in OneDrive: open het in "
+               "Firefox via onedrive.live.com.", "1 file was only in OneDrive and did not come along{v}. It is still in "
+               "OneDrive: open it in Firefox at onedrive.live.com.")).format(
                   n=aantal, v=(t(" (bijv. {b})", " (e.g. {b})").format(b=ot._kort(voorbeelden, 3)) if voorbeelden else ""))
     return [ot.Uitslag("bestanden", ZELF, tekst)]

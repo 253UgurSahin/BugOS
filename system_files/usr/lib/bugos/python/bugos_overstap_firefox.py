@@ -612,7 +612,8 @@ def profiel_erbij(map_: Path, bron_profiel: Path, naam: str, achtervoegsel: str,
         return _niet_kopieren(m, namen) | {n for n in namen if n in ook_niet}
 
     try:
-        map_.mkdir(parents=True, exist_ok=True)
+        import bugos_overstap_logboek as lb
+        lb.maak_map(map_)   # een nieuwe map (Thunderbird nog nooit gestart) ook onthouden, voor terugdraaien
         shutil.copytree(bron_profiel, doel, ignore=niet, symlinks=True)
         prefs = doel / "prefs.js"
         if prefs.is_file():
