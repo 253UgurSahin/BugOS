@@ -138,7 +138,39 @@ def achtergrond_zetten(bron: Path) -> list[ot.Uitslag]:
 
 
 # Wat er na de bestanden gebeurt, in deze volgorde (het Firefox-profiel vóór de bladwijzers: die gaan erin).
-NA_DE_BESTANDEN = ("achtergrond", "firefox", "bladwijzers", "instellingen", "wifi", "printers")
+# 'taal' en 'notatie' zijn eigen schuifjes (D-10), maar gaan samen met 'instellingen' in één keer zet_instellingen.
+NA_DE_BESTANDEN = ("achtergrond", "firefox", "bladwijzers", "instellingen", "taal", "notatie", "wifi", "printers")
+INSTELLING_DELEN = {"instellingen", "taal", "notatie"}
+
+
+def bezig_tekst(keuze: set[str]) -> str:
+    """De melding terwijl de rest (na de bestanden) wordt overgezet: noemt alleen wat aan staat (D-10: er stond
+    'Je instellingen, wifi en printers' ook als wifi en printers uit stonden). Vraagt alleen om je wachtwoord als
+    er iets aan staat dat erom vraagt: de tijdzone (bij 'Instellingen') of een printer."""
+    namen = []
+    if keuze & INSTELLING_DELEN:
+        namen.append(t("je instellingen", "your settings"))
+    for deel, nl, en in (("achtergrond", "je achtergrond", "your wallpaper"),
+                         ("firefox", "je Firefox", "your Firefox"),
+                         ("bladwijzers", "je bladwijzers", "your bookmarks"),
+                         ("wifi", "je wifi-netwerken", "your Wi-Fi networks"),
+                         ("printers", "je printers", "your printers")):
+        if deel in keuze:
+            namen.append(t(nl, en))
+    if not namen:
+        return ""
+    if len(namen) == 1:
+        lijst = namen[0]
+    else:
+        lijst = t("{a} en {b}", "{a} and {b}").format(a=", ".join(namen[:-1]), b=namen[-1])
+    tekst = t("Bezig met {wat}…", "Transferring {wat}…").format(wat=lijst)
+    waarvoor = [w for d, w in (("instellingen", t("de tijdzone", "the time zone")),
+                               ("printers", t("de printers", "the printers"))) if d in keuze]
+    if waarvoor:
+        tekst += " " + t("Vraagt BugOS je wachtwoord, typ het dan in (voor {w}).",
+                         "If BugOS asks for your password, type it (for {w}).").format(
+                             w=t(" en ", " and ").join(waarvoor))
+    return tekst
 
 
 def rest_toepassen(bron: Path, i: dict, keuze: set[str]) -> list[ot.Uitslag]:
@@ -147,6 +179,7 @@ def rest_toepassen(bron: Path, i: dict, keuze: set[str]) -> list[ot.Uitslag]:
     misgaat, staat in de uitslag, en de rest gaat door."""
     uit: list[ot.Uitslag] = []
     profiel_over = False
+    instellingen_gedaan = False
     for deel in NA_DE_BESTANDEN:
         if deel not in keuze:
             continue
@@ -161,8 +194,13 @@ def rest_toepassen(bron: Path, i: dict, keuze: set[str]) -> list[ot.Uitslag]:
                     uit.append(u)
             elif deel == "bladwijzers":
                 uit += bladwijzers_zetten(bron, i, zonder_firefox=profiel_over)
-            elif deel == "instellingen":
-                uit += ot.zet_instellingen(ot._dict(i.get("instellingen")))
+            elif deel in INSTELLING_DELEN:
+                # Eén keer voor de drie schuifjes samen: de taal staat alleen aan als je 'Taal' aanzette, de notatie
+                # alleen met 'Datum en tijd' (D-10), de rest (tijdzone, toetsenbord ...) met 'Instellingen'.
+                if not instellingen_gedaan:
+                    instellingen_gedaan = True
+                    uit += ot.zet_instellingen(ot._dict(i.get("instellingen")), met_taal="taal" in keuze,
+                                               met_notatie="notatie" in keuze, met_rest="instellingen" in keuze)
             elif deel == "wifi":
                 uit += ot.zet_wifi(i.get("wifi"))
             elif deel == "printers":
@@ -416,7 +454,8 @@ def venster() -> int:
                 x.hide()
             delen = ot.onderdelen(bron) if bron is not None else []
             for o in delen:
-                schuif = Schuif(True)
+                # Bijna alles staat aan; taal en notatie die anders zijn dan nu niet (D-10).
+                schuif = Schuif(o.aan)
                 schuif.setAccessibleName(ot.deel_naam(o.sleutel))
                 self.schakelaars[o.sleutel] = schuif
                 self.overzicht.voeg(rij(o.icoon, ot.deel_naam(o.sleutel), o.uitleg, schuif))
@@ -488,10 +527,8 @@ def venster() -> int:
                 if not rest:
                     self.afgerond([])
                     return
-                self.melding.zet(t("Je instellingen, wifi en printers worden overgezet… Vraagt BugOS je wachtwoord, "
-                                   "typ het dan in (voor de tijdzone en printers).",
-                                   "Your settings, Wi-Fi and printers are being transferred… If BugOS asks for your "
-                                   "password, type it (for the time zone and printers)."), "bezig")
+                # Alleen wat aan staat (D-10).
+                self.melding.zet(bezig_tekst(rest), "bezig")
                 self.werk = Werk(self, self.bron, info(self.bron), rest)
                 self.werk.klaar.connect(self.afgerond)
                 self.werk.start()

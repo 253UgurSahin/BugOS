@@ -288,6 +288,32 @@ klopt(ot.zet_instellingen({}) == [] and ot.zet_instellingen("kapot") == [],
       "instellingen: niets (of iets geks) op de stick: niets doen")
 _vreemd = ot.zet_instellingen({"taal": "xx-YY", "tijdzone": "Mars Standard Time"})
 klopt([u.soort for u in _vreemd] == [ot.NIET, ot.NIET], "instellingen: onbekende taal en tijdzone: 'kan niet', geen gok")
+# D-10: de VM-test. BugOS is hier Engels (LANG=en_US); de stick heeft taal nl-NL en notatie en-US. Taal aan, notatie
+# uit: de taal wordt Nederlands, maar de datum en tijd blijven Amerikaans (zet_taal haalt LC_TIME weg; dat zetten we
+# terug naar wat het was). Andersom: notatie aan, taal uit: alleen LC_TIME, de taal blijft.
+LOG.write_text("")
+_d10 = {"taal": "nl-NL", "notatie": "nl-NL", "tijdzone": "W. Europe Standard Time"}
+uit = ot.zet_instellingen(_d10, met_taal=True, met_notatie=False, met_rest=False)
+L = log()
+klopt("--group Translations --key LANGUAGE --notify nl:en_US" in L and L.rstrip().endswith(
+    "--group Formats --key LC_TIME --notify en_US.UTF-8") and "timedatectl" not in L
+      and any(u.deel == "notatie" and "Blijft zoals in Verenigde Staten" in u.tekst for u in uit),
+      "D-10: taal aan en notatie uit: Nederlands, maar de datum en tijd blijven zoals ze waren (en niets anders)")
+LOG.write_text("")
+uit = ot.zet_instellingen(_d10, met_taal=False, met_notatie=True, met_rest=False)
+L = log()
+klopt("Translations" not in L and "--key LC_TIME --notify nl_NL.UTF-8" in L
+      and any(u.deel == "taal" and u.tekst.startswith("Blijft English (Windows had Nederlands)") for u in uit),
+      "D-10: notatie aan en taal uit: alleen de datum en tijd, de taal blijft English")
+LOG.write_text("")
+klopt(ot.zet_instellingen({"taal": "en-NL", "notatie": "en-US"}, met_taal=False, met_notatie=False) == [] and log() == "",
+      "D-10: Windows had dezelfde taal en notatie als BugOS: niets te doen, en ook geen 'blijft'-regels")
+klopt(ot.taal_wissel({"taal": "nl-NL"}) == ("en", "nl") and ot.taal_wissel({"taal": "en-NL"}) == ("en", "")
+      and ot.taal_wissel({"taal": "xx-YY"}) == ("en", "") and ot.notatie_wissel({"notatie": "en-US"}) == ("en_US", ""),
+      "D-10: taal_wissel/notatie_wissel: alleen een wissel als het echt anders is en BugOS het kent")
+klopt(ot.regio_voorbeeld("en_US") == "2:58 PM, 11/16/26" and ot.regio_voorbeeld("nl_NL") == "14:58, 16-11-2026"
+      and ot.regio_voorbeeld("de_DE") == "14:58, 16.11.2026",
+      "D-10: bij de notatie een voorbeeld van de klok en de datum (12 uur en maand/dag zie je meteen)")
 
 # ===================================================================================== wifi ===
 LOG.write_text("")
@@ -550,10 +576,19 @@ bo.venster()
 w = _gevangen[-1]
 w.show()
 app.processEvents()
-klopt(set(w.schakelaars) == {"bestanden", "bladwijzers", "firefox", "achtergrond", "instellingen", "wifi", "printers"}
-      and all(s.isChecked() for s in w.schakelaars.values()) and w.overzicht.isVisibleTo(w) and not w.wat.isVisibleTo(w),
+klopt(set(w.schakelaars) == {"bestanden", "bladwijzers", "firefox", "achtergrond", "instellingen", "taal", "notatie",
+                              "wifi", "printers"}
+      and all(s.isChecked() for k, s in w.schakelaars.items() if k not in ("taal", "notatie"))
+      and w.overzicht.isVisibleTo(w) and not w.wat.isVisibleTo(w),
       f"venster: het overzicht van een stick van versie 2: elk onderdeel met een schuifje, alles aan ({sorted(w.schakelaars)})")
+# D-10: deze BugOS is Engels met de Amerikaanse notatie (LANG=en_US in de test), de stick Nederlands. Taal en notatie
+# hebben een eigen schuifje met 'nu -> straks', en dat staat UIT: BugOS verandert je taal niet zonder dat je het aanzet.
 _t = teksten(w)
+klopt(not w.schakelaars["taal"].isChecked() and not w.schakelaars["notatie"].isChecked()
+      and "English -> Nederlands" in _t and "Verenigde Staten -> Nederland (14:58, 16-11-2026)" in _t,
+      "D-10: taal en notatie staan als 'nu -> straks' in het overzicht, elk met een eigen schuifje dat uit staat")
+klopt("Nederlands" not in next((o.uitleg for o in ot.onderdelen(V2) if o.sleutel == "instellingen"), ""),
+      "D-10: het schuifje 'Instellingen' noemt de andere taal niet meer (alleen het woord 'English' was te weinig)")
 klopt("Thuis-5G" in _t and "HP LaserJet" in _t and "Spotify" in _t and "Niet op BugOS" in _t and "Iets Eigens" in _t,
       "venster: het overzicht noemt de wifi, de printer en de programma's (met 'niet op BugOS' en de rest)")
 _winkel = [k for k in w.programmas.findChildren(QPushButton) if k.text() == "In de Winkel"]
@@ -576,6 +611,9 @@ klopt("connection add" not in L and "Wifi" not in _samen,
       "venster: wifi stond uit: niets met wifi gedaan, en het staat ook niet in de samenvatting")
 klopt("timedatectl set-timezone Europe/Amsterdam" in L and "bugos-theme donker" in L and "lpadmin -p HP_LaserJet" in L,
       "venster: instellingen en printer zijn overgezet")
+klopt("--group Translations" not in L and "--key LC_TIME" not in L and "--key LANG " not in L
+      and "Blijft English (Windows had Nederlands)" in _samen and "Blijft zoals in Verenigde Staten" in _samen,
+      "D-10: taal en notatie stonden uit: BugOS blijft Engels met dezelfde datum en tijd, en zegt dat in de samenvatting")
 klopt(all(x in _samen for x in ("Je bestanden", "Instellingen", "Tijdzone: Amsterdam", "Printers", "Bladwijzers",
                                  "Je Firefox van Windows", "Je achtergrond")),
       f"venster: de samenvatting noemt per onderdeel wat er gebeurde ({_samen[:120]})")
@@ -589,6 +627,15 @@ klopt(any(p.name.startswith("Bladwijzers-van-Windows") for p in (THUIS / "Docume
       "venster: een kopie van de bladwijzers staat in Documenten (zoals in versie 1)")
 klopt("Klaar" in w.melding.tekst.text() and w.knop.isEnabled(), f"venster: klaar ({w.melding.tekst.text()[:60]})")
 w.close()
+# D-10: de melding tijdens het overzetten noemt alleen wat aan staat ('wifi en printers' stond er ook als die uit waren).
+_b1 = bo.bezig_tekst({"instellingen"})
+_b2 = bo.bezig_tekst({"taal", "bladwijzers"})
+_b3 = bo.bezig_tekst({"instellingen", "wifi", "printers"})
+klopt("wifi" not in _b1 and "printer" not in _b1 and "je instellingen" in _b1 and "de tijdzone" in _b1
+      and "wachtwoord" not in _b2 and "je instellingen en je bladwijzers" in _b2
+      and "je wifi-netwerken en je printers" in _b3 and "de tijdzone en de printers" in _b3
+      and bo.bezig_tekst(set()) == "",
+      f"D-10: de melding noemt alleen wat aan staat, en het wachtwoord alleen als dat nodig is ({_b1!r} | {_b2!r})")
 
 # Een stick van versie 1: alleen bestanden, bladwijzers en achtergrond. Werkt zoals altijd.
 V1 = stick("v1", {"gebruiker": "Oma", "computer": "OUDE-PC"})
