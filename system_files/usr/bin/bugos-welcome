@@ -37,7 +37,7 @@ if __name__ == "__main__" and "--eerste-keer" in sys.argv and _al_klaar():
 
 import bugos_ui  # noqa: E402
 from bugos_ui import (  # noqa: E402
-    CONFIG, Chip, Groep, IcoonChip, Kaart, KeuzeKaart, Knop, SchakelRij, Tegel, achtergrond_pad, bestaat, draai,
+    CONFIG, Banner, Chip, Groep, IcoonChip, Kaart, KeuzeKaart, Knop, SchakelRij, Tegel, achtergrond_pad, bestaat, draai,
     label, maak_app, ronde_pixmap, schuifbaar, start, t, uitvoeren,
 )
 from bugos_welcome_panel import Zijpaneel  # noqa: E402
@@ -545,9 +545,19 @@ class Klaar(Pagina):
         super().__init__(t("Klaar! Veel plezier 🎉", "All done! Have fun 🎉"),
                          t("BugOS staat voor je klaar. Klik linksonder op het lieveheersbeestje om je apps te vinden.",
                            "BugOS is ready. Click the ladybug at the bottom left to find your apps."))
+        # Bovenaan: de stick van BugOS Switch zit erin? Dan zeggen we dat hier (wie net is overgestapt, ziet meteen
+        # waar hij heen moet). Verborgen tot we hem zien; showEvent en de klok kijken, alleen zolang deze pagina open is.
+        self.stick = Banner()
+        self.stick.hide()
+        self.lay.addWidget(self.stick)
+        self.stick_klok = QTimer(self)
+        self.stick_klok.timeout.connect(self.kijk_stick)
         tegels = [
-            Tegel("lijn:download", t("Bestanden van Windows", "Files from Windows"),
-                  t("Zet je oude foto's en documenten terug", "Bring back your old photos and documents"),
+            # Niet meer alleen bestanden: ook instellingen, wifi, printers, bladwijzers en je programma's (BugOS
+            # Switch versie 2). Zelfde app (bugos-switch), andere naam.
+            Tegel("lijn:download", t("Haal alles van je oude pc", "Bring everything from your old PC"),
+                  t("Bestanden, bladwijzers, instellingen, wifi en printers van Windows",
+                    "Files, bookmarks, settings, Wi-Fi and printers from Windows"),
                   lambda: start("bugos-switch")),
             Tegel("lijn:ster", t("BugOS Winkel", "BugOS Store"),
                   t("Apps installeren met één klik", "Install apps with one click"),
@@ -561,6 +571,33 @@ class Klaar(Pagina):
         self.lay.addWidget(label(t("Dit scherm vind je terug in het startmenu: \"BugOS Welkom\".",
                                    "You can find this screen again in the start menu: \"BugOS Welcome\"."), "klein"))
         self.klaar_met_vullen()
+
+    def showEvent(self, e) -> None:  # noqa: N802
+        super().showEvent(e)
+        self.kijk_stick()
+        self.stick_klok.start(3000)   # een stick die je nu pas insteekt, zie je ook
+
+    def hideEvent(self, e) -> None:  # noqa: N802
+        self.stick_klok.stop()
+        super().hideEvent(e)
+
+    def kijk_stick(self) -> None:
+        """Zit er een schijf van BugOS Switch in? Dan een melding bovenaan (van wie en van welke computer)."""
+        try:
+            import bugos_overstap_toepassen as ot
+            gevonden = ot.zoek_overstap()
+            i = ot.info(gevonden[0]) if gevonden else {}
+        except Exception:  # noqa: BLE001  Welkom mag hier nooit door stoppen
+            gevonden, i = [], {}
+        if not gevonden:
+            self.stick.hide()
+            return
+        wie = ot._tekst(i.get("gebruiker"), 60)
+        waar = ot._tekst(i.get("computer"), 60)
+        van = (t(" (van {w} op {c})", " (from {w} on {c})").format(w=wie, c=waar) if wie and waar else "")
+        self.stick.zet(t("Je BugOS Switch-schijf zit erin{van}. Klik op 'Haal alles van je oude pc' om je spullen van "
+                         "Windows over te zetten.", "Your BugOS Switch drive is plugged in{van}. Click 'Bring everything "
+                         "from your old PC' to bring over your things from Windows.").format(van=van), "info")
 
 
 # ================================================================ venster ===
