@@ -87,11 +87,18 @@ def zoek_overstap(openen: bool = True) -> list[Path]:
             pass
     gebruiker = getpass.getuser()
     gevonden = []
+    gezien: set[Path] = set()
     for basis in (Path("/run/media") / gebruiker, Path("/media") / gebruiker, Path("/media")):
         try:
             if basis.is_dir():
                 for schijf in basis.iterdir():
-                    gevonden.extend(_op_schijf(schijf))
+                    for map_ in _op_schijf(schijf):
+                        # Op Fedora is /media een koppeling naar /run/media: dan vonden we dezelfde stick twee keer
+                        # (VM-test 2026-11-16). Het echte pad telt, één keer.
+                        echt = map_.resolve()
+                        if echt not in gezien:
+                            gezien.add(echt)
+                            gevonden.append(map_)
         except OSError:
             continue
     return gevonden
@@ -286,11 +293,14 @@ def land_van(code: str) -> str:
     return delen[-1].upper() if len(delen) >= 2 and re.fullmatch(r"[A-Za-z]{2}", delen[-1]) else ""
 
 
-def iana_zone(windows_id: str, land: str = "") -> str:
-    """'W. Europe Standard Time' (+ land 'NL') -> 'Europe/Amsterdam'. Onbekend: ''. Zonder (bekend) land de zone
-    die CLDR voor de hele Windows-zone kiest ('001')."""
+def iana_zone(windows_id: str, land="") -> str:
+    """'W. Europe Standard Time' (+ land 'NL') -> 'Europe/Amsterdam'. Onbekend: ''. 'land' mag ook een rij landen
+    zijn (notatie, dan taal): de eerste die bij deze Windows-zone hoort, telt. Zo krijgt iemand met notatie 'en-US'
+    en taal 'en-NL' in 'W. Europe' Amsterdam, niet Berlijn (VM-test 2026-11-16). Zonder passend land de zone die
+    CLDR voor de hele Windows-zone kiest ('001')."""
     zones = _dict(_tz().get(windows_id))
-    zone = zones.get(land.upper()) or zones.get("001") or ""
+    landen = [land] if isinstance(land, str) else list(land)
+    zone = next((zones[l.upper()] for l in landen if l and l.upper() in zones), "") or zones.get("001") or ""
     return NIEUWE_NAAM.get(zone, zone) if isinstance(zone, str) else ""
 
 
@@ -359,7 +369,7 @@ def instellingen_kort(ins: dict) -> list[str]:
     code = taal_code(ins.get("taal"))
     if code:
         wat.append(taal_naam(code))
-    zone = iana_zone(_tekst(ins.get("tijdzone")), land_van(_tekst(ins.get("notatie"))) or land_van(_tekst(ins.get("taal"))))
+    zone = iana_zone(_tekst(ins.get("tijdzone")), (land_van(_tekst(ins.get("notatie"))), land_van(_tekst(ins.get("taal")))))
     if zone:
         wat.append(t("tijdzone {z}", "time zone {z}").format(z=bi.mooie_zone(zone, nl=t("nl", "en") == "nl")))
     borden = [b for b in (xkb_voor(k) for k in _lijst(ins.get("toetsenborden"))) if b]
@@ -418,7 +428,7 @@ def _tijdzone(ins: dict) -> list[Uitslag]:
     windows_id = _tekst(ins.get("tijdzone"), 80)
     if not windows_id:
         return []
-    zone = iana_zone(windows_id, land_van(_tekst(ins.get("notatie"))) or land_van(_tekst(ins.get("taal"))))
+    zone = iana_zone(windows_id, (land_van(_tekst(ins.get("notatie"))), land_van(_tekst(ins.get("taal")))))
     if not zone:
         return [Uitslag("instellingen", NIET, t("Tijdzone '{w}': die kent BugOS niet. Kies hem in Instellingen > Tijd en "
                                                 "taal.", "Time zone '{w}': BugOS does not know it. Choose it in Settings > "

@@ -500,7 +500,7 @@ function Copy-FirefoxProfiel([string] $bron, [string] $doel) {
     }
     # /XF: wachtwoorden (logins*.json, key4.db, key3.db, signons.sqlite), cookies, open tabbladen en de slotjes van
     # een draaiende Firefox. robocopy kijkt naar de bestandsnaam op elke diepte.
-    $xf = @('logins.json', 'logins-backup.json', 'key4.db', 'key3.db', 'signons.sqlite', 'cookies.sqlite*', 'sessionstore*', 'parent.lock', '.parentlock', 'lock')
+    $xf = @('logins.json', 'logins-backup.json', 'logins.db', 'logins.db-wal', 'logins.db-shm', 'key4.db', 'key3.db', 'signons.sqlite', 'cookies.sqlite*', 'sessionstore*', 'parent.lock', '.parentlock', 'lock')
     $argumenten = @($bron, $doel, '/E', '/R:1', '/W:1', '/XJ', '/NFL', '/NDL', '/NJH', '/NJS', '/NP', '/XF') + $xf + @('/XD') + $xd.ToArray()
     $null = & robocopy @argumenten
     if ($LASTEXITCODE -ge 16) { throw (T 'Het Firefox-profiel kopiëren lukte niet.' 'Copying the Firefox profile failed.') }

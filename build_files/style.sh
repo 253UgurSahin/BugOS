@@ -242,14 +242,15 @@ kwriteconfig6 --file /etc/xdg/kscreenlockerrc --group Greeter --group Wallpaper 
 kwriteconfig6 --file /etc/xdg/kscreenlockerrc --group Greeter --group Wallpaper --group org.kde.image --group General \
     --key PreviewImage "file:///usr/share/wallpapers/bugos/contents/screenshot.jpg"
 # Het inlogscherm. Fedora 44 gebruikt "Plasma Login Manager" (niet meer
-# SDDM), met de achtergrond van Fedora. Nu: Stip.
+# SDDM), met de achtergrond van Fedora. Nu: Stip, en net als het vergrendelscherm altijd de donkere versie: de
+# klok en datum zijn wit, en op de lichte Stip waren ze nauwelijks te lezen (VM-test 2026-11-16).
 if [ -d /usr/lib/plasmalogin ]; then
     cat >/usr/lib/plasmalogin/defaults.conf <<'EOF'
 [Greeter]
 WallpaperPlugin=org.kde.image
 
 [Greeter][Wallpaper][org.kde.image][General]
-Image=file:///usr/share/wallpapers/bugos/
+Image=file:///usr/share/wallpapers/bugos/contents/images_dark/3840x2160.jpg
 PreviewImage=file:///usr/share/wallpapers/bugos/contents/screenshot.jpg
 EOF
 fi

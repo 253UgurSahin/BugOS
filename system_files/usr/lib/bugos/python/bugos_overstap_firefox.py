@@ -47,7 +47,7 @@ GOED, NIET, ZELF = ot.GOED, ot.NIET, ot.ZELF
 
 # Nooit meenemen in een profiel: wachtwoorden en cookies (de keuze van de eigenaar), ook niet als Windows ze per
 # ongeluk toch op de stick zette. sessionstore heeft de cookies van open tabbladen.
-NOOIT_MEE = {"logins.json", "logins-backup.json", "key3.db", "key4.db", "signons.sqlite", "signons3.txt",
+NOOIT_MEE = {"logins.json", "logins-backup.json", "logins.db", "logins.db-wal", "logins.db-shm", "key3.db", "key4.db", "signons.sqlite", "signons3.txt",
              "cookies.sqlite", "cookies.sqlite-wal", "cookies.sqlite-shm", "cookies.sqlite-journal",
              "sessionstore.jsonlz4", "sessionstore-backups", "sessionCheckpoints.json"}
 # Maakt Firefox zelf opnieuw; van Windows kloppen ze niet (paden naar C:\, de versie van Windows, een slot).
