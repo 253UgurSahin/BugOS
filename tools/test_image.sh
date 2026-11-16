@@ -112,6 +112,12 @@ klopt 'grep -A3 "^\[Icons\]" /etc/xdg/kdeglobals | grep -q "Theme=BugOS"' "stijl
 klopt 'grep -q "widgetStyle=kvantum" /etc/xdg/kdeglobals && [ -d /usr/share/Kvantum/BugOS ] && [ -d /usr/share/Kvantum/BugOSDark ] && grep -q "^theme=BugOS$" /etc/xdg/Kvantum/kvantum.kvconfig' "stijl: Kvantum met BugOS licht en donker"
 klopt '[ -f /usr/share/color-schemes/BugOSLight.colors ] && [ -f /usr/share/color-schemes/BugOSDark.colors ]' "stijl: kleurschema's licht en donker"
 klopt '[ -f /usr/share/bugos/wine/licht.reg ] && [ -f /usr/share/bugos/wine/donker.reg ]' "Windows-programma's: licht.reg en donker.reg"
+# D-03: de 32-bits ntdll.dll van wine-wow64 krijgt het SELinux-label waarmee Wine hem mag aanpassen (execmod), en
+# wine-mono heeft precies de versie die deze Wine zoekt (anders vraagt Wine bij de eerste keer om Mono te downloaden).
+NTDLL=/usr/lib64/wine-wow64/wine/i386-windows/ntdll.dll
+klopt '[ ! -e "$NTDLL" ] || matchpathcon "$NTDLL" | grep -q textrel_shlib_t' "Windows-programma's: 32-bits ntdll.dll heeft textrel_shlib_t (D-03)"
+klopt 'v="$(rpm -q --qf "%{VERSION}" wine-mono)" && [ -d "/usr/share/wine/mono/wine-mono-$v" ] && strings -el /usr/lib64/wine-wow64/wine/x86_64-windows/appwiz.cpl | grep -q "wine-mono-$v"' \
+    "Windows-programma's: wine-mono hoort bij deze Wine (geen Mono-download bij de eerste keer) (D-05)"
 klopt '[ -f /usr/share/plasma/shells/org.kde.plasma.desktop/contents/logout/bugos-aftellen.js ] && [ -f /usr/share/plasma/look-and-feel/org.bugos.desktop/contents/logout/bugos-aftellen.js ]' "uitzetscherm: bugos-aftellen.js staat naast Logout.qml (U088)"
 klopt 'fc-list | grep -q "Inter" && fc-list | grep -q "JetBrains Mono"' "letters: Inter en JetBrains Mono geïnstalleerd"
 # Taakbalk en bureaublad zonder KDE-bewerkregels (pakket shell).

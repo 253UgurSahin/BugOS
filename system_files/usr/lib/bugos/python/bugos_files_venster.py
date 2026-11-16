@@ -10,14 +10,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bugos_ui import ActieBalk, Knop, Melding, Venster, Zijbalk, label, lijn_icoon, px, ronde_knop, t
+from bugos_ui import ActieBalk, Knop, Melding, Venster, Zijbalk, label, lijn_icoon, px, ronde_knop, start, t
 from bugos_drives import Schijf, mooie_maat
 from bugos_files_plekken import PAD_ROL, bijzondere_mappen, schijf_van, thuis, vrije_ruimte
 from bugos_files_acties import Klus
 from bugos_files_tegels import Sorteerder, TegelTekenaar, Voorbeelden
 from bugos_files_onderdelen import RechtsKlik, Zoekbalk, stijl
 from bugos_files_navigeren import Navigeren
-from bugos_files_bewerken import Bewerken, laat_klembord_los
+from bugos_files_bewerken import Bewerken, eigen_opener, laat_klembord_los
 from bugos_files_computer import Computer
 from bugos_files_schijven import Schijven
 from PySide6.QtCore import QDir, QEvent, QPoint, QRect, Qt, QThreadPool, QTimer, QUrl
@@ -502,4 +502,11 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
             if pad.is_dir():
                 self.ga_naar(pad)
                 return
+            # .exe/.msi naar bugos-exe, .deb/.rpm naar bugos-package, rechtstreeks: via kde-open weigerde KIO ze als
+            # "uitvoerbaar bestand" en gebeurde er niets dan een KDE-foutmelding (D-01).
+            opener = eigen_opener(pad)
+            if opener is not None:
+                if not start(opener, str(pad)):
+                    self.melding.toon(t("Dit bestand openen lukte niet.", "Could not open this file."), "fout")
+                continue
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(pad)))

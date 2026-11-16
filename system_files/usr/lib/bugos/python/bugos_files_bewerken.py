@@ -26,6 +26,21 @@ from PySide6.QtCore import QEvent, QMimeData, QMimeDatabase, QModelIndex, QPoint
 from PySide6.QtWidgets import QApplication, QMenu
 
 
+# Bestanden die BugOS zelf opent, met een eigen helper (D-01). De standaardweg (QDesktopServices -> kde-open -> KIO)
+# weigert elk "uitvoerbaar" bestand: "Vanwege veiligheidsredenen is het starten van uitvoerbare bestanden niet
+# toegestaan in deze context", ook al is bugos-exe.desktop de standaard-app voor .exe. bugos-exe en bugos-package
+# voeren zelf niets blind uit: ze vragen eerst (Winkel-versie, doosje, Wine) en leggen uit als het niet lukt.
+# Op de extensie (hoofdletters tellen niet), want zo herkent ook de gebruiker een installatiebestand.
+EIGEN_OPENER = {".exe": "bugos-exe", ".msi": "bugos-exe", ".deb": "bugos-package", ".rpm": "bugos-package"}
+# Hun .desktop-bestanden zijn NoDisplay (niet in het startmenu), maar horen wel in 'Openen met' (D-01).
+EIGEN_APPS = {"bugos-exe.desktop", "bugos-package.desktop"}
+
+
+def eigen_opener(pad: Path) -> str | None:
+    """Het BugOS-programma dat dit bestand zelf opent (bugos-exe of bugos-package), of None: dan de gewone weg."""
+    return EIGEN_OPENER.get(pad.suffix.lower())
+
+
 def openen_met_apps(pad: Path, hoogstens: int = 12) -> list[tuple[str, str]]:
     """(naam, pad van het .desktop-bestand) van de apps die dit soort bestand kunnen openen, voor 'Openen met'.
 
@@ -56,7 +71,10 @@ def openen_met_apps(pad: Path, hoogstens: int = 12) -> list[tuple[str, str]]:
         if c is None:
             continue
         s = c["Desktop Entry"]
-        if s.get("NoDisplay", "false").lower() == "true" or s.get("Hidden", "false").lower() == "true":
+        # Verborgen apps niet, behalve die van BugOS zelf voor .exe/.msi/.deb/.rpm (die zijn alleen in het startmenu
+        # verborgen) (D-01).
+        verborgen = s.get("NoDisplay", "false").lower() == "true" and desktop_id not in EIGEN_APPS
+        if verborgen or s.get("Hidden", "false").lower() == "true":
             continue
         naam = vertaald(s, "Name") or desktop_id.removesuffix(".desktop")
         uit.setdefault(naam.lower(), (naam, str(bestand)))

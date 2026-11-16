@@ -22,6 +22,9 @@ nep rpm '[ "$1" = -qp ] && echo voorbeeld; exit 0'
 nep sudo 'exec "$@"'
 nep dnf 'printf "%s\n" "$@" >"$NEP_UIT"'
 nep distrobox 'case "$1" in list) echo " bugos-fedora ";; enter) shift; while [ "$1" != -- ]; do shift; done; shift; exec "$@";; esac'
+# Het beeld van het doosje is er al (geen download), en skopeo komt niet op internet: de tests downloaden nooit iets.
+nep podman 'exit 0'
+nep skopeo 'exit 1'
 
 cd "$TMP" || exit 1
 installeer() { rm -f "$TMP/dnf-args"; touch "$1"; PATH="$TMP/bin:$PATH" NEP_UIT="$TMP/dnf-args" bash "$TMP/bugos-package" "$1"; }
@@ -43,7 +46,7 @@ rm -f "$TMP/gevraagd" "$TMP/winkel"
 LANG=nl_NL.UTF-8 installeer "$TMP/eigen-app.rpm"
 klopt '! grep -qi "winkel\|store" "$TMP/gevraagd" 2>/dev/null && [ ! -f "$TMP/winkel" ]' \
     "U057: geen app in de Winkel (Nederlandse flatpak): niet vragen of het 'ook in de Winkel' staat"
-nep flatpak 'if [ "$1" = search ]; then echo "org.voorbeeld.App"; fi; exit 0'
+nep flatpak 'if [ "$1" = search ]; then printf "Voorbeeld\torg.voorbeeld.App\n"; fi; exit 0'
 rm -f "$TMP/gevraagd" "$TMP/winkel"
 installeer "$TMP/voorbeeld.rpm"
 klopt 'grep -q "appstream://org.voorbeeld.App" "$TMP/winkel" 2>/dev/null' "U057: staat het wel in de Winkel, dan gaat het daarheen"
@@ -76,6 +79,54 @@ nep distrobox 'case "$1" in list) exit 0;; create) echo "Error: writing blob: No
 rm -f "$TMP/fouten"
 installeer "$TMP/half.rpm"
 klopt 'grep -qi "vol\|full" "$TMP/fouten" 2>/dev/null && ! grep -qi "internet\|online" "$TMP/fouten"' "U424: doosje maken met een volle computer: dat wordt gezegd"
+# D-06: flatpak search zoekt "ongeveer" (voor hello kwam Discord bovenaan). Alleen een app die precies zo heet of
+# waarvan de app-naam op het pakket eindigt, telt; anders geen Winkel-vraag.
+nep flatpak 'if [ "$1" = search ]; then printf "Discord\tcom.discordapp.Discord\nHello Flatpak\torg.example.HelloWorld\n"; fi; exit 0'
+nep kdialog 'echo "$*" >>"'"$TMP"'/gevraagd"; exit 1'
+rm -f "$TMP/gevraagd" "$TMP/winkel"
+LANG=nl_NL.UTF-8 installeer "$TMP/hello_2.10-3_amd64.deb" >/dev/null 2>&1
+klopt '! grep -qi "Winkel\|Store" "$TMP/gevraagd" 2>/dev/null && [ ! -f "$TMP/winkel" ]' \
+    "D-06: hello.deb: geen 'staat ook in de Winkel' voor Discord of HelloWorld"
+nep flatpak 'if [ "$1" = search ]; then printf "GIMP User Manual\torg.gimp.GIMP.Manual\nGNU Image Manipulation Program\torg.gimp.GIMP\n"; fi; exit 0'
+nep kdialog 'echo "$*" >>"'"$TMP"'/gevraagd"; exit 0'
+rm -f "$TMP/gevraagd" "$TMP/winkel"
+LANG=nl_NL.UTF-8 installeer "$TMP/gimp_2.10.38_amd64.deb" >/dev/null 2>&1
+klopt '[ "$(cat "$TMP/winkel" 2>/dev/null)" = "appstream://org.gimp.GIMP" ]' "D-06: gimp.deb: de echte GIMP (org.gimp.GIMP, niet de handleiding)"
+nep flatpak 'if [ "$1" = search ]; then printf "Hello\tcom.example.Groeter\n"; fi; exit 0'
+rm -f "$TMP/gevraagd" "$TMP/winkel"
+LANG=nl_NL.UTF-8 installeer "$TMP/hello_2.10-3_amd64.deb" >/dev/null 2>&1
+klopt '[ "$(cat "$TMP/winkel" 2>/dev/null)" = "appstream://com.example.Groeter" ]' "D-06: een app die precies 'hello' heet: wel de Winkel"
+
+# D-07: een nieuw doosje: vooraf zeggen dat het minuten duurt en hoeveel MB, en dan echte stappen in één melding die
+# wordt bijgewerkt (ophalen, klaarzetten, installeren), alles met lage voorrang.
+# D-08: daarna het doosje weer uitzetten (het bleef draaien, 715 MB), maar niet als het al draaide.
+nep flatpak 'exit 0'
+nep kdialog 'echo "$*" >>"'"$TMP"'/gevraagd"; exit 0'
+nep notify-send 'echo "$*" >>"'"$TMP"'/meldingen"; case " $* " in *" --print-id "*) echo 42;; esac'
+nep podman 'echo "podman $*" >>"'"$TMP"'/doos-log"; [ "$1 $2" = "image exists" ] && exit 1; exit 0'
+nep skopeo 'echo "{\"LayersData\":[{\"Size\":200000000},{\"Size\":100000000}]}"'
+nep systemd-run 'echo "systemd-run $*" >>"'"$TMP"'/laag"; while [ "$#" -gt 0 ] && [ "$1" != -- ]; do shift; done; shift; exec "$@"'
+nep distrobox 'echo "distrobox $*" >>"'"$TMP"'/doos-log"; case "$1" in list) [ -f "'"$TMP"'/doos-er" ] && echo " bugos-ubuntu | Exited (0) 1 minute ago ";; create) touch "'"$TMP"'/doos-er";; enter) shift; while [ "$1" != -- ]; do shift; done; shift; exec "$@";; esac; exit 0'
+nep apt-get 'exit 0'
+rm -f "$TMP/gevraagd" "$TMP/meldingen" "$TMP/doos-log" "$TMP/laag" "$TMP/doos-er"
+LANG=nl_NL.UTF-8 installeer "$TMP/eigen_1.0_amd64.deb" >/dev/null 2>&1
+if command -v jq >/dev/null 2>&1; then mb_ok='grep -q "ongeveer 287 MB" "$TMP/gevraagd"'; else mb_ok=true; fi
+klopt 'grep -q "5 tot 15 minuten" "$TMP/gevraagd" 2>/dev/null && eval "$mb_ok"' "D-07: vooraf: de eerste keer duurt minuten, en hoeveel MB er gedownload wordt"
+klopt 'grep -q "stap 1 van 3.*ophalen" "$TMP/meldingen" && grep -q "stap 2 van 3.*klaarzetten" "$TMP/meldingen" && grep -q "stap 3 van 3.*installeren" "$TMP/meldingen" && grep -q -- "--replace-id=42 Klaar" "$TMP/meldingen"' \
+    "D-07: echte stappen (ophalen, klaarzetten, installeren) in één melding die wordt bijgewerkt"
+klopt 'grep -q "podman pull quay.io/toolbx/ubuntu-toolbox" "$TMP/doos-log" && grep -q "CPUWeight=idle" "$TMP/laag" 2>/dev/null && grep -q "nice -n 19" "$TMP/laag" 2>/dev/null' \
+    "D-07: ophalen, klaarzetten en installeren draaien met lage voorrang (CPUWeight=idle, nice)"
+klopt 'grep -q "distrobox stop --yes bugos-ubuntu" "$TMP/doos-log"' "D-08: na het installeren gaat het doosje weer uit"
+nep distrobox 'echo "distrobox $*" >>"'"$TMP"'/doos-log"; case "$1" in list) echo " bugos-ubuntu | Up 5 minutes ";; enter) shift; while [ "$1" != -- ]; do shift; done; shift; exec "$@";; esac; exit 0'
+rm -f "$TMP/doos-log" "$TMP/gevraagd"
+LANG=nl_NL.UTF-8 installeer "$TMP/eigen_1.0_amd64.deb" >/dev/null 2>&1
+klopt '! grep -q "distrobox stop" "$TMP/doos-log" && ! grep -q "podman pull\|distrobox create" "$TMP/doos-log" && grep -q "een paar minuten" "$TMP/gevraagd"' \
+    "D-08: draaide het doosje al (een programma eruit is open), dan blijft het aan; geen nieuw doosje"
+rm -f "$TMP/bin/systemd-run" "$TMP/bin/apt-get"
+nep podman 'exit 0'
+nep skopeo 'exit 1'
+nep notify-send 'exit 0'
+nep distrobox 'case "$1" in list) echo " bugos-fedora ";; enter) shift; while [ "$1" != -- ]; do shift; done; shift; exec "$@";; esac'
 # U465: programma's uit een .rpm/.deb worden bijgewerkt (elke dag, bij 'Updates vanzelf').
 nep distrobox 'case "$1" in list) echo " bugos-ubuntu ";; upgrade) echo "$2" >>"'"$TMP"'/bijgewerkt";; esac; exit 0'
 rm -f "$TMP/bijgewerkt"

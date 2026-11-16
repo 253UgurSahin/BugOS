@@ -935,6 +935,42 @@ from bugos_files_bewerken import openen_met_apps  # noqa: E402
 
 _om = [n for n, _p in openen_met_apps(_c / "brief.txt")]
 klopt("Kladblok" in _om and "Geheim" not in _om, f"C-01: Openen met: de apps voor tekst, zonder verborgen ({_om})")
+# D-01: een .exe (of .msi/.deb/.rpm) dubbelklikken gaat rechtstreeks naar BugOS' eigen helper, niet via kde-open
+# (KIO weigerde: "het starten van uitvoerbare bestanden is niet toegestaan"). En 'Openen met' noemt die helper, ook al
+# is zijn .desktop-bestand verborgen voor het startmenu.
+import bugos_files_venster as _fv  # noqa: E402
+
+(_c / "npp.8.7.1.Installer.x64.exe").write_bytes(b"MZ")
+(_c / "hello_2.10_amd64.DEB").write_bytes(b"!<arch>")
+for _ in range(80):   # het model ziet nieuwe bestanden pas na een paar rondjes van de event-loop
+    app.processEvents()
+_gestart: list = []
+_oud_start, _oud_open = _fv.start, _fv.QDesktopServices.openUrl
+_fv.start = lambda *cmd: (_gestart.append(cmd), True)[1]
+_fv.QDesktopServices.openUrl = staticmethod(lambda url: _gestart.append(("openUrl", url.toLocalFile())))
+for _naam in ("npp.8.7.1.Installer.x64.exe", "hello_2.10_amd64.DEB", "brief.txt"):
+    _idx_ = venster.sorteer.mapFromSource(venster.model.index(str(_c / _naam)))
+    venster.openen(_idx_)
+_fv.start, _fv.QDesktopServices.openUrl = _oud_start, _oud_open
+klopt(_gestart == [("bugos-exe", str(_c / "npp.8.7.1.Installer.x64.exe")),
+                   ("bugos-package", str(_c / "hello_2.10_amd64.DEB")),
+                   ("openUrl", str(_c / "brief.txt"))],
+      f"D-01: .exe naar bugos-exe, .deb naar bugos-package, de rest zoals altijd ({_gestart})")
+(_apps / "mimeinfo.cache").write_text("[MIME Cache]\ntext/plain=kladblok.desktop;geheim.desktop;\n"
+                                      "application/x-msdownload=bugos-exe.desktop;\n"
+                                      "application/vnd.microsoft.portable-executable=bugos-exe.desktop;\n"
+                                      "application/x-ms-dos-executable=bugos-exe.desktop;\n")
+(_apps / "bugos-exe.desktop").write_text((ROOT / "system_files/usr/share/applications/bugos-exe.desktop").read_text())
+_om = [n for n, _p in openen_met_apps(_c / "npp.8.7.1.Installer.x64.exe")]
+klopt(any("Windows" in n for n in _om), f"D-01: Openen met bij een .exe: Windows-programma (BugOS) staat erbij ({_om})")
+# Weer weg: de tests hierna tellen wat er in deze map staat.
+(_c / "npp.8.7.1.Installer.x64.exe").unlink()
+(_c / "hello_2.10_amd64.DEB").unlink()
+for _ in range(40):
+    app.processEvents()
+_sd = (ROOT / "system_files/usr/bin/bugos-start-data").read_text(encoding="utf-8")
+klopt('".exe": "bugos-exe"' in _sd and '".deb": "bugos-package"' in _sd,
+      "D-01: ook een .exe uit 'Recent' in het startmenu gaat naar bugos-exe (niet via xdg-open)")
 # C-02: een nieuw tekstbestand (leeg, .txt erbij), en nooit een bestaand bestand overschrijven.
 _oud_vt = venster.vraag_tekst
 _vragen: list = []
