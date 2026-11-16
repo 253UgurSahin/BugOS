@@ -164,6 +164,39 @@ klopt(ot.iana_zone("W. Europe Standard Time", "NL") == "Europe/Amsterdam"
 klopt(ot.iana_zone("India Standard Time") == "Asia/Kolkata" and ot.iana_zone("FLE Standard Time", "UA") == "Europe/Kyiv",
       "tijdzone: de oude CLDR-namen worden de nieuwe (Calcutta -> Kolkata, Kiev -> Kyiv)")
 klopt(ot.iana_zone("Mars Standard Time") == "" and len(ot._tz()) > 130, "tijdzone: een onbekende geeft '' (niet raden)")
+# VM-test 2026-11-16: notatie 'en-US' en taal 'en-NL' in 'W. Europe' gaf Berlijn (US hoort niet bij die zone).
+# Het eerste land dat wél bij de Windows-zone hoort, telt.
+klopt(ot.iana_zone("W. Europe Standard Time", ("US", "NL")) == "Europe/Amsterdam"
+      and ot.iana_zone("W. Europe Standard Time", ("NL", "DE")) == "Europe/Amsterdam"
+      and ot.iana_zone("W. Europe Standard Time", ("US", "")) == "Europe/Berlin",
+      "tijdzone: notatie en-US + taal en-NL in W. Europe -> Amsterdam (het land dat bij de zone hoort)")
+# (Niet de stap zelf draaien: die roept pkexec aan. Wel nakijken dat hij notatie én taal doorgeeft.)
+_ot_bron = (ROOT / "system_files/usr/lib/bugos/python/bugos_overstap_toepassen.py").read_text(encoding="utf-8")
+klopt(_ot_bron.count('(land_van(_tekst(ins.get("notatie"))), land_van(_tekst(ins.get("taal"))))') == 2,
+      "tijdzone: overzicht en toepassen geven notatie en taal allebei door")
+# Firefox' nieuwere wachtwoordopslag (logins.db) gaat nooit mee, net als logins.json en key4.db.
+klopt({"logins.db", "logins.db-wal", "logins.db-shm", "logins.json", "key4.db"} <= ff.NOOIT_MEE,
+      "Firefox: logins.db (nieuwe wachtwoordopslag) gaat nooit mee")
+_ps = (ROOT / "windows-switch" / "BugOS-Switch.ps1").read_text(encoding="utf-8")
+klopt("'logins.db'" in _ps and "'key4.db'" in _ps, "Windows-kant: logins.db wordt ook niet op de stick gezet")
+# Dezelfde stick via /media én /run/media (op Fedora is /media een koppeling): één keer in de lijst.
+_echt = TMP / "run-media" / "STICK"
+(_echt / "BugOS-Switch").mkdir(parents=True, exist_ok=True)
+(_echt / "BugOS-Switch" / "bugos-switch.json").write_text('{"versie": 2}', encoding="utf-8")
+_link = TMP / "media-link"
+_link.symlink_to(TMP / "run-media", target_is_directory=True)
+_oud_schijven = os.environ.get("BUGOS_SCHIJVEN")
+os.environ.pop("BUGOS_SCHIJVEN", None)
+_gevonden = []
+for _basis in (TMP / "run-media", _link):
+    for _s in _basis.iterdir():
+        _gevonden.extend(ot._op_schijf(_s))
+klopt(len({p.resolve() for p in _gevonden}) == 1 and len(_gevonden) == 2,
+      "stick: via /media en /run/media dezelfde map (voorwaarde voor de volgende controle)")
+klopt("echt = map_.resolve()" in (ROOT / "system_files/usr/lib/bugos/python/bugos_overstap_toepassen.py").read_text(encoding="utf-8"),
+      "stick: zoek_overstap telt het echte pad één keer (niet twee keer dezelfde stick)")
+if _oud_schijven is not None:
+    os.environ["BUGOS_SCHIJVEN"] = _oud_schijven
 klopt(ot.land_van("nl-NL") == "NL" and ot.land_van("nl") == "" and ot.regio_code("nl-BE") == "nl_BE"
       and ot.taal_code("de-AT") == "de", "taal en notatie: nl-NL -> nl en nl_NL, land NL")
 klopt(ot.xkb_voor("00020409") == bi.Indeling("us", "intl") and ot.xkb_voor("0413:00000413") == bi.Indeling("nl")
