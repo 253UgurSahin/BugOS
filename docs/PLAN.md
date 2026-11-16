@@ -168,6 +168,14 @@ The most important idea: **BugOS can't break.**
 ### Next: testing on real computers
 - [x] **Switched to English, new base `kinoite-main`:** the docs and the default language are English, "oma" is "Bugie". Tested 2026-11-10 in a VM (QEMU, UEFI): the stick boots, BugOS installs, signs in and runs.
 - [x] **The stick installs BugOS** (tested 2026-11-10 in a VM with `tools/iso-local.sh`). Found and fixed: Fedora's KDE installer profile hid the Account and Date-and-time pages, so after installing there was no user and the clock was on New York time (now `hidden_webui_pages =` empty, plus `bugos-user-check.service` as a safety net). Fixed since then (`iso_live/src`): the time zone is guessed from the chosen language (the "Automatically set timezone" box is unticked and hidden); "Set the clock automatically" (NTP) stays ticked on purpose, so chronyd keeps the clock of the installed BugOS right; copying shows real progress; the installer speaks plain English from the first page and plain Dutch on "Share the disk" and "Make room"; a calm "The installer is starting" notice covers the minute or two before the installer appears; the stick's clock is 24-hour with year-first dates. `tools/test_native_installer.py --beeld` checks the built live image.
+- [x] **Native BugOS pages instead of KDE's, tested in a VM (2026-11-12 to 2026-11-16).** Merged on `feat/local-vm`:
+  the shell (taskbar and desktop locked, BugOS right-click lines), the Store without KDE Discover (all of Flathub inside
+  the Store), Task Manager Details, "What takes up the most space" in Files, native account, network, sound, display
+  and printer pages, installer polish (Dutch wording, "the installer is starting", 24-hour clock on the stick).
+  Two testers walked through the installed system in VirtualBox; their 42 findings were fixed (dark-mode dialogs,
+  quick-menu arrows, start-menu height, Settings at half-screen width, and more). Also removed: Partition Manager and
+  the Xwayland Video Bridge tray icon (owner's choice). Local build is now about 20 minutes (see TESTING.md).
+- [ ] Test the apps area (Store installs, Back-up to a USB drive, `.exe` and `.deb`) in the VM
 - [ ] Try the "try first" stick on a real PC
 - [x] Start menu and quick menu by default (tested outside Plasma: tools/qml-test.py, tools/test_start_data.py, tools/test_logout.py)
 - [ ] Check the start menu, quick menu and shutdown screen on a real PC (Windows key, picking Wi-Fi, shutting down) — see TESTING.md
