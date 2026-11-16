@@ -186,8 +186,9 @@ fi
 # dan een beeld dat niet bouwt. De Winkel laat zo'n app dan niet in 'Mijn apps' zien (bugos_apps.mijn_apps_ids),
 # zodat daar nooit een app zonder 'Verwijderen' staat.
 WINKEL_PAKKETTEN=(
-    # Voor als de basis ooit zelf een browser meebrengt (kinoite-main heeft er nu geen).
-    "firefox org.mozilla.firefox ja"
+    # kinoite-main brengt Firefox mee, met firefox-langpacks erbij. Die heeft Firefox nodig: dus samen weg
+    # (anders weigert rpm -e --test, en had je twee Firefoxen: het pakket en de Flatpak). Komma = samen.
+    "firefox,firefox-langpacks org.mozilla.firefox ja"
     "steam com.valvesoftware.Steam ja"
     # Filelight zit in de basis (Kinoite 44), maar is verborgen: Bestanden laat zelf zien wat de meeste ruimte
     # inneemt. Wie hem toch wil, haalt hem uit de Winkel (en kan hem dan ook weer verwijderen).
@@ -201,10 +202,17 @@ WINKEL_PAKKETTEN=(
 )
 STANDAARD_APPS=/usr/share/bugos/standaard-apps.txt
 for regel in "${WINKEL_PAKKETTEN[@]}"; do
-    read -r pakket app_id klaarzetten <<<"$regel"
+    read -r pakketten app_id klaarzetten <<<"$regel"
+    # Het eerste pakket is de app zelf; de rest (na een komma) hoort erbij en gaat mee weg, als het er is.
+    pakket="${pakketten%%,*}"
     rpm -q "$pakket" >/dev/null 2>&1 || continue
-    if rpm -e --test "$pakket" >/dev/null 2>&1; then
-        rpm -e "$pakket"
+    weg=()
+    IFS=, read -r -a alle <<<"$pakketten"
+    for p in "${alle[@]}"; do
+        if rpm -q "$p" >/dev/null 2>&1; then weg+=("$p"); fi
+    done
+    if rpm -e --test "${weg[@]}" >/dev/null 2>&1; then
+        rpm -e "${weg[@]}"
         echo "Winkel: pakket $pakket weg; $app_id komt als Flatpak (klaarzetten: $klaarzetten)"
         if [ "$klaarzetten" = ja ] && ! grep -qx "$app_id" "$STANDAARD_APPS"; then
             printf '# Zat in de basis als pakket %s (build.sh): nu een Flatpak die je kunt verwijderen.\n%s\n' \

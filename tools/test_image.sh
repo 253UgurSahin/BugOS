@@ -132,6 +132,8 @@ klopt '[ ! -e /usr/share/kio/servicemenus/filelight.desktop ]' "bestandsmenu: ge
 # Werkt met en zonder Discover in het beeld. 5b hieronder ziet alleen namen met "Discover" erin, Filelight niet.
 klopt '[ ! -f /usr/share/applications/org.kde.discover.desktop ] || grep -qx "NoDisplay=true" /usr/share/applications/org.kde.discover.desktop' "startmenu: geen KDE Discover (weg uit het beeld, of verborgen)"
 klopt '[ ! -f /usr/share/applications/org.kde.filelight.desktop ] || grep -qx "NoDisplay=true" /usr/share/applications/org.kde.filelight.desktop' "startmenu: geen Filelight (Bestanden laat zelf zien wat de meeste ruimte inneemt)"
+# Firefox is een Flatpak (te verwijderen in de Winkel); het pakket van de basis moet echt weg, anders twee Firefoxen.
+klopt '! rpm -q firefox >/dev/null 2>&1' "Firefox: geen pakket in het beeld (Firefox komt als Flatpak)"
 
 klopt '! grep -qE "^(TEMPLATES|PUBLICSHARE)=" /etc/xdg/user-dirs.defaults && grep -q "^DOCUMENTS=" /etc/xdg/user-dirs.defaults'     "thuismap: een nieuwe gebruiker krijgt geen lege mappen Templates en Public (zoals Windows)"
 
