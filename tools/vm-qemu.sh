@@ -17,7 +17,7 @@
 #   vm-qemu.sh terug <naam>         schijf terug naar die momentopname (VM moet uit staan)
 #   vm-qemu.sh lijst                momentopnames tonen
 #   vm-qemu.sh ssh [opdracht]       inloggen (als in de VM sshd aanstaat; poort 2222 op deze computer)
-# Instellingen: VM_MAP, GEHEUGEN (MB, standaard 8192), KERNEN (standaard 4), GL=1 (3D, vraagt een venster),
+# Instellingen: VM_MAP, GEHEUGEN (MB, standaard 4096), KERNEN (standaard 4; 2 cores met 4 threads), GL=1 (3D, vraagt een venster),
 #               AUDIO=pa of pipewire (standaard stil), ZONDER_VENSTER=1 (geen venster: besturen met foto en ssh),
 #               VM_GEBRUIKER (voor ssh, standaard je eigen naam).
 
@@ -27,7 +27,8 @@ MAP="${VM_MAP:-$HOME/bugos-vm}"
 SCHIJF="$MAP/schijf.qcow2"
 VARS="$MAP/uefi-vars.fd"
 QMP="$MAP/qmp.sock"
-GEHEUGEN="${GEHEUGEN:-8192}"
+# 4 GB: zo veel heeft een gewone, wat oudere pc ook, en de computer eromheen blijft bruikbaar (eigenaar 2026-11-16).
+GEHEUGEN="${GEHEUGEN:-4096}"
 KERNEN="${KERNEN:-4}"
 
 fout() { echo "vm-qemu: $*" >&2; exit 1; }
