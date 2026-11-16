@@ -142,7 +142,7 @@ SOORTEN = [
     ("tekst", "potlood", ("Tekstbestanden", "Text files"), ["text/plain"]),
 ]
 
-_VB_APPS = {"internet": ("firefox.desktop", [("firefox.desktop", "Firefox"), ("org.chromium.Chromium.desktop", "Chromium")]),
+_VB_APPS = {"internet": ("org.mozilla.firefox.desktop", [("org.mozilla.firefox.desktop", "Firefox"), ("org.chromium.Chromium.desktop", "Chromium")]),
             "mail": ("org.mozilla.Thunderbird.desktop", [("org.mozilla.Thunderbird.desktop", "Thunderbird")]),
             "fotos": ("org.kde.gwenview.desktop", [("org.kde.gwenview.desktop",
                                                     t("Gwenview (foto's bekijken)", "Gwenview (view photos)")),
@@ -151,7 +151,7 @@ _VB_APPS = {"internet": ("firefox.desktop", [("firefox.desktop", "Firefox"), ("o
                                                  ("vlc.desktop", "VLC")]),
             "videos": ("org.kde.haruna.desktop", [("org.kde.haruna.desktop", "Haruna (video)"), ("vlc.desktop", "VLC")]),
             "pdf": ("org.kde.okular.desktop", [("org.kde.okular.desktop", t("Okular (documenten)", "Okular (documents)")),
-                                               ("firefox.desktop", "Firefox")]),
+                                               ("org.mozilla.firefox.desktop", "Firefox")]),
             "kantoor": ("org.libreoffice.LibreOffice.writer.desktop",
                         [("org.libreoffice.LibreOffice.writer.desktop", "LibreOffice Writer")]),
             "rekenen": ("org.libreoffice.LibreOffice.calc.desktop",
@@ -373,7 +373,7 @@ def apps_voor_soort(mime: str, taalcode: str = "nl") -> list[tuple[str, str]]:
 def alle_apps(taalcode: str = "nl") -> list[tuple[str, str]]:
     """Elk programma dat bestanden kan openen (Exec met %f, %F, %u of %U), voor 'Een ander programma...'."""
     if _c.VOORBEELD:
-        return [("org.kde.okular.desktop", "Okular"), ("org.kde.kate.desktop", "Kate"), ("firefox.desktop", "Firefox"),
+        return [("org.kde.okular.desktop", "Okular"), ("org.kde.kate.desktop", "Kate"), ("org.mozilla.firefox.desktop", "Firefox"),
                 ("org.kde.ark.desktop", "Ark")]
     gezien: dict[str, str] = {}
     for map_ in app_mappen():

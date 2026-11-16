@@ -105,9 +105,12 @@ case "${1:-status}" in
 auto)
     als_beheerder "$@"
     zet_keuze auto || niet_bewaard
-    # Waren de nieuwe standaard-apps overgeslagen omdat je updates zelf deed? Dan bij de volgende start alsnog (U320).
+    # Waren de nieuwe standaard-apps overgeslagen omdat je updates zelf deed? Dan bij de volgende start alsnog (U320):
+    # bugos-first-boot kijkt bij elke start wat er nog niet klaargezet is, en mag dat nu ook. Het merkje weg, en de
+    # dienst meteen even aanzetten (hij wacht zelf op internet en draait op de achtergrond).
     if [ -f /var/lib/bugos/standaard-apps-overgeslagen ]; then
-        rm -f /var/lib/bugos/standaard-apps-overgeslagen /var/lib/bugos/standaard-apps-2
+        rm -f /var/lib/bugos/standaard-apps-overgeslagen
+        systemctl start --no-block bugos-first-boot.service 2>/dev/null || true
     fi
     systemctl enable --now "${TIMERS[@]}"
     gebruiker_timer unmask

@@ -195,26 +195,11 @@ done
 # bestand gelden de gewone KDE-instellingen.
 rm -f /usr/share/kde-settings/kde-profile/default/xdg/krunnerrc
 
-# Firefox: begint niet meer op de Fedora-startpagina, en heet "for BugOS".
-# browser.tabs.inTitlebar=0: Firefox krijgt dezelfde vensterbalk als alle andere vensters
-# (geen eigen knoppen meer in de tabbalk), zodat het één geheel blijft.
-FF=/usr/lib64/firefox
-if [ -d "$FF" ]; then
-    sed -i -e 's|https://start.fedoraproject.org/|about:home|' -e '/browser.newtabpage.pinned/d' \
-        "$FF/browser/defaults/preferences/firefox-redhat-default-prefs.js" || true
-    mkdir -p "$FF/distribution"
-    cat >"$FF/distribution/distribution.ini" <<'EOF'
-[Global]
-id=bugos
-version=1.0
-about=Mozilla Firefox for BugOS
-
-[Preferences]
-app.distributor="bugos"
-app.distributor.channel="bugos"
-browser.tabs.inTitlebar=0
-EOF
-fi
+# Firefox: is nu een Flatpak van Flathub (org.mozilla.firefox), geen pakket meer in BugOS. De BugOS-instellingen
+# ervoor (dezelfde vensterbalk als alle vensters: browser.tabs.inTitlebar=0, en de gewone startpagina) staan in
+# /usr/share/bugos/firefox-systemconfig, en /usr/lib/tmpfiles.d/bugos-firefox.conf laat de Flatpak die lezen (de
+# uitbreiding org.mozilla.firefox.systemconfig; uitleg en bronnen in defaults/pref/bugos.js). De naam 'Mozilla Firefox
+# for BugOS' (distribution.ini) kan bij de Flatpak niet: die map zit in de doos van Flathub zelf.
 
 # Logo's: veel programma's gebruiken vaste bestandsnamen voor "het logo van
 # dit systeem" (Over dit systeem, het installatieprogramma, sommige menu's).

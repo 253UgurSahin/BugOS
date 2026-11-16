@@ -971,17 +971,17 @@ klopt(_gekozen_lijsten[-1] == ["org.kde.okular.desktop", "org.kde.kate.desktop",
       and bi.standaard_voor_soort("application/epub+zip") == "org.kde.kate.desktop"
       and pg.melding.tekst.text() == "EPUB-e-boek opent voortaan met Kate (tekst).",
       f"programma's: een EPUB: de programma's ervoor, en 'Een ander programma...' ({pg.melding.tekst.text()!r})")
-_keuzes_rij[:] = ["__alle__", "firefox.desktop"]
+_keuzes_rij[:] = ["__alle__", "org.mozilla.firefox.desktop"]
 pg.kies_soort("application/epub+zip")
 wacht()
-klopt(_gekozen_lijsten[-1] == ["org.kde.okular.desktop", "org.kde.kate.desktop", "firefox.desktop", "org.kde.ark.desktop"]
-      and bi.standaard_voor_soort("application/epub+zip") == "firefox.desktop"
+klopt(_gekozen_lijsten[-1] == ["org.kde.okular.desktop", "org.kde.kate.desktop", "org.mozilla.firefox.desktop", "org.kde.ark.desktop"]
+      and bi.standaard_voor_soort("application/epub+zip") == "org.mozilla.firefox.desktop"
       and pg.melding.tekst.text() == "EPUB-e-boek opent voortaan met Firefox.",
       "programma's: 'Een ander programma...' laat alle programma's zien")
 _keuzes_rij[:] = []
 pg.kies_soort("application/epub+zip")
 wacht()
-klopt(bi.standaard_voor_soort("application/epub+zip") == "firefox.desktop", "programma's: Annuleren verandert niets")
+klopt(bi.standaard_voor_soort("application/epub+zip") == "org.mozilla.firefox.desktop", "programma's: Annuleren verandert niets")
 pg.kies_soort("application/x-msi")
 klopt(pg.melding.tekst.text() == "Dit soort bestand regelt BugOS zelf.", "programma's: een .msi regelt BugOS zelf")
 pg.kies_soort("application/octet-stream")

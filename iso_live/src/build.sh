@@ -381,7 +381,7 @@ printf '[Wallet]\nEnabled=false\n' >/etc/xdg/kwalletrc
 # het geheugen kan vollopen. Na het installeren draaien ze gewoon wel (dit
 # geldt alleen voor de stick).
 for s in rpm-ostreed-automatic.timer bugos-update-apps.timer uupd.timer rpm-ostree-countme.service \
-    bootloader-update.service bugos-first-boot.service \
+    bootloader-update.service bugos-first-boot.service bugos-first-boot.timer \
     flatpak-preinstall.service brew-setup.service brew-update.timer brew-upgrade.timer \
     rpm-ostree-countme.timer ublue-system-setup.service tailscaled.service; do
     systemctl disable "$s" 2>/dev/null || true

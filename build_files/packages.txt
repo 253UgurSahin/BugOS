@@ -33,9 +33,8 @@ ffmpegthumbnailer
 kf6-kimageformats
 
 # --- Internet en apps ---
-# Firefox als gewoon programma: de fundering heeft geen browser in het systeem, en
-# de taakbalk en het startmenu van BugOS verwijzen naar Firefox.
-firefox
+# (Geen Firefox meer als pakket: Firefox komt als Flatpak van Flathub, zodat je hem kunt verwijderen en weer
+# installeren. bugos-first-boot zet hem klaar; zie /usr/share/bugos/standaard-apps.txt en build.sh.)
 # 'Teksteditor' in het startmenu is KWrite: de eenvoudige teksteditor van KDE (zoals Kladblok), uit dezelfde familie
 # als Kate. Kate zelf (met LSP, projecten, git en sessies) is voor programmeurs en heet in het startmenu gewoon Kate
 # (A-14). Brengt de basis KWrite al mee, dan doet deze regel niets.

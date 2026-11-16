@@ -108,6 +108,10 @@ Then restart the computer. Want to go back? Use Settings > Updates and info, or 
 - [ ] On a PC with OneDrive: BugOS Switch asks about files that are only in OneDrive; choose No, and in BugOS the summary names them
 - [ ] In BugOS, **Bring everything from your old PC**: transfer, then **Undo everything**. Files from the old PC are in the trash, a file you changed in between stays, settings, Wi-Fi and printers are back to how they were
 - [ ] Open the **BugOS Store** and install something
+- [ ] After installing BugOS (with internet): Firefox, LibreOffice, VLC, Gwenview, Okular and Steam arrive by themselves within a few minutes, and Firefox opens web links. Firefox has the normal window title bar (no buttons in the tab bar)
+- [ ] Install BugOS **without internet**, sign in (it must not wait), then connect: within about 5 minutes the apps arrive (`systemctl status bugos-first-boot`)
+- [ ] Store → **My apps**: every app has **Remove** (also Firefox and Steam). Remove Firefox, restart twice: it does not come back by itself. Install it again from the Store: it is back
+- [ ] Settings → Apps and gaming → **Installed apps**: the same list, each with **Remove**; removing asks first and then the app is gone from the list
 - [ ] The ladybug at the bottom left is the **BugOS start menu**: search for "wifi" and open the page; the Windows key opens the menu
 - [ ] The **quick menu** (two sliders, next to the system tray): turn Wi-Fi off and on; the little arrow next to Wi-Fi opens Settings
 - [ ] Shut down from the start menu: you see the **BugOS shutdown screen** with big tiles; "Cancel" takes you back
