@@ -8,6 +8,8 @@
 #                                          snelmenu op de taakbalk, de KDE-onderdelen die het vervangt uitzetten;
 #                                          alles: alles weer zichtbaar en aan)
 #   bugos-panel bewerken aan|uit|status   (voor gevorderden: het slot eraf voor KDE's eigen taakbalkbewerking)
+#   bugos-panel taakbalk vastmaken|losmaken <naam>.desktop   (een app op de taakbalk zetten of eraf halen; print
+#                                          'ok:' met de nieuwe lijst, of 'geen' zonder takenlijst)
 #
 # Jip-en-Janneke: de startknop linksonder (het lieveheersbeestje) is het
 # BugOS-menu. "uit" zet het gewone KDE-menu terug, precies zoals BugOS het
@@ -158,6 +160,40 @@ function hernoemd() {
             if (anders) ws[j].writeConfig("launchers", nieuw);
         }
     }
+}
+// Een app vastmaken aan de taakbalk (vast true) of ervan losmaken (vast false), zoals "Vastmaken aan taakbalk" in
+// het startmenu van Windows 11 (bugos-start-data --taakbalk). De vastgezette apps zijn de lijst "launchers" van
+// de takenlijst van KDE ("applications:<id>"; KDE kan er ook "file:///.../<id>" van maken). Vastmaken zet de app
+// achteraan, losmaken haalt hem weg; een app die er al (niet) staat, laat de lijst zoals hij is. reloadConfig():
+// dan ziet de takenlijst het meteen, niet pas na opnieuw inloggen.
+// Print "ok:" met de nieuwe lijst (de id-s, met komma-s), of "geen" als er geen takenlijst op een taakbalk staat.
+// Het id is al gecontroleerd door de shell hieronder (alleen letters, cijfers en . _ + -, eindigt op .desktop).
+// LET OP: geen enkel aanhalingsteken (apostrof) in dit blok, ook niet in commentaar: het hele blok staat tussen
+// enkele aanhalingstekens (JS=...).
+function taakbalkApp(id, vast) {
+    var ps = panels(), lijst = null;
+    for (var i = 0; i < ps.length; i++) {
+        var ws = ps[i].widgets();
+        for (var j = 0; j < ws.length; j++) {
+            if (ws[j].type != "org.kde.plasma.icontasks" && ws[j].type != "org.kde.plasma.taskmanager") continue;
+            ws[j].currentConfigGroup = ["General"];
+            var l = ws[j].readConfig("launchers", []);
+            if (typeof l == "string") l = l === "" ? [] : l.split(",");
+            var nieuw = [], ids = [], er = false;
+            for (var k = 0; k < l.length; k++) {
+                var naam = String(l[k]), kaal = "";
+                if (naam.indexOf("applications:") === 0) kaal = naam.substring(13);
+                else if (naam.indexOf("file://") === 0) kaal = naam.substring(naam.lastIndexOf("/") + 1);
+                if (kaal === id) { er = true; if (!vast) continue; }
+                nieuw.push(naam);
+                if (kaal !== "") ids.push(kaal);
+            }
+            if (vast && !er) { nieuw.push("applications:" + id); ids.push(id); }
+            if (er !== vast) { ws[j].writeConfig("launchers", nieuw); ws[j].reloadConfig(); }
+            if (lijst === null) lijst = ids;
+        }
+    }
+    print(lijst === null ? "geen" : "ok:" + lijst.join(","));
 }
 function weg(soort) {
     var ps = panels(), n = 0;
@@ -607,11 +643,25 @@ bewerken:uit)
     rm -f "$BEWERKEN"
     melding "$(t "Taakbalk en bureaublad staan weer vast" "Taskbar and desktop are locked again")" ""
     ;;
+# Een app vastmaken aan de taakbalk of ervan losmaken (het menu van de rechtermuisknop in het startmenu, via
+# bugos-start-data --taakbalk). Het id gaat in het JavaScript: daarom eerst streng controleren (geen ' " ; of
+# spaties), anders zou een vreemde naam het script van Plasma kunnen veranderen.
+taakbalk:vastmaken | taakbalk:losmaken)
+    APPID="${3:-}"
+    if ! [[ "$APPID" =~ ^[A-Za-z0-9_.+-]+\.desktop$ ]]; then
+        echo "Gebruik: bugos-panel taakbalk vastmaken|losmaken <naam>.desktop" >&2
+        exit 2
+    fi
+    bureaublad_er || niet_bereikbaar
+    VAST=false
+    [ "$ACTIE" = vastmaken ] && VAST=true
+    plasma_wijzig "taakbalkApp(\"$APPID\", $VAST);" || niet_bereikbaar
+    ;;
 bewerken:status)
     if [ -f "$BEWERKEN" ]; then echo aan; else echo uit; fi
     ;;
 *)
-    echo "Gebruik: bugos-panel startmenu|snelmenu aan|uit|status, bugos-panel systeemvak rustig|alles, bugos-panel bewerken aan|uit|status, of bugos-panel standaard" >&2
+    echo "Gebruik: bugos-panel startmenu|snelmenu aan|uit|status, bugos-panel systeemvak rustig|alles, bugos-panel bewerken aan|uit|status, bugos-panel taakbalk vastmaken|losmaken <naam>.desktop, of bugos-panel standaard" >&2
     exit 2
     ;;
 esac

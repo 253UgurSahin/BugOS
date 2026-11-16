@@ -10,6 +10,11 @@ Het startmenu op de taakbalk (QML) roept dit aan en krijgt JSON terug.
   bugos-start-data --snel          -> status voor het snelmenu
   bugos-start-data --tray          -> korte status voor een taakbalk-icoontje (internet, volume, batterij)
   bugos-start-data --zet <wat> <waarde>  -> snelmenu-knop omzetten
+  bugos-start-data --actie <pad> <actie>   -> een eigen actie van een app starten (Firefox: new-private-window)
+  bugos-start-data --vastzetten <id>       -> app vastmaken aan Start (en daarna de gegevens, zoals zonder opties)
+  bugos-start-data --losmaken <id>         -> app losmaken van Start (idem)
+  bugos-start-data --taakbalk vastmaken|losmaken <id>  -> app op de taakbalk zetten of eraf halen (idem)
+  bugos-start-data --verwijder <flatpak-id>  -> de Winkel openen op die app, om hem te verwijderen
 """
 
 import configparser
@@ -17,6 +22,7 @@ import getpass
 import json
 import os
 import pwd
+import re
 import shutil
 import subprocess
 import sys
@@ -179,6 +185,10 @@ def lees_desktop(pad: Path) -> dict | None:
         oude_naam, naam, uitleg = naam, t(nl, en), t(unl, uen)
     cats = [c for c in d.get("Categories", "").split(";") if c]
     groep = next((t(nl, en) for c, nl, en in CATEGORIE if c in cats), t("Overig", "Other"))
+    # Flatpak zet in elk .desktop-bestand dat hij klaarzet (exports/share/applications) 'X-Flatpak=<app-id>'.
+    # Alleen zulke apps kun je verwijderen (de rest hoort bij BugOS zelf): dan staat 'Verwijderen' in het menu
+    # van de rechtermuisknop, en dat opent de Winkel op die app (met zijn eigen 'Weet je het zeker?').
+    flatpak = d.get("X-Flatpak", "").strip()
     return {
         "id": pad.name,
         "pad": str(pad),
@@ -188,7 +198,114 @@ def lees_desktop(pad: Path) -> dict | None:
         "groep": groep,
         "zoek": zoeksleutel(" ".join([naam, oude_naam, lokaal("GenericName"), lokaal("Comment"), lokaal("Keywords"), d.get("Keywords", "")])),
         "soort": "app",
+        # De eigen acties van de app ('Nieuw privévenster' bij Firefox), voor het menu van de rechtermuisknop.
+        "acties": desktop_acties(cp, d),
+        # Het Flatpak-id ('org.mozilla.firefox') als je de app kunt verwijderen, anders leeg.
+        "verwijder": flatpak if APP_ID_VORM.match(flatpak) else "",
     }
+
+
+# Een Flatpak-id zoals de Winkel die kent (org.mozilla.firefox): letters, cijfers, _ en -, met punten ertussen.
+# Alleen zo'n id gaat naar 'bugos-store appstream://<id>'; een vreemde waarde in een .desktop-bestand niet.
+APP_ID_VORM = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z0-9_-]+)+$")
+# Een desktop-id zoals het startmenu het doorgeeft (org.mozilla.firefox.desktop): geen mappen, geen spaties.
+DESKTOP_ID_VORM = re.compile(r"^[A-Za-z0-9_.+-]+\.desktop$")
+
+
+def desktop_acties(cp: configparser.RawConfigParser, d) -> list[dict]:
+    """De [Desktop Action ...]-groepen die 'Actions=' in [Desktop Entry] noemt, op volgorde.
+
+    Elke actie: {"id": "new-private-window", "naam": "Nieuw privévenster", "icoon": "..."}. De naam in je eigen
+    taal (Name[nl]), anders de gewone Name. Een actie zonder naam of zonder Exec laten we weg: die kun je niet
+    tonen of niet starten. Hoe een actie start, staat niet in de JSON: dat leest '--actie' straks opnieuw uit het
+    bestand zelf (zie actie_opdracht), zodat het startmenu nooit zelf een opdracht hoeft door te geven."""
+    uit = []
+    for actie_id in [a.strip() for a in d.get("Actions", "").split(";") if a.strip()]:
+        sectie = f"Desktop Action {actie_id}"
+        if not cp.has_section(sectie):
+            continue
+        a = cp[sectie]
+        naam = a.get(f"Name[{TAAL}]") or a.get("Name", "")
+        if not naam.strip() or not a.get("Exec", "").strip():
+            continue
+        uit.append({"id": actie_id, "naam": naam.strip(), "icoon": a.get("Icon", "")})
+    return uit
+
+
+# Veldcodes in een Exec-regel (freedesktop Desktop Entry Specification). Het startmenu start een actie zonder
+# bestand of adres, dus %f %F %u %U (en de oude %d %D %n %N %v %m) vallen weg. %i, %c en %k vullen we in.
+LEGE_VELDCODES = {"%f", "%F", "%u", "%U", "%d", "%D", "%n", "%N", "%v", "%m"}
+
+
+def exec_argumenten(exec_regel: str, naam: str = "", icoon: str = "", pad: str = "") -> list[str]:
+    """Een Exec-regel uit een .desktop-bestand als lijst argumenten, zonder shell (er wordt dus nooit iets
+    'uitgevoerd' wat in de regel staat, alleen het programma zelf met zijn argumenten).
+
+    Eerst de gewone tekens-met-backslash van de specificatie (\\s is een spatie, \\\\ een backslash), daarna de
+    aanhalingstekens zoals een shell ze leest (shlex). Veldcodes: %f/%u/... weg, %i wordt '--icon <icoon>', %c
+    de naam, %k het pad van het .desktop-bestand, %% een gewoon procentteken. Flatpak zet bv.
+    'flatpak run ... org.mozilla.firefox --private-window @@u %u @@': na het weghalen van %u blijft '@@u @@'
+    staan, en dat is precies wat flatpak zelf verwacht als er geen bestand meekomt. Een kapotte regel (een
+    aanhalingsteken te weinig) geeft een lege lijst: dan starten we niets."""
+    import shlex
+    # Stap 1 van de specificatie: de algemene tekens-met-backslash, van links naar rechts (zodat '\\s' een
+    # backslash plus 's' blijft en geen spatie wordt). Een andere backslash blijft staan voor stap 2 (shlex).
+    vervang = {"s": " ", "n": "\n", "t": "\t", "r": "\r", "\\": "\\"}
+    regel, i = "", 0
+    while i < len(exec_regel):
+        if exec_regel[i] == "\\" and i + 1 < len(exec_regel) and exec_regel[i + 1] in vervang:
+            regel += vervang[exec_regel[i + 1]]
+            i += 2
+        else:
+            regel += exec_regel[i]
+            i += 1
+    try:
+        delen = shlex.split(regel)
+    except ValueError:
+        return []
+    uit = []
+    for deel in delen:
+        if deel in LEGE_VELDCODES:
+            continue
+        if deel == "%i":
+            if icoon:
+                uit += ["--icon", icoon]
+            continue
+        if deel == "%c":
+            uit.append(naam)
+            continue
+        if deel == "%k":
+            uit.append(pad)
+            continue
+        # Een veldcode midden in een argument (bv. '--bestand=%f'): weghalen; '%%' wordt '%'.
+        schoon = re.sub(r"%(.)", lambda m: "%" if m.group(1) == "%" else "", deel)
+        if schoon or not deel:
+            uit.append(schoon)
+    return uit
+
+
+def actie_opdracht(pad: Path, actie_id: str) -> list[str]:
+    """De opdracht voor één eigen actie van een app ('new-private-window' van Firefox), uit het .desktop-bestand
+    zelf. Leeg als het geen echt .desktop-bestand is, of als die actie er niet (meer) in staat: alleen acties die
+    het bestand zelf noemt, kunnen starten."""
+    if pad.suffix != ".desktop" or not pad.is_file():
+        return []
+    cp = configparser.RawConfigParser(strict=False, interpolation=None)
+    cp.optionxform = str
+    try:
+        cp.read(pad, encoding="utf-8")
+    except (configparser.Error, UnicodeDecodeError, OSError):
+        return []
+    if not cp.has_section("Desktop Entry"):
+        return []
+    d = cp["Desktop Entry"]
+    genoemd = [a.strip() for a in d.get("Actions", "").split(";") if a.strip()]
+    sectie = f"Desktop Action {actie_id}"
+    if actie_id not in genoemd or not cp.has_section(sectie):
+        return []
+    a = cp[sectie]
+    naam = a.get(f"Name[{TAAL}]") or a.get("Name", "")
+    return exec_argumenten(a.get("Exec", ""), naam, a.get("Icon", "") or d.get("Icon", ""), str(pad))
 
 
 def zoeksleutel(tekst: str) -> str:
@@ -234,9 +351,15 @@ def instellingen_apps() -> list[dict]:
     return uit
 
 
-def favorieten(apps: list[dict]) -> list[dict]:
-    ids = list(STANDAARD_FAVORIETEN)
-    eigen = HOME / ".config/bugos/favorieten.json"
+def favorieten_bestand() -> Path:
+    """Waar je eigen lijst van vastgezette apps staat. Bestaat hij niet, dan geldt de standaardlijst."""
+    return HOME / ".config/bugos/favorieten.json"
+
+
+def favoriet_ids() -> list[str]:
+    """De desktop-id's van je vastgezette apps, op volgorde (ook die van apps die er nu niet zijn: die blijven
+    in de lijst staan, zodat ze terugkomen als je de app opnieuw installeert)."""
+    eigen = favorieten_bestand()
     try:
         ids = json.loads(eigen.read_text())
         # Geen lijst (null, een getal, met de hand bewerkt)? Dan niet het hele startmenu leeg, maar de standaard (U414).
@@ -252,6 +375,11 @@ def favorieten(apps: list[dict]) -> list[dict]:
                 ids = [x for x in cfg.get("General", "Prepend").split(";") if x]
         except configparser.Error:
             pass
+    return ids
+
+
+def favorieten(apps: list[dict]) -> list[dict]:
+    ids = favoriet_ids()
     per_id = {a["id"]: a for a in apps}
     uit, gezien = [], set()
     for i in ids:
@@ -261,6 +389,175 @@ def favorieten(apps: list[dict]) -> list[dict]:
                 uit.append(per_id[kandidaat])
                 break
     return uit
+
+
+def zelfde_namen(app_id: str) -> list[str]:
+    """De app zelf en zijn andere naam (rpm of Flatpak, zie ZELFDE_APP): Firefox staat vast, welke naam ook."""
+    return [app_id] + ZELFDE_APP.get(app_id, [])
+
+
+def schrijf_json(pad: Path, waarde) -> bool:
+    """Veilig wegschrijven: eerst naar een tijdelijk bestand ernaast, dan in één keer vervangen. Zo blijft er nooit
+    een half bestand staan als de computer net op dat moment uitgaat (dan zou het startmenu de standaard tonen)."""
+    try:
+        pad.parent.mkdir(parents=True, exist_ok=True)
+        tijdelijk = pad.with_name(pad.name + ".nieuw")
+        tijdelijk.write_text(json.dumps(waarde, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+        os.replace(tijdelijk, pad)
+        return True
+    except OSError as e:
+        print(f"bugos-start-data: kon {pad} niet schrijven: {e}", file=sys.stderr)
+        return False
+
+
+def favoriet_zet(app_id: str, aan: bool) -> bool:
+    """'Vastmaken aan Start' (aan) of 'Losmaken van Start' (uit), zoals in Windows 11.
+
+    Vastmaken zet de app achteraan (staat hij er al, ook onder zijn andere naam, dan verandert er niets).
+    Losmaken haalt hem weg, onder elke naam. De lijst komt in ~/.config/bugos/favorieten.json, het bestand dat
+    favorieten() al las: was er nog geen eigen lijst, dan begint die met de standaardlijst (je verliest dus niet
+    de andere vastgezette apps als je er één losmaakt)."""
+    if not DESKTOP_ID_VORM.match(app_id):
+        return False
+    ids = favoriet_ids()
+    namen = zelfde_namen(app_id)
+    if aan:
+        if any(n in ids for n in namen):
+            return True
+        nieuw = ids + [app_id]
+    else:
+        nieuw = [i for i in ids if i not in namen]
+    return schrijf_json(favorieten_bestand(), nieuw)
+
+
+# ------------------------------------------------------- taakbalk ----
+# De vastgezette apps op de taakbalk zijn die van KDE's takenlijst (org.kde.plasma.icontasks): de lijst
+# 'launchers' in zijn instellingen, bv. 'applications:org.mozilla.firefox.desktop'. Lezen kan rechtstreeks uit
+# het bestand van Plasma; veranderen gaat via 'bugos-panel taakbalk vastmaken|losmaken <id>' (een script in
+# Plasma zelf), want alleen dan ziet de takenlijst het meteen. Plasma schrijft zijn bestand pas een paar seconden
+# later weg: daarom onthouden we wat bugos-panel als nieuwe lijst teruggaf (taakbalk_onthouden) en gebruiken we
+# die tot het bestand van Plasma nieuwer is.
+TAKENLIJSTEN = ("org.kde.plasma.icontasks", "org.kde.plasma.taskmanager")
+
+
+def config_map() -> Path:
+    return Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
+
+
+def taakbalk_onthouden() -> Path:
+    return Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache")) / "bugos" / "taakbalk.json"
+
+
+def launcher_id(launcher: str) -> str:
+    """'applications:org.mozilla.firefox.desktop' of 'file:///.../x.desktop' -> de desktop-id; anders leeg
+    (bv. 'preferred://browser': dat is geen vaste app)."""
+    if launcher.startswith("applications:"):
+        return launcher[len("applications:"):]
+    if launcher.startswith("file://") and launcher.endswith(".desktop"):
+        return unquote(urlparse(launcher).path).rsplit("/", 1)[-1]
+    return ""
+
+
+def taakbalk_ids() -> list[str] | None:
+    """De desktop-id's die vastgezet zijn op de taakbalk, of None als er geen takenlijst is (dan kan
+    'Vastmaken aan taakbalk' niet, en laat het menu die regel weg).
+
+    Leest plasma-org.kde.plasma.desktop-appletsrc als gewone tekst: groepskoppen als
+    [Containments][2][Applets][5] met 'plugin=org.kde.plasma.icontasks', en daaronder
+    [Containments][2][Applets][5][Configuration][General] met 'launchers=a,b,c'. (configparser zou bij een
+    vreemde regel in dit grote bestand van Plasma het hele bestand opgeven.)"""
+    pad = config_map() / "plasma-org.kde.plasma.desktop-appletsrc"
+    groepen: dict[str, dict[str, str]] = {}
+    try:
+        groep = ""
+        for regel in pad.read_text(encoding="utf-8", errors="replace").splitlines():
+            regel = regel.strip()
+            if regel.startswith("[") and regel.endswith("]"):
+                groep = regel
+                groepen.setdefault(groep, {})
+            elif "=" in regel and groep and not regel.startswith("#"):
+                sleutel, waarde = regel.split("=", 1)
+                groepen[groep][sleutel.strip()] = waarde.strip()
+    except OSError:
+        return None
+    takenlijsten = [g for g, w in groepen.items() if w.get("plugin") in TAKENLIJSTEN]
+    if not takenlijsten:
+        return None
+    uit: list[str] = []
+    for g in takenlijsten:
+        for l in groepen.get(g + "[Configuration][General]", {}).get("launchers", "").split(","):
+            i = launcher_id(l.strip())
+            if i and i not in uit:
+                uit.append(i)
+    # Net iets veranderd via bugos-panel, en Plasma heeft zijn bestand nog niet bijgewerkt? Dan die lijst.
+    try:
+        onthouden = json.loads(taakbalk_onthouden().read_text())
+        if onthouden.get("tijd", 0) > pad.stat().st_mtime and isinstance(onthouden.get("lijst"), list):
+            return [i for i in onthouden["lijst"] if isinstance(i, str)]
+    except (OSError, ValueError, AttributeError):
+        pass
+    return uit
+
+
+def taakbalk_zet(app_id: str, aan: bool) -> bool:
+    """'Vastmaken aan taakbalk' (aan) of 'Losmaken van taakbalk' (uit), via bugos-panel. bugos-panel antwoordt
+    met 'ok:<id>,<id>,...' (de nieuwe lijst); die onthouden we, zie taakbalk_ids()."""
+    if not DESKTOP_ID_VORM.match(app_id) or not shutil.which("bugos-panel"):
+        return False
+    # Losmaken: onder elke naam (Firefox kan als firefox.desktop op de taakbalk staan). Vastmaken: deze naam.
+    lijst = None
+    for naam in ([app_id] if aan else zelfde_namen(app_id)):
+        # Niet via draai(): die geeft het na 5 s op, en bugos-panel haalt eerst het slot van de taakbalk af.
+        try:
+            uit = subprocess.run(["bugos-panel", "taakbalk", "vastmaken" if aan else "losmaken", naam],
+                                 capture_output=True, text=True, timeout=20).stdout
+        except (OSError, subprocess.SubprocessError):
+            uit = ""
+        for regel in uit.splitlines():
+            if regel.strip().startswith("ok:"):
+                lijst = [i for i in regel.strip()[3:].split(",") if i]
+    if lijst is None:
+        return False
+    schrijf_json(taakbalk_onthouden(), {"tijd": time.time(), "lijst": lijst})
+    return True
+
+
+def verwijder(flatpak_id: str) -> None:
+    """'Verwijderen' in het menu van de rechtermuisknop: opent de Winkel op die app. Daar staat de knop
+    'Verwijderen' met de vraag 'Weet je het zeker?' (en of je je eigen gegevens wilt houden). Het startmenu
+    verwijdert dus nooit zelf iets."""
+    if APP_ID_VORM.match(flatpak_id):
+        los_starten("bugos-store", f"appstream://{flatpak_id}")
+
+
+def start_actie(pad: str, actie_id: str) -> bool:
+    """Een eigen actie van een app starten (Firefox: 'Nieuw privévenster'), net zo als --start: los, in een eigen
+    systemd-scope met de naam van de app (zodat Taakbeheer hem als die app ziet)."""
+    cmd = actie_opdracht(Path(pad), actie_id)
+    if not cmd:
+        print(f"bugos-start-data: actie {actie_id!r} van {pad} niet gevonden", file=sys.stderr)
+        return False
+    return los_starten(*cmd, app=Path(pad).stem)
+
+
+def gegevens() -> dict:
+    """Alles voor het startmenu. Per app ook of hij vastgezet is op Start ('vastgezet') en op de taakbalk
+    ('op_taakbalk'), zodat het menu van de rechtermuisknop 'Vastmaken' of 'Losmaken' kan zeggen."""
+    apps = alle_apps()
+    favs = favorieten(apps)
+    vast = {a["id"] for a in favs}
+    taakbalk = taakbalk_ids()
+    for a in apps:
+        a["vastgezet"] = a["id"] in vast
+        a["op_taakbalk"] = bool(taakbalk) and any(n in taakbalk for n in zelfde_namen(a["id"]))
+    return {
+        "apps": apps + instellingen_apps(),
+        "favorieten": favs,
+        "recent": recente_bestanden(),
+        "gebruiker": gebruiker(),
+        # Is er een takenlijst op de taakbalk om apps aan vast te maken (en kan bugos-panel dat)?
+        "taakbalk_kan": taakbalk is not None and bool(shutil.which("bugos-panel")),
+    }
 
 
 def map_naam(map_pad: Path) -> str:
@@ -347,11 +644,14 @@ def draai(*cmd: str) -> str:
         return ""
 
 
-def eigen_plek(cmd: tuple | list) -> list[str]:
+def eigen_plek(cmd: tuple | list, app: str = "") -> list[str]:
     """Start een programma (met een .desktop-bestand) in zijn eigen systemd-scope, zoals KDE dat doet: dan ziet
     Taakbeheer het als dat programma (niet als deel van wie het startte) en kun je het daar sluiten (U125).
-    Zonder systemd voor de gebruiker (of een opdracht zonder .desktop): gewoon zoals het was."""
-    naam = os.path.basename(cmd[0]) if cmd else ""
+    Zonder systemd voor de gebruiker (of een opdracht zonder .desktop): gewoon zoals het was.
+    app: de naam van het .desktop-bestand (zonder .desktop) als die niet gelijk is aan het programma, bv. bij een
+    eigen actie van Firefox ('flatpak run ... org.mozilla.firefox --private-window' hoort bij
+    org.mozilla.firefox.desktop, niet bij een 'flatpak.desktop')."""
+    naam = app or (os.path.basename(cmd[0]) if cmd else "")
     runtime = os.environ.get("XDG_RUNTIME_DIR", "")
     # Alleen namen die systemd in een eenheid toestaat; anders zou systemd-run weigeren en start er niets (U146).
     if not naam or not runtime or not os.path.exists(os.path.join(runtime, "systemd", "private")) or \
@@ -359,15 +659,17 @@ def eigen_plek(cmd: tuple | list) -> list[str]:
         return list(cmd)
     mappen = [os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))] + \
         os.environ.get("XDG_DATA_DIRS", "/usr/local/share:/usr/share").split(":")
-    if not any(os.path.exists(os.path.join(m, "applications", f"{naam}.desktop")) for m in mappen if m):
+    # (Met 'app' weten we het .desktop-bestand al: start_actie las het net. Dat kan ook in de Flatpak-map staan,
+    # die niet altijd in XDG_DATA_DIRS staat.)
+    if not app and not any(os.path.exists(os.path.join(m, "applications", f"{naam}.desktop")) for m in mappen if m):
         return list(cmd)
     eenheid = "app-" + naam.replace("\\", "\\x5c").replace("-", "\\x2d") + f"-{os.getpid():x}{os.urandom(3).hex()}.scope"
     return ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={eenheid}", "--", *cmd]
 
 
-def los_starten(*cmd: str) -> bool:
+def los_starten(*cmd: str, app: str = "") -> bool:
     try:
-        subprocess.Popen(eigen_plek(cmd), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        subprocess.Popen(eigen_plek(cmd, app), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         return True
     except OSError as e:
         print(f"bugos-start-data: {cmd[0]} kon niet starten: {e}", file=sys.stderr)
@@ -660,13 +962,23 @@ def main(args: list[str]) -> int:
             s[args[1]] = args[2] in ("aan", "true", "1", "on")
         print(json.dumps(s))
         return 0
-    apps = alle_apps()
-    print(json.dumps({
-        "apps": apps + instellingen_apps(),
-        "favorieten": favorieten(apps),
-        "recent": recente_bestanden(),
-        "gebruiker": gebruiker(),
-    }, ensure_ascii=False))
+    # Het menu van de rechtermuisknop op een app (StartMenu.qml, appMenu).
+    if len(args) == 3 and args[0] == "--actie":
+        # Een eigen actie van de app ('new-private-window'): de opdracht komt uit het .desktop-bestand zelf.
+        return 0 if start_actie(args[1], args[2]) else 1
+    if len(args) == 2 and args[0] == "--verwijder":
+        verwijder(args[1])
+        return 0
+    if len(args) == 2 and args[0] in ("--vastzetten", "--losmaken"):
+        # Daarna meteen de nieuwe gegevens, zodat het startmenu de tegel er direct bij zet of weghaalt.
+        favoriet_zet(args[1], args[0] == "--vastzetten")
+        print(json.dumps(gegevens(), ensure_ascii=False))
+        return 0
+    if len(args) == 3 and args[0] == "--taakbalk" and args[1] in ("vastmaken", "losmaken"):
+        taakbalk_zet(args[2], args[1] == "vastmaken")
+        print(json.dumps(gegevens(), ensure_ascii=False))
+        return 0
+    print(json.dumps(gegevens(), ensure_ascii=False))
     return 0
 
 
