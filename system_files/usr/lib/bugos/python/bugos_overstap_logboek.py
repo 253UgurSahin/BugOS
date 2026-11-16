@@ -213,6 +213,20 @@ def onthoud(soort: str, **velden) -> None:
             pass
 
 
+def maak_map(p: Path) -> None:
+    """Maak een map (met alles erboven wat nog niet bestaat) en onthoud elke map die BugOS zo NIEUW maakte. Dan
+    haalt terugdraaien ze weer weg als ze leeg zijn (in de VM bleven anders lege mappen als 'fonts' en '.thunderbird'
+    achter). Een map die er al was, komt niet in het logboek: die blijft altijd."""
+    nieuw = []
+    m = p
+    while not m.exists() and m != m.parent:
+        nieuw.append(m)
+        m = m.parent
+    p.mkdir(parents=True, exist_ok=True)
+    for m in reversed(nieuw):   # bovenste eerst; terugdraaien begint toch bij de diepste
+        onthoud("map", pad=str(m))
+
+
 def bestand_erbij(p: Path) -> None:
     if ACTIEF is not None:
         try:
@@ -246,6 +260,11 @@ def lees_rsync_log(logbestand: Path, doel: Path) -> tuple[list[Path], list[Path]
             continue
         soort, naam = m.groups()
         naam = naam.rstrip("/")
+        if naam == "." and soort.startswith("cd"):
+            # 'cd+++++++++ ./': de doelmap zelf is nieuw (bijv. 'Foto's 2019' in je Thuismap). Ook onthouden: anders
+            # blijft na terugdraaien een lege map staan (gezien in de VM).
+            mappen.append(doel)
+            continue
         # Nooit iets buiten de doelmap (een rare naam met ../ zou dat kunnen): dan niet onthouden.
         if not naam or naam == "." or naam.startswith("/") or ".." in Path(naam).parts:
             continue
@@ -368,7 +387,7 @@ def terugdraaien(boek: Logboek | None = None) -> list[ot.Uitslag]:
     mappen: list[Path] = []
     instellingen_ok, instellingen_mis = [], []
     wifi_ok, wifi_mis, printers_ok, printers_mis = [], [], [], []
-    profielen_ok, zelf_doen = 0, []
+    profielen_ok, zelf_doen = [], []
     achtergrond_ok = None
     fonts_veranderd = False
 
@@ -419,7 +438,8 @@ def terugdraaien(boek: Logboek | None = None) -> list[ot.Uitslag]:
                 p = Path(str(a.get("pad")))
                 if p.exists():
                     if _naar_prullenbak(p):
-                        profielen_ok += 1
+                        # Van welk programma: Thunderbird staat in een map met 'thunderbird' in de naam.
+                        profielen_ok.append("mail" if "thunderbird" in str(p).lower() else "firefox")
                     else:
                         niet_weg.append(p.name)
             elif soort == "ini":
@@ -483,8 +503,11 @@ def terugdraaien(boek: Logboek | None = None) -> list[ot.Uitslag]:
     # ------------------------------------------------------------- de uitslagen ---
     uit: list[ot.Uitslag] = []
     if weg or veranderd or niet_weg:
-        tekst = t("{n} bestanden van je oude pc staan in de prullenbak (daar kun je ze nog terughalen).",
-                  "{n} files from your old PC are in the trash (you can still get them back from there).").format(n=weg)
+        tekst = (t("{n} bestanden van je oude pc staan in de prullenbak (daar kun je ze nog terughalen).",
+                   "{n} files from your old PC are in the trash (you can still get them back from there).")
+                 if weg != 1 else t("1 bestand van je oude pc staat in de prullenbak (daar kun je het nog terughalen).",
+                                    "1 file from your old PC is in the trash (you can still get it back from there).")
+                 ).format(n=weg)
         if veranderd:
             tekst += " " + t("Bleef staan omdat je het zelf veranderde: {b}.",
                              "Kept because you changed it yourself: {b}.").format(b=ot._kort(veranderd, 3))
@@ -492,10 +515,12 @@ def terugdraaien(boek: Logboek | None = None) -> list[ot.Uitslag]:
             " " + t("Kon niet naar de prullenbak: {b}. Gooi die zelf weg in Bestanden.",
                     "Could not go to the trash: {b}. Throw those away yourself in Files.").format(
                         b=ot._kort(niet_weg, 3)) if niet_weg else "")))
-    if profielen_ok:
-        uit.append(ot.Uitslag("firefox", GOED, t("Het profiel van Windows staat in de prullenbak; je vorige profiel "
-                                                 "is weer het standaardprofiel.", "The profile from Windows is in the "
-                                                 "trash; your previous profile is the default again.")))
+    for deel in dict.fromkeys(profielen_ok):
+        uit.append(ot.Uitslag(deel, GOED, t(
+            "Het profiel van Windows staat in de prullenbak; Firefox opent weer met je vorige profiel.",
+            "The profile from Windows is in the trash; Firefox opens with your previous profile again.")
+            if deel == "firefox" else t(
+            "Je Thunderbird van Windows staat in de prullenbak.", "Your Thunderbird from Windows is in the trash.")))
     if achtergrond_ok is not None:
         uit.append(ot.Uitslag("achtergrond", GOED if achtergrond_ok else ZELF,
                               t("Je vorige achtergrond is terug.", "Your previous wallpaper is back.") if achtergrond_ok
@@ -507,10 +532,11 @@ def terugdraaien(boek: Logboek | None = None) -> list[ot.Uitslag]:
                                                           "Not everything could go back ({w}). Check Settings.").format(
                                                               w=", ".join(sorted(set(instellingen_mis))))))
         else:
-            uit.append(ot.Uitslag("instellingen", GOED, t("Je instellingen zijn weer zoals ze waren. Taal en notatie "
-                                                          "zie je na opnieuw inloggen.", "Your settings are back to how "
-                                                          "they were. Language and format show after you sign in "
-                                                          "again.")))
+            tekst = t("Je instellingen zijn weer zoals ze waren.", "Your settings are back to how they were.")
+            if {"taal", "regio"} & set(instellingen_ok):
+                tekst += " " + t("Taal en notatie zie je na opnieuw inloggen.",
+                                 "Language and format show after you sign in again.")
+            uit.append(ot.Uitslag("instellingen", GOED, tekst))
     if wifi_ok:
         uit.append(ot.Uitslag("wifi", GOED, t("Weg: {n}.", "Removed: {n}.").format(n=ot._kort(wifi_ok, 5))))
     if wifi_mis:

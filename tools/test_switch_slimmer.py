@@ -163,6 +163,10 @@ RLOG.write_text("2026/11/16 19:30:01 [123] building file list\n"
                 "2026/11/16 19:30:01 [123] >f+++++++++ /etc/passwd\n"
                 "2026/11/16 19:30:01 [123] >f..t...... al-er.txt\n")
 _b, _m = lb.lees_rsync_log(RLOG, THUIS / "Foto's 2019")
+RLOG2 = TMP / "rsync2.log"
+RLOG2.write_text("2026/11/16 19:30:01 [123] cd+++++++++ ./\n")
+_b2, _m2 = lb.lees_rsync_log(RLOG2, THUIS / "Nieuw")
+klopt(_m2 == [THUIS / "Nieuw"], "rsync-logboek: 'cd+++++++++ ./' = de doelmap zelf is nieuw (ook weg bij terugdraaien)")
 klopt([str(p) for p in _b] == [str(THUIS / "Foto's 2019" / "Vakantie" / "strand.txt")]
       and [str(p) for p in _m] == [str(THUIS / "Foto's 2019" / "Vakantie")],
       "rsync-logboek: alleen nieuwe bestanden en mappen, nooit iets buiten de doelmap")
@@ -284,6 +288,12 @@ klopt(_profiel is not None and not _profiel.exists() and not (TBMAP / "profiles.
 klopt(not lb.pad().exists() and any(lb.map_().glob("logboek-teruggedraaid-*.json")),
       "terugdraaien: het logboek heeft een andere naam (de volgende overstap begint schoon)")
 klopt(lb.terugdraaien()[0].soort == ot.NIET, "terugdraaien zonder logboek: 'er is niets om terug te draaien'")
+# VM-test 2026-11-16: na terugdraaien bleven lege mappen staan die BugOS zelf had gemaakt.
+klopt(not (THUIS / ".local" / "share" / "fonts").exists() and not TBMAP.exists()
+      and not (THUIS / ".var" / "app" / "org.mozilla.Thunderbird").exists(),
+      "terugdraaien: geen lege mappen van BugOS over (fonts, de Thunderbird-map)")
+klopt("mail:goed:Je Thunderbird van Windows" in _teksten and "Taal en notatie" in _teksten,
+      "terugdraaien: Thunderbird heet Thunderbird (niet 'Firefox'); taal teruggezet: 'zie je na opnieuw inloggen'")
 
 # ================================================================================= het venster ===
 import bugos_ui  # noqa: E402
