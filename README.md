@@ -95,7 +95,7 @@ Did something go wrong after an update? Then you go back to yesterday's version 
 
 ## Try it
 
-BugOS is still being built (version 0.3). Try it first on a spare computer or in a virtual PC.
+BugOS is still being built (version 0.4). Try it first on a spare computer or in a virtual PC.
 [docs/TESTING.md](docs/TESTING.md) explains exactly how.
 
 Still on Windows? The little program **BugOS Switch** (in [`windows-switch/`](windows-switch/))

@@ -59,7 +59,7 @@ The most important idea: **BugOS can't break.**
 4. The next time the computer starts, the new version runs.
 5. Problems? Then you pick the previous version in Settings, or in the startup menu (hold Shift or press Esc while starting; it is hidden otherwise), and everything is back to how it was yesterday.
 
-## What is already in it (version 0.3)
+## What is already in it (version 0.4)
 
 ### Apps you can see
 
