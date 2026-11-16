@@ -83,6 +83,27 @@ TOON="${NAAM//\\/\\\\}"
 TOON="${TOON//</‹}"
 TOON="${TOON//>/›}"
 
+# Eén installatie tegelijk per doosje. VM-test 2026-11-16: een dubbelklik die even duurde, en daarna nog eens op
+# 'Openen', gaf twee keer de vraag "Wil je hello installeren?" en had twee keer tegelijk hetzelfde doosje gemaakt.
+# Een slotmap met ons procesnummer erin (mkdir is in één keer: wie hem maakt, heeft het slot). Geen flock: dat slot
+# zou overgaan op podman/conmon, die blijven draaien, en dan bleef het slot de hele sessie dicht (U487).
+# Is het proces van de slotmap er niet meer (gecrasht, of de computer ging uit), dan nemen we het slot over.
+if [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+    SLOT="$XDG_RUNTIME_DIR/bugos-package-$DOOS.bezig"
+    if ! mkdir "$SLOT" 2>/dev/null; then
+        ander="$(cat "$SLOT/pid" 2>/dev/null)"
+        if [ -n "$ander" ] && kill -0 "$ander" 2>/dev/null; then
+            melding "$(t "BugOS is al bezig met installeren. Wacht tot de melding 'Klaar' zegt, en probeer het daarna nog eens als het nog nodig is." \
+                "BugOS is already installing. Wait until the notification says 'Done', then try again if it is still needed.")"
+            exit 0
+        fi
+        rm -rf "$SLOT"
+        mkdir "$SLOT" 2>/dev/null || exit 0   # net een ander die ook overnam: die doet het
+    fi
+    echo $$ >"$SLOT/pid"
+    trap 'rm -rf "$SLOT"' EXIT
+fi
+
 # Stap 1: staat het in de Winkel?
 # LC_ALL=C: anders zegt flatpak "Geen overeenkomsten gevonden" (in je eigen taal) en zouden we dat voor een app aanzien.
 # flatpak search zoekt "ongeveer": voor 'hello' kwam Discord bovenaan, en bood BugOS Discord aan (D-06). Dus alleen een
@@ -106,6 +127,9 @@ if [ -n "$GEVONDEN" ]; then
     if vraag "$(t \
         "\"$TOON\" staat ook in de BugOS Winkel. Dat is veiliger en wordt bijgewerkt met de rest.\n\nWil je het uit de Winkel halen?" \
         "\"$TOON\" is also in the BugOS Store. That is safer and is updated with everything else.\n\nDo you want to get it from the Store?")"; then
+        # exec vervangt dit proces: de trap van het slot loopt dan niet, dus het slot nu zelf weghalen (anders zei
+        # BugOS 'al bezig' zolang de Winkel open stond).
+        [ -n "${SLOT:-}" ] && rm -rf "$SLOT"
         exec bugos-store "appstream://$GEVONDEN"
     fi
 fi

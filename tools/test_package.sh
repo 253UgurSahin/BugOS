@@ -153,5 +153,31 @@ HOME="$TMP/thuis" XDG_RUNTIME_DIR="$TMP/run494" PATH="$TMP/bin:$PATH" bash "$TMP
 duur=$((SECONDS - begin))
 wait
 klopt '[ "$c494" -eq 0 ] && [ "$duur" -lt 2 ] && [ ! -e "$TMP/bijgewerkt" ]' "U494: 'Nu updaten' wacht niet op een dagelijkse doosjes-update die al loopt ($c494, ${duur}s)"
+# VM-test 2026-11-16: een trage dubbelklik en daarna 'Openen' gaf twee keer de vraag en twee installaties tegelijk.
+# Eén installatie tegelijk per doosje (slotmap met procesnummer in XDG_RUNTIME_DIR).
+RUN="$TMP/run"; mkdir -p "$RUN"
+# De nep-programma's terug zoals bovenaan (eerdere controles hierboven veranderden rpm, dnf en distrobox).
+nep rpm '[ "$1" = -qp ] && echo voorbeeld; exit 0'
+nep dnf 'printf "%s
+" "$@" >"$NEP_UIT"'
+nep distrobox 'case "$1" in list) echo " bugos-fedora ";; enter) shift; while [ "$1" != -- ]; do shift; done; shift; exec "$@";; esac'
+nep podman 'exit 0'
+nep flatpak 'exit 0'
+nep kdialog 'echo "$*" >>"'"$TMP"'/gevraagd"; exit 0'
+nep notify-send 'echo "$*" >>"'"$TMP"'/meldingen"'
+mkdir -p "$RUN/bugos-package-bugos-fedora.bezig"; echo $$ >"$RUN/bugos-package-bugos-fedora.bezig/pid"   # $$ leeft
+rm -f "$TMP/gevraagd" "$TMP/meldingen" "$TMP/dnf-args"
+touch "$TMP/tweede.rpm"; XDG_RUNTIME_DIR="$RUN" PATH="$TMP/bin:$PATH" NEP_UIT="$TMP/dnf-args" bash "$TMP/bugos-package" "$TMP/tweede.rpm"
+klopt '[ ! -e "$TMP/dnf-args" ] && grep -q "al bezig\|already installing" "$TMP/gevraagd" "$TMP/meldingen" 2>/dev/null'     "Eén tegelijk: loopt er al een installatie, dan geen tweede vraag of installatie, wel 'al bezig'"
+echo 999999 >"$RUN/bugos-package-bugos-fedora.bezig/pid"   # dit proces bestaat niet (meer)
+rm -f "$TMP/dnf-args"
+XDG_RUNTIME_DIR="$RUN" PATH="$TMP/bin:$PATH" NEP_UIT="$TMP/dnf-args" bash "$TMP/bugos-package" "$TMP/tweede.rpm"
+klopt 'grep -qxF -- "$TMP/tweede.rpm" "$TMP/dnf-args" 2>/dev/null && [ ! -e "$RUN/bugos-package-bugos-fedora.bezig" ]'     "Eén tegelijk: een oud slot (proces weg) wordt overgenomen, en na afloop is het slot weer weg"
+nep flatpak 'if [ "$1" = search ]; then printf "Voorbeeld	org.voorbeeld.App
+"; fi; exit 0'
+nep bugos-store 'exit 0'
+touch "$TMP/voorbeeld.rpm"; XDG_RUNTIME_DIR="$RUN" PATH="$TMP/bin:$PATH" NEP_UIT="$TMP/dnf-args" bash "$TMP/bugos-package" "$TMP/voorbeeld.rpm"
+klopt '[ ! -e "$RUN/bugos-package-bugos-fedora.bezig" ]' "Eén tegelijk: naar de Winkel (exec) laat geen slot achter"
+
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
