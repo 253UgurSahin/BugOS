@@ -136,16 +136,152 @@ $script:Mappen = @(
     @{ Sleutel = 'Downloads'; Naam = 'Downloads' }
 )
 
-function Get-MeeneemGrootte {
-    $totaal = 0L
-    foreach ($m in $script:Mappen) {
-        $pad = Get-BekendeMap $m.Sleutel
-        if ($pad -and (Test-Path $pad)) {
-            $som = (Get-ChildItem -LiteralPath $pad -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
-            if ($som) { $totaal += $som }
+function Get-MapGrootte([string] $pad, [string[]] $ZonderMappen = @()) {
+    # Hoeveel bytes er in een map staan (alle submappen). Mappen met een naam uit -ZonderMappen tellen niet mee
+    # (bijvoorbeeld 'ImapMail' van Thunderbird: die gaat niet mee). Bestanden die alleen in OneDrive staan, tellen
+    # niet mee als je die niet mee wilt ($script:CloudMee uit): die worden dan ook niet gekopieerd.
+    if (-not $pad -or -not (Test-Path -LiteralPath $pad)) { return 0L }
+    $bestanden = Get-ChildItem -LiteralPath $pad -Recurse -File -Force -ErrorAction SilentlyContinue
+    if ($ZonderMappen.Count -gt 0) {
+        $bestanden = $bestanden | Where-Object {
+            $rel = $_.FullName.Substring($pad.Length).TrimStart('\')
+            -not ($ZonderMappen | Where-Object { $rel -like "$_\*" })
         }
     }
+    if (-not $script:CloudMee) { $bestanden = $bestanden | Where-Object { -not (Test-AlleenInCloud $_) } }
+    $som = ($bestanden | Measure-Object Length -Sum).Sum
+    if ($som) { return [int64]$som } else { return 0L }
+}
+
+function Get-MeeneemGrootte {
+    # Alles wat naar de schijf gaat, opgeteld: de zes vaste mappen, de extra mappen die je koos, je lettertypen,
+    # je Thunderbird (zonder ImapMail, die haalt Thunderbird opnieuw op) en Outlook-mailbestanden buiten Documenten.
+    # Zo kunnen we VOORAF zeggen of het past (E: 'vooraf zeggen hoeveel er meegaat').
+    $totaal = 0L
+    foreach ($m in $script:Mappen) { $totaal += Get-MapGrootte (Get-BekendeMap $m.Sleutel) }
+    foreach ($e in $script:ExtraMappen) { $totaal += Get-MapGrootte $e }
+    foreach ($f in @(Get-Lettertypen)) { $totaal += $f.Length }
+    $tb = Get-ThunderbirdProfiel
+    if ($tb) { $totaal += Get-MapGrootte $tb.Pad -ZonderMappen $script:ThunderbirdNietMee }
+    foreach ($p in @(Get-OutlookBestanden)) { $totaal += $p.Length }
     return $totaal
+}
+
+# ------------------------------------------- meenemen: bestanden slimmer (E) --
+
+function Test-AlleenInCloud($bestand) {
+    # Staat dit bestand alleen in OneDrive (in de cloud, niet echt op deze computer)? Windows geeft zo'n bestand
+    # (een 'placeholder' van Files On-Demand) het kenmerk RECALL_ON_DATA_ACCESS (0x400000) of RECALL_ON_OPEN
+    # (0x40000), en voor oude programma's ook OFFLINE (0x1000). Zie de Microsoft-documentatie over
+    # 'File attribute constants' (learn.microsoft.com/windows/win32/fileio/file-attribute-constants).
+    # Let op: op de testcomputer van BugOS stond geen OneDrive; dit is getest met nep-kenmerken, niet met echte.
+    $a = [int64]$bestand.Attributes
+    return (($a -band 0x400000) -ne 0) -or (($a -band 0x40000) -ne 0) -or (($a -band 0x1000) -ne 0)
+}
+
+function Get-CloudBestanden {
+    # Hoeveel bestanden in de mappen die meegaan alleen in OneDrive staan, hoe groot samen, en een paar namen als
+    # voorbeeld. Die moeten eerst gedownload worden (dat doet Windows vanzelf als we ze kopiëren, maar dat kan lang
+    # duren en vraagt internet), of ze blijven in OneDrive: dan kun je ze in BugOS via onedrive.live.com openen.
+    $aantal = 0; $bytes = 0L
+    $voorbeelden = New-Object System.Collections.Generic.List[string]
+    $bronnen = @($script:Mappen | ForEach-Object { Get-BekendeMap $_.Sleutel }) + @($script:ExtraMappen)
+    foreach ($pad in $bronnen) {
+        if (-not $pad -or -not (Test-Path -LiteralPath $pad)) { continue }
+        foreach ($f in @(Get-ChildItem -LiteralPath $pad -Recurse -File -Force -ErrorAction SilentlyContinue)) {
+            if (-not (Test-AlleenInCloud $f)) { continue }
+            $aantal++; $bytes += $f.Length
+            if ($voorbeelden.Count -lt 8) { $voorbeelden.Add($f.Name) }
+        }
+    }
+    return [pscustomobject]@{ Aantal = $aantal; Bytes = $bytes; Voorbeelden = $voorbeelden.ToArray() }
+}
+
+function Get-Lettertypen {
+    # De lettertypen die JIJ installeerde (per gebruiker), alleen echte lettertypebestanden.
+    if (-not (Test-Path -LiteralPath $script:LettertypeMap)) { return @() }
+    return @(Get-ChildItem -LiteralPath $script:LettertypeMap -File -Force -ErrorAction SilentlyContinue |
+        Where-Object { $_.Extension -in @('.ttf', '.otf', '.ttc', '.otc') })
+}
+
+# Uit het Thunderbird-profiel gaat niet mee: ImapMail (een kopie van de mail op de server, die haalt Thunderbird
+# opnieuw op; kan vele GB zijn) en wat Thunderbird zelf opnieuw maakt. Wachtwoorden en cookies staan in de /XF-lijst
+# van Copy-ThunderbirdProfiel (net als bij Firefox: de regel van de eigenaar).
+$script:ThunderbirdNietMee = @('ImapMail', 'cache2', 'startupCache', 'shader-cache', 'crashes', 'minidumps', 'saved-telemetry-pings', 'datareporting', 'sessionstore-backups')
+
+function Get-ThunderbirdProfiel {
+    # Het standaardprofiel van Thunderbird, of $null als Thunderbird er niet is.
+    try { return @(Get-FirefoxProfielen -Map $script:ThunderbirdMap | Where-Object { $_.Standaard }) | Select-Object -First 1 }
+    catch { return $null }
+}
+
+function Copy-ThunderbirdProfiel([string] $bron, [string] $doel) {
+    # Je Thunderbird: accounts, mappen op deze computer ('Lokale mappen', POP-mail), adresboek, filters en
+    # instellingen. NOOIT de wachtwoorden (logins.json, key4.db): in BugOS vraagt Thunderbird ze één keer.
+    $xf = @('logins.json', 'logins-backup.json', 'logins.db', 'logins.db-wal', 'logins.db-shm', 'key4.db', 'key3.db', 'signons.sqlite', 'cookies.sqlite*', 'sessionstore*', 'parent.lock', '.parentlock', 'lock')
+    $argumenten = @($bron, $doel, '/E', '/R:1', '/W:1', '/XJ', '/NFL', '/NDL', '/NJH', '/NJS', '/NP', '/XF') + $xf + @('/XD') + $script:ThunderbirdNietMee
+    $null = & robocopy @argumenten
+    if ($LASTEXITCODE -ge 16) { throw (T 'Thunderbird kopiëren lukte niet.' 'Copying Thunderbird failed.') }
+}
+
+function Get-OutlookBestanden {
+    # Outlook-mailbestanden (.pst) die NIET al in Documenten staan (die gaan daar al mee). .ost-bestanden laten we
+    # liggen: dat is alleen een kopie van wat op de server staat.
+    if (-not (Test-Path -LiteralPath $script:OutlookMap)) { return @() }
+    return @(Get-ChildItem -LiteralPath $script:OutlookMap -Filter '*.pst' -File -Force -ErrorAction SilentlyContinue)
+}
+
+function Test-ExtraMap([string] $pad, [string] $doelSchijf = '') {
+    # Mag deze map mee als extra map? Geeft '' (ja) of de reden (nee), in gewone woorden.
+    # Niet: iets dat niet bestaat, een hele schijf (C:\ of D:\: kies een map ERIN, anders sleep je ook Windows
+    # of programma's mee), de mappen van Windows zelf, een map die al meegaat (of erin zit), de USB-schijf zelf.
+    if (-not $pad -or -not (Test-Path -LiteralPath $pad -PathType Container)) { return (T 'Die map bestaat niet.' 'That folder does not exist.') }
+    $vol = [System.IO.Path]::GetFullPath($pad).TrimEnd('\')
+    if ($vol -match '^[A-Za-z]:$') { return (T 'Kies een map op die schijf, niet de hele schijf.' 'Choose a folder on that drive, not the whole drive.') }
+    if ($doelSchijf -and $vol.StartsWith($doelSchijf.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)) {
+        return (T 'Die map staat op de USB-schijf zelf.' 'That folder is on the USB drive itself.')
+    }
+    foreach ($systeem in @($env:windir, $env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:ProgramData, $env:APPDATA, $env:LOCALAPPDATA)) {
+        if ($systeem -and ($vol + '\').StartsWith($systeem.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
+            return (T 'Dat is een map van Windows of van je programma''s. Die werkt niet op BugOS.' 'That is a folder of Windows or your programs. It does not work on BugOS.')
+        }
+    }
+    foreach ($al in @($script:Mappen | ForEach-Object { Get-BekendeMap $_.Sleutel }) + @($script:ExtraMappen)) {
+        if (-not $al) { continue }
+        $alVol = [System.IO.Path]::GetFullPath($al).TrimEnd('\')
+        if (($vol + '\').StartsWith($alVol + '\', [StringComparison]::OrdinalIgnoreCase)) { return (T 'Die map gaat al mee.' 'That folder already goes along.') }
+        if (($alVol + '\').StartsWith($vol + '\', [StringComparison]::OrdinalIgnoreCase)) {
+            return (T 'In die map zit een map die al meegaat. Kies een map die er niet omheen zit.' 'That folder contains a folder that already goes along. Choose one that does not.')
+        }
+    }
+    return ''
+}
+
+function Get-ExtraNaam([string] $pad, [System.Collections.Generic.HashSet[string]] $gebruikt) {
+    # De naam van een extra map op de schijf (Extra\<naam>): de mapnaam, en bij twee dezelfde (D:\Foto's en
+    # E:\Foto's) 'Foto's (2)'. Tekens die op een FAT32-stick of in BugOS lastig zijn, worden een _.
+    $naam = (Split-Path $pad -Leaf) -replace '[<>:"/\\|?*\x00-\x1f]', '_'
+    if (-not $naam) { $naam = 'Map' }
+    $kandidaat = $naam; $n = 2
+    while ($gebruikt.Contains($kandidaat)) { $kandidaat = "$naam ($n)"; $n++ }
+    [void]$gebruikt.Add($kandidaat)
+    return $kandidaat
+}
+
+function Get-TeGrootVoorFat32 {
+    # FAT32 (veel USB-sticks) kan geen bestanden van 4 GB of groter bewaren. Welke van de bestanden die meegaan zijn
+    # dat? Dan kunnen we het VOORAF zeggen in plaats van halverwege.
+    $grens = 4GB - 1
+    $uit = New-Object System.Collections.Generic.List[object]
+    $bronnen = @($script:Mappen | ForEach-Object { Get-BekendeMap $_.Sleutel }) + @($script:ExtraMappen)
+    foreach ($pad in $bronnen) {
+        if (-not $pad -or -not (Test-Path -LiteralPath $pad)) { continue }
+        foreach ($f in @(Get-ChildItem -LiteralPath $pad -Recurse -File -Force -ErrorAction SilentlyContinue)) {
+            if ($f.Length -gt $grens -and -not ((-not $script:CloudMee) -and (Test-AlleenInCloud $f))) { $uit.Add($f) }
+        }
+    }
+    foreach ($p in @(Get-OutlookBestanden)) { if ($p.Length -gt $grens) { $uit.Add($p) } }
+    return $uit.ToArray()
 }
 
 # ------------------------------------------------- meenemen: formaat 2 --
@@ -165,6 +301,19 @@ $script:FirefoxMap = "$env:APPDATA\Mozilla\Firefox"
 # de schijf vol en BugOS heeft ze niet nodig. We zeggen wel welke het waren.
 $script:FirefoxGrens = 300MB
 $script:FirefoxOverslagen = @()
+# Thunderbird bewaart zijn profielen op dezelfde manier als Firefox (profiles.ini met [Profile..] en [Install..]),
+# alleen in een andere map. Daarom leest Get-FirefoxProfielen ook die van Thunderbird (parameter -Map).
+$script:ThunderbirdMap = "$env:APPDATA\Thunderbird"
+# Lettertypen die je zelf installeerde, staan sinds Windows 10 (1809) per gebruiker hier. Die van Windows zelf
+# (C:\Windows\Fonts) nemen we NIET mee: die zijn van Microsoft en mogen niet zomaar naar een andere computer.
+$script:LettertypeMap = "$env:LOCALAPPDATA\Microsoft\Windows\Fonts"
+# Outlook bewaart losse mailbestanden (.pst) in Documenten\Outlook-bestanden (gaat al mee met Documenten) of hier.
+$script:OutlookMap = "$env:LOCALAPPDATA\Microsoft\Outlook"
+# Extra mappen die je zelf kiest (bijvoorbeeld op D:), bovenop de vaste zes. Volle paden.
+$script:ExtraMappen = New-Object System.Collections.Generic.List[string]
+# Bestanden die alleen in OneDrive (de cloud) staan, en of je die mee wilt (eerst downloaden) of niet.
+$script:Cloud = $null
+$script:CloudMee = $true
 
 function Get-Waarde($obj, [string] $naam) {
     # Een eigenschap lezen die er misschien niet is. Met Set-StrictMode geeft $obj.Naam anders een fout als de
@@ -449,11 +598,12 @@ function Get-ChromiumProfielen {
     return $uit.ToArray()
 }
 
-function Get-FirefoxProfielen {
+function Get-FirefoxProfielen([string] $Map = $script:FirefoxMap) {
     # Alle Firefox-profielen uit profiles.ini, met de nieuwste bladwijzer-back-up (Firefox maakt die zelf elke dag,
-    # als .jsonlz4) en welk profiel het standaardprofiel is.
+    # als .jsonlz4) en welk profiel het standaardprofiel is. Met -Map $script:ThunderbirdMap: die van Thunderbird
+    # (zelfde opbouw; daar is geen bladwijzer-back-up, dus Backup blijft leeg).
     $uit = New-Object System.Collections.Generic.List[object]
-    $ini = Join-Path $script:FirefoxMap 'profiles.ini'
+    $ini = Join-Path $Map 'profiles.ini'
     if (-not (Test-Path -LiteralPath $ini)) { return $uit.ToArray() }
     # profiles.ini in stukken [Kopje] met sleutel=waarde.
     $stukken = New-Object System.Collections.Generic.List[object]
@@ -468,7 +618,7 @@ function Get-FirefoxProfielen {
     foreach ($s in $stukken) { if ($s['_kop'] -like 'Install*' -and $s['Default']) { $installStandaard = $s['Default']; break } }
     $profielen = @($stukken | Where-Object { $_['_kop'] -like 'Profile*' -and $_['Path'] })
     foreach ($s in $profielen) {
-        $pad = if ($s['IsRelative'] -eq '1') { Join-Path $script:FirefoxMap ($s['Path'] -replace '/', '\') } else { $s['Path'] }
+        $pad = if ($s['IsRelative'] -eq '1') { Join-Path $Map ($s['Path'] -replace '/', '\') } else { $s['Path'] }
         if (-not (Test-Path -LiteralPath $pad)) { continue }
         if ($installStandaard) { $isStandaard = ($s['Path'] -eq $installStandaard) }
         else { $isStandaard = ($s['Default'] -eq '1') -or ($profielen.Count -eq 1) }
@@ -511,11 +661,17 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
     $doel = Join-Path $doelSchijf 'BugOS-Switch'
     New-Item -ItemType Directory -Force -Path $doel | Out-Null
     $stap = 0
-    # De mappen, en daarna: bladwijzers, het Firefox-profiel, de achtergrond, en instellingen/wifi/printers/programma's.
-    $aantal = $script:Mappen.Count + 4
+    # De mappen, en daarna: extra mappen, lettertypen, e-mail, bladwijzers, het Firefox-profiel, de achtergrond, en
+    # instellingen/wifi/printers/programma's.
+    $aantal = $script:Mappen.Count + 7
     # Mappen waar een paar bestanden niet mee konden (open in een programma, groter dan 4 GB op FAT32, alleen in
     # OneDrive): de rest gaat gewoon door (U094).
     $script:Deels = @()
+    # Wil je de bestanden die alleen in OneDrive staan niet mee (eerst downloaden duurt lang), dan slaat robocopy
+    # bestanden met het kenmerk OFFLINE over (/XA:O). Windows geeft dat kenmerk aan OneDrive-bestanden die alleen in
+    # de cloud staan. Wat er overblijft, staat in bugos-switch.json (cloud), zodat BugOS het kan zeggen.
+    $cloudArg = @()
+    if (-not $script:CloudMee) { $cloudArg = @('/XA:O') }
     foreach ($m in $script:Mappen) {
         $stap++
         $bron = Get-BekendeMap $m.Sleutel
@@ -523,10 +679,65 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
         if ($bron -and (Test-Path $bron)) {
             # /E alle submappen, /R:1 /W:1 niet eindeloos wachten, /XJ geen snelkoppel-lussen,
             # /XF geen Windows-hulpbestanden (die zie je anders in elke map in BugOS) (U096).
-            $null = robocopy $bron (Join-Path $doel $m.Naam) /E /R:1 /W:1 /XJ /NFL /NDL /NJH /NJS /NP /XF desktop.ini Thumbs.db
+            $null = robocopy $bron (Join-Path $doel $m.Naam) /E /R:1 /W:1 /XJ /NFL /NDL /NJH /NJS /NP @cloudArg /XF desktop.ini Thumbs.db
             # robocopy: 8 = een paar bestanden niet, 16 = helemaal mislukt (bijv. de schijf is weg).
             if ($LASTEXITCODE -ge 16) { throw (T "Kopiëren van $($m.Naam) lukte niet." "Copying $($m.Naam) failed.") }
             if ($LASTEXITCODE -ge 8) { $script:Deels += $m.Naam }
+        }
+    }
+
+    # Extra mappen die je zelf koos (bijvoorbeeld D:\Foto's), elk in Extra\<naam>. Een vorige keer kan andere
+    # extra mappen hebben gehad: die blijven op de schijf staan, maar BugOS kijkt alleen naar wat in de JSON staat.
+    $stap++
+    & $Voortgang ([int](100 * $stap / $aantal)) (T 'Kopiëren: je andere mappen...' 'Copying: your other folders...')
+    $extra = New-Object System.Collections.Generic.List[object]
+    $gebruikt = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    foreach ($e in $script:ExtraMappen) {
+        if (-not (Test-Path -LiteralPath $e)) { continue }
+        $naam = Get-ExtraNaam $e $gebruikt
+        $null = robocopy $e (Join-Path (Join-Path $doel 'Extra') $naam) /E /R:1 /W:1 /XJ /NFL /NDL /NJH /NJS /NP @cloudArg /XF desktop.ini Thumbs.db
+        if ($LASTEXITCODE -ge 16) { throw (T "Kopiëren van $naam lukte niet." "Copying $naam failed.") }
+        if ($LASTEXITCODE -ge 8) { $script:Deels += $naam }
+        $extra.Add([ordered]@{ naam = $naam; map = "Extra/$naam"; van = $e })
+    }
+
+    # Je eigen lettertypen (alleen die jij installeerde, niet die van Windows).
+    $stap++
+    & $Voortgang ([int](100 * $stap / $aantal)) (T 'Lettertypen meenemen...' 'Taking fonts...')
+    $letters = @(Get-Lettertypen)
+    if ($letters.Count -gt 0) {
+        $lmap = Join-Path $doel 'Lettertypen'
+        New-Item -ItemType Directory -Force -Path $lmap | Out-Null
+        foreach ($f in $letters) { Copy-Item -LiteralPath $f.FullName -Destination (Join-Path $lmap $f.Name) -Force -ErrorAction SilentlyContinue }
+    }
+
+    # E-mail: je Thunderbird (zonder wachtwoorden), en Outlook-mailbestanden (.pst) die niet al in Documenten staan.
+    $stap++
+    & $Voortgang ([int](100 * $stap / $aantal)) (T 'E-mail meenemen...' 'Taking e-mail...')
+    $tbProfiel = $null
+    $tb = Get-ThunderbirdProfiel
+    if ($tb) {
+        try {
+            Copy-ThunderbirdProfiel $tb.Pad (Join-Path (Join-Path $doel 'Thunderbird') $tb.Profiel)
+            $tbProfiel = "Thunderbird/$($tb.Profiel)"
+        } catch { Write-Verbose 'Thunderbird niet gekopieerd.' }
+    }
+    $pst = New-Object System.Collections.Generic.List[string]
+    $outlook = @(Get-OutlookBestanden)
+    if ($outlook.Count -gt 0) {
+        $omap = Join-Path $doel 'Outlook'
+        New-Item -ItemType Directory -Force -Path $omap | Out-Null
+        foreach ($p in $outlook) {
+            # Een .pst die open is in Outlook, kan niet gekopieerd worden: dan staat hij niet in de lijst.
+            try { Copy-Item -LiteralPath $p.FullName -Destination (Join-Path $omap $p.Name) -Force; $pst.Add("Outlook/$($p.Name)") }
+            catch { $script:Deels += 'Outlook' }
+        }
+    }
+    # De .pst-bestanden die al met Documenten meegingen, ook noemen: BugOS legt dan uit hoe je ze opent.
+    $docs = Get-BekendeMap 'MyDocuments'
+    if ($docs -and (Test-Path -LiteralPath $docs)) {
+        foreach ($p in @(Get-ChildItem -LiteralPath $docs -Filter '*.pst' -Recurse -File -Force -ErrorAction SilentlyContinue)) {
+            $pst.Add('Documents/' + ($p.FullName.Substring($docs.TrimEnd('\').Length + 1) -replace '\\', '/'))
         }
     }
 
@@ -607,6 +818,19 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
     if ($null -ne $programmas) { $info.programmas = @($programmas) }
     $info.browsers = @($browsers.ToArray())
     if ($firefoxProfiel) { $info.firefox_profiel = $firefoxProfiel }
+    # Bestanden slimmer (E). Elk veld alleen als er iets is: een ontbrekend veld = 'niets van dit soort'.
+    if ($extra.Count -gt 0) { $info.extra = @($extra.ToArray()) }
+    if ($letters.Count -gt 0) { $info.lettertypen = [ordered]@{ map = 'Lettertypen'; aantal = $letters.Count } }
+    if ($tbProfiel) { $info.thunderbird_profiel = $tbProfiel }
+    if ($pst.Count -gt 0) { $info.outlook = [ordered]@{ pst = @($pst.ToArray()) } }
+    if ($script:Cloud -and $script:Cloud.Aantal -gt 0) {
+        $info.cloud = [ordered]@{
+            aantal      = $script:Cloud.Aantal
+            bytes       = $script:Cloud.Bytes
+            voorbeelden = @($script:Cloud.Voorbeelden)
+            meegenomen  = [bool]$script:CloudMee
+        }
+    }
     # -Depth: standaard stopt ConvertTo-Json na 2 lagen, en de muis-instellingen zitten op laag 3.
     $info | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $doel 'bugos-switch.json') -Encoding UTF8
     & $Voortgang 100 (T 'Klaar!' 'Done!')
@@ -1504,8 +1728,12 @@ $Paginas += {
     $groot = [math]::Round((Get-MeeneemGrootte) / 1GB, 1)
     # In gewone woorden wat er mee gaat (formaat 2, zie FORMAT.md), en heel duidelijk dat wachtwoorden NOOIT
     # meegaan: dat is de keuze van de eigenaar, en mensen moeten weten dat ze hun wifi-wachtwoord nog één keer nodig
-    # hebben. Kort gehouden, zodat de pagina ook op 150% zonder schuifbalk past.
-    $y = Nieuw-Tekst (T "Dit gaat mee naar een USB-schijf ($groot GB): je bestanden (documenten, foto's, muziek, video's, bureaublad, downloads), je bladwijzers en achtergrond, je instellingen (taal, toetsenbord, tijdzone, donker of licht, muis), de namen van je wifi-netwerken, je netwerkprinters en een lijstje van je programma's. In BugOS zet je alles terug met één klik." "This goes to a USB drive ($groot GB): your files (documents, photos, music, videos, desktop, downloads), your bookmarks and wallpaper, your settings (language, keyboard, time zone, dark or light, mouse), the names of your Wi-Fi networks, your network printers and a list of your programs. In BugOS you put it all back with one click.") 0
+    # hebben. Kort gehouden (de rij 'andere mappen' kwam erbij), zodat de pagina ook op 150% zonder schuifbalk past.
+    # Geen woorden met een koppelteken aan het eind van de zin: Windows brak 'wifi-namen' af als 'wifi' + '-namen' (en
+    # een koppelteken dat niet afbreekt, U+2011, tekent Windows Forms als 'wifi- namen').
+    # De grootte staat in een eigen label: die verandert als je een extra map toevoegt.
+    $script:W.groot = Nieuw-Label (T "Dit gaat mee naar een USB-schijf ($groot GB):" "This goes to a USB drive ($groot GB):") 0 0 $null -Vet
+    $y = Nieuw-Tekst (T "je bestanden, bladwijzers, achtergrond, e-mail, eigen lettertypen, instellingen, netwerkprinters, de namen van je wifi en een lijstje van je programma's." "your files, bookmarks, wallpaper, e-mail, own fonts, settings, Wi-Fi names, network printers and a list of your programs.") ([math]::Ceiling($script:W.groot.Height / $script:Schaal))
     $y = Nieuw-Tekst (T 'Wachtwoorden gaan nooit mee, ook niet van je wifi of je browser. Gebruik een andere schijf dan de USB-stick voor BugOS (stap 4): die wordt gewist.' 'Passwords never go along, not even for your Wi-Fi or browser. Use a different drive than the USB stick for BugOS (step 4): that one is erased.') ($y + 8) $Grijs
     $y = Nieuw-Tekst (T 'Kies de USB-schijf:' 'Choose the USB drive:') ($y + 12) -Vet
     # De keuzelijst en de knop naast elkaar (niet onder elkaar): zo past de langere uitleg hierboven zonder
@@ -1519,18 +1747,88 @@ $Paginas += {
     }
     if ($lijst.Items.Count -gt 0) { $lijst.SelectedIndex = 0 }
     $script:W.knop = Nieuw-Knop (T 'Bestanden kopiëren' 'Copy files') 316 ($y + 4) 220 'hoofd'
-    $script:W.balk = Nieuw-Balk 0 ($y + 62) ($script:Breedte - 4) $vlak
-    $script:W.status = Nieuw-Label '' ($y + 80) 48 $Grijs
+    # Extra mappen (E): ook iets anders dan de vaste zes, bijvoorbeeld een map op een tweede schijf (D:). Links staat
+    # wat je koos, rechts de knop om er een toe te voegen. Kiezen gaat met het gewone mapvenster van Windows.
+    # Een LinkLabel: als er extra mappen zijn, staat er een klikbaar '(weghalen)' achter, om de keuze ongedaan te maken.
+    $script:W.extra = New-Object System.Windows.Forms.LinkLabel
+    $script:W.extra.Font = $script:LetterGewoon
+    $script:W.extra.ForeColor = $Grijs
+    $script:W.extra.LinkColor = $Inkt
+    $script:W.extra.AutoEllipsis = $true
+    Plaats $script:W.extra 0 ($y + 58) 300 42
+    $vlak.Controls.Add($script:W.extra)
+    $script:W.extra.Add_LinkClicked({
+        $script:ExtraMappen.Clear()
+        Zet-ExtraTekst
+    })
+    $script:W.extraKnop = Nieuw-Knop (T 'Andere map toevoegen…' 'Add another folder…') 316 ($y + 56) 220
+    # script: zodat de knoppen (die later draaien, buiten deze pagina) de functie ook vinden.
+    function script:Zet-ExtraTekst {
+        # Wat er in de regel 'andere mappen' staat, en de nieuwe totale grootte bovenaan.
+        if ($script:ExtraMappen.Count -eq 0) {
+            $script:W.extra.Text = (T 'Ook een andere map of een tweede schijf (D:)?' 'Also another folder or a second drive (D:)?')
+            $script:W.extra.LinkArea = New-Object System.Windows.Forms.LinkArea(0, 0)
+        } else {
+            $namen = ($script:ExtraMappen | ForEach-Object { Split-Path $_ -Leaf }) -join ', '
+            $weg = (T '(weghalen)' '(remove)')
+            $tekst = (T "Ook mee: $namen " "Also: $namen ") + $weg
+            $script:W.extra.Text = $tekst
+            $script:W.extra.LinkArea = New-Object System.Windows.Forms.LinkArea(($tekst.Length - $weg.Length), $weg.Length)
+        }
+        $gb = [math]::Round((Get-MeeneemGrootte) / 1GB, 1)
+        $script:W.groot.Text = (T "Dit gaat mee naar een USB-schijf ($gb GB):" "This goes to a USB drive ($gb GB):")
+    }
+    Zet-ExtraTekst
+    $script:W.extraKnop.Add_Click({
+        $kies = New-Object System.Windows.Forms.FolderBrowserDialog
+        $kies.Description = (T 'Kies een map die ook mee moet naar BugOS' 'Choose a folder that should also go to BugOS')
+        $kies.ShowNewFolderButton = $false
+        if ($kies.ShowDialog() -ne 'OK') { return }
+        $letter = ''
+        if ($script:W.schijf.SelectedIndex -ge 0) { $letter = ($script:W.schijf.SelectedItem -split '\s+')[0] + '\' }
+        $reden = Test-ExtraMap $kies.SelectedPath $letter
+        if ($reden) { Toon $reden 'Warning'; return }
+        $script:ExtraMappen.Add([System.IO.Path]::GetFullPath($kies.SelectedPath).TrimEnd('\'))
+        Zet-ExtraTekst
+    })
+    $script:W.balk = Nieuw-Balk 0 ($y + 108) ($script:Breedte - 4) $vlak
+    $script:W.status = Nieuw-Label '' ($y + 122) 48 $Grijs
     $script:W.knop.Add_Click({
         $lijst = $script:W.schijf; $balk = $script:W.balk; $status = $script:W.status; $knop = $script:W.knop
         if ($lijst.SelectedIndex -lt 0) { Toon (T 'Steek eerst een USB-schijf in en ga even terug en weer verder.' 'Plug in a USB drive first, then go back and forward again.'); return }
         $letter = ($lijst.SelectedItem -split '\s+')[0] + '\'
+        # OneDrive (E): staan er bestanden alleen in de cloud? Vraag het VOORAF: eerst downloaden (kan lang duren
+        # en vraagt internet), of laten staan (dan zegt BugOS straks welke het waren).
+        $status.Text = (T 'Even kijken wat er mee gaat…' 'Checking what goes along…'); [System.Windows.Forms.Application]::DoEvents()
+        $script:CloudMee = $true
+        $script:Cloud = Get-CloudBestanden
+        if ($script:Cloud.Aantal -gt 0) {
+            $cgb = [math]::Round($script:Cloud.Bytes / 1GB, 1)
+            $script:CloudMee = Vraag (T "$($script:Cloud.Aantal) bestanden ($cgb GB) staan alleen in OneDrive, niet op deze computer. Zal Windows ze eerst downloaden, zodat ze ook meegaan? Dat kan even duren.`n`nKies je Nee, dan blijven ze in OneDrive. In BugOS open je ze dan via onedrive.live.com." "$($script:Cloud.Aantal) files ($cgb GB) are only in OneDrive, not on this computer. Should Windows download them first, so they come along too? That can take a while.`n`nIf you choose No, they stay in OneDrive. In BugOS you open them at onedrive.live.com.")
+        }
+        # FAT32 (E): bestanden van 4 GB of groter passen niet op zo'n stick. Zeg het nu, niet halverwege.
+        $fs = ''
+        try { $fs = (Get-Volume -DriveLetter $letter.Substring(0, 1) -ErrorAction Stop).FileSystem } catch { $fs = '' }
+        if ($fs -eq 'FAT32') {
+            $groot4 = @(Get-TeGrootVoorFat32)
+            if ($groot4.Count -gt 0) {
+                $namen = ($groot4 | Select-Object -First 3 | ForEach-Object { $_.Name }) -join ', '
+                if (-not (Vraag (T "Deze schijf (FAT32) kan geen bestanden van 4 GB of groter bewaren. $($groot4.Count) bestand(en) passen er dus niet op, zoals: $namen.`n`nGebruik je liever een andere schijf (exFAT of NTFS)? Kies dan Nee. Kies Ja om zonder die bestanden door te gaan." "This drive (FAT32) cannot hold files of 4 GB or more. $($groot4.Count) file(s) will not fit, such as: $namen.`n`nWould you rather use another drive (exFAT or NTFS)? Choose No. Choose Yes to continue without those files."))) {
+                    $status.Text = ''; return
+                }
+            }
+        }
         $vrij = (Get-PSDrive $letter.Substring(0, 1)).Free
         # Wat er al in BugOS-Switch staat (een eerdere keer), hoeft er niet nog een keer bij (U286).
         $al = 0L
         if (Test-Path -LiteralPath "$($letter)BugOS-Switch") { $al = [int64](Get-ChildItem -LiteralPath "$($letter)BugOS-Switch" -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum }
-        if ($vrij + $al -lt (Get-MeeneemGrootte)) { Toon (T 'Er is niet genoeg ruimte op die schijf.' 'Not enough space on that drive.') 'Warning'; return }
-        $knop.Enabled = $false; $verder.Enabled = $false
+        $nodig = Get-MeeneemGrootte
+        if ($vrij + $al -lt $nodig) {
+            # Precies zeggen hoeveel er nodig is en hoeveel er is, dan weet je hoe groot je andere schijf moet zijn.
+            Toon (T "Er is niet genoeg ruimte op die schijf: er moet $([math]::Round($nodig / 1GB, 1)) GB op, en er is $([math]::Round(($vrij + $al) / 1GB, 1)) GB. Gebruik een grotere schijf, of haal een extra map weg." "Not enough space on that drive: $([math]::Round($nodig / 1GB, 1)) GB must go on it, and there is $([math]::Round(($vrij + $al) / 1GB, 1)) GB. Use a bigger drive, or remove an extra folder.") 'Warning'
+            $status.Text = ''; return
+        }
+        $knop.Enabled = $false; $verder.Enabled = $false; $script:W.extraKnop.Enabled = $false
         try {
             Invoke-Meenemen $letter { param($p, $t) Zet-Balk $balk $p; $status.Text = $t; [System.Windows.Forms.Application]::DoEvents() }
             $nogVrij = (Get-PSDrive $letter.Substring(0, 1)).Free
@@ -1552,7 +1850,7 @@ $Paginas += {
                 $status.Text += ' ' + (T "Uit Firefox bleven een paar heel grote mappen thuis ($welke); websites maken die vanzelf opnieuw." "A few very large Firefox folders stayed behind ($welke); websites make them again by themselves.")
             }
         } catch { Toon $_.Exception.Message 'Error'; $status.Text = '' }
-        $knop.Enabled = $true; $verder.Enabled = $true
+        $knop.Enabled = $true; $verder.Enabled = $true; $script:W.extraKnop.Enabled = $true
     })
 }
 

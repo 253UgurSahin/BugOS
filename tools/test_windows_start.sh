@@ -32,7 +32,8 @@ PS="$(tr -d '\r' <"$ROOT/windows-switch/BugOS-Switch.ps1")"
 controle() { if eval "$1"; then echo "OK    $2"; else echo "FOUT  $2"; fouten=$((fouten + 1)); fi; }
 controle 'grep -q "DriveType -eq 3 -and (Test-UsbLetter" <<<"$PS" && ! grep -q "DriveType -in 2, 3" <<<"$PS"' \
     "U284: stap 2 biedt geen schijf in de computer (D:) aan als back-upplek"
-controle 'grep -q "\$vrij + \$al -lt (Get-MeeneemGrootte)" <<<"$PS"' "U286: nog een keer klikken telt wat er al op de schijf staat"
+# Sinds 'bestanden slimmer' staat de grootte eerst in $nodig (die noemt de melding ook), daarna de vergelijking.
+controle 'grep -q "\$nodig = Get-MeeneemGrootte" <<<"$PS" && grep -q "\$vrij + \$al -lt \$nodig" <<<"$PS"' "U286: nog een keer klikken telt wat er al op de schijf staat"
 controle '! grep -q "choose \"Automatic\"" <<<"$PS" && grep -q "Share disk with other operating systems" <<<"$PS"' \
     "U285: na 'Ruimte maken' noemt hij de keuze die het installatieprogramma echt heeft"
 controle 'grep -q "if (-not \$gelukt) { Remove-Item -LiteralPath \$doel" <<<"$PS"' "U287: een halve download wordt opgeruimd"
