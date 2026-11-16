@@ -170,6 +170,7 @@ QFrame#rij[gekozen="true"], QFrame#rij[gekozen="true"]:hover {{ background: {K['
 QLabel#stip {{ border-radius: 6px; min-width: 12px; max-width: 12px; min-height: 12px; max-height: 12px; }}
 QLabel#stip[soort="goed"] {{ background: {K['goed']}; }}
 QLabel#stip[soort="let_op"] {{ background: {K['let_op']}; }}
+QLabel#stip[soort="druk"] {{ background: {K['let_op']}; }}
 QTreeView#processen {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-radius: 16px; padding: 4px;
   font-size: 14px; selection-background-color: {K['knop_hover']}; selection-color: {K['tekst']}; outline: 0; }}
 QTreeView#processen:focus {{ border: 1px solid {K['accent']}; }}
@@ -420,7 +421,8 @@ class Status(QWidget):
         self.stip.setObjectName("stip")
         self.stip.setProperty("soort", "goed")
         lay.addWidget(self.stip, 0, Qt.AlignmentFlag.AlignVCenter)
-        self.tekst = label(t("Even kijken…", "Taking a look…"), "sub", wrap=False)
+        # Afbreken mag: de zin zegt nu ook wat er druk is (C-15), en mag de pagina dan niet breder maken.
+        self.tekst = label(t("Even kijken…", "Taking a look…"), "sub")
         lay.addWidget(self.tekst, 1)
 
     def zet(self, soort: str, zin: str) -> None:
@@ -505,10 +507,13 @@ class ProcesModel(QAbstractTableModel):
             f = QFont()
             f.setWeight(QFont.Weight.DemiBold)
             return f
-        if rol == Qt.ItemDataRole.ToolTipRole and kolom == 0:
+        if rol == Qt.ItemDataRole.ToolTipRole:
+            # Op elke kolom (niet alleen de naam): waarom deze regel grijs is (C-17).
             extra = ""
             if r.beschermd:
-                extra = t(" · hoort bij BugOS", " · part of BugOS") if r.eigen else t(" · niet van jou", " · not yours")
+                extra = (t(" · hoort bij BugOS: hier niet te beëindigen", " · part of BugOS: cannot be ended here")
+                         if r.eigen else t(" · niet van jou: hier niet te beëindigen",
+                                           " · not yours: cannot be ended here"))
             return f"{r.naam} · {r.pid}{extra}"
         return None
 

@@ -237,6 +237,13 @@ class Taakbeheer(Venster):
         self.proces_filter.setSourceModel(self.proces_model)
         self.tabel = ProcesTabel(self.proces_filter)
         p.lay.addWidget(self.tabel, 1)
+        # Wat de grijze regels betekenen (C-17): zonder uitleg leek grijs 'uit' of 'kapot'.
+        self.details_legenda = label(t("Grijze regels horen bij BugOS of zijn niet van jou: die kun je hier niet "
+                                       "beëindigen.",
+                                       "Grey rows are part of BugOS or are not yours: you cannot end those here."),
+                                     "klein")
+        self.details_legenda.setContentsMargins(4, 0, 4, 0)
+        p.lay.addWidget(self.details_legenda)
         self.details_leeg = label(t("Even kijken…", "Taking a look…"), "sub")
         self.details_leeg.setContentsMargins(4, 0, 4, 0)
         p.lay.addWidget(self.details_leeg)
@@ -454,7 +461,10 @@ class Taakbeheer(Venster):
         self.laatste = m
         self.processor_geschiedenis = (self.processor_geschiedenis + [m["processor"]])[-GESCHIEDENIS:]
         taken = m["taken"]
-        soort, zin = bt.advies(self.processor_geschiedenis, m["geheugen_gebruikt"], m["geheugen_totaal"], taken)
+        # De vorige uitslag gaat mee: 'druk' blijft staan tot het echt rustiger is (hysterese, C-15).
+        soort, zin = bt.advies(self.processor_geschiedenis, m["geheugen_gebruikt"], m["geheugen_totaal"], taken,
+                               vorige=getattr(self, "_advies_soort", "goed"))
+        self._advies_soort = soort
         for s in self.statussen:
             s.zet(soort, zin)
         gebruikt, totaal = m["geheugen_gebruikt"], m["geheugen_totaal"]
