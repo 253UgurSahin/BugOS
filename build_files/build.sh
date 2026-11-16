@@ -168,9 +168,52 @@ REGELS
     done
 fi
 
-# Steam als echt systeemprogramma (beste voor controllers en game-modus).
-# Lukt dat niet, dan zet bugos-first-boot.service Steam later als Flatpak neer.
-dnf5 install -y --skip-unavailable steam || true
+# Apps als Flatpak, niet als pakket in BugOS zelf (wens van de eigenaar, 2026-11-16): alles wat je in de Winkel
+# onder 'Mijn apps' ziet, moet je kunnen verwijderen, daar en in Instellingen > Apps. Een pakket in het beeld van BugOS
+# kun je niet los verwijderen (het systeem is 'onbreekbaar glas'), een Flatpak wel, en later weer installeren.
+# Daarom zitten Firefox en Steam niet meer in het beeld (Firefox stond in packages.txt, Steam werd hier met
+# 'dnf5 install steam' toegevoegd); bugos-first-boot zet ze na het installeren klaar als Flatpak van Flathub
+# (/usr/share/bugos/standaard-apps.txt), en onthoudt wat je daarna zelf verwijdert.
+# Voor Steam als Flatpak blijft steam-devices (packages.txt): de udev-regels voor controllers horen op de computer
+# zelf, niet in de Flatpak-doos. Game-modus werkt via de GameMode-portal, de FPS-teller via de MangoHud-uitbreiding
+# (bugos-flatpak-style).
+#
+# Brengt de basis zelf een app mee die ook in de Winkel staat, dan gaat dat pakket er hier ook uit, zodat de app niet
+# als 'hoort bij BugOS zelf' (niet te verwijderen) in de Winkel staat. Per regel: pakket, Flathub-id, en of BugOS de
+# Flatpak dan klaarzet (ja: je had die app, dus je houdt hem; nee: BugOS heeft er zelf iets voor).
+# Zelfde aanpak als bij Discover hierboven: alleen als het pakket er is, en zonder --nodeps. Maar heeft iets anders
+# het pakket nodig (rpm -e --test mislukt), dan blijft het staan en gaat de bouw door: een app die blijft, is beter
+# dan een beeld dat niet bouwt. De Winkel laat zo'n app dan niet in 'Mijn apps' zien (bugos_apps.mijn_apps_ids),
+# zodat daar nooit een app zonder 'Verwijderen' staat.
+WINKEL_PAKKETTEN=(
+    # Voor als de basis ooit zelf een browser meebrengt (kinoite-main heeft er nu geen).
+    "firefox org.mozilla.firefox ja"
+    "steam com.valvesoftware.Steam ja"
+    # Filelight zit in de basis (Kinoite 44), maar is verborgen: Bestanden laat zelf zien wat de meeste ruimte
+    # inneemt. Wie hem toch wil, haalt hem uit de Winkel (en kan hem dan ook weer verwijderen).
+    "filelight org.kde.filelight nee"
+    # Niet zeker of de basis deze meebrengt; is het zo, dan worden ze een Flatpak die je houdt.
+    "kcalc org.kde.kcalc ja"
+    "elisa-player org.kde.elisa ja"
+    "marble org.kde.marble ja"
+    "gwenview org.kde.gwenview ja"
+    "okular org.kde.okular ja"
+)
+STANDAARD_APPS=/usr/share/bugos/standaard-apps.txt
+for regel in "${WINKEL_PAKKETTEN[@]}"; do
+    read -r pakket app_id klaarzetten <<<"$regel"
+    rpm -q "$pakket" >/dev/null 2>&1 || continue
+    if rpm -e --test "$pakket" >/dev/null 2>&1; then
+        rpm -e "$pakket"
+        echo "Winkel: pakket $pakket weg; $app_id komt als Flatpak (klaarzetten: $klaarzetten)"
+        if [ "$klaarzetten" = ja ] && ! grep -qx "$app_id" "$STANDAARD_APPS"; then
+            printf '# Zat in de basis als pakket %s (build.sh): nu een Flatpak die je kunt verwijderen.\n%s\n' \
+                "$pakket" "$app_id" >>"$STANDAARD_APPS"
+        fi
+    else
+        echo "LET OP: pakket $pakket kan niet weg (iets anders heeft het nodig); $app_id blijft een deel van BugOS zelf."
+    fi
+done
 
 # 3. BugOS is een eigen systeem, net als Bazzite (naam, logo, ondertekende updates): zie system.sh.
 # shellcheck source=build_files/system.sh
@@ -185,6 +228,8 @@ update-desktop-database /usr/share/applications || true
 
 # 6. Diensten aanzetten.
 systemctl enable bugos-first-boot.service
+# Het vangnet voor de standaard-apps: zonder internet bij de eerste start later nog eens (zie de timer zelf).
+systemctl enable bugos-first-boot.timer
 # Geen gebruiker na het installeren? Dan alsnog KDE's assistent om er een te maken.
 systemctl enable bugos-user-check.service
 # De systeemdelen (wortel, /boot, EFI) niet als volle, rode schijven in KDE-bestandsvensters (B-06).

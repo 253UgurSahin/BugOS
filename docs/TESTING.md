@@ -105,6 +105,10 @@ Then restart the computer. Want to go back? Use Settings > Updates and info, or 
 - [ ] Open **Backup** and make a backup to a USB stick
 - [ ] Try **BugOS Switch** on a Windows PC (steps 1 and 2 are safe, they change nothing on your PC)
 - [ ] Open the **BugOS Store** and install something
+- [ ] After installing BugOS (with internet): Firefox, LibreOffice, VLC, Gwenview, Okular and Steam arrive by themselves within a few minutes, and Firefox opens web links. Firefox has the normal window title bar (no buttons in the tab bar)
+- [ ] Install BugOS **without internet**, sign in (it must not wait), then connect: within about 5 minutes the apps arrive (`systemctl status bugos-first-boot`)
+- [ ] Store → **My apps**: every app has **Remove** (also Firefox and Steam). Remove Firefox, restart twice: it does not come back by itself. Install it again from the Store: it is back
+- [ ] Settings → Apps and gaming → **Installed apps**: the same list, each with **Remove**; removing asks first and then the app is gone from the list
 - [ ] The ladybug at the bottom left is the **BugOS start menu**: search for "wifi" and open the page; the Windows key opens the menu
 - [ ] The **quick menu** (two sliders, next to the system tray): turn Wi-Fi off and on; the little arrow next to Wi-Fi opens Settings
 - [ ] Shut down from the start menu: you see the **BugOS shutdown screen** with big tiles; "Cancel" takes you back

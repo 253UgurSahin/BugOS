@@ -632,6 +632,47 @@ klopt(_rij_mijn >= 0 and isinstance(_oud, winkel.FlathubKaart) and _oud.weg.isVi
 gestart.clear()
 _oud.knop.click()
 klopt(gestart == [("flatpak", "run", OUD_ID)], f"F7: ... en Openen start die app ({gestart})")
+# Alles in 'Mijn apps' is te verwijderen (wens van de eigenaar, 2026-11-16). Vroeger stonden daar Firefox en Steam
+# als programma van BugOS zelf, zonder Verwijderen. Een app uit de selectie die als gewoon programma op de computer
+# staat (hier Steam als steam.desktop, zoals het oude pakket), hoort dus niet in 'Mijn apps'; wel bij Gamen, met Openen.
+(APPS / "steam.desktop").write_text("[Desktop Entry]
+Type=Application
+Name=Steam
+Exec=steam
+")
+w.systeem = winkel.systeem_apps(w.cat["apps"])
+w.installed = w.flatpaks | set(w.systeem)
+w.lijst.setCurrentRow(_rij_mijn)
+w.toon()
+even(50)
+klopt("com.valvesoftware.Steam" in w.systeem and w.kaarten
+      and all(k.weg.isVisibleTo(w) for k in w.kaarten)
+      and not any(k.app["id"] == "com.valvesoftware.Steam" for k in w.kaarten),
+      f"Winkel: elke app in 'Mijn apps' heeft Verwijderen; een programma van BugOS zelf staat er niet "
+      f"({[k.app['id'] for k in w.kaarten]})")
+_rij_gamen = next(i for i in range(w.lijst.count()) if w.lijst.sleutel(i) == "gamen")
+w.lijst.setCurrentRow(_rij_gamen)
+even(50)
+_steam = next((k for k in w.kaarten if k.app["id"] == "com.valvesoftware.Steam"), None)
+klopt(_steam is not None and _steam.knop.text() == "Openen" and not _steam.weg.isVisibleTo(w),
+      "Winkel: zo'n programma staat bij zijn onderwerp met Openen (er is niets te verwijderen)")
+(APPS / "steam.desktop").unlink()
+w.systeem = winkel.systeem_apps(w.cat["apps"])
+w.installed = w.flatpaks | set(w.systeem)
+# De gedeelde regels (bugos_apps): dezelfde voor de Winkel en Instellingen > Apps.
+import bugos_apps  # noqa: E402
+
+klopt(bugos_apps.mijn_apps_ids([{"id": "b.b.B"}, {"id": "a.a.A"}], {"z.z.Z", "a.a.A", "b.b.B", "-rf.x.y", "c.c.C"})
+      == ["b.b.B", "a.a.A", "c.c.C", "z.z.Z"],
+      "bugos_apps: eerst de selectie (in de volgorde van de catalogus), dan de rest op naam, nooit een vreemd id")
+klopt(bugos_apps.verwijder_opdracht("org.voorbeeld.Radio", False) == ["uninstall", "-y", "org.voorbeeld.Radio"]
+      and bugos_apps.verwijder_opdracht("org.voorbeeld.Radio", True)[-1] == "--delete-data"
+      and bugos_apps.verwijder_opdracht("--delete-data", True) == [] and bugos_apps.verwijder_opdracht("-rf.x.y", False) == [],
+      "bugos_apps: verwijderen alleen met een echt app-id, en de bestanden alleen als je dat aanvinkte")
+klopt(bugos_apps.verwijder_melding(0, "", "VLC")[1] == "goed"
+      and "beheerder" in bugos_apps.verwijder_melding(1, "error: Not authorized", "VLC")[0]
+      and bugos_apps.verwijder_melding(1, "iets anders", "VLC")[1] == "fout",
+      "bugos_apps: de melding na het verwijderen (gelukt, wachtwoord nodig, mislukt)")
 w.lijst.setCurrentRow(0)
 # 12. de kaarten van Flathub zijn niet breder dan die van BugOS
 w.zoek.setText("muziek")
@@ -1004,7 +1045,7 @@ _standaard = dict(r.split("=", 1) for r in _lijst.split("[Added Associations]")[
 klopt(all(_standaard.get(s) == "bugos-store.desktop" for s in SOORTEN),
       "15: kde-mimeapps.list: die vijf openen standaard de Winkel (ook voor Firefox: gio leest kde-mimeapps.list)")
 _bouw = (ROOT / "build_files/build.sh").read_text(encoding="utf-8")
-_stap2 = _bouw.split("# Geen KDE Discover")[1].split("# Steam als echt")[0]
+_stap2 = _bouw.split("# Geen KDE Discover")[1].split("# Apps als Flatpak, niet als pakket")[0]
 _rpm_e = [r.strip() for r in _stap2.splitlines() if r.strip().startswith("rpm -e")]
 klopt(all(p in _stap2 for p in ("plasma-discover-libs", "plasma-discover-kns", "plasma-discover-flatpak",
                                 "plasma-discover-notifier", "kde-partitionmanager", "kpmcore"))

@@ -1,0 +1,13 @@
+[Unit]
+Description=BugOS: try the default apps again later (no internet at the first start)
+
+[Timer]
+# Het vangnet naast Restart=on-failure in de dienst: een half uur na het opstarten, en daarna elke zes uur nadat de
+# dienst stopte. Is alles al klaargezet, dan stopt de dienst meteen weer (hij kijkt alleen in een bestandje).
+# Draait de dienst al (hij wacht op zijn volgende poging), dan doet de timer niets.
+OnBootSec=30min
+OnUnitInactiveSec=6h
+Unit=bugos-first-boot.service
+
+[Install]
+WantedBy=timers.target

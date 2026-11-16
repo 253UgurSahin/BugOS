@@ -187,8 +187,8 @@ bi.zet_aanwijzer("event7", "tikken", False)
 klopt(not next(a for a in bi.aanwijzers() if a.touchpad).tikken, "voorbeeld: tikken om te klikken uit")
 bi.zet_slot_na(0)
 klopt(bi.slot_na() == 0, "voorbeeld: scherm nooit op slot")
-bi.zet_standaard_app("pdf", "firefox.desktop")
-klopt(bi.standaard_app("pdf") == "firefox.desktop", "voorbeeld: een ander programma voor PDF")
+bi.zet_standaard_app("pdf", "org.mozilla.firefox.desktop")
+klopt(bi.standaard_app("pdf") == "org.mozilla.firefox.desktop", "voorbeeld: een ander programma voor PDF")
 bi.zet_standaard_printer("Canon_PIXMA")
 klopt([p.standaard for p in bi.printers()] == [False, True], "voorbeeld: een andere standaardprinter")
 
@@ -241,6 +241,38 @@ klopt(len(muis_p.vak.findChildren(mod.Groep)) == 2 and len(muis_p.vak.findChildr
 klopt(venster.paginas["inloggen"].ik.titel.text() == "Bugie" and "bugie" in venster.paginas["inloggen"].ik.uitleg.text(),
       "inloggen-pagina: naam en inlognaam")
 klopt(venster.paginas["programmas"].rijen["pdf"].uitleg.text() == "Firefox", "programma's-pagina: PDF opent nu met Firefox")
+# Geïnstalleerde apps (Apps en gamen): dezelfde lijst als 'Mijn apps' in de Winkel, en elke app heeft Verwijderen.
+import bugos_apps  # noqa: E402
+import bugos_settings_apps  # noqa: E402
+import bugos_shell  # noqa: E402
+
+bugos_apps.CATALOGUS = ROOT / "system_files" / "usr" / "share" / "bugos" / "store.json"
+apps_p = venster.paginas["mijnapps"]
+venster.ga_naar("mijnapps")
+QThreadPool.globalInstance().waitForDone(5000)
+app.processEvents()
+_namen = [r.titel.text() for r in apps_p.lijst.findChildren(mod.Rij)]
+klopt(_namen[:3] == ["Firefox", "LibreOffice", "VLC"] and "Spotify" in _namen
+      and set(apps_p.knoppen) == set(bugos_settings_apps.VOORBEELD_APPS)
+      and all(k.text() == "Verwijderen" for k in apps_p.knoppen.values()),
+      f"apps-pagina: de apps in de volgorde van de Winkel, elk met Verwijderen ({_namen})")
+klopt(venster.nav.sleutel(venster.nav.currentRow()) == "apps", "apps-pagina: staat onder Apps en gamen")
+_echt_exec = bugos_shell.VraagDialoog.exec
+_vragen: list = []
+bugos_shell.VraagDialoog.exec = lambda self: (_vragen.append((self.kop.text(), self.standaard)),
+                                              bugos_shell.QDialog.DialogCode.Rejected)[1]
+apps_p.knoppen["org.videolan.VLC"].click()
+klopt(_vragen == [("Verwijderen?", "Annuleren")] and apps_p.bezig is None and "org.videolan.VLC" in apps_p.knoppen,
+      "apps-pagina: eerst de vraag van de Winkel (Enter = Annuleren); Annuleren verwijdert niets")
+bugos_shell.VraagDialoog.exec = lambda self: bugos_shell.QDialog.DialogCode.Accepted
+apps_p.knoppen["org.videolan.VLC"].click()
+QThreadPool.globalInstance().waitForDone(5000)
+app.processEvents()
+QThreadPool.globalInstance().waitForDone(5000)
+app.processEvents()
+bugos_shell.VraagDialoog.exec = _echt_exec
+klopt("org.videolan.VLC" not in apps_p.knoppen and "VLC is verwijderd." in apps_p.melding.tekst.text(),
+      f"apps-pagina: Verwijderen haalt de app weg en zegt dat het gelukt is ({apps_p.melding.tekst.text()!r})")
 printers_p = venster.paginas["printers"]
 klopt(len(printers_p.lijst.findChildren(mod.Rij)) == 2 and "wacht" in printers_p.wacht_rij.titel.text(),
       "printers-pagina: twee printers en de wachtrij")

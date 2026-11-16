@@ -1,17 +1,25 @@
 [Unit]
-Description=BugOS: set up the default apps after installing
-# Geen Wants/After network-online: dan wachtte elke keer opstarten (ook lang na de eerste keer) op het
-# netwerk. Het script wacht zelf even op internet (U312).
-ConditionPathExists=!/var/lib/bugos/standaard-apps-2
+Description=BugOS: set up the default apps (Flatpak) after installing
+# Draait bij elke start, maar stopt meteen als alles al klaargezet is (het script kijkt zelf, zonder internet).
+# Zo pakt hij ook een app op die in een nieuwe BugOS-versie bij /usr/share/bugos/standaard-apps.txt kwam.
+# Geen Wants/After network-online.target: multi-user.target wacht op het starten van deze dienst, en dan wachtte elke
+# keer opstarten (en dus het inloggen) op het netwerk, ook lang na de eerste keer. Het script wacht zelf even op
+# internet met nm-online (U312).
 ConditionKernelCommandLine=!rd.live.image
+ConditionPathExists=/usr/bin/flatpak
 
 [Service]
 # exec, niet oneshot: dan is het opstarten klaar zodra dit begint, en wacht de computer niet op
 # het downloaden van de apps (of, zonder internet, op het steeds opnieuw proberen).
 Type=exec
 ExecStart=/usr/bin/bugos-first-boot
+# Geen internet of een hotspot: over vijf minuten opnieuw, zolang de computer aan staat. Daarnaast start
+# bugos-first-boot.timer hem af en toe opnieuw (bijvoorbeeld als iemand de dienst stopte).
 Restart=on-failure
 RestartSec=5min
+# Downloaden op de achtergrond: wat je zelf doet, gaat voor.
+Nice=10
+IOSchedulingClass=idle
 
 [Install]
 WantedBy=multi-user.target

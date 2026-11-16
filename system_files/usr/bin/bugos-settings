@@ -3,13 +3,13 @@
 
 Zoals Instellingen in Windows, maar rustiger: de dingen die je echt gebruikt (wifi,
 bluetooth, printers, geluid, scherm, energie, uiterlijk, meldingen, muis, makkelijker zien,
-tijd en taal, inloggen, standaardprogramma's, updates) regel je hier zelf. Klik op een
+tijd en taal, inloggen, geïnstalleerde apps, standaardprogramma's, updates) regel je hier zelf. Klik op een
 netwerk om te verbinden, op een luidspreker om die te gebruiken. Wie meer wil, vindt per
 onderdeel 'Meer instellingen (voor gevorderden)'.
 
 Gebruik:  bugos-settings [pagina]
           pagina = start | wifi | bluetooth | printers | geluid | scherm | energie | uiterlijk | meldingen
-                   | muis | zien | tijd | inloggen | programmas | updates | over
+                   | muis | zien | tijd | inloggen | mijnapps | programmas | spelen | updates | over
 
 Hier staan de startpagina en het venster; de andere pagina's staan in /usr/lib/bugos/python/bugos_settings_*.py.
 """
@@ -27,6 +27,8 @@ from bugos_ui import (  # noqa: E402
 )
 import bugos_ui  # noqa: E402  (DONKER en zet_thema via de module: ze veranderen terwijl de app open is)
 from bugos_settings_account import InloggenPagina, TijdPagina  # noqa: E402
+# Geïnstalleerde apps: dezelfde lijst en hetzelfde verwijderen als 'Mijn apps' in de Winkel (bugos_apps).
+from bugos_settings_apps import AppsPagina  # noqa: E402
 from bugos_settings_meldingen import MeldingenPagina, PrintersPagina, ProgrammasPagina  # noqa: E402
 from bugos_settings_netwerk import BluetoothPagina, WifiPagina  # noqa: E402
 # Doorloop (tabjes die naar een tweede regel gaan) staat in bugos_settings_onderdelen, zodat de pagina's hem ook
@@ -199,7 +201,7 @@ class StartPagina(Blad):
 
 PAGINAS: list[type[Blad]] = [StartPagina, WifiPagina, BluetoothPagina, PrintersPagina, GeluidPagina, SchermPagina,
                              EnergiePagina, UiterlijkPagina, MeldingenPagina, MuisPagina, ZienPagina, TijdPagina,
-                             InloggenPagina, ProgrammasPagina, SpelenPagina, UpdatesPagina, OverPagina]
+                             InloggenPagina, AppsPagina, ProgrammasPagina, SpelenPagina, UpdatesPagina, OverPagina]
 OUDE_NAMEN = {"schakelaars": "updates"}
 
 
@@ -239,9 +241,11 @@ GROEPEN: list[Indeling] = [
              [InloggenPagina, TijdPagina]),
     Indeling("zien", ZienPagina.icoon, "Makkelijker zien", "Easier to see",
              "Grotere letters, vergrootglas, voorlezen.", "Bigger text, magnifier, read aloud.", [ZienPagina]),
+    # Zoals Windows 11 (Apps > Geïnstalleerde apps): eerst je apps, met Verwijderen; dan de standaardprogramma's.
     Indeling("apps", SpelenPagina.icoon, "Apps en gamen", "Apps and gaming",
-             "Standaardprogramma's, game-modus en ontwikkelaarsmodus.", "Default programs, game mode and developer mode.",
-             [ProgrammasPagina, SpelenPagina]),
+             "Je apps verwijderen, standaardprogramma's, game-modus en ontwikkelaarsmodus.",
+             "Remove your apps, default programs, game mode and developer mode.",
+             [AppsPagina, ProgrammasPagina, SpelenPagina]),
     Indeling("systeem", UpdatesPagina.icoon, "Updates en info", "Updates and info",
              "Updates, terug naar de vorige versie, over deze computer.",
              "Updates, back to the previous version, about this computer.", [UpdatesPagina, OverPagina]),
@@ -408,7 +412,7 @@ class Instellingen(Venster):
 
     # Pagina's waar je een KDE-venster voor opent (koppelen, printer toevoegen) of een app voor installeert:
     # kom je terug in Instellingen, dan opnieuw kijken (U227).
-    VERVERS_BIJ_TERUGKOMEN = ("bluetooth", "printers", "programmas")
+    VERVERS_BIJ_TERUGKOMEN = ("bluetooth", "printers", "programmas", "mijnapps")
 
     def changeEvent(self, e) -> None:  # noqa: N802
         super().changeEvent(e)

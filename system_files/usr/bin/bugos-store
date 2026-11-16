@@ -35,33 +35,23 @@ from bugos_ui import px  # noqa: E402
 from PySide6.QtCore import QEvent, QProcess, QProcessEnvironment, QSize, Qt, QTimer  # noqa: E402
 from PySide6.QtGui import QIcon, QKeySequence, QPixmap, QShortcut  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QCheckBox, QDialog, QFrame, QHBoxLayout, QLabel, QScrollArea, QStackedWidget, QVBoxLayout, QWidget,
+    QFrame, QHBoxLayout, QLabel, QScrollArea, QStackedWidget, QVBoxLayout, QWidget,
 )
-from bugos_shell import VraagDialoog  # noqa: E402
 
-CATALOGUS = Path("/usr/share/bugos/store.json")
-ICOON_MAPPEN = [
-    Path("/var/lib/flatpak/appstream/flathub/x86_64/active/icons/128x128"),
-    Path("/var/lib/flatpak/appstream/flathub/x86_64/active/icons/64x64"),
-    Path.home() / ".local/share/flatpak/appstream/flathub/x86_64/active/icons/128x128",
-    # Meegeleverd met BugOS (build.sh): ook op een vers systeem en zonder internet een echt pictogram.
-    Path("/usr/share/bugos/store-icons"),
-]
-# Apps die BugOS als gewoon pakket heeft (niet als Flatpak): hun pictogram heet in het thema anders.
-THEMA_NAMEN = {"org.mozilla.firefox": "firefox", "com.valvesoftware.Steam": "steam"}
-if os.environ.get("BUGOS_APPICONEN"):
-    ICOON_MAPPEN.insert(0, Path(os.environ["BUGOS_APPICONEN"]))
-# Een geldig app-id (org.voorbeeld.App): alleen zo'n id gaat ooit naar flatpak. Nooit met '-' vooraan (geen optie).
-APP_ID = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]*(\.[A-Za-z0-9_-]+){2,}$")
+# De catalogus, de pictogrammen, het app-id en de lijst met Flatpak-apps staan in bugos_apps: Instellingen > Apps
+# gebruikt precies dezelfde (zie de uitleg daar). Hier onder dezelfde namen, zodat de rest van de Winkel (en de
+# tests) ze gewoon als winkel.APP_ID, winkel.lees_catalogus enz. blijven vinden.
+from bugos_apps import (  # noqa: E402
+    APP_ID, CATALOGUS, ICOON_MAPPEN, THEMA_NAMEN, flatpak_lijst, lees_catalogus, mijn_apps_ids, verwijder_melding,
+    verwijder_opdracht,
+)
+from bugos_apps import app_icoon as icoon_voor  # noqa: E402
+from bugos_apps import vraag_verwijderen as _vraag_verwijderen  # noqa: E402
 
 
 def app_naam(app: dict) -> str:
     """De naam van een app in jouw taal (de meeste zijn merknamen; 'Rekenmachine' heet in het Engels 'Calculator') (U209)."""
     return app.get("naam_en", app["naam"]) if TAAL != "nl" else app["naam"]
-
-
-def lees_catalogus(pad: Path = CATALOGUS) -> dict:
-    return json.loads(pad.read_text(encoding="utf-8"))
 
 
 def geinstalleerd() -> set[str]:
@@ -73,29 +63,13 @@ def geinstalleerd() -> set[str]:
     return {regel.strip() for regel in uit.splitlines() if regel.strip()}
 
 
-def flatpak_lijst() -> dict[str, dict]:
-    """Elke geïnstalleerde Flatpak-app: id -> {'naam': naam, 'bron': waar hij vandaan kwam (meestal 'flathub')}.
-    Zo kan 'Mijn apps' ook apps laten zien die niet uit de BugOS-selectie komen."""
-    if os.environ.get("BUGOS_GEINSTALLEERD") is not None:   # voor screenshots: de naam is het laatste stuk van het id
-        return {i: {"naam": i.rsplit(".", 1)[-1], "bron": "flathub"}
-                for i in filter(None, os.environ["BUGOS_GEINSTALLEERD"].split(","))}
-    if not bestaat("flatpak"):
-        return {}
-    _, uit = draai("flatpak", "list", "--app", "--columns=application,name,origin", timeout=20)
-    lijst = {}
-    for regel in uit.splitlines():
-        delen = [d.strip() for d in regel.split("\t")]
-        if delen and APP_ID.match(delen[0]):
-            lijst[delen[0]] = {"naam": delen[1] if len(delen) > 1 and delen[1] else delen[0].rsplit(".", 1)[-1],
-                               "bron": delen[2] if len(delen) > 2 else ""}
-    return lijst
-
-
-# Waar gewone programma's (geen Flatpak) hun .desktop-bestand hebben. Firefox en Steam zitten
-# bijvoorbeeld al in BugOS zelf: die zijn er dus al, ook al staan ze niet in 'flatpak list'.
+# Waar gewone programma's (geen Flatpak) hun .desktop-bestand hebben. Een app uit de catalogus die zo op de computer
+# staat (bijvoorbeeld Firefox die iemand zelf als pakket erbij zette met rpm-ostree), is er al, ook al staat hij niet
+# in 'flatpak list': dan biedt de Winkel hem niet nog eens aan. (Firefox en Steam zaten vroeger zo in BugOS zelf;
+# nu zijn het Flatpaks, zie bugos-first-boot, zodat je ze ook kunt verwijderen.)
 APP_MAPPEN = [Path("/usr/share/applications"), Path("/usr/local/share/applications"),
               Path.home() / ".local/share/applications"]
-# Sommige programma's heten als systeemprogramma anders dan in Flathub.
+# Sommige programma's heten als systeemprogramma anders dan in Flathub. Blijft staan voor wie ze zelf als pakket heeft.
 SYSTEEM_NAMEN = {
     "org.mozilla.firefox": ("org.mozilla.firefox", "firefox"),
     "com.valvesoftware.Steam": ("steam",),
@@ -114,17 +88,6 @@ def systeem_apps(apps: list[dict]) -> dict[str, Path]:
                 gevonden[app["id"]] = bestand
                 break
     return gevonden
-
-
-def icoon_voor(app_id: str) -> QIcon:
-    for map_ in ICOON_MAPPEN:
-        for ext in (".png", ".svg"):
-            bestand = map_ / f"{app_id}{ext}"
-            if bestand.is_file():
-                return QIcon(str(bestand)) if ext == ".svg" else QIcon(QPixmap(str(bestand)))
-    if QIcon.hasThemeIcon(app_id):
-        return QIcon.fromTheme(app_id)
-    return QIcon.fromTheme(THEMA_NAMEN.get(app_id, app_id), QIcon.fromTheme("application-x-executable"))
 
 
 def tekst(app: dict) -> str:
@@ -1267,7 +1230,8 @@ class Winkel(Venster):
         self.lijst = self.nav
         for c in self.cat["categorieen"]:
             self.lijst.voeg_toe(c["icoon"], c["nl" if TAAL == "nl" else "en"], c["id"])
-        if self.installed:
+        # 'Mijn apps' alleen als er iets te verwijderen is: daar staan alleen Flatpak-apps (zie toon()).
+        if self.flatpaks:
             self.mijn_apps_erbij()
         self.melding_weg = False   # zie toon(): mag een melding 'gelukt' nu weg (C-12)
         self._toon_zoek = ""       # de zoektekst bij de vorige toon()
@@ -1980,12 +1944,16 @@ class Winkel(Venster):
             apps = [a for a in self.cat["apps"] if past(a, zoek)]
             self.kop.setText(t(f"Zoeken: {zoek}", f"Search: {zoek}"))
         elif cat_id == "_mijn":
-            apps = [a for a in self.cat["apps"] if a["id"] in self.installed]
             self.kop.setText(t("Mijn apps", "My apps"))
-            # Daarna elke andere Flatpak-app op deze computer (ook van buiten de BugOS-selectie), op naam (F7).
-            picks = {a["id"].lower() for a in self.cat["apps"]}
-            anderen = [self.entry_van(f) for f in self.flatpaks if f.lower() not in picks and APP_ID.match(f)]
-            apps = apps + sorted(anderen, key=lambda e: zoeksleutel(naam_in_taal(e)))
+            # Alleen de Flatpak-apps: elke app hier heeft een werkende knop 'Verwijderen'. Een programma dat in BugOS
+            # zelf zit, kun je niet los verwijderen, en hoort dus niet bij 'Mijn apps' (wens van de eigenaar; vroeger
+            # stonden Firefox en Steam er zonder Verwijderen). Eerst de apps uit de BugOS-selectie, daarna elke
+            # andere Flatpak-app op deze computer (ook van buiten de selectie), op naam (F7). Dezelfde lijst als
+            # Instellingen > Apps (bugos_apps.mijn_apps_ids).
+            picks = {a["id"]: a for a in self.cat["apps"]}
+            ids = mijn_apps_ids(self.cat["apps"], self.flatpaks,
+                                sleutel=lambda i: zoeksleutel(naam_in_taal(self.entry_van(i))))
+            apps = [picks[i] if i in picks else self.entry_van(i) for i in ids]
         else:
             apps = [a for a in self.cat["apps"] if cat_id in a["cat"]]
             item = self.lijst.item(rij)
@@ -2057,25 +2025,21 @@ class Winkel(Venster):
 
     def vraag_verwijderen(self, app: dict) -> None:
         """Eerst vragen (de BugOS-vraag; Enter doet niets, want weg is weg); je bestanden van de app (inloggen,
-        instellingen) alleen weg als je dat aanvinkt (U464)."""
-        vraag = VraagDialoog(self, t("Verwijderen?", "Remove?"),
-                             t("{} van deze computer verwijderen?", "Remove {} from this computer?").format(app_naam(app)),
-                             t("Verwijderen", "Remove"), enter_is_nee=True)
-        vraag.vinkje = QCheckBox(t("Ook de instellingen en bestanden van deze app weggooien",
-                                   "Also delete this app's settings and files"))
-        lay = vraag.layout()
-        lay.insertWidget(lay.count() - 2, vraag.vinkje)   # onder de vraag, boven de knoppen
-        if vraag.exec() == QDialog.DialogCode.Accepted:
-            self.verwijder(app, vraag.vinkje.isChecked())
+        instellingen) alleen weg als je dat aanvinkt (U464). De vraag zelf staat in bugos_apps, zodat Instellingen >
+        Apps precies dezelfde stelt."""
+        met_gegevens = _vraag_verwijderen(self, app_naam(app))
+        if met_gegevens is not None:
+            self.verwijder(app, met_gegevens)
 
     def verwijder(self, app: dict, met_gegevens: bool) -> None:
-        if not APP_ID.match(app["id"]):
+        opdracht = verwijder_opdracht(app["id"], met_gegevens)
+        if not opdracht:   # geen echt app-id: nooit iets naar flatpak
             return
         self.bezig_met = app["id"]
         self.klus = "verwijder"
         self.meld(t(f"{app_naam(app)} wordt verwijderd…", f"Removing {app_naam(app)}…"), "bezig", app["id"])
         self.ververs_alles()
-        self.start_flatpak(["uninstall", "-y", app["id"]] + (["--delete-data"] if met_gegevens else []))
+        self.start_flatpak(opdracht)
 
     def start_flatpak(self, args: list[str]) -> None:
         """Installeren of verwijderen. Wordt de lijst van Flathub net ververst (dezelfde map op de computer), dan
@@ -2119,14 +2083,9 @@ class Winkel(Venster):
         if not self.zoek.text().strip() and rij >= 0 and self.lijst.sleutel(rij) == "_mijn":
             self.toon()
             self.zoek.setFocus()   # de kaart met de focus is weg: niet de focus kwijt (U482)
-        if code == 0:
-            self.meld(t(f"{naam} is verwijderd.", f"{naam} has been removed."), "goed", app_id)
-        elif any(w in uit.lower() for w in ("not authorized", "not allowed", "authentication", "authoriz")):
-            self.meld(t(f"{naam} verwijderen mag alleen met het wachtwoord van een beheerder.",
-                        f"Removing {naam} needs an administrator's password."), "fout", app_id)
-        else:
-            self.meld(t(f"{naam} verwijderen lukte niet. Probeer het nog eens.",
-                        f"Removing {naam} did not work. Please try again."), "fout", app_id)
+        # De melding (gelukt, wachtwoord nodig, mislukt) uit bugos_apps: dezelfde woorden als in Instellingen > Apps.
+        tekst_, soort = verwijder_melding(code, uit, naam)
+        self.meld(tekst_, soort, app_id)
         self.ververs_alles()
 
     def installeer(self, app: dict) -> None:
