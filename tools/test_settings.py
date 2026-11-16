@@ -251,6 +251,10 @@ apps_p = venster.paginas["mijnapps"]
 venster.ga_naar("mijnapps")
 QThreadPool.globalInstance().waitForDone(5000)
 app.processEvents()
+# De regels van een eerdere keer tekenen (deleteLater) echt weg, anders telt findChildren ze nog mee.
+from PySide6.QtCore import QCoreApplication, QEvent  # noqa: E402
+
+QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 _namen = [r.titel.text() for r in apps_p.lijst.findChildren(mod.Rij)]
 klopt(_namen[:3] == ["Firefox", "LibreOffice", "VLC"] and "Spotify" in _namen
       and set(apps_p.knoppen) == set(bugos_settings_apps.VOORBEELD_APPS)
