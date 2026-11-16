@@ -15,7 +15,7 @@ from bugos_drives import Schijf, mooie_maat
 from bugos_files_plekken import PAD_ROL, bijzondere_mappen, schijf_van, thuis, vrije_ruimte
 from bugos_files_acties import Klus
 from bugos_files_tegels import Sorteerder, TegelTekenaar, Voorbeelden
-from bugos_files_onderdelen import Zoekbalk, stijl
+from bugos_files_onderdelen import RechtsKlik, Zoekbalk, stijl
 from bugos_files_navigeren import Navigeren
 from bugos_files_bewerken import Bewerken, laat_klembord_los
 from bugos_files_computer import Computer
@@ -113,11 +113,17 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
         self.plak_knop.clicked.connect(self.plak)
         self.nieuw_knop = Knop(t("Nieuwe map", "New folder"), "gewoon", "lijn:map-plus")
         self.nieuw_knop.clicked.connect(self.nieuwe_map)
+        # Naast 'Nieuwe map': een leeg tekstbestand maken, zoals Nieuw > Tekstdocument in Windows (C-02).
+        self.tekst_knop = Knop(t("Nieuw tekstbestand", "New text file"), "gewoon", "lijn:document")
+        self.tekst_knop.clicked.connect(self.nieuw_tekstbestand)
         self.uitwerp_knop = Knop(t("Veilig verwijderen", "Safely remove"), "gewoon", "lijn:uitwerpen")
         self.uitwerp_knop.clicked.connect(self.uitwerpen_hier)
         self.leeg_knop = Knop(t("Prullenbak leegmaken", "Empty trash"), "gewoon", "lijn:prullenbak")
         self.leeg_knop.clicked.connect(self.leegmaken)
-        for k in (self.plak_knop, self.nieuw_knop, self.uitwerp_knop, self.leeg_knop):
+        # De knoppen bovenin, in de volgorde waarin ze hun woord houden als de ruimte krap wordt (C-03): 'Plakken'
+        # en 'Prullenbak leegmaken' zeggen met alleen een pictogram te weinig, dus die het langst. Zie pas_knoppen.
+        self.balk_knoppen = (self.leeg_knop, self.plak_knop, self.nieuw_knop, self.uitwerp_knop, self.tekst_knop)
+        for k in (self.plak_knop, self.nieuw_knop, self.tekst_knop, self.uitwerp_knop, self.leeg_knop):
             k.setMinimumHeight(HOOGTE)
             k.setMaximumHeight(HOOGTE)
             k.setProperty("volle_tekst", k.text())
@@ -125,6 +131,7 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
             k.setToolTip(k.toolTip() or k.text())
             balk.addWidget(k)
         self.plak_knop.hide()
+        self.balk_lay = balk   # voor pas_knoppen: hoeveel ruimte de balk heeft
         rechts.addLayout(balk)
 
         # Eén korte regel onder de balk: "8 items · 1 gekozen · 11 GB vrij".
@@ -165,8 +172,12 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
         self.lijst.setMouseTracking(True)
         self.lijst.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.lijst.setItemDelegate(TegelTekenaar(self.voorbeelden, bijzondere_mappen()))
+        # Het menu onder de rechtermuisknop: met de muis bij het loslaten (RechtsKlik, C-01), met het toetsenbord
+        # (de Menu-toets) via Qt's eigen contextmenu-sein.
         self.lijst.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.lijst.customContextMenuRequested.connect(self.menu)
+        self.lijst.customContextMenuRequested.connect(lambda punt: self.menu(punt, toetsenbord=True))
+        self.rechts_klik = RechtsKlik(self, self._rechts_geklikt)
+        self.rechts_klik.volg(self.lijst.viewport())
         self.lijst.activated.connect(self.geactiveerd)
         self.lijst.pressed.connect(self._muis_gedrukt)
         self.lijst.clicked.connect(self._muis_gedrukt)   # ook bij loslaten: een trage Ctrl+klik (U528)
@@ -189,6 +200,12 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
             ll.addWidget(w)
         self.leeg.setAcceptDrops(True)  # "Sleep er iets naartoe": dat moet dan ook werken
         self.leeg.installEventFilter(self)
+        # Ook in een lege map een menu (Nieuwe map, Nieuw tekstbestand, Plakken): daar staan geen tegels, dus het
+        # 'lege' vlak krijgt zelf een rechtermuisknop (C-01).
+        self.rechts_klik.volg(self.leeg)
+        # Het lege vlak kan de focus krijgen (met een klik, of na een vraag: focus_terug), anders viel die op de
+        # knop 'Thuis' in het pad (C-08). Met Tab gaat er niemand naartoe: er valt niets te kiezen.
+        self.leeg.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         ll.addStretch(2)
         self.computer = QScrollArea()
         self.computer.setFrameShape(QFrame.Shape.NoFrame)
@@ -249,9 +266,14 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
     # ----------------------------------------------------------- inhoud
     def ververs_staat(self) -> None:
         if self.in_computer:
+            # Vroeger stond hier 'Niets aangesloten' direct onder de titel: dat las als 'deze computer heeft niets'
+            # (C-09a). Of er een USB-stick in zit, zegt nu alleen het kopje 'USB-sticks en schijven' onderaan; hier
+            # alleen iets als er wel iets aangesloten is.
             n = len(self.lijst_schijven)
-            self.status.setText(t(f"{n} aangesloten", f"{n} connected") if n else
-                                t("Niets aangesloten", "Nothing connected"))
+            self.status.setText(t(f"{n} USB-stick of schijf aangesloten" if n == 1 else
+                                  f"{n} USB-sticks of schijven aangesloten",
+                                  f"{n} USB stick or drive connected" if n == 1 else
+                                  f"{n} USB sticks or drives connected") if n else "")
             self.stapel.setCurrentWidget(self.computer)
             self.keuzebalk.toon(0)
             self.plaats_keuzebalk()
@@ -332,11 +354,49 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
         # Smal venster (of grote letters): de knoppen bovenin alleen met hun pictogram (de naam als tip), anders
         # schoof de zoekbalk over het pad en viel 'Veilig verwijderen' half weg (U398).
         if hasattr(self, "leeg_knop"):
-            smal = self.width() < px(1260)
-            for k in (self.plak_knop, self.nieuw_knop, self.uitwerp_knop, self.leeg_knop):
-                k.setText("" if smal else k.property("volle_tekst"))
+            self.pas_knoppen()
         if hasattr(self, "keuzebalk"):
             self.plaats_keuzebalk()
+
+    def pas_knoppen(self) -> None:
+        """Welke knoppen bovenin hun woord houden (C-03). Vroeger verloren ze allemaal tegelijk hun woord onder de
+        1260 px, dus ook in een gewoon venster van 1120 px: dan stonden 'Plakken' en 'Prullenbak leegmaken' er als
+        raadseltje bij. Nu rekenen we: wat over is naast het pad (minstens 'Thuis › … › map') en de zoekbalk, gaat
+        naar de woorden, in de volgorde van self.balk_knoppen. Past een woord niet, dan alleen het pictogram, met de
+        naam als tip en voor de schermlezer (zoals vroeger in een smal venster, U398)."""
+        zichtbaar = [k for k in self.balk_knoppen if not k.isHidden()]
+        # Hoeveel breedte de balk heeft: de rechterkant van het venster min de marges (22 + 22).
+        rechts = self.width() - self.zij.width() - 44
+        vast = self.terug_knop.sizeHint().width() + self.vooruit_knop.sizeHint().width()
+        if not self.pad_vak.isHidden():
+            vast += px(240)                       # het pad mag niet onder 'Thuis › … › map' komen
+        else:
+            vast += self.titel.sizeHint().width()  # Prullenbak, Deze computer: de naam in de balk
+        if not self.zoek.isHidden():
+            vast += 180                           # de zoekbalk mag wat smaller dan zijn gewone 240
+        ruimte = rechts - vast - 8 * (len(zichtbaar) + 3)
+        # Eerst iedereen een pictogram (dat moet altijd passen), dan per knop het woord erbij zolang het past.
+        for k in zichtbaar:
+            k.setText("")
+        ruimte -= sum(k.sizeHint().width() for k in zichtbaar)
+        # 'Plakken' en 'Prullenbak leegmaken' krijgen hun woord als het past. De andere (Nieuwe map, Nieuw
+        # tekstbestand, Veilig verwijderen) alleen als het pad daarna nog ruim de tijd heeft (EXTRA): anders werd
+        # een diep pad onleesbaar kort (U272), voor knoppen die met hun pictogram en tip al duidelijk zijn.
+        extra = 0 if self.pad_vak.isHidden() else px(180)
+        for k in zichtbaar:
+            volle = k.property("volle_tekst") or ""
+            leeg = k.sizeHint().width()
+            k.setText(volle)
+            erbij = k.sizeHint().width() - leeg
+            if erbij + (0 if k in (self.plak_knop, self.leeg_knop) else extra) <= ruimte:
+                ruimte -= erbij
+            else:
+                k.setText("")
+        # Verborgen knoppen krijgen hun woord terug (anders verschijnt bijvoorbeeld 'Plakken' straks zonder woord
+        # terwijl er ruimte genoeg is: pas_knoppen loopt opnieuw zodra de knoppen veranderen, zie bouw_pad).
+        for k in self.balk_knoppen:
+            if k.isHidden():
+                k.setText(k.property("volle_tekst") or "")
 
     def event(self, e) -> bool:
         if e.type() == QEvent.Type.WindowActivate:
@@ -357,7 +417,10 @@ class Bestanden(Navigeren, Bewerken, Computer, Schijven, Venster):
         return super().eventFilter(ding, e)
 
     def ververs_plak(self) -> None:
-        self.plak_knop.setVisible(not self.in_prullenbak and not self.in_computer and self.klembord_heeft_bestanden())
+        zichtbaar = not self.in_prullenbak and not self.in_computer and self.klembord_heeft_bestanden()
+        if zichtbaar != (not self.plak_knop.isHidden()):
+            self.plak_knop.setVisible(zichtbaar)
+            self.pas_knoppen()   # een knop erbij of eraf: opnieuw kijken welke woorden passen (C-03)
 
     def escape(self) -> None:
         if self.zoek.text():

@@ -21,7 +21,11 @@ PAD_ROL = int(Qt.ItemDataRole.UserRole) + 1        # = QFileSystemModel.FilePath
 INFO_ROL = int(Qt.ItemDataRole.UserRole) + 40     # prullenbak: pad van het .trashinfo-bestand
 HERKOMST_ROL = int(Qt.ItemDataRole.UserRole) + 41  # prullenbak: waar het vandaan kwam
 
-AFBEELDING = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tif", ".tiff", ".svg", ".avif", ".heic", ".ico"}
+# .jxl (JPEG XL) hoort er ook bij (C-05): dan heet een JPEG XL-foto net als elke andere foto zonder extensie, en
+# krijgt hij een voorbeeldje als Qt hem kan lezen (de kimg_jxl-plug-in uit kf6-kimageformats van KDE). Kan Qt het
+# niet, dan valt maak_voorbeeld terug op een voorbeeldje van KDE zelf of een papiertje met 'JXL'.
+AFBEELDING = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tif", ".tiff", ".svg", ".avif", ".heic", ".ico",
+              ".jxl"}
 ODF = {".odt", ".ods", ".odp", ".odg"}
 SOORTEN = {  # extensie -> (kleur, teken in het papiertje)
     "pdf": ("#D3263A", "tekst"), "doc": ("#2F7BF5", "tekst"), "docx": ("#2F7BF5", "tekst"),

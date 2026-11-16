@@ -535,12 +535,25 @@ class Venster(QWidget):
 # Eén look voor elke vraag, zoals KiesDialoog: een kop, ruime marges, rechts 'Annuleren' (stil) en de rode knop.
 # Niet QMessageBox (met Qt's blauwe '?') of QInputDialog (geen kop, de knoppen verkeerd om).
 
+def als_dialoog(d: QDialog) -> None:
+    """Een klein BugOS-venstertje (een vraag, een naam) is een dialoog, geen gewoon venster (C-07): in de titelbalk
+    alleen het kruisje, geen 'minimaliseren' en 'maximaliseren' (een vraag van drie regels schermvullend maken of
+    in de taakbalk wegstoppen heeft geen zin, en dan raak je hem kwijt terwijl het venster erachter wacht).
+
+    Zo werkt het: de vlaggen hieronder zeggen het tegen X11/XWayland (Qt zet dan de Motif-hints), en op Wayland
+    beslist KWin zelf: een venster dat niet van grootte kan veranderen, krijgt geen knop 'maximaliseren'. Daarom
+    zet de dialoog zichzelf bij het tonen op een vaste maat (zie VraagDialoog.showEvent)."""
+    d.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.CustomizeWindowHint | Qt.WindowType.WindowTitleHint
+                     | Qt.WindowType.WindowCloseButtonHint)
+
+
 class VraagDialoog(QDialog):
     """Een vraag met een kop, een uitleg, eventueel een invoerveld, en twee knoppen: stil 'nee', rood 'ja'."""
 
     def __init__(self, ouder: QWidget | None, titel_tekst: str, tekst: str, ja: str, nee: str = "",
                  veld: bool = False, waarde: str = "", wachtwoord: bool = False, enter_is_nee: bool = False):
         super().__init__(ouder)
+        als_dialoog(self)   # alleen een kruisje in de titelbalk (C-07)
         self.setWindowTitle(titel_tekst)
         breed = schermmaat((bugos_ui.px(440), 0))[0][0]   # op een smal scherm (150 %) niet breder dan het scherm
         self.setMinimumWidth(breed)
@@ -607,8 +620,9 @@ class VraagDialoog(QDialog):
     def showEvent(self, e) -> None:  # noqa: N802
         super().showEvent(e)
         maat = self.sizeHint()
-        self.setMinimumHeight(min(self.minimumHeight(), maat.height()))
-        self.resize(maat)
+        # Een vaste maat: precies de inhoud. Dan kan het venster niet van grootte veranderen, en geeft KWin het geen
+        # knop 'maximaliseren' (C-07, zie als_dialoog). De breedte blijft binnen de grenzen van __init__.
+        self.setFixedSize(maat)
 
     @property
     def standaard(self) -> str:

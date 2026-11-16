@@ -7,9 +7,53 @@ USB-stick of schijf, en de gekleurde stipjes bij de ruimtebalk.
 from __future__ import annotations
 
 from bugos_ui import K, Knop, Zoekveld, label, lijn_icoon, ronde_knop, schaal_css, t
-from PySide6.QtCore import QRectF, QSize, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, QPoint, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QProgressBar, QWidget
+
+
+class RechtsKlik(QObject):
+    """Het menu onder de rechtermuisknop pas bij het LOSLATEN van de knop, zoals in Windows (C-01).
+
+    Waarom: Qt maakt op Linux het 'contextmenu' al bij het indrukken van de rechterknop. In de VM (KWin op
+    Wayland) ging dat menu meteen weer dicht: het verscheen pas nadat de knop al los was (een klik duurt zo'n 60 ms,
+    en het eerste menu opbouwen duurt langer), en KWin sluit een pop-up die hoort bij een knop die niet meer
+    ingedrukt is. Een menu dat bij het loslaten opent (zoals 'Ruimte maken', dat opent na een gewone klik) bleef wel
+    staan. Daarom: het muis-contextmenu van Qt slikken we in, en bij het loslaten van de rechterknop roepen we zelf
+    het menu op. Het contextmenu via het toetsenbord (de Menu-toets, Shift+F10) gaat gewoon zijn eigen gang.
+
+    doe(punt) krijgt het punt in de coördinaten van het onderdeel waarop geklikt werd."""
+
+    def __init__(self, ouder: QObject, doe):
+        super().__init__(ouder)
+        self.doe = doe
+        self._ingedrukt: QObject | None = None   # op welk onderdeel de rechterknop werd ingedrukt
+
+    def volg(self, onderdeel: QWidget) -> None:
+        """Dit onderdeel (bijvoorbeeld de viewport van de tegels) krijgt een menu bij rechtsklikken."""
+        onderdeel.installEventFilter(self)
+
+    def eventFilter(self, ding, e) -> bool:  # noqa: N802
+        soort = e.type()
+        if soort == QEvent.Type.ContextMenu and e.reason() == e.Reason.Mouse:
+            return True   # niet nu (bij het indrukken), maar zo meteen bij het loslaten
+        if soort == QEvent.Type.MouseButtonPress and e.button() == Qt.MouseButton.RightButton:
+            self._ingedrukt = ding
+            return False  # het indrukken zelf doet gewoon wat het deed (de tegel eronder kiezen)
+        if soort == QEvent.Type.MouseButtonRelease and e.button() == Qt.MouseButton.RightButton:
+            if self._ingedrukt is ding:
+                self._ingedrukt = None
+                punt = e.position().toPoint()
+                # Pas na dit loslaten (de lijst is dan helemaal klaar met de klik), en dan meteen.
+                QTimer.singleShot(0, lambda d=ding, p=QPoint(punt): self._open(d, p))
+                return True
+        return False
+
+    def _open(self, ding, punt: QPoint) -> None:
+        try:
+            self.doe(ding, punt)
+        except RuntimeError:   # het venster ging intussen dicht
+            pass
 
 
 def stijl() -> str:
@@ -23,6 +67,7 @@ QPushButton#kruimel:focus {{ border: 2px solid {K['accent']}; padding: 4px 6px; 
 QListView#tegels {{ background: transparent; border: none; outline: 0; }}
 QWidget#computer_binnen {{ background: transparent; }}
 QFrame#kaart {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-radius: 16px; }}
+QFrame#kaart[uitgelicht="true"] {{ border: 2px solid {K['accent']}; }}
 QFrame#schijfrij {{ background: transparent; border-radius: 12px; }}
 QFrame#schijfrij:hover {{ background: {K['knop']}; }}
 QFrame#schijfrij:focus {{ border: 2px solid {K['accent']}; }}

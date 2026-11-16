@@ -620,6 +620,8 @@ class Computer:
             self.vooruit_lijst.clear()
         if self.lijst.selectionModel() is not None:
             self.lijst.selectionModel().clear()
+        if not self.in_computer:
+            self.wis_melding()   # de melding van de map waar je was, hoort hier niet (C-04)
         self.in_computer, self.in_prullenbak = True, False
         self.vul_computer()
         self.bouw_pad()
@@ -679,8 +681,10 @@ class Computer:
         # --- wat de meeste ruimte inneemt (één telling voor deze lijst én de balk hierboven)
         lay.addSpacing(10)
         apps_knop = Knop(t("Apps verwijderen die je niet gebruikt", "Remove apps you do not use"), "stil")
-        apps_knop.setToolTip(t("Opent de Winkel, waar je apps verwijdert", "Opens the Store, where you remove apps"))
-        apps_knop.clicked.connect(lambda _c=False: start("bugos-store"))
+        apps_knop.setToolTip(t("Opent de Winkel bij Mijn apps, waar je apps verwijdert",
+                               "Opens the Store at My apps, where you remove apps"))
+        # Meteen naar 'Mijn apps' (C-09e): daar staan de apps die je kunt verwijderen, niet bij 'Aanbevolen'.
+        apps_knop.clicked.connect(lambda _c=False: start("bugos-store", "--mijn-apps"))
         self.grootste_kop = sectie_met_knop(t("Wat de meeste ruimte inneemt", "What takes up the most space"),
                                             apps_knop)
         lay.addWidget(self.grootste_kop)
@@ -718,7 +722,8 @@ class Computer:
             rijen.addWidget(self.schijf_rij(x))
         if not self.lijst_schijven:
             tip = t("Steek een USB-stick in, dan staat hij hier.", "Plug in a USB stick and it shows up here.")
-            leeg = SchijfRij("usb", t("Nog niets aangesloten", "Nothing plugged in yet"), tip, leeg=True)
+            # Precies zeggen wat er niet is (C-09a): 'Niets aangesloten' las als 'de computer heeft niets'.
+            leeg = SchijfRij("usb", t("Geen USB-stick aangesloten", "No USB stick plugged in"), tip, leeg=True)
             for uitleg in leeg.findChildren(QLabel):
                 if uitleg.text() == tip:   # met grote letters liever twee regels dan een pagina die opzij schuift
                     uitleg.setWordWrap(True)
@@ -846,6 +851,45 @@ class Computer:
             except RuntimeError:
                 pass
 
+    def toon_grootste(self) -> None:
+        """Ruimte maken > Zien wat ruimte inneemt (C-09d). Vroeger gebeurde er niets zichtbaars: de lijst stond al in
+        beeld (dan schuift er niets), en het opnieuw tellen liet de oude lijst gewoon staan. Nu: opnieuw tellen (met
+        een melding dat dat gebeurt), erheen schuiven, de kaart even laten oplichten, en de focus op de eerste
+        regel, zodat je met Enter meteen de grootste opent."""
+        was_bezig = getattr(self, "grootste_bezig", False)
+        self.tel_grootste(opnieuw=True)
+        if getattr(self, "grootste_bezig", False) and not was_bezig:
+            self.melding.toon(t("Bezig met opnieuw tellen wat de meeste ruimte inneemt…",
+                                "Counting again what takes up the most space…"), seconden=5)
+        self.naar_grootste()
+        self.licht_op()
+
+    def licht_op(self) -> None:
+        """De kaart 'Wat de meeste ruimte inneemt' anderhalve seconde een rand in de accentkleur, en de focus op de
+        eerste regel die je kunt openen."""
+        kaart = getattr(self, "grootste_kaart", None)
+        if kaart is None:
+            return
+        try:
+            kaart.setProperty("uitgelicht", "true")
+            kaart.style().unpolish(kaart)
+            kaart.style().polish(kaart)
+            eerste = next((r for r in getattr(self, "ruimte_rijen", [])
+                           if r.focusPolicy() != Qt.FocusPolicy.NoFocus), None)
+            if eerste is not None:
+                eerste.setFocus(Qt.FocusReason.OtherFocusReason)
+        except RuntimeError:   # de pagina werd intussen opnieuw opgebouwd
+            return
+
+        def uit(k=kaart) -> None:
+            try:
+                k.setProperty("uitgelicht", "false")
+                k.style().unpolish(k)
+                k.style().polish(k)
+            except RuntimeError:
+                pass
+        QTimer.singleShot(1600, uit)
+
     def open_ruimte(self, r: Ruimtegebruik) -> None:
         """Waar je iets aan een regel doet: de map openen, de prullenbak, of de app in de Winkel."""
         if r.soort == "prullenbak":
@@ -854,7 +898,7 @@ class Computer:
             if r.app_id and in_winkel(r.app_id):
                 start("bugos-store", f"appstream://{r.app_id}")
             else:
-                start("bugos-store")   # nooit Discover van KDE
+                start("bugos-store", "--mijn-apps")   # de apps die je hebt (C-09e); nooit Discover van KDE
         elif r.pad is not None and r.pad.is_dir():
             self.ga_naar(r.pad)
 
@@ -863,7 +907,7 @@ class Computer:
         m = QMenu(self)
         zien = m.addAction(lijn_icoon("zoek", "tekst", 18, gekozen=None),
                            t("Zien wat ruimte inneemt", "See what takes up space"))
-        zien.triggered.connect(lambda _c=False: (self.tel_grootste(opnieuw=True), self.naar_grootste()))
+        zien.triggered.connect(lambda _c=False: self.toon_grootste())
         m.addSeparator()
         bak = (self.ruimte or {}).get("prullenbak")
         tekst = t(f"Prullenbak leegmaken ({mooie_maat(bak)})", f"Empty the trash ({mooie_maat(bak)})") if bak else \
@@ -895,7 +939,12 @@ class Computer:
             rest = max(gebruikt - sum(d * totaal for d, _k in delen), 0)
             grijs = QColor(K["tekst3"])
             delen.append((rest / totaal, grijs))
-            items.append((grijs, t(f"BugOS en apps  {mooie_maat(rest)}", f"BugOS and apps  {mooie_maat(rest)}"), None))
+            # 'Al het andere', niet 'BugOS en apps' (C-09b): dit grijze stuk is meer dan BugOS en de apps (ook je
+            # tijdelijke bestanden, instellingen en kleine mappen), en in de lijst eronder heet 'BugOS en apps voor
+            # iedereen' iets kleiners. Twee keer dezelfde naam met een ander getal (18 GB boven, 17 GB onder) leek
+            # een rekenfout.
+            items.append((grijs, t(f"Al het andere  {mooie_maat(rest)}", f"Everything else  {mooie_maat(rest)}"),
+                          "rest"))
         else:
             grijs = QColor(K["tekst3"])
             delen.append((gebruikt / totaal, grijs))
@@ -914,6 +963,13 @@ class Computer:
                 k.clicked.connect(lambda _c=False, d=pad: self.ga_naar(d))
             else:
                 k.setEnabled(False)
+                if pad == "rest":
+                    k.setToolTip(platte_tip(t("BugOS zelf, de apps, tijdelijke bestanden, instellingen en alles wat "
+                                              "niet in de mappen hiernaast staat. Wat precies: zie 'Wat de meeste "
+                                              "ruimte inneemt'.",
+                                              "BugOS itself, the apps, temporary files, settings and everything not "
+                                              "in the folders next to it. What exactly: see 'What takes up the most "
+                                              "space'.")))
             knoppen.append(k)
         self.legenda.zet(knoppen)
 

@@ -94,8 +94,39 @@ def systeem_autostart() -> list[Path]:
     return [Path(p) / "autostart" for p in os.environ.get("XDG_CONFIG_DIRS", "/etc/xdg").split(":") if p]
 
 
+# Onderdelen van het systeem die bij het inloggen starten, maar geen 'programma' zijn dat een gewone gebruiker uit
+# moet kunnen zetten (C-16): zet je ze uit, dan werkt er iets niet meer (meldingen van apps, de muis in een VM, de
+# wachtwoordvraag, toegankelijkheid). Ze staan niet op de pagina Opstarten. Alleen als ze van het systeem komen
+# (/etc/xdg/autostart): een eigen opstartprogramma van de gebruiker verbergen we nooit, ook niet met zo'n naam.
+TECHNISCH_OPSTART = {
+    "org.kde.kunifiedpush-distributor", "kunifiedpush-distributor", "vboxclient", "vboxclient-all",
+    "spice-vdagent", "vmware-user", "open-vm-tools", "xembedsniproxy", "gmenudbusmenuproxy", "kaccess",
+    "polkit-kde-authentication-agent-1", "org.kde.polkit-kde-authentication-agent-1", "powerdevil",
+    "org.kde.powerdevil", "baloo_file", "at-spi-dbus-bus", "pam_kwallet_init", "xdg-user-dirs", "kxkb2locale1",
+    "org.kde.plasma-fallback-session-restore", "geoclue-demo-agent", "org.kde.xwaylandvideobridge",
+    "imsettings-start", "ibus-autostart", "orca-autostart", "user-dirs-update-gtk",
+    "bugos-panel", "bugos-theme", "bugos-light-mode", "bugos-open-drives",
+}
+# Gewone namen voor wat wel op de pagina staat, maar een technische naam heeft (geen Name, of een id) (C-16).
+MOOIE_OPSTART = {
+    "org.kde.kdeconnect.daemon": ("KDE Connect (je telefoon koppelen)", "KDE Connect (link your phone)"),
+    "kdeconnectd": ("KDE Connect (je telefoon koppelen)", "KDE Connect (link your phone)"),
+    "org.kde.discover.notifier": ("Meldingen over updates", "Update notifications"),
+    "nextcloud": ("Nextcloud", "Nextcloud"),
+    "com.nextcloud.desktopclient.nextcloud": ("Nextcloud", "Nextcloud"),
+}
+
+
+def _taal_nl() -> bool:
+    """Is de taal van de gebruiker Nederlands? (Zelfde volgorde als vertaald(): LANGUAGE, LC_ALL, LANG.)"""
+    taal = os.environ.get("LANGUAGE", "").split(":")[0] or os.environ.get("LC_ALL") or \
+        os.environ.get("LC_MESSAGES") or os.environ.get("LANG") or ""
+    return taal.lower().startswith("nl")
+
+
 def opstart_lijst() -> list[Opstart]:
-    """Programma's die vanzelf starten als je inlogt (zoals 'Opstarten' in Taakbeheer van Windows)."""
+    """Programma's die vanzelf starten als je inlogt (zoals 'Opstarten' in Taakbeheer van Windows).
+    Zonder de technische onderdelen van het systeem (TECHNISCH_OPSTART), met gewone namen (MOOIE_OPSTART)."""
     systeem: dict[str, Path] = {}
     for map_ in reversed(systeem_autostart()):
         for pad in sorted(map_.glob("*.desktop")):
@@ -103,6 +134,9 @@ def opstart_lijst() -> list[Opstart]:
     eigen = {p.name: p for p in sorted((config_thuis() / "autostart").glob("*.desktop"))}
     lijst = []
     for bestand in sorted(set(systeem) | set(eigen)):
+        stam = bestand.removesuffix(".desktop")
+        if bestand in systeem and stam in TECHNISCH_OPSTART:
+            continue   # een onderdeel van het systeem, geen programma om uit te zetten (C-16)
         basis = lees_bureaublad(systeem[bestand]) if bestand in systeem else None
         eigen_c = lees_bureaublad(eigen[bestand]) if bestand in eigen else None
         c = eigen_c if eigen_c is not None and eigen_c["Desktop Entry"].get("Name") else (basis or eigen_c)
@@ -119,7 +153,10 @@ def opstart_lijst() -> list[Opstart]:
         verborgen = eigen_c is not None and eigen_c["Desktop Entry"].get("Hidden", "false").lower() == "true"
         if basis is not None and basis["Desktop Entry"].get("Hidden", "false").lower() == "true" and eigen_c is None:
             verborgen = True
-        lijst.append(Opstart(bestand, vertaald(s, "Name") or vertaald(bron, "Name") or bestand.removesuffix(".desktop"),
+        naam = vertaald(s, "Name") or vertaald(bron, "Name") or stam
+        if stam in MOOIE_OPSTART and (bestand in systeem or naam == stam):
+            naam = MOOIE_OPSTART[stam][0 if _taal_nl() else 1]   # een gewone naam (C-16)
+        lijst.append(Opstart(bestand, naam,
                              s.get("Icon", "") or bron.get("Icon", ""), not verborgen, bestand in systeem))
     return sorted(lijst, key=lambda x: x.naam.lower())
 

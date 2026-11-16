@@ -297,7 +297,9 @@ class Banner(QFrame):
             "goed": (K["goed"], K["goed_zacht"], "emblem-success"),
             "let_op": (K["let_op"], K["let_op_zacht"], "dialog-warning"),
             "fout": (K["fout"], K["fout_zacht"], "dialog-error"),
-            "bezig": (K["accent_gekozen"], K["accent_zacht"], "view-refresh"),   # 4,5:1 (U282)
+            # Bezig is geen fout: rustig grijs, zoals 'info' (C-11). Het rood-roze van de accentkleur las als een
+            # foutmelding ('VLC wordt geïnstalleerd' in een rode balk). Gewone tekst op 'knop' haalt ruim 4,5:1 (U282).
+            "bezig": (K["tekst"], K["knop"], "view-refresh"),
         }.get(self.soort, (K["tekst"], K["knop"], "dialog-information"))
         self.setStyleSheet(f"QFrame{{background:{achter};border-radius:12px;}} QLabel{{color:{voor};font-size:{bugos_ui.px(14)}px;}}")
         self.teken.setPixmap(QIcon.fromTheme(icoon).pixmap(20, 20))

@@ -391,21 +391,50 @@ def groepeer(lijst: list[Proces], procent: dict[int, float]) -> list[Taak]:
     return sorted(taken.values(), key=lambda x: (x.soort != "app", x.naam.lower()))
 
 
-def advies(processor: list[float], gebruikt: int, totaal: int, taken: list[Taak]) -> tuple[str, str]:
-    """('goed' of 'let_op', een zin in gewone woorden over hoe het gaat)."""
+# Wanneer de zin bovenaan zegt dat de processor het druk heeft (C-15). Met 'hysterese': erin bij een hogere waarde
+# dan eruit, zodat de zin niet elke twee seconden heen en weer springt bij een processor die rond de grens zit.
+#   zwaar ('let_op'): erin als het gemiddelde van de laatste twee metingen >= 80 %, eruit onder 65 % (drie metingen)
+#   druk  ('druk'):   erin als de laatste meting >= 50 %, eruit als drie metingen gemiddeld onder 35 %
+# Vroeger zei Taakbeheer pas iets na drie metingen boven 85 %: bij 86 % stond er nog 'Alles loopt soepel.'.
+ZWAAR_ERIN, ZWAAR_ERUIT = 80.0, 65.0
+DRUK_ERIN, DRUK_ERUIT = 50.0, 35.0
+
+
+def _gemiddeld(waarden: list[float]) -> float:
+    return sum(waarden) / len(waarden) if waarden else 0.0
+
+
+def advies(processor: list[float], gebruikt: int, totaal: int, taken: list[Taak],
+           vorige: str = "goed") -> tuple[str, str]:
+    """('goed', 'druk' of 'let_op', een zin in gewone woorden over hoe het gaat). vorige: wat de vorige keer de
+    uitslag was (voor de hysterese hierboven). De zin zegt ook wat er zo druk is (C-15)."""
     apps = [x for x in taken if x.soort == "app"] or taken
     if totaal and gebruikt / totaal > 0.9:
         zwaarste = max(apps, key=lambda x: x.geheugen, default=None)
         wie = t(f" {zwaarste.naam} gebruikt het meeste.", f" {zwaarste.naam} uses the most.") if zwaarste else ""
         return "let_op", t("Het geheugen is bijna vol. Sluit een paar programma's die je niet gebruikt." + wie,
                            "Memory is almost full. Close a few programs you are not using." + wie)
-    laatste = processor[-3:]
-    if len(laatste) == 3 and min(laatste) > 85:
-        zwaarste = max(apps, key=lambda x: x.processor, default=None)
-        wie = t(f" {zwaarste.naam} gebruikt de meeste kracht.", f" {zwaarste.naam} uses the most power.") \
-            if zwaarste else ""
-        return "let_op", t("Je computer heeft het druk." + wie, "Your computer is busy." + wie)
-    return "goed", t("Alles loopt soepel.", "Everything is running smoothly.")
+    nu = processor[-1] if processor else 0.0   # wat de processor nu doet (dat getal staat ook in beeld)
+    zwaar = _gemiddeld(processor[-2:])         # 'heel druk' pas na twee hoge metingen: één piek is nog geen drukte
+    rustiger = _gemiddeld(processor[-3:])      # om eruit te gaan: pas als het echt rustiger is
+    if zwaar >= ZWAAR_ERIN or (vorige == "let_op" and rustiger >= ZWAAR_ERUIT):
+        niveau = "let_op"
+    elif nu >= DRUK_ERIN or (vorige in ("druk", "let_op") and rustiger >= DRUK_ERUIT):
+        niveau = "druk"
+    else:
+        return "goed", t("Alles loopt soepel.", "Everything is running smoothly.")
+    # Wat er zo druk is: van alles wat draait (ook de achtergrond) het zwaarste, als dat echt iets doet.
+    zwaarste = max(taken, key=lambda x: x.processor, default=None)
+    if zwaarste is not None and zwaarste.processor >= 5:
+        wie = t(f" {zwaarste.naam} gebruikt de meeste kracht ({zwaarste.processor:.0f}%).",
+                f" {zwaarste.naam} uses the most power ({zwaarste.processor:.0f}%).")
+    else:
+        wie = ""
+    if niveau == "let_op":
+        return "let_op", t(f"Je computer heeft het druk: de processor werkt voor {nu:.0f}%." + wie,
+                           f"Your computer is busy: the processor is at {nu:.0f}%." + wie)
+    return "druk", t(f"Je computer is flink bezig: de processor werkt voor {nu:.0f}%." + wie,
+                     f"Your computer is working hard: the processor is at {nu:.0f}%." + wie)
 
 
 # ================================================================ details ===
@@ -422,9 +451,20 @@ def volle_naam(pid: int, comm: str) -> str:
     firewalld draait als /usr/bin/python3, en Firefox noemt zijn tabbladen zelf 'Isolated Web Co'."""
     if len(comm) != 15:
         return comm
-    eerste = lees(proc() / str(pid) / "cmdline").split("\0", 1)[0]
-    naam = re.split(r"[\s:]", os.path.basename(eerste), maxsplit=1)[0] if eerste else ""
-    return naam if naam.startswith(comm) else comm
+    # Kandidaten, de beste eerst (C-17): het programma zelf (eerste woord van cmdline), dan een script dat door een
+    # tolk draait ('/usr/bin/python3 /usr/bin/bugos-task-manager': comm is dan 'bugos-task-mana', het eerste woord
+    # 'python3'), en als laatste het bestand achter /proc/<pid>/exe. Telt alleen als het met de korte naam begint:
+    # zo wordt een zelfgekozen titel als 'Isolated Web Co' (Firefox) nooit 'firefox'.
+    delen = [d for d in lees(proc() / str(pid) / "cmdline").split("\0") if d]
+    kandidaten = []
+    if delen:
+        kandidaten.append(re.split(r"[\s:]", os.path.basename(delen[0]), maxsplit=1)[0])
+        kandidaten += [os.path.basename(d) for d in delen[1:4] if not d.startswith("-")]
+    try:
+        kandidaten.append(os.path.basename(os.readlink(proc() / str(pid) / "exe")).removesuffix(" (deleted)"))
+    except OSError:
+        pass
+    return next((k for k in kandidaten if k.startswith(comm) and len(k) > len(comm)), comm)
 
 
 def eigenaar_naam(uid: int) -> str:
