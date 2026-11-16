@@ -635,11 +635,7 @@ klopt(gestart == [("flatpak", "run", OUD_ID)], f"F7: ... en Openen start die app
 # Alles in 'Mijn apps' is te verwijderen (wens van de eigenaar, 2026-11-16). Vroeger stonden daar Firefox en Steam
 # als programma van BugOS zelf, zonder Verwijderen. Een app uit de selectie die als gewoon programma op de computer
 # staat (hier Steam als steam.desktop, zoals het oude pakket), hoort dus niet in 'Mijn apps'; wel bij Gamen, met Openen.
-(APPS / "steam.desktop").write_text("[Desktop Entry]
-Type=Application
-Name=Steam
-Exec=steam
-")
+(APPS / "steam.desktop").write_text("[Desktop Entry]\nType=Application\nName=Steam\nExec=steam\n")
 w.systeem = winkel.systeem_apps(w.cat["apps"])
 w.installed = w.flatpaks | set(w.systeem)
 w.lijst.setCurrentRow(_rij_mijn)

@@ -126,9 +126,10 @@ class AppsPagina(Blad):
             # Wacht ook als KDE eerst het wachtwoord van een beheerder vraagt (zie verwijder_nu).
             return bugos_apps.verwijder_nu(opdracht)
 
-        op_achtergrond(self, werk, lambda uitkomst: self.klaar(app, uitkomst))
+        op_achtergrond(self, werk, lambda uitkomst: self.verwijderd(app, uitkomst))
 
-    def klaar(self, app: dict, uitkomst) -> None:
+    def verwijderd(self, app: dict, uitkomst) -> None:
+        """Het verwijderen is klaar (gelukt of niet). Niet 'klaar': zo heet al de methode van Blad die de pagina afmaakt."""
         code, uit = uitkomst if uitkomst else (1, "")
         self.bezig = None
         tekst, soort = bugos_apps.verwijder_melding(code, uit, app["naam"])
