@@ -81,7 +81,7 @@ class Bewerken:
         """Het menu onder de rechtermuisknop, zoals in de Verkenner van Windows (C-01). Dezelfde acties als de
         knoppenbalk onderin en de knoppen bovenin: niets dat alleen hier kan.
 
-          op een tegel:  Openen, Openen met ▸, Knippen, Kopiëren, Naam wijzigen, Naar de prullenbak, Eigenschappen
+          op een tegel:  Openen, Openen met ▸, Knippen, Kopiëren, Naam wijzigen, Weggooien, Eigenschappen
           op leeg vlak:  Nieuwe map, Nieuw tekstbestand, Plakken (als er iets gekopieerd is), Sorteren op ▸
           prullenbak:    Zet terug, Prullenbak leegmaken
 
@@ -129,7 +129,9 @@ class Bewerken:
             actie("kopieer", t("Kopiëren", "Copy"), self.kopieer)
             actie("potlood", t("Naam wijzigen", "Rename"), self.hernoem, len(gekozen) == 1)
             m.addSeparator()
-            actie("prullenbak", t("Naar de prullenbak", "Move to trash"), self.weggooien)
+            # Hetzelfde woord als de knop in de balk onderin (D-15). 'Weggooien' klopt ook op een USB-stick, waar
+            # het niet naar de prullenbak gaat (dan vraagt BugOS het eerst).
+            actie("prullenbak", t("Weggooien", "Delete"), self.weggooien)
             m.addSeparator()
             actie("meer", t("Eigenschappen", "Properties"), self.eigenschappen, len(gekozen) == 1)
         else:

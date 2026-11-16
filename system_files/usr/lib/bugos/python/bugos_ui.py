@@ -729,6 +729,9 @@ LIJN = {
     "film": '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="m10 9.5 4.5 2.5-4.5 2.5z"/>',
     "download": '<path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/>',
     "map": '<path d="M3.5 7a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>',
+    # Een doos (deksel en bak): een programma (.exe, .deb ...) of een archief (.zip) in Bestanden, zoals in het
+    # pictogramthema (tools/icons/places_folders.py, EIGEN["doos"]). Eerst tekende Bestanden daar een map (D-15).
+    "doos": '<rect x="3.5" y="4.5" width="17" height="4.5" rx="1.5"/><path d="M5 9v9.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V9M10 12.5h4"/>',
     "map-plus": '<path d="M3.5 7a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/><path d="M12 10.5v6M9 13.5h6"/>',
     "links": '<path d="m14.5 5.5-6.5 6.5 6.5 6.5"/>',
     "rechts": '<path d="m9.5 5.5 6.5 6.5-6.5 6.5"/>',

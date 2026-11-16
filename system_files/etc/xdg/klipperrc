@@ -1,0 +1,6 @@
+# BugOS: het klembord van KDE (Klipper, in het systeemvak) onthoudt niets na afmelden of opnieuw opstarten,
+# net als Windows. Anders zette Plasma bij het aanmelden het laatst gekopieerde bestand van een vorige keer terug op
+# het klembord, en stond 'Plakken' in Bestanden klaar terwijl je in deze sessie niets had gekopieerd (VM-test D-15:
+# history3.sqlite had nog file:///home/test/Documenten/notitie.txt). Binnen een sessie werkt de geschiedenis gewoon.
+[General]
+KeepClipboardContents=false

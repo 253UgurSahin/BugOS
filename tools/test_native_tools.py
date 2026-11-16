@@ -162,15 +162,16 @@ klopt(_gestart[-1:] == [("bugos-settings", "printers")] and u.repareer_tekst == 
 from collections import namedtuple as _nt  # noqa: E402
 
 _Gebruik = _nt("du", "total used free")
-bh.shutil.disk_usage = lambda p: _Gebruik(500 * 1024**3, 0, int(1.5 * 1024**3))
+# GB van 1000 MB, zoals Bestanden (D-13).
+bh.shutil.disk_usage = lambda p: _Gebruik(500 * 1000**3, 0, int(1.5 * 1000**3))
 u = bh.controle_opslag()
 u.repareer()
 klopt(u.stand == bh.PROBLEEM and "1,5 GB" in u.tekst and _gestart[-1:] == [("bugos-files", "computer:/ruimte")],
       f"H3: schijf bijna vol: Bestanden > Deze computer, ook al is Filelight er ({u.tekst!r}, {_gestart[-1:]})")
-bh.shutil.disk_usage = lambda p: _Gebruik(100 * 1024**3, 0, int(5 * 1024**3))
+bh.shutil.disk_usage = lambda p: _Gebruik(100 * 1000**3, 0, int(5 * 1000**3))
 u = bh.controle_opslag()
 klopt(u.stand == bh.LET_OP and u.repareer is not None and (u.repareer(), _gestart[-1])[1] == ("bugos-files", "computer:/ruimte")
-      and "5 GB" in u.tekst, f"H3: nog maar 5 GB vrij: ook dan de knop naar 'Wat de meeste ruimte inneemt' ({u.tekst!r})")
+      and ("5,0 GB" in u.tekst or "5.0 GB" in u.tekst), f"H3: nog maar 5 GB vrij: ook dan de knop naar 'Wat de meeste ruimte inneemt' ({u.tekst!r})")
 bh.shutil.disk_usage = lambda p: _Gebruik(500 * 1024**3, 0, int(50 * 1024**3))
 klopt(bh.controle_opslag().repareer is None, "H3: genoeg ruimte: geen knop")
 bh.start, bh.draai, bh.bestaat, bh.shutil.disk_usage = _echt_hulp
@@ -243,7 +244,7 @@ klopt(wacht_tot(lambda: venster.sorteer.rowCount(venster.lijst.rootIndex()) == 1
 venster.menu(QPoint(-50, -50))            # buiten elke tegel: lege plek
 _idx = venster.sorteer.mapFromSource(venster.model.index(str(THUIS / "Documenten" / "brief.txt")))
 venster.menu(venster.lijst.visualRect(_idx).center())   # op het bestand zelf (review 14)
-klopt(len(_menus) == 2 and "Nieuwe map" in _menus[0] and "Naar de prullenbak" in _menus[1]
+klopt(len(_menus) == 2 and "Nieuwe map" in _menus[0] and "Weggooien" in _menus[1]
       and not any("Dolphin" in x for m in _menus for x in m) and not hasattr(venster, "in_dolphin"),
       f"F1: rechtermuisknop (lege plek en op een bestand): geen 'Openen in Dolphin' ({_menus})")
 _bew.QMenu = QMenu
