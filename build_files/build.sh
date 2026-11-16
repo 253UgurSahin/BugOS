@@ -53,8 +53,53 @@ chmod 0644 /usr/share/bugos/store-icons/* 2>/dev/null || true
 # 2. Extra programma's installeren.
 #    --skip-unavailable: als een pakket (even) niet bestaat, gaat de bouw
 #    gewoon door in plaats van te stoppen.
-mapfile -t PAKKETTEN < <(grep -vE '^\s*(#|$)' /ctx/packages.txt)
-dnf5 install -y --skip-unavailable "${PAKKETTEN[@]}"
+#    Alleen wat de basis nog NIET heeft. 'dnf5 install' van een pakket dat er al is, werkt het bij naar de nieuwste
+#    versie in 'updates'; zo'n los bijgewerkt pakket kan nieuwere bibliotheken nodig hebben dan de basis heeft, zonder
+#    dat rpm dat weet (zie D-09 hieronder: precies zo ging KWrite stuk). De basis is één geheel dat samen getest is:
+#    packages.txt vult aan en werkt niets van de basis stukje voor stukje bij. Nieuwe pakketten mogen wel meenemen
+#    wat ze nodig hebben.
+mapfile -t ALLE_PAKKETTEN < <(grep -vE '^\s*(#|$)' /ctx/packages.txt)
+PAKKETTEN=()
+for pakket in "${ALLE_PAKKETTEN[@]}"; do
+    # rpm -q kent ook 'provides' niet, alleen pakketnamen: precies wat packages.txt bevat.
+    if rpm -q "$pakket" >/dev/null 2>&1; then
+        echo "packages.txt: $pakket zit al in de basis, blijft zoals de basis hem heeft"
+    else
+        PAKKETTEN+=("$pakket")
+    fi
+done
+if [ "${#PAKKETTEN[@]}" -gt 0 ]; then
+    dnf5 install -y --skip-unavailable "${PAKKETTEN[@]}"
+fi
+
+# D-09: de teksteditor moet echt starten. De basis van Universal Blue (kinoite-main:44 van 2026-11-16) zet zelf Kate
+# erbij en haalt daarvoor kate, kate-libs en KWrite 26.08.3 uit 'updates', gebouwd tegen KDE Frameworks 6.32; de
+# frameworks van de basis bleven op 6.31 (Fedora's eigen Kinoite had nog 26.08.2, dat paste). De eis van kate-libs op
+# libKF6ConfigCore staat er zonder versie in, dus rpm en dnf zien niets, maar KWrite stopte meteen met "symbol lookup
+# error: libkateprivate.so.26.08.3: undefined symbol: _ZN7KConfig8copyFromERKS_": geen enkel .txt ging open.
+# LD_BIND_NOW=1 zoekt bij het starten alle symbolen op, dus 'kwrite --version' laat zo'n gat meteen zien.
+# Is het stuk, dan werken we ALLE KDE Frameworks (de kf6-pakketten met versie 6.x) samen bij naar de versie in
+# 'updates': de frameworks horen één set met één versie te zijn (nagegaan 2026-11-16: 81 pakketten, alleen kf6,
+# Plasma en de rest blijven zoals ze zijn; Plasma 6.8 werkt met nieuwere frameworks). Zo blijft het geheel kloppen,
+# zoals bij een Fedora met alle updates. Alleen als het nodig is: zolang het past, blijft de basis precies de basis.
+# Lukt het daarna nog niet, dan stopt de bouw luid: liever geen beeld dan een BugOS waarin niets van tekst opengaat.
+editor_start() {
+    local p
+    for p in kwrite kate; do
+        command -v "$p" >/dev/null 2>&1 || continue
+        LD_BIND_NOW=1 QT_QPA_PLATFORM=offscreen HOME=/tmp timeout 60 "$p" --version >/dev/null 2>&1 || return 1
+    done
+}
+if ! editor_start; then
+    echo "D-09: de teksteditor start niet met de KDE Frameworks van de basis; frameworks samen bijwerken"
+    mapfile -t FRAMEWORKS < <(rpm -qa --qf '%{NAME} %{VERSION}\n' 'kf6-*' | awk '$2 ~ /^6\./ {print $1}' | sort -u)
+    dnf5 upgrade -y "${FRAMEWORKS[@]}"
+    if ! editor_start; then
+        echo "D-09: de teksteditor start nog steeds niet, ook met bijgewerkte frameworks" >&2
+        LD_BIND_NOW=1 QT_QPA_PLATFORM=offscreen HOME=/tmp kwrite --version >&2 || true
+        exit 1
+    fi
+fi
 
 # Geen KDE Discover: de BugOS Winkel doet alle apps zelf, ook die van buiten de BugOS-selectie (Flathub),
 # en opent zelf de .flatpakref-bestanden van flathub.org. Haal hem weg als de basis hem meebrengt, met de

@@ -322,7 +322,7 @@ class Taakbeheer(Venster):
             return
         self.details_balk.toon(1)
         self.details_balk.aantal.setText(QFontMetrics(self.details_balk.aantal.font()).elidedText(
-            regel.naam, Qt.TextElideMode.ElideRight, px(140)))
+            regel.naam, Qt.TextElideMode.ElideMiddle, px(140)))   # in het midden, zoals in de tabel (D-16)
         self.details_balk.aantal.setToolTip(f"{regel.naam} · {regel.pid}")
         self.details_balk.knoppen["beeindigen"].setEnabled(not regel.beschermd)
         self.details_balk.knoppen["forceren"].setEnabled(self.mag_forceren(regel))

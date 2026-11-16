@@ -175,6 +175,30 @@ done
 # 6. Alles laadt met de Qt, KDE en Python van het beeld zelf
 HOME="$(mktemp -d)"
 export QT_QPA_PLATFORM=offscreen PYTHONDONTWRITEBYTECODE=1 HOME
+
+# 6a. D-09: de standaard-teksteditor (KWrite, zie kde-mimeapps.list) start echt. In een bouw kwam KWrite 26.08.3 bovenop
+#     kf6-kconfig 6.31 van de basis; KWrite stopte meteen ("symbol lookup error ... _ZN7KConfig8copyFromERKS_") en geen
+#     .txt ging open. Zo'n fout ziet rpm niet (de eis op libKF6ConfigCore staat er zonder versie), dus kijken we zelf:
+#     - ldd: elke bibliotheek wordt gevonden;
+#     - LD_BIND_NOW=1: alle symbolen worden bij het starten opgezocht, ook die pas later nodig zijn; 'kwrite --version'
+#       moet dan gewoon een versie geven;
+#     - rpm -V --nofiles: de eisen van kate-libs en kwrite zijn allemaal vervuld (geen 'Unsatisfied dependencies');
+#     - KWrite, kate-libs en KTextEditor horen bij de KDE-frameworks van de basis: alle kf6-pakketten van KDE
+#       Frameworks hebben één versie (een half bijgewerkte set is precies wat misging).
+editor="$(command -v kwrite || true)"
+klopt '[ -n "$editor" ]' "teksteditor: kwrite staat in het beeld"
+if [ -n "$editor" ]; then
+    ontbreekt="$({ ldd "$editor"; ldd /usr/lib64/libkateprivate.so.* 2>/dev/null; } | grep 'not found' | sort -u | paste -sd, - || true)"
+    klopt '[ -z "$ontbreekt" ]' "teksteditor: ldd vindt elke bibliotheek van KWrite ${ontbreekt:+($ontbreekt)}"
+    versie="$(LD_BIND_NOW=1 timeout 30 "$editor" --version 2>&1 | head -3 | paste -sd' ' -)"
+    klopt 'LD_BIND_NOW=1 timeout 30 "$editor" --version >/dev/null 2>&1 && [[ "$versie" == kwrite* ]]' \
+        "teksteditor: KWrite start met alle symbolen opgezocht (LD_BIND_NOW=1 kwrite --version: ${versie:0:200})"
+fi
+eisen="$(rpm -V --nofiles --nodigest --nosignature kate-libs kwrite 2>&1 | grep -i 'unsatisfied\|not installed' | head -3 | paste -sd' ' - || true)"
+klopt '[ -z "$eisen" ]' "teksteditor: alle eisen van kate-libs en kwrite zijn vervuld ${eisen:+($eisen)}"
+# Alleen de echte KDE Frameworks (versie 6.x, zoals kf6-kconfig): kf6-kirigami-addons e.d. hebben een eigen nummering.
+kf6_versies="$(rpm -qa --qf '%{NAME} %{VERSION}\n' 'kf6-*' | awk '$2 ~ /^6\./ {print $2}' | sort -u | paste -sd, -)"
+klopt '[ -n "$kf6_versies" ] && [[ "$kf6_versies" != *,* ]]' "KDE Frameworks: één versie voor alle kf6-pakketten ($kf6_versies)"
 uit="$(python3 - <<'EOF' 2>&1
 import importlib, importlib.machinery, importlib.util, sys
 from pathlib import Path

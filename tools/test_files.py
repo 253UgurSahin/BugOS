@@ -275,6 +275,26 @@ klopt(b.zelfde_schijf(docs / "kapot", thuis), "snelkoppeling: een kapotte koppel
 klopt(b.toon_naam("Recept.odt", False) == "Recept", "naam: bekende extensie verborgen")
 klopt(b.toon_naam("SpotifySetup.exe", False) == "SpotifySetup.exe", "naam: programma houdt zijn extensie")
 klopt(b.toon_naam("foto.jpg", True) == "foto.jpg", "naam: map houdt zijn naam")
+# D-15: één regel voor extensies. Gewone dingen (ook een webpagina) zonder; programma's, pakketten en archieven altijd
+# met, ook een vermomd programma ('foto.jpg.exe').
+klopt(b.toon_naam("notitie.txt", False) == "notitie" and b.toon_naam("pagina.html", False) == "pagina"
+      and b.toon_naam("spel.deb", False) == "spel.deb" and b.toon_naam("Setup.exe", False) == "Setup.exe"
+      and b.toon_naam("foto.jpg.exe", False) == "foto.jpg.exe" and b.toon_naam("app.AppImage", False) == "app.AppImage"
+      and b.toon_naam("map.zip", False) == "map.zip",
+      "D-15: extensies: verborgen bij documenten, webpagina's en media; altijd zichtbaar bij programma's en pakketten")
+import bugos_files_plekken as _pl15  # noqa: E402
+
+klopt(not (_pl15.VERBERG_EXT & _pl15.TOON_ALTIJD_EXT),
+      "D-15: geen programma of pakket in de lijst van te verbergen extensies")
+import bugos_ui as _ui15  # noqa: E402
+
+_tegels15 = (ROOT / "system_files/usr/lib/bugos/python/bugos_files_tegels.py").read_text(encoding="utf-8")
+klopt("doos" in _ui15.LIJN and '"doos": "doos"' in _tegels15 and '"doos": "map"' not in _tegels15
+      and _pl15.SOORTEN["exe"][1] == "doos" and _pl15.SOORTEN["deb"][1] == "doos",
+      "D-15: een .exe of .deb krijgt een doos op het papiertje, geen map")
+_klipper15 = (ROOT / "system_files/etc/xdg/klipperrc").read_text(encoding="utf-8")
+klopt("[General]" in _klipper15 and "KeepClipboardContents=false" in _klipper15,
+      "D-15: het klembord onthoudt niets van een vorige sessie (dan geen 'Plakken' als je nog niets kopieerde)")
 
 # 9. schijven herkennen (een nep-lijstje, zoals lsblk het geeft)
 # U139: een stick die er net in zit, wordt opengezet (KDE doet dat niet vanzelf), zodat Back-up en Overstap hem zien.
@@ -859,7 +879,7 @@ def _idx(naam):
 # C-01: het menu op een tegel en op het lege vlak, zoals in de Verkenner van Windows.
 _punt = venster.lijst.visualRect(_idx("brief.txt")).center()
 _m = venster.maak_menu(_punt)
-klopt(_teksten(_m) == ["Openen", "Openen met", "Knippen", "Kopiëren", "Naam wijzigen", "Naar de prullenbak",
+klopt(_teksten(_m) == ["Openen", "Openen met", "Knippen", "Kopiëren", "Naam wijzigen", "Weggooien",
                        "Eigenschappen"] and venster.gekozen() == [_c / "brief.txt"],
       f"C-01: rechts op een bestand: Openen, Openen met, Knippen, Kopiëren, Naam wijzigen, Prullenbak, Eigenschappen "
       f"({_teksten(_m)})")

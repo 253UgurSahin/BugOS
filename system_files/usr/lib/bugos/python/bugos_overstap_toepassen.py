@@ -177,6 +177,9 @@ DEEL_NAAM = {
     "firefox": ("Je Firefox van Windows", "Your Firefox from Windows"),
     "achtergrond": ("Je achtergrond", "Your wallpaper"),
     "instellingen": ("Instellingen", "Settings"),
+    # D-10: taal en notatie hebben elk een eigen schuifje (staat uit als Windows iets anders had dan BugOS nu).
+    "taal": ("Taal", "Language"),
+    "notatie": ("Datum en tijd", "Date and time"),
     "wifi": ("Wifi-netwerken", "Wi-Fi networks"),
     "printers": ("Printers", "Printers"),
 }
@@ -191,10 +194,12 @@ def deel_naam(deel: str) -> str:
 
 @dataclass
 class Onderdeel:
-    """Een regel in het overzicht: wat er op de stick staat en mee kan (de schakelaar staat standaard aan)."""
+    """Een regel in het overzicht: wat er op de stick staat en mee kan. aan: hoe de schakelaar begint. Bijna alles
+    begint aan; taal en notatie niet (D-10): die verander je alleen als je dat zelf aanzet."""
     sleutel: str
     icoon: str
     uitleg: str
+    aan: bool = True
 
 
 def windows_mappen(bron: Path) -> list[str]:
@@ -249,6 +254,24 @@ def onderdelen(bron: Path, i: dict | None = None) -> list[Onderdeel]:
                              t("Je oude Windows-achtergrond wordt ook je BugOS-achtergrond.",
                                "Your old Windows wallpaper becomes your BugOS wallpaper too.")))
     ins = _dict(i.get("instellingen"))
+    # D-10: de taal en de notatie van datum en tijd apart, als 'nu -> straks', en standaard UIT. Een tester met een
+    # Nederlandse BugOS en een Windows met taal en-NL en notatie en-US kreeg anders een Engelse BugOS met een
+    # 12-uursklok en M/D/YY, terwijl het overzicht alleen het woord 'English' liet zien. Je koos de taal bij het
+    # installeren of in Welkom; die verandert BugOS alleen als jij dat hier aanzet.
+    taal_nu, taal_straks = taal_wissel(ins)
+    if taal_straks:
+        uit.append(Onderdeel("taal", "lijn:wereld", t(
+            "{nu} -> {straks}. Staat standaard uit: zonder dit schuifje houdt BugOS de taal {nu}.",
+            "{nu} -> {straks}. Off by default: without this switch BugOS keeps the language {nu}.").format(
+                nu=taal_naam(taal_nu), straks=taal_naam(taal_straks)), aan=False))
+    regio_nu, regio_straks = notatie_wissel(ins)
+    if regio_straks:
+        uit.append(Onderdeel("notatie", "lijn:klok", t(
+            "{nu} -> {straks} ({voorbeeld}). Staat standaard uit: zonder dit schuifje blijven de datum en de tijd "
+            "zoals nu.", "{nu} -> {straks} ({voorbeeld}). Off by default: without this switch the date and time stay "
+            "as they are.").format(
+                nu=regio_naam(regio_nu), straks=regio_naam(regio_straks), voorbeeld=regio_voorbeeld(regio_straks)),
+            aan=False))
     wat = instellingen_kort(ins)
     if wat:
         uit.append(Onderdeel("instellingen", "lijn:schakelaar", _kort(wat, 6)))
@@ -355,6 +378,49 @@ def regio_naam(code: str) -> str:
     return next((t(nl, en) for c, nl, en in bi.REGIOS if c == code), code)
 
 
+# Hoe de klok en de datum er in zo'n land uitzien: een kort voorbeeld bij 'nu -> straks' (D-10). Wie 'Verenigde
+# Staten' leest, weet niet dat dat een 12-uursklok en maand/dag betekent; '2:58 PM, 11/16/26' zegt het meteen.
+# Alleen de landen met een andere gewoonte dan 24 uur en dag-maand-jaar staan hier; de rest krijgt 14:58 en 16-11-2026
+# (met het scheidingsteken van dat land).
+_REGIO_VOORBEELD = {
+    "en_US": "2:58 PM, 11/16/26", "en_CA": "2:58 p.m., 2026-11-16", "en_AU": "2:58 pm, 16/11/26",
+    "en_IN": "2:58 PM, 16/11/26", "en_GB": "14:58, 16/11/2026", "en_IE": "14:58, 16/11/2026",
+    "en_ZA": "14:58, 2026/11/16", "ar_EG": "2:58 PM, 16/11/2026",
+}
+
+
+def regio_voorbeeld(code: str) -> str:
+    """Een voorbeeld van de klok en de datum in die notatie (zie _REGIO_VOORBEELD); anders 24 uur en dag eerst."""
+    if code in _REGIO_VOORBEELD:
+        return _REGIO_VOORBEELD[code]
+    if code.startswith(("de_", "pl_", "tr_", "uk_")):
+        teken = "."
+    elif code.startswith(("fr_", "es_", "it_", "pt_", "ar_")):
+        teken = "/"
+    else:
+        teken = "-"
+    return f"14:58, 16{teken}11{teken}2026"
+
+
+def taal_wissel(ins: dict) -> tuple[str, str]:
+    """(taal nu, taal van Windows) als die verschillen en BugOS de taal van Windows heeft; anders (nu, '').
+    'nu' is de taal die je bij het installeren of in Welkom koos (of later zelf in Instellingen)."""
+    nu = bi.taal()
+    code = taal_code(_dict(ins).get("taal"))
+    if code and code != nu and code in {c for c, _l, _n in bi.TALEN}:
+        return nu, code
+    return nu, ""
+
+
+def notatie_wissel(ins: dict) -> tuple[str, str]:
+    """(notatie nu, notatie van Windows) als die verschillen en BugOS hem kent; anders (nu, '')."""
+    nu = bi.regio()
+    code = regio_code(_dict(ins).get("notatie"))
+    if code and code != nu and code in {c for c, _nl, _en in bi.REGIOS}:
+        return nu, code
+    return nu, ""
+
+
 def schaal_waarde(procent) -> float | None:
     """125 -> 1.25 uit de vaste lijst van Instellingen (SCHALEN); iets wat daar niet in de buurt komt: None."""
     if not isinstance(procent, (int, float)) or isinstance(procent, bool) or not 50 <= procent <= 400:
@@ -364,14 +430,27 @@ def schaal_waarde(procent) -> float | None:
 
 
 def instellingen_kort(ins: dict) -> list[str]:
-    """Wat er in 'instellingen' staat, in een paar woorden voor het overzicht ('Nederlands', 'tijdzone Amsterdam' ...)."""
+    """Wat er in 'instellingen' staat, in een paar woorden voor het overzicht ('tijdzone Amsterdam', 'donker' ...).
+    De taal en de notatie staan hier alleen als ze al zo staan ('taal Nederlands (blijft)'); verschillen ze, dan
+    hebben ze elk een eigen schuifje met 'nu -> straks' (D-10). De tijdzone ook als 'nu -> straks'."""
     wat = []
-    code = taal_code(ins.get("taal"))
-    if code:
-        wat.append(taal_naam(code))
+    taal_nu, _straks = taal_wissel(ins)
+    if taal_code(ins.get("taal")) == taal_nu:
+        wat.append(t("taal {n} (blijft)", "language {n} (stays)").format(n=taal_naam(taal_nu)))
+    nl = t("nl", "en") == "nl"
     zone = iana_zone(_tekst(ins.get("tijdzone")), (land_van(_tekst(ins.get("notatie"))), land_van(_tekst(ins.get("taal")))))
     if zone:
-        wat.append(t("tijdzone {z}", "time zone {z}").format(z=bi.mooie_zone(zone, nl=t("nl", "en") == "nl")))
+        try:
+            zone_nu = bi.tijd().zone
+        except Exception:  # noqa: BLE001  geen timedatectl: dan alleen de nieuwe zone
+            zone_nu = ""
+        if zone_nu == zone:
+            wat.append(t("tijdzone {z} (blijft)", "time zone {z} (stays)").format(z=bi.mooie_zone(zone, nl=nl)))
+        elif zone_nu:
+            wat.append(t("tijdzone {nu} -> {z}", "time zone {nu} -> {z}").format(
+                nu=bi.mooie_zone(zone_nu, nl=nl), z=bi.mooie_zone(zone, nl=nl)))
+        else:
+            wat.append(t("tijdzone {z}", "time zone {z}").format(z=bi.mooie_zone(zone, nl=nl)))
     borden = [b for b in (xkb_voor(k) for k in _lijst(ins.get("toetsenborden"))) if b]
     if borden:
         wat.append(t("toetsenbord {b}", "keyboard {b}").format(
@@ -386,9 +465,20 @@ def instellingen_kort(ins: dict) -> list[str]:
     return wat
 
 
-def _taal_en_notatie(ins: dict) -> list[Uitslag]:
+def _taal_en_notatie(ins: dict, met_taal: bool = True, met_notatie: bool = True) -> list[Uitslag]:
+    """De taal en de notatie van Windows. met_taal / met_notatie: alleen als je dat schuifje aanzette (D-10). Staat
+    het uit en had Windows iets anders, dan zegt de samenvatting dat het blijft zoals het was (geen fout)."""
     uit = []
     code = taal_code(ins.get("taal"))
+    regio_oud = bi.regio()
+    if code and not met_taal:
+        nu, straks = taal_wissel(ins)
+        if straks:
+            uit.append(Uitslag("taal", GOED, t("Blijft {nu} (Windows had {w}). Wil je dat toch, kies het dan in "
+                                               "Instellingen > Tijd en taal.", "Stays {nu} (Windows had {w}). If you "
+                                               "want it after all, choose it in Settings > Time and language.").format(
+                                                   nu=taal_naam(nu), w=taal_naam(straks))))
+        code = ""
     if code:
         if code not in {c for c, _l, _n in bi.TALEN}:
             uit.append(Uitslag("instellingen", NIET,
@@ -399,6 +489,10 @@ def _taal_en_notatie(ins: dict) -> list[Uitslag]:
             uit.append(Uitslag("instellingen", GOED, t("Taal: {n} (stond al zo).", "Language: {n} (already set).").format(
                 n=taal_naam(code))))
         elif bi.zet_taal(code):
+            # zet_taal zet de notatie ook terug naar die van de taal (LC_TIME weg). Staat 'Datum en tijd' uit, dan
+            # houden we de notatie die je had (D-10): de taal aan is niet ook een 12-uursklok aan.
+            if not met_notatie and regio_oud in {c for c, _nl, _en in bi.REGIOS}:
+                bi.zet_regio(regio_oud)
             uit.append(Uitslag("instellingen", GOED,
                                t("Taal: {n}. Dat zie je na opnieuw inloggen.", "Language: {n}. You'll see it after you "
                                  "sign in again.").format(n=taal_naam(code))))
@@ -406,6 +500,14 @@ def _taal_en_notatie(ins: dict) -> list[Uitslag]:
             uit.append(Uitslag("instellingen", ZELF, t("Taal: lukte niet. Kies hem in Instellingen > Tijd en taal.",
                                                        "Language: did not work. Choose it in Settings > Time and language.")))
     regio = regio_code(ins.get("notatie"))
+    if regio and not met_notatie:
+        nu, straks = notatie_wissel(ins)
+        if straks:
+            uit.append(Uitslag("notatie", GOED, t("Blijft zoals in {nu} (Windows had {w}). Wil je dat toch, kies het "
+                                                  "dan in Instellingen > Tijd en taal.", "Stays as in {nu} (Windows had "
+                                                  "{w}). If you want it after all, choose it in Settings > Time and "
+                                                  "language.").format(nu=regio_naam(nu), w=regio_naam(straks))))
+        regio = ""
     if regio:
         if regio not in {c for c, _nl, _en in bi.REGIOS}:
             uit.append(Uitslag("instellingen", NIET,
@@ -584,11 +686,18 @@ def _schaal(ins: dict) -> list[Uitslag]:
                                             "Size {p}: did not work. Choose it in Settings > Display.").format(p=p))]
 
 
-def zet_instellingen(ins: dict) -> list[Uitslag]:
-    """Alle instellingen van Windows, elk los: wat mislukt, houdt de rest niet tegen."""
+def zet_instellingen(ins: dict, met_taal: bool = True, met_notatie: bool = True,
+                     met_rest: bool = True) -> list[Uitslag]:
+    """De instellingen van Windows, elk los: wat mislukt, houdt de rest niet tegen.
+    met_taal / met_notatie: de schuifjes 'Taal' en 'Datum en tijd' (D-10; in het venster standaard uit als Windows
+    iets anders had); met_rest: het schuifje 'Instellingen' (tijdzone, toetsenbord, donker, muis, grootte).
+    Zonder die argumenten: alles (de opdracht --zet zonder venster, en de tests)."""
     ins = _dict(ins)
     uit: list[Uitslag] = []
-    for stap in (_taal_en_notatie, _tijdzone, _toetsenborden, _donker, _muis, _schaal):
+    stappen = [lambda i: _taal_en_notatie(i, met_taal, met_notatie)]
+    if met_rest:
+        stappen += [_tijdzone, _toetsenborden, _donker, _muis, _schaal]
+    for stap in stappen:
         try:
             uit.extend(stap(ins))
         except Exception as e:  # noqa: BLE001  nooit het hele overzetten laten stoppen om één instelling

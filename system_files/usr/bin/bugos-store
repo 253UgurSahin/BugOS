@@ -1966,6 +1966,15 @@ class Winkel(Venster):
         self._toon_zoek = zoek
         rij = self.lijst.currentRow()
         cat_id = self.lijst.sleutel(rij) if rij >= 0 else "aanbevolen"
+        # D-14: tijdens het zoeken licht er geen onderwerp op in de zijbalk: je ziet zoekresultaten, niet 'Aanbevolen'.
+        # Alleen de selectie (die kleurt) gaat weg; het huidige onderwerp blijft onthouden, zodat een klik erop het
+        # zoeken stopt en dat onderwerp laat zien (zijbalk_klik, C-10). Zonder zoektekst kleurt het weer.
+        self.lijst.blockSignals(True)
+        if zoek:
+            self.lijst.clearSelection()
+        elif rij >= 0 and self.lijst.item(rij) is not None and not self.lijst.item(rij).isSelected():
+            self.lijst.item(rij).setSelected(True)
+        self.lijst.blockSignals(False)
         self.held.setVisible(not zoek and cat_id == "aanbevolen")
         if zoek:
             apps = [a for a in self.cat["apps"] if past(a, zoek)]

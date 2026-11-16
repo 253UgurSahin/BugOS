@@ -109,6 +109,15 @@ wacht(lambda: w.bezig, 2)
 klopt(w.bezig and time.monotonic() - begin < 1.0, "nakijken: gebeurt op de achtergrond, het venster blijft reageren")
 klopt(wacht(lambda: not w.bezig and w.laatste), "nakijken: daarna staat de uitslag in het venster")
 klopt(w.kop.text().startswith(("1 ding", "1 thing")), "nakijken: '1 ding om naar te kijken'")
+# D-13: opnieuw nakijken (zoals na 'Geluid aanzetten'): een rustige bezig-stand, niet het rode uitroepteken van de
+# vorige keer met de oude zin eronder.
+w.vul()
+_chips = [w.chip_plek.itemAt(i).widget() for i in range(w.chip_plek.count())]
+_chips = [c for c in _chips if c is not None and not c.isHidden() and c.parent() is not None]
+klopt(w.bezig and w.kop.text() in ("Even kijken…", "Let me check…") and "Druk op de knop" not in w.sub.text()
+      and "Press the button" not in w.sub.text() and len(_chips) == 1 and _chips[0].neutraal,
+      f"D-13: tijdens het nakijken een neutrale bezig-stand ({w.kop.text()} | {w.sub.text()} | {len(_chips)})")
+klopt(wacht(lambda: not w.bezig and w.laatste), "D-13: daarna weer de uitslag")
 knop = next(k for k in w.findChildren(bugos_ui.Knop) if k.text() == "Zet aan")
 begin = time.monotonic()
 knop.click()
@@ -152,12 +161,23 @@ klopt('start("bugos-files"' in (ROOT / "system_files/usr/bin/bugos-help").read_t
 from collections import namedtuple as _nt  # noqa: E402
 
 _oud_du, _oud_t = bh.shutil.disk_usage, bh.t
-bh.shutil.disk_usage = lambda p: _nt("du", "total used free")(500 * 1024**3, 0, int(1.5 * 1024**3))
+# (GB van 1000 MB, zoals Bestanden: zie D-13.)
+bh.shutil.disk_usage = lambda p: _nt("du", "total used free")(500 * 1000**3, 0, int(1.5 * 1000**3))
 bh.t = lambda nl, en: nl
 _u = bh.controle_opslag()
-bh.shutil.disk_usage, bh.t = _oud_du, _oud_t
 klopt("1,5 GB" in _u.tekst if hasattr(_u, "tekst") else "1,5 GB" in str(_u),
       f"U237: 'schijf bijna vol' schrijft 1,5 GB met een komma ({_u})")
+# D-13: Hulp zei '46 GB vrij' en Bestanden '49 GB vrij' over dezelfde schijf (1024 tegen 1000). Nu net als Bestanden.
+import bugos_drives as _bd13  # noqa: E402
+
+_vrij13 = 49_300_000_000   # 49,3 GB = 45,9 GiB
+bh.shutil.disk_usage = lambda p: _nt("du", "total used free")(120 * 1000**3, 0, _vrij13)
+_u13 = bh.controle_opslag()
+bh.shutil.disk_usage = lambda p: _nt("du", "total used free")(120 * 1000**3, 0, 9_540_000_000)
+_u13b = bh.controle_opslag()
+bh.shutil.disk_usage, bh.t = _oud_du, _oud_t
+klopt("49 GB vrij" in _u13.tekst and _bd13.mooie_maat(_vrij13) == "49 GB" and "9,5 GB vrij" in _u13b.tekst,
+      f"D-13: Hulp rekent de vrije ruimte zoals Bestanden (49 GB, niet 46; 9,5 GB) ({_u13.tekst} | {_u13b.tekst})")
 
 print(f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)

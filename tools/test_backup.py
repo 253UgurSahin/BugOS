@@ -173,14 +173,15 @@ klopt(_u410, "U410: lukt het bewaren van de back-updatum niet, dan gaat de back-
 _ik = __import__("getpass").getuser()
 _v434 = bb.terug_vraag(Path(f"/stick/BugOS-Backup/papa@bugos"))
 _eigen434 = bb.terug_vraag(Path(f"/stick/BugOS-Backup/{_ik}@bugos"))
-klopt("papa@bugos" in _v434 and "'papa'" in _v434 and "\n\n" not in _eigen434 and "if lijst[0] != backup_doel(schijf):" in (ROOT / "system_files/usr/bin/bugos-backup").read_text(),
+# D-12: de vraag noemt de back-up met een gewone naam ('Back-up van Papa ...'), de waarschuwing de accountnaam.
+klopt("Papa" in _v434 and "'papa'" in _v434 and "\n\n" not in _eigen434 and "if lijst[0] != backup_doel(schijf):" in (ROOT / "system_files/usr/bin/bugos-backup").read_text(),
       "U434: terugzetten van andermans back-up: altijd kiezen, met naam en een waarschuwing")
 
 # U442: een mapnaam als '<h1>x' op de stick wordt in de vraag geen opmaak, en de zinnen zijn te vertalen.
 from PySide6.QtGui import QTextDocument as _QTD442
 _d442 = _QTD442()
 _d442.setHtml(bb.terug_vraag(Path("/stick/BugOS-Backup/<h1>papa@bugos")))
-klopt("<h1>papa@bugos" in _d442.toPlainText() and 't("De bestanden van de back-up \'{naam}\'' in
+klopt("<h1>papa" in _d442.toPlainText() and 't("De bestanden uit \'{naam}\'' in
       (ROOT / "system_files/usr/bin/bugos-backup").read_text(),
       f"U442: de naam van de back-up wordt letterlijk getoond, en de vraag is te vertalen ({_d442.toPlainText()[:60]!r})")
 
@@ -282,6 +283,106 @@ import re as _re  # noqa: E402
 
 klopt(any(_re.search(r"--backup-dir=.*\d{4}-\d{2}-\d{2} \d{2}\.\d{2}\.\d{2}$", a) for a in bb.rsync_terug(_bk, _th)),
       "U381: de map voor vervangen bestanden heeft ook de tijd: twee keer terugzetten op één dag overschrijft niets")
+
+# D-11: op Fedora is /media een koppeling naar run/media. Dezelfde schijf stond er dan twee keer in (als
+# /run/media/test/USBSTICK, 'zit in de computer: alleen terugzetten', en als /media/test/USBSTICK, 'heeft al een
+# back-up', waarop je dan wél een back-up kon maken). Na te bootsen met een tijdelijke map en een koppeling.
+_ik = __import__("getpass").getuser()
+_wortel = TMP / "d11"
+(_wortel / "run" / "media" / _ik / "USBSTICK").mkdir(parents=True)
+(_wortel / "media").symlink_to("run/media")
+_gevonden = bb.schijven_in((_wortel / "run" / "media" / _ik, _wortel / "media" / _ik, _wortel / "media"),
+                           is_koppel=lambda p: p.name == "USBSTICK")
+klopt(_gevonden == [_wortel / "run" / "media" / _ik / "USBSTICK"],
+      f"D-11: een schijf staat er één keer in, ook via de koppeling /media -> run/media ({_gevonden})")
+_intern = str(_wortel / "run" / "media" / _ik / "USBSTICK")
+_via_media = _wortel / "media" / _ik / "USBSTICK"
+bb.LAATSTE_INTERNE.clear()
+bb.LAATSTE_INTERNE.add(_intern)
+klopt(bb.zonder_interne([_via_media], {_intern}) == [] and bb.alleen_terugzetten(_via_media),
+      "D-11: dezelfde schijf in de computer via /media is ook 'in de computer' (geen back-up erop maken)")
+bb.LAATSTE_INTERNE.clear()
+
+# D-12: een gewone naam voor de back-up in plaats van 'test@bugos', met de dag en de tijd van de laatste back-up.
+import time as _tijd12  # noqa: E402
+
+_jaar = _tijd12.localtime().tm_year
+_stip = _tijd12.mktime((_jaar, 11, 16, 13, 20, 0, 0, 0, -1))
+_bk12 = TMP / "stick12" / "BugOS-Backup"
+_eigen12 = _bk12 / f"{_ik}@{bb.computernaam()}"
+_papa12 = _bk12 / "papa@oude-laptop"
+for _b in (_eigen12, _papa12):
+    (_b / "Documents" / "sub").mkdir(parents=True)
+    (_b / bb.LIJSTJE).write_text(json.dumps({"DOCUMENTS": "Documents"}))
+    os.utime(_b / bb.LIJSTJE, (_stip, _stip))
+_n_eigen, _n_papa = bb.mooie_naam(_eigen12), bb.mooie_naam(_papa12)
+_vraag12 = bb.terug_vraag(_eigen12)
+klopt(_n_eigen.startswith(("Back-up van ", "Backup of ")) and _n_eigen.endswith(("16 november 13:20", "16 November 13:20"))
+      and "@" not in _n_eigen and " op " not in _n_eigen and " on " not in _n_eigen,
+      f"D-12: de back-up heet gewoon 'Back-up van <naam>, 16 november 13:20' ({_n_eigen!r})")
+klopt(("Papa op oude-laptop" in _n_papa or "Papa on oude-laptop" in _n_papa) and "@" not in _n_papa,
+      f"D-12: een back-up van een ander account of een andere computer zegt van wie en welke computer ({_n_papa!r})")
+klopt(_n_eigen in _vraag12 and f"'{_eigen12.name}'" not in _vraag12,
+      f"D-12: de vraag voor het terugzetten noemt de gewone naam, niet '{_eigen12.name}' ({_vraag12[:70]!r})")
+
+# D-12: één bestand of map terugzetten, op dezelfde plek in je eigen map, nooit iets overschrijven ('naam (2)').
+(_eigen12 / "Documents" / "sub" / "brief.txt").write_text("uit de back-up")
+(_eigen12 / "Documents" / "los.txt").write_text("los")
+schrijf(THUIS / "Documents" / "sub" / "brief.txt", b"mijn nieuwe versie")
+_doel_b = bb.een_terug_doel(_eigen12, _eigen12 / "Documents" / "sub" / "brief.txt", THUIS)
+_doel_m = bb.een_terug_doel(_eigen12, _eigen12 / "Documents" / "sub", THUIS)
+_doel_l = bb.een_terug_doel(_eigen12, _eigen12 / "Documents" / "los.txt", THUIS)
+klopt(_doel_b == THUIS / "Documents" / "sub" / "brief (2).txt" and _doel_m == THUIS / "Documents" / "sub (2)"
+      and _doel_l == THUIS / "Documents" / "los.txt",
+      f"D-12: één ding komt op dezelfde plek terug; staat daar al iets, dan als 'naam (2)' ({_doel_b}, {_doel_m})")
+_r1 = _sp3.run(bb.een_terug_opdracht(_eigen12 / "Documents" / "sub" / "brief.txt", _doel_b), capture_output=True)
+_r2 = _sp3.run(bb.een_terug_opdracht(_eigen12 / "Documents" / "sub", _doel_m), capture_output=True)
+klopt(_r1.returncode == 0 and _r2.returncode == 0 and _doel_b.read_text() == "uit de back-up"
+      and (THUIS / "Documents" / "sub" / "brief.txt").read_text() == "mijn nieuwe versie"
+      and (_doel_m / "brief.txt").read_text() == "uit de back-up",
+      "D-12: het bestand en de map staan terug, en je eigen nieuwere bestand is niet overschreven")
+(_eigen12 / "Documents" / "naar-buiten").symlink_to(TMP)
+klopt(bb.een_terug_doel(_eigen12, _eigen12, THUIS) is None
+      and bb.een_terug_doel(_eigen12, _eigen12 / bb.LIJSTJE, THUIS) is None
+      and bb.een_terug_doel(_eigen12, TMP / "thuis", THUIS) is None
+      and bb.een_terug_doel(_eigen12, _eigen12 / "Documents" / "naar-buiten", THUIS) is None,
+      "D-12: alleen wat echt in een map van de back-up staat (niet de back-up zelf, het lijstje of iets daarbuiten)")
+(_eigen12 / "Documents" / "naar-buiten").unlink()
+
+# D-12: het kiesvenster toont de back-up als boom (zonder het lijstje van BugOS) en geeft het gekozen ding terug.
+from PySide6.QtCore import QTimer as _QT12  # noqa: E402
+from PySide6.QtWidgets import QApplication as _QA12  # noqa: E402
+
+_app12 = _QA12.instance() or _QA12([])
+_zag12: dict = {}
+
+
+def _kies_auto(poging: int = 0) -> None:
+    """Wacht tot het venstertje er is en de map geladen is (QFileSystemModel leest op de achtergrond), en kies dan."""
+    dlg = _QA12.activeModalWidget()
+    if dlg is None or not hasattr(dlg, "boom"):
+        if poging < 200:
+            _QT12.singleShot(50, lambda: _kies_auto(poging + 1))
+        return
+    wortel = dlg.boom.rootIndex()
+    namen = sorted(dlg.proxy.index(r, 0, wortel).data() for r in range(dlg.proxy.rowCount(wortel)))
+    if namen != ["Documents"] and poging < 200:
+        _QT12.singleShot(50, lambda: _kies_auto(poging + 1))
+        return
+    _zag12["namen"] = namen
+    dlg.boom.setCurrentIndex(dlg.proxy.mapFromSource(dlg.model.index(str(_eigen12 / "Documents" / "los.txt"))))
+    dlg.kies.click()
+
+
+_QT12.singleShot(0, _kies_auto)
+_QT12.singleShot(15000, lambda: _QA12.activeModalWidget() and _QA12.activeModalWidget().reject())
+_gekozen12 = bb.kies_in_backup(None, _eigen12)
+klopt(_zag12.get("namen") == ["Documents"] and _gekozen12 == _eigen12 / "Documents" / "los.txt",
+      f"D-12: 'Eén bestand of map terugzetten' kiest in de back-up, zonder het lijstje van BugOS ({_zag12}, {_gekozen12})")
+_bron = (ROOT / "system_files/usr/bin/bugos-backup").read_text(encoding="utf-8")
+klopt('t("Eén bestand of map terugzetten"' in _bron and "self.een_terug.clicked.connect(self.zet_een_terug)" in _bron,
+      "D-12: het venster heeft de knop 'Eén bestand of map terugzetten'")
+_app12.processEvents()   # het venstertje echt opruimen (deleteLater) voor het einde
 
 print(f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)

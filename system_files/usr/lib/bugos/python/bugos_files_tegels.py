@@ -266,7 +266,9 @@ def teken_papier(p: QPainter, r: QRectF, ext: str) -> None:
     p.drawPath(vouw)
     dpr = p.device().devicePixelRatioF() if p.device() else 1.0
     if soort in ("muziek", "film", "doos"):
-        icoon = {"muziek": "muziek", "film": "film", "doos": "map"}[soort]
+        # 'doos' (programma's, pakketten, archieven) is een doos, geen map: een .exe met een mapje erop leek een map
+        # die je kon openen (D-15).
+        icoon = {"muziek": "muziek", "film": "film", "doos": "doos"}[soort]
         m = w * 0.46
         pm = lijn_pixmap(icoon, QColor(kleur), int(m * dpr), 2.0)
         p.drawPixmap(QRectF(r.center().x() - m / 2, r.top() + h * 0.22, m, m), pm, QRectF())

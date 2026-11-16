@@ -775,5 +775,49 @@ klopt 'grep -q "trigger --action=change --subsystem-match=block --property-match
 klopt 'grep -qx "systemctl enable bugos-hide-system-drives.service" "$ROOT/build_files/build.sh" && grep -q "/usr/libexec/bugos-hide-system-drives" "$ROOT/build_files/build.sh"' \
     "B-06: de dienst staat aan en het script is uitvoerbaar in het beeld"
 unset BUGOS_UDEV_REGELS BUGOS_UTAB
+
+# D-09: build.sh werkt geen pakketten van de basis bij. 'kwrite' in packages.txt haalde KWrite 26.08.3 binnen bovenop
+# kf6-kconfig 6.31 van de basis, en dan ging geen enkel .txt-bestand meer open. We knippen het installeerstuk uit
+# build.sh en draaien het met een nep-rpm (de 'basis' heeft kwrite en git) en een nep-dnf5 die zijn opdracht opschrijft.
+# Verwacht: dnf5 krijgt alleen de nieuwe pakketten, nooit kwrite of git.
+mkdir -p "$TMP/ctx"
+printf '# uitleg\nkwrite\nwine\n\ngit\nkio-fuse\n' >"$TMP/ctx/packages.txt"
+nep rpm 'case "$2" in kwrite|git) exit 0 ;; *) exit 1 ;; esac'
+nep dnf5 "echo \"\$@\" >>'$TMP/dnf5-log'"
+: >"$TMP/dnf5-log"
+sed -n '/^mapfile -t ALLE_PAKKETTEN/,/^fi$/p' "$ROOT/build_files/build.sh" | sed "s|/ctx/packages.txt|$TMP/ctx/packages.txt|" \
+    >"$TMP/installeer.sh"
+PATH="$TMP/bin:$PATH" bash "$TMP/installeer.sh" >/dev/null 2>&1
+klopt '[ "$(cat "$TMP/dnf5-log")" = "install -y --skip-unavailable wine kio-fuse" ]' \
+    "D-09: build.sh installeert alleen wat de basis nog niet heeft, en werkt KWrite van de basis niet bij ($(cat "$TMP/dnf5-log"))"
+# Heeft de basis alles al, dan roept build.sh dnf5 helemaal niet aan (dnf5 install zonder pakketten is een fout).
+nep rpm 'exit 0'
+: >"$TMP/dnf5-log"
+PATH="$TMP/bin:$PATH" bash "$TMP/installeer.sh" >/dev/null 2>&1
+klopt '[ ! -s "$TMP/dnf5-log" ]' "D-09: zit alles al in de basis, dan installeert build.sh niets"
+# D-09, de echte oorzaak: de basis bracht KWrite 26.08.3 mee bovenop KDE Frameworks 6.31. build.sh ziet met
+# LD_BIND_NOW=1 kwrite --version dat de editor niet start en werkt dan alle frameworks (alleen kf6 met versie 6.x,
+# niet kf6-kirigami-addons met een eigen nummering) samen bij. Nep-kwrite start pas na die update.
+sed -n '/^editor_start() {/,/^fi$/p' "$ROOT/build_files/build.sh" >"$TMP/editor.sh"
+nep rpm "printf 'kf6-kconfig 6.31.0\nkf6-kirigami-addons 1.15.0\nkf6-ktexteditor 6.31.0\nkf6-kconfig 6.31.0\n'"
+nep dnf5 "echo \"\$@\" >>'$TMP/dnf5-log'; : >'$TMP/kf6-bij'"
+nep kwrite "[ \"\$LD_BIND_NOW\" = 1 ] && [ -e '$TMP/kf6-bij' ]"
+nep kate 'exit 0'
+: >"$TMP/dnf5-log"; rm -f "$TMP/kf6-bij"
+PATH="$TMP/bin:$PATH" bash -e "$TMP/editor.sh" >/dev/null 2>&1
+code=$?
+klopt '[ "$code" -eq 0 ] && [ "$(cat "$TMP/dnf5-log")" = "upgrade -y kf6-kconfig kf6-ktexteditor" ]' \
+    "D-09: start de teksteditor niet, dan werkt build.sh alle KDE Frameworks samen bij ($(cat "$TMP/dnf5-log"))"
+# Start hij wel, dan blijft de basis precies de basis (geen dnf5).
+: >"$TMP/dnf5-log"
+PATH="$TMP/bin:$PATH" bash -e "$TMP/editor.sh" >/dev/null 2>&1
+klopt '[ ! -s "$TMP/dnf5-log" ]' "D-09: start de teksteditor gewoon, dan werkt build.sh niets bij"
+# Helpt de update niet, dan stopt de bouw (exit 1) in plaats van een beeld zonder werkende editor.
+nep kwrite 'exit 127'
+PATH="$TMP/bin:$PATH" bash -e "$TMP/editor.sh" >/dev/null 2>&1
+code=$?
+klopt '[ "$code" -ne 0 ]' "D-09: start de teksteditor ook na de update niet, dan stopt de bouw"
+rm -f "$TMP/bin/rpm" "$TMP/bin/dnf5" "$TMP/bin/kwrite" "$TMP/bin/kate" "$TMP/kf6-bij"
+
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

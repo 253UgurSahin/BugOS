@@ -35,18 +35,34 @@ SOORTEN = {  # extensie -> (kleur, teken in het papiertje)
     "pptx": ("#F2711C", "tekst"), "odp": ("#F2711C", "tekst"), "zip": ("#6B7280", "doos"),
     "7z": ("#6B7280", "doos"), "rar": ("#6B7280", "doos"), "tar": ("#6B7280", "doos"), "gz": ("#6B7280", "doos"),
     "exe": ("#8B5CF6", "doos"), "msi": ("#8B5CF6", "doos"), "iso": ("#6B7280", "doos"),
+    "deb": ("#8B5CF6", "doos"), "rpm": ("#8B5CF6", "doos"), "appimage": ("#8B5CF6", "doos"),
+    "html": ("#2F7BF5", "tekst"), "htm": ("#2F7BF5", "tekst"),
     "mp3": ("#E2457A", "muziek"), "flac": ("#E2457A", "muziek"), "ogg": ("#E2457A", "muziek"),
     "wav": ("#E2457A", "muziek"), "m4a": ("#E2457A", "muziek"), "mp4": ("#0EA5A4", "film"),
     "mkv": ("#0EA5A4", "film"), "avi": ("#0EA5A4", "film"), "mov": ("#0EA5A4", "film"), "webm": ("#0EA5A4", "film"),
 }
+# De regel voor extensies in Bestanden (D-15, één regel, bewust gekozen):
+#   - VERBORGEN bij gewone dingen die je alleen bekijkt of bewerkt: documenten, tabellen, presentaties, tekst,
+#     webpagina's (.html, .htm), foto's, muziek en video. 'Recept.odt' heet gewoon 'Recept', zoals in Windows.
+#   - ZICHTBAAR bij al het andere, en altijd bij wat iets kan doen of iets kan verstoppen: programma's en pakketten
+#     (.exe, .msi, .deb, .rpm, .AppImage, .sh ...), archieven (.zip, .7z) en wat BugOS niet kent. Zo valt
+#     'foto.jpg.exe' op: de laatste extensie (.exe) telt, en die wordt nooit verborgen (veiliger dan Windows, dat
+#     ook .exe verbergt). Het tegeltje zegt het bovendien in een gekleurd labeltje (EXE, DEB).
+# Eerst zag je .txt verborgen maar .html wel: dat leek willekeurig. .html hoort bij de gewone dingen.
 VERBERG_EXT = AFBEELDING | ODF | {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".rtf", ".md",
-                                  ".csv", ".mp3", ".flac", ".ogg", ".wav", ".m4a", ".mp4", ".mkv", ".avi", ".mov", ".webm"}
+                                  ".csv", ".html", ".htm",
+                                  ".mp3", ".flac", ".ogg", ".wav", ".m4a", ".mp4", ".mkv", ".avi", ".mov", ".webm"}
+# Nooit verbergen, ook niet als iemand ze ooit aan VERBERG_EXT toevoegt (de test kijkt dat na).
+TOON_ALTIJD_EXT = {".exe", ".msi", ".bat", ".cmd", ".com", ".scr", ".deb", ".rpm", ".appimage", ".flatpak",
+                   ".flatpakref", ".sh", ".run", ".desktop", ".zip", ".7z", ".rar", ".tar", ".gz", ".iso"}
 
 
 def toon_naam(naam: str, is_map: bool) -> str:
-    """'Recept.odt' wordt 'Recept'. Programma's en onbekende bestanden houden hun extensie (veiliger)."""
+    """'Recept.odt' wordt 'Recept'. Programma's, pakketten, archieven en onbekende bestanden houden hun extensie
+    (veiliger; zie de regel bij VERBERG_EXT)."""
     p = Path(naam)
-    if not is_map and p.suffix.lower() in VERBERG_EXT and p.stem:
+    ext = p.suffix.lower()
+    if not is_map and ext in VERBERG_EXT and ext not in TOON_ALTIJD_EXT and p.stem:
         return p.stem
     return naam
 
