@@ -178,8 +178,10 @@ class Logboek:
         if printers_:
             delen.append(t("{n} printers", "{n} printers").format(n=printers_) if printers_ != 1 else
                          t("1 printer", "1 printer"))
-        if any(a.get("soort") == "profielmap" for a in acties):
-            delen.append(t("Firefox of Thunderbird", "Firefox or Thunderbird"))
+        # Welk programma: een profiel van Thunderbird staat in een map met 'thunderbird' in de naam.
+        profielen = {"Thunderbird" if "thunderbird" in str(a.get("pad")).lower() else "Firefox"
+                     for a in acties if a.get("soort") == "profielmap"}
+        delen.extend(sorted(profielen))
         wanneer = ""
         try:
             d = datetime.fromisoformat(str(self.data.get("tijd")))

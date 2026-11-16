@@ -613,10 +613,21 @@ def venster() -> int:
             self.toon_programmas(info(bron).get("programmas") if bron is not None else None)
 
         def toon_programmas(self, programmas) -> None:
-            lijst, rest = ot.suggesties(programmas)
+            # Welke Winkel-apps er al zijn (Flatpak): die krijgen 'Openen' in plaats van 'In de Winkel'.
+            try:
+                import bugos_apps
+                al = set(bugos_apps.flatpak_lijst())
+            except Exception:  # noqa: BLE001  geen flatpak: dan gewoon alles als 'In de Winkel'
+                al = set()
+            lijst, rest = ot.suggesties(programmas, geinstalleerd=al)
             for s in lijst:
                 knop = None
-                if s.id:
+                if s.id and s.soort == "al":
+                    # Staat er al: meteen openen (flatpak run), niet nog eens naar de Winkel.
+                    knop = Knop(t("Openen", "Open"), "stil")
+                    knop.setAccessibleName(t("{n} openen", "Open {n}").format(n=s.naam))
+                    knop.clicked.connect(lambda _=False, i=s.id: start("flatpak", "run", i))
+                elif s.id:
                     knop = Knop(t("In de Winkel", "In the Store") if s.soort == "winkel" else
                                 t("Bekijk {n}", "See {n}").format(n=s.naam), "stil")
                     knop.setAccessibleName(t("{n} in de Winkel", "{n} in the Store").format(n=s.naam))
@@ -626,16 +637,19 @@ def venster() -> int:
                     kop_t = voor
                     sub_t = t("Niet op BugOS. ", "Not on BugOS. ") + s.tekst
                     icoon = "uitroep"
-                elif s.soort == "ingebouwd":
+                elif s.soort in ("ingebouwd", "al"):
                     kop_t = s.naam
-                    sub_t = t("Voor {w}. ", "For {w}. ").format(w=voor) + s.tekst
+                    sub_t = t("Voor {w}. ", "For {w}. ").format(w=voor) + (
+                        t("Staat al op deze computer. ", "Already on this computer. ") if s.soort == "al" else "") + s.tekst
                     icoon = "vink"
                 else:
                     kop_t = s.naam
                     sub_t = (t("Voor {w}. ", "For {w}. ").format(w=voor) if voor != s.naam else "") + s.tekst
                     icoon = "lijn:apps"
-                self.programmas.voeg(rij(icoon, kop_t, sub_t, knop, "grijs" if icoon == "uitroep" else "neutraal",
-                                         vol=icoon == "uitroep"))
+                # 'vink' en 'uitroep' zijn gevulde tegeltjes (zoals in de samenvatting); met vol=False bleef het
+                # tegeltje van 'Zit al in BugOS' leeg (VM-test 2026-11-16).
+                tint = {"uitroep": "grijs", "vink": "groen"}.get(icoon, "neutraal")
+                self.programmas.voeg(rij(icoon, kop_t, sub_t, knop, tint, vol=icoon in ("uitroep", "vink")))
             if rest:
                 knop = Knop(t("Winkel openen", "Open the Store"), "stil")
                 knop.clicked.connect(lambda: start("bugos-store"))

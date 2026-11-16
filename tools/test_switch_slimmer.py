@@ -150,6 +150,15 @@ klopt(_iconen and _iconen <= _lijn, f"overzicht: elk icoon bestaat echt (mist: {
 klopt(next(o.uitleg for o in ot.onderdelen(S) if o.sleutel == "lettertypen").startswith("1 lettertype dat"),
       "overzicht: '1 lettertype' (niet '1 lettertypen')")
 
+# Programma's: een Winkel-app die al op de computer staat, is 'al' (Openen), niet 'In de Winkel' (VM-test).
+_regels = [{"patroon": __import__("re").compile("Steam"), "soort": "winkel", "id": "com.valvesoftware.Steam",
+            "naam": "Steam", "nl": "x", "en": "x"},
+           {"patroon": __import__("re").compile("Spotify"), "soort": "winkel", "id": "com.spotify.Client",
+            "naam": "Spotify", "nl": "x", "en": "x"}]
+_sug, _rest = ot.suggesties([{"naam": "Steam"}, {"naam": "Spotify"}], _regels, {"com.valvesoftware.Steam"})
+klopt([(s.naam, s.soort) for s in _sug] == [("Spotify", "winkel"), ("Steam", "al")],
+      "programma's: Steam staat er al ('al', na de Winkel-apps), Spotify nog niet ('winkel')")
+
 # ================================================================================ het logboek ===
 lb.ACTIEF = lb.Logboek()
 lb.ACTIEF.begin("LAPTOP-PIET", "piet")
@@ -255,6 +264,8 @@ lb.onthoud("instelling", naam="taal", oud="nl")
 lb.onthoud("wifi", naam="Thuis-5G", uuid="01234567-89ab-cdef-0123-456789abcdef")
 lb.onthoud("printer", wachtrij="HP_LaserJet", naam="HP LaserJet")
 lb.ACTIEF.uitslagen([ot.Uitslag("bestanden", ot.GOED, "Je bestanden staan op hun plek.")])
+klopt("Thunderbird" in lb.Logboek().samenvatting() and "Firefox" not in lb.Logboek().samenvatting(),
+      "logboek: de samenvatting noemt Thunderbird (niet 'Firefox of Thunderbird')")
 klopt("LAPTOP-PIET" in lb.Logboek().samenvatting() and "wifi" in lb.Logboek().samenvatting(),
       f"logboek: de samenvatting noemt de computer en wat er kwam ({lb.Logboek().samenvatting()})")
 lb.ACTIEF = None
