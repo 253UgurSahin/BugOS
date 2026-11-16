@@ -722,6 +722,9 @@ klopt '! grep -q "^ConditionPathExists=!" "$SD/system/bugos-first-boot.service" 
 klopt 'sd_goed "$SD/system/bugos-first-boot.timer" "$SD/system/bugos-first-boot.service"' "Winkel: systemd kan de timer lezen"
 klopt '! grep -qxE "\s*firefox\s*" "$ROOT/build_files/packages.txt" && ! grep -q "dnf5 install -y --skip-unavailable steam" "$ROOT/build_files/build.sh"' \
     "Winkel: Firefox en Steam zitten niet meer als pakket in het beeld"
+# VM-test 2026-11-16: kinoite-main brengt Firefox zelf mee, met firefox-langpacks erbij; rpm -e --test firefox
+# weigerde daardoor, en dan had je twee Firefoxen (pakket en Flatpak). Samen weghalen.
+klopt 'grep -q "\"firefox,firefox-langpacks org.mozilla.firefox ja\"" "$ROOT/build_files/build.sh" && grep -q "rpm -e --test \"\${weg\[@\]}\"" "$ROOT/build_files/build.sh"'     "Winkel: Firefox gaat samen met zijn taalpakketten uit het beeld (anders weigert rpm)"
 klopt 'grep -q "^x-scheme-handler/https=org.mozilla.firefox.desktop" "$ROOT/system_files/etc/xdg/kde-mimeapps.list" && grep -q "^text/html=org.mozilla.firefox.desktop" "$ROOT/system_files/etc/xdg/kde-mimeapps.list"' \
     "Winkel: Firefox (de Flatpak) is de standaardbrowser"
 klopt 'grep -q "^L+ /var/lib/flatpak/extension/org.mozilla.firefox.systemconfig/x86_64/stable .* /usr/share/bugos/firefox-systemconfig$" "$ROOT/system_files/usr/lib/tmpfiles.d/bugos-firefox.conf" && grep -qF "pref(\"browser.tabs.inTitlebar\", 0);" "$ROOT/system_files/usr/share/bugos/firefox-systemconfig/defaults/pref/bugos.js"' \
