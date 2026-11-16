@@ -94,6 +94,31 @@ if [ "${#BRUG[@]}" -gt 0 ]; then
     rpm -e "${BRUG[@]}"
 fi
 
+# 32-bits Windows-programma's (de meeste installatieprogramma's, zoals die van Notepad++) (D-03).
+# Fedora 44 levert Wine als "wow64" in /usr/lib64/wine-wow64. Het SELinux-beleid kent alleen /usr/lib(64)/wine: daar
+# krijgen de Windows-dll's het label textrel_shlib_t (Wine moet die in het geheugen kunnen aanpassen: "execmod").
+# De wine-wow64-map viel erbuiten (label lib_t), dus weigerde SELinux execmod op i386-windows/ntdll.dll; Wine zei
+# "failed to set ... protection on syswow64\ntdll.dll ... noexec filesystem?" en het programma liep vast.
+# De boolean selinuxuser_execmod helpt niet: die staat al aan, en de controle gebeurt met de rechten van wie het
+# composefs-bestandssysteem van ostree aankoppelde (kernel_t), niet die van de gebruiker (zie de AVC: scontext kernel_t).
+# Dus dezelfde regels als Fedora voor /usr/lib/wine, nu ook voor wine-wow64. semanage zet ze in het beleid van het
+# image (/etc/selinux, file_contexts.local); ostree labelt /usr met dat beleid als het image wordt neergezet.
+# De paden met /usr/lib: SELinux leest /usr/lib64 als /usr/lib (file_contexts.subs_dist). In één 'semanage import'
+# (één keer het beleid opnieuw bouwen); nagegaan in het image: matchpathcon geeft daarna textrel_shlib_t.
+if [ -d /usr/lib64/wine-wow64 ]; then
+    semanage import <<'REGELS'
+fcontext -a -t textrel_shlib_t '/usr/lib/wine-wow64/.+\.so'
+fcontext -a -t textrel_shlib_t '/usr/lib/wine-wow64/.+-windows/.+\.(exe|dll|acm|drv|sys)'
+REGELS
+    # Luid stoppen als het toch niet klopt: anders werken 32-bits Windows-programma's stilletjes niet.
+    for f in /usr/lib64/wine-wow64/wine/i386-windows/ntdll.dll /usr/lib64/wine-wow64/wine/x86_64-windows/ntdll.dll; do
+        if [ -e "$f" ] && ! matchpathcon "$f" | grep -q textrel_shlib_t; then
+            echo "LET OP: $f krijgt niet het SELinux-label textrel_shlib_t: $(matchpathcon "$f")" >&2
+            exit 1
+        fi
+    done
+fi
+
 # Steam als echt systeemprogramma (beste voor controllers en game-modus).
 # Lukt dat niet, dan zet bugos-first-boot.service Steam later als Flatpak neer.
 dnf5 install -y --skip-unavailable steam || true

@@ -45,10 +45,35 @@ zoek_alternatief() {
     return 1
 }
 
+# Het .desktop-bestand van een app die al op deze computer staat (uit het systeem, een Flatpak of je eigen map), of
+# niets. Zo zien we dat bijv. KWrite (voor Notepad++) of Firefox er al is: dan hoeft hij niet uit de Winkel (D-04).
+geinstalleerde_app() {
+    local map
+    local IFS=:
+    for map in "${XDG_DATA_HOME:-$HOME/.local/share}" ${XDG_DATA_DIRS:-/usr/local/share:/usr/share} \
+        /var/lib/flatpak/exports/share "$HOME/.local/share/flatpak/exports/share"; do
+        if [ -n "$map" ] && [ -f "$map/applications/$1.desktop" ]; then
+            echo "$map/applications/$1.desktop"
+            return 0
+        fi
+    done
+    return 1
+}
+
 if ALT="$(zoek_alternatief)"; then
     APP="${ALT%%|*}"
     ID="${ALT##*|}"
-    if vraag "$(t \
+    if DESKTOP="$(geinstalleerde_app "$ID")"; then
+        # Al op BugOS: aanbieden hem meteen te openen (gio start het .desktop-bestand, zoals Bestanden dat doet).
+        if vraag "$(t \
+            "BugOS heeft al $APP. Dat doet hetzelfde als dit Windows-programma, en werkt beter op BugOS.\n\nWil je $APP openen?\n(Kies Nee om de Windows-versie toch te proberen.)" \
+            "BugOS already has $APP. It does the same as this Windows program, and works better on BugOS.\n\nDo you want to open $APP?\n(Choose No to try the Windows version anyway.)")"; then
+            if command -v gio >/dev/null 2>&1; then
+                exec gio launch "$DESKTOP"
+            fi
+            exec kioclient exec "$DESKTOP"
+        fi
+    elif vraag "$(t \
         "Dit lijkt op een programma waarvoor een betere versie voor BugOS bestaat: $APP.\n\nWil je $APP uit de BugOS Winkel halen?\n(Kies Nee om de Windows-versie toch te proberen.)" \
         "This looks like a program that has a better version for BugOS: $APP.\n\nDo you want to get $APP from the BugOS Store?\n(Choose No to try the Windows version anyway.)")"; then
         exec bugos-store "appstream://$ID"
@@ -63,15 +88,51 @@ fi
 
 # Elke gebruiker krijgt één eigen "Windows-map" voor zijn programma's.
 export WINEPREFIX="${WINEPREFIX:-$HOME/.local/share/bugos/windows}"
+
+# Is de schijf (bijna) vol waar de Windows-map komt? Een nieuwe Windows-map is zo'n 500 MB; met minder dan 1 GB vrij
+# noemen we de computer "vol". Alleen dan zeggen we dat ook: een andere fout is geen volle schijf (D-02).
+# df -Pk: altijd één regel per schijf in KB (ook met een lange naam); we kijken bij de dichtstbijzijnde map die al
+# bestaat, want de Windows-map zelf bestaat nog niet.
+schijf_vol() {
+    local map="$1" vrij
+    while [ ! -d "$map" ] && [ "$map" != / ] && [ -n "$map" ]; do map="$(dirname "$map")"; done
+    vrij="$(df -Pk -- "$map" 2>/dev/null | awk 'NR==2 {print $4}')"
+    [[ "$vrij" =~ ^[0-9]+$ ]] && [ "$vrij" -lt 1048576 ]
+}
+
+# Windows klaarzetten zonder dat Wine zijn eigen vensters laat zien ("De Wine-configuratie wordt bijgewerkt", en
+# vroeger de vraag om Mono te downloaden) (D-05). BugOS laat zelf al "Even geduld..." zien. Zonder DISPLAY en
+# WAYLAND_DISPLAY kan Wine geen venster openen; Mono en Gecko komen uit de pakketten van het systeem (wine-mono,
+# mingw*-wine-gecko), dus er hoeft niets gedownload of gevraagd te worden. Lukt het zo niet (een Wine die per se een
+# scherm wil), dan nog één keer gewoon, met scherm: liever een Wine-venster dan geen Windows-programma's.
+# Daarna wachten tot de Wine-achtergronddienst (wineserver) van dat klaarzetten weg is: anders zou het programma
+# straks in die sessie zonder scherm starten en zie je zijn venster niet. Hoogstens een minuut, dan stoppen we hem.
+wine_klaarzetten() {
+    if env -u DISPLAY -u WAYLAND_DISPLAY WINEDEBUG=-all wineboot --init >/dev/null 2>&1; then
+        timeout 60 wineserver -w >/dev/null 2>&1 || wineserver -k >/dev/null 2>&1
+        return 0
+    fi
+    wineserver -k >/dev/null 2>&1
+    WINEDEBUG=-all wineboot --init >/dev/null 2>&1
+}
+
 if [ ! -d "$WINEPREFIX" ]; then
     melding "$(t "Even geduld..." "Please wait...")" \
         "$(t "De eerste keer zet BugOS alles klaar voor Windows-programma's. Dit duurt een minuutje." \
             "The first time, BugOS prepares everything for Windows programs. This takes a minute.")"
-    if ! WINEDEBUG=-all wineboot --init >/dev/null 2>&1; then
+    # Wine maakt alleen de laatste map zelf: ~/.local/share/bugos bestaat op een nieuwe computer nog niet, en dan
+    # mislukte het klaarzetten altijd ("chdir ... No such file or directory") (D-02). Dus de map erboven eerst maken.
+    mkdir -p -- "$(dirname "$WINEPREFIX")" 2>/dev/null
+    if ! wine_klaarzetten; then
         # Een half klaargezette Windows-map werkt later ook niet: weg ermee, dan de volgende keer opnieuw.
         rm -rf -- "$WINEPREFIX"
-        fout "$(t "Klaarzetten voor Windows-programma's lukte niet. Is je computer vol? Probeer het straks nog eens." \
-            "Preparing for Windows programs did not work. Is your computer full? Try again later.")"
+        if schijf_vol "$WINEPREFIX"; then
+            fout "$(t "Klaarzetten voor Windows-programma's lukte niet: je computer is vol. Maak eerst ruimte (bijv. de prullenbak leegmaken in Bestanden) en probeer het dan nog eens." \
+                "Preparing for Windows programs did not work: your computer is full. Make room first (for example empty the trash in Files) and then try again.")"
+        else
+            fout "$(t "Klaarzetten voor Windows-programma's lukte niet. Probeer het straks nog eens, of herstart de computer eerst." \
+                "Preparing for Windows programs did not work. Try again later, or restart the computer first.")"
+        fi
         exit 1
     fi
 fi

@@ -33,6 +33,11 @@ if [ "${1:-}" = --bijwerken ]; then
     for doos in bugos-fedora bugos-ubuntu; do
         if grep -q " $doos " <<<"$lijst"; then
             distrobox upgrade "$doos" >/dev/null 2>&1 9>&- || { echo "bugos-package: $doos bijwerken lukte niet" >&2; mislukt=1; }
+            # Draaide het doosje niet voor het bijwerken (geen programma eruit open)? Dan weer uit: anders bleef het de
+            # hele dag draaien en geheugen gebruiken, net als na het installeren (D-08).
+            if ! grep " $doos " <<<"$lijst" | grep -qE '\|[[:space:]]*Up\b'; then
+                distrobox stop --yes "$doos" >/dev/null 2>&1 9>&- || true
+            fi
         fi
     done
     exit "$mislukt"   # mislukt: systemd probeert het later opnieuw (U473)
@@ -80,9 +85,24 @@ TOON="${TOON//>/›}"
 
 # Stap 1: staat het in de Winkel?
 # LC_ALL=C: anders zegt flatpak "Geen overeenkomsten gevonden" (in je eigen taal) en zouden we dat voor een app aanzien.
-# En alleen iets dat op een app-naam lijkt (org.voorbeeld.App) telt.
-GEVONDEN="$(LC_ALL=C flatpak search --columns=application "$NAAM" 2>/dev/null | head -n1)"
-if [[ "$GEVONDEN" =~ ^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+$ ]]; then
+# flatpak search zoekt "ongeveer": voor 'hello' kwam Discord bovenaan, en bood BugOS Discord aan (D-06). Dus alleen een
+# app die precies zo heet, of waarvan de app-naam op het pakket eindigt (gimp -> org.gimp.GIMP; hoofdletters tellen
+# niet). Niet org.gimp.GIMP.Manual voor 'gimp'. Zonder zo'n app: geen Winkel-vraag, gewoon installeren.
+# flatpak zet de kolommen (naam, app-naam) met een tab ertussen als het niet in een terminal schrijft.
+winkel_app() {
+    local naam="${1,,}" app id
+    while IFS=$'\t' read -r app id; do
+        # Alleen iets dat op een app-naam lijkt (org.voorbeeld.App) telt.
+        [[ "$id" =~ ^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+$ ]] || continue
+        if [ "${app,,}" = "$naam" ] || [[ "${id,,}" == *".$naam" ]]; then
+            echo "$id"
+            return 0
+        fi
+    done < <(LC_ALL=C flatpak search --columns=name,application "$1" 2>/dev/null)
+    return 1
+}
+GEVONDEN="$(winkel_app "$NAAM")"
+if [ -n "$GEVONDEN" ]; then
     if vraag "$(t \
         "\"$TOON\" staat ook in de BugOS Winkel. Dat is veiliger en wordt bijgewerkt met de rest.\n\nWil je het uit de Winkel halen?" \
         "\"$TOON\" is also in the BugOS Store. That is safer and is updated with everything else.\n\nDo you want to get it from the Store?")"; then
@@ -90,24 +110,155 @@ if [[ "$GEVONDEN" =~ ^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+$ ]]; then
     fi
 fi
 
-# Stap 2: in een doosje installeren.
+# ---------------------------------------------------------------- hulpjes voor stap 2 ---
+# Een doosje maken en een pakket installeren is zwaar werk: een paar honderd MB downloaden, uitpakken en apt/dnf.
+# Op een trage computer bleef het scherm daarbij minutenlang hangen, met maar één melding "Bezig met installeren..."
+# in 9 minuten (D-07). Daarom: alles met lage voorrang, echte stappen in de melding, en vooraf zeggen hoe lang het duurt.
+
+# Lage voorrang: de processor alleen als niets anders hem wil (CPUWeight=idle), de schijf met weinig gewicht
+# (IOWeight=10), en ook nice/ionice (die gaan over op podman, conmon en alles in het doosje). systemd-run --scope
+# maakt er een eigen eenheid van (run-….scope) in plaats van die van 'Pakket installeren (BugOS)': dan staat het
+# doosje ook niet als jouw geopende programma in Taakbeheer (D-08). Eerst proberen of systemd-run hier werkt (zonder
+# gebruikers-systemd, zoals in een test, lukt dat niet); anders alleen nice en ionice.
+LAAG=()
+SYSTEMD_LAAG=(systemd-run --user --scope --quiet --collect -p CPUWeight=idle -p IOWeight=10)
+if command -v systemd-run >/dev/null 2>&1 && timeout 10 "${SYSTEMD_LAAG[@]}" -- true >/dev/null 2>&1; then
+    LAAG=("${SYSTEMD_LAAG[@]}" --)
+fi
+command -v nice >/dev/null 2>&1 && LAAG+=(nice -n 19)
+# Klasse 2, laagste stand (niet 3 'alleen als de schijf niets doet'): dan staat het nooit helemaal stil.
+command -v ionice >/dev/null 2>&1 && LAAG+=(ionice -c 2 -n 7)
+laag() { "${LAAG[@]}" "$@"; }
+
+# Eén melding die we steeds bijwerken (notify-send --replace-id), zodat je ziet bij welke stap BugOS is, zonder een
+# stapel losse meldingen. Kan notify-send dat niet, dan een gewone melding.
+MELDING_ID=""
+voortgang() {
+    local id
+    if [ -n "$MELDING_ID" ]; then
+        id="$(notify-send --app-name=BugOS --icon=bugos-package --hint=string:desktop-entry:bugos-settings \
+            --print-id --replace-id="$MELDING_ID" "$1" "$2" 2>/dev/null)" || id=""
+    else
+        id="$(notify-send --app-name=BugOS --icon=bugos-package --hint=string:desktop-entry:bugos-settings \
+            --print-id "$1" "$2" 2>/dev/null)" || id=""
+    fi
+    if [[ "$id" =~ ^[0-9]+$ ]]; then
+        MELDING_ID="$id"
+    else
+        melding "$1" "$2"
+    fi
+}
+
+# bezig "titel" "tekst" opdracht...: draai de opdracht met lage voorrang en laat intussen zien dat BugOS bezig is,
+# met elke minuut hoe lang al (een stap van minuten zonder teken van leven lijkt vastgelopen). Geeft de afsluitcode
+# van de opdracht terug. De uitvoer van de opdracht gaat waar de aanroeper hem heen stuurt (>"$LOG").
+bezig() {
+    local titel="$1" tekst="$2" pid code=0 begin=$SECONDS volgende=60
+    shift 2
+    voortgang "$titel" "$tekst"
+    laag "$@" &
+    pid=$!
+    while kill -0 "$pid" 2>/dev/null; do
+        sleep 1
+        if [ $((SECONDS - begin)) -ge "$volgende" ]; then
+            voortgang "$titel" "$tekst $(t "(al $((volgende / 60)) min. bezig)" "($((volgende / 60)) min. so far)")"
+            volgende=$((volgende + 60))
+        fi
+    done
+    wait "$pid" || code=$?
+    return "$code"
+}
+
+# Fout bij het ophalen of maken van het doosje: een volle computer is geen 'heb je internet?' (U424).
+doos_fout() {
+    if grep -qiE "no space left on device|not enough (disk |free )?space" "$1"; then
+        fout "$(t "Het doosje kon niet gemaakt worden: je computer is vol. Maak eerst ruimte (bijv. de prullenbak leegmaken in Bestanden)." \
+            "The box could not be created: your computer is full. Make room first (for example empty the trash in Files).")"
+    else
+        fout "$(t "Het doosje kon niet gemaakt worden. Heb je internet?" "The box could not be created. Are you online?")"
+    fi
+}
+
+# Hoe groot is het doosje dat nog gedownload moet worden, in MB? Leeg als het er al is of als we het niet weten
+# (geen internet, skopeo of jq). skopeo kijkt bij de bron welke lagen er voor deze computer zijn, zonder te downloaden.
+download_mb() {
+    command -v podman >/dev/null 2>&1 && podman image exists "$1" 2>/dev/null && return 0
+    command -v skopeo >/dev/null 2>&1 && command -v jq >/dev/null 2>&1 || return 0
+    local bytes
+    bytes="$(timeout 20 skopeo inspect "docker://$1" 2>/dev/null | jq -r '[.LayersData[]?.Size // 0] | add // empty' 2>/dev/null)"
+    if [[ "$bytes" =~ ^[0-9]+$ ]] && [ "$bytes" -gt 0 ]; then
+        echo $(((bytes + 1048575) / 1048576))
+    fi
+}
+
+# Draait het doosje nu (bijv. omdat je een programma eruit gebruikt)? 'distrobox list' zegt dan "Up ...".
+doos_draait() {
+    distrobox list 2>/dev/null | grep " $1 " | grep -qE '\|[[:space:]]*Up\b'
+}
+
+# ------------------------------------------------------------------- stap 2: installeren ---
+NIEUWE_DOOS=0
+distrobox list 2>/dev/null | grep -q " $DOOS " || NIEUWE_DOOS=1
+MB=""
+if [ "$NIEUWE_DOOS" = 1 ]; then
+    # Vooraf zeggen dat de eerste keer echt minuten duurt, en hoeveel er gedownload wordt (D-07).
+    MB="$(download_mb "$DOOS_BEELD")"
+    if [ -n "$MB" ]; then
+        DUUR="$(t "\n\nDe eerste keer haalt BugOS eerst het doosje op (ongeveer $MB MB downloaden) en zet het klaar. Dat duurt al gauw 5 tot 15 minuten. Je kunt intussen gewoon doorwerken; een melding laat zien hoe ver het is." \
+            "\n\nThe first time, BugOS first downloads the box (about $MB MB) and sets it up. That easily takes 5 to 15 minutes. You can keep working meanwhile; a notification shows how far it is.")"
+    else
+        DUUR="$(t "\n\nDe eerste keer haalt BugOS eerst het doosje op en zet het klaar. Dat duurt al gauw 5 tot 15 minuten. Je kunt intussen gewoon doorwerken; een melding laat zien hoe ver het is." \
+            "\n\nThe first time, BugOS first downloads the box and sets it up. That easily takes 5 to 15 minutes. You can keep working meanwhile; a notification shows how far it is.")"
+    fi
+else
+    DUUR="$(t "\n\nDit duurt een paar minuten." "\n\nThis takes a few minutes.")"
+fi
+
 vraag "$(t \
     "Wil je \"$TOON\" installeren?\n\nBugOS zet het in een apart doosje, zodat het BugOS zelf niet kapot kan maken. Het kan wel bij je eigen bestanden, zoals elk programma: installeer het alleen als je de website vertrouwt.\n\nDaarna staat het gewoon in je startmenu." \
-    "Do you want to install \"$TOON\"?\n\nBugOS puts it in a separate box, so it cannot break BugOS itself. It can still use your own files, like any program: only install it if you trust the website.\n\nAfterwards it is in your start menu.")" || exit 0
+    "Do you want to install \"$TOON\"?\n\nBugOS puts it in a separate box, so it cannot break BugOS itself. It can still use your own files, like any program: only install it if you trust the website.\n\nAfterwards it is in your start menu.")$DUUR" || exit 0
 
-melding "$(t "Bezig met installeren..." "Installing...")" \
-    "$(t "Dit kan een paar minuten duren. Je mag gewoon doorwerken." "This can take a few minutes. You can keep working.")"
+# Stappen tellen: met een nieuw doosje 3 (ophalen, klaarzetten, installeren), anders alleen installeren.
+if [ "$NIEUWE_DOOS" = 1 ]; then
+    STAPPEN=3
+else
+    STAPPEN=1
+fi
+stap_titel() {
+    if [ "$STAPPEN" -gt 1 ]; then
+        t "Bezig met installeren (stap $1 van $STAPPEN)" "Installing (step $1 of $STAPPEN)"
+    else
+        t "Bezig met installeren..." "Installing..."
+    fi
+}
 
-if ! distrobox list 2>/dev/null | grep -q " $DOOS "; then
+# Draaide het doosje al voor we begonnen (een programma eruit is open)? Dan laten we het daarna aan; anders zetten
+# we het na het installeren weer uit (D-08): het bleef anders de hele sessie draaien (honderden MB geheugen).
+DRAAIDE_AL=0
+doos_draait "$DOOS" && DRAAIDE_AL=1
+
+if [ "$NIEUWE_DOOS" = 1 ]; then
     LOG="$(mktemp)"
-    distrobox create --yes --name "$DOOS" --image "$DOOS_BEELD" >"$LOG" 2>&1 || {
-        # Een volle computer is geen 'heb je internet?' (U424).
-        if grep -qiE "no space left on device|not enough (disk |free )?space" "$LOG"; then
-            fout "$(t "Het doosje kon niet gemaakt worden: je computer is vol. Maak eerst ruimte (bijv. de prullenbak leegmaken in Bestanden)." \
-                "The box could not be created: your computer is full. Make room first (for example empty the trash in Files).")"
+    # Stap 1: het beeld van het doosje ophalen. Los van 'distrobox create', zodat je ziet dat dit het downloaden is.
+    # Is het er al (of is er geen los podman), dan doet distrobox create het in stap 2.
+    if command -v podman >/dev/null 2>&1 && ! podman image exists "$DOOS_BEELD" 2>/dev/null; then
+        if [ -n "$MB" ]; then
+            TEKST="$(t "Het doosje ophalen (ongeveer $MB MB). Je mag gewoon doorwerken." "Downloading the box (about $MB MB). You can keep working.")"
         else
-            fout "$(t "Het doosje kon niet gemaakt worden. Heb je internet?" "The box could not be created. Are you online?")"
+            TEKST="$(t "Het doosje ophalen. Je mag gewoon doorwerken." "Downloading the box. You can keep working.")"
         fi
+        bezig "$(stap_titel 1)" "$TEKST" podman pull "$DOOS_BEELD" >"$LOG" 2>&1 || {
+            doos_fout "$LOG"
+            rm -f "$LOG"
+            exit 1
+        }
+    fi
+    # Stap 2: het doosje maken en één keer starten (de eerste start zet het doosje binnenin klaar, dat duurt ook).
+    # shellcheck disable=SC2016  # $1 en $2 zijn voor die bash, niet voor deze
+    bezig "$(stap_titel 2)" "$(t "Het doosje klaarzetten. Je mag gewoon doorwerken." "Setting up the box. You can keep working.")" \
+        bash -c 'distrobox create --yes --name "$1" --image "$2" && distrobox enter "$1" -- true' bugos-package "$DOOS" "$DOOS_BEELD" \
+        >"$LOG" 2>&1 || {
+        doos_fout "$LOG"
         rm -f "$LOG"
         exit 1
     }
@@ -129,14 +280,30 @@ fi
 # Tellen hoeveel er naar het startmenu gingen: een pakket zonder programma met een venster heeft er geen (U195).
 EXPORT='n=0; f=0; for d in $( (rpm -qlp "$1" 2>/dev/null || dpkg-deb -c "$1" 2>/dev/null | awk '\''{print $6}'\'') | grep -E '\''share/applications/.*\.desktop$'\''); do if distrobox-export --app "$(basename "$d" .desktop)" >/dev/null 2>&1; then n=$((n+1)); else f=1; fi; done; echo "bugos-startmenu=$n"; [ "$n" -gt 0 ] || exit $f'
 
+# Stap 3 (of de enige stap): installeren in het doosje.
 # 'INSTALL || exit 1': EXPORT bestaat uit meer opdrachten; met && zou alleen de eerste van een gelukte installatie
 # afhangen, en meldde BugOS 'Klaar' na een mislukte installatie (U198).
-if uit="$(distrobox enter "$DOOS" -- bash -c "$INSTALL || exit 1; $EXPORT" bugos-package "$BESTAND" 2>/dev/null)"; then
+# De uitvoer gaat naar een bestand (niet uit="$(…)"): bezig() moet in deze shell draaien, anders onthoudt hij het
+# nummer van de melding niet.
+UIT="$(mktemp)"
+gelukt=0
+bezig "$(stap_titel "$STAPPEN")" "$(t "\"$TOON\" installeren. Je mag gewoon doorwerken." "Installing \"$TOON\". You can keep working.")" \
+    distrobox enter "$DOOS" -- bash -c "$INSTALL || exit 1; $EXPORT" bugos-package "$BESTAND" >"$UIT" 2>/dev/null && gelukt=1
+uit="$(cat "$UIT")"
+rm -f "$UIT"
+
+# Het doosje weer uitzetten als het voor ons begon niet draaide (D-08). Een programma eruit start het later vanzelf.
+if [ "$DRAAIDE_AL" = 0 ]; then
+    laag distrobox stop --yes "$DOOS" >/dev/null 2>&1 || true
+fi
+
+# De laatste melding vervangt die van de voortgang (zelfde nummer), zodat er geen 'Bezig...' blijft staan.
+if [ "$gelukt" = 1 ]; then
     if [ "$(echo "$uit" | sed -n 's/^bugos-startmenu=//p' | tail -1)" = 0 ]; then
-        melding "$(t "Klaar!" "Done!")" "$(t "\"$TOON\" is geïnstalleerd. Het heeft geen plek in het startmenu; je gebruikt het in de Terminal met: distrobox enter $DOOS" \
+        voortgang "$(t "Klaar!" "Done!")" "$(t "\"$TOON\" is geïnstalleerd. Het heeft geen plek in het startmenu; je gebruikt het in de Terminal met: distrobox enter $DOOS" \
             "\"$TOON\" is installed. It has no place in the start menu; you use it in the Terminal with: distrobox enter $DOOS")"
     else
-        melding "$(t "Klaar!" "Done!")" "$(t "\"$TOON\" staat nu in je startmenu. Gaan je updates vanzelf, dan wordt het elke dag bijgewerkt." \
+        voortgang "$(t "Klaar!" "Done!")" "$(t "\"$TOON\" staat nu in je startmenu. Gaan je updates vanzelf, dan wordt het elke dag bijgewerkt." \
             "\"$TOON\" is now in your start menu. If your updates are automatic, it is updated every day.")"
     fi
 else
