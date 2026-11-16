@@ -118,10 +118,15 @@ wine_klaarzetten() {
 
 # Een Windows-map die er wel is maar niet af (een eerste keer die halverwege stopte: stroom weg, schijf vol, of een
 # fout van een oudere BugOS), werkt nooit: Wine zegt dan "could not load kernel32.dll". Zo'n map zetten we opzij (niet
-# weg: er kunnen al programma's in staan) en we maken een nieuwe. Af = kernel32.dll en system.reg staan erin
+# weg: er kunnen al programma's in staan) en we maken een nieuwe. Af = kernel32.dll (64- én 32-bits) en system.reg
 # (VM-test 2026-11-16).
 wine_compleet() {
-    [ -f "$WINEPREFIX/drive_c/windows/system32/kernel32.dll" ] && [ -f "$WINEPREFIX/system.reg" ]
+    # Beide helften: 64-bits (system32) en 32-bits (syswow64). In de VM was syswow64 leeg (de 32-bits helft liep
+    # destijds vast op SELinux) terwijl system32 er wel stond: dan zegt Wine bij elk 32-bits programma
+    # "could not load kernel32.dll".
+    [ -f "$WINEPREFIX/drive_c/windows/system32/kernel32.dll" ] &&
+        [ -f "$WINEPREFIX/drive_c/windows/syswow64/kernel32.dll" ] &&
+        [ -f "$WINEPREFIX/system.reg" ]
 }
 if [ -d "$WINEPREFIX" ] && ! wine_compleet; then
     mv -- "$WINEPREFIX" "$WINEPREFIX-onaf-$(date +%Y%m%d-%H%M%S)" 2>/dev/null || rm -rf -- "$WINEPREFIX"
