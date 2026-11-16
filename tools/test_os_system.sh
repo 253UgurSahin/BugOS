@@ -891,5 +891,37 @@ code=$?
 klopt '[ "$code" -ne 0 ]' "D-09: start de teksteditor ook na de update niet, dan stopt de bouw"
 rm -f "$TMP/bin/rpm" "$TMP/bin/dnf5" "$TMP/bin/kwrite" "$TMP/bin/kate" "$TMP/kf6-bij"
 
+# Standaard-Engels, maar internationaal (eigenaar 2026-11-16: "default taal Engels internationaal, pas als je de
+# taal weet aanpassen"). Fedora schrijft LANG=en_US als je bij het installeren 'English' laat staan; buiten de VS
+# maakt bugos-taal-standaard daar dag/maand, 24 uur en A4 van (voor iedereen, via /etc/xdg/plasma-localerc).
+TS="$ROOT/system_files/usr/libexec/bugos-taal-standaard"
+ZI="$TMP/zoneinfo"; mkdir -p "$ZI"
+printf 'NL	+5222+00454	Europe/Amsterdam
+US	+404251-0740023	America/New_York
+' >"$ZI/zone.tab"
+taal_geval() {  # taal_geval <naam> <LANG of leeg> <zone of leeg>: een nep-/etc, en draai het script
+    local e="$TMP/etc-$1"
+    rm -rf "$e"; mkdir -p "$e"
+    [ -n "$2" ] && echo "LANG=\"$2\"" >"$e/locale.conf"
+    [ -n "$3" ] && ln -s "../usr/share/zoneinfo/$3" "$e/localtime"
+    BUGOS_ETC="$e" BUGOS_ZONEINFO="$ZI" bash "$TS" >/dev/null 2>&1
+    echo "$e/xdg/plasma-localerc"
+}
+f="$(taal_geval nl-zone en_US.UTF-8 Europe/Amsterdam)"
+klopt 'grep -qx "LC_TIME=en_IE.UTF-8" "$f" && grep -qx "LC_PAPER=en_IE.UTF-8" "$f" && ! grep -q LC_MONETARY "$f"'     "Taal: Engels (VS) in Amsterdam wordt internationaal Engels (dag/maand, 24 uur, A4); geld blijft van het land"
+f="$(taal_geval vs en_US.UTF-8 America/New_York)"
+klopt '[ ! -e "$f" ]' "Taal: Engels (VS) in New York blijft Amerikaans"
+f="$(taal_geval nl nl_NL.UTF-8 Europe/Amsterdam)"
+klopt '[ ! -e "$f" ]' "Taal: koos je bij het installeren Nederlands (of een andere taal), dan blijft alles af"
+f="$(taal_geval geen-zone "" "")"
+klopt 'grep -qx "LC_TIME=en_IE.UTF-8" "$f"' "Taal: geen taal en geen tijdzone: internationaal Engels"
+e="$TMP/etc-al"; rm -rf "$e"; mkdir -p "$e/xdg"; echo "LANG=en_US.UTF-8" >"$e/locale.conf"; echo eigen >"$e/xdg/plasma-localerc"
+BUGOS_ETC="$e" BUGOS_ZONEINFO="$ZI" bash "$TS" >/dev/null 2>&1
+klopt '[ "$(cat "$e/xdg/plasma-localerc")" = eigen ]' "Taal: een bestaande /etc/xdg/plasma-localerc wordt nooit overschreven"
+klopt 'grep -qx "systemctl enable bugos-taal-standaard.service" "$ROOT/build_files/build.sh" && grep -q "/usr/libexec/bugos-taal-standaard" "$ROOT/build_files/build.sh" && sd_goed "$SD/system/bugos-taal-standaard.service" && grep -q "^Before=display-manager.service" "$SD/system/bugos-taal-standaard.service"'     "Taal: de dienst staat aan, is uitvoerbaar en draait vóór het inlogscherm"
+if command -v shellcheck >/dev/null 2>&1; then
+    klopt 'shellcheck "$TS"' "Taal: shellcheck vindt niets in bugos-taal-standaard"
+fi
+
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

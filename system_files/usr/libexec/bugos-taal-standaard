@@ -1,0 +1,70 @@
+#!/usr/bin/bash
+# bugos-taal-standaard: Engels als standaard, maar dan het internationale Engels (niet het Amerikaanse).
+#
+# Jip-en-Janneke: BugOS is standaard Engels, tot BugOS weet welke taal jij wilt (de taal die je bij het installeren
+# koos, of later in Instellingen / Welkom). Laat je bij het installeren gewoon 'English' staan, dan schrijft Fedora
+# LANG=en_US.UTF-8: Amerikaans. Dan kreeg iemand in Nederland, België of waar dan ook buiten Amerika de maand vóór de
+# dag (11/16/26), een 12-uursklok, Letter-papier en inches. Dat is geen 'internationaal Engels'.
+#
+# Wat dit doet (één keer, vóór het inlogscherm):
+#   - de taal van de computer is Engels-Amerikaans (of niets), EN
+#   - de tijdzone ligt niet in de Verenigde Staten (gekeken met zone.tab: welk land hoort bij de zone)
+#   => de formaten worden voor iedereen op de computer internationaal Engels: /etc/xdg/plasma-localerc met
+#      LC_TIME, LC_PAPER en LC_MEASUREMENT = en_IE (dag/maand/jaar, 24 uur, A4, metrisch). Plasma geeft die bij het
+#      inloggen door aan alle programma's, ook die van BugOS. Geld (LC_MONETARY) laten we met rust: dat hoort bij het
+#      land, niet bij de taal.
+# Waarom en_IE: dezelfde keuze als Instellingen al maakt voor Engels buiten Amerika (formaten_voor in
+# bugos_config_account.py, U229/U242): dag/maand en 24 uur, zoals bijna overal ter wereld.
+#
+# Wat dit NIET doet:
+#   - een andere taal (Nederlands, Duits ...) of Engels van een ander land (Brits, Iers ...): daar blijft alles af;
+#   - iemand in de VS: die krijgt gewoon het Amerikaanse Engels;
+#   - een eigen keuze: kies je in Instellingen een notatie, dan staat die in je eigen plasma-localerc en die wint
+#     altijd van /etc/xdg. En staat /etc/xdg/plasma-localerc er al, dan doen we niets (nooit overschrijven).
+#
+# Voor de test: BUGOS_ETC en BUGOS_ZONEINFO wijzen naar een nep-/etc en een nep-zoneinfo.
+set -u
+
+ETC="${BUGOS_ETC:-/etc}"
+ZONEINFO="${BUGOS_ZONEINFO:-/usr/share/zoneinfo}"
+DOEL="$ETC/xdg/plasma-localerc"
+
+# Al een standaard voor de formaten (van een vorige keer, of door iemand anders gezet): nooit overschrijven.
+[ -e "$DOEL" ] && exit 0
+
+# De taal van de computer. Leeg telt als Engels-Amerikaans: dat is wat glibc dan doet.
+taal="$(sed -n 's/^LANG=//p' "$ETC/locale.conf" 2>/dev/null | tr -d '"' | head -n 1)"
+case "$taal" in
+    "" | en_US | en_US.* | C | C.* | POSIX) ;;
+    *) exit 0 ;;   # een echte keuze (nl_NL, en_GB, de_DE ...): niets aan doen
+esac
+
+# De tijdzone (/etc/localtime wijst naar .../zoneinfo/Europe/Amsterdam) en het land dat erbij hoort (zone.tab:
+# 'NL<tab>+5222+00454<tab>Europe/Amsterdam'). Geen zone of geen land (UTC): dan internationaal.
+zone="$(readlink "$ETC/localtime" 2>/dev/null | sed 's#.*/zoneinfo/##')"
+land=""
+if [ -n "$zone" ] && [ -r "$ZONEINFO/zone.tab" ]; then
+    land="$(awk -F '\t' -v z="$zone" '$3 == z { print $1; exit }' "$ZONEINFO/zone.tab")"
+fi
+# In de VS is Amerikaans Engels precies goed.
+[ "$land" = US ] && exit 0
+
+# Bestaat en_IE hier wel (glibc-all-langpacks)? Anders liever niets dan een notatie die niet werkt.
+if command -v locale >/dev/null 2>&1 && [ -z "${BUGOS_ETC:-}" ]; then
+    locale -a 2>/dev/null | grep -qix 'en_IE.utf8' || exit 0
+fi
+
+mkdir -p "$ETC/xdg"
+tmp="$DOEL.bugos-nieuw"
+cat >"$tmp" <<'EOF'
+# BugOS (bugos-taal-standaard): Engels, maar internationaal: dag/maand/jaar, 24 uur, A4 en metrisch.
+# Alleen gezet omdat de computer op Engels-Amerikaans stond en de tijdzone niet in de VS ligt.
+# Je eigen keuze in Instellingen (~/.config/plasma-localerc) gaat altijd voor.
+[Formats]
+LC_TIME=en_IE.UTF-8
+LC_PAPER=en_IE.UTF-8
+LC_MEASUREMENT=en_IE.UTF-8
+EOF
+chmod 0644 "$tmp"
+mv -f "$tmp" "$DOEL"
+echo "BugOS: Engels met internationale notatie (land: ${land:-onbekend}, zone: ${zone:-geen})"

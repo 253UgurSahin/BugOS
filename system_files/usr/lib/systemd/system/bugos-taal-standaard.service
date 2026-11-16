@@ -1,0 +1,15 @@
+# BugOS: Engels als standaard, maar internationaal (dag/maand, 24 uur, A4) als de computer niet in de VS staat.
+# Zie /usr/libexec/bugos-taal-standaard. Vóór het inlogscherm, zodat de eerste keer inloggen al goed is. Het script
+# doet niets als /etc/xdg/plasma-localerc er al is, dus elke start opnieuw draaien is onschuldig (en dan klopt het ook
+# als iemand na het installeren de tijdzone pas goed zet en opnieuw opstart).
+[Unit]
+Description=BugOS: internationaal Engels als standaard (buiten de VS)
+After=local-fs.target
+Before=display-manager.service systemd-user-sessions.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/bugos-taal-standaard
+
+[Install]
+WantedBy=multi-user.target
