@@ -25,7 +25,7 @@ The most important idea: **BugOS can't break.**
 | Windows programs | Double-click an `.exe` and it starts through Wine | If it doesn't work, BugOS explains what you can use instead. |
 | Gamers | Steam and Proton, game mode, controllers and Nvidia | Play without hassle. |
 | Developers | Developer mode switch, containers, VS Code and programming languages | Everything is ready with one click, and Bugie never sees any of it. |
-| Languages | English by default; our own screens in English and Dutch | Every other language can be added with translation files. KDE itself already speaks 50+ languages. |
+| Languages | English by default; our own screens in English and Dutch | Every other language can be added with translation files. KDE itself already speaks 50+ languages. English is international English until BugOS knows your language: if you leave 'English' in the installer and you are not in the US, `bugos-taal-standaard` gives day/month, a 24-hour clock and A4 (your own choice in Settings always wins). |
 | Installing | USB stick, also next to Windows, plus a Windows switching program | Switching should be easy. |
 | Computers | Normal PCs and laptops, Nvidia, old PCs (with light mode) | Light mode turns on by itself on slow computers. |
 | Privacy | No account and no data collection | Your computer belongs to you. |

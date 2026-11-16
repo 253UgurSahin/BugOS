@@ -22,7 +22,7 @@ cp -av --remove-destination /ctx/system_files/. /
 # alleen de programma's in /usr/bin uitvoerbaar.
 (cd /ctx/system_files && find . -type f -print0) | while IFS= read -r -d '' f; do chmod 0644 "/${f#./}"; done
 (cd /ctx/system_files && find . -mindepth 1 -type d -print0) | while IFS= read -r -d '' d; do chmod 0755 "/${d#./}"; done
-chmod 0755 /usr/bin/bugos-* /usr/libexec/bugos-user-check /usr/libexec/bugos-hide-system-drives
+chmod 0755 /usr/bin/bugos-* /usr/libexec/bugos-user-check /usr/libexec/bugos-hide-system-drives /usr/libexec/bugos-taal-standaard
 # De Python-onderdelen van BugOS vooraf vertalen: /usr is straks alleen-lezen, dus anders doet elke app dat bij
 # elke start opnieuw. Met een controlegetal (checked-hash): ostree zet de tijden van bestanden gelijk, en een
 # veranderd bestand (usr-overlay bij het zoeken naar een fout) wordt dan toch opnieuw gelezen (U313, U319).
@@ -242,6 +242,8 @@ systemctl enable bugos-first-boot.timer
 systemctl enable bugos-user-check.service
 # De systeemdelen (wortel, /boot, EFI) niet als volle, rode schijven in KDE-bestandsvensters (B-06).
 systemctl enable bugos-hide-system-drives.service
+# Engels als standaard, maar internationaal (dag/maand, 24 uur, A4) als de computer niet in de VS staat.
+systemctl enable bugos-taal-standaard.service
 # Updates: BugOS regelt dit zelf (geen uupd van Universal Blue).
 #  - het systeem: rpm-ostree haalt de nieuwe BugOS op de achtergrond op en zet
 #    hem klaar ("stage"); hij wordt actief bij de volgende keer opstarten.
