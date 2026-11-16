@@ -307,7 +307,9 @@ QMenu::item:selected {{ background: {k['knop']}; }}
 QMenu::item:disabled {{ color: {k['tekst3']}; }}
 QMenu::icon {{ padding-left: 8px; }}
 QMenu::separator {{ height: 1px; background: {k['rand']}; margin: 6px 8px; }}
-QToolTip {{ background: {k['tekst']}; color: {k['achter']}; border: none; border-radius: 8px; padding: 6px 10px; }}
+/* D-16: de tooltip volgt het thema (donker vlak in donker, licht in licht), met een rand zodat hij loskomt van wat
+   eronder ligt. Eerst was hij omgekeerd (de tekstkleur als achtergrond): een fel licht vlak in het donkere thema. */
+QToolTip {{ background: {k['vlak']}; color: {k['tekst']}; border: 1px solid {k['rand_sterk']}; border-radius: 8px; padding: 6px 10px; }}
 QCheckBox, QRadioButton {{ spacing: 10px; font-size: 15px; }}
 QSlider {{ min-height: 28px; }}
 QSlider::groove:horizontal {{ height: 8px; border-radius: 4px; background: {k['schuif_uit']}; }}

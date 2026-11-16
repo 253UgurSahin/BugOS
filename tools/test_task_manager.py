@@ -464,6 +464,28 @@ _d.wait(3000)
 klopt(_verborgen == 0 and _zichtbaar >= 1 and _tijd.time() - _t0 < 1.0,
       f"U311: Taakbeheer meet niet als het venster weg is, wel meteen weer in beeld, en stopt meteen ({_verborgen}, {_zichtbaar})")
 
+# D-16: lange namen in het midden ingekort (het eind zegt wat het is), en de tooltip volgt het thema (geen licht vlak
+# in het donkere thema).
+from PySide6.QtCore import Qt as _Qt16  # noqa: E402
+from PySide6.QtGui import QFontMetrics as _FM16  # noqa: E402
+
+import bugos_ui as _ui16  # noqa: E402
+
+_tabel16 = _tu.ProcesTabel(_tu.ProcesFilter())
+_naam16 = "polkit-kde-authentication-agent-1"
+_kort16 = _FM16(_tabel16.font()).elidedText(_naam16, _tabel16.textElideMode(), 160)
+klopt(_tabel16.textElideMode() == _Qt16.TextElideMode.ElideMiddle and _kort16.endswith("agent-1")
+      and len(_kort16) < len(_naam16), f"D-16: een lange naam wordt in het midden ingekort ({_kort16!r})")
+_tips16 = {}
+for _thema in ("licht", "donker"):
+    _k = _ui16.KLEUREN[_thema]
+    _blad = _ui16._stijlblad(_k)
+    _regel = next((r for r in _blad.splitlines() if r.startswith("QToolTip")), "")
+    _tips16[_thema] = _regel
+klopt(all(f"background: {_ui16.KLEUREN[th]['vlak']}" in r and f"color: {_ui16.KLEUREN[th]['tekst']}" in r
+          for th, r in _tips16.items()),
+      f"D-16: de tooltip heeft in licht en donker de kleuren van het thema zelf ({_tips16['donker'][:80]})")
+
 shutil.rmtree(TMP, ignore_errors=True)  # alleen onze eigen tijdelijke testmap
 print()
 print("Alles goed." if not fouten else f"{fouten} fout(en).")

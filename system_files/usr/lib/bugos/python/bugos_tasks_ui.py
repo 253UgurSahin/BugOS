@@ -592,6 +592,9 @@ class ProcesTabel(QTreeView):
         self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        # D-16: een lange naam in het midden inkorten ('polkit-kde-…tion-agent-1'), niet aan het eind: het eind zegt
+        # vaak juist welk ding het is ('-agent-1', '-helper'). De hele naam staat in de tooltip.
+        self.setTextElideMode(Qt.TextElideMode.ElideMiddle)
         self.setAccessibleName(t("Alles wat draait", "Everything that is running"))
         kop = self.header()
         kop.setStretchLastSection(False)
