@@ -150,13 +150,17 @@ fi
 # image (/etc/selinux, file_contexts.local); ostree labelt /usr met dat beleid als het image wordt neergezet.
 # De paden met /usr/lib: SELinux leest /usr/lib64 als /usr/lib (file_contexts.subs_dist). In één 'semanage import'
 # (één keer het beleid opnieuw bouwen); nagegaan in het image: matchpathcon geeft daarna textrel_shlib_t.
+# In de *-windows-mappen ALLE bestanden, niet alleen .exe/.dll: de Mono-setup laadt appwiz.cpl via rundll32, en ook
+# .dll16, .tlb, .msstyles enz. is Windows-code die Wine in het geheugen laadt (VM-test 2026-11-16: execmod geweigerd
+# op appwiz.cpl; 1656 bestanden in wine-wow64 hadden nog lib_t).
 if [ -d /usr/lib64/wine-wow64 ]; then
     semanage import <<'REGELS'
 fcontext -a -t textrel_shlib_t '/usr/lib/wine-wow64/.+\.so'
-fcontext -a -t textrel_shlib_t '/usr/lib/wine-wow64/.+-windows/.+\.(exe|dll|acm|drv|sys)'
+fcontext -a -t textrel_shlib_t '/usr/lib/wine-wow64/.+-windows/.+'
 REGELS
     # Luid stoppen als het toch niet klopt: anders werken 32-bits Windows-programma's stilletjes niet.
-    for f in /usr/lib64/wine-wow64/wine/i386-windows/ntdll.dll /usr/lib64/wine-wow64/wine/x86_64-windows/ntdll.dll; do
+    for f in /usr/lib64/wine-wow64/wine/i386-windows/ntdll.dll /usr/lib64/wine-wow64/wine/x86_64-windows/ntdll.dll \
+        /usr/lib64/wine-wow64/wine/i386-windows/appwiz.cpl; do
         if [ -e "$f" ] && ! matchpathcon "$f" | grep -q textrel_shlib_t; then
             echo "LET OP: $f krijgt niet het SELinux-label textrel_shlib_t: $(matchpathcon "$f")" >&2
             exit 1

@@ -96,6 +96,21 @@ klopt '[ "$code" = 0 ] && [ -d "$TMP/thuis/.local/share/bugos/windows" ] && ! gr
 klopt '[ "$(cat "$TMP/wineboot" 2>/dev/null)" = "DISPLAY=weg WAYLAND=weg" ] && grep -q "DISPLAY=:0" "$TMP/wine-gestart" 2>/dev/null' \
     "D-05: Windows klaarzetten zonder Wine-vensters, het programma daarna gewoon in beeld ($(cat "$TMP/wineboot" 2>/dev/null))"
 
+# Een half klaargezette Windows-map (zonder kernel32.dll, van een eerste keer die halverwege stopte) wordt opzij gezet
+# en opnieuw gemaakt; een complete map blijft gewoon staan (VM-test 2026-11-16: "could not load kernel32.dll").
+nep wineboot 'mkdir -p "$WINEPREFIX/drive_c/windows/system32" && touch "$WINEPREFIX/drive_c/windows/system32/kernel32.dll" "$WINEPREFIX/system.reg"'
+rm -rf "$TMP/thuis/.local"
+mkdir -p "$TMP/thuis/.local/share/bugos/windows/drive_c"          # half: geen kernel32.dll, geen system.reg
+touch "$TMP/thuis/.local/share/bugos/windows/mijn-spul"
+code="$(draai "$TMP/spel.exe")"
+klopt '[ "$code" = 0 ] && [ -f "$TMP/thuis/.local/share/bugos/windows/drive_c/windows/system32/kernel32.dll" ] && ls -d "$TMP"/thuis/.local/share/bugos/windows-onaf-* >/dev/null 2>&1 && [ -f "$(ls -d "$TMP"/thuis/.local/share/bugos/windows-onaf-* | head -1)/mijn-spul" ]' \
+    "Windows-map half af: opzij gezet (niets weggegooid) en opnieuw klaargezet ($code)"
+nep wineboot 'echo opnieuw >>"'"$TMP"'/wineboot-twee"; exit 0'
+rm -f "$TMP/wineboot-twee"
+draai "$TMP/spel.exe" >/dev/null
+klopt '[ ! -e "$TMP/wineboot-twee" ] && [ "$(ls -d "$TMP"/thuis/.local/share/bugos/windows-onaf-* | wc -l)" = 1 ]' \
+    "Windows-map compleet: blijft staan, niet opnieuw klaarzetten"
+
 # D-02: mislukt het klaarzetten, dan alleen "vol" zeggen als de schijf echt (bijna) vol is.
 nep wineboot 'exit 1'
 nep df 'echo "Filesystem 1024-blocks Used Available Capacity Mounted on"; echo "/dev/sda3 100000000 20000000 80000000 20% /var"'

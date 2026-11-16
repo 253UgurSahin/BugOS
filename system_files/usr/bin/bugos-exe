@@ -116,6 +116,17 @@ wine_klaarzetten() {
     WINEDEBUG=-all wineboot --init >/dev/null 2>&1
 }
 
+# Een Windows-map die er wel is maar niet af (een eerste keer die halverwege stopte: stroom weg, schijf vol, of een
+# fout van een oudere BugOS), werkt nooit: Wine zegt dan "could not load kernel32.dll". Zo'n map zetten we opzij (niet
+# weg: er kunnen al programma's in staan) en we maken een nieuwe. Af = kernel32.dll en system.reg staan erin
+# (VM-test 2026-11-16).
+wine_compleet() {
+    [ -f "$WINEPREFIX/drive_c/windows/system32/kernel32.dll" ] && [ -f "$WINEPREFIX/system.reg" ]
+}
+if [ -d "$WINEPREFIX" ] && ! wine_compleet; then
+    mv -- "$WINEPREFIX" "$WINEPREFIX-onaf-$(date +%Y%m%d-%H%M%S)" 2>/dev/null || rm -rf -- "$WINEPREFIX"
+fi
+
 if [ ! -d "$WINEPREFIX" ]; then
     melding "$(t "Even geduld..." "Please wait...")" \
         "$(t "De eerste keer zet BugOS alles klaar voor Windows-programma's. Dit duurt een minuutje." \
