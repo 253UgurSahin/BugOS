@@ -197,7 +197,10 @@ def controle_opslag() -> Uitslag:
         gebruik = shutil.disk_usage(str(Path.home()))
     except OSError:
         return Uitslag(naam, ONBEKEND, t("Kon het niet controleren.", "Could not check."))
-    vrij_gb = gebruik.free / 1024**3
+    # D-13: in GB van 1000 MB, zoals Bestanden (mooie_maat in bugos_drives) en de verpakking van een schijf. Met
+    # 1024 zei Hulp '46 GB vrij' en Bestanden '49 GB vrij' over dezelfde schijf. Beide rekenen met de ruimte die jij
+    # mag gebruiken (statvfs f_bavail: shutil.disk_usage().free hier, QStorageInfo/lsblk fsavail in Bestanden).
+    vrij_gb = gebruik.free / 1000**3
     # Bestanden > Deze computer, met de lijst 'Wat de meeste ruimte inneemt' (niet Filelight van KDE). Het stukje
     # '/ruimte' laat Bestanden meteen naar die lijst schuiven (op een klein scherm staat hij anders onder de rand).
     kijken = lambda: start("bugos-files", "computer:/ruimte")   # noqa: E731  BugOS Bestanden, niet Dolphin (U291)
@@ -210,8 +213,13 @@ def controle_opslag() -> Uitslag:
         return Uitslag(naam, PROBLEEM, zin.replace("{gb}", getal), kijken,
                        t("Laat zien wat ruimte inneemt", "Show what takes up space"))
     if vrij_gb < 10:
-        return Uitslag(naam, LET_OP, t("Nog {gb} GB vrij. Dat raakt op.", "{gb} GB free. Running low.").replace(
-                           "{gb}", f"{vrij_gb:.0f}"),
+        nl = "Nog {gb} GB vrij. Dat raakt op."
+        zin = t(nl, "{gb} GB free. Running low.")
+        # Onder de 10 met één cijfer achter de komma, zoals Bestanden (9,5 GB).
+        getal = f"{vrij_gb:.1f}"
+        if zin == nl:
+            getal = getal.replace(".", ",")
+        return Uitslag(naam, LET_OP, zin.replace("{gb}", getal),
                        kijken, t("Laat zien wat ruimte inneemt", "Show what takes up space"))
     return Uitslag(naam, OK, t(f"Genoeg ruimte: {vrij_gb:.0f} GB vrij.", f"Enough space: {vrij_gb:.0f} GB free."))
 
@@ -356,7 +364,17 @@ def venster() -> int:
             if self.bezig:
                 return
             self.bezig = True
+            # D-13: een rustige 'bezig'-stand. Eerst bleef het rode uitroepteken van de vorige keer staan, met de oude
+            # zin eronder ('Druk op de knop ernaast…'), terwijl de kop al 'Even kijken…' zei. Nu: een grijs
+            # verversen-tegeltje en de zin dat BugOS alles nakijkt; de uitslag zet straks het goede tegeltje.
+            while self.chip_plek.count():
+                oud = self.chip_plek.takeAt(0).widget()
+                if oud:
+                    oud.deleteLater()
+            self.chip_plek.addWidget(IcoonChip("lijn:verversen", "neutraal", 64, vol=False))
             self.kop.setText(t("Even kijken…", "Let me check…"))
+            self.sub.setText(t("BugOS loopt alles na. Dit duurt maar een paar seconden.",
+                               "BugOS is checking everything. This only takes a few seconds."))
             self.op_achtergrond(alles_controleren, self.toon)
 
         def repareer(self, knop, f) -> None:
