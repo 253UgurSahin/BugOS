@@ -380,12 +380,21 @@ def bestaande_bladwijzers(profiel: Path) -> dict[str, list] | None:
 
 # ============================================================ Firefox-profielen ===
 
+# Firefox als Flatpak (org.mozilla.firefox van Flathub): BugOS zet Firefox als losse app klaar, zodat je hem kunt
+# verwijderen (keuze van de eigenaar, 2026-11-16). Een Flatpak bewaart zijn profielen in zijn eigen map onder
+# ~/.var/app/<id>/, met daarin dezelfde opbouw als de gewone Firefox.
+FLATPAK_FIREFOX = "org.mozilla.firefox"
+
+
 def firefox_mappen() -> list[Path]:
-    """Waar Firefox zijn profielen kan hebben: ~/.mozilla/firefox (tot nu toe), of ~/.config/mozilla/firefox (nieuwe
-    gebruikers sinds Firefox 147). De map met een profiles.ini eerst."""
+    """Waar Firefox zijn profielen kan hebben: ~/.mozilla/firefox (tot nu toe), ~/.config/mozilla/firefox (nieuwe
+    gebruikers sinds Firefox 147), en dezelfde twee in de map van de Flatpak-Firefox. De map met een profiles.ini
+    eerst; daarna de Flatpak (die heeft BugOS nu), dan de rest."""
     thuis = Path.home()
     config = Path(os.environ.get("XDG_CONFIG_HOME") or thuis / ".config")
-    mappen = [thuis / ".mozilla" / "firefox", config / "mozilla" / "firefox"]
+    flatpak = thuis / ".var" / "app" / FLATPAK_FIREFOX
+    mappen = [flatpak / ".mozilla" / "firefox", flatpak / "config" / "mozilla" / "firefox",
+              thuis / ".mozilla" / "firefox", config / "mozilla" / "firefox"]
     return sorted(mappen, key=lambda m: not (m / "profiles.ini").is_file())
 
 
@@ -454,14 +463,29 @@ def draait(profiel: Path | None = None) -> bool:
     return False
 
 
+def firefox_opdracht() -> list[str] | None:
+    """Hoe je Firefox start: de gewone 'firefox', anders de Flatpak ('flatpak run org.mozilla.firefox'), of None."""
+    if shutil.which("firefox"):
+        return ["firefox"]
+    if shutil.which("flatpak"):
+        try:
+            if subprocess.run(["flatpak", "info", FLATPAK_FIREFOX], capture_output=True, timeout=15).returncode == 0:
+                return ["flatpak", "run", FLATPAK_FIREFOX]
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return None
+
+
 def maak_profiel() -> Path | None:
     """Nog nooit Firefox gestart: laat Firefox zelf zijn profiel maken (onzichtbaar, --headless met een schermfoto
     van een lege pagina; daarna stopt hij vanzelf). Zo klopt alles wat Firefox erbij zet (installs.ini ...)."""
-    if not shutil.which("firefox"):
+    opdracht = firefox_opdracht()
+    if opdracht is None:
         return None
     with tempfile.TemporaryDirectory(prefix="bugos-firefox-") as tmp:
         try:
-            subprocess.run(["firefox", "--headless", "--screenshot", str(Path(tmp) / "leeg.png"), "about:blank"],
+            # Een Flatpak mag niet zomaar in /tmp schrijven; de schermfoto zelf hebben we niet nodig (alleen het profiel).
+            subprocess.run(opdracht + ["--headless", "--screenshot", str(Path(tmp) / "leeg.png"), "about:blank"],
                            capture_output=True, timeout=120)
         except (OSError, subprocess.SubprocessError):
             return None
@@ -534,9 +558,12 @@ def bladwijzers_naar_firefox(bronnen: list[Bron], computer: str = "", profiel: P
     bestand = profiel / EIGEN_BESTAND
     try:
         bestand.write_text(bladwijzer_html(bestaand["menu"], balk, bestaand["andere"]), encoding="utf-8")
-        _zet_voorkeuren(profiel, {"browser.places.importBookmarksHTML": True,
-                                  "browser.bookmarks.file": str(bestand),
-                                  "browser.bookmarks.restore_default_bookmarks": False})
+        voorkeuren = {"browser.places.importBookmarksHTML": True,
+                      "browser.bookmarks.file": str(bestand),
+                      "browser.bookmarks.restore_default_bookmarks": False}
+        _zet_voorkeuren(profiel, voorkeuren)
+        # Voor 'Alles terugdraaien': zolang Firefox ze nog niet inlas, kunnen deze voorkeuren weer weg.
+        ot._onthoud("firefox_voorkeuren", profiel=str(profiel), namen=list(voorkeuren), map=titel)
     except OSError:
         return ot.Uitslag("bladwijzers", ZELF, t("Opslaan in Firefox lukte niet.", "Saving into Firefox did not work.") + hand)
     return ot.Uitslag("bladwijzers", GOED, t("Ze staan in Firefox, in de map '{m}' op de bladwijzerbalk (zodra je Firefox "
@@ -566,6 +593,75 @@ def _niet_kopieren(map_: str, namen: list[str]) -> set[str]:
     return {n for n in namen if n in NOOIT_MEE or n in NIET_NODIG or os.path.islink(os.path.join(map_, n))}
 
 
+def profiel_erbij(map_: Path, bron_profiel: Path, naam: str, achtervoegsel: str,
+                  ook_niet: frozenset[str] = frozenset()) -> str:
+    """Kopieer een profiel van de stick naar map_ (de map met profiles.ini) als nieuw profiel 'naam', en maak het het
+    standaardprofiel. Voor Firefox én Thunderbird (zelfde opbouw). ook_niet: mappen die ook thuisblijven
+    (Thunderbird: ImapMail). Het profiel dat er al was, blijft staan (als reserve).
+
+    Alles komt in het logboek (profielmap, profiles.ini en installs.ini zoals ze waren), zodat 'Alles terugdraaien'
+    het nieuwe profiel naar de prullenbak kan zetten en het oude weer standaard maakt.
+    Geeft '' (gelukt), 'kopie' (kopiëren lukte niet) of 'ini' (het profiel staat er, maar kiezen lukte niet)."""
+    ini_pad = map_ / "profiles.ini"
+    installs_pad = map_ / "installs.ini"
+    ini = _ini(ini_pad)
+    profielen = [s for s in ini.sections() if s.startswith("Profile")]
+    doel = map_ / f"{secrets.token_hex(4)}.{achtervoegsel}"
+
+    def niet(m: str, namen: list[str]) -> set[str]:
+        return _niet_kopieren(m, namen) | {n for n in namen if n in ook_niet}
+
+    try:
+        map_.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(bron_profiel, doel, ignore=niet, symlinks=True)
+        prefs = doel / "prefs.js"
+        if prefs.is_file():
+            regels = prefs.read_text(encoding="utf-8", errors="replace").splitlines()
+            # Een map op C:\ (downloads, de laatste map, een mailmap) bestaat hier niet: weg ermee, dan neemt het
+            # programma zijn eigen (Thunderbird valt dan terug op de '-rel'-variant, bijv. [ProfD]Mail/...).
+            prefs.write_text("\n".join(r for r in regels if not _WINDOWS_PAD.search(r)) + "\n", encoding="utf-8")
+    except (OSError, shutil.Error):
+        shutil.rmtree(doel, ignore_errors=True)
+        return "kopie"
+    ot._onthoud("profielmap", pad=str(doel))
+    # Hoe profiles.ini en installs.ini nu zijn (None: er was er nog geen), vóór we ze veranderen.
+    for p in (ini_pad, installs_pad):
+        try:
+            ot._onthoud("ini", pad=str(p), inhoud=p.read_text(encoding="utf-8") if p.is_file() else None)
+        except OSError:
+            pass
+    nummer = 0
+    while f"Profile{nummer}" in ini.sections():
+        nummer += 1
+    ini[f"Profile{nummer}"] = {"Name": naam, "IsRelative": "1", "Path": doel.name}
+    installaties = [s for s in ini.sections() if s.startswith("Install")]
+    if installaties:
+        # Firefox/Thunderbird 67+: elke installatie heeft zijn eigen standaard. Die wordt het nieuwe profiel.
+        for s in installaties:
+            ini[s]["Default"] = doel.name
+            ini[s]["Locked"] = "1"
+    else:
+        # Nog geen installatie bekend (bijvoorbeeld Thunderbird nog nooit gestart): het profiel met Default=1. Bij de
+        # eerste start neemt het programma dat standaardprofiel over.
+        for s in profielen:
+            ini[s].pop("Default", None)
+        ini[f"Profile{nummer}"]["Default"] = "1"
+    if not ini.has_section("General"):
+        ini["General"] = {"StartWithLastProfile": "1", "Version": "2"}
+    ini["General"]["StartWithLastProfile"] = "1"
+    try:
+        _schrijf_ini(ini, ini_pad)
+        if installs_pad.is_file():
+            installs = _ini(installs_pad)
+            for s in installs.sections():
+                installs[s]["Default"] = doel.name
+                installs[s]["Locked"] = "1"
+            _schrijf_ini(installs, installs_pad)
+    except OSError:
+        return "ini"
+    return ""
+
+
 def profiel_overnemen(bron_profiel: Path, computer: str = "") -> ot.Uitslag:
     """Kopieer het Firefox-profiel van Windows naar BugOS en maak het het profiel dat Firefox opent. Het profiel dat
     er al was, blijft (als reserve)."""
@@ -583,52 +679,16 @@ def profiel_overnemen(bron_profiel: Path, computer: str = "") -> ot.Uitslag:
         return ot.Uitslag("firefox", ZELF, t("Firefox stond open. Sluit Firefox en druk nog eens op Overzetten.",
                                              "Firefox was open. Close Firefox and press Transfer again."))
     map_ = oud.parent
-    ini_pad = map_ / "profiles.ini"
-    ini = _ini(ini_pad)
-    profielen = [s for s in ini.sections() if s.startswith("Profile")]
-    if any(ini[s].get("Name") == naam for s in profielen):
+    if any(_ini(map_ / "profiles.ini")[s].get("Name") == naam for s in _ini(map_ / "profiles.ini").sections()
+           if s.startswith("Profile")):
         return ot.Uitslag("firefox", GOED, t("Je profiel van Windows stond er al ('{n}').",
                                              "Your profile from Windows was already there ('{n}').").format(n=naam))
-    doel = map_ / f"{secrets.token_hex(4)}.van-windows"
-    try:
-        shutil.copytree(bron_profiel, doel, ignore=_niet_kopieren, symlinks=True)
-        prefs = doel / "prefs.js"
-        if prefs.is_file():
-            regels = prefs.read_text(encoding="utf-8", errors="replace").splitlines()
-            # Een map op C:\ (downloads, de laatste map) bestaat hier niet: weg ermee, dan neemt Firefox zijn eigen.
-            prefs.write_text("\n".join(r for r in regels if not _WINDOWS_PAD.search(r)) + "\n", encoding="utf-8")
-    except (OSError, shutil.Error):
-        shutil.rmtree(doel, ignore_errors=True)
+    fout = profiel_erbij(map_, bron_profiel, naam, "van-windows")
+    if fout == "kopie":
         return ot.Uitslag("firefox", ZELF, t("Kopiëren lukte niet (is je computer vol, of is de stick eruit?). Probeer het "
                                              "opnieuw.", "Copying did not work (is your computer full, or was the drive "
                                              "unplugged?). Try again."))
-    nummer = 0
-    while f"Profile{nummer}" in ini.sections():
-        nummer += 1
-    ini[f"Profile{nummer}"] = {"Name": naam, "IsRelative": "1", "Path": doel.name}
-    installaties = [s for s in ini.sections() if s.startswith("Install")]
-    if installaties:
-        # Firefox 67+: elke installatie heeft zijn eigen standaard. Die wordt het nieuwe profiel.
-        for s in installaties:
-            ini[s]["Default"] = doel.name
-            ini[s]["Locked"] = "1"
-    else:
-        for s in profielen:
-            ini[s].pop("Default", None)
-        ini[f"Profile{nummer}"]["Default"] = "1"
-    if not ini.has_section("General"):
-        ini["General"] = {"StartWithLastProfile": "1"}
-    ini["General"]["StartWithLastProfile"] = "1"
-    try:
-        _schrijf_ini(ini, ini_pad)
-        installs_pad = map_ / "installs.ini"
-        if installs_pad.is_file():
-            installs = _ini(installs_pad)
-            for s in installs.sections():
-                installs[s]["Default"] = doel.name
-                installs[s]["Locked"] = "1"
-            _schrijf_ini(installs, installs_pad)
-    except OSError:
+    if fout == "ini":
         return ot.Uitslag("firefox", ZELF, t("Het profiel staat er, maar Firefox kiezen lukte niet. Open about:profiles in "
                                              "Firefox en kies '{n}'.", "The profile is there, but choosing it did not "
                                              "work. Open about:profiles in Firefox and choose '{n}'.").format(n=naam))

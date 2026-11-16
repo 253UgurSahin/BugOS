@@ -12,7 +12,11 @@ je niet wilt en druk op "Overzetten". Dan:
   - kent BugOS je wifi-netwerken op naam (het wachtwoord vraagt hij één keer, nooit van de stick);
   - staan je netwerkprinters erin;
   - zie je welke van je Windows-programma's er in de Winkel zijn (BugOS installeert ze nooit zelf).
+  - komen de extra mappen die je koos (bijv. van D:) in je Thuismap, je eigen lettertypen erbij, en je
+    Thunderbird (zonder wachtwoorden) en Outlook-mailbestanden klaar;
 Daarna een samenvatting: wat gelukt is, wat niet kan (en waarom) en wat je zelf moet doen (en hoe).
+Alles wat BugOS neerzet of verandert, staat in een logboek: met 'Alles terugdraaien' gaat het weer weg (bestanden
+naar de prullenbak, instellingen zoals ze waren), zie bugos_overstap_logboek.
 
 Versie 1 van de stick (alleen bestanden, bladwijzers en achtergrond) werkt gewoon. Het formaat staat in
 windows-switch/FORMAT.md; het werk zelf in bugos_overstap_toepassen en bugos_overstap_firefox.
@@ -28,7 +32,9 @@ from pathlib import Path
 sys.path.insert(0, "/usr/lib/bugos/python")
 
 from bugos_ui import t  # noqa: E402
+import bugos_overstap_bestanden as ob  # noqa: E402
 import bugos_overstap_firefox as ff  # noqa: E402
+import bugos_overstap_logboek as lb  # noqa: E402
 import bugos_overstap_toepassen as ot  # noqa: E402
 # Ook hier te vinden (de tests en oudere code halen ze uit bugos-switch zelf).
 from bugos_overstap_toepassen import (  # noqa: E402,F401
@@ -68,17 +74,45 @@ def chrome_naar_html(bestanden: dict[str, Path]) -> str:
 
 # ---------------------------------------------------------- terugzetten ----
 
-def stappen(bron: Path) -> list[tuple[str, list[str]]]:
-    """De kopieer-opdrachten, met een uitleg per stap."""
+def rsync_log(naam: str) -> Path:
+    """Het logbestand van één rsync (welke bestanden nieuw waren), in ~/.cache/bugos/overstap."""
+    import os
+    cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "bugos" / "overstap"
+    cache.mkdir(parents=True, exist_ok=True)
+    pad = cache / f"rsync-{naam}.log"
+    pad.unlink(missing_ok=True)   # rsync schrijft erbij: een oude ronde mag niet meetellen
+    return pad
+
+
+def _rsync(bron_map: Path, doel: Path, lognaam: str) -> list[str]:
+    # --ignore-existing: wat al op BugOS staat, wordt nooit overschreven. --log-file: welke bestanden nieuw zijn
+    # (voor 'Alles terugdraaien': alleen wat BugOS neerzette, gaat weer weg).
+    return (["rsync", "-rt", "--ignore-existing", "--modify-window=2", "--info=progress2", "--no-inc-recursive"]
+            + lb.rsync_opties(rsync_log(lognaam)) + [f"{bron_map}/", f"{doel}/"])
+
+
+def stappen(bron: Path, met_bestanden: bool = True, met_extra: bool = False) -> list[tuple[str, list[str]]]:
+    """De kopieer-opdrachten, met een uitleg per stap. met_extra: ook de extra mappen (onderdeel 'extra')."""
     lijst = []
-    for win, xdg in KOPPELING.items():
-        if (bron / win).is_dir():
-            doel = gebruikersmap(xdg, win)
-            # --ignore-existing: wat al op BugOS staat, wordt nooit overschreven.
-            lijst.append((t(f"{mapnaam(win)} terugzetten...", f"Restoring {mapnaam(win)}..."),
-                          ["rsync", "-rt", "--ignore-existing", "--modify-window=2", "--info=progress2",
-                           "--no-inc-recursive", f"{bron / win}/", f"{doel}/"]))
+    if met_bestanden:
+        for win, xdg in KOPPELING.items():
+            if (bron / win).is_dir():
+                lijst.append((t(f"{mapnaam(win)} terugzetten...", f"Restoring {mapnaam(win)}..."),
+                              _rsync(bron / win, gebruikersmap(xdg, win), win)))
+    if met_extra:
+        for nr, (naam, pad) in enumerate(ob.extra_mappen(bron, info(bron))):
+            lijst.append((t(f"{naam} terugzetten...", f"Restoring {naam}..."),
+                          _rsync(pad, ob.extra_doel(naam), f"extra-{nr}")))
     return lijst
+
+
+def na_rsync(cmd: list[str]) -> None:
+    """Na één rsync: de nieuwe bestanden en mappen in het logboek (uit zijn --log-file)."""
+    log = next((c.split("=", 1)[1] for c in cmd if c.startswith("--log-file=")), None)
+    if log is None or lb.ACTIEF is None:
+        return
+    bestanden, mappen = lb.lees_rsync_log(Path(log), Path(cmd[-1].rstrip("/")))
+    lb.ACTIEF.bestanden_erbij(bestanden, mappen)
 
 
 def vrije_naam(pad: Path) -> Path:
@@ -103,6 +137,7 @@ def bladwijzers_zetten(bron: Path, i: dict, zonder_firefox: bool = False) -> lis
         doel = vrije_naam(gebruikersmap("DOCUMENTS", "Documents") / "Bladwijzers-van-Windows.html")
         doel.parent.mkdir(parents=True, exist_ok=True)
         doel.write_text(ff.bladwijzer_html(mappen, [], []), encoding="utf-8")
+        lb.bestand_erbij(doel)
         kopie = doel.name
     if zonder_firefox:
         bronnen = [b for b in bronnen if b.soort != "firefox"]
@@ -125,6 +160,9 @@ def achtergrond_zetten(bron: Path) -> list[ot.Uitslag]:
     doel = vrije_naam(gebruikersmap("PICTURES", "Pictures") / "Windows-achtergrond.jpg")
     doel.parent.mkdir(parents=True, exist_ok=True)
     doel.write_bytes(achtergrond.read_bytes())
+    lb.bestand_erbij(doel)
+    # Hoe de achtergrond nu is, voor 'Alles terugdraaien'.
+    lb.onthoud("achtergrond", oud=lb.lees_achtergrond())
     try:
         klaar = subprocess.run(["plasma-apply-wallpaperimage", str(doel)], capture_output=True, timeout=10)
         if klaar.returncode == 0:
@@ -139,7 +177,8 @@ def achtergrond_zetten(bron: Path) -> list[ot.Uitslag]:
 
 # Wat er na de bestanden gebeurt, in deze volgorde (het Firefox-profiel vóór de bladwijzers: die gaan erin).
 # 'taal' en 'notatie' zijn eigen schuifjes (D-10), maar gaan samen met 'instellingen' in één keer zet_instellingen.
-NA_DE_BESTANDEN = ("achtergrond", "firefox", "bladwijzers", "instellingen", "taal", "notatie", "wifi", "printers")
+NA_DE_BESTANDEN = ("achtergrond", "firefox", "bladwijzers", "instellingen", "taal", "notatie", "wifi", "printers",
+                   "lettertypen", "mail")
 INSTELLING_DELEN = {"instellingen", "taal", "notatie"}
 
 
@@ -154,7 +193,9 @@ def bezig_tekst(keuze: set[str]) -> str:
                          ("firefox", "je Firefox", "your Firefox"),
                          ("bladwijzers", "je bladwijzers", "your bookmarks"),
                          ("wifi", "je wifi-netwerken", "your Wi-Fi networks"),
-                         ("printers", "je printers", "your printers")):
+                         ("printers", "je printers", "your printers"),
+                         ("lettertypen", "je lettertypen", "your fonts"),
+                         ("mail", "je e-mail", "your e-mail")):
         if deel in keuze:
             namen.append(t(nl, en))
     if not namen:
@@ -205,6 +246,11 @@ def rest_toepassen(bron: Path, i: dict, keuze: set[str]) -> list[ot.Uitslag]:
                 uit += ot.zet_wifi(i.get("wifi"))
             elif deel == "printers":
                 uit += ot.zet_printers(i.get("printers"))
+            elif deel == "lettertypen":
+                uit += ob.zet_lettertypen(bron, i)
+            elif deel == "mail":
+                uit += ob.zet_thunderbird(bron, i)
+                uit += ob.zet_outlook(bron, i, gebruikersmap("DOCUMENTS", "Documents"))
         except OSError:   # schijf vol, of de stick eruit getrokken
             uit.append(ot.Uitslag(deel, ot.ZELF, t("Lukte niet: is je computer vol, of is de stick eruit? Probeer het "
                                                    "opnieuw.", "Did not work: is your computer full, or was the drive "
@@ -249,8 +295,13 @@ def deels_uitleg(mappen: list[str]) -> str:
 
 def zonder_venster(bron: Path) -> int:
     deels = []
+    # Ook zonder venster een logboek: dan kan 'Alles terugdraaien' in het venster het later weer weghalen.
+    i = info(bron)
+    lb.ACTIEF = lb.Logboek()
+    lb.ACTIEF.begin(ot._tekst(i.get("computer"), 60), ot._tekst(i.get("gebruiker"), 60))
     for _, cmd in stappen(bron):
         r = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, errors="replace")
+        na_rsync(cmd)
         sys.stderr.write(r.stderr)
         soort = uitslag(r.returncode, cmd, r.stderr)
         if soort == "deels":
@@ -310,6 +361,18 @@ def venster() -> int:
                                                           "Something went wrong. Try again."))]
             self.klaar.emit(uit)
 
+    class TerugWerk(QThread):
+        """Alles terugdraaien, op de achtergrond (de tijdzone en printers kunnen om je wachtwoord vragen)."""
+        klaar = Signal(list)
+
+        def run(self) -> None:  # noqa: D102
+            try:
+                uit = lb.terugdraaien()
+            except Exception:  # noqa: BLE001  het venster moet altijd 'klaar' horen
+                uit = [ot.Uitslag("terug", ot.ZELF, t("Er ging iets mis. Probeer het opnieuw.",
+                                                      "Something went wrong. Try again."))]
+            self.klaar.emit(uit)
+
     class Overstap(QWidget):
         def __init__(self):
             super().__init__()
@@ -366,6 +429,29 @@ def venster() -> int:
             self.samenvatting = Groep()
             lay.addWidget(self.klaar_kop)
             lay.addWidget(self.samenvatting)
+            # Terugdraaien (F): zolang er een logboek is, kun je alles wat BugOS van je oude pc neerzette weer
+            # weghalen. Ook als je het venster later weer opent (dan zonder stick).
+            self.terug_kop = sectie(t("Toch niet? Alles terugdraaien", "Changed your mind? Undo everything"), wrap=True)
+            self.terug = Groep()
+            self.terug_knop = Knop(t("Alles terugdraaien", "Undo everything"), "stil", "lijn:terug")
+            self.terug_knop.clicked.connect(self.vraag_terugdraaien)
+            self.terug_tekst = label("", "klein")
+            self.terug_tekst.setWordWrap(True)
+            terug_rij = QWidget()
+            tr = QHBoxLayout(terug_rij)
+            tr.setContentsMargins(18, 12, 18, 12)
+            tr.setSpacing(14)
+            tb = QVBoxLayout()
+            tb.setSpacing(1)
+            tb.addWidget(label(t("Bestanden naar de prullenbak, instellingen weer zoals ze waren",
+                                 "Files to the trash, settings back to how they were"), "kop3"))
+            tb.addWidget(self.terug_tekst)
+            tr.addLayout(tb, 1)
+            tr.addWidget(self.terug_knop)
+            self.terug.voeg(terug_rij)
+            lay.addWidget(self.terug_kop)
+            lay.addWidget(self.terug)
+            self.terug_werk: QThread | None = None
             # De programma's: alleen voorstellen (de eigenaar: BugOS installeert nooit zelf).
             self.prog_kop = sectie(t("Je programma's van Windows: dit is er op BugOS",
                                      "Your programs from Windows: this is on BugOS"), wrap=True)
@@ -403,6 +489,7 @@ def venster() -> int:
             for x in (self.overzicht_kop, self.overzicht, self.klaar_kop, self.samenvatting, self.prog_kop,
                       self.prog_uitleg, self.programmas):
                 x.hide()
+            self.toon_terug()
             self.timer = QTimer(self)
             self.timer.timeout.connect(self.ververs)
             self.timer.start(3000)
@@ -413,7 +500,67 @@ def venster() -> int:
 
         def bezig(self) -> bool:
             return self.proces.state() != QProcess.ProcessState.NotRunning or (
-                self.werk is not None and self.werk.isRunning())
+                self.werk is not None and self.werk.isRunning()) or (
+                getattr(self, "terug_werk", None) is not None and self.terug_werk.isRunning())
+
+        # ------------------------------------------------------------ terugdraaien ---
+
+        def toon_terug(self) -> None:
+            """Het blok 'Alles terugdraaien': alleen als er een logboek is, met wat erin staat."""
+            boek = lb.Logboek()
+            heeft = not boek.leeg()
+            if heeft:
+                self.terug_tekst.setText(boek.samenvatting() + " " + t(
+                    "Wat je daarna zelf veranderde, blijft staan.", "What you changed yourself afterwards stays."))
+            self.terug_kop.setVisible(heeft)
+            self.terug.setVisible(heeft)
+            self.terug_knop.setEnabled(heeft and not self.bezig())
+
+        def vraag_terugdraaien(self) -> None:
+            if self.bezig():
+                return
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Icon.Question)
+            box.setWindowTitle(t("Alles terugdraaien?", "Undo everything?"))
+            box.setText(t("Alles van je oude pc weer weghalen?", "Remove everything from your old PC again?"))
+            box.setInformativeText(t(
+                "De bestanden die BugOS van je oude pc neerzette, gaan naar de prullenbak (daar kun je ze nog "
+                "terughalen). Je instellingen worden weer zoals ze waren, en de wifi-netwerken en printers van je oude "
+                "pc gaan eruit. Bestanden die je zelf hebt veranderd, blijven staan.",
+                "The files BugOS put here from your old PC go to the trash (you can still get them back from there). "
+                "Your settings go back to how they were, and the Wi-Fi networks and printers from your old PC are "
+                "removed. Files you changed yourself stay."))
+            ja = box.addButton(t("Terugdraaien", "Undo"), QMessageBox.ButtonRole.DestructiveRole)
+            nee = box.addButton(t("Niet doen", "Don't"), QMessageBox.ButtonRole.RejectRole)
+            box.setDefaultButton(nee)
+            box.exec()
+            if box.clickedButton() is not ja:
+                return
+            self.start_terugdraaien()
+
+        def start_terugdraaien(self) -> None:
+            """Na 'Terugdraaien' in de vraag (los, zodat een test het zonder vraagvenster kan doen)."""
+            for w in (self.knop, self.kiezer, self.overzicht, self.terug_knop):
+                w.setEnabled(False)
+            self.melding.zet(t("Bezig met terugdraaien... Vraagt BugOS je wachtwoord, typ het dan in (voor de tijdzone "
+                               "of de printers).", "Undoing... If BugOS asks for your password, type it (for the time "
+                               "zone or the printers)."), "bezig")
+            self.terug_werk = TerugWerk(self)
+            self.terug_werk.klaar.connect(self.teruggedraaid)
+            self.terug_werk.start()
+
+        def teruggedraaid(self, uitslagen: list) -> None:
+            if self.terug_werk is not None:
+                self.terug_werk.wait(2000)
+                self.terug_werk = None
+            mis = any(u.soort != ot.GOED for u in uitslagen)
+            self.melding.zet(t("Teruggedraaid. Kijk hieronder wat je nog zelf moet doen.",
+                               "Undone. See below what you still need to do yourself.") if mis else
+                             t("Teruggedraaid: alles staat weer zoals voor het overzetten.",
+                               "Undone: everything is back to how it was before the transfer."),
+                             "let_op" if mis else "goed")
+            self.toon_samenvatting(uitslagen)
+            self.vrij()
 
         def ververs(self) -> None:
             # Niet verversen terwijl we bezig zijn (de kiezer staat dan uit). Daarna wel weer: de balk
@@ -550,7 +697,18 @@ def venster() -> int:
                 alles.append(ot.Uitslag("bestanden", ot.ZELF if self.deels else ot.GOED,
                                         deels_uitleg(self.deels) if self.deels else
                                         t("Je bestanden staan op hun plek.", "Your files are in place.")))
+                # Bestanden die alleen in OneDrive stonden (en niet mee wilden): zeg welke en waar ze zijn (E).
+                alles += ob.cloud_uitslag(info(self.bron))
+            extra = ob.extra_mappen(self.bron, info(self.bron)) if "extra" in self.keuze else []
+            if extra:
+                alles.append(ot.Uitslag("extra", ot.GOED, t("Ze staan in je Thuismap: {m}.",
+                                                            "They are in your Home folder: {m}.").format(
+                                            m=ot._kort([n for n, _p in extra]))))
             alles += uitslagen
+            # De samenvatting ook in het logboek (om later terug te lezen); deze ronde is klaar.
+            if lb.ACTIEF is not None:
+                lb.ACTIEF.uitslagen(alles)
+                lb.ACTIEF = None
             mis = any(u.soort != ot.GOED for u in alles)
             kop = (deels_uitleg(self.deels) if self.deels else
                    t("Klaar! Kijk hieronder wat er is gebeurd.", "Done! See below what happened.") if mis else
@@ -569,6 +727,8 @@ def venster() -> int:
                     self.balk.setValue(int(stuk[:-1]))
 
         def klaar(self, code: int, _s) -> None:
+            # Eerst: wat deze rsync neerzette, in het logboek (ook na stoppen of een fout: dat staat er dan wel).
+            na_rsync(self.nu)
             if self.gestopt:
                 # Gestopt: zeg het, en de volgende keer begint gewoon opnieuw (ook als je het venster weer opende) (U241).
                 self.gestopt = False
@@ -599,6 +759,7 @@ def venster() -> int:
             self.knop.setEnabled(True)
             self.kiezer.setEnabled(True)
             self.overzicht.setEnabled(True)
+            self.toon_terug()
             if self.sluit_na:
                 QTimer.singleShot(0, self.close)
 
@@ -656,16 +817,21 @@ def venster() -> int:
             self.keuze = {k for k, s in self.schakelaars.items() if s.isChecked()}
             self.gestopt = False
             self.deels = []
-            self.wachtrij[:] = stappen(self.bron) if "bestanden" in self.keuze else []
+            self.wachtrij[:] = stappen(self.bron, "bestanden" in self.keuze, "extra" in self.keuze)
             if not self.wachtrij and not (self.keuze & set(NA_DE_BESTANDEN)):
                 # Stick eruit, of alleen het lijstje zonder mappen: niet 'Klaar!' zeggen (U140).
                 self.melding.zet(t("Er is niets om over te zetten. Zit de schijf er nog in, en staat er iets aan?",
                                    "There is nothing to transfer. Is the drive still plugged in, and is something "
                                    "switched on?"), "fout")
                 return
+            # Het logboek van deze ronde (komt bij een eerdere ronde, als die er nog is): voor 'Alles terugdraaien'.
+            i = info(self.bron)
+            lb.ACTIEF = lb.Logboek()
+            lb.ACTIEF.begin(ot._tekst(i.get("computer"), 60), ot._tekst(i.get("gebruiker"), 60))
             self.knop.setEnabled(False)
             self.kiezer.setEnabled(False)
             self.overzicht.setEnabled(False)
+            self.terug_knop.setEnabled(False)
             for x in (self.klaar_kop, self.samenvatting):
                 x.hide()
             self.balk.show()

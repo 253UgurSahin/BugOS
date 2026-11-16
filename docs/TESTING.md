@@ -104,6 +104,9 @@ Then restart the computer. Want to go back? Use Settings > Updates and info, or 
 - [ ] Open **Something is not working** and mute the sound: do you get an "Unmute" button?
 - [ ] Open **Backup** and make a backup to a USB stick
 - [ ] Try **BugOS Switch** on a Windows PC (steps 1 and 2 are safe, they change nothing on your PC)
+- [ ] BugOS Switch step 2: add another folder (for example on D:), then remove it again with '(remove)'; the size at the top changes with it
+- [ ] On a PC with OneDrive: BugOS Switch asks about files that are only in OneDrive; choose No, and in BugOS the summary names them
+- [ ] In BugOS, **Bring everything from your old PC**: transfer, then **Undo everything**. Files from the old PC are in the trash, a file you changed in between stays, settings, Wi-Fi and printers are back to how they were
 - [ ] Open the **BugOS Store** and install something
 - [ ] The ladybug at the bottom left is the **BugOS start menu**: search for "wifi" and open the page; the Windows key opens the menu
 - [ ] The **quick menu** (two sliders, next to the system tray): turn Wi-Fi off and on; the little arrow next to Wi-Fi opens Settings

@@ -170,6 +170,16 @@ class Uitslag:
     tekst: str
 
 
+def _onthoud(soort: str, **velden) -> None:
+    """Zet iets in het logboek van deze overstap (bugos_overstap_logboek), zodat 'Alles terugdraaien' weet hoe
+    het was. Geen logboek actief (tests, oude aanroepen): dan gebeurt er niets. Nooit een fout."""
+    try:
+        import bugos_overstap_logboek as lb   # hier pas: dat onderdeel gebruikt dit onderdeel ook
+        lb.onthoud(soort, **velden)
+    except Exception:  # noqa: BLE001  onthouden mag het overzetten nooit tegenhouden
+        pass
+
+
 # De kop per onderdeel, in het overzicht en in de samenvatting.
 DEEL_NAAM = {
     "bestanden": ("Je bestanden", "Your files"),
@@ -182,6 +192,12 @@ DEEL_NAAM = {
     "notatie": ("Datum en tijd", "Date and time"),
     "wifi": ("Wifi-netwerken", "Wi-Fi networks"),
     "printers": ("Printers", "Printers"),
+    # Bestanden slimmer (E) en terugdraaien (F).
+    "extra": ("Andere mappen", "Other folders"),
+    "lettertypen": ("Lettertypen", "Fonts"),
+    "mail": ("E-mail", "E-mail"),
+    "outlook": ("Outlook", "Outlook"),
+    "terug": ("Terugdraaien", "Undo"),
 }
 
 
@@ -233,6 +249,13 @@ def onderdelen(bron: Path, i: dict | None = None) -> list[Onderdeel]:
                              t("{mappen}. Wat al op BugOS staat, wordt nooit overschreven.",
                                "{mappen}. What's already on BugOS is never overwritten.").format(
                                  mappen=", ".join(mapnaam(m) for m in mappen))))
+    import bugos_overstap_bestanden as ob
+    extra = ob.extra_mappen(bron, i)
+    if extra:
+        uit.append(Onderdeel("extra", "lijn:map",
+                             t("{mappen}. Komen in je Thuismap, onder dezelfde naam.",
+                               "{mappen}. Go to your Home folder, under the same name.").format(
+                                 mappen=_kort([n for n, _p in extra]))))
     bronnen = ff.bladwijzer_bronnen(bron, i)
     if bronnen:
         uit.append(Onderdeel("bladwijzers", "lijn:ster",
@@ -288,6 +311,22 @@ def onderdelen(bron: Path, i: dict | None = None) -> list[Onderdeel]:
         uit.append(Onderdeel("printers", "lijn:printer",
                              t("{printers}. Printers met een kabel komen vanzelf.",
                                "{printers}. Printers with a cable come by themselves.").format(printers=_kort(printers_))))
+    letters = ob.lettertypen_op_stick(bron, i)
+    if letters:
+        uit.append(Onderdeel("lettertypen", "lijn:tekst",
+                             t("{n} lettertypen die je zelf installeerde. Elk programma kan ze gebruiken.",
+                               "{n} fonts you installed yourself. Every program can use them.").format(n=len(letters))))
+    tb = ob.thunderbird_op_stick(bron, i) is not None
+    pst = ob.outlook_bestanden(bron, i)
+    if tb or pst:
+        wat = []
+        if tb:
+            wat.append(t("je Thunderbird (accounts, mappen en adresboek, zonder wachtwoorden)",
+                         "your Thunderbird (accounts, folders and address book, without passwords)"))
+        if pst:
+            wat.append(t("je Outlook-mailbestanden", "your Outlook mail files"))
+        tekst = t(" en ", " and ").join(wat)
+        uit.append(Onderdeel("mail", "lijn:mail", tekst[:1].upper() + tekst[1:] + "."))
     return uit
 
 
@@ -488,7 +527,12 @@ def _taal_en_notatie(ins: dict, met_taal: bool = True, met_notatie: bool = True)
         elif bi.taal() == code:
             uit.append(Uitslag("instellingen", GOED, t("Taal: {n} (stond al zo).", "Language: {n} (already set).").format(
                 n=taal_naam(code))))
-        elif bi.zet_taal(code):
+        # (onthoud, ..., zet)[-1]: eerst in het logboek hoe het was, dan pas veranderen; het resultaat van het
+        # veranderen beslist de elif. Zo blijft de rij elif's (al zo / gelukt / niet gelukt) zoals hij was.
+        elif (_onthoud("instelling", naam="taal", oud=bi.taal()),
+              # zet_taal zet ook de notatie terug: die dus ook onthouden.
+              _onthoud("instelling", naam="regio", oud=regio_oud),
+              bi.zet_taal(code))[-1]:
             # zet_taal zet de notatie ook terug naar die van de taal (LC_TIME weg). Staat 'Datum en tijd' uit, dan
             # houden we de notatie die je had (D-10): de taal aan is niet ook een 12-uursklok aan.
             if not met_notatie and regio_oud in {c for c, _nl, _en in bi.REGIOS}:
@@ -517,7 +561,7 @@ def _taal_en_notatie(ins: dict, met_taal: bool = True, met_notatie: bool = True)
         elif bi.regio() == regio:
             uit.append(Uitslag("instellingen", GOED, t("Datum en tijd zoals in {r} (stond al zo).",
                                                        "Date and time as in {r} (already set).").format(r=regio_naam(regio))))
-        elif bi.zet_regio(regio):
+        elif (_onthoud("instelling", naam="regio", oud=bi.regio()), bi.zet_regio(regio))[-1]:
             uit.append(Uitslag("instellingen", GOED, t("Datum en tijd zoals in {r}.", "Date and time as in {r}.").format(
                 r=regio_naam(regio))))
         else:
@@ -539,6 +583,7 @@ def _tijdzone(ins: dict) -> list[Uitslag]:
     if bi.tijd().zone == zone:
         return [Uitslag("instellingen", GOED, t("Tijdzone: {z} (stond al zo).", "Time zone: {z} (already set).").format(z=mooi))]
     # Via bugos-tijd en pkexec, net als Instellingen: BugOS vraagt hier je wachtwoord (de klok is van iedereen).
+    _onthoud("instelling", naam="tijdzone", oud=bi.tijd().zone)
     if bi.zet_tijdzone(zone):
         return [Uitslag("instellingen", GOED, t("Tijdzone: {z}.", "Time zone: {z}.").format(z=mooi))]
     return [Uitslag("instellingen", ZELF, t("Tijdzone {z}: lukte niet (geen wachtwoord gegeven?). Zet hem in Instellingen > "
@@ -567,7 +612,8 @@ def _toetsenborden(ins: dict) -> list[Uitslag]:
         if bi.toetsenborden() == goed:
             uit.append(Uitslag("instellingen", GOED, t("Toetsenbord: {n} (stond al zo).", "Keyboard: {n} (already set).").format(
                 n=namen)))
-        elif bi.zet_toetsenborden(goed):
+        elif (_onthoud("instelling", naam="toetsenborden", oud=[[i.layout, i.variant] for i in bi.toetsenborden()]),
+              bi.zet_toetsenborden(goed))[-1]:
             uit.append(Uitslag("instellingen", GOED, t("Toetsenbord: {n}.", "Keyboard: {n}.").format(n=namen)
                                + (t(" Wisselen: Windows-toets + spatie.", " Switch: Windows key + space.") if len(goed) > 1 else "")))
         else:
@@ -588,6 +634,7 @@ def _donker(ins: dict) -> list[Uitslag]:
     naam = t("donker", "dark") if donker else t("licht", "light")
     if bi.donker() == donker:
         return [Uitslag("instellingen", GOED, t("Uiterlijk: {n} (stond al zo).", "Appearance: {n} (already set).").format(n=naam))]
+    _onthoud("instelling", naam="donker", oud=bi.donker())
     if bi.zet_donker(donker):
         return [Uitslag("instellingen", GOED, t("Uiterlijk: {n}.", "Appearance: {n}.").format(n=naam))]
     return [Uitslag("instellingen", ZELF, t("Uiterlijk: lukte niet. Kies licht of donker in Instellingen > Uiterlijk.",
@@ -631,12 +678,21 @@ def _muis(ins: dict) -> list[Uitslag]:
     for a in apparaten:
         # Links- of rechtshandig geldt in Windows voor alles (ook het touchpad); snelheid en scrollen voor de muis.
         if isinstance(links, bool) and "linkshandig" in a.kan and a.linkshandig != links:
+            _onthoud("muis", sysnaam=a.sysnaam, wat="linkshandig", oud=a.linkshandig)
             mislukt |= not bi.zet_aanwijzer(a.sysnaam, "linkshandig", links)
         if a.touchpad:
             continue
         if snelheid is not None and "snelheid" in a.kan and a.snelheid != snelheid:
+            _onthoud("muis", sysnaam=a.sysnaam, wat="snelheid", oud=a.snelheid)
             mislukt |= not bi.zet_aanwijzer(a.sysnaam, "snelheid", snelheid)
         if regels is not None:
+            try:
+                import bugos_overstap_logboek as lb
+                oud_factor = lb.lees_scrollen(a.sysnaam)
+            except Exception:  # noqa: BLE001
+                oud_factor = None
+            if oud_factor is not None:
+                _onthoud("scrollen", sysnaam=a.sysnaam, oud=oud_factor)
             mislukt |= not zet_scrollen(a.sysnaam, max(0.1, min(10.0, regels / 3)))
     if isinstance(links, bool):
         gedaan.append(t("linkshandig", "left-handed") if links else t("rechtshandig", "right-handed"))
@@ -645,6 +701,9 @@ def _muis(ins: dict) -> list[Uitslag]:
     if regels is not None:
         # Ook voor programma's die het wieltje zelf tellen (Qt/KDE): zo veel regels per tikje.
         if not bi.VOORBEELD:
+            # Was er niets gezet, dan onthouden we None: terugdraaien haalt de regel dan weer weg.
+            _onthoud("kde", bestand="kdeglobals", groep="KDE", sleutel="WheelScrollLines",
+                     oud=bi.kde_lees("kdeglobals", "KDE", "WheelScrollLines", "") or None)
             bi.kde_schrijf("kdeglobals", "KDE", "WheelScrollLines", str(regels))
         gedaan.append(t("{n} regels per tikje", "{n} lines per notch").format(n=regels))
     if mislukt:
@@ -680,6 +739,7 @@ def _schaal(ins: dict) -> list[Uitslag]:
     if abs(hoofd.schaal - waarde) < 0.01:
         return [Uitslag("instellingen", GOED, t("Grootte: {p} (stond al zo).", "Size: {p} (already set).").format(p=p))]
     # Eén scherm: zoals Instellingen (alle schermen). Meer schermen: alleen het hoofdscherm (daar gold het in Windows).
+    _onthoud("schaal", scherm=hoofd.naam if len(schermen) >= 2 else None, oud=hoofd.schaal)
     if bi.zet_schaal(waarde, hoofd.naam if len(schermen) >= 2 else None):
         return [Uitslag("instellingen", GOED, t("Grootte: {p}.", "Size: {p}.").format(p=p))]
     return [Uitslag("instellingen", ZELF, t("Grootte {p}: lukte niet. Kies hem in Instellingen > Scherm.",
@@ -791,10 +851,14 @@ def zet_wifi(lijst) -> list[Uitslag]:
         elif soort not in ("psk", "sae", "open") or not geldige_ssid(naam):
             anders.append(naam)
         else:
-            gelukt, _fout = nieuw_wifi(naam, soort, verborgen)
+            gelukt, melding = nieuw_wifi(naam, soort, verborgen)
             (opgeslagen if gelukt else mislukt).append(naam)
             if gelukt:
                 namen.add(naam)   # twee keer hetzelfde netwerk op de stick: één profiel
+                # nmcli zegt "Connection 'x' (<uuid>) successfully added.": met de uuid halen we bij terugdraaien
+                # precies dit profiel weg (ook als er later een tweede met dezelfde naam bij kwam).
+                m = re.search(r"\(([0-9a-fA-F-]{36})\)", melding)
+                _onthoud("wifi", naam=naam, uuid=m.group(1) if m else "")
     uit = []
     if opgeslagen:
         uit.append(Uitslag("wifi", GOED, t("Opgeslagen: {n}. Ben je in de buurt, dan vraagt BugOS één keer het wachtwoord.",
@@ -906,7 +970,13 @@ def zet_printers(lijst) -> list[Uitslag]:
         except Exception:  # noqa: BLE001  een printer die raar doet, houdt de andere niet tegen
             soort, wachtrij = "geen_antwoord", ""
         if soort == "ok":
+            _onthoud("printer", wachtrij=wachtrij, naam=naam)
             if standaard:
+                try:
+                    import bugos_overstap_logboek as lb
+                    _onthoud("standaardprinter", oud=lb.lees_standaardprinter())
+                except Exception:  # noqa: BLE001
+                    pass
                 bi.zet_standaard_printer(wachtrij)
             apparaten[wachtrij] = f"ipp://{adres}/ipp/print"
             uit.append(Uitslag("printers", GOED, (t("{n}: toegevoegd, en je standaardprinter.", "{n}: added, and your "
