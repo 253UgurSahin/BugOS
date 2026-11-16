@@ -1053,7 +1053,8 @@ klopt(any(x.startswith("Er staat niets groots in je eigen mappen") for x in _tek
       f"review 2: niets groots in je eigen mappen: dat staat er, met 'Apps verwijderen die je niet gebruikt' ({_teksten[:2]})")
 if _knop_apps:
     _knop_apps[0].click()
-klopt(_gestart_b[-1:] == [("bugos-store",)], f"review 2: die knop opent de Winkel ({_gestart_b[-1:]})")
+klopt(_gestart_b[-1:] == [("bugos-store", "--mijn-apps")],
+      f"review 2/C-09e: die knop opent de Winkel, bij Mijn apps ({_gestart_b[-1:]})")
 _eerste_actie = [a.text() for a in venster.ruimte_menu().actions() if a.text()]
 klopt(_eerste_actie[:1] == ["Zien wat ruimte inneemt"],
       f"ruimte: 'Ruimte maken' begint met 'Zien wat ruimte inneemt' ({_eerste_actie})")
@@ -1087,7 +1088,8 @@ _gestart_b.clear()
 next(r for r in v2.ruimte_rijen if r.gebruik.naam == "Steam").geklikt.emit()
 v2.open_ruimte(bfc.Ruimtegebruik("systeemapp", "Iets", "", "apps", None, GB, "org.kde.NietInDeWinkel"))
 v2.open_ruimte(next(r.gebruik for r in v2.ruimte_rijen if r.gebruik.soort == "systeem"))
-klopt(_gestart_b == [("bugos-store", "appstream://com.valvesoftware.Steam"), ("bugos-store",), ("bugos-store",)],
+klopt(_gestart_b == [("bugos-store", "appstream://com.valvesoftware.Steam"), ("bugos-store", "--mijn-apps"),
+                    ("bugos-store", "--mijn-apps")],
       f"review 2: een app opent in de Winkel; staat hij er niet in, dan de Winkel zelf (nooit Discover) ({_gestart_b})")
 _video_rij = next(r for r in v2.ruimte_rijen if r.gebruik.soort == "map" and r.gebruik.naam == "Video's")
 _video_rij.geklikt.emit()

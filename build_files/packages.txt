@@ -28,6 +28,9 @@ libnotify
 # Voorbeeldjes van PDF's en video's in Bestanden (U172)
 poppler-utils
 ffmpegthumbnailer
+# Voorbeeldjes van JPEG XL (.jxl), AVIF en HEIC in Bestanden: de beeldplug-ins van KDE voor Qt (C-05). De basis brengt
+# ze waarschijnlijk al mee (Gwenview en de voorbeeldjes van KDE gebruiken ze); dan doet deze regel niets.
+kf6-kimageformats
 
 # --- Internet en apps ---
 # Firefox als gewoon programma: de fundering heeft geen browser in het systeem, en

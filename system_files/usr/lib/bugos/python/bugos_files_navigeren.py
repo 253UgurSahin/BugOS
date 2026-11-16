@@ -122,9 +122,12 @@ class Navigeren:
             self.melding.toon(t(f"In '{pad.name or pad}' mag je niet kijken.", f"You may not look in '{pad.name or pad}'."),
                               "let_op")
             return
-        if geschiedenis and (self.in_prullenbak or self.in_computer or pad != self.huidig):
+        andere_plek = self.in_prullenbak or self.in_computer or pad != self.huidig
+        if geschiedenis and andere_plek:
             self.terug_lijst.append(self.plek_nu())
             self.vooruit_lijst.clear()
+        if andere_plek:
+            self.wis_melding()   # (C-04) verversen (F5) in dezelfde map laat de melding wel staan
         self.in_prullenbak = self.in_computer = False
         self.huidig = pad
         self.zoek.blockSignals(True)
@@ -155,6 +158,8 @@ class Navigeren:
         if geschiedenis and not self.in_prullenbak:
             self.terug_lijst.append(self.plek_nu())
             self.vooruit_lijst.clear()
+        if not self.in_prullenbak:
+            self.wis_melding()   # (C-04)
         self.in_prullenbak, self.in_computer = True, False
         self.bak_model.clear()
         for bestand, info, herkomst in prullenbak_inhoud():
@@ -214,6 +219,33 @@ class Navigeren:
             return ""
         return self.titel.text()
 
+    def venster_titel(self) -> str:
+        """De titel van het venster (in de taakbalk en Alt+Tab), altijd '<plek> - Bestanden' (C-06).
+
+        Vroeger heette je thuismap naar je loginnaam ('test - Bestanden') en de Prullenbak en Deze computer zonder
+        '- Bestanden'. Nu: een vaste plek met de naam uit de zijbalk ('Thuis', 'Documenten'), een USB-stick met
+        zijn eigen naam, en anders de naam van de map."""
+        app = t("Bestanden", "Files")
+        if self.in_prullenbak:
+            return f"{t('Prullenbak', 'Trash')} - {app}"
+        if self.in_computer:
+            return f"{t('Deze computer', 'This computer')} - {app}"
+        naam = next((n for _s, n, _i, pad in plekken() if pad == self.huidig), None)
+        if naam is None:
+            hier = schijf_van(self.huidig, self.lijst_schijven)
+            if hier is not None and Path(hier.wortel) == self.huidig:
+                naam = hier.naam
+        return f"{naam or self.huidig.name or '/'} - {app}"
+
+    def wis_melding(self) -> None:
+        """Naar een andere plek: de melding van de vorige plek weg ('2 dingen gekopieerd' hoort niet bij een andere
+        map, C-04). Behalve als er nog iets loopt (kopiëren met een knop 'Stoppen', een schijf die bezig is): die
+        melding moet je blijven zien."""
+        if (self.klus is not None and self.klus.isRunning()) or self.bezig:
+            return
+        self.melding.klok.stop()
+        self.melding.hide()
+
     def pad_passend(self) -> None:
         """Na een andere breedte: het pad opnieuw passend maken (U272)."""
         if self.pad_vak.isVisible() and self.pad_vak.width() != getattr(self, "_pad_breedte", -1):
@@ -229,6 +261,7 @@ class Navigeren:
         self.titel.setVisible(not in_map)
         self.zoek.setVisible(in_map)
         self.nieuw_knop.setVisible(in_map)
+        self.tekst_knop.setVisible(in_map)
         self.ververs_plak()
         self.leeg_knop.setVisible(self.in_prullenbak)
         hier = schijf_van(self.huidig, self.lijst_schijven) if in_map else None
@@ -240,9 +273,11 @@ class Navigeren:
             # op de plek van het pad, zodat je altijd bovenin ziet waar je bent.
             titel = t("Prullenbak", "Trash") if self.in_prullenbak else t("Deze computer", "This computer")
             self.titel.setText(titel)
-            self.setWindowTitle(titel)
+            self.setWindowTitle(self.venster_titel())
+            self.pas_knoppen()   # andere knoppen bovenin: opnieuw kijken welke woorden passen (C-03)
             return
-        self.setWindowTitle(f"{self.huidig.name or '/'} - {t('Bestanden', 'Files')}")
+        self.setWindowTitle(self.venster_titel())
+        self.pas_knoppen()
         # Van waar tellen we? Thuis, een schijf, of de hele computer.
         delen: list[tuple[str, Path]] = []
         wortel_naam, wortel = t("Computer", "Computer"), Path("/")
