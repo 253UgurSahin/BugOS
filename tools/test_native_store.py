@@ -653,6 +653,21 @@ w.lijst.setCurrentRow(_rij_mijn)
 klopt(w.zoek.text() == "" and w.kop.text() == "Mijn apps",
       f"C-10: tijdens het zoeken 'Mijn apps' kiezen laat Mijn apps zien ({w.kop.text()!r})")
 w.lijst.setCurrentRow(0)
+# D-14: tijdens het zoeken licht er geen onderwerp op in de zijbalk (de oude pagina bleef gekleurd terwijl je
+# zoekresultaten zag); na het zoeken weer wel. Een klik op het onderwerp stopt het zoeken nog steeds (C-10).
+w.zoek.setText("muziek")
+even(50)
+_tijdens = [it.text() for it in w.lijst.selectedItems()]
+w.zoek.setText("")
+even(50)
+_na = [it.text() for it in w.lijst.selectedItems()]
+klopt(_tijdens == [] and _na == [w.lijst.item(0).text()] and w.lijst.currentRow() == 0,
+      f"D-14: tijdens het zoeken geen onderwerp gekleurd in de zijbalk, daarna weer wel ({_tijdens}, {_na})")
+w.zoek.setText("muziek")
+even(50)
+w.lijst.itemClicked.emit(w.lijst.item(0))
+klopt(w.zoek.text() == "" and [it.text() for it in w.lijst.selectedItems()] == [w.lijst.item(0).text()],
+      "D-14: een klik op het onderwerp tijdens het zoeken: het zoeken gaat weg en het onderwerp kleurt weer")
 # C-12: een melding 'gelukt' blijft na het opnieuw tekenen, maar gaat weg bij een nieuwe zoekopdracht; geen ✅.
 w.meld("Radio NL is geïnstalleerd. Je vindt het in het startmenu.", "goed")
 w.toon()
