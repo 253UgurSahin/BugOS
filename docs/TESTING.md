@@ -26,7 +26,60 @@ The stick and the installer start in English. In the installer you pick your own
 A virtual PC is a "computer inside your computer". Your real computer stays exactly the way it is.
 
 - **Windows:** use [VirtualBox](https://www.virtualbox.org/). Make a new machine, choose the ISO, give it 4 GB of memory and a 40 GB disk, and turn on EFI.
-- **Linux:** use GNOME Boxes or virt-manager.
+- **Linux:** use GNOME Boxes or virt-manager, or `tools/vm-qemu.sh` (see below).
+
+## Building and testing on your own computer (without GitHub)
+
+`tools/iso-local.sh` builds BugOS and the USB stick locally. It does what `build.yml` and `iso.yml` do, but faster:
+a full build (system + ISO) takes about 20 minutes, the system alone about 10.
+
+**On Linux** (with podman, as root):
+
+```bash
+sudo tools/iso-local.sh . uit                          # system + ISO in ./uit
+sudo ALLEEN_BEELD=1 tools/iso-local.sh . uit           # only the system (for a VM that already runs BugOS)
+```
+
+**On Windows** (Docker Desktop): first export the repo with Linux line endings, then build in a podman container:
+
+```bash
+git -c core.autocrlf=false archive HEAD | tar -x -C /c/bouw/repo
+docker run --rm --privileged -v bugos-podman:/var/lib/containers \
+    -v C:/bouw/repo:/repo:ro -v C:/bouw/uit:/uit quay.io/podman/stable bash /repo/tools/iso-local.sh /repo /uit
+```
+
+The script uses the kernel's own overlay (not fuse-overlayfs, which was slow and left half-written files) in its
+own storage folder, and stops if that is not available. `ISO_ZSTD=19` packs the stick as small as GitHub does
+(much slower); the default 3 is fine for testing.
+
+### The fast round: update a test VM instead of reinstalling
+
+Installing from the ISO takes 40-60 minutes. For every next round of fixes, let the test VM fetch the new system
+itself, the way a real BugOS update works:
+
+1. Once, on your computer: a small registry. `docker run -d --restart unless-stopped -p 5000:5000 --name bugos-registry registry:2`
+2. Once, in the VM: trust it. Put this in `/etc/containers/registries.conf.d/50-bugos-lokaal.conf`:
+   ```
+   [[registry]]
+   location = "10.0.2.2:5000"
+   insecure = true
+   ```
+   (`10.0.2.2` is your computer, seen from a VirtualBox or QEMU VM with NAT networking.)
+3. Each round: build only the system and put it in the registry
+   (`ALLEEN_BEELD=1 REGISTRY=host.docker.internal:5000` on Windows, `REGISTRY=localhost:5000` on Linux), then in the VM:
+   `sudo bootc switch --transport registry 10.0.2.2:5000/bugos:lokaal` and restart. After the first switch,
+   `sudo bootc upgrade` is enough.
+
+### QEMU on Linux
+
+`tools/vm-qemu.sh` runs BugOS in QEMU with KVM: fast, with a virtio graphics card (`GL=1` for 3D) and UEFI.
+
+```bash
+tools/vm-qemu.sh nieuw uit/BugOS-main-lokaal-*.iso    # install
+tools/vm-qemu.sh start                                 # after installing
+tools/vm-qemu.sh foto scherm.png                       # screenshot
+tools/vm-qemu.sh bewaar schoon / terug schoon          # snapshots (VM off)
+```
 
 ## Already on Fedora Atomic or another Universal Blue image? Then you can do it without a USB stick
 
