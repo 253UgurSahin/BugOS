@@ -111,11 +111,15 @@ def chrome_bladwijzers(data: dict) -> list:
     'Andere bladwijzers' en die van je telefoon, elk als eigen map."""
     wortels = ot._dict(ot._dict(data).get("roots"))
     uit = _chrome_knopen(ot._dict(wortels.get("bookmark_bar")))
-    for sleutel, nl, en in (("other", "Andere bladwijzers", "Other bookmarks"),
-                            ("synced", "Mobiele bladwijzers", "Mobile bookmarks")):
-        kinderen = _chrome_knopen(ot._dict(wortels.get(sleutel)))
+    namen = {"other": ("Andere bladwijzers", "Other bookmarks"), "synced": ("Mobiele bladwijzers", "Mobile bookmarks")}
+    # Eerst 'other' en 'synced', dan wat een andere browser (of een oudere versie) nog meer als wortel heeft: die
+    # met hun eigen naam, zodat er niets verloren gaat.
+    for sleutel in ["other", "synced"] + [s for s in wortels if s not in ("bookmark_bar", "other", "synced")]:
+        wortel = ot._dict(wortels.get(sleutel))
+        kinderen = _chrome_knopen(wortel)
         if kinderen:
-            uit.append({"titel": t(nl, en), "kinderen": kinderen})
+            titel = t(*namen[sleutel]) if sleutel in namen else (ot._tekst(wortel.get("name"), 200) or sleutel)
+            uit.append({"titel": titel, "kinderen": kinderen})
     return uit
 
 

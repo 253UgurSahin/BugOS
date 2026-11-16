@@ -282,8 +282,8 @@ def venster() -> int:
             self.inhoud = lay
             buiten = QVBoxLayout(self)
             buiten.setContentsMargins(0, 0, 0, 0)
-            self.vlak = schuifbaar(w)
-            buiten.addWidget(self.vlak)
+            buiten.addWidget(schuifbaar(w))
+            self.vlak = buiten.itemAt(0).widget()   # het schuifvlak: om na afloop naar de samenvatting te schuiven
             lay.addWidget(kop_met_icoon("lijn:download", "neutraal",
                                         t("Haal alles van je oude pc", "Bring everything from your old PC"),
                                         t("Heb je met \"BugOS Switch\" je spullen van Windows op een USB-schijf gezet? "
