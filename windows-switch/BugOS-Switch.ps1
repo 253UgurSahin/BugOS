@@ -7,7 +7,10 @@
     Jip-en-Janneke:
       1. Controleren  - kan deze computer BugOS draaien?
       2. Meenemen     - je documenten, foto's, muziek, video's, bureaublad,
-                        downloads, bladwijzers en achtergrond naar een USB-schijf.
+                        downloads, bladwijzers en achtergrond naar een USB-schijf,
+                        plus je instellingen, de NAMEN van je wifi-netwerken, je
+                        netwerkprinters en een lijstje van je programma's
+                        (formaat 2, zie FORMAT.md). Nooit wachtwoorden.
       3. Ruimte maken - (alleen als je BugOS naast Windows wilt) Windows een
                         beetje kleiner maken zodat BugOS ernaast past.
       4. USB-stick    - de BugOS-installatie op een USB-stick zetten.
@@ -145,11 +148,371 @@ function Get-MeeneemGrootte {
     return $totaal
 }
 
+# ------------------------------------------------- meenemen: formaat 2 --
+# Wat er naast de bestanden mee gaat (zie windows-switch/FORMAT.md, het contract met BugOS). Elke Get-* hieronder
+# leest alleen (niets wordt veranderd) en is los te proberen. Regel van de eigenaar: NOOIT een wachtwoord op de schijf
+# (geen wifi-sleutels, geen browser-wachtwoorden of cookies). Programma's worden alleen opgesomd: BugOS stelt voor,
+# installeert nooit zelf.
+
+# Waar de browsers hun gegevens bewaren. Script-variabelen, zodat een test ze naar een nep-map kan laten wijzen.
+$script:ChromiumMappen = [ordered]@{
+    'Chrome' = "$env:LOCALAPPDATA\Google\Chrome\User Data"
+    'Edge'   = "$env:LOCALAPPDATA\Microsoft\Edge\User Data"
+    'Brave'  = "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\User Data"
+}
+$script:FirefoxMap = "$env:APPDATA\Mozilla\Firefox"
+# Mappen in het Firefox-profiel die groter zijn dan dit, blijven thuis (meestal 'storage' van websites): die maken
+# de schijf vol en BugOS heeft ze niet nodig. We zeggen wel welke het waren.
+$script:FirefoxGrens = 300MB
+$script:FirefoxOverslagen = @()
+
+function Get-Waarde($obj, [string] $naam) {
+    # Een eigenschap lezen die er misschien niet is. Met Set-StrictMode geeft $obj.Naam anders een fout als de
+    # eigenschap ontbreekt (bijv. een registersleutel zonder DisplayName).
+    if ($null -eq $obj) { return $null }
+    $eig = $obj.PSObject.Properties[$naam]
+    if ($eig) { return $eig.Value }
+    return $null
+}
+
+function Get-SchermSchaal {
+    # De schaal van het hoofdscherm in procent (100, 125, 150...). Alleen juist als het programma 'DPI-bewust' is:
+    # anders zegt Windows altijd 96 dpi. Dat zetten we hier (nog een keer) aan; twee keer kan geen kwaad.
+    # Het is de schaal van het scherm waarop Windows bij het aanmelden begon (zo werkt 'system DPI').
+    try { if ('BugOS.Dpi' -as [type]) { [void][BugOS.Dpi]::SetProcessDPIAware() } } catch { Write-Verbose 'Niet DPI-bewust.' }
+    $g = [System.Drawing.Graphics]::FromHwnd([IntPtr]::Zero)
+    try { return [int][math]::Round($g.DpiX * 100.0 / 96.0) } finally { $g.Dispose() }
+}
+
+function Get-Toetsenborden([object[]] $talen) {
+    # De toetsenbordindelingen (KLID, 8 hexadecimale tekens) in de volgorde van Windows.
+    # Eerst uit de taallijst: elke 'InputMethodTip' is 'taal:KLID', bijv. '0409:00020409' (VS-internationaal).
+    # Een IME (Japans, Chinees) is '{guid}{guid}': die heeft geen KLID en slaan we over.
+    $klids = New-Object System.Collections.Generic.List[string]
+    foreach ($taal in @($talen)) {
+        foreach ($tip in @(Get-Waarde $taal 'InputMethodTips')) {
+            if ("$tip" -match '^[0-9A-Fa-f]{4}:([0-9A-Fa-f]{8})$') {
+                $k = $Matches[1].ToUpperInvariant()
+                if (-not $klids.Contains($k)) { $klids.Add($k) }
+            }
+        }
+    }
+    if ($klids.Count -eq 0) {
+        # Reserve: HKCU\Keyboard Layout\Preload (1, 2, 3...). Een waarde als 'd0010409' is een verwijzing die in
+        # 'Substitutes' naar de echte KLID wijst.
+        $voor = Get-ItemProperty 'HKCU:\Keyboard Layout\Preload' -ErrorAction SilentlyContinue
+        $vervang = Get-ItemProperty 'HKCU:\Keyboard Layout\Substitutes' -ErrorAction SilentlyContinue
+        if ($voor) {
+            $namen = @($voor.PSObject.Properties | Where-Object { $_.Name -match '^\d+$' } | Sort-Object { [int]$_.Name })
+            foreach ($n in $namen) {
+                $k = "$($n.Value)"
+                $echt = Get-Waarde $vervang $k
+                if ($echt) { $k = "$echt" }
+                if ($k -match '^[0-9A-Fa-f]{8}$') {
+                    $k = $k.ToUpperInvariant()
+                    if (-not $klids.Contains($k)) { $klids.Add($k) }
+                }
+            }
+        }
+    }
+    return $klids.ToArray()
+}
+
+function Get-Instellingen {
+    # Taal, notatie, tijdzone, toetsenbord, donker/licht, muis en schaal. Wat niet te lezen is, laten we weg:
+    # BugOS slaat een ontbrekend onderdeel dan over (FORMAT.md).
+    $uit = [ordered]@{}
+    $talen = @()
+    # Get-WinUserLanguageList geeft de hele lijst als één object (een List<>) terug; ForEach-Object pakt hem uit tot
+    # losse talen, anders zou $talen[0] de lijst zelf zijn en geen taal.
+    try { $talen = @(Get-WinUserLanguageList -ErrorAction Stop | ForEach-Object { $_ }) } catch { Write-Verbose 'Geen taallijst.' }
+    # De weergavetaal: de eerste taal in de lijst van Windows (Instellingen > Tijd en taal).
+    if ($talen.Count -gt 0 -and (Get-Waarde $talen[0] 'LanguageTag')) { $uit.taal = "$($talen[0].LanguageTag)" }
+    else { try { $uit.taal = (Get-UICulture).Name } catch { Write-Verbose 'Geen weergavetaal.' } }
+    # De notatie (datum, getallen, valuta) staat los van de taal: iemand kan Engels lezen met een Nederlandse notatie.
+    try { $uit.notatie = (Get-Culture).Name } catch { Write-Verbose 'Geen notatie.' }
+    # De Windows-naam van de tijdzone (bijv. 'W. Europe Standard Time'); BugOS zet die om naar Europe/Amsterdam enz.
+    try { $uit.tijdzone = [System.TimeZoneInfo]::Local.Id } catch { Write-Verbose 'Geen tijdzone.' }
+    try {
+        $klids = @(Get-Toetsenborden $talen)
+        if ($klids.Count -gt 0) { $uit.toetsenborden = @($klids) }
+    } catch { Write-Verbose 'Geen toetsenborden.' }
+    # Donker of licht: AppsUseLightTheme = 0 betekent donker. Ontbreekt de waarde, dan zeggen we niets (geen gok).
+    $thema = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' -ErrorAction SilentlyContinue
+    $licht = Get-Waarde $thema 'AppsUseLightTheme'
+    if ($null -ne $licht) { $uit.donker = ([int]$licht -eq 0) }
+    # De muis. Het register bewaart deze waarden als tekst ("1", "10", "3").
+    $muis = [ordered]@{}
+    $m = Get-ItemProperty 'HKCU:\Control Panel\Mouse' -ErrorAction SilentlyContinue
+    $wissel = Get-Waarde $m 'SwapMouseButtons'
+    if ($null -ne $wissel) { $muis.linkshandig = ("$wissel" -eq '1') }
+    $snel = 0
+    if ([int]::TryParse("$(Get-Waarde $m 'MouseSensitivity')", [ref]$snel) -and $snel -ge 1 -and $snel -le 20) { $muis.snelheid = $snel }
+    $bureau = Get-ItemProperty 'HKCU:\Control Panel\Desktop' -ErrorAction SilentlyContinue
+    $regels = 0
+    # -1 betekent in Windows 'een heel scherm per keer': dat kent BugOS niet als getal, dus dan laten we het weg.
+    if ([int]::TryParse("$(Get-Waarde $bureau 'WheelScrollLines')", [ref]$regels) -and $regels -ge 1) { $muis.scrollregels = $regels }
+    if ($muis.Count -gt 0) { $uit.muis = $muis }
+    try { $uit.schaal = Get-SchermSchaal } catch { Write-Verbose 'Geen schaal.' }
+    return $uit
+}
+
+function Get-XmlTekst([xml] $doc, [string] $naam) {
+    # De tekst van het eerste element met deze naam, waar ook in het bestand. Met local-name(), zodat de
+    # namespaces van Microsoft (v1, v3, v4) niet in de weg zitten.
+    $knoop = $doc.SelectSingleNode("//*[local-name()='$naam']")
+    if ($knoop) { return $knoop.InnerText }
+    return $null
+}
+
+function Get-WifiBeveiliging([string] $auth, [string] $oneX) {
+    # De 'authentication' uit het profiel in woorden die mensen (en BugOS) kennen. 'Enterprise' = school- of
+    # werknetwerk met een eigen inlog (802.1X): BugOS zegt dan "log één keer in".
+    $soort = switch ($auth) {
+        'open'       { 'Open' }
+        'shared'     { 'WEP' }
+        'WPA'        { 'WPA-Enterprise' }
+        'WPAPSK'     { 'WPA-Personal' }
+        'WPA2'       { 'WPA2-Enterprise' }
+        'WPA2PSK'    { 'WPA2-Personal' }
+        'WPA3'       { 'WPA3-Enterprise' }
+        'WPA3ENT'    { 'WPA3-Enterprise' }
+        'WPA3ENT192' { 'WPA3-Enterprise' }
+        'WPA3SAE'    { 'WPA3-Personal' }
+        'OWE'        { 'OWE' }
+        default      { if ($auth) { $auth } else { 'Onbekend' } }
+    }
+    # Een 'open' netwerk met 802.1X (oude WEP-schoolnetwerken) is toch een inlog-netwerk.
+    if ($oneX -eq 'true' -and $soort -notlike '*Enterprise') { $soort = "$soort-Enterprise" }
+    return $soort
+}
+
+function Get-WifiNetwerken {
+    # De opgeslagen wifi-netwerken: naam, beveiliging en of het netwerk verborgen is. NOOIT de sleutel.
+    # Hoe: 'netsh wlan export profile' ZONDER key=clear. Dat geeft XML-bestanden waarin de sleutel versleuteld staat
+    # (alleen deze Windows kan hem lezen). We lezen er alleen naam en soort uit, in een eigen tijdelijke map op deze
+    # pc (nooit op de USB-schijf), en gooien die map daarna meteen weg.
+    # Waarom XML en niet de tekst van 'netsh wlan show profile': die tekst is vertaald (Nederlands, Engels, Duits...)
+    # en dus lastig te lezen; de XML is overal hetzelfde.
+    $netwerken = New-Object System.Collections.Generic.List[object]
+    $gezien = @{}
+    $tijdelijk = Join-Path ([System.IO.Path]::GetTempPath()) ('bugos-wifi-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Force -Path $tijdelijk | Out-Null
+    try {
+        # 1. Alles in één keer.
+        $null = & netsh.exe wlan export profile "folder=$tijdelijk"
+        # 2. Daarnaast elk profiel apart, in een eigen submap. Sommige Windows-versies geven elk bestand dezelfde naam
+        #    (bijv. 'WiFi-.xml'), zodat stap 1 bij meer netwerken er maar één overhoudt. De namen komen uit
+        #    'netsh wlan show profiles': in elke taal zijn dat regels '    <iets>  : <naam>'. Een naam met
+        #    vreemde tekens kan hier verminkt zijn; die zit dan nog wel in stap 1.
+        $lijst = @(& netsh.exe wlan show profiles)
+        $nr = 0
+        foreach ($regel in $lijst) {
+            if ("$regel" -match '^\s+\S.*?\s:\s(.+?)\s*$') {
+                $nr++
+                $sub = Join-Path $tijdelijk "$nr"
+                New-Item -ItemType Directory -Force -Path $sub | Out-Null
+                $null = & netsh.exe wlan export profile "name=$($Matches[1])" "folder=$sub"
+            }
+        }
+        foreach ($bestand in @(Get-ChildItem -LiteralPath $tijdelijk -Recurse -File -Filter '*.xml' -ErrorAction SilentlyContinue)) {
+            try {
+                [xml] $doc = Get-Content -LiteralPath $bestand.FullName -Raw -Encoding UTF8
+                $profiel = Get-XmlTekst $doc 'name'
+                # De naam van het netwerk zelf (SSID). Die kan anders zijn dan de profielnaam, en BugOS heeft de
+                # SSID nodig om het netwerk te vinden. Ontbreekt hij, dan uit de hex-vorm, en anders de profielnaam.
+                $ssidKnoop = $doc.SelectSingleNode("//*[local-name()='SSIDConfig']/*[local-name()='SSID']")
+                $ssid = $null
+                if ($ssidKnoop) {
+                    $n = $ssidKnoop.SelectSingleNode("*[local-name()='name']")
+                    if ($n -and $n.InnerText) { $ssid = $n.InnerText }
+                    else {
+                        $h = $ssidKnoop.SelectSingleNode("*[local-name()='hex']")
+                        if ($h -and $h.InnerText -match '^([0-9A-Fa-f]{2})+$') {
+                            $bytes = [byte[]]@(for ($i = 0; $i -lt $h.InnerText.Length; $i += 2) { [Convert]::ToByte($h.InnerText.Substring($i, 2), 16) })
+                            $ssid = [System.Text.Encoding]::UTF8.GetString($bytes)
+                        }
+                    }
+                }
+                if (-not $ssid) { $ssid = $profiel }
+                if (-not $ssid -or $gezien.ContainsKey($ssid)) { continue }
+                $gezien[$ssid] = $true
+                $netwerken.Add([ordered]@{
+                    naam        = $ssid
+                    beveiliging = Get-WifiBeveiliging (Get-XmlTekst $doc 'authentication') (Get-XmlTekst $doc 'useOneX')
+                    verborgen   = ((Get-XmlTekst $doc 'nonBroadcast') -eq 'true')
+                })
+            } catch { Write-Verbose "Wifi-profiel niet te lezen: $($bestand.Name)" }
+        }
+    } finally {
+        # Weg met de tijdelijke XML-bestanden (daar staat de versleutelde sleutel in), wat er ook gebeurde.
+        Remove-Item -LiteralPath $tijdelijk -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    return $netwerken.ToArray()
+}
+
+function Get-NetwerkPrinters {
+    # Alleen printers op het netwerk (met een IP-adres of hostnaam). Een USB-printer vindt BugOS zelf als je hem
+    # insteekt; 'Microsoft Print to PDF' en dergelijke hebben geen adres en vallen zo vanzelf af.
+    $uit = New-Object System.Collections.Generic.List[object]
+    # De standaardprinter: Get-Printer weet dat niet, WMI wel.
+    $standaard = @{}
+    try { foreach ($w in @(Get-CimInstance Win32_Printer -ErrorAction Stop)) { $standaard["$($w.Name)"] = [bool]$w.Default } } catch { Write-Verbose 'Geen standaardprinter bekend.' }
+    foreach ($p in @(Get-Printer -ErrorAction Stop)) {
+        $adres = $null
+        if ("$($p.Type)" -eq 'Connection') {
+            # Gedeeld via een andere pc of printserver (\\server\printer): het adres is die server.
+            $adres = "$(Get-Waarde $p 'ComputerName')".Trim('\')
+        } else {
+            $poort = Get-PrinterPort -Name $p.PortName -ErrorAction SilentlyContinue
+            $host_ = "$(Get-Waarde $poort 'PrinterHostAddress')"
+            if ($host_) { $adres = $host_ }
+            elseif ("$($p.PortName)" -match '^(https?|ipp)://') {
+                # Een internetpoort (IPP): het adres zit in de URL.
+                try { $adres = ([uri]"$($p.PortName)").Host } catch { Write-Verbose 'Geen URL.' }
+            } elseif ("$($p.PortName)" -match '(?<![\d.])((\d{1,3}\.){3}\d{1,3})(?![\d.])') {
+                # Een TCP/IP-poort waarvan Windows alleen de naam weet, zoals 'IP_192.168.1.40'. Geen \b: '_' telt
+                # als letter, dus tussen 'IP_' en het adres zit voor de regex geen woordgrens.
+                $adres = $Matches[1]
+            }
+        }
+        if (-not $adres) { continue }
+        $uit.Add([ordered]@{ naam = "$($p.Name)"; adres = $adres; standaard = [bool]$standaard["$($p.Name)"] })
+    }
+    return $uit.ToArray()
+}
+
+function Get-Programmas {
+    # De geïnstalleerde programma's uit de Uninstall-sleutels (64-bit, 32-bit en alleen-voor-deze-gebruiker), zoals
+    # 'Apps en onderdelen' ze laat zien. Weg: systeemonderdelen, updates/hotfixes, stuurprogramma's en lege namen.
+    # BugOS gebruikt de lijst alleen om apps uit de Store VOOR TE STELLEN (de keuze van de eigenaar).
+    $sleutels = @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    )
+    $gezien = @{}
+    $uit = New-Object System.Collections.Generic.List[object]
+    foreach ($sleutel in $sleutels) {
+        foreach ($s in @(Get-ItemProperty -Path $sleutel -ErrorAction SilentlyContinue)) {
+            $naam = "$(Get-Waarde $s 'DisplayName')".Trim()
+            if (-not $naam) { continue }
+            if ("$(Get-Waarde $s 'SystemComponent')" -eq '1') { continue }
+            # Een update hangt onder een 'ouder' (ParentKeyName) of heeft een ReleaseType.
+            if (Get-Waarde $s 'ParentKeyName') { continue }
+            if ("$(Get-Waarde $s 'ReleaseType')" -match 'Update|Hotfix|Service Pack') { continue }
+            if ($naam -match '\bKB\d{6,}\b' -or $naam -match '^(Security )?Update for|^Hotfix for') { continue }
+            # Stuurprogramma's (Windows Driver Package, '... Driver', Nederlandse Windows: 'stuurprogramma').
+            if ($naam -match '(?i)\bdrivers?\b|stuurprogramma|Treiber|Windows Driver Package') { continue }
+            # Dubbelen (hetzelfde programma als 32- en 64-bit, of machine en gebruiker): één keer.
+            $k = $naam.ToLowerInvariant()
+            if ($gezien.ContainsKey($k)) { continue }
+            $gezien[$k] = $true
+            $uit.Add([ordered]@{ naam = $naam; uitgever = "$(Get-Waarde $s 'Publisher')".Trim(); versie = "$(Get-Waarde $s 'DisplayVersion')".Trim() })
+        }
+    }
+    return @($uit | Sort-Object { $_.naam })
+}
+
+function Get-ChromiumProfielen {
+    # Alle profielen van Chrome, Edge en Brave die bladwijzers hebben. 'Local State' (JSON) somt de profielen op met
+    # hun naam ("Persoon 1", "Werk"). We lezen dat met de JavaScriptSerializer van .NET: ConvertFrom-Json van
+    # PowerShell 5.1 struikelt over sleutels die alleen in hoofdletters verschillen, en die komen in dat bestand voor.
+    Add-Type -AssemblyName System.Web.Extensions
+    $uit = New-Object System.Collections.Generic.List[object]
+    foreach ($b in $script:ChromiumMappen.GetEnumerator()) {
+        $basis = $b.Value
+        if (-not (Test-Path -LiteralPath $basis)) { continue }
+        $profielen = [ordered]@{}
+        try {
+            $lezer = New-Object System.Web.Script.Serialization.JavaScriptSerializer
+            $lezer.MaxJsonLength = [int]::MaxValue
+            $staat = $lezer.DeserializeObject([System.IO.File]::ReadAllText((Join-Path $basis 'Local State')))
+            $cache = $staat['profile']['info_cache']
+            foreach ($map in $cache.Keys) {
+                $info = $cache[$map]
+                $profielen[$map] = if ($info -is [System.Collections.IDictionary] -and $info.ContainsKey('name')) { "$($info['name'])" } else { $map }
+            }
+        } catch { Write-Verbose "Local State van $($b.Key) niet te lezen." }
+        if ($profielen.Count -eq 0) {
+            # Reserve: de mappen 'Default' en 'Profile 1', 'Profile 2'... (zonder naam: dan de mapnaam).
+            foreach ($d in @(Get-ChildItem -LiteralPath $basis -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq 'Default' -or $_.Name -match '^Profile \d+$' })) {
+                $profielen[$d.Name] = $d.Name
+            }
+        }
+        foreach ($p in $profielen.GetEnumerator()) {
+            $bestand = Join-Path (Join-Path $basis $p.Key) 'Bookmarks'
+            if (-not (Test-Path -LiteralPath $bestand)) { continue }
+            $uit.Add([pscustomobject]@{ Browser = $b.Key; Profiel = $p.Key; Naam = $p.Value; Bestand = $bestand })
+        }
+    }
+    return $uit.ToArray()
+}
+
+function Get-FirefoxProfielen {
+    # Alle Firefox-profielen uit profiles.ini, met de nieuwste bladwijzer-back-up (Firefox maakt die zelf elke dag,
+    # als .jsonlz4) en welk profiel het standaardprofiel is.
+    $uit = New-Object System.Collections.Generic.List[object]
+    $ini = Join-Path $script:FirefoxMap 'profiles.ini'
+    if (-not (Test-Path -LiteralPath $ini)) { return $uit.ToArray() }
+    # profiles.ini in stukken [Kopje] met sleutel=waarde.
+    $stukken = New-Object System.Collections.Generic.List[object]
+    $huidig = $null
+    foreach ($regel in (Get-Content -LiteralPath $ini -Encoding UTF8)) {
+        if ($regel -match '^\s*\[(.+)\]\s*$') { $huidig = @{ '_kop' = $Matches[1] }; $stukken.Add($huidig) }
+        elseif ($huidig -and $regel -match '^\s*([^=;#]+?)\s*=\s*(.*?)\s*$') { $huidig[$Matches[1]] = $Matches[2] }
+    }
+    # Nieuwe Firefox: het standaardprofiel staat bij [Install...] (per installatie). Oude Firefox: Default=1 bij het
+    # profiel zelf. De eerste wint.
+    $installStandaard = $null
+    foreach ($s in $stukken) { if ($s['_kop'] -like 'Install*' -and $s['Default']) { $installStandaard = $s['Default']; break } }
+    $profielen = @($stukken | Where-Object { $_['_kop'] -like 'Profile*' -and $_['Path'] })
+    foreach ($s in $profielen) {
+        $pad = if ($s['IsRelative'] -eq '1') { Join-Path $script:FirefoxMap ($s['Path'] -replace '/', '\') } else { $s['Path'] }
+        if (-not (Test-Path -LiteralPath $pad)) { continue }
+        if ($installStandaard) { $isStandaard = ($s['Path'] -eq $installStandaard) }
+        else { $isStandaard = ($s['Default'] -eq '1') -or ($profielen.Count -eq 1) }
+        $backup = Get-ChildItem -LiteralPath (Join-Path $pad 'bookmarkbackups') -Filter '*.jsonlz4' -File -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        $uit.Add([pscustomobject]@{
+            Profiel   = Split-Path $pad -Leaf
+            Naam      = if ($s['Name']) { $s['Name'] } else { Split-Path $pad -Leaf }
+            Pad       = $pad
+            Standaard = [bool]$isStandaard
+            Backup    = if ($backup) { $backup.FullName } else { $null }
+        })
+    }
+    return $uit.ToArray()
+}
+
+function Copy-FirefoxProfiel([string] $bron, [string] $doel) {
+    # Het Firefox-profiel meenemen (geschiedenis, bladwijzers, extensies, instellingen), maar ZONDER wachtwoorden,
+    # cookies en open tabbladen (die laatste bevatten inlog-sessies). Geeft de namen terug van mappen die te groot
+    # waren en thuis bleven.
+    $grootTeVeel = New-Object System.Collections.Generic.List[string]
+    $xd = New-Object System.Collections.Generic.List[string]
+    # Rommel en privé-dingen die BugOS niet nodig heeft: de cache, sessies (inlog!), crashrapporten en telemetrie.
+    foreach ($n in @('cache2', 'startupCache', 'shader-cache', 'sessionstore-backups', 'crashes', 'minidumps', 'saved-telemetry-pings', 'datareporting')) { $xd.Add($n) }
+    foreach ($map in @(Get-ChildItem -LiteralPath $bron -Directory -Force -ErrorAction SilentlyContinue)) {
+        if ($xd.Contains($map.Name)) { continue }
+        $som = (Get-ChildItem -LiteralPath $map.FullName -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
+        if ($som -and $som -gt $script:FirefoxGrens) { $xd.Add($map.FullName); $grootTeVeel.Add($map.Name) }
+    }
+    # /XF: wachtwoorden (logins*.json, key4.db, key3.db, signons.sqlite), cookies, open tabbladen en de slotjes van
+    # een draaiende Firefox. robocopy kijkt naar de bestandsnaam op elke diepte.
+    $xf = @('logins.json', 'logins-backup.json', 'key4.db', 'key3.db', 'signons.sqlite', 'cookies.sqlite*', 'sessionstore*', 'parent.lock', '.parentlock', 'lock')
+    $argumenten = @($bron, $doel, '/E', '/R:1', '/W:1', '/XJ', '/NFL', '/NDL', '/NJH', '/NJS', '/NP', '/XF') + $xf + @('/XD') + $xd.ToArray()
+    $null = & robocopy @argumenten
+    if ($LASTEXITCODE -ge 16) { throw (T 'Het Firefox-profiel kopiëren lukte niet.' 'Copying the Firefox profile failed.') }
+    return $grootTeVeel.ToArray()
+}
+
 function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
     $doel = Join-Path $doelSchijf 'BugOS-Switch'
     New-Item -ItemType Directory -Force -Path $doel | Out-Null
     $stap = 0
-    $aantal = $script:Mappen.Count + 2
+    # De mappen, en daarna: bladwijzers, het Firefox-profiel, de achtergrond, en instellingen/wifi/printers/programma's.
+    $aantal = $script:Mappen.Count + 4
     # Mappen waar een paar bestanden niet mee konden (open in een programma, groter dan 4 GB op FAT32, alleen in
     # OneDrive): de rest gaat gewoon door (U094).
     $script:Deels = @()
@@ -167,23 +530,48 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
         }
     }
 
-    # Bladwijzers van Chrome, Edge en Brave (allemaal hetzelfde JSON-formaat).
+    # Bladwijzers van ALLE profielen van Chrome, Edge en Brave (allemaal hetzelfde JSON-formaat), als
+    # Bladwijzers/<Browser>-<Profiel>.json, en van Firefox de nieuwste back-up per profiel (FORMAT.md).
     $stap++
     & $Voortgang ([int](100 * $stap / $aantal)) (T 'Bladwijzers meenemen...' 'Taking bookmarks...')
     $bw = Join-Path $doel 'Bladwijzers'
     New-Item -ItemType Directory -Force -Path $bw | Out-Null
-    $browsers = @{
-        'Chrome' = "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Bookmarks"
-        'Edge'   = "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Bookmarks"
-        'Brave'  = "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\User Data\Default\Bookmarks"
+    # Namen van versie 1 (één bestand per browser) van een eerdere keer weghalen: anders zou BugOS die bladwijzers
+    # twee keer binnenhalen (oud en nieuw naast elkaar).
+    foreach ($oud in @('Chrome.json', 'Edge.json', 'Brave.json', 'Firefox.jsonlz4')) {
+        Remove-Item -LiteralPath (Join-Path $bw $oud) -Force -ErrorAction SilentlyContinue
     }
-    foreach ($b in $browsers.GetEnumerator()) {
-        if (Test-Path $b.Value) { Copy-Item -LiteralPath $b.Value -Destination (Join-Path $bw "$($b.Key).json") -Force }
+    $browsers = New-Object System.Collections.Generic.List[object]
+    try {
+        foreach ($p in @(Get-ChromiumProfielen)) {
+            $bestand = "$($p.Browser)-$($p.Profiel).json"
+            Copy-Item -LiteralPath $p.Bestand -Destination (Join-Path $bw $bestand) -Force
+            $browsers.Add([ordered]@{ browser = $p.Browser; profiel = $p.Profiel; naam = $p.Naam; bladwijzers = "Bladwijzers/$bestand" })
+        }
+    } catch { Write-Verbose 'Bladwijzers van Chrome/Edge/Brave niet (allemaal) gelukt.' }
+    $firefox = @()
+    try { $firefox = @(Get-FirefoxProfielen) } catch { Write-Verbose 'Firefox-profielen niet te lezen.' }
+    foreach ($p in $firefox) {
+        if (-not $p.Backup) { continue }
+        try {
+            $bestand = "Firefox-$($p.Profiel).jsonlz4"
+            Copy-Item -LiteralPath $p.Backup -Destination (Join-Path $bw $bestand) -Force
+            $browsers.Add([ordered]@{ browser = 'Firefox'; profiel = $p.Profiel; naam = $p.Naam; bladwijzers = "Bladwijzers/$bestand" })
+        } catch { Write-Verbose "Bladwijzers van Firefox-profiel $($p.Profiel) niet gelukt." }
     }
-    # Firefox: de nieuwste automatische bladwijzer-back-up.
-    Get-ChildItem "$env:APPDATA\Mozilla\Firefox\Profiles\*\bookmarkbackups\*.jsonlz4" -ErrorAction SilentlyContinue |
-        Sort-Object LastWriteTime -Descending | Select-Object -First 1 |
-        ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $bw 'Firefox.jsonlz4') -Force }
+
+    # Het standaardprofiel van Firefox (alleen als Windows Firefox heeft), zonder wachtwoorden en cookies.
+    $stap++
+    & $Voortgang ([int](100 * $stap / $aantal)) (T 'Firefox meenemen...' 'Taking Firefox...')
+    $script:FirefoxOverslagen = @()
+    $firefoxProfiel = $null
+    $standaard = @($firefox | Where-Object { $_.Standaard }) | Select-Object -First 1
+    if ($standaard) {
+        try {
+            $script:FirefoxOverslagen = @(Copy-FirefoxProfiel $standaard.Pad (Join-Path (Join-Path $doel 'Firefox') $standaard.Profiel))
+            $firefoxProfiel = "Firefox/$($standaard.Profiel)"
+        } catch { Write-Verbose 'Firefox-profiel niet gekopieerd.' }
+    }
 
     # De bureaubladachtergrond, zodat BugOS meteen vertrouwd voelt.
     $stap++
@@ -191,8 +579,19 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
     $achtergrond = "$env:APPDATA\Microsoft\Windows\Themes\TranscodedWallpaper"
     if (Test-Path $achtergrond) { Copy-Item -LiteralPath $achtergrond -Destination (Join-Path $doel 'achtergrond.jpg') -Force }
 
+    # Instellingen, wifi-namen, netwerkprinters en het lijstje programma's. Elk onderdeel apart: lukt er één niet
+    # (bijv. geen wifi-kaart, of de printerdienst staat uit), dan laten we alleen dat veld weg.
+    $stap++
+    & $Voortgang ([int](100 * $stap / $aantal)) (T 'Instellingen, wifi-namen, printers en programma''s...' 'Settings, Wi-Fi names, printers and programs...')
+    $instellingen = $null; $wifi = $null; $printers = $null; $programmas = $null
+    try { $instellingen = Get-Instellingen } catch { Write-Verbose 'Instellingen niet te lezen.' }
+    try { $wifi = @(Get-WifiNetwerken) } catch { Write-Verbose 'Wifi niet te lezen.' }
+    try { $printers = @(Get-NetwerkPrinters) } catch { Write-Verbose 'Printers niet te lezen.' }
+    try { $programmas = @(Get-Programmas) } catch { Write-Verbose 'Programma''s niet te lezen.' }
+
+    # Versie 2. De velden van versie 1 blijven precies zo, zodat een oude BugOS de schijf nog kan lezen.
     $info = [ordered]@{
-        versie     = 1
+        versie     = 2
         gemaakt    = (Get-Date).ToString('s')
         gebruiker  = $env:USERNAME
         computer   = $env:COMPUTERNAME
@@ -200,7 +599,16 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
         mappen     = @($script:Mappen | ForEach-Object { $_.Naam })
         deels      = @($script:Deels)
     }
-    $info | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $doel 'bugos-switch.json') -Encoding UTF8
+    # De nieuwe velden alleen als ze gelezen konden worden: een ontbrekend veld betekent voor BugOS "sla over en zeg
+    # het". @() om de lijsten, zodat één wifi-netwerk toch een lijst blijft (en geen los object) in de JSON.
+    if ($instellingen -and $instellingen.Count -gt 0) { $info.instellingen = $instellingen }
+    if ($null -ne $wifi) { $info.wifi = @($wifi) }
+    if ($null -ne $printers) { $info.printers = @($printers) }
+    if ($null -ne $programmas) { $info.programmas = @($programmas) }
+    $info.browsers = @($browsers.ToArray())
+    if ($firefoxProfiel) { $info.firefox_profiel = $firefoxProfiel }
+    # -Depth: standaard stopt ConvertTo-Json na 2 lagen, en de muis-instellingen zitten op laag 3.
+    $info | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $doel 'bugos-switch.json') -Encoding UTF8
     & $Voortgang 100 (T 'Klaar!' 'Done!')
 }
 
@@ -1094,9 +1502,15 @@ $Paginas += {
 $Paginas += {
     $kop.Text = (T 'Je bestanden meenemen' 'Take your files with you')
     $groot = [math]::Round((Get-MeeneemGrootte) / 1GB, 1)
-    $y = Nieuw-Tekst (T "Je documenten, foto's, muziek, video's, bureaublad, downloads, bladwijzers en achtergrond ($groot GB) gaan naar een USB-schijf. In BugOS zet je ze terug met één klik. Dit is ook meteen een back-up! Gebruik een andere schijf dan de USB-stick voor BugOS (stap 4): die wordt gewist." "Your documents, photos, music, videos, desktop, downloads, bookmarks and wallpaper ($groot GB) go to a USB drive. In BugOS you put them back with one click. This is also a backup! Use a different drive than the USB stick for BugOS (step 4): that one is erased.") 0
-    $y = Nieuw-Tekst (T 'Kies de USB-schijf:' 'Choose the USB drive:') ($y + 16) -Vet
-    $script:W.schijf = Nieuw-Lijst ($y + 4) 400
+    # In gewone woorden wat er mee gaat (formaat 2, zie FORMAT.md), en heel duidelijk dat wachtwoorden NOOIT
+    # meegaan: dat is de keuze van de eigenaar, en mensen moeten weten dat ze hun wifi-wachtwoord nog één keer nodig
+    # hebben. Kort gehouden, zodat de pagina ook op 150% zonder schuifbalk past.
+    $y = Nieuw-Tekst (T "Dit gaat mee naar een USB-schijf ($groot GB): je bestanden (documenten, foto's, muziek, video's, bureaublad, downloads), je bladwijzers en achtergrond, je instellingen (taal, toetsenbord, tijdzone, donker of licht, muis), de namen van je wifi-netwerken, je netwerkprinters en een lijstje van je programma's. In BugOS zet je alles terug met één klik." "This goes to a USB drive ($groot GB): your files (documents, photos, music, videos, desktop, downloads), your bookmarks and wallpaper, your settings (language, keyboard, time zone, dark or light, mouse), the names of your Wi-Fi networks, your network printers and a list of your programs. In BugOS you put it all back with one click.") 0
+    $y = Nieuw-Tekst (T 'Wachtwoorden gaan nooit mee, ook niet van je wifi of je browser. Gebruik een andere schijf dan de USB-stick voor BugOS (stap 4): die wordt gewist.' 'Passwords never go along, not even for your Wi-Fi or browser. Use a different drive than the USB stick for BugOS (step 4): that one is erased.') ($y + 8) $Grijs
+    $y = Nieuw-Tekst (T 'Kies de USB-schijf:' 'Choose the USB drive:') ($y + 12) -Vet
+    # De keuzelijst en de knop naast elkaar (niet onder elkaar): zo past de langere uitleg hierboven zonder
+    # schuifbalk, ook op 150%. De lijst staat 5 punten lager, zodat hij in het midden naast de hogere knop staat.
+    $script:W.schijf = Nieuw-Lijst ($y + 9) 300
     $lijst = $script:W.schijf
     # Alleen schijven die je eruit haalt: een D:-schijf in de laptop gaat mee de prullenbak in als je straks
     # bij het installeren de hele schijf kiest (U284). Een vaste (type 3) schijf telt alleen als hij via USB hangt.
@@ -1104,9 +1518,9 @@ $Paginas += {
         [void]$lijst.Items.Add("$($_.DeviceID)  $($_.VolumeName)  ($([math]::Round($_.FreeSpace / 1GB)) GB $(T 'vrij' 'free'))")
     }
     if ($lijst.Items.Count -gt 0) { $lijst.SelectedIndex = 0 }
-    $script:W.knop = Nieuw-Knop (T 'Bestanden kopiëren' 'Copy files') 0 ($y + 52) 220 'hoofd'
-    $script:W.balk = Nieuw-Balk 0 ($y + 114) ($script:Breedte - 4) $vlak
-    $script:W.status = Nieuw-Label '' ($y + 134) 48 $Grijs
+    $script:W.knop = Nieuw-Knop (T 'Bestanden kopiëren' 'Copy files') 316 ($y + 4) 220 'hoofd'
+    $script:W.balk = Nieuw-Balk 0 ($y + 62) ($script:Breedte - 4) $vlak
+    $script:W.status = Nieuw-Label '' ($y + 80) 48 $Grijs
     $script:W.knop.Add_Click({
         $lijst = $script:W.schijf; $balk = $script:W.balk; $status = $script:W.status; $knop = $script:W.knop
         if ($lijst.SelectedIndex -lt 0) { Toon (T 'Steek eerst een USB-schijf in en ga even terug en weer verder.' 'Plug in a USB drive first, then go back and forward again.'); return }
@@ -1131,6 +1545,11 @@ $Paginas += {
             } else {
                 $status.Text = (T 'Klaar! Je bestanden staan in de map BugOS-Switch op de schijf.' 'Done! Your files are in the BugOS-Switch folder on the drive.')
                 $status.ForeColor = $Goed
+            }
+            if ($script:FirefoxOverslagen.Count -gt 0) {
+                # Een paar heel grote mappen van Firefox (meestal opslag van websites) bleven thuis: even zeggen.
+                $welke = $script:FirefoxOverslagen -join ', '
+                $status.Text += ' ' + (T "Uit Firefox bleven een paar heel grote mappen thuis ($welke); websites maken die vanzelf opnieuw." "A few very large Firefox folders stayed behind ($welke); websites make them again by themselves.")
             }
         } catch { Toon $_.Exception.Message 'Error'; $status.Text = '' }
         $knop.Enabled = $true; $verder.Enabled = $true
