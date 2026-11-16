@@ -1,23 +1,26 @@
 #!/usr/bin/python3
-"""BugOS Overstap (BugOS-kant) - je bestanden van Windows terugzetten.
+"""Haal alles van je oude pc (BugOS-kant van BugOS Switch).
 
-Jip-en-Janneke: met het Windows-programma "BugOS Overstap" heb je je
-bestanden op een USB-schijf gezet (map "BugOS-Switch"). Steek die schijf
-in, open dit programma en druk op één knop. Dan:
-  - komen je documenten, foto's, muziek, video's, bureaublad en downloads
-    op de goede plek;
-  - worden je bladwijzers van Chrome/Edge/Brave omgezet naar een bestand
-    dat je in Firefox kunt importeren;
-  - wordt je oude Windows-achtergrond ook je BugOS-achtergrond.
+Jip-en-Janneke: met het Windows-programma "BugOS Switch" heb je je spullen op een USB-schijf gezet (map
+"BugOS-Switch"). Steek die schijf in en open dit programma. Je ziet wat er mee kan, alles staat aan; zet uit wat
+je niet wilt en druk op "Overzetten". Dan:
+  - komen je documenten, foto's, muziek, video's, bureaublad en downloads op de goede plek;
+  - staan je bladwijzers van Chrome, Edge, Brave en Firefox vanzelf in Firefox (en een kopie in Documenten);
+  - opent Firefox met je Firefox-profiel van Windows (als dat op de stick staat), zonder wachtwoorden;
+  - wordt je oude Windows-achtergrond ook je BugOS-achtergrond;
+  - krijg je je taal, notatie, tijdzone, toetsenbord, licht/donker, muis en (als het past) de grootte van Windows;
+  - kent BugOS je wifi-netwerken op naam (het wachtwoord vraagt hij één keer, nooit van de stick);
+  - staan je netwerkprinters erin;
+  - zie je welke van je Windows-programma's er in de Winkel zijn (BugOS installeert ze nooit zelf).
+Daarna een samenvatting: wat gelukt is, wat niet kan (en waarom) en wat je zelf moet doen (en hoe).
+
+Versie 1 van de stick (alleen bestanden, bladwijzers en achtergrond) werkt gewoon. Het formaat staat in
+windows-switch/FORMAT.md; het werk zelf in bugos_overstap_toepassen en bugos_overstap_firefox.
 
   bugos-switch                -> het venster
-  bugos-switch --zet <map>    -> zonder venster
+  bugos-switch --zet <map>    -> zonder venster (bestanden, bladwijzers en achtergrond, zoals versie 1)
 """
 
-import getpass
-import os
-import html
-import json
 import subprocess
 import sys
 from pathlib import Path
@@ -25,19 +28,12 @@ from pathlib import Path
 sys.path.insert(0, "/usr/lib/bugos/python")
 
 from bugos_ui import t  # noqa: E402
-
-# Mapnaam en infobestand van de Windows-overstap: de nieuwe en de oude (van voor de hernoeming).
-MAPPEN = (("BugOS-Switch", "bugos-switch.json"), ("BugOS-Overstap", "bugos-overstap.json"))
-
-# Windows-mapnaam -> xdg-naam van de BugOS-map
-KOPPELING = {
-    "Documents": "DOCUMENTS",
-    "Pictures": "PICTURES",
-    "Music": "MUSIC",
-    "Videos": "VIDEOS",
-    "Desktop": "DESKTOP",
-    "Downloads": "DOWNLOAD",
-}
+import bugos_overstap_firefox as ff  # noqa: E402
+import bugos_overstap_toepassen as ot  # noqa: E402
+# Ook hier te vinden (de tests en oudere code halen ze uit bugos-switch zelf).
+from bugos_overstap_toepassen import (  # noqa: E402,F401
+    KOPPELING, MAP_NAAM, MAPPEN, _op_schijf, info, mapnaam, zoek_overstap,
+)
 
 
 def gebruikersmap(xdg: str, standaard: str) -> Path:
@@ -54,89 +50,20 @@ def gebruikersmap(xdg: str, standaard: str) -> Path:
     return Path.home() / standaard
 
 
-def _op_schijf(schijf: Path) -> list[Path]:
-    """De overstap-map op één schijf: BugOS-Switch, of anders BugOS-Overstap van de oude versie.
-    Staan ze er allebei (beide versies gebruikt), dan alleen de nieuwe: anders staat de stick er twee keer."""
-    for naam, bestand in MAPPEN:
-        if (schijf / naam / bestand).is_file():
-            return [schijf / naam]
-    return []
-
-
-def zoek_overstap() -> list[Path]:
-    """Zoek op alle aangesloten schijven naar de map BugOS-Switch (of de oude BugOS-Overstap)."""
-    if os.environ.get("BUGOS_SCHIJVEN"):  # voor tests en screenshots
-        return [m for p in os.environ["BUGOS_SCHIJVEN"].split(":") for m in _op_schijf(Path(p))]
-    # Een stick die er net in zit, is nog dicht (KDE opent hem niet vanzelf): eerst openzetten (U139).
-    try:
-        import bugos_drives
-        bugos_drives.losse_openen_op_achtergrond()
-    except Exception:  # noqa: BLE001  zonder udisks/lsblk gewoon kijken wat er al open is
-        pass
-    gebruiker = getpass.getuser()
-    gevonden = []
-    for basis in (Path("/run/media") / gebruiker, Path("/media") / gebruiker, Path("/media")):
-        if basis.is_dir():
-            for schijf in basis.iterdir():
-                gevonden.extend(_op_schijf(schijf))
-    return gevonden
-
-
-def info(map_: Path) -> dict:
-    for _naam, bestand in MAPPEN:
-        try:
-            return json.loads((map_ / bestand).read_text(encoding="utf-8-sig"))
-        except FileNotFoundError:
-            continue
-        except (OSError, ValueError):
-            return {}
-    return {}
-
-
 # --------------------------------------------------------- bladwijzers ----
 
-def _html_map(knoop: dict, diepte: int) -> list[str]:
-    inspring = "    " * diepte
-    regels = []
-    for kind in knoop.get("children", []):
-        naam = html.escape(kind.get("name", ""))
-        if kind.get("type") == "folder":
-            regels.append(f"{inspring}<DT><H3>{naam}</H3>")
-            regels.append(f"{inspring}<DL><p>")
-            regels.extend(_html_map(kind, diepte + 1))
-            regels.append(f"{inspring}</DL><p>")
-        elif kind.get("type") == "url":
-            url = html.escape(kind.get("url", ""), quote=True)
-            regels.append(f'{inspring}<DT><A HREF="{url}">{naam}</A>')
-    return regels
-
-
 def chrome_naar_html(bestanden: dict[str, Path]) -> str:
-    """Zet Chrome/Edge/Brave-bladwijzers om naar het standaard HTML-formaat
-    dat elke browser (Firefox, Chrome, ...) kan importeren."""
-    regels = [
-        "<!DOCTYPE NETSCAPE-Bookmark-file-1>",
-        '<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">',
-        "<TITLE>Bookmarks</TITLE>",
-        "<H1>Bookmarks</H1>",
-        "<DL><p>",
-    ]
+    """Zet Chrome/Edge/Brave-bladwijzers om naar het standaard HTML-formaat dat elke browser (Firefox, Chrome, ...)
+    kan importeren: een map per browser. (De kopie in Documenten; Firefox krijgt ze ook vanzelf.)"""
+    import json
+    mappen = []
     for browser, pad in bestanden.items():
         try:
-            data = json.loads(pad.read_text(encoding="utf-8"))
+            knopen = ff.chrome_bladwijzers(json.loads(pad.read_text(encoding="utf-8-sig")))
         except (OSError, ValueError):
             continue
-        regels.append(f"    <DT><H3>{html.escape(browser)}</H3>")
-        regels.append("    <DL><p>")
-        for wortel in data.get("roots", {}).values():
-            if isinstance(wortel, dict) and wortel.get("children"):
-                regels.append(f"        <DT><H3>{html.escape(wortel.get('name', ''))}</H3>")
-                regels.append("        <DL><p>")
-                regels.extend(_html_map(wortel, 3))
-                regels.append("        </DL><p>")
-        regels.append("    </DL><p>")
-    regels.append("</DL><p>")
-    return "\n".join(regels) + "\n"
+        mappen.append({"titel": browser, "kinderen": knopen})
+    return ff.bladwijzer_html(mappen, [], [])
 
 
 # ---------------------------------------------------------- terugzetten ----
@@ -164,40 +91,95 @@ def vrije_naam(pad: Path) -> Path:
     return nieuw
 
 
-def afronden(bron: Path) -> list[str]:
-    """Bladwijzers en achtergrond. Geeft een lijstje met wat er gedaan is."""
-    gedaan = []
-    bw = bron / "Bladwijzers"
-    jsons = {p.stem: p for p in sorted(bw.glob("*.json"))} if bw.is_dir() else {}
-    if jsons:
+def bladwijzers_zetten(bron: Path, i: dict, zonder_firefox: bool = False) -> list[ot.Uitslag]:
+    """De bladwijzers van elk browserprofiel: een kopie in Documenten (zoals altijd, voor de zekerheid), en vanzelf in
+    Firefox. zonder_firefox: het Firefox-profiel van Windows is net overgenomen, daar staan die van Firefox al in."""
+    bronnen = ff.bladwijzer_bronnen(bron, i)
+    if not bronnen:
+        return []
+    mappen = [{"titel": b.naam, "kinderen": k} for b in bronnen if (k := ff.lees_bron(b))]
+    kopie = ""
+    if mappen:
         doel = vrije_naam(gebruikersmap("DOCUMENTS", "Documents") / "Bladwijzers-van-Windows.html")
         doel.parent.mkdir(parents=True, exist_ok=True)
-        doel.write_text(chrome_naar_html(jsons), encoding="utf-8")
-        gedaan.append(t(f"Je bladwijzers staan in {doel.name} (in Documenten). In Firefox: menu → Bladwijzers → "
-                        "Bladwijzers beheren → Importeren → HTML.",
-                        f"Your bookmarks are in {doel.name} (in Documents). In Firefox: menu → Bookmarks → "
-                        "Manage bookmarks → Import → HTML."))
-    if bw.is_dir() and (bw / "Firefox.jsonlz4").is_file():
-        doel = vrije_naam(gebruikersmap("DOCUMENTS", "Documents") / "Firefox-bladwijzers.jsonlz4")
-        doel.parent.mkdir(parents=True, exist_ok=True)
-        doel.write_bytes((bw / "Firefox.jsonlz4").read_bytes())
-        gedaan.append(t("Firefox-bladwijzers: Firefox → Bladwijzers beheren → Importeren → Herstellen → Bestand kiezen → "
-                        f"{doel.name}.",
-                        f"Firefox bookmarks: Firefox → Manage bookmarks → Import → Restore → Choose file → {doel.name}."))
+        doel.write_text(ff.bladwijzer_html(mappen, [], []), encoding="utf-8")
+        kopie = doel.name
+    if zonder_firefox:
+        bronnen = [b for b in bronnen if b.soort != "firefox"]
+    if not bronnen:
+        return [ot.Uitslag("bladwijzers", ot.GOED, t("Die van Firefox zitten in je Firefox-profiel van Windows.",
+                                                     "The Firefox ones are in your Firefox profile from Windows."))]
+    u = ff.bladwijzers_naar_firefox(bronnen, ot._tekst(i.get("computer"), 40))
+    if kopie and u.soort == ot.GOED:
+        u.tekst += t(f" Een kopie staat in Documenten ({kopie}).", f" A copy is in Documents ({kopie}).")
+    elif kopie:
+        u.tekst += t(f" (Het bestand: {kopie} in Documenten.)", f" (The file: {kopie} in Documents.)")
+    return [u]
+
+
+def achtergrond_zetten(bron: Path) -> list[ot.Uitslag]:
+    """De Windows-achtergrond in Afbeeldingen, en als achtergrond van BugOS."""
     achtergrond = bron / "achtergrond.jpg"
-    if achtergrond.is_file():
-        doel = vrije_naam(gebruikersmap("PICTURES", "Pictures") / "Windows-achtergrond.jpg")
-        doel.parent.mkdir(parents=True, exist_ok=True)
-        doel.write_bytes(achtergrond.read_bytes())
+    if not achtergrond.is_file():
+        return []
+    doel = vrije_naam(gebruikersmap("PICTURES", "Pictures") / "Windows-achtergrond.jpg")
+    doel.parent.mkdir(parents=True, exist_ok=True)
+    doel.write_bytes(achtergrond.read_bytes())
+    try:
+        klaar = subprocess.run(["plasma-apply-wallpaperimage", str(doel)], capture_output=True, timeout=10)
+        if klaar.returncode == 0:
+            return [ot.Uitslag("achtergrond", ot.GOED, t("Je Windows-achtergrond is nu ook je BugOS-achtergrond.",
+                                                         "Your Windows wallpaper is now your BugOS wallpaper too."))]
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return [ot.Uitslag("achtergrond", ot.ZELF, t(f"Hij staat in Afbeeldingen ({doel.name}). Kies hem in Instellingen > "
+                                                 "Uiterlijk.", f"It is in Pictures ({doel.name}). Choose it in Settings > "
+                                                 "Appearance."))]
+
+
+# Wat er na de bestanden gebeurt, in deze volgorde (het Firefox-profiel vóór de bladwijzers: die gaan erin).
+NA_DE_BESTANDEN = ("achtergrond", "firefox", "bladwijzers", "instellingen", "wifi", "printers")
+
+
+def rest_toepassen(bron: Path, i: dict, keuze: set[str]) -> list[ot.Uitslag]:
+    """Alles behalve het kopiëren van de mappen, voor de onderdelen die aan staan. Draait op de achtergrond (een
+    wachtwoordvraag voor de tijdzone of een printer mag het venster niet laten vastlopen). Elk onderdeel los: wat
+    misgaat, staat in de uitslag, en de rest gaat door."""
+    uit: list[ot.Uitslag] = []
+    profiel_over = False
+    for deel in NA_DE_BESTANDEN:
+        if deel not in keuze:
+            continue
         try:
-            klaar = subprocess.run(["plasma-apply-wallpaperimage", str(doel)], capture_output=True, timeout=10)
-            if klaar.returncode != 0:
-                raise OSError(klaar.returncode)
-            gedaan.append(t("Je Windows-achtergrond is nu ook je BugOS-achtergrond.",
-                            "Your Windows wallpaper is now your BugOS wallpaper too."))
-        except (OSError, subprocess.SubprocessError):
-            pass
-    return gedaan
+            if deel == "achtergrond":
+                uit += achtergrond_zetten(bron)
+            elif deel == "firefox":
+                pad = ff.profiel_op_stick(bron, i)
+                if pad is not None:
+                    u = ff.profiel_overnemen(pad, ot._tekst(i.get("computer"), 40))
+                    profiel_over = u.soort == ot.GOED
+                    uit.append(u)
+            elif deel == "bladwijzers":
+                uit += bladwijzers_zetten(bron, i, zonder_firefox=profiel_over)
+            elif deel == "instellingen":
+                uit += ot.zet_instellingen(ot._dict(i.get("instellingen")))
+            elif deel == "wifi":
+                uit += ot.zet_wifi(i.get("wifi"))
+            elif deel == "printers":
+                uit += ot.zet_printers(i.get("printers"))
+        except OSError:   # schijf vol, of de stick eruit getrokken
+            uit.append(ot.Uitslag(deel, ot.ZELF, t("Lukte niet: is je computer vol, of is de stick eruit? Probeer het "
+                                                   "opnieuw.", "Did not work: is your computer full, or was the drive "
+                                                   "unplugged? Try again.")))
+        except Exception as e:  # noqa: BLE001  nooit alles laten stoppen om één onderdeel
+            uit.append(ot.Uitslag(deel, ot.ZELF, t("Er ging iets mis ({e}). Probeer het opnieuw.",
+                                                   "Something went wrong ({e}). Try again.").format(e=type(e).__name__)))
+    return uit
+
+
+def afronden(bron: Path) -> list[str]:
+    """Bladwijzers en achtergrond (zoals versie 1). Geeft een lijstje met wat er gedaan is."""
+    return [u.tekst for u in rest_toepassen(bron, info(bron), {"bladwijzers", "achtergrond"})]
 
 
 # rsync: 0 = goed, 24 = een bestand verdween (geen probleem), 23 = een paar bestanden konden niet mee
@@ -219,17 +201,6 @@ def uitslag(code: int, cmd: list[str], uitvoer: str = "") -> str:
     if weg:
         return "weg"
     return "deels" if code in DEELS else "fout"
-
-
-# De Windows-mapnamen in je eigen taal, voor de meldingen (U150).
-MAP_NAAM = {"Documents": ("Documenten", "Documents"), "Pictures": ("Afbeeldingen", "Pictures"),
-            "Music": ("Muziek", "Music"), "Videos": ("Video's", "Videos"), "Desktop": ("Bureaublad", "Desktop"),
-            "Downloads": ("Downloads", "Downloads")}
-
-
-def mapnaam(win: str) -> str:
-    nl, en = MAP_NAAM.get(win, (win, win))
-    return t(nl, en)
 
 
 def deels_uitleg(mappen: list[str]) -> str:
@@ -262,68 +233,118 @@ def zonder_venster(bron: Path) -> int:
 
 def venster() -> int:
     from bugos_ui import (
-        Banner, Groep, IcoonChip, Knop, SchijfKiezer, Voortgang, kop_met_icoon, label, maak_app, pagina, schuifbaar,
-        sectie, uitvoeren,
+        Banner, Groep, IcoonChip, Knop, SchijfKiezer, Schuif, Voortgang, kop_met_icoon, label, leeg_groep, maak_app,
+        pagina, schuifbaar, sectie, start, uitvoeren,
     )
-    from PySide6.QtCore import QProcess, QTimer
+    from PySide6.QtCore import QProcess, QThread, QTimer, Signal
     from PySide6.QtWidgets import QHBoxLayout, QMessageBox, QVBoxLayout, QWidget
+
+    def rij(icoon: str, kop_t: str, sub_t: str, rechts: QWidget | None = None, tint: str = "neutraal",
+            vol: bool = False) -> QWidget:
+        """Een regel in een kaart: tegeltje, kop, uitleg en rechts eventueel een schuifje of knop."""
+        w = QWidget()
+        r = QHBoxLayout(w)
+        r.setContentsMargins(18, 12, 18, 12)
+        r.setSpacing(14)
+        r.addWidget(IcoonChip(icoon, tint, 36, vol=vol))
+        b = QVBoxLayout()
+        b.setSpacing(1)
+        b.addWidget(label(kop_t, "kop3"))
+        b.addWidget(label(sub_t, "klein"))
+        r.addLayout(b, 1)
+        if rechts is not None:
+            r.addWidget(rechts)
+        return w
+
+    class Werk(QThread):
+        """Alles na het kopiëren (instellingen, wifi, printers, Firefox), zonder dat het venster vastloopt."""
+        klaar = Signal(list)
+
+        def __init__(self, ouder, bron: Path, i: dict, keuze: set[str]):
+            super().__init__(ouder)
+            self.bron, self.i, self.keuze = bron, i, keuze
+
+        def run(self) -> None:  # noqa: D102
+            try:
+                uit = rest_toepassen(self.bron, self.i, self.keuze)
+            except Exception:  # noqa: BLE001  het venster moet altijd 'klaar' horen
+                uit = [ot.Uitslag("bestanden", ot.ZELF, t("Er ging iets mis. Probeer het opnieuw.",
+                                                          "Something went wrong. Try again."))]
+            self.klaar.emit(uit)
 
     class Overstap(QWidget):
         def __init__(self):
             super().__init__()
             self.setObjectName("venster")
-            self.setWindowTitle(t("Bestanden van Windows", "Files from Windows"))
+            self.setWindowTitle(t("Haal alles van je oude pc", "Bring everything from your old PC"))
             self.resize(780, 700)
             w, lay = pagina()
+            self.inhoud = lay
             buiten = QVBoxLayout(self)
             buiten.setContentsMargins(0, 0, 0, 0)
-            buiten.addWidget(schuifbaar(w))
-            lay.addWidget(kop_met_icoon("lijn:download", "neutraal", t("Je bestanden van Windows", "Your files from Windows"),
-                                        t("Heb je met \"BugOS Overstap\" je bestanden op een USB-schijf gezet? "
-                                          "Steek die schijf in en druk op de knop.",
-                                          "Did you put your files on a USB drive with \"BugOS Switch\"? "
-                                          "Plug in that drive and press the button.")))
-            wat = Groep()
-            for icoon, tint, kop_t, sub_t in (
-                ("lijn:download", "neutraal", t("Documenten, foto's, muziek en video's", "Documents, photos, music and videos"),
+            self.vlak = schuifbaar(w)
+            buiten.addWidget(self.vlak)
+            lay.addWidget(kop_met_icoon("lijn:download", "neutraal",
+                                        t("Haal alles van je oude pc", "Bring everything from your old PC"),
+                                        t("Heb je met \"BugOS Switch\" je spullen van Windows op een USB-schijf gezet? "
+                                          "Steek die schijf in: je ziet wat er mee kan.",
+                                          "Did you put your things from Windows on a USB drive with \"BugOS Switch\"? "
+                                          "Plug in that drive: you'll see what can come along.")))
+            # Zonder schijf: wat er mee kan, in het algemeen. Met een schijf staat daar het echte overzicht.
+            self.wat = Groep()
+            for icoon, kop_t, sub_t in (
+                ("lijn:download", t("Documenten, foto's, muziek en video's", "Documents, photos, music and videos"),
                  t("Komen op de goede plek. Wat al op BugOS staat, wordt nooit overschreven.",
                    "Go to the right place. What's already on BugOS is never overwritten.")),
-                ("lijn:ster", "neutraal", t("Bladwijzers", "Bookmarks"),
-                 t("Van Chrome, Edge, Brave en Firefox, klaar om in Firefox te zetten.",
-                   "From Chrome, Edge, Brave and Firefox, ready for Firefox.")),   # (U476)
-                ("lijn:foto", "neutraal", t("Je achtergrond", "Your wallpaper"),
-                 t("Je oude Windows-achtergrond wordt ook je BugOS-achtergrond.",
-                   "Your old Windows wallpaper becomes your BugOS wallpaper too.")),
+                ("lijn:ster", t("Bladwijzers en Firefox", "Bookmarks and Firefox"),
+                 t("Van Chrome, Edge, Brave en Firefox, vanzelf in Firefox.",
+                   "From Chrome, Edge, Brave and Firefox, straight into Firefox.")),   # (U476)
+                ("lijn:schakelaar", t("Instellingen, wifi en printers", "Settings, Wi-Fi and printers"),
+                 t("Je taal, tijdzone, toetsenbord en muis. Wifi zonder wachtwoorden: die vraagt BugOS één keer.",
+                   "Your language, time zone, keyboard and mouse. Wi-Fi without passwords: BugOS asks for them once.")),
+                ("lijn:apps", t("Je programma's", "Your programs"),
+                 t("Je ziet welke er in de Winkel zijn. Installeren doe je zelf, als je wilt.",
+                   "You see which ones are in the Store. You install them yourself, if you want.")),
             ):
-                rij = QWidget()
-                r = QHBoxLayout(rij)
-                r.setContentsMargins(18, 12, 18, 12)
-                r.setSpacing(14)
-                r.addWidget(IcoonChip(icoon, tint, 36, vol=False))
-                b = QVBoxLayout()
-                b.setSpacing(1)
-                b.addWidget(label(kop_t, "kop3"))
-                b.addWidget(label(sub_t, "klein"))
-                r.addLayout(b, 1)
-                wat.voeg(rij)
-            lay.addWidget(wat)
+                self.wat.voeg(rij(icoon, kop_t, sub_t))
+            lay.addWidget(self.wat)
             lay.addWidget(sectie(t("Kies de schijf", "Choose the drive")))
-            self.kiezer = SchijfKiezer(t("Steek de USB-schijf met je Windows-bestanden in…",
-                                         "Plug in the USB drive with your Windows files…"))
+            self.kiezer = SchijfKiezer(t("Steek de USB-schijf met je Windows-spullen in…",
+                                         "Plug in the USB drive with your Windows things…"))
             lay.addWidget(self.kiezer)
+            # Het overzicht: per onderdeel een schuifje, alles staat aan.
+            self.overzicht_kop = sectie(t("Wat gaat er mee? Zet uit wat je niet wilt.",
+                                          "What comes along? Switch off what you don't want."), wrap=True)
+            self.overzicht = Groep()
+            lay.addWidget(self.overzicht_kop)
+            lay.addWidget(self.overzicht)
             self.melding = Banner()
             lay.addWidget(self.melding)
             self.balk = Voortgang()
             self.balk.hide()
             lay.addWidget(self.balk)
+            # Na afloop: per onderdeel gelukt / kan niet / zelf doen.
+            self.klaar_kop = sectie(t("Zo ging het", "How it went"))
+            self.samenvatting = Groep()
+            lay.addWidget(self.klaar_kop)
+            lay.addWidget(self.samenvatting)
+            # De programma's: alleen voorstellen (de eigenaar: BugOS installeert nooit zelf).
+            self.prog_kop = sectie(t("Je programma's van Windows: dit is er op BugOS",
+                                     "Your programs from Windows: this is on BugOS"), wrap=True)
+            self.prog_uitleg = label(t("BugOS installeert niets zelf. Klik op 'In de Winkel' om te kijken en te "
+                                       "installeren wat je wilt.", "BugOS does not install anything by itself. Click "
+                                       "'In the Store' to look and install what you want."), "klein")
+            self.programmas = Groep()
+            for x in (self.prog_kop, self.prog_uitleg, self.programmas):
+                lay.addWidget(x)
             lay.addStretch(1)
-            rij = QHBoxLayout()
-            rij.addStretch(1)
-            self.knop = Knop(t("Zet mijn bestanden terug", "Restore my files"), "hoofd", "lijn:download", groot=True)
-            rij.addWidget(self.knop)
+            rij_ = QHBoxLayout()
+            rij_.addStretch(1)
+            self.knop = Knop(t("Overzetten", "Transfer"), "hoofd", "lijn:download", groot=True)
+            rij_.addWidget(self.knop)
             # Onder het schuifvlak, niet erin: de knop blijft altijd in beeld, ook bij 150 % (R03).
-            rij.setContentsMargins(40, 12, 40, 20)
-            buiten.addLayout(rij)
+            rij_.setContentsMargins(40, 12, 40, 20)
+            buiten.addLayout(rij_)
 
             self.proces = QProcess(self)
             self.proces.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
@@ -333,50 +354,147 @@ def venster() -> int:
             self.nu: list[str] = []
             self.deels: list[str] = []
             self.bron: Path | None = None
+            self.werk: QThread | None = None
+            self.schakelaars: dict[str, Schuif] = {}
+            self._overzicht_van = None   # (map, tijd van bugos-switch.json): niet elke 3 seconden opnieuw bouwen
+            self.keuze: set[str] = set()
             self.sluit_na = False  # het venster ging dicht tijdens het terugzetten: sluiten zodra het klaar is
             self.gestopt = False   # de gebruiker koos 'Nu stoppen'
             self.knop.clicked.connect(self.begin)
-            self.kiezer.gewijzigd.connect(lambda: self.knop.setEnabled(self.kiezer.gekozen() is not None))
+            self.kiezer.gewijzigd.connect(self.gekozen_veranderd)
+            for x in (self.overzicht_kop, self.overzicht, self.klaar_kop, self.samenvatting, self.prog_kop,
+                      self.prog_uitleg, self.programmas):
+                x.hide()
             self.timer = QTimer(self)
             self.timer.timeout.connect(self.ververs)
             self.timer.start(3000)
             self.ververs()
             self.kiezer.setFocus()
 
+        # ---------------------------------------------------------------- de schijf ---
+
+        def bezig(self) -> bool:
+            return self.proces.state() != QProcess.ProcessState.NotRunning or (
+                self.werk is not None and self.werk.isRunning())
+
         def ververs(self) -> None:
             # Niet verversen terwijl we bezig zijn (de kiezer staat dan uit). Daarna wel weer: de balk
             # blijft na de eerste keer zichtbaar, dus daar mogen we niet op letten.
-            if self.proces.state() != QProcess.ProcessState.NotRunning or not self.kiezer.isEnabled():
+            if self.bezig() or not self.kiezer.isEnabled():
                 return
             items = []
             for m in zoek_overstap():
                 i = info(m)
                 items.append((str(m), m.parent.name,
-                              t(f"Van {i.get('gebruiker', '?')} op {i.get('computer', '?')}",
-                                f"From {i.get('gebruiker', '?')} on {i.get('computer', '?')}")))
+                              t(f"Van {ot._tekst(i.get('gebruiker'), 60) or '?'} op {ot._tekst(i.get('computer'), 60) or '?'}",
+                                f"From {ot._tekst(i.get('gebruiker'), 60) or '?'} on {ot._tekst(i.get('computer'), 60) or '?'}")))
             self.kiezer.zet(items)
-            self.knop.setEnabled(self.kiezer.gekozen() is not None)
+            self.gekozen_veranderd()
+
+        def gekozen_veranderd(self) -> None:
+            gekozen = self.kiezer.gekozen()
+            self.knop.setEnabled(gekozen is not None)
+            if self.bezig():
+                return
+            sleutel = None
+            if gekozen:
+                try:
+                    sleutel = (gekozen, max((Path(gekozen) / b).stat().st_mtime for _n, b in MAPPEN
+                                            if (Path(gekozen) / b).exists()))
+                except (OSError, ValueError):
+                    sleutel = (gekozen, 0)
+            if sleutel != self._overzicht_van:
+                self._overzicht_van = sleutel
+                self.toon_overzicht(Path(gekozen) if gekozen else None)
+
+        def toon_overzicht(self, bron: Path | None) -> None:
+            """Het overzicht van deze schijf: een schuifje per onderdeel (alles aan), en de programma's."""
+            leeg_groep(self.overzicht)
+            leeg_groep(self.programmas)
+            self.schakelaars = {}
+            for x in (self.klaar_kop, self.samenvatting):
+                x.hide()
+            delen = ot.onderdelen(bron) if bron is not None else []
+            for o in delen:
+                schuif = Schuif(True)
+                schuif.setAccessibleName(ot.deel_naam(o.sleutel))
+                self.schakelaars[o.sleutel] = schuif
+                self.overzicht.voeg(rij(o.icoon, ot.deel_naam(o.sleutel), o.uitleg, schuif))
+            heeft = bool(delen)
+            self.overzicht_kop.setVisible(heeft)
+            self.overzicht.setVisible(heeft)
+            self.wat.setVisible(bron is None)
+            self.toon_programmas(info(bron).get("programmas") if bron is not None else None)
+
+        def toon_programmas(self, programmas) -> None:
+            lijst, rest = ot.suggesties(programmas)
+            for s in lijst:
+                knop = None
+                if s.id:
+                    knop = Knop(t("In de Winkel", "In the Store") if s.soort == "winkel" else
+                                t("Bekijk {n}", "See {n}").format(n=s.naam), "stil")
+                    knop.setAccessibleName(t("{n} in de Winkel", "{n} in the Store").format(n=s.naam))
+                    knop.clicked.connect(lambda _=False, i=s.id: start(*ot.winkel_opdracht(i)))
+                voor = ot._kort(s.windows, 2)
+                if s.soort == "niet":
+                    kop_t = voor
+                    sub_t = t("Niet op BugOS. ", "Not on BugOS. ") + s.tekst
+                    icoon = "uitroep"
+                elif s.soort == "ingebouwd":
+                    kop_t = s.naam
+                    sub_t = t("Voor {w}. ", "For {w}. ").format(w=voor) + s.tekst
+                    icoon = "vink"
+                else:
+                    kop_t = s.naam
+                    sub_t = (t("Voor {w}. ", "For {w}. ").format(w=voor) if voor != s.naam else "") + s.tekst
+                    icoon = "lijn:apps"
+                self.programmas.voeg(rij(icoon, kop_t, sub_t, knop, "grijs" if icoon == "uitroep" else "neutraal",
+                                         vol=icoon == "uitroep"))
+            if rest:
+                knop = Knop(t("Winkel openen", "Open the Store"), "stil")
+                knop.clicked.connect(lambda: start("bugos-store"))
+                self.programmas.voeg(rij("lijn:zoek", t("Nog {n} andere programma's", "{n} other programs").format(
+                    n=len(rest)), ot._kort(rest, 4) + ". " + t("Zoek ze in de Winkel. Staat er een niet in, dan doet een "
+                                                              "ander programma vaak hetzelfde.", "Look for them in the "
+                                                              "Store. If one is not there, another program often does "
+                                                              "the same."), knop))
+            heeft = bool(lijst or rest)
+            for x in (self.prog_kop, self.prog_uitleg, self.programmas):
+                x.setVisible(heeft)
+
+        def toon_samenvatting(self, uitslagen: list) -> None:
+            """Per ding: gelukt, kan niet (waarom) of doe dit zelf (hoe)."""
+            leeg_groep(self.samenvatting)
+            for u in uitslagen:
+                if u.soort == ot.GOED:
+                    icoon, tint, voor = "vink", "groen", ""
+                elif u.soort == ot.NIET:
+                    icoon, tint, voor = "kruis", "grijs", t("Kan niet: ", "Not possible: ")
+                else:
+                    icoon, tint, voor = "uitroep", "oranje", t("Doe dit zelf: ", "Do this yourself: ")
+                self.samenvatting.voeg(rij(icoon, ot.deel_naam(u.deel), voor + u.tekst, None, tint, vol=True))
+            heeft = bool(uitslagen)
+            self.klaar_kop.setVisible(heeft)
+            self.samenvatting.setVisible(heeft)
+            if heeft:
+                QTimer.singleShot(50, lambda: self.vlak.ensureWidgetVisible(self.klaar_kop, 0, 40))
+
+        # -------------------------------------------------------------- overzetten ---
 
         def volgende(self) -> None:
             if not self.wachtrij:
-                try:
-                    gedaan = afronden(self.bron)
-                except OSError:  # schijf vol, of de stick eruit getrokken
-                    self.melding.zet(t("Je bestanden staan erop, maar de bladwijzers of achtergrond lukten niet. "
-                                       "Is je computer vol, of is de stick eruit? Probeer het opnieuw.",
-                                       "Your files are there, but the bookmarks or wallpaper did not work. "
-                                       "Is your computer full, or was the stick unplugged? Try again."), "fout")
-                    self.sluit_na = False  # de foutmelding moet je kunnen zien, ook na 'Eerst afmaken'
-                    self.vrij()
-                    return
                 self.balk.setValue(100)
-                kop = (deels_uitleg(self.deels) if self.deels
-                       else t("Klaar! Je bestanden staan op hun plek.", "Done! Your files are in place."))
-                self.melding.zet(kop + ("\n\n• " + "\n• ".join(gedaan) if gedaan else ""),
-                                 "let_op" if self.deels else "goed")
-                if self.deels:
-                    self.sluit_na = False  # niet alles kon mee: dat moet je kunnen lezen, ook na 'Eerst afmaken'
-                self.vrij()
+                rest = self.keuze & set(NA_DE_BESTANDEN)
+                if not rest:
+                    self.afgerond([])
+                    return
+                self.melding.zet(t("Je instellingen, wifi en printers worden overgezet… Vraagt BugOS je wachtwoord, "
+                                   "typ het dan in (voor de tijdzone en printers).",
+                                   "Your settings, Wi-Fi and printers are being transferred… If BugOS asks for your "
+                                   "password, type it (for the time zone and printers)."), "bezig")
+                self.werk = Werk(self, self.bron, info(self.bron), rest)
+                self.werk.klaar.connect(self.afgerond)
+                self.werk.start()
                 return
             tekst, cmd = self.wachtrij.pop(0)
             self.nu = cmd
@@ -384,6 +502,27 @@ def venster() -> int:
             self.melding.zet(tekst, "bezig")
             self.balk.setValue(0)
             self.proces.start(cmd[0], cmd[1:])
+
+        def afgerond(self, uitslagen: list) -> None:
+            """Alles is gedaan: de melding bovenaan en de samenvatting eronder."""
+            if self.werk is not None:
+                self.werk.wait(2000)
+                self.werk = None
+            alles = []
+            if "bestanden" in self.keuze:
+                alles.append(ot.Uitslag("bestanden", ot.ZELF if self.deels else ot.GOED,
+                                        deels_uitleg(self.deels) if self.deels else
+                                        t("Je bestanden staan op hun plek.", "Your files are in place.")))
+            alles += uitslagen
+            mis = any(u.soort != ot.GOED for u in alles)
+            kop = (deels_uitleg(self.deels) if self.deels else
+                   t("Klaar! Kijk hieronder wat er is gebeurd.", "Done! See below what happened.") if mis else
+                   t("Klaar! Alles staat op BugOS.", "Done! Everything is on BugOS."))
+            self.melding.zet(kop, "let_op" if self.deels else "goed")
+            self.toon_samenvatting(alles)
+            if self.deels or mis:
+                self.sluit_na = False  # dat moet je kunnen lezen, ook na 'Eerst afmaken'
+            self.vrij()
 
         def lees(self) -> None:
             tekst = bytes(self.proces.readAllStandardOutput()).decode(errors="ignore")
@@ -422,6 +561,7 @@ def venster() -> int:
             """Klaar (of gestopt): de knoppen doen het weer, en ging het venster dicht, dan nu echt."""
             self.knop.setEnabled(True)
             self.kiezer.setEnabled(True)
+            self.overzicht.setEnabled(True)
             if self.sluit_na:
                 QTimer.singleShot(0, self.close)
 
@@ -444,19 +584,23 @@ def venster() -> int:
 
         def tweede_start(self, _args: list[str]) -> None:
             """Weer geopend terwijl het venster wachtte om dicht te gaan: dat gaat niet meer door (U233)."""
-            if self.sluit_na and self.proces.state() != QProcess.ProcessState.NotRunning and not self.gestopt:
+            if self.sluit_na and self.bezig() and not self.gestopt:
                 self.melding.zet(t("Nog even bezig…", "Still busy…"), "bezig")
 
         def closeEvent(self, e) -> None:  # noqa: N802
-            if self.proces.state() == QProcess.ProcessState.NotRunning:
+            if not self.bezig():
                 super().closeEvent(e)
                 return
-            # Nooit stilletjes midden in het terugzetten stoppen: vraag het, en sluit pas als het proces klaar is.
+            # Nooit stilletjes midden in het overzetten stoppen: vraag het, en sluit pas als het klaar is.
             e.ignore()
             if self.sluit_na:
                 return  # al gevraagd; we wachten
             self.sluit_na = True
-            if self.vraag_stoppen():
+            if self.proces.state() == QProcess.ProcessState.NotRunning:
+                # De instellingen, wifi en printers: kort, en misschien wacht er een wachtwoordvraag. Niet afbreken.
+                self.melding.zet(t("Even wachten: het venster gaat vanzelf dicht als het klaar is.",
+                                   "One moment: the window closes by itself when it is done."), "bezig")
+            elif self.vraag_stoppen():
                 self.gestopt = True
                 self.wachtrij.clear()
                 self.melding.zet(t("Bezig met stoppen…", "Stopping…"), "bezig")
@@ -467,19 +611,26 @@ def venster() -> int:
 
         def begin(self) -> None:
             gekozen = self.kiezer.gekozen()
-            if not gekozen:
+            if not gekozen or self.bezig():
                 return
             self.bron = Path(gekozen)
+            if not self.schakelaars:
+                self.toon_overzicht(self.bron)
+            self.keuze = {k for k, s in self.schakelaars.items() if s.isChecked()}
             self.gestopt = False
             self.deels = []
-            self.wachtrij[:] = stappen(self.bron)
-            if not self.wachtrij:
+            self.wachtrij[:] = stappen(self.bron) if "bestanden" in self.keuze else []
+            if not self.wachtrij and not (self.keuze & set(NA_DE_BESTANDEN)):
                 # Stick eruit, of alleen het lijstje zonder mappen: niet 'Klaar!' zeggen (U140).
-                self.melding.zet(t("Er is niets om terug te zetten. Zit de schijf er nog in?",
-                                   "There is nothing to restore. Is the drive still plugged in?"), "fout")
+                self.melding.zet(t("Er is niets om over te zetten. Zit de schijf er nog in, en staat er iets aan?",
+                                   "There is nothing to transfer. Is the drive still plugged in, and is something "
+                                   "switched on?"), "fout")
                 return
             self.knop.setEnabled(False)
             self.kiezer.setEnabled(False)
+            self.overzicht.setEnabled(False)
+            for x in (self.klaar_kop, self.samenvatting):
+                x.hide()
             self.balk.show()
             self.volgende()
 

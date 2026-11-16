@@ -92,8 +92,27 @@ def omgeving(thuis: Path) -> dict:
     for d in (stick, schijf):
         d.mkdir(exist_ok=True)
     (stick / "BugOS-Switch").mkdir(exist_ok=True)
-    (stick / "BugOS-Switch" / "bugos-switch.json").write_text(
-        json.dumps({"gebruiker": "Bugie", "computer": "LIVING-ROOM-PC"}), encoding="utf-8")
+    # Een stick van BugOS Switch versie 2 (windows-switch/FORMAT.md), met van alles wat: dan toont 'Haal alles van
+    # je oude pc' het hele overzicht (elk onderdeel, de programma's) en moet dat op 1280 x 800 passen.
+    for m in ("Documents", "Pictures", "Music"):
+        (stick / "BugOS-Switch" / m).mkdir(exist_ok=True)
+    (stick / "BugOS-Switch" / "Bladwijzers").mkdir(exist_ok=True)
+    (stick / "BugOS-Switch" / "Bladwijzers" / "Chrome-Default.json").write_text(
+        json.dumps({"roots": {"bookmark_bar": {"children": [{"type": "url", "name": "News", "url": "https://example.org/"}]}}}))
+    (stick / "BugOS-Switch" / "achtergrond.jpg").write_bytes(b"jpg")
+    (stick / "BugOS-Switch" / "bugos-switch.json").write_text(json.dumps({
+        "versie": 2, "gebruiker": "Bugie", "computer": "LIVING-ROOM-PC",
+        "instellingen": {"taal": "nl-NL", "notatie": "nl-NL", "tijdzone": "W. Europe Standard Time",
+                         "toetsenborden": ["00020409", "00000413"], "donker": True,
+                         "muis": {"linkshandig": False, "snelheid": 10, "scrollregels": 3}, "schaal": 125},
+        "wifi": [{"naam": "Home-5G", "beveiliging": "WPA2-Personal"}, {"naam": "eduroam", "beveiliging": "WPA2-Enterprise"}],
+        "printers": [{"naam": "HP LaserJet", "adres": "192.168.1.40", "standaard": True}],
+        "programmas": [{"naam": n} for n in ("Spotify", "Google Chrome", "Microsoft Office Professional Plus 2019",
+                                             "7-Zip 23.01 (x64)", "Adobe Photoshop 2024", "Steam", "OneDrive",
+                                             "Some Very Specific Tool With A Long Name 2.0")],
+        "browsers": [{"browser": "Chrome", "profiel": "Default", "naam": "Person 1",
+                      "bladwijzers": "Bladwijzers/Chrome-Default.json"}],
+    }), encoding="utf-8")
     return {
         "HOME": str(thuis), "XDG_CONFIG_HOME": str(thuis / ".config"), "XDG_DATA_HOME": str(thuis / ".local/share"),
         "BUGOS_INSTELLINGEN_VOORBEELD": "1", "BUGOS_TAKEN_VOORBEELD": "1", "BUGOS_MEERDERE": "1",
@@ -213,8 +232,16 @@ def pas(schaal: str, groot: bool = False, teksten: bool = False, smal: bool = Fa
             venster.balk.setValue(42)
             venster.balk.show()
             kijk(app_naam, "deels", venster, True)
+        elif app_naam == "switch":
+            # Het overzicht van een stick van versie 2 (alle onderdelen en de programma's), en de samenvatting na
+            # het overzetten (gelukt, kan niet, zelf doen). Beide moeten passen, met de knop Overzetten in beeld.
+            kijk(app_naam, "begin", venster, True)
+            venster.melding.zet(g["ot"].t("Klaar! Kijk hieronder wat er is gebeurd.", "Done! See below what happened."),
+                                "goed")
+            venster.toon_samenvatting(g["ot"].voorbeeld_uitslagen())
+            kijk(app_naam, "samenvatting", venster, True)
         else:
-            kijk(app_naam, "begin", venster, app_naam == "switch")
+            kijk(app_naam, "begin", venster)
 
     APPS = {"settings": "bugos-settings", "welcome": "bugos-welcome", "help": "bugos-help", "store": "bugos-store",
             "backup": "bugos-backup", "switch": "bugos-switch", "tasks": "bugos-task-manager", "files": "bugos-files"}
