@@ -717,6 +717,8 @@ LIJN = {
     "huis": '<path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1z"/>',
     "schakelaar": '<rect x="2.5" y="7" width="19" height="10" rx="5"/><circle cx="16.5" cy="12" r="2.5"/>',
     "computer": '<rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8.5 20h7M12 16.5V20"/>',
+    # Een envelop: e-mail (Haal alles van je oude pc: Thunderbird en Outlook).
+    "mail": '<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m4 7.5 8 6 8-6"/>',
     "wifi": '<path d="M2.8 9.2a13.5 13.5 0 0 1 18.4 0M5.8 12.6a9 9 0 0 1 12.4 0M8.9 16a4.6 4.6 0 0 1 6.2 0M12 19.4h.01"/>',
     # Een netwerkstekker met kabel: voor 'verbonden via de kabel' (A-09), zodat een pc zonder wifi geen wifi-teken krijgt.
     "kabel": '<rect x="7" y="3.5" width="10" height="9" rx="1.5"/><path d="M10 3.5v3M14 3.5v3M9.5 12.5v2.5h5v-2.5M12 15v5.5"/>',

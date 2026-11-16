@@ -313,9 +313,11 @@ def onderdelen(bron: Path, i: dict | None = None) -> list[Onderdeel]:
                                "{printers}. Printers with a cable come by themselves.").format(printers=_kort(printers_))))
     letters = ob.lettertypen_op_stick(bron, i)
     if letters:
-        uit.append(Onderdeel("lettertypen", "lijn:tekst",
-                             t("{n} lettertypen die je zelf installeerde. Elk programma kan ze gebruiken.",
-                               "{n} fonts you installed yourself. Every program can use them.").format(n=len(letters))))
+        uit.append(Onderdeel("lettertypen", "lijn:letter",
+                             (t("{n} lettertypen die je zelf installeerde. Elk programma kan ze gebruiken.",
+                                "{n} fonts you installed yourself. Every program can use them.") if len(letters) != 1 else
+                              t("1 lettertype dat je zelf installeerde. Elk programma kan het gebruiken.",
+                                "1 font you installed yourself. Every program can use it.")).format(n=len(letters))))
     tb = ob.thunderbird_op_stick(bron, i) is not None
     pst = ob.outlook_bestanden(bron, i)
     if tb or pst:

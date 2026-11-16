@@ -141,6 +141,14 @@ uitleg = {o.sleutel: o.uitleg for o in ot.onderdelen(S)}
 klopt("Thunderbird" in uitleg["mail"] and "Outlook" in uitleg["mail"] and "wachtwoord" in uitleg["mail"],
       "overzicht: e-mail noemt Thunderbird (zonder wachtwoorden) en Outlook")
 klopt([p.name for p in ob.lettertypen_op_stick(S, I)] == ["MijnLetter.ttf"], "lettertypen: alleen echte lettertypen")
+# VM-test 2026-11-16: 'lijn:tekst' en 'lijn:mail' bestonden niet: lege tegeltjes. Elk icoon moet echt bestaan.
+import re as _re  # noqa: E402
+_ui = (PY / "bugos_ui.py").read_text(encoding="utf-8")
+_lijn = set(_re.findall(r"^    \"([a-z_]+)\": '<", _ui[_ui.index("LIJN = {"):], _re.M))
+_iconen = {o.icoon[5:] for o in ot.onderdelen(S) if o.icoon.startswith("lijn:")}
+klopt(_iconen and _iconen <= _lijn, f"overzicht: elk icoon bestaat echt (mist: {sorted(_iconen - _lijn)})")
+klopt(next(o.uitleg for o in ot.onderdelen(S) if o.sleutel == "lettertypen").startswith("1 lettertype dat"),
+      "overzicht: '1 lettertype' (niet '1 lettertypen')")
 
 # ================================================================================ het logboek ===
 lb.ACTIEF = lb.Logboek()
