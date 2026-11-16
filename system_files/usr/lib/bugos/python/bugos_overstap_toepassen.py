@@ -994,7 +994,8 @@ def zet_printers(lijst) -> list[Uitslag]:
 
 @dataclass
 class Suggestie:
-    """Een programma van Windows en wat BugOS ervoor heeft. soort: winkel / ingebouwd / niet."""
+    """Een programma van Windows en wat BugOS ervoor heeft. soort: winkel / al (de Winkel-app staat al op deze
+    computer) / ingebouwd / niet."""
     soort: str
     naam: str                   # de naam op BugOS (of de Windows-naam als er niets is)
     id: str                     # Flathub-id voor de Winkel ('' als er niets te openen is)
@@ -1026,10 +1027,14 @@ def app_regels(pad: Path | None = None) -> list[dict]:
     return regels
 
 
-def suggesties(programmas, regels: list[dict] | None = None) -> tuple[list[Suggestie], list[str]]:
+def suggesties(programmas, regels: list[dict] | None = None,
+               geinstalleerd: set[str] | None = None) -> tuple[list[Suggestie], list[str]]:
     """(voorstellen, programma's zonder regel). Elk programma hoort bij de eerste regel die past; een BugOS-app staat
     er één keer (Word en Excel samen bij LibreOffice). Hulpstukken van Windows (negeer) verdwijnen. Nooit installeren:
-    dit is alleen wat we laten zien."""
+    dit is alleen wat we laten zien.
+    geinstalleerd: de Flatpak-ids die al op deze computer staan. Een Winkel-app die er al is, wordt soort 'al'
+    ("staat er al", met 'Openen' in plaats van 'In de Winkel'): de VM-test liet Steam en VLC als 'In de Winkel' zien
+    terwijl BugOS ze zelf al had klaargezet."""
     regels = app_regels() if regels is None else regels
     per: dict[tuple, Suggestie] = {}
     rest: list[str] = []
@@ -1051,7 +1056,12 @@ def suggesties(programmas, regels: list[dict] | None = None) -> tuple[list[Sugge
                                          t(str(regel.get("nl", "")), str(regel.get("en", ""))))
         if naam not in s.windows:
             s.windows.append(naam)
-    volgorde = {"winkel": 0, "ingebouwd": 1, "niet": 2}
+    al = {i.lower() for i in (geinstalleerd or ())}
+    for s in per.values():
+        if s.soort == "winkel" and s.id and s.id.lower() in al:
+            s.soort = "al"
+    # Eerst wat je nog kunt halen, dan wat er al is (al en ingebouwd), dan wat niet kan.
+    volgorde = {"winkel": 0, "al": 1, "ingebouwd": 2, "niet": 3}
     lijst = sorted(per.values(), key=lambda s: (volgorde.get(s.soort, 3), s.naam.lower()))
     return lijst, sorted(rest, key=str.lower)
 
