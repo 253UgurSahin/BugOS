@@ -138,6 +138,7 @@ The most important idea: **BugOS can't break.**
 - [x] **"Try first" USB stick** with the new installer (Anaconda WebUI). It asks few questions, warns about BitLocker and explains the blue key screen for Nvidia.
 - [x] **The stick is BugOS**: BugOS itself is on the stick and installs without internet. No more Aurora or Fedora names or logos on the stick, in the installer and in the installed system (welcome screen, terminal, sign-in screen, "About this system", start menu, store). The stick starts in English; you choose your language, keyboard and time zone in the installer (the date and time page is no longer hidden).
 - [x] A download place for the ISO: GitHub Releases, in pieces of less than 2 GB. BugOS Switch glues them back together by itself.
+- [x] **Signed updates** (2026-11-17): GitHub signs every BugOS with cosign (classic `.sig` format, which rpm-ostree reads); `etc/pki/containers/bugos.pub` is in BugOS, so PCs only install an update with that signature. The packages on GitHub are public, so every BugOS PC can fetch updates without signing in. See docs/ONDERTEKENEN.md.
 - [ ] **Sign the Windows program**, so Windows doesn't show a warning. This normally costs money (a certificate). For open-source projects it can be free through [SignPath Foundation](https://signpath.org). The owner of the repo has to apply, so **this is a task for the manager**.
 
 ### Phase 4: Polishing ✅ (except for the manager's items)
