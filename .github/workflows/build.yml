@@ -112,7 +112,9 @@ jobs:
         run: python3 tools/test_backup.py
       - name: Opmaak testen (Windows 11-maten, elk venster past op 1280x800 van 75 tot 150 procent)
         run: QT_QPA_PLATFORM=offscreen python3 tools/test_native_layout.py
-      - name: Haal alles van je oude pc testen (BugOS Switch versie 2: instellingen, wifi, printers, Firefox, programma's; met nep-programma's)
+      # Tussen aanhalingstekens: een ': ' in een naam zonder aanhalingstekens maakt het hele bestand ongeldig (dan
+      # weigert GitHub de bouw, en elke push gaf een 'mislukte' ronde zonder jobs; gezien 2026-11-17).
+      - name: "Haal alles van je oude pc testen (BugOS Switch versie 2: instellingen, wifi, printers, Firefox, programma's; met nep-programma's)"
         run: QT_QPA_PLATFORM=offscreen python3 tools/test_switch_config.py
       - name: Haal alles van je oude pc testen (bestanden slimmer en alles terugdraaien; met nep-programma's)
         run: QT_QPA_PLATFORM=offscreen python3 tools/test_switch_slimmer.py

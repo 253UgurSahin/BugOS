@@ -54,6 +54,8 @@ own storage folder, and stops if that is not available. `ISO_ZSTD=19` packs the 
 
 ### The fast round: update a test VM instead of reinstalling
 
+A BugOS installed from a local ISO gets its updates from GitHub (`ghcr.io/253ugursahin/bugos:latest`), like the real ISO. The steps below point a test VM at your own registry instead.
+
 Installing from the ISO takes 40-60 minutes. For every next round of fixes, let the test VM fetch the new system
 itself, the way a real BugOS update works:
 
