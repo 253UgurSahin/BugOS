@@ -25,7 +25,7 @@ from pathlib import Path
 sys.path.insert(0, "/usr/lib/bugos/python")
 
 from bugos_ui import CONFIG, platte_tip, t  # noqa: E402
-from bugos_files_acties import dubbele_namen, kent_hoofdletters  # noqa: E402
+from bugos_files_acties import dubbele_namen, kent_hoofdletters, vrije_naam  # noqa: E402
 
 LOG = CONFIG / "backup.json"
 
@@ -72,8 +72,8 @@ def schrijf_lijstje(doel: Path) -> None:
         pass
 
 
-def terug_opdrachten(bron: Path, thuis: Path) -> list[list[str]]:
-    """Per map in de back-up één rsync, naar de echte map op deze computer."""
+def _soort_van(bron: Path) -> dict[str, str]:
+    """Welke map in de back-up welke soort is ({'Afbeeldingen': 'PICTURES', ...}), uit het lijstje van de back-up."""
     try:
         lijstje = json.loads((bron / LIJSTJE).read_text())
     except (OSError, ValueError):
@@ -85,6 +85,19 @@ def terug_opdrachten(bron: Path, thuis: Path) -> list[list[str]]:
     soort_van = {naam: xdg for xdg, naam in lijstje.items()
                  if xdg in soorten and isinstance(naam, str) and naam and "/" not in naam and naam not in (".", "..")}
     soort_van.update({s: x for x, s in MAPPEN if s not in soort_van})  # oude back-ups: de Engelse namen
+    return soort_van
+
+
+def _doelmap(mapnaam: str, soort_van: dict[str, str], thuis: Path) -> Path:
+    """De echte map op deze computer voor een map uit de back-up ('Afbeeldingen' -> ~/Pictures op een Engelse pc)."""
+    xdg = soort_van.get(mapnaam)
+    standaard = next((s for x, s in MAPPEN if x == xdg), mapnaam)
+    return gebruikersmap(xdg, standaard) if xdg else thuis / mapnaam
+
+
+def terug_opdrachten(bron: Path, thuis: Path) -> list[list[str]]:
+    """Per map in de back-up één rsync, naar de echte map op deze computer."""
+    soort_van = _soort_van(bron)
     opdrachten = []
     try:
         mappen = sorted(p for p in bron.iterdir() if p.is_dir())
@@ -93,11 +106,32 @@ def terug_opdrachten(bron: Path, thuis: Path) -> list[list[str]]:
     for m in mappen:
         if m.name.startswith("."):
             continue   # verborgen mappen (bijv. .config) maakt de back-up niet; die zetten we ook niet terug (U097)
-        xdg = soort_van.get(m.name)
-        standaard = next((s for x, s in MAPPEN if x == xdg), m.name)
-        naar = gebruikersmap(xdg, standaard) if xdg else thuis / m.name
-        opdrachten.append(rsync_terug(m, naar))
+        opdrachten.append(rsync_terug(m, _doelmap(m.name, soort_van, thuis)))
     return opdrachten
+
+
+def een_terug_doel(bron: Path, ding: Path, thuis: Path) -> Path | None:
+    """D-12: waar één bestand of map uit de back-up op deze computer komt. 'ding' ligt in de back-up 'bron'
+    (bijv. <stick>/BugOS-Backup/test@bugos/Afbeeldingen/Vakantie/zee.jpg); het komt op dezelfde plek in de echte map
+    (~/Afbeeldingen/Vakantie/zee.jpg). Staat daar al iets, dan 'zee (2).jpg': terugzetten overschrijft nooit iets,
+    net als de rest van BugOS. None: het ligt niet in een map van de back-up (de back-up zelf, of daarbuiten, ook
+    niet via een snelkoppeling die de back-up uit wijst)."""
+    try:
+        rel = ding.resolve().relative_to(bron.resolve())
+    except (OSError, ValueError):
+        return None
+    if not rel.parts or rel.parts[0].startswith(".") or rel.parts[0] == LIJSTJE:
+        return None
+    doel = _doelmap(rel.parts[0], _soort_van(bron), thuis).joinpath(*rel.parts[1:])
+    return vrije_naam(doel)
+
+
+def een_terug_opdracht(ding: Path, doel: Path) -> list[str]:
+    """De rsync voor één bestand of map (D-12). Een map met / erachter: de inhoud komt in de nieuwe map 'doel'.
+    doel bestaat nooit (een_terug_doel koos een vrije naam), dus er wordt niets overschreven."""
+    if ding.is_dir() and not ding.is_symlink():
+        return ["rsync", "-rtl", "--info=progress2", "--no-inc-recursive", f"{ding}/", f"{doel}/"]
+    return ["rsync", "-tl", "--info=progress2", str(ding), str(doel)]
 
 
 def schijven() -> list[Path]:
@@ -111,16 +145,48 @@ def schijven() -> list[Path]:
     except Exception:  # noqa: BLE001  zonder udisks/lsblk gewoon kijken wat er al open is
         pass
     gebruiker = getpass.getuser()
-    gevonden = []
-    for basis in (Path("/run/media") / gebruiker, Path("/media") / gebruiker, Path("/media")):
-        if basis.is_dir():
-            for p in sorted(basis.iterdir()):
-                if p.is_dir() and os.access(p, os.W_OK) and p.is_mount():
-                    gevonden.append(p)
+    gevonden = schijven_in((Path("/run/media") / gebruiker, Path("/media") / gebruiker, Path("/media")))
     interne = interne_plekken()
     LAATSTE_INTERNE.clear()
     LAATSTE_INTERNE.update(interne)
     return zonder_interne(gevonden, interne)
+
+
+def schijven_in(basissen, is_koppel=os.path.ismount) -> list[Path]:
+    """De schijven in deze mappen (/run/media/<jij>, /media/<jij>, /media), elk één keer.
+    D-11: op Fedora is /media een koppeling naar run/media. Dan stond dezelfde schijf er twee keer in, als
+    /run/media/test/USBSTICK en als /media/test/USBSTICK; de ene herkende BugOS als 'zit in de computer: alleen
+    terugzetten', de andere niet ('heeft al een back-up', en je kon er een back-up op maken). Het echte pad telt,
+    één keer, met de eerste naam (die van /run/media, zoals KDE en lsblk hem ook noemen).
+    is_koppel: voor de test (een tijdelijke map is geen koppelpunt)."""
+    gevonden: list[Path] = []
+    gezien: set[Path] = set()
+    for basis in basissen:
+        try:
+            if not basis.is_dir():
+                continue
+            kandidaten = sorted(basis.iterdir())
+        except OSError:
+            continue
+        for p in kandidaten:
+            try:
+                if not (p.is_dir() and os.access(p, os.W_OK) and is_koppel(p)):
+                    continue
+                echt = p.resolve()
+            except OSError:   # een stick die net uitgetrokken wordt
+                continue
+            if echt not in gezien:
+                gezien.add(echt)
+                gevonden.append(p)
+    return gevonden
+
+
+def _echt(pad) -> str:
+    """Het echte pad (zonder koppelingen zoals /media -> run/media), om plekken te vergelijken (D-11)."""
+    try:
+        return str(Path(pad).resolve())
+    except (OSError, RuntimeError):
+        return str(pad)
 
 
 LAATSTE_INTERNE: set[str] = set()   # de schijven in de computer, van de laatste keer kijken
@@ -138,12 +204,15 @@ def interne_plekken() -> set[str]:
 def zonder_interne(paden: list[Path], interne: set[str]) -> list[Path]:
     """Een back-up hoort op iets wat je eruit haalt: gaat de computer kapot, dan ook een schijf erin (U226).
     Staat er al een back-up op een schijf in de computer (van vroeger)? Dan blijft hij, om terug te zetten (U231)."""
-    return [p for p in paden if str(p) not in interne or backups_op(p)]
+    # Vergelijken op het echte pad: /media/<jij>/X is dezelfde schijf als /run/media/<jij>/X (D-11).
+    echt_intern = {_echt(i) for i in interne}
+    return [p for p in paden if _echt(p) not in echt_intern or backups_op(p)]
 
 
 def alleen_terugzetten(schijf: Path) -> bool:
-    """Een schijf in de computer: daar kun je wel een oude back-up van terugzetten, maar geen nieuwe op maken."""
-    return str(schijf) in LAATSTE_INTERNE
+    """Een schijf in de computer: daar kun je wel een oude back-up van terugzetten, maar geen nieuwe op maken.
+    Op het echte pad, zodat een andere naam voor dezelfde schijf er niet langs komt (D-11)."""
+    return _echt(schijf) in {_echt(i) for i in LAATSTE_INTERNE}
 
 
 HOSTNAAM = Path("/etc/hostname")
@@ -163,14 +232,62 @@ def backup_doel(schijf: Path) -> Path:
     return schijf / "BugOS-Backup" / f"{getpass.getuser()}@{computernaam()}"
 
 
+MAANDEN = (("januari", "January"), ("februari", "February"), ("maart", "March"), ("april", "April"), ("mei", "May"),
+           ("juni", "June"), ("juli", "July"), ("augustus", "August"), ("september", "September"),
+           ("oktober", "October"), ("november", "November"), ("december", "December"))
+
+
+def _volle_naam(gebruiker: str) -> str:
+    """De naam die je bij het installeren gaf ('Test'), uit /etc/passwd; anders de gebruikersnaam met een hoofdletter."""
+    try:
+        import pwd
+        volle = pwd.getpwnam(gebruiker).pw_gecos.split(",")[0].strip()
+    except (ImportError, KeyError, OSError):
+        volle = ""
+    return volle or (gebruiker[:1].upper() + gebruiker[1:])
+
+
+def backup_tijd(bron: Path) -> float | None:
+    """Wanneer deze back-up voor het laatst gemaakt is: het lijstje wordt bij elke back-up opnieuw geschreven."""
+    for p in (bron / LIJSTJE, bron):
+        try:
+            return p.stat().st_mtime
+        except OSError:
+            continue
+    return None
+
+
+def mooie_naam(bron: Path) -> str:
+    """D-12: een gewone naam voor een back-up: 'Back-up van Test, 16 november 13:20', niet "'test@bugos'". De map
+    heet <gebruiker>@<computer>. Is de computer een andere dan deze, dan zeggen we dat erbij ('van Test op
+    oude-laptop'): zo zie je welke van de back-ups op een familiestick van jou is. De delen komen van de stick: die
+    tonen we letterlijk (platte_tip in de vraag), en de map is nooit '/' of iets geks (de lijst komt van iterdir)."""
+    wie, _, computer = bron.name.partition("@")
+    naam = _volle_naam(wie) if wie == getpass.getuser() else (wie[:1].upper() + wie[1:])
+    if computer and computer != computernaam():
+        kop = t("Back-up van {naam} op {computer}", "Backup of {naam} on {computer}").replace(
+            "{naam}", naam).replace("{computer}", computer)
+    else:
+        kop = t("Back-up van {naam}", "Backup of {naam}").replace("{naam}", naam)
+    tijd = backup_tijd(bron)
+    if tijd is None:
+        return kop
+    d = time.localtime(tijd)
+    maand = t(*MAANDEN[d.tm_mon - 1])
+    jaar = f" {d.tm_year}" if d.tm_year != time.localtime().tm_year else ""
+    return f"{kop}, {d.tm_mday} {maand}{jaar} {d.tm_hour:02d}:{d.tm_min:02d}"
+
+
 def terug_vraag(bron: Path) -> str:
     """De vraag voor het terugzetten, met de naam van de back-up. Is hij van een ander account (een gedeelde
     familiestick), dan zeggen we dat erbij: anders kwamen papa's bestanden stil in jouw map (U434).
     Vaste zinnen (te vertalen) met {naam}/{wie} erin; de naam komt van de stick, dus letterlijk tonen (U442)."""
-    tekst = t("De bestanden van de back-up '{naam}' komen terug op je computer. Een bestand dat op je computer "
+    # Met een gewone naam (D-12): 'Back-up van Test, 16 november 13:20' in plaats van 'test@bugos'.
+    tekst = t("De bestanden uit '{naam}' komen terug op je computer. Een bestand dat op je computer "
               "ouder is dan in de back-up, wordt vervangen. Nieuwere bestanden op je computer blijven staan.",
-              "The files from the backup '{naam}' come back to your computer. A file that is older on your "
-              "computer than in the backup is replaced. Newer files on your computer are kept.").replace("{naam}", bron.name)
+              "The files from '{naam}' come back to your computer. A file that is older on your "
+              "computer than in the backup is replaced. Newer files on your computer are kept.").replace(
+                  "{naam}", mooie_naam(bron))
     wie = bron.name.split("@", 1)[0]
     if wie != getpass.getuser():
         tekst += "\n\n" + t("Let op: deze back-up is van '{wie}', niet van jou. Zijn of haar bestanden komen dan in "
@@ -387,6 +504,80 @@ def zonder_venster(schijf: Path) -> int:
 
 # ------------------------------------------------------------------ venster ----
 
+def kies_in_backup(ouder, bron: Path) -> Path | None:
+    """D-12: kies één bestand of map in de back-up. Een eigen venstertje met de mappen van de back-up als boom (geen
+    gewone 'Openen'-dialoog: die kiest óf een bestand óf een map, en laat je overal heen bladeren, ook buiten de
+    back-up). Alleen de back-up zelf is te zien; het lijstje van BugOS en verborgen bestanden niet.
+    Geeft het gekozen pad, of None (Annuleren)."""
+    from bugos_ui import Knop, label
+    from PySide6.QtCore import QDir, QSortFilterProxyModel
+    from PySide6.QtWidgets import QDialog, QFileSystemModel, QHBoxLayout, QTreeView, QVBoxLayout
+
+    dlg = QDialog(ouder)
+    dlg.setObjectName("venster")
+    dlg.setWindowTitle(t("Eén bestand of map terugzetten", "Restore one file or folder"))
+    dlg.resize(620, 480)
+    lay = QVBoxLayout(dlg)
+    lay.setContentsMargins(20, 18, 20, 18)
+    lay.setSpacing(12)
+    lay.addWidget(label(t("Kies wat terug moet uit '{naam}'. Het komt op dezelfde plek op je computer; staat daar al "
+                          "iets met die naam, dan krijgt het een (2) erachter. Er wordt niets overschreven.",
+                          "Choose what to restore from '{naam}'. It goes to the same place on your computer; if "
+                          "something with that name is already there, it gets a (2) after it. Nothing is "
+                          "overwritten.").replace("{naam}", mooie_naam(bron)), wrap=True))
+    model = QFileSystemModel(dlg)
+    model.setFilter(QDir.Filter.AllEntries | QDir.Filter.NoDotAndDotDot)   # zonder verborgen bestanden
+    model.setRootPath(str(bron))
+
+    class Zonder(QSortFilterProxyModel):
+        """Het lijstje van BugOS (bugos-mappen.json) hoort bij de back-up, niet bij je bestanden: niet tonen."""
+
+        def filterAcceptsRow(self, rij, ouder_index):  # noqa: N802
+            index = self.sourceModel().index(rij, 0, ouder_index)
+            return not (self.sourceModel().fileName(index) == LIJSTJE
+                        and Path(self.sourceModel().filePath(index)).parent == bron)
+
+    proxy = Zonder(dlg)
+    proxy.setSourceModel(model)
+    boom = QTreeView()
+    boom.setModel(proxy)
+    boom.setRootIndex(proxy.mapFromSource(model.index(str(bron))))
+    for kolom in (1, 2, 3):   # alleen de naam: grootte, soort en datum maken het druk
+        boom.hideColumn(kolom)
+    boom.setHeaderHidden(True)
+    boom.setAccessibleName(t("Bestanden en mappen in de back-up", "Files and folders in the backup"))
+    lay.addWidget(boom, 1)
+    rij = QHBoxLayout()
+    rij.addStretch(1)
+    annuleer = Knop(t("Annuleren", "Cancel"), "rand")
+    kies = Knop(t("Terugzetten", "Restore"), "hoofd", "lijn:terug")
+    kies.setEnabled(False)
+    rij.addWidget(annuleer)
+    rij.addWidget(kies)
+    lay.addLayout(rij)
+    gekozen: list[Path] = []
+
+    def keuze() -> Path | None:
+        index = boom.currentIndex()
+        return Path(model.filePath(proxy.mapToSource(index))) if index.isValid() else None
+
+    boom.selectionModel().currentChanged.connect(lambda *_: kies.setEnabled(keuze() is not None))
+
+    def klaar() -> None:
+        p = keuze()
+        if p is not None:
+            gekozen.append(p)
+            dlg.accept()
+
+    kies.clicked.connect(klaar)
+    annuleer.clicked.connect(dlg.reject)
+    dlg.kies, dlg.boom, dlg.model, dlg.proxy = kies, boom, model, proxy   # voor de test
+    dlg.exec()
+    # Netjes opruimen: QFileSystemModel kijkt op de achtergrond naar de map; dat stopt met het venster.
+    dlg.deleteLater()
+    return gekozen[0] if gekozen else None
+
+
 def venster() -> int:
     from bugos_ui import (
         Banner, Chip, IcoonChip, Knop, SchijfKiezer, Voortgang, kop_met_icoon, label, maak_app, pagina,
@@ -467,11 +658,17 @@ def venster() -> int:
             lay.addStretch(1)
             rij = QHBoxLayout()
             self.terugzetten = Knop(t("Terugzetten", "Restore"), "rand", "lijn:terug", groot=True)
+            # D-12: niet alleen alles of niets: ook één bestand of map uit de back-up.
+            self.een_terug = Knop(t("Eén bestand of map terugzetten", "Restore one file or folder"), "stil",
+                                  "lijn:document")
             self.maak = Knop(t("Maak back-up", "Make backup"), "hoofd", "lijn:opslag", groot=True)
             rij.addWidget(self.terugzetten)
+            rij.addWidget(self.een_terug)
             rij.addStretch(1)
             rij.addWidget(self.maak)
-            lay.addLayout(rij)
+            # Onder het schuifvlak, niet erin: de knoppen blijven altijd in beeld, ook bij 150 % met een melding (R03).
+            rij.setContentsMargins(40, 12, 40, 20)
+            buiten.addLayout(rij)
 
             self.wachtrij: list[list[str]] = []
             self.nu: list[str] = []     # de opdracht die nu loopt
@@ -486,6 +683,7 @@ def venster() -> int:
             self.teller: Teller | None = None  # telt of alles past
             self.maak.clicked.connect(self.maak_backup)
             self.terugzetten.clicked.connect(self.zet_terug)
+            self.een_terug.clicked.connect(self.zet_een_terug)
             self.kiezer.gewijzigd.connect(self.knoppen)
             self.timer = QTimer(self)
             self.timer.timeout.connect(self.ververs_schijven)
@@ -508,6 +706,7 @@ def venster() -> int:
             s = self.gekozen()
             self.maak.setEnabled(s is not None and not alleen_terugzetten(s))
             self.terugzetten.setEnabled(s is not None and bool(backups_op(s)))
+            self.een_terug.setEnabled(self.terugzetten.isEnabled())
 
         def ververs_schijven(self) -> None:
             if self.druk():
@@ -601,6 +800,12 @@ def venster() -> int:
                 self.wanneer.setText(laatste_backup())
                 self.melding.zet(t("Klaar! Je bestanden staan veilig op de schijf. Je mag hem er nu uithalen.",
                                    "Done! Your files are safe on the drive. You can unplug it now."), "goed")
+            elif self.stand["klus"] == "een":
+                # Eén ding terug (D-12): zeg waar het staat, met de naam die het kreeg (misschien 'naam (2)').
+                doel = self.stand.get("doel")
+                waar = str(doel).replace(str(Path.home()), "~", 1) if doel else ""
+                self.melding.zet(t("Klaar! Het staat weer op je computer: {waar}",
+                                   "Done! It is back on your computer: {waar}").replace("{waar}", waar), "goed")
             else:
                 self.melding.zet(t("Klaar! Je bestanden staan weer op je computer. Werd er iets vervangen, dan staat het "
                                    "oude in een map 'Vervangen bij terugzetten'.",
@@ -672,6 +877,7 @@ def venster() -> int:
             self.balk.show()
             self.maak.setEnabled(False)
             self.terugzetten.setEnabled(False)
+            self.een_terug.setEnabled(False)
             self.kiezer.setEnabled(False)
 
         def maak_backup(self) -> None:
@@ -728,26 +934,66 @@ def venster() -> int:
             self.deels = [m.name for m in dubbel]  # die gaan niet mee: dat zeggen we straks
             self.volgende()
 
-        def zet_terug(self) -> None:
-            schijf = self.gekozen()
-            if schijf is None:
-                return
+        def kies_backup(self, schijf: Path) -> Path | None:
+            """Welke back-up van deze schijf? Die van deze computer meteen; anders laten kiezen, met een gewone naam
+            ('Back-up van Bugie op oude-laptop, 3 maart 10:12') in plaats van 'bugie@oude-laptop' (D-12)."""
             lijst = backups_op(schijf)
             if not lijst:
-                return
+                return None
             bron = lijst[0]
             if lijst[0] != backup_doel(schijf):   # ook als er maar één is: dan zie je van wie hij is (U434)
-                # Geen back-up van deze computer, wel van andere: laat kiezen (bijv. "bugie@oude-laptop").
+                # Geen back-up van deze computer, wel van andere: laat kiezen.
+                namen = [mooie_naam(p) for p in lijst]
+                # Twee met dezelfde naam (zelfde voornaam, zelfde minuut)? Dan de mapnaam erachter, anders kies je blind.
+                namen = [f"{n} ({p.name})" if namen.count(n) > 1 else n for n, p in zip(namen, lijst)]
                 keuze, ok = QInputDialog.getItem(
                     self, t("Welke back-up?", "Which backup?"),
                     t("Er staan meer back-ups op deze schijf. Welke wil je terugzetten?",
                       "There are several backups on this drive. Which one do you want to restore?") if len(lijst) > 1 else
                     t("Op deze schijf staat deze back-up. Wil je hem terugzetten?",
                       "This drive has this backup. Do you want to restore it?"),   # (U442)
-                    [p.name for p in lijst], 0, False)
-                if not ok:
-                    return
-                bron = next(p for p in lijst if p.name == keuze)
+                    namen, 0, False)
+                if not ok or keuze not in namen:
+                    return None
+                bron = lijst[namen.index(keuze)]
+            return bron
+
+        def zet_een_terug(self) -> None:
+            """D-12: één bestand of map uit de back-up terugzetten, in plaats van alles. Je kiest het in de back-up;
+            het komt op dezelfde plek in je eigen map, en staat daar al iets, dan als 'naam (2)'."""
+            schijf = self.gekozen()
+            if schijf is None or self.druk():
+                return
+            bron = self.kies_backup(schijf)
+            if bron is None:
+                return
+            ding = kies_in_backup(self, bron)
+            if ding is None:
+                return
+            doel = een_terug_doel(bron, ding, Path.home())
+            if doel is None or not ding.exists():
+                self.melding.zet(t("Dat kan niet terug: kies een bestand of map in de back-up. Zit de schijf er nog in?",
+                                   "That cannot be restored: choose a file or folder in the backup. Is the drive "
+                                   "still plugged in?"), "fout")
+                return
+            try:
+                doel.parent.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                self.melding.zet(t("Je computer is vol, of je mag daar niet schrijven.",
+                                   "Your computer is full, or you may not write there."), "fout")
+                return
+            self.stand.update(klus="een", schijf=schijf, doel=doel)
+            self.wachtrij[:] = [een_terug_opdracht(ding, doel)]
+            self.bezig(t("Bezig met terugzetten van {naam}…", "Restoring {naam}…").replace("{naam}", ding.name))
+            self.volgende()
+
+        def zet_terug(self) -> None:
+            schijf = self.gekozen()
+            if schijf is None:
+                return
+            bron = self.kies_backup(schijf)
+            if bron is None:
+                return
             vraag = QMessageBox.question(
                 self, t("Terugzetten?", "Restore?"),
                 terug_vraag(bron),

@@ -21,6 +21,51 @@ klopt '[ -n "${VARIANT_ID:-}" ] && [ -n "${VERSION_ID:-}" ]' "os-release: VARIAN
 klopt '[ -s /usr/share/icons/hicolor/scalable/apps/bugos-logo.svg ] && [ -s /usr/share/pixmaps/bugos-logo.svg ]' "logo: bugos-logo staat in hicolor en pixmaps"
 klopt 'grep -q "\"image-name\"" /usr/share/ublue-os/image-info.json' "image-info.json: geschreven"
 
+# 1b. Elk bestand uit system_files staat er precies zo in (build.sh, stap 1). Een lokale bouw liet ooit bestanden die
+#     al in de fundering stonden half staan: de oude inhoud met nul-bytes erachter. Alleen bestanden die de bouw
+#     daarna niet zelf nog aanpast (AANGEPAST: de vooraf vertaalde Python-bestanden).
+AANGEPAST='^usr/lib/bugos/python/__pycache__/'
+anders=""
+if [ -d "$REPO/system_files" ]; then
+    while IFS= read -r -d '' f; do
+        rel="${f#"$REPO"/system_files/}"
+        [[ "$rel" =~ $AANGEPAST ]] && continue
+        cmp -s "$f" "/$rel" || anders="$anders /$rel"
+    done < <(find "$REPO/system_files" -type f -print0)
+fi
+klopt '[ -z "$anders" ]' "bestanden: alles uit system_files staat er ongeschonden in${anders:0:300}"
+
+# 1c. Ook wat de bouw zelf schrijft (cat >, printf >, kwriteconfig6) moet heel zijn. In een lokale bouw met
+#     fuse-overlayfs bleef van bestanden die al in de fundering stonden alleen de oude inhoud over, aangevuld met
+#     nul-bytes tot de nieuwe lengte (/usr/lib/plasmalogin/defaults.conf: inlogscherm met de achtergrond van KDE;
+#     /etc/xdg/kcm-about-distrorc: 'Over deze computer'). Zo'n tekstbestand eindigt op nul-bytes: dat mag nergens
+#     in /etc of in de mappen waar de bouw schrijft. (/etc/selinux heeft echte binaire bestanden met nullen.)
+kapot="$(python3 - <<'EOF'
+import os
+plekken = ["/etc", "/usr/lib/plasmalogin", "/usr/share/kde-settings", "/usr/share/plasma/look-and-feel",
+           "/usr/share/plasma/shells", "/usr/share/sddm", "/usr/share/bugos"]
+kapot = []
+for plek in plekken:
+    for map_, mappen, bestanden in os.walk(plek):
+        mappen[:] = [m for m in mappen if os.path.join(map_, m) != "/etc/selinux"]
+        for b in bestanden:
+            p = os.path.join(map_, b)
+            try:
+                if os.path.islink(p) or not 0 < os.path.getsize(p) < 2_000_000:
+                    continue
+                with open(p, "rb") as h:
+                    data = h.read()
+            except OSError:
+                continue
+            # Tekst (geen nul-byte in het begin) met nul-bytes aan het eind: de oude inhoud, opgevuld.
+            romp = data.rstrip(b"\0")
+            if romp != data and romp and b"\0" not in romp:
+                kapot.append(p)
+print(" ".join(kapot[:10]))
+EOF
+)"
+klopt '[ -z "$kapot" ]' "bestanden: geen tekstbestand dat eindigt op nul-bytes (half geschreven) ${kapot}"
+
 # 2. Rechten (build.sh): programma's uitvoerbaar, de rest niet, geen wereld-schrijfbare bestanden
 slecht="$(find /usr/bin -maxdepth 1 -name 'bugos-*' ! -perm 0755 | head -5)"
 klopt '[ -z "$slecht" ]' "rechten: elk /usr/bin/bugos-* is 0755 ${slecht}"
@@ -53,6 +98,10 @@ klopt 'grep -q "^AutomaticUpdatePolicy=stage" /etc/rpm-ostreed.conf' "updates: r
 # IPv6, connect, not running: meldingen van de bouwcontainer zelf, geen fouten in de diensten.
 uit="$(systemd-analyze verify /usr/lib/systemd/system/bugos-*.service /usr/lib/systemd/system/bugos-*.timer 2>&1 | grep -v -E 'Failed to (connect|open)|Cannot|not running|IPv6' || true)"
 klopt '[ -z "$uit" ]' "diensten: systemd-analyze verify vindt geen fouten ${uit:+($uit)}"
+# systemd-remount-fs mislukte na elke start (composefs-wortel); onze aanvulling laat die ene mislukking niet als fout
+# tellen. Het programma moet op de plek staan die de aanvulling noemt, anders start de dienst helemaal niet meer.
+klopt 'grep -qx "ExecStart=-/usr/lib/systemd/systemd-remount-fs" /usr/lib/systemd/system/systemd-remount-fs.service.d/50-bugos-composefs.conf && [ -x /usr/lib/systemd/systemd-remount-fs ] && grep -q "^enabled *= *yes" /usr/lib/ostree/prepare-root.conf' \
+    "dienst: systemd-remount-fs telt het niet-opnieuw-koppelen van de composefs-wortel niet als fout"
 for p in /usr/share/polkit-1/actions/org.bugos.*.policy; do
     klopt 'python3 -c "import sys, xml.etree.ElementTree as E; E.parse(sys.argv[1])" "$p"' "polkit: $(basename "$p") is geldige XML"
 done
@@ -63,12 +112,95 @@ klopt 'grep -A3 "^\[Icons\]" /etc/xdg/kdeglobals | grep -q "Theme=BugOS"' "stijl
 klopt 'grep -q "widgetStyle=kvantum" /etc/xdg/kdeglobals && [ -d /usr/share/Kvantum/BugOS ] && [ -d /usr/share/Kvantum/BugOSDark ] && grep -q "^theme=BugOS$" /etc/xdg/Kvantum/kvantum.kvconfig' "stijl: Kvantum met BugOS licht en donker"
 klopt '[ -f /usr/share/color-schemes/BugOSLight.colors ] && [ -f /usr/share/color-schemes/BugOSDark.colors ]' "stijl: kleurschema's licht en donker"
 klopt '[ -f /usr/share/bugos/wine/licht.reg ] && [ -f /usr/share/bugos/wine/donker.reg ]' "Windows-programma's: licht.reg en donker.reg"
+# D-03: de 32-bits ntdll.dll van wine-wow64 krijgt het SELinux-label waarmee Wine hem mag aanpassen (execmod), en
+# wine-mono heeft precies de versie die deze Wine zoekt (anders vraagt Wine bij de eerste keer om Mono te downloaden).
+NTDLL=/usr/lib64/wine-wow64/wine/i386-windows/ntdll.dll
+klopt '[ ! -e "$NTDLL" ] || matchpathcon "$NTDLL" | grep -q textrel_shlib_t' "Windows-programma's: 32-bits ntdll.dll heeft textrel_shlib_t (D-03)"
+klopt 'v="$(rpm -q --qf "%{VERSION}" wine-mono)" && [ -d "/usr/share/wine/mono/wine-mono-$v" ] && strings -el /usr/lib64/wine-wow64/wine/x86_64-windows/appwiz.cpl | grep -q "wine-mono-$v"' \
+    "Windows-programma's: wine-mono hoort bij deze Wine (geen Mono-download bij de eerste keer) (D-05)"
 klopt '[ -f /usr/share/plasma/shells/org.kde.plasma.desktop/contents/logout/bugos-aftellen.js ] && [ -f /usr/share/plasma/look-and-feel/org.bugos.desktop/contents/logout/bugos-aftellen.js ]' "uitzetscherm: bugos-aftellen.js staat naast Logout.qml (U088)"
 klopt 'fc-list | grep -q "Inter" && fc-list | grep -q "JetBrains Mono"' "letters: Inter en JetBrains Mono geïnstalleerd"
+# Taakbalk en bureaublad zonder KDE-bewerkregels (pakket shell).
+MAP=/usr/share/plasma/plasmoids/org.kde.desktopcontainment/contents/ui
+klopt 'grep -q "plasma/allow_configure_when_locked=false" /etc/xdg/kdeglobals && ! grep -q "unlockedDesktop" /etc/xdg/kdeglobals' "slot: kiosk-sleutel allow_configure_when_locked, niet unlockedDesktop"
+klopt 'grep -q BugosBureaubladActies.qml "$MAP/FolderViewLayer.qml" && [ -f "$MAP/BugosBureaubladActies.qml" ]' "bureaubladmenu: BugOS-regels in de mapweergave van KDE"
+klopt '! grep -q "Ctrl+Shift+D" "$MAP/main.qml"' "bureaubladmenu: geen Ctrl+Shift+D (KDE's achtergrondvenster)"
+klopt 'grep -q "edit mode=false" /etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc && grep -q "RightButton;NoModifier=org.kde.contextmenu" /etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc' "nieuwe gebruikers: bureaubladmenu zonder KDE-regels"
+klopt '( for p in kactivitymanagerd_fileitem_linking_plugin tagsfileitemaction kdeconnectfileitemaction plasmavaultfileitemaction kio-admin; do [ -f /usr/lib64/qt6/plugins/kf6/kfileitemaction/$p.so ] && grep -qx "$p=false" /etc/xdg/kservicemenurc || exit 1; done )' "bestandsmenu: geen Activiteiten, tags, KDE Connect, kluis en Openen als beheerder (de plug-ins bestaan en staan uit)"
+klopt '[ ! -e /usr/share/kio/servicemenus/filelight.desktop ]' "bestandsmenu: geen 'Gebruiksstatistieken van schijven bekijken' (Filelight) op mappen"
+# Discover en Filelight niet in het startmenu (style.sh, 4c): weg uit het beeld (Discover: pakket store) of verborgen.
+# Werkt met en zonder Discover in het beeld. 5b hieronder ziet alleen namen met "Discover" erin, Filelight niet.
+klopt '[ ! -f /usr/share/applications/org.kde.discover.desktop ] || grep -qx "NoDisplay=true" /usr/share/applications/org.kde.discover.desktop' "startmenu: geen KDE Discover (weg uit het beeld, of verborgen)"
+klopt '[ ! -f /usr/share/applications/org.kde.filelight.desktop ] || grep -qx "NoDisplay=true" /usr/share/applications/org.kde.filelight.desktop' "startmenu: geen Filelight (Bestanden laat zelf zien wat de meeste ruimte inneemt)"
+# Firefox is een Flatpak (te verwijderen in de Winkel); het pakket van de basis moet echt weg, anders twee Firefoxen.
+klopt '! rpm -q firefox >/dev/null 2>&1' "Firefox: geen pakket in het beeld (Firefox komt als Flatpak)"
+
+klopt '! grep -qE "^(TEMPLATES|PUBLICSHARE)=" /etc/xdg/user-dirs.defaults && grep -q "^DOCUMENTS=" /etc/xdg/user-dirs.defaults'     "thuismap: een nieuwe gebruiker krijgt geen lege mappen Templates en Public (zoals Windows)"
+
+# 5b. Het startmenu toont alleen programma's met een gewone naam (style.sh: hernoemen en verbergen).
+#     Geen KDE-namen (KFind, Krfb, KCharSelect...), geen hulpjes voor gevorderden.
+apps="$(LANG=en_US.UTF-8 /usr/bin/bugos-start-data 2>/dev/null | python3 -c 'import json, sys
+for a in json.load(sys.stdin)["apps"]:
+    if a.get("soort") == "app":
+        print(a["naam"])' 2>/dev/null)"
+klopt '[ -n "$apps" ]' "startmenu: bugos-start-data geeft de apps"
+raar="$(echo "$apps" | grep -E '^K[A-Z]|^K[a-z]+[A-Z]|^Krfb|Kvantum|DOSBox|Firewall|KDE|Dolphin|Discover|Info Center|System Monitor|Menu Editor' | paste -sd, - || true)"
+klopt '[ -z "$raar" ]' "startmenu: geen KDE-namen of hulpjes voor gevorderden tussen de apps ${raar:+($raar)}"
+# A-14: 'Teksteditor' is de eenvoudige KWrite (in het beeld, niet verborgen), Kate heet gewoon Kate.
+klopt '[ -f /usr/share/applications/org.kde.kwrite.desktop ] && ! grep -qx "NoDisplay=true" /usr/share/applications/org.kde.kwrite.desktop && grep -qx "Name\[nl\]=Teksteditor" /usr/share/applications/org.kde.kwrite.desktop' \
+    "startmenu: Teksteditor is KWrite (de eenvoudige), niet Kate voor programmeurs"
+
+# 5c. Geen KDE Discover en geen KDE Partition Manager (build.sh, stap 2): de BugOS Winkel doet alle apps van Flathub
+#     zelf, ook een .flatpakref uit Firefox (de knop 'Install' op flathub.org) en een flatpak+https://- of
+#     appstream://-link (bijv. 'Uninstall or Manage Add-Ons…' in KDE). Zonder Discover is de Winkel de enige die
+#     ze kent; de standaard staat in /etc/xdg/kde-mimeapps.list. gio leest die (XDG_CURRENT_DESKTOP=KDE), net als
+#     Firefox; LC_ALL=C zodat de zin van gio niet vertaald is, en een lege thuismap zodat alleen BugOS telt.
+weg="$(rpm -qa --qf '%{NAME}\n' | grep -E '^(plasma-discover.*|kde-partitionmanager|kpmcore|xwaylandvideobridge)$' | paste -sd, - || true)"
+klopt '[ -z "$weg" ]' "pakketten: geen KDE Discover, geen Partition Manager en geen Xwayland Video Bridge ${weg:+($weg)}"
+# A-12: de Video Bridge stond als technisch icoon in het systeemvak; bewust weggehaald (zie build.sh).
+klopt '[ ! -e /etc/xdg/autostart/org.kde.xwaylandvideobridge.desktop ]' "systeemvak: geen 'Xwayland Video Bridge' meer bij het opstarten (A-12)"
+klopt '[ ! -e /usr/share/applications/org.kde.discover.desktop ] && [ ! -e /etc/xdg/autostart/org.kde.discover.notifier.desktop ] && [ ! -e /usr/share/solid/actions/open_in_partitionmanager.desktop ]' \
+    "Discover: niet in het startmenu en niet bij het opstarten; geen 'Reformat or Edit with Partition Manager' bij een USB-stick"
+# Met de mappen van een echte Plasma-sessie: Plasma leest bij het aanmelden /etc/xdg/plasma-workspace/env/*.sh, en
+# env.sh van Fedora (kde-settings-plasma) zet XDG_CONFIG_DIRS op /etc/xdg:/usr/share/kde-settings/kde-profile/default/xdg.
+# Dat kde-profile noemt Discover nog (kde-mimeapps.list, kicker-extra-favoritesrc); /etc/xdg staat vooraan en moet dus
+# winnen. Daarom gio in een eigen bash, zonder XDG_CONFIG_DIRS (zoals bij het aanmelden) en zonder set -u: env.sh
+# leest die variabele zonder standaardwaarde. Is er geen env.sh (een andere basis), dan gewoon met de standaardmappen.
+leeg_thuis="$(mktemp -d)"
+for m in application/vnd.flatpak.ref application/vnd.flatpak.repo application/vnd.flatpak x-scheme-handler/flatpak+https x-scheme-handler/appstream; do
+    standaard="$(env -u XDG_CONFIG_DIRS HOME="$leeg_thuis" XDG_CURRENT_DESKTOP=KDE LC_ALL=C bash -c \
+        'for f in /etc/xdg/plasma-workspace/env/*.sh; do [ -r "$f" ] && . "$f"; done; gio mime "$1" 2>/dev/null' _ "$m" \
+        | sed -n 's/^Default application for .*: //p')"
+    klopt '[ "$standaard" = bugos-store.desktop ]' "openen met: $m opent de BugOS Winkel, ook met de mappen van een Plasma-sessie (${standaard:-niets})"
+done
 
 # 6. Alles laadt met de Qt, KDE en Python van het beeld zelf
 HOME="$(mktemp -d)"
 export QT_QPA_PLATFORM=offscreen PYTHONDONTWRITEBYTECODE=1 HOME
+
+# 6a. D-09: de standaard-teksteditor (KWrite, zie kde-mimeapps.list) start echt. In een bouw kwam KWrite 26.08.3 bovenop
+#     kf6-kconfig 6.31 van de basis; KWrite stopte meteen ("symbol lookup error ... _ZN7KConfig8copyFromERKS_") en geen
+#     .txt ging open. Zo'n fout ziet rpm niet (de eis op libKF6ConfigCore staat er zonder versie), dus kijken we zelf:
+#     - ldd: elke bibliotheek wordt gevonden;
+#     - LD_BIND_NOW=1: alle symbolen worden bij het starten opgezocht, ook die pas later nodig zijn; 'kwrite --version'
+#       moet dan gewoon een versie geven;
+#     - rpm -V --nofiles: de eisen van kate-libs en kwrite zijn allemaal vervuld (geen 'Unsatisfied dependencies');
+#     - KWrite, kate-libs en KTextEditor horen bij de KDE-frameworks van de basis: alle kf6-pakketten van KDE
+#       Frameworks hebben één versie (een half bijgewerkte set is precies wat misging).
+editor="$(command -v kwrite || true)"
+klopt '[ -n "$editor" ]' "teksteditor: kwrite staat in het beeld"
+if [ -n "$editor" ]; then
+    ontbreekt="$({ ldd "$editor"; ldd /usr/lib64/libkateprivate.so.* 2>/dev/null; } | grep 'not found' | sort -u | paste -sd, - || true)"
+    klopt '[ -z "$ontbreekt" ]' "teksteditor: ldd vindt elke bibliotheek van KWrite ${ontbreekt:+($ontbreekt)}"
+    versie="$(LD_BIND_NOW=1 timeout 30 "$editor" --version 2>&1 | head -3 | paste -sd' ' -)"
+    klopt 'LD_BIND_NOW=1 timeout 30 "$editor" --version >/dev/null 2>&1 && [[ "$versie" == kwrite* ]]' \
+        "teksteditor: KWrite start met alle symbolen opgezocht (LD_BIND_NOW=1 kwrite --version: ${versie:0:200})"
+fi
+eisen="$(rpm -V --nofiles --nodigest --nosignature kate-libs kwrite 2>&1 | grep -i 'unsatisfied\|not installed' | head -3 | paste -sd' ' - || true)"
+klopt '[ -z "$eisen" ]' "teksteditor: alle eisen van kate-libs en kwrite zijn vervuld ${eisen:+($eisen)}"
+# Alleen de echte KDE Frameworks (versie 6.x, zoals kf6-kconfig): kf6-kirigami-addons e.d. hebben een eigen nummering.
+kf6_versies="$(rpm -qa --qf '%{NAME} %{VERSION}\n' 'kf6-*' | awk '$2 ~ /^6\./ {print $2}' | sort -u | paste -sd, -)"
+klopt '[ -n "$kf6_versies" ] && [[ "$kf6_versies" != *,* ]]' "KDE Frameworks: één versie voor alle kf6-pakketten ($kf6_versies)"
 uit="$(python3 - <<'EOF' 2>&1
 import importlib, importlib.machinery, importlib.util, sys
 from pathlib import Path

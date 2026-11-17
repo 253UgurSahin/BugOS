@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Move apps to their new place
+Name[nl]=Apps naar hun nieuwe plek verhuizen
+Comment=Moves your Firefox and Steam to the Firefox and Steam apps, so nothing is lost
+Comment[nl]=Verhuist je Firefox en Steam naar de losse apps, zodat je niets kwijt bent
+Exec=/usr/bin/bugos-verhuis-apps
+NoDisplay=true
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=1

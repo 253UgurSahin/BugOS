@@ -1,38 +1,109 @@
 #!/usr/bin/bash
-# bugos-first-boot - draait één keer na installatie (als systeemdienst).
+# bugos-first-boot - zet de standaard-apps klaar als gewone Flatpak-apps van Flathub (als systeemdienst).
 #
-# Zet de standaard-apps uit de Winkel klaar: Steam (als die er nog niet is),
-# LibreOffice (kantoor), VLC (films en muziek), Gwenview (foto's) en Okular (PDF's).
-# Lukt het niet (bijv. geen internet)? Dan probeert hij het de volgende keer
-# opnieuw bij het opstarten.
+# Welke apps: /usr/share/bugos/standaard-apps.txt (Firefox, LibreOffice, VLC, Gwenview, Okular en Steam).
+# Waarom Flatpaks: die kun je verwijderen in de Winkel ('Mijn apps') en in Instellingen > Apps, en later weer
+# installeren. Firefox en Steam zaten vroeger als pakket in BugOS zelf; die kon je niet verwijderen.
+#
+# De regels:
+#   1. Elke app zet hij hooguit één keer klaar. Wat hij klaarzette (of al op de computer vond), onthoudt hij in
+#      /var/lib/bugos/standaard-apps-klaargezet. Verwijder je zo'n app later, dan komt hij dus nooit meer vanzelf
+#      terug: dat was je eigen keuze. (Dat werkt ook als je hem in een terminal verwijderde: er hoeft niemand iets
+#      bij te houden op het moment van verwijderen.)
+#   2. Geen internet, of een telefoon-hotspot (een databundel)? Dan niets downloaden en het later opnieuw proberen:
+#      over vijf minuten (Restart=on-failure in bugos-first-boot.service) en anders met bugos-first-boot.timer.
+#   3. Het opstarten en inloggen wachten hier nooit op (Type=exec in de dienst): de apps komen op de achtergrond.
+#   4. Lukt één app niet, dan komen de andere toch (elke app apart), en wordt alleen die ene later opnieuw geprobeerd.
+#   5. Komt er in een nieuwe BugOS-versie een app bij de lijst, dan krijgen computers die de eerste start al deden
+#      die app ook, één keer (U239). Doe je je updates zelf ('Ik kies zelf wanneer'), dan niet vanzelf (U308), behalve
+#      een app die vroeger in BugOS zelf zat (VERVANGERS): anders was je na de update ineens je browser kwijt.
+#
+# Is alles al klaargezet, dan stopt hij meteen (zonder op internet te wachten): de dienst mag dus bij elke start
+# draaien, en een nieuwe regel in de lijst wordt vanzelf opgepakt.
 
 set -u
-KLAAR=/var/lib/bugos/eerste-start-klaar
-# Later bijgekomen standaard-apps (Gwenview, Okular: U224) krijgen ook computers die de eerste start al deden,
-# één keer (U239). Haal je ze daarna weg, dan blijven ze weg.
-KLAAR2=/var/lib/bugos/standaard-apps-2
-mkdir -p /var/lib/bugos
+# De lijst en de map met wat hij onthoudt. Een test kan ze omzetten (met sed of BUGOS_STANDAARD_APPS).
+LIJST="${BUGOS_STANDAARD_APPS:-/usr/share/bugos/standaard-apps.txt}"
+STAAT=/var/lib/bugos
+KLAARGEZET="$STAAT/standaard-apps-klaargezet"
+# 'De eerste start is een keer helemaal gelukt': vanaf dan geldt regel 5 (zelf updaten = niet vanzelf).
+KLAAR="$STAAT/eerste-start-klaar"
+# Overgeslagen omdat je je updates zelf doet. bugos-updates auto haalt dit weg (U320); daarna komen ze bij de
+# volgende start alsnog (dit script kijkt elke keer opnieuw wat er nog moet).
+OVERGESLAGEN="$STAAT/standaard-apps-overgeslagen"
+# Van de vorige versie van dit script (met een vaste lijst): Gwenview en Okular waren klaar (U224, U239).
+OUD_KLAAR2="$STAAT/standaard-apps-2"
+OVERGEZET="$STAAT/standaard-apps-overgezet"
+# Apps die vroeger als pakket in BugOS zelf zaten. Die komen altijd (ook bij 'zelf updaten'), want met de update van
+# BugOS ging het pakket weg.
+VERVANGERS=(org.mozilla.firefox com.valvesoftware.Steam)
+# Een geldig Flathub-id (org.voorbeeld.App), net als APP_ID in bugos_apps.py: nooit iets anders naar flatpak.
+ID_PATROON='^[A-Za-z0-9_][A-Za-z0-9_-]*(\.[A-Za-z0-9_-]+){2,}$'
 
-APPS=(
-    org.libreoffice.LibreOffice
-    org.videolan.VLC
-    # Foto's en PDF's openen met dubbelklik: de fundering heeft er geen programma voor (U224).
-    org.kde.gwenview
-    org.kde.okular
-)
-# Steam als Flatpak alleen als de systeemversie ontbreekt.
-command -v steam >/dev/null 2>&1 || APPS+=(com.valvesoftware.Steam)
-# Al eens klaargezet: alleen wat er later bij kwam. Doe je updates zelf, dan ook dit niet vanzelf (U308).
-if [ -f "$KLAAR" ]; then
-    if ! /usr/bin/bugos-updates mag-vanzelf 2>/dev/null; then
-        # Onthouden dat het is overgeslagen: zet je updates later weer op 'vanzelf', dan komen ze alsnog (U320).
-        touch "$KLAAR2" /var/lib/bugos/standaard-apps-overgeslagen
-        exit 0
+mkdir -p "$STAAT"
+touch "$KLAARGEZET"
+
+# Overstap van de vorige versie: die hield niet per app bij wat hij klaarzette, alleen 'klaar'. Wat die versie zeker
+# klaarzette, telt als klaargezet; anders zou een LibreOffice die je al verwijderde, nu terugkomen. (Steam niet: dat
+# was meestal een pakket, en dat is met deze update weg; dan komt de Flatpak ervoor in de plaats.) Eén keer.
+if [ -f "$KLAAR" ] && [ ! -f "$OVERGEZET" ]; then
+    printf '%s\n' org.libreoffice.LibreOffice org.videolan.VLC >>"$KLAARGEZET"
+    if [ -f "$OUD_KLAAR2" ]; then
+        printf '%s\n' org.kde.gwenview org.kde.okular >>"$KLAARGEZET"
     fi
-    APPS=(org.kde.gwenview org.kde.okular)
+    touch "$OVERGEZET"
 fi
 
-# Even wachten op internet (de dienst wacht er niet meer op bij het opstarten) (U312).
+# is_vervanger ID: zat deze app vroeger in BugOS zelf?
+is_vervanger() {
+    local v
+    for v in "${VERVANGERS[@]}"; do
+        [ "$v" = "$1" ] && return 0
+    done
+    return 1
+}
+
+# Wat moet er nog? Alles uit de lijst dat nog nooit klaargezet is. Staat een app er al (je installeerde hem zelf
+# uit de Winkel, of hij kwam van een eerdere keer), dan telt hij als klaargezet en doen we er niets mee.
+TE_DOEN=()
+while IFS= read -r regel; do
+    id="${regel%%#*}"
+    id="${id//[[:space:]]/}"
+    [ -n "$id" ] || continue
+    if ! [[ "$id" =~ $ID_PATROON ]]; then
+        echo "BugOS: '$id' in $LIJST is geen app-id, overgeslagen." >&2
+        continue
+    fi
+    grep -qxF "$id" "$KLAARGEZET" && continue
+    if flatpak info --system "$id" >/dev/null 2>&1; then
+        echo "$id" >>"$KLAARGEZET"
+        continue
+    fi
+    TE_DOEN+=("$id")
+done <"$LIJST"
+
+# Al eens helemaal klaar en je doet je updates zelf: dan alleen de vervangers (regel 5).
+if [ -f "$KLAAR" ] && [ "${#TE_DOEN[@]}" -gt 0 ] && ! /usr/bin/bugos-updates mag-vanzelf 2>/dev/null; then
+    WEL=()
+    for id in "${TE_DOEN[@]}"; do
+        if is_vervanger "$id"; then
+            WEL+=("$id")
+        else
+            # Onthouden dat er iets is overgeslagen: zet je updates later weer op 'vanzelf', dan komt het alsnog (U320).
+            touch "$OVERGESLAGEN"
+        fi
+    done
+    TE_DOEN=("${WEL[@]}")
+fi
+
+if [ "${#TE_DOEN[@]}" -eq 0 ]; then
+    # Niets te doen (de gewone toestand na de eerste keer): meteen klaar, zonder op internet te wachten.
+    exit 0
+fi
+
+# Even wachten op internet. Niet met network-online.target in de dienst: dan wachtte het opstarten (en dus het
+# inloggen) op het netwerk, ook lang na de eerste keer (U312). nm-online vraagt NetworkManager zelf of er een
+# verbinding is, en wacht hooguit twee minuten.
 nm-online -q -t 120 >/dev/null 2>&1 || true
 
 # Niet over een verbinding met een databundel (telefoon-hotspot): dat is al gauw een paar gigabyte. Dan over
@@ -49,11 +120,28 @@ flatpak remote-add --if-not-exists --system flathub https://dl.flathub.org/repo/
 # minuten opnieuw mislukken en de Winkel "ben je online?" zeggen (U466).
 flatpak remote-modify --system --enable flathub 2>/dev/null || true
 
-if flatpak install --system --noninteractive --or-update flathub "${APPS[@]}"; then
+# Elke app apart (regel 4). Gelukt: meteen onthouden, ook als een volgende app nog mislukt.
+mislukt=0
+gelukt=0
+for id in "${TE_DOEN[@]}"; do
+    if flatpak install --system --noninteractive --or-update flathub "$id"; then
+        echo "$id" >>"$KLAARGEZET"
+        gelukt=1
+    else
+        echo "BugOS: $id installeren lukte nog niet, straks opnieuw." >&2
+        mislukt=1
+    fi
+done
+
+if [ "$gelukt" = 1 ]; then
     # De BugOS-stijl ook voor deze apps (Kvantum en Breeze-GTK in de Flatpak-doos).
     /usr/bin/bugos-flatpak-style || true
-    touch "$KLAAR" "$KLAAR2"
-else
-    echo "BugOS: apps installeren lukte nog niet, volgende keer opnieuw." >&2
-    exit 1
 fi
+if [ "$mislukt" = 1 ]; then
+    exit 1   # Restart=on-failure: over vijf minuten de apps die nog niet lukten
+fi
+touch "$KLAAR"
+# Ook het 'klaar' van de vorige versie: ga je ooit terug naar een oudere BugOS (vorige versie bij het opstarten), dan
+# zet die oude dienst (ConditionPathExists=!standaard-apps-2) niet alles nog eens neer.
+touch "$OUD_KLAAR2"
+exit 0

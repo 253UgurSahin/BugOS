@@ -94,6 +94,11 @@ apps.mkdir(parents=True)
                                               "Categories=System;\nIcon=folder\n")
 (apps / "tr.desktop").write_text("[Desktop Entry]\nType=Application\nName=Sistem İzleyicisi\nCategories=System;\n")
 (apps / "geheim.desktop").write_text("[Desktop Entry]\nType=Application\nName=Geheim\nNoDisplay=true\n")
+# Een programma met een eigen BugOS-naam, en een waarvan de uitleg de naam herhaalt.
+(apps / "org.kde.okular.desktop").write_text("[Desktop Entry]\nType=Application\nName=Okular\n"
+                                              "GenericName=Document Viewer\nCategories=Office;\nIcon=okular\n")
+(apps / "dubbel.desktop").write_text("[Desktop Entry]\nType=Application\nName=Terminal\nGenericName=Terminal\n"
+                                     "Categories=System;\n")
 (TMP / "thuis").mkdir()
 (TMP / "data").mkdir()
 
@@ -114,7 +119,13 @@ _tr = next((a for a in data["apps"] if a["naam"] == "Sistem İzleyicisi"), None)
 klopt(_tr is not None and "izleyici" in _tr["zoek"],
       f"U268: de zoektekst van 'Sistem İzleyicisi' bevat 'izleyici' (Turkse İ), zodat het startmenu hem vindt ({_tr and _tr['zoek']!r})")
 namen = [a["naam"] for a in data["apps"] if a["soort"] == "app"]
-klopt(namen == ["Bestanden", "Firefox", "Sistem İzleyicisi", "Steam"], f"gegevens: apps op naam, verborgen niet ({namen})")
+klopt(namen == ["Bestanden", "Documenten bekijken", "Firefox", "Sistem İzleyicisi", "Steam", "Terminal"],
+      f"gegevens: apps op naam, verborgen niet ({namen})")
+_ok = next((a for a in data["apps"] if a["id"] == "org.kde.okular.desktop"), {})
+klopt(_ok.get("uitleg") == "PDF's en andere documenten lezen" and "okular" in _ok.get("zoek", ""),
+      f"startmenu: Okular heet 'Documenten bekijken' met een eigen uitleg, en is als 'okular' te vinden ({_ok})")
+_db = next((a for a in data["apps"] if a["id"] == "dubbel.desktop"), {})
+klopt(_db.get("uitleg") == "", f"startmenu: een uitleg die alleen de naam herhaalt, valt weg ({_db.get('uitleg')!r})")
 fav = [a["id"] for a in data["favorieten"]]
 klopt(fav == ["firefox.desktop", "bugos-files.desktop", "steam.desktop"],
       f"favorieten: Firefox en Steam ook onder hun rpm-naam, zonder dubbelen ({fav})")
@@ -311,6 +322,196 @@ klopt(sd.niet_storen_tot_in_toekomst(_kde(datetime.now() + timedelta(hours=1)))
       and sd.niet_storen_tot_in_toekomst(_kde(_u + timedelta(hours=2), "12.345") + ",UTC")
       and not sd.niet_storen_tot_in_toekomst(_kde(_u - timedelta(hours=2)) + ",UTC"),
       "U072: snelmenu leest 'niet storen tot' met komma-seconden en tijdzone goed")
+
+# A-07 (VM-test): op Kinoite is /home een koppeling naar /var/home. HOME zegt '/home/test', recently-used.xbel
+# '/var/home/test/Documenten/...'. Het startmenu moet dan gewoon 'Documenten' tonen, niet het technische pad.
+_echt = TMP / "a07" / "var" / "home" / "test"
+(_echt / "Documenten" / "Werk").mkdir(parents=True)
+(TMP / "a07" / "home").symlink_to(_echt.parent)   # zoals Kinoite: /home -> var/home
+_oud_home = sd.HOME
+sd.HOME = TMP / "a07" / "home" / "test"
+try:
+    _namen = {
+        "via /var/home": sd.map_naam(_echt / "Documenten"),
+        "via /home": sd.map_naam(sd.HOME / "Documenten"),
+        "dieper": sd.map_naam(_echt / "Documenten" / "Werk"),
+        "thuismap": sd.map_naam(_echt),
+        "buiten": sd.map_naam(Path("/tmp")),
+        "lijkt erop": sd.map_naam(_echt.parent / "testen"),   # '/var/home/testen' is niet de thuismap van 'test'
+    }
+finally:
+    sd.HOME = _oud_home
+klopt(_namen["via /var/home"] == "Documenten" and _namen["via /home"] == "Documenten"
+      and _namen["dieper"] == "Documenten/Werk" and _namen["thuismap"] in ("Thuismap", "Home folder")
+      and _namen["buiten"] == "/tmp" and _namen["lijkt erop"].endswith("/testen"),
+      f"A-07: recente bestanden tonen 'Documenten', ook als het pad via /var/home loopt ({_namen})")
+
+# A-11 (VM-test): 'Game mode' (twee woorden), 'gamemode' en 'gamen' vinden ook 'Game-modus aan/uit', niet alleen
+# de pagina van Instellingen. Het startmenu zoekt elk woord los in 'zoek', dus elk woord moet erin staan.
+_spel = sd.lees_desktop(ROOT / "system_files/usr/share/applications/bugos-game-mode.desktop")
+_mist = [z for z in ("game mode", "gamemode", "gamen", "game-modus", "spelmodus")
+         if not _spel or not all(w in _spel["zoek"] for w in sd.zoeksleutel(z).split())]
+klopt(not _mist, f"A-11: zoeken op 'game mode', 'gamemode' en 'gamen' vindt 'Game-modus aan/uit' (mist: {_mist})")
+# A-14: 'Teksteditor' in het startmenu is de eenvoudige KWrite; Kate (voor programmeurs) houdt zijn eigen naam.
+# Is KWrite er niet, dan blijft Kate de Teksteditor (anders is er geen). sd.TAAL bepaalt de taal van t().
+_a14 = TMP / "a14" / "applications"
+_a14.mkdir(parents=True)
+(_a14 / "org.kde.kate.desktop").write_text("[Desktop Entry]\nType=Application\nName=Kate\nExec=kate %U\n")
+_kate_alleen = sd.lees_desktop(_a14 / "org.kde.kate.desktop") or {}
+klopt(_kate_alleen.get("naam") in ("Teksteditor", "Text editor"),
+      f"A-14: zonder KWrite blijft Kate de Teksteditor ({_kate_alleen.get('naam')!r})")
+(_a14 / "org.kde.kwrite.desktop").write_text("[Desktop Entry]\nType=Application\nName=KWrite\nExec=kwrite %U\n")
+_kwrite = sd.lees_desktop(_a14 / "org.kde.kwrite.desktop") or {}
+_kate = sd.lees_desktop(_a14 / "org.kde.kate.desktop") or {}
+klopt(_kwrite.get("naam") in ("Teksteditor", "Text editor") and _kate.get("naam", "").startswith("Kate (")
+      and "kwrite" in _kwrite.get("zoek", "") and "kate" in _kate.get("zoek", ""),
+      f"A-14: met KWrite is die de Teksteditor en heet Kate gewoon Kate ({_kwrite.get('naam')!r}, {_kate.get('naam')!r})")
+_mime = (ROOT / "system_files/etc/xdg/kde-mimeapps.list").read_text(encoding="utf-8")
+_pakk = (ROOT / "build_files/packages.txt").read_text(encoding="utf-8").split("\n")
+_stijl = (ROOT / "build_files/style.sh").read_text(encoding="utf-8")
+klopt("text/plain=org.kde.kwrite.desktop" in _mime and "kwrite" in _pakk
+      and 'hernoem org.kde.kwrite.desktop "Teksteditor"' in _stijl and "org.kde.kwrite.desktop org.kde.khelpcenter" not in _stijl,
+      "A-14: KWrite zit in het beeld, opent .txt-bestanden, heet Teksteditor en is niet meer verborgen")
+
+# 6. Het menu van de rechtermuisknop op een app (StartMenu.qml, appMenu).
+def wacht_op(tekst: str) -> bool:
+    """Wacht tot een los gestart programma in het logboek staat (los_starten wacht er niet op)."""
+    for _ in range(50):
+        if tekst in logboek():
+            return True
+        time.sleep(0.1)
+    return False
+
+
+# Firefox als Flatpak, zoals Flatpak hem klaarzet: in de exports-map in je thuismap (een Flatpak voor alleen jou),
+# met X-Flatpak, twee eigen acties en de Exec-regel van flatpak (met @@u %u @@). De Exec van de acties gebruikt
+# hier een nep-flatpak (op PATH), zodat we zien wat er echt gestart wordt.
+_fp = TMP / "thuis" / ".local" / "share" / "flatpak" / "exports" / "share" / "applications"
+_fp.mkdir(parents=True)
+(_fp / "org.mozilla.firefox.desktop").write_text(
+    "[Desktop Entry]\nType=Application\nName=Firefox\nCategories=Network;\nIcon=org.mozilla.firefox\n"
+    "Exec=flatpak run --branch=stable --arch=x86_64 --command=firefox --file-forwarding org.mozilla.firefox @@u %u @@\n"
+    "Actions=new-window;new-private-window;kapot;zonder-exec;\nX-Flatpak=org.mozilla.firefox\n\n"
+    "[Desktop Action new-window]\nName=Open a New Window\nName[nl]=Nieuw venster\n"
+    "Exec=flatpak run --branch=stable --arch=x86_64 --command=firefox --file-forwarding org.mozilla.firefox --new-window @@u %u @@\n\n"
+    "[Desktop Action new-private-window]\nName=Open a New Private Window\nName[nl]=Nieuw privévenster\n"
+    "Exec=flatpak run --branch=stable --arch=x86_64 --command=firefox --file-forwarding org.mozilla.firefox --private-window @@u %u @@\n\n"
+    "[Desktop Action zonder-exec]\nName=Zonder Exec\n\n"
+    "[Desktop Action niet-genoemd]\nName=Staat niet in Actions\nExec=flatpak run iets\n",
+    encoding="utf-8")
+nep("flatpak")
+_d6 = json.loads(draai())
+_ff6 = next((a for a in _d6["apps"] if a["id"] == "org.mozilla.firefox.desktop"), {})
+klopt([a["naam"] for a in _ff6.get("acties", [])] == ["Nieuw venster", "Nieuw privévenster"],
+      f"app-menu: Firefox uit de Flatpak-map met zijn eigen acties in het Nederlands, zonder kapotte ({_ff6.get('acties')})")
+klopt(_ff6.get("verwijder") == "org.mozilla.firefox", f"app-menu: een Flatpak kun je verwijderen ({_ff6.get('verwijder')!r})")
+_st6 = next((a for a in _d6["apps"] if a["id"] == "steam.desktop"), {})
+klopt(_st6.get("acties") == [] and _st6.get("verwijder") == "",
+      f"app-menu: een gewone app zonder acties: geen acties en niet te verwijderen ({_st6.get('acties')}, {_st6.get('verwijder')!r})")
+_en6 = json.loads(draai(env_extra={"LC_ALL": "en_US.UTF-8", "LANGUAGE": ""}))
+_ffen = next((a for a in _en6["apps"] if a["id"] == "org.mozilla.firefox.desktop"), {})
+klopt([a["naam"] for a in _ffen.get("acties", [])] == ["Open a New Window", "Open a New Private Window"],
+      f"app-menu: in het Engels de gewone namen (Name) ({_ffen.get('acties')})")
+
+# De opdracht van een actie: veldcodes weg (%u), @@u @@ van flatpak blijft (zo verwacht flatpak het zonder bestand).
+klopt(sd.exec_argumenten("flatpak run --command=firefox --file-forwarding org.mozilla.firefox --private-window @@u %u @@")
+      == ["flatpak", "run", "--command=firefox", "--file-forwarding", "org.mozilla.firefox", "--private-window", "@@u", "@@"],
+      "app-menu: Exec van een Flatpak-actie: %u weg, de rest precies zoals het er staat")
+_ex = sd.exec_argumenten('prog %F --naam=%c %c %i "met spatie" --bestand=%f 100%% %k "a\\sb" c\\sd', "Mijn App", "mijn-icoon", "/pad/x.desktop")
+# \s is een spatie: tussen aanhalingstekens hoort hij bij het argument ("a b"), zonder splitst hij (c en d).
+klopt(_ex == ["prog", "--naam=", "Mijn App", "--icon", "mijn-icoon", "met spatie", "--bestand=", "100%", "/pad/x.desktop",
+              "a b", "c", "d"],
+      f"app-menu: veldcodes zoals de specificatie: %F/%f weg, %c naam, %i --icon, %% wordt %, %k het pad, \\s spatie ({_ex})")
+klopt(sd.exec_argumenten('prog "kapot') == [] and sd.exec_argumenten("prog; rm -rf ~") == ["prog;", "rm", "-rf", "~"],
+      "app-menu: een kapotte Exec start niets, en een ; is gewoon tekst (er komt geen shell aan te pas)")
+klopt(sd.actie_opdracht(_fp / "org.mozilla.firefox.desktop", "niet-genoemd") == []
+      and sd.actie_opdracht(_fp / "org.mozilla.firefox.desktop", "bestaat-niet") == []
+      and sd.actie_opdracht(TMP / "geen.desktop", "new-window") == [],
+      "app-menu: alleen acties die in Actions= staan kunnen starten (en geen bestand: niets)")
+LOG.write_text("")
+draai("--actie", str(_fp / "org.mozilla.firefox.desktop"), "new-private-window")
+klopt(wacht_op("flatpak run --branch=stable --arch=x86_64 --command=firefox --file-forwarding org.mozilla.firefox --private-window @@u @@"),
+      f"app-menu: 'Nieuw privévenster' start flatpak met --private-window ({logboek().splitlines()})")
+LOG.write_text("")
+draai("--actie", str(_fp / "org.mozilla.firefox.desktop"), "zonder-exec")
+time.sleep(0.3)
+klopt("flatpak" not in logboek(), "app-menu: een actie zonder Exec start niets")
+
+# Vastmaken aan Start en losmaken. Nu is er ook de Flatpak van Firefox: die telt voor 'org.mozilla.firefox.desktop'.
+_favb = TMP / "thuis" / ".config" / "bugos" / "favorieten.json"
+_v = json.loads(draai("--vastzetten", "tr.desktop"))
+_ids = [a["id"] for a in _v["favorieten"]]
+klopt(_ids[-1:] == ["tr.desktop"] and json.loads(_favb.read_text())[-1] == "tr.desktop"
+      and next(a for a in _v["apps"] if a["id"] == "tr.desktop")["vastgezet"] is True,
+      f"vastmaken aan Start: achteraan, in favorieten.json, en de app weet dat hij vastgezet is ({_ids})")
+klopt("org.mozilla.firefox.desktop" in json.loads(_favb.read_text()) and "bugos-store.desktop" in json.loads(_favb.read_text()),
+      "vastmaken aan Start: de standaardlijst blijft erin staan (ook apps die er nu niet zijn)")
+_v = json.loads(draai("--vastzetten", "tr.desktop"))
+klopt([a["id"] for a in _v["favorieten"]].count("tr.desktop") == 1, "vastmaken aan Start: twee keer vastmaken geeft geen dubbele tegel")
+_v = json.loads(draai("--losmaken", "firefox.desktop"))
+_ids = [a["id"] for a in _v["favorieten"]]
+_opgeslagen = json.loads(_favb.read_text())
+klopt("org.mozilla.firefox.desktop" not in _opgeslagen and "firefox.desktop" not in _ids and "org.mozilla.firefox.desktop" not in _ids
+      and all(not a.get("vastgezet") for a in _v["apps"] if "firefox" in a["id"]),
+      f"losmaken van Start: onder elke naam weg (rpm en Flatpak) ({_ids})")
+_voor = _favb.read_text()
+draai("--vastzetten", "../../etc/passwd")
+draai("--losmaken", "tr desktop")
+klopt(_favb.read_text() == _voor, "vastmaken aan Start: een vreemde naam (met / of een spatie) verandert niets")
+_v = json.loads(draai("--losmaken", "tr.desktop"))
+klopt("tr.desktop" not in [a["id"] for a in _v["favorieten"]], "losmaken van Start: de tegel is weg")
+
+# Vastmaken aan de taakbalk: de lijst van KDE's takenlijst uit het bestand van Plasma; veranderen via bugos-panel.
+_cfg = TMP / "cfg"
+_cfg.mkdir()
+_rc = _cfg / "plasma-org.kde.plasma.desktop-appletsrc"
+_rc.write_text("[Containments][2]\nplugin=org.kde.panel\n\n[Containments][2][Applets][5]\nplugin=org.kde.plasma.icontasks\n\n"
+               "[Containments][2][Applets][5][Configuration][General]\n"
+               "launchers=applications:bugos-files.desktop,file:///usr/share/applications/steam.desktop,preferred://browser\n"
+               "[Containments][2][Applets][6]\nplugin=org.bugos.taskbar\n")
+_tb = {"XDG_CONFIG_HOME": str(_cfg), "XDG_CACHE_HOME": str(TMP / "cache")}
+_g = json.loads(draai(env_extra=_tb))
+klopt(_g.get("taakbalk_kan") is False, "taakbalk: zonder bugos-panel geen 'Vastmaken aan taakbalk'")
+nep("bugos-panel", "ok:bugos-files.desktop,steam.desktop,tr.desktop")
+_g = json.loads(draai(env_extra=_tb))
+_op = {a["id"]: a.get("op_taakbalk") for a in _g["apps"] if a["soort"] == "app"}
+klopt(_g.get("taakbalk_kan") is True and _op.get("bugos-files.desktop") is True and _op.get("steam.desktop") is True
+      and _op.get("tr.desktop") is False,
+      f"taakbalk: leest de vastgezette apps van de takenlijst (ook als file://) ({_op})")
+LOG.write_text("")
+_g = json.loads(draai("--taakbalk", "vastmaken", "tr.desktop", env_extra=_tb))
+klopt("bugos-panel taakbalk vastmaken tr.desktop" in logboek()
+      and next(a for a in _g["apps"] if a["id"] == "tr.desktop")["op_taakbalk"] is True,
+      "taakbalk: vastmaken gaat via bugos-panel, en het menu ziet het meteen (ook voor Plasma zijn bestand bijwerkt)")
+_g = json.loads(draai(env_extra=_tb))
+klopt(next(a for a in _g["apps"] if a["id"] == "tr.desktop")["op_taakbalk"] is True,
+      "taakbalk: ook bij de volgende keer openen (Plasma schrijft zijn bestand pas later)")
+os.utime(_rc, (time.time() + 5, time.time() + 5))   # nu heeft Plasma zijn bestand bijgewerkt (zonder tr.desktop)
+_g = json.loads(draai(env_extra=_tb))
+klopt(next(a for a in _g["apps"] if a["id"] == "tr.desktop")["op_taakbalk"] is False,
+      "taakbalk: is het bestand van Plasma nieuwer, dan telt dat weer")
+LOG.write_text("")
+draai("--taakbalk", "losmaken", "org.mozilla.firefox.desktop", env_extra=_tb)
+klopt("bugos-panel taakbalk losmaken org.mozilla.firefox.desktop" in logboek()
+      and "bugos-panel taakbalk losmaken firefox.desktop" in logboek(),
+      "taakbalk: losmaken onder elke naam van de app (rpm en Flatpak)")
+LOG.write_text("")
+draai("--taakbalk", "vastmaken", "x';y.desktop", env_extra=_tb)
+klopt("bugos-panel" not in logboek(), "taakbalk: een vreemde naam gaat niet naar bugos-panel")
+_rc.write_text("[Containments][2]\nplugin=org.kde.panel\n")
+klopt(json.loads(draai(env_extra=_tb)).get("taakbalk_kan") is False,
+      "taakbalk: geen takenlijst op de taakbalk: geen 'Vastmaken aan taakbalk'")
+
+# Verwijderen: opent de Winkel op die app (met zijn eigen 'Weet je het zeker?'), verwijdert zelf niets.
+LOG.write_text("")
+nep("bugos-store")
+draai("--verwijder", "org.mozilla.firefox")
+klopt(wacht_op("bugos-store appstream://org.mozilla.firefox") and "flatpak" not in logboek(),
+      "verwijderen: opent de Winkel op die app (en roept zelf geen flatpak uninstall aan)")
+LOG.write_text("")
+draai("--verwijder", "org.mozilla.firefox; rm -rf ~")
+time.sleep(0.3)
+klopt("bugos-store" not in logboek(), "verwijderen: een vreemde naam opent niets")
 
 shutil.rmtree(TMP, ignore_errors=True)
 print()

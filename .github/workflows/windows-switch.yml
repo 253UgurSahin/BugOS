@@ -55,6 +55,13 @@ jobs:
           "Soort voor deze pc: $(Get-IsoSoort)"
           try { $gevonden = Get-IsoInfo 'main' } catch { "Downloads nog niet bereikbaar (repo is privé): $($_.Exception.Message)"; $gevonden = $null }
           if ($gevonden) { "Nieuwste ISO: $($gevonden.Versie) - $($gevonden.Info.delen.Count) stukjes" } else { "Nog geen ISO-release gevonden (dat is goed zolang er nog niets gepubliceerd is)." }
+          # Formaat 2 (FORMAT.md): alleen lezen. Een runner heeft geen wifi en vaak geen printers: een lege lijst is goed,
+          # een fout (een tikfout in de functie) laat de stap mislukken. Nooit wachtwoorden: daar vraagt niets om.
+          "Instellingen:"; Get-Instellingen | ConvertTo-Json -Depth 4
+          $wifi = @(Get-WifiNetwerken); "Wifi-netwerken (alleen namen): $($wifi.Count)"
+          try { $printers = @(Get-NetwerkPrinters); "Netwerkprinters: $($printers.Count)" } catch { "Printers niet te lezen (printerdienst uit?): $($_.Exception.Message)" }
+          $programmas = @(Get-Programmas); "Programma's: $($programmas.Count)"; $programmas | Select-Object -First 5 | ForEach-Object { "  $($_.naam) ($($_.versie))" }
+          "Browserprofielen: $(@(Get-ChromiumProfielen).Count) Chromium, $(@(Get-FirefoxProfielen).Count) Firefox"
 
       - name: Venster nakijken (plaatjes van elke pagina, 100% en 150%)
         shell: powershell

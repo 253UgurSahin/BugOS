@@ -7,12 +7,16 @@ Firefox bij elkaar, ook de losse tabbladen.
 Voor tests en foto's kan een nep-/proc gebruikt worden: BUGOS_PROC=/pad/naar/proc.
 
 Namen van apps en 'Opstarten' komen uit de .desktop-bestanden: dat staat in bugos_desktop.
+
+De pagina Details (voor wie helpt) toont elk proces los: details() maakt de regels, beeindig() stopt er een. Een
+proces van een ander (root, een ander account) kan niemand hier stoppen: dat weigert de kernel zelf al.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import pwd
 import re
 import signal
 import subprocess
@@ -76,6 +80,12 @@ BEKENDE_NAMEN = {  # achtergrond: gewone woorden in plaats van programmanamen
 
 def proc() -> Path:
     return Path(os.environ.get("BUGOS_PROC", "/proc"))
+
+
+def mijn_uid() -> int:
+    """Wie ben jij (het nummer van je account)? Op één plek, zodat een test als 'gewone gebruiker' kan draaien,
+    ook in een testcontainer die als root draait (review 5)."""
+    return os.getuid()
 
 
 def sys_map() -> Path:
@@ -198,11 +208,14 @@ class Proces:
     geheugen: int       # bytes (Pss als dat kan, anders RSS)
     eigen: bool         # van jou (dan mag je hem stoppen)
     groep: str          # het cgroup-pad
+    uid: int = -1       # van welk account (de echte gebruiker uit 'Uid:'), -1 als onbekend
+    start: int = 0      # wanneer hij begon (tikjes na het opstarten): zo herken je een hergebruikt nummer
+    staat: str = ""     # R (bezig), S (wacht), Z (zombie: al gestopt) ...
 
 
 def processen() -> list[Proces]:
     lijst = []
-    mijn = os.getuid()
+    mijn = mijn_uid()
     for map_ in proc().iterdir():
         if not map_.name.isdigit():
             continue
@@ -217,9 +230,10 @@ def processen() -> list[Proces]:
         # programma's met extra rechten (gamescope) en voor ssh-agent, ook al zijn ze van jou (U451).
         uid = next((r.split()[1] for r in lees(map_ / "status").splitlines() if r.startswith("Uid:")), "")
         try:
-            eigen = int(uid) == mijn if uid.isdigit() else map_.stat().st_uid == mijn
+            uid_ = int(uid) if uid.isdigit() else map_.stat().st_uid
         except OSError:
             continue
+        eigen = uid_ == mijn
         geheugen_ = 0
         if eigen:
             for regel in lees(map_ / "smaps_rollup").splitlines():
@@ -233,7 +247,7 @@ def processen() -> list[Proces]:
             if regel.startswith("0::"):
                 groep = regel[3:].strip()
         lijst.append(Proces(int(map_.name), naam, int(rest[1]), int(rest[11]) + int(rest[12]), geheugen_, eigen,
-                            groep))
+                            groep, uid_, int(rest[19]) if rest[19].isdigit() else 0, rest[0]))
     return lijst
 
 
@@ -284,6 +298,9 @@ class Meter:
 
     def __init__(self):
         self.vorige: dict | None = None
+        # De getallen van de laatste echte meting (voor een meting die te kort na de vorige komt).
+        self.procent: dict[int, float] = {}
+        self.snelheid = {"processor": 0.0, "schijf": 0.0, "schijf_bezig": 0.0, "binnen": 0.0, "buiten": 0.0}
 
     def meet(self) -> dict:
         nu = time.monotonic()
@@ -297,18 +314,36 @@ class Meter:
         v = self.vorige or gezien
         dt = max(nu - v["tijd"], 1e-6)
         d_totaal = max(totaal - v["totaal"], 1)
-        proc_procent = {p.pid: max(p.tijd - v["proc"].get(p.pid, p.tijd), 0) / d_totaal * 100 for p in lijst}
+        # Twee metingen vlak na elkaar (het venster komt net in beeld, en meet dan meteen opnieuw): dan zijn er te
+        # weinig tikjes om eerlijk te delen, en kwam er bijvoorbeeld '300%' uit voor Taakbeheer zelf. Dan houden we
+        # de getallen van de vorige meting, en meten we de volgende keer verder vanaf de oude (langere) basis.
+        te_kort = self.vorige is not None and d_totaal < 10 * aantal_kernen()
+        if te_kort:
+            proc_procent = {p.pid: self.procent.get(p.pid, 0.0) for p in lijst}
+            snel = dict(self.snelheid)
+        else:
+            # Nooit meer dan de hele computer (100%), en nooit minder dan niets.
+            proc_procent = {p.pid: min(max(p.tijd - v["proc"].get(p.pid, p.tijd), 0) / d_totaal * 100, 100.0)
+                            for p in lijst}
+            snel = {
+                "processor": min(max((bezig - v["bezig"]) / d_totaal * 100, 0.0), 100.0) if self.vorige else 0.0,
+                "schijf": max(((lezen - v["lezen"]) + (schrijven - v["schrijven"])) / dt, 0.0),
+                "schijf_bezig": min(max((schijf_ms - v["schijf_ms"]) / (dt * 1000) * 100, 0.0), 100.0)
+                if self.vorige else 0.0,
+                "binnen": max((binnen - v["binnen"]) / dt, 0.0), "buiten": max((buiten - v["buiten"]) / dt, 0.0),
+            }
         mem_totaal, mem_vrij = geheugen()
+        taken = groepeer(lijst, proc_procent)
         uitslag = {
-            "processor": (bezig - v["bezig"]) / d_totaal * 100 if self.vorige else 0.0,
+            **snel,
             "geheugen_totaal": mem_totaal, "geheugen_gebruikt": max(mem_totaal - mem_vrij, 0),
-            "schijf": ((lezen - v["lezen"]) + (schrijven - v["schrijven"])) / dt,
-            "schijf_bezig": min((schijf_ms - v["schijf_ms"]) / (dt * 1000) * 100, 100) if self.vorige else 0.0,
-            "binnen": (binnen - v["binnen"]) / dt, "buiten": (buiten - v["buiten"]) / dt,
             "temperatuur": temperatuur(), "videokaart": videokaart(),
-            "taken": groepeer(lijst, proc_procent),
+            "taken": taken,
+            "processen": details(lijst, proc_procent, taken),
         }
-        self.vorige = gezien
+        if not te_kort:
+            self.vorige = gezien
+            self.procent, self.snelheid = proc_procent, snel
         return uitslag
 
 
@@ -316,7 +351,7 @@ def _ander_account(groep: str) -> bool:
     """Hoort dit proces bij de sessie van een ander account (user-<nummer>.slice)? Niet: 'niet van jou volgens /proc':
     programma's met extra rechten (kwin_wayland) of ssh-agent zijn daar van root, maar wel van jou (U441)."""
     m = re.search(r"/user-(\d+)\.slice(?:/|$)", groep)
-    return bool(m) and int(m.group(1)) != os.getuid()
+    return bool(m) and int(m.group(1)) != mijn_uid()
 
 
 def groepeer(lijst: list[Proces], procent: dict[int, float]) -> list[Taak]:
@@ -356,21 +391,188 @@ def groepeer(lijst: list[Proces], procent: dict[int, float]) -> list[Taak]:
     return sorted(taken.values(), key=lambda x: (x.soort != "app", x.naam.lower()))
 
 
-def advies(processor: list[float], gebruikt: int, totaal: int, taken: list[Taak]) -> tuple[str, str]:
-    """('goed' of 'let_op', een zin in gewone woorden over hoe het gaat)."""
+# Wanneer de zin bovenaan zegt dat de processor het druk heeft (C-15). Met 'hysterese': erin bij een hogere waarde
+# dan eruit, zodat de zin niet elke twee seconden heen en weer springt bij een processor die rond de grens zit.
+#   zwaar ('let_op'): erin als het gemiddelde van de laatste twee metingen >= 80 %, eruit onder 65 % (drie metingen)
+#   druk  ('druk'):   erin als de laatste meting >= 50 %, eruit als drie metingen gemiddeld onder 35 %
+# Vroeger zei Taakbeheer pas iets na drie metingen boven 85 %: bij 86 % stond er nog 'Alles loopt soepel.'.
+ZWAAR_ERIN, ZWAAR_ERUIT = 80.0, 65.0
+DRUK_ERIN, DRUK_ERUIT = 50.0, 35.0
+
+
+def _gemiddeld(waarden: list[float]) -> float:
+    return sum(waarden) / len(waarden) if waarden else 0.0
+
+
+def advies(processor: list[float], gebruikt: int, totaal: int, taken: list[Taak],
+           vorige: str = "goed") -> tuple[str, str]:
+    """('goed', 'druk' of 'let_op', een zin in gewone woorden over hoe het gaat). vorige: wat de vorige keer de
+    uitslag was (voor de hysterese hierboven). De zin zegt ook wat er zo druk is (C-15)."""
     apps = [x for x in taken if x.soort == "app"] or taken
     if totaal and gebruikt / totaal > 0.9:
         zwaarste = max(apps, key=lambda x: x.geheugen, default=None)
         wie = t(f" {zwaarste.naam} gebruikt het meeste.", f" {zwaarste.naam} uses the most.") if zwaarste else ""
         return "let_op", t("Het geheugen is bijna vol. Sluit een paar programma's die je niet gebruikt." + wie,
                            "Memory is almost full. Close a few programs you are not using." + wie)
-    laatste = processor[-3:]
-    if len(laatste) == 3 and min(laatste) > 85:
-        zwaarste = max(apps, key=lambda x: x.processor, default=None)
-        wie = t(f" {zwaarste.naam} gebruikt de meeste kracht.", f" {zwaarste.naam} uses the most power.") \
-            if zwaarste else ""
-        return "let_op", t("Je computer heeft het druk." + wie, "Your computer is busy." + wie)
-    return "goed", t("Alles loopt soepel.", "Everything is running smoothly.")
+    nu = processor[-1] if processor else 0.0   # wat de processor nu doet (dat getal staat ook in beeld)
+    zwaar = _gemiddeld(processor[-2:])         # 'heel druk' pas na twee hoge metingen: één piek is nog geen drukte
+    rustiger = _gemiddeld(processor[-3:])      # om eruit te gaan: pas als het echt rustiger is
+    if zwaar >= ZWAAR_ERIN or (vorige == "let_op" and rustiger >= ZWAAR_ERUIT):
+        niveau = "let_op"
+    elif nu >= DRUK_ERIN or (vorige in ("druk", "let_op") and rustiger >= DRUK_ERUIT):
+        niveau = "druk"
+    else:
+        return "goed", t("Alles loopt soepel.", "Everything is running smoothly.")
+    # Wat er zo druk is: van alles wat draait (ook de achtergrond) het zwaarste, als dat echt iets doet.
+    zwaarste = max(taken, key=lambda x: x.processor, default=None)
+    if zwaarste is not None and zwaarste.processor >= 5:
+        wie = t(f" {zwaarste.naam} gebruikt de meeste kracht ({zwaarste.processor:.0f}%).",
+                f" {zwaarste.naam} uses the most power ({zwaarste.processor:.0f}%).")
+    else:
+        wie = ""
+    if niveau == "let_op":
+        return "let_op", t(f"Je computer heeft het druk: de processor werkt voor {nu:.0f}%." + wie,
+                           f"Your computer is busy: the processor is at {nu:.0f}%." + wie)
+    return "druk", t(f"Je computer is flink bezig: de processor werkt voor {nu:.0f}%." + wie,
+                     f"Your computer is working hard: the processor is at {nu:.0f}%." + wie)
+
+
+# ================================================================ details ===
+# De pagina Details: elk proces los, zoals 'Details' in Taakbeheer van Windows. Voor wie helpt ("draait er iets dat
+# Isolated Web Co heet?"). Dezelfde regels als hierboven: wat bij BugOS hoort of niet van jou is, kun je niet stoppen.
+
+_NAMEN: dict[int, str] = {}   # uid -> loginnaam (verandert niet terwijl Taakbeheer open is)
+
+
+def volle_naam(pid: int, comm: str) -> str:
+    """De kernel kort een procesnaam in tot 15 tekens ('xdg-desktop-por'). Dan de naam van het programma zelf
+    (/usr/libexec/xdg-desktop-portal-kde), als die met de korte naam begint. Een programma dat zijn titel
+    herschrijft ('systemd-userwork: waiting...') houdt alleen het eerste woord (review 13). Anders de korte naam:
+    firewalld draait als /usr/bin/python3, en Firefox noemt zijn tabbladen zelf 'Isolated Web Co'."""
+    if len(comm) != 15:
+        return comm
+    # Kandidaten, de beste eerst (C-17): het programma zelf (eerste woord van cmdline), dan een script dat door een
+    # tolk draait ('/usr/bin/python3 /usr/bin/bugos-task-manager': comm is dan 'bugos-task-mana', het eerste woord
+    # 'python3'), en als laatste het bestand achter /proc/<pid>/exe. Telt alleen als het met de korte naam begint:
+    # zo wordt een zelfgekozen titel als 'Isolated Web Co' (Firefox) nooit 'firefox'.
+    delen = [d for d in lees(proc() / str(pid) / "cmdline").split("\0") if d]
+    kandidaten = []
+    if delen:
+        kandidaten.append(re.split(r"[\s:]", os.path.basename(delen[0]), maxsplit=1)[0])
+        kandidaten += [os.path.basename(d) for d in delen[1:4] if not d.startswith("-")]
+    try:
+        kandidaten.append(os.path.basename(os.readlink(proc() / str(pid) / "exe")).removesuffix(" (deleted)"))
+    except OSError:
+        pass
+    return next((k for k in kandidaten if k.startswith(comm) and len(k) > len(comm)), comm)
+
+
+def eigenaar_naam(uid: int) -> str:
+    """Van wie: 'jij', 'systeem' (root) of de naam van het account (polkitd, een ander gezinslid)."""
+    if uid < 0:
+        return "?"
+    if uid == mijn_uid():
+        return t("jij", "you")
+    if uid == 0:
+        return t("systeem", "system")
+    if uid not in _NAMEN:
+        try:
+            _NAMEN[uid] = pwd.getpwuid(uid).pw_name
+        except (KeyError, OverflowError):
+            _NAMEN[uid] = str(uid)
+    return _NAMEN[uid]
+
+
+def proces_beschermd(p: Proces) -> bool:
+    """Mag dit ene proces niet gestopt worden? Dezelfde regels als groepeer() per taak."""
+    soort, _sleutel, eenheid = soort_van(p.groep)
+    return (not p.eigen or _ander_account(p.groep) or p.naam[:15] in BESCHERMD_KORT or p.pid == os.getpid()
+            or soort == "systeem" or bool(BESCHERMDE_EENHEID.match(eenheid)))
+
+
+@dataclass
+class ProcesRegel:
+    """Eén regel op de pagina Details."""
+    pid: int
+    naam: str
+    uid: int
+    eigenaar: str        # 'jij', 'systeem' of een loginnaam
+    hoort_bij: str       # de naam van de taak (Firefox, Netwerk ...), leeg als die gelijk is aan de naam
+    processor: float     # procent van de hele computer
+    geheugen: int        # bytes
+    eigen: bool          # van jou
+    beschermd: bool      # kan hier niet gestopt worden
+    start: int           # om een hergebruikt procesnummer te herkennen
+    app: bool = False    # het hoofdproces van een programma met vensters (dan eerst netjes sluiten)
+
+
+def details(lijst: list[Proces], procent: dict[int, float], taken: list[Taak]) -> list[ProcesRegel]:
+    """Een regel per proces, met de taak waar hij bij hoort (zoals op de pagina Programma's)."""
+    taak_van = {pid: taak for taak in taken for pid in taak.pids}
+    pids_van = {id(taak): set(taak.pids) for taak in taken}
+    comm = {p.pid: p.naam for p in lijst}
+    regels = []
+    for p in lijst:
+        naam = volle_naam(p.pid, p.naam)
+        taak = taak_van.get(p.pid)
+        hoort_bij = ""
+        if taak is not None:
+            hoort_bij = taak.naam
+            eerste = taak.pids[0] if taak.pids else p.pid
+            if hoort_bij == comm.get(eerste):   # een systeemtaak zonder eigen woord: de volle naam (review 12)
+                hoort_bij = volle_naam(eerste, hoort_bij)
+            if hoort_bij == naam:
+                hoort_bij = ""                 # alleen de naam nog eens: dan liever niets
+        regels.append(ProcesRegel(p.pid, naam, p.uid, eigenaar_naam(p.uid), hoort_bij, procent.get(p.pid, 0.0),
+                                  p.geheugen, p.eigen, proces_beschermd(p), p.start,
+                                  # Het hoofdproces van een programma (zijn ouder hoort er niet bij) heeft de vensters;
+                                  # een tabblad van Firefox ('Isolated Web Co') niet.
+                                  bool(taak and taak.soort == "app" and p.ppid not in pids_van[id(taak)])))
+    return regels
+
+
+def zelfde_proces(pid: int, start: int) -> bool:
+    """Draait dit nummer nog, en is het nog hetzelfde proces (zelfde starttijd)? Een zombie (Z) is al gestopt."""
+    stat = lees(proc() / str(pid) / "stat")
+    if ")" not in stat:
+        return False
+    rest = stat[stat.rfind(")") + 2:].split()
+    if len(rest) < 20 or rest[0] == "Z" or not rest[19].isdigit():
+        return False
+    return int(rest[19]) == start
+
+
+def _signaal(pid: int, start: int, sig: int) -> None:
+    """Stuur het signaal. Op de echte computer via een pidfd: dan kan het nummer tussen kijken en stoppen niet
+    ineens van een ander proces zijn (review 15)."""
+    if str(proc()) == "/proc" and hasattr(os, "pidfd_open") and hasattr(signal, "pidfd_send_signal"):
+        fd = os.pidfd_open(pid)
+        try:
+            if not zelfde_proces(pid, start):
+                raise ProcessLookupError(pid)
+            signal.pidfd_send_signal(fd, sig)
+        finally:
+            os.close(fd)
+        return
+    os.kill(pid, sig)
+
+
+def beeindig(regel: ProcesRegel, hard: bool = False) -> str:
+    """Eén proces stoppen: netjes (TERM) of hard (KILL). Geeft 'klaar', 'weg' (draait niet meer, of het nummer is
+    nu van een ander proces), 'beschermd', 'mag_niet' (niet van jou) of 'fout'."""
+    if regel.beschermd:
+        return "beschermd"
+    if not zelfde_proces(regel.pid, regel.start):
+        return "weg"
+    try:
+        _signaal(regel.pid, regel.start, signal.SIGKILL if hard else signal.SIGTERM)
+    except ProcessLookupError:
+        return "weg"
+    except PermissionError:
+        return "mag_niet"
+    except OSError:
+        return "fout"
+    return "klaar"
 
 
 def stop(pids: list[int], hard: bool = False) -> int:

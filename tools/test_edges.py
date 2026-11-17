@@ -254,6 +254,27 @@ for wf in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
             los.append(f"{wf.name}:{nr} {m.group(1)}@{m.group(2)}")
 klopt(not los, "workflows: elke actie van buiten GitHub staat op een vaste commit" + (f"; los: {los}" if los else ""))
 
+# 2026-11-17: in build.yml stond een stapnaam met "versie 2: instellingen" zonder aanhalingstekens. Dan is het hele
+# bestand ongeldige YAML: GitHub weigerde de bouw (ook met de hand), en elke push gaf een 'mislukte' ronde zonder jobs.
+# Altijd: een '- name:' of 'description:' met nog een ': ' erin moet tussen aanhalingstekens. En als PyYAML er is
+# (op GitHub wel), het hele bestand echt inlezen.
+_ongeldig = []
+for wf in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+    for nr, regel in enumerate(wf.read_text(encoding="utf-8").splitlines(), 1):
+        m = re.match(r"^\s*(?:- )?(?:name|description):\s+(.*)$", regel)
+        if m and not m.group(1).startswith(("'", '"', "|", ">", "${{")) and ": " in m.group(1).split(" #")[0]:
+            _ongeldig.append(f"{wf.name}:{nr}")
+    try:
+        import yaml  # noqa: PLC0415
+    except ImportError:
+        continue
+    try:
+        yaml.safe_load(wf.read_text(encoding="utf-8"))
+    except yaml.YAMLError as e:
+        _ongeldig.append(f"{wf.name}: {str(e).splitlines()[0]}")
+klopt(not _ongeldig, "workflows: elk bestand is geldige YAML (geen ': ' in een naam zonder aanhalingstekens)"
+      + (f"; fout: {_ongeldig}" if _ongeldig else ""))
+
 # U359-U364: wat BugOS belooft, klopt met wat het doet (de Windows-plaatjes, de verborgen opstartlijst, CI-uitleg).
 _ws = (ROOT / ".github/workflows/windows-switch.yml").read_text(encoding="utf-8")
 _test = (ROOT / "docs/TESTING.md").read_text(encoding="utf-8")

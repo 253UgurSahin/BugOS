@@ -9,8 +9,8 @@
 // rechts op "niets" komt hier terecht.
 //
 // Het onderdeel tekent zelf niets: het is alleen ruimte met een menu.
-// Plasma zet onder onze twee regels vanzelf zijn eigen keuzes (taakbalk aanpassen,
-// widgets toevoegen); die laten we staan voor wie meer wil.
+// De eigen regels van Plasma (taakbalk aanpassen, widgets toevoegen) staan er niet onder: taakbalk en
+// bureaublad staan op slot (bugos-panel, functie slot). Voor gevorderden: 'bugos-panel bewerken aan'.
 
 import QtQuick
 import QtQuick.Layouts

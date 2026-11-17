@@ -19,7 +19,7 @@ Rectangle {
         ? Math.min(1.5, Math.max(1, Qt.application.font.pointSize / 10)) : 1
 
     // Gegevens van bugos-start-data (apps, favorieten, recent, gebruiker).
-    property var gegevens: ({ apps: [], favorieten: [], recent: [], gebruiker: { naam: "" } })
+    property var gegevens: ({ apps: [], favorieten: [], recent: [], gebruiker: { naam: "" }, taakbalk_kan: false })
     property bool nederlands: true
     // Hoe een pictogram getekend wordt (in Plasma: Kirigami.Icon).
     property Component icoonTekenaar: Image {
@@ -34,6 +34,12 @@ Rectangle {
     signal openBestand(string pad)
     signal aanUit(string actie)
     signal sluiten()
+    // Uit het menu van de rechtermuisknop op een app (appMenu, onderaan). main.qml geeft ze door aan
+    // bugos-start-data (--actie, --vastzetten/--losmaken, --taakbalk, --verwijder).
+    signal appActie(string pad, string actie)    // een eigen actie van de app, bv. Firefox 'new-private-window'
+    signal vastzetten(string id, bool aan)       // Vastmaken aan Start (aan) of Losmaken van Start
+    signal taakbalk(string id, bool aan)         // Vastmaken aan taakbalk (aan) of Losmaken van taakbalk
+    signal verwijderApp(string flatpak)          // de Winkel openen op die app (daar staat 'Verwijderen')
 
     // Huisstijl
     readonly property bool donker: palette.window.hslLightness < 0.5
@@ -114,18 +120,132 @@ Rectangle {
         const lijst = gevonden()
         if (lijst.length > 0) { start(lijst[0].pad); sluiten() }
     }
+    // ------------------------------------------- menu van de rechtermuisknop ---
+    // Rechtermuisknop (of de Menu-toets, Shift+F10, of lang ingedrukt houden) op een app: een menu voor DIE app,
+    // zoals in Windows 11. Vroeger kwam hier het menu van de Start-knop zelf (Taakbeheer, Instellingen, ...),
+    // bij elke app hetzelfde: niemand vond daar 'Nieuw privévenster' van Firefox.
+    // appMenuApp: de app waar het menu nu bij hoort. appMenuRegels: wat erin staat, op volgorde; elke regel is
+    // { soort, tekst, icoon, id, lijn } (lijn: een scheidingslijn erboven).
+    property var appMenuApp: null
+    property var appMenuRegels: []
+    // De plek in de lijsten, om terug te zetten als na 'Vastmaken' de nieuwe gegevens komen (anders sprong
+    // 'Alle apps' na elke klik terug naar boven, want een nieuw model begint bovenaan).
+    property var plekTerug: null
+
+    // Is dit de toets voor het menu van de rechtermuisknop? De Menu-toets (naast de rechter Ctrl) of Shift+F10,
+    // net als in Windows.
+    function isMenuToets(e) {
+        return e.key === Qt.Key_Menu || (e.key === Qt.Key_F10 && (e.modifiers & Qt.ShiftModifier))
+    }
+
+    // Wat er in het menu staat, voor deze app. Apart van toonAppMenu, zodat de test het kan nagaan.
+    function appMenuVoor(app) {
+        const regels = [{ soort: "open", tekst: tr("Openen", "Open"), icoon: app.icoon || "" }]
+        // Een pagina van Instellingen (in de zoekresultaten) kun je alleen openen: hij staat niet in 'Alle apps'
+        // en kan niet op Start of de taakbalk.
+        if (app.soort === "instelling")
+            return regels
+        // De eigen acties van de app (uit zijn .desktop-bestand, in je eigen taal): 'Nieuw venster',
+        // 'Nieuw privévenster', ... Zonder eigen pictogram: dat van de app.
+        const acties = app.acties || []
+        for (let i = 0; i < acties.length; i++)
+            regels.push({ soort: "actie", tekst: acties[i].naam, icoon: acties[i].icoon || app.icoon || "", id: acties[i].id,
+                          lijn: i === 0 })
+        regels.push(app.vastgezet
+            ? { soort: "start", tekst: tr("Losmaken van Start", "Unpin from Start"), icoon: "window-unpin", lijn: true }
+            : { soort: "start", tekst: tr("Vastmaken aan Start", "Pin to Start"), icoon: "window-pin", lijn: true })
+        // Alleen als er een takenlijst op de taakbalk staat (bugos-start-data: taakbalk_kan).
+        if (gegevens.taakbalk_kan)
+            regels.push(app.op_taakbalk
+                ? { soort: "taakbalk", tekst: tr("Losmaken van taakbalk", "Unpin from taskbar"), icoon: "window-unpin" }
+                : { soort: "taakbalk", tekst: tr("Vastmaken aan taakbalk", "Pin to taskbar"), icoon: "window-pin" })
+        // Alleen apps uit de Winkel (Flatpak) kun je verwijderen; de onderdelen van BugOS zelf niet.
+        if (app.verwijder)
+            regels.push({ soort: "verwijder", tekst: tr("Verwijderen", "Uninstall"), icoon: "edit-delete", lijn: true })
+        return regels
+    }
+
+    // Het menu openen bij een app. bron: het item waar je klikte (tegel of regel), x/y: de plek daarin.
+    // viaToetsenbord: dan staat de markering meteen op 'Openen' (met de pijltjes verder), met de muis nog niet.
+    function toonAppMenu(app, bron, x, y, viaToetsenbord) {
+        if (!app)
+            return
+        appMenuApp = app
+        appMenuRegels = appMenuVoor(app)
+        appMenu.terugFocus = bron
+        appMenu.viaToetsenbord = !!viaToetsenbord
+        // Waar: bij de muis (of bij de tegel), maar altijd helemaal binnen het startmenu. De pop-up van Plasma is
+        // een eigen venster: wat erbuiten valt, zou je niet zien. Past hij er onder de muis niet meer, dan erboven.
+        const p = bron ? bron.mapToItem(menu, x, y) : Qt.point(menu.width / 2, menu.height / 2)
+        const breed = appMenu.width
+        const hoog = appMenu.hoogteVoor(appMenuRegels)
+        appMenu.x = Math.max(8, Math.min(p.x, menu.width - breed - 8))
+        appMenu.y = p.y + hoog <= menu.height - 8 ? p.y : Math.max(8, p.y - hoog)
+        appMenu.open()
+    }
+
+    // Een regel uit het menu kiezen (klik, Enter of spatie).
+    function kiesAppMenu(index) {
+        const r = appMenuRegels[index]
+        const app = appMenuApp
+        if (!r || !app)
+            return
+        appMenu.close()
+        if (r.soort === "open") {
+            start(app.pad); sluiten()
+        } else if (r.soort === "actie") {
+            appActie(app.pad, r.id); sluiten()
+        } else if (r.soort === "start") {
+            // Het startmenu blijft open (zoals Windows): je ziet de tegel er meteen bij komen of verdwijnen.
+            bewaarPlek(); vastzetten(app.id, !app.vastgezet)
+        } else if (r.soort === "taakbalk") {
+            bewaarPlek(); taakbalk(app.id, !app.op_taakbalk)
+        } else if (r.soort === "verwijder") {
+            verwijderApp(app.verwijder); sluiten()
+        }
+    }
+
+    function bewaarPlek() {
+        plekTerug = { begin: begin.contentY, alle: alleLijst.contentY, alleIndex: alleLijst.currentIndex,
+                      zoek: zoekLijst.contentY }
+    }
+    function herstelPlek() {
+        const p = plekTerug
+        plekTerug = null
+        if (!p)
+            return
+        begin.contentY = Math.min(p.begin, Math.max(0, begin.contentHeight - begin.height))
+        alleLijst.currentIndex = p.alleIndex
+        alleLijst.contentY = p.alle
+        zoekLijst.contentY = p.zoek
+    }
+    // Nieuwe gegevens na 'Vastmaken' of 'Losmaken': de lijsten weer op dezelfde plek (na het opbouwen).
+    onGegevensChanged: if (plekTerug) Qt.callLater(herstelPlek)
+
     function terugNaarBegin() {
+        appMenu.close()
         zoekveld.text = ""
         stapel.currentIndex = 0
         datumTekst = datum()
+        // Elke keer bovenaan beginnen: anders bleef de beginpagina gescrold staan en was de bovenste rij
+        // vastgezette apps half weg ('LibreOffice Writer' afgeknipt) (A-05, VM-test).
+        begin.contentY = 0
+        alleLijst.positionViewAtBeginning()
         zoekveld.forceActiveFocus()
     }
 
     implicitWidth: 660
-    // Plasma maakt de pop-up zo hoog als dit: dus de echte hoogte van de inhoud, met een minimum en maximum.
-    implicitHeight: Math.max(420, Math.min(680, gewensteHoogte))
-    // Zo hoog als de beginpagina nodig heeft (vastgezet + recent), zoals Windows 11: geen groot leeg vlak
-    // onder twee rijen apps. main.qml houdt een minimum en een maximum aan (dan scrolt de beginpagina).
+    // Hoogte van de pop-up (A-05/A-06, VM-test). Vroeger zo hoog als de beginpagina nodig had, met 420 als minimum.
+    // In de VM werd de pop-up dan maar ~450 px: 'Recent geopend' viel onder de rand en 'Alle apps' liet ~3 regels zien.
+    // Nu, zoals het startmenu van Windows 11, een vaste ruime hoogte die bij beginpagina, 'Alle apps' en zoeken
+    // gelijk blijft (geen menu dat verspringt als je van pagina wisselt): vasteHoogte. Is de inhoud hoger (grote
+    // letters), dan groeit hij mee, maar nooit hoger dan maxHoogte: main.qml zet die naar het scherm, zodat het
+    // menu op 1280x800 boven de taakbalk past. Past het dan nog niet, dan scrolt de beginpagina (met een zichtbare
+    // schuifbalk).
+    property int maxHoogte: 680
+    readonly property int vasteHoogte: 640
+    implicitHeight: Math.min(maxHoogte, Math.max(vasteHoogte, gewensteHoogte))
+    // Wat de beginpagina helemaal nodig heeft (vastgezet + recent), om te kunnen groeien bij grote letters.
     readonly property int gewensteHoogte: 22 * 2 + kopRij.implicitHeight + zoekveld.implicitHeight
         + beginKolom.implicitHeight + 1 + onderRij.implicitHeight + 16 * 4
     color: palette.window
@@ -181,6 +301,15 @@ Rectangle {
                 if (zoekLijst.visible && zoekLijst.count > 0) { zoekLijst.currentIndex = 0; zoekLijst.forceActiveFocus() }
                 else event.accepted = false
             }
+            // Menu-toets of Shift+F10 in het zoekveld: het menu van de bovenste treffer (die Enter ook opent).
+            Keys.onPressed: event => {
+                if (menu.isMenuToets(event) && zoekLijst.visible && zoekLijst.count > 0) {
+                    zoekLijst.currentIndex = 0
+                    const r = zoekLijst.itemAtIndex(0)
+                    menu.toonAppMenu(zoekLijst.model[0], r, 24, r ? r.height / 2 : 0, true)
+                    event.accepted = true
+                }
+            }
             background: Rectangle {
                 radius: menu.o.rKnop
                 color: menu.o.vlak
@@ -211,6 +340,11 @@ Rectangle {
             keyNavigationEnabled: true
             Keys.onPressed: event => {
                 if (event.key === Qt.Key_Up && currentIndex <= 0) { zoekveld.forceActiveFocus(); event.accepted = true }
+                else if (menu.isMenuToets(event) && currentItem) {
+                    // Menu-toets of Shift+F10 op de gemarkeerde treffer: zijn eigen menu.
+                    menu.toonAppMenu(model[currentIndex], currentItem, 24, currentItem.height / 2, true)
+                    event.accepted = true
+                }
                 else menu.naarZoekveld(event)
             }
             delegate: AppRegel {
@@ -218,6 +352,8 @@ Rectangle {
                 app: modelData
                 gemarkeerd: ListView.isCurrentItem
             }
+            // Meer treffers dan er passen ('LibreOffice': Writer stond onderaan buiten beeld): laat het zien (A-06).
+            ScrollBar.vertical: ScrollBar { policy: zoekLijst.contentHeight > zoekLijst.height ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff }
             Label {
                 anchors.centerIn: parent
                 visible: zoekLijst.count === 0
@@ -242,7 +378,9 @@ Rectangle {
                 contentWidth: width
                 contentHeight: beginKolom.implicitHeight
                 boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: ScrollBar { policy: begin.contentHeight > begin.height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff }
+                // Altijd zichtbaar als er meer is dan past: 'AsNeeded' toont hem pas tijdens het scrollen, en dan zag
+                // je niet dat er onder 'Vastgezet' nog 'Recent geopend' stond (A-05, VM-test).
+                ScrollBar.vertical: ScrollBar { policy: begin.contentHeight > begin.height ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff }
                 ColumnLayout {
                     id: beginKolom
                     width: begin.width
@@ -265,6 +403,7 @@ Rectangle {
                         Repeater {
                             model: menu.gegevens.favorieten
                             delegate: AppTegel {
+                                objectName: "tegel" + index   // voor tools/qml-test.py (rechtermuisknop)
                                 app: modelData
                                 Layout.fillWidth: true; Layout.preferredWidth: 1; Layout.minimumWidth: 0
                                 Layout.minimumHeight: implicitHeight
@@ -315,6 +454,16 @@ Rectangle {
                     spacing: 2
                     keyNavigationEnabled: true
                     model: menu.alleAppsLijst()
+                    // Menu-toets of Shift+F10 op de gemarkeerde app: zijn eigen menu (de lijst heeft de focus,
+                    // niet de regel zelf). Andere toetsen gaan, zoals altijd, naar het zoekveld (menu, Keys).
+                    Keys.onPressed: event => {
+                        if (menu.isMenuToets(event) && currentItem) {
+                            menu.toonAppMenu(model[currentIndex], currentItem, 24, currentItem.height / 2, true)
+                            event.accepted = true
+                        } else {
+                            event.accepted = false
+                        }
+                    }
                     section.property: "groep"
                     section.delegate: Label {
                         required property string section
@@ -328,7 +477,8 @@ Rectangle {
                         leftPadding: 8
                     }
                     delegate: AppRegel { width: alleLijst.width; app: modelData; gemarkeerd: ListView.isCurrentItem && alleLijst.activeFocus }
-                    ScrollBar.vertical: ScrollBar {}
+                    // Een lange lijst: de schuifbalk altijd laten zien, dan weet je dat er meer is (A-06, VM-test).
+                    ScrollBar.vertical: ScrollBar { policy: alleLijst.contentHeight > alleLijst.height ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff }
                 }
             }
         }
@@ -343,49 +493,73 @@ Rectangle {
             id: onderRij
             Layout.fillWidth: true
             spacing: 8
-            Rectangle {
-                id: avatar
-                width: 32; height: 32; radius: 16
-                readonly property string foto: (menu.gegevens.gebruiker && menu.gegevens.gebruiker.foto) ? menu.gegevens.gebruiker.foto : ""
-                gradient: Gradient {
-                    GradientStop { position: 0.0; color: menu.o.verloopBegin }
-                    GradientStop { position: 1.0; color: menu.o.verloopEind }
+            // Jij (foto/letter en naam) als één knop: opent Instellingen > Account (de pagina 'inloggen': naam,
+            // foto en wachtwoord), zoals de accountknop van Windows 11. Vroeger deed een klik hierop niets (A-17).
+            AbstractButton {
+                id: ikKnop
+                objectName: "ikKnop"
+                Layout.fillWidth: true
+                implicitHeight: 40
+                hoverEnabled: true
+                Accessible.name: menu.tr("Account-instellingen", "Account settings")
+                ToolTip.visible: hovered
+                ToolTip.text: Accessible.name
+                onClicked: { menu.start("instelling:inloggen"); menu.sluiten() }
+                Keys.onReturnPressed: clicked()
+                Keys.onEnterPressed: clicked()
+                background: Rectangle {
+                    radius: menu.o.rKnop
+                    color: ikKnop.hovered || ikKnop.activeFocus ? menu.zweef : "transparent"
+                    border.width: ikKnop.activeFocus ? 2 : 0   // ook met het toetsenbord goed te zien (U135)
+                    border.color: menu.rood
                 }
-                Label {
-                    anchors.centerIn: parent
-                    visible: fotoBeeld.status !== Image.Ready
-                    text: ((menu.gegevens.gebruiker && menu.gegevens.gebruiker.naam) || "?").charAt(0).toUpperCase()
-                    color: "white"
-                    font.family: menu.display
-                    font.weight: Font.DemiBold
-                    font.pixelSize: Math.round(14 * menu.schaal)
-                }
-                // Eigen foto (als die er is): in een rond venstertje
-                Item {
-                    anchors.fill: parent
-                    clip: true
-                    visible: fotoBeeld.status === Image.Ready
-                    Image {
-                        id: fotoBeeld
-                        anchors.fill: parent
-                        // De tijd erachter: een nieuwe foto onder dezelfde naam wordt dan echt opnieuw geladen (U112).
-                        source: avatar.foto === "" ? "" : "file://" + avatar.foto + "?" + (menu.gegevens.gebruiker.foto_tijd || 0)
-                        cache: false
-                        fillMode: Image.PreserveAspectCrop
-                        sourceSize.width: 76
-                        sourceSize.height: 76
-                        asynchronous: true
+                contentItem: RowLayout {
+                    spacing: 8
+                    Rectangle {
+                        id: avatar
+                        width: 32; height: 32; radius: 16
+                        readonly property string foto: (menu.gegevens.gebruiker && menu.gegevens.gebruiker.foto) ? menu.gegevens.gebruiker.foto : ""
+                        gradient: Gradient {
+                            GradientStop { position: 0.0; color: menu.o.verloopBegin }
+                            GradientStop { position: 1.0; color: menu.o.verloopEind }
+                        }
+                        Label {
+                            anchors.centerIn: parent
+                            visible: fotoBeeld.status !== Image.Ready
+                            text: ((menu.gegevens.gebruiker && menu.gegevens.gebruiker.naam) || "?").charAt(0).toUpperCase()
+                            color: "white"
+                            font.family: menu.display
+                            font.weight: Font.DemiBold
+                            font.pixelSize: Math.round(14 * menu.schaal)
+                        }
+                        // Eigen foto (als die er is): in een rond venstertje
+                        Item {
+                            anchors.fill: parent
+                            clip: true
+                            visible: fotoBeeld.status === Image.Ready
+                            Image {
+                                id: fotoBeeld
+                                anchors.fill: parent
+                                // De tijd erachter: een nieuwe foto onder dezelfde naam wordt dan echt opnieuw geladen (U112).
+                                source: avatar.foto === "" ? "" : "file://" + avatar.foto + "?" + (menu.gegevens.gebruiker.foto_tijd || 0)
+                                cache: false
+                                fillMode: Image.PreserveAspectCrop
+                                sourceSize.width: 76
+                                sourceSize.height: 76
+                                asynchronous: true
+                            }
+                        }
+                        Rectangle { anchors.fill: parent; radius: 19; color: "transparent"; border.width: 1; border.color: menu.lijnkleur }
+                    }
+                    Label {
+                        text: (menu.gegevens.gebruiker && menu.gegevens.gebruiker.naam) || ""
+                        color: menu.tekst
+                        font.pixelSize: Math.round(14 * menu.schaal)
+                        font.weight: Font.Medium
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
                     }
                 }
-                Rectangle { anchors.fill: parent; radius: 19; color: "transparent"; border.width: 1; border.color: menu.lijnkleur }
-            }
-            Label {
-                text: (menu.gegevens.gebruiker && menu.gegevens.gebruiker.naam) || ""
-                color: menu.tekst
-                font.pixelSize: Math.round(14 * menu.schaal)
-                font.weight: Font.Medium
-                Layout.fillWidth: true
-                elide: Text.ElideRight
             }
             OnderKnop { icoon: "configure"; tekst: menu.tr("Instellingen", "Settings"); onGeklikt: { menu.start("/usr/share/applications/bugos-settings.desktop"); menu.sluiten() } }
             OnderKnop { icoon: "system-lock-screen"; tekst: menu.tr("Vergrendelen", "Lock"); onGeklikt: { menu.aanUit("slot"); menu.sluiten() } }
@@ -441,9 +615,24 @@ Rectangle {
         onClicked: { menu.start(app.pad); menu.sluiten() }
         Keys.onReturnPressed: clicked()
         Keys.onEnterPressed: clicked()
+        // Het menu van deze app: Menu-toets / Shift+F10 (met het toetsenbord op de tegel), of lang ingedrukt houden
+        // (een aanraakscherm heeft geen rechtermuisknop). Met een verbonden pressAndHold start de app daarna niet
+        // ook nog (Qt stuurt dan geen 'clicked' meer bij het loslaten).
+        Keys.onPressed: event => {
+            if (menu.isMenuToets(event)) { menu.toonAppMenu(app, tegel, tegel.width / 2, tegel.height / 2, true); event.accepted = true }
+        }
+        onPressAndHold: menu.toonAppMenu(app, tegel, tegel.width / 2, tegel.height / 2, false)
+        // De rechtermuisknop. Een MouseArea die de klik echt aanneemt: dan gaat hij niet door naar Plasma, die er
+        // anders het menu van de Start-knop zelf (Taakbeheer, Instellingen, ...) van maakte. Alleen de rechterknop:
+        // links blijft van de tegel zelf (openen).
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.RightButton
+            onClicked: mouse => menu.toonAppMenu(tegel.app, tegel, mouse.x, mouse.y, false)
+        }
         background: Rectangle {
             radius: menu.o.rKnop
-            color: tegel.hovered || tegel.activeFocus ? menu.zweef : "transparent"
+            color: tegel.hovered || tegel.activeFocus || (appMenu.visible && menu.appMenuApp === tegel.app) ? menu.zweef : "transparent"
             border.width: tegel.activeFocus ? 2 : 0   // ook met het toetsenbord goed te zien (U135)
             border.color: menu.rood
         }
@@ -476,12 +665,24 @@ Rectangle {
         id: regel
         property var app
         property bool gemarkeerd: false
-        implicitHeight: 54
+        // 48 (was 54): iets compacter, zodat 'Alle apps' en de zoekresultaten meer regels tegelijk tonen (A-06).
+        // Past nog steeds: een pictogram van 32 en twee regels tekst (14 + 12 px).
+        implicitHeight: Math.round(48 * menu.schaal)
         hoverEnabled: true
         Accessible.name: app.naam
         onClicked: { menu.start(app.pad); menu.sluiten() }
         Keys.onReturnPressed: clicked()
         Keys.onEnterPressed: clicked()
+        // Het menu van deze app, net als bij AppTegel: Menu-toets / Shift+F10, lang indrukken, rechtermuisknop.
+        Keys.onPressed: event => {
+            if (menu.isMenuToets(event)) { menu.toonAppMenu(app, regel, 24, regel.height / 2, true); event.accepted = true }
+        }
+        onPressAndHold: menu.toonAppMenu(app, regel, 24, regel.height / 2, false)
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.RightButton
+            onClicked: mouse => menu.toonAppMenu(regel.app, regel, mouse.x, mouse.y, false)
+        }
         // Met Tab naar een regel: dan wordt die ook de gekozen regel, zodat wat oplicht ook is wat Enter opent (U149).
         onActiveFocusChanged: if (activeFocus && ListView.view) {
             const i = ListView.view.indexAt(x + 1, y + 1)
@@ -489,7 +690,8 @@ Rectangle {
         }
         background: Rectangle {
             radius: menu.o.rKnop
-            color: regel.hovered || regel.gemarkeerd || regel.activeFocus ? menu.zweef : "transparent"
+            color: regel.hovered || regel.gemarkeerd || regel.activeFocus || (appMenu.visible && menu.appMenuApp === regel.app)
+                ? menu.zweef : "transparent"
             border.width: regel.activeFocus ? 2 : 0
             border.color: menu.rood
         }
@@ -582,6 +784,140 @@ Rectangle {
                 width: 20; height: 20
                 sourceComponent: menu.icoonTekenaar
                 onLoaded: item.naam = knop.icoon
+            }
+        }
+    }
+
+    // ------------------------------------------ het menu van een app (pop-up) ---
+    // Een gewone Popup uit QtQuick.Controls (geen PlasmaExtras.Menu): zo werkt hij ook buiten Plasma
+    // (tools/qml-test.py) en ziet hij eruit als de rest van het startmenu (Design.qml), wat de KDE-stijl ook is.
+    // Hij leeft binnen het venster van het startmenu (toonAppMenu houdt hem binnen de randen, en margins doet dat
+    // nog een keer): er valt dus niets buiten de pop-up van Plasma weg, en het startmenu gaat niet dicht omdat er
+    // een ander venster de focus krijgt.
+    // modal: een klik ernaast sluit alleen dit menu (zoals in Windows), en start niet per ongeluk een andere app.
+    // dim: false: het startmenu wordt er niet donker van.
+    Popup {
+        id: appMenu
+        objectName: "appMenu"
+        parent: menu
+        modal: true
+        dim: false
+        focus: true
+        margins: 8
+        padding: 6
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        width: Math.round(250 * menu.schaal)
+        // Waar de focus heen gaat als het menu dichtgaat: de tegel of regel waar je het opende.
+        property Item terugFocus: null
+        property bool viaToetsenbord: false
+        readonly property int regelHoogte: Math.round(36 * menu.schaal)
+        readonly property int lijnRuimte: 9
+        // Hoe hoog het menu wordt met deze regels (toonAppMenu moet dat weten vóór het opent, om te kiezen
+        // tussen onder of boven de muis).
+        function hoogteVoor(regels) {
+            let h = padding * 2
+            for (let i = 0; i < regels.length; i++)
+                h += regelHoogte + (regels[i].lijn ? lijnRuimte : 0)
+            return h
+        }
+        height: hoogteVoor(menu.appMenuRegels)
+
+        onOpened: {
+            appMenuLijst.currentIndex = viaToetsenbord ? 0 : -1
+            appMenuLijst.forceActiveFocus()
+        }
+        // Dicht (gekozen, Esc, ernaast geklikt): de focus terug, zodat je met het toetsenbord verder kunt waar je
+        // was. Is die tegel er niet meer (net losgemaakt van Start), dan het zoekveld: typen zoekt altijd.
+        onClosed: {
+            const terug = terugFocus
+            terugFocus = null
+            if (terug && terug.visible) terug.forceActiveFocus()
+            else zoekveld.forceActiveFocus()
+        }
+
+        background: Rectangle {
+            radius: menu.o.rKnop
+            color: menu.o.vlak
+            border.width: 1
+            border.color: menu.o.randSterk
+        }
+
+        contentItem: ListView {
+            id: appMenuLijst
+            objectName: "appMenuLijst"
+            model: menu.appMenuRegels
+            interactive: false   // alles past altijd; niet laten verschuiven met het muiswiel
+            keyNavigationEnabled: true
+            keyNavigationWraps: true   // met pijltje omlaag van de onderste regel weer naar boven, zoals een menu
+            Accessible.role: Accessible.PopupMenu
+            Accessible.name: menu.appMenuApp ? menu.appMenuApp.naam : ""
+            Keys.onReturnPressed: if (currentIndex >= 0) menu.kiesAppMenu(currentIndex)
+            Keys.onEnterPressed: if (currentIndex >= 0) menu.kiesAppMenu(currentIndex)
+            Keys.onSpacePressed: if (currentIndex >= 0) menu.kiesAppMenu(currentIndex)
+            // Nog een keer de Menu-toets: dicht (zoals in Windows). Andere toetsen gaan niet naar het zoekveld:
+            // de pop-up vangt ze, zodat typen niet onder het menu door een zoekopdracht start.
+            Keys.onPressed: event => {
+                if (menu.isMenuToets(event)) { appMenu.close(); event.accepted = true }
+            }
+
+            delegate: AbstractButton {
+                id: keuze
+                required property var modelData
+                required property int index
+                width: appMenuLijst.width
+                height: appMenu.regelHoogte + (modelData.lijn ? appMenu.lijnRuimte : 0)
+                padding: 0   // de plek van tekst en lijn regelen we zelf (hieronder), niet de stijl
+                hoverEnabled: true
+                Accessible.role: Accessible.MenuItem
+                Accessible.name: modelData.tekst
+                // Muis erop: die regel is ook de gemarkeerde, zodat er nooit twee tegelijk oplichten.
+                onHoveredChanged: if (hovered) appMenuLijst.currentIndex = index
+                onClicked: menu.kiesAppMenu(index)
+                // Rechtermuisknop op een regel kiest hem ook (zoals in Windows), en gaat niet door naar Plasma.
+                MouseArea {
+                    anchors.fill: parent
+                    acceptedButtons: Qt.RightButton
+                    onClicked: menu.kiesAppMenu(keuze.index)
+                }
+                background: Item {
+                    // Scheidingslijn tussen de groepen (openen en acties | vastmaken | verwijderen).
+                    Rectangle {
+                        visible: keuze.modelData.lijn === true
+                        x: 6; width: parent.width - 12
+                        y: Math.floor(appMenu.lijnRuimte / 2)
+                        height: 1
+                        color: menu.lijnkleur
+                    }
+                    Rectangle {
+                        x: 0; width: parent.width
+                        y: keuze.modelData.lijn ? appMenu.lijnRuimte : 0
+                        height: appMenu.regelHoogte
+                        radius: menu.o.rKnop - 4
+                        color: keuze.ListView.isCurrentItem || keuze.pressed ? menu.zweef : "transparent"
+                    }
+                }
+                contentItem: Item {
+                    RowLayout {
+                        x: 10; width: parent.width - 20
+                        y: keuze.modelData.lijn ? appMenu.lijnRuimte : 0
+                        height: appMenu.regelHoogte
+                        spacing: 10
+                        Loader {
+                            Layout.preferredWidth: 18
+                            Layout.preferredHeight: 18
+                            sourceComponent: menu.icoonTekenaar
+                            onLoaded: item.naam = Qt.binding(() => keuze.modelData.icoon || "")
+                        }
+                        Label {
+                            text: keuze.modelData.tekst
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                            // Verwijderen in het rood: dat is de enige regel die iets weghaalt.
+                            color: keuze.modelData.soort === "verwijder" ? menu.o.fout : menu.tekst
+                            font.pixelSize: Math.round(14 * menu.schaal)
+                        }
+                    }
+                }
             }
         }
     }

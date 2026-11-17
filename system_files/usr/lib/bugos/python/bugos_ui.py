@@ -24,9 +24,10 @@ import re
 from collections.abc import Sequence
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, Qt
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QIcon, QPainter, QPalette, QPixmap
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtCore import QByteArray, QRect, QSize, Qt
+from PySide6.QtGui import (QColor, QFont, QFontDatabase, QGuiApplication, QIcon, QIconEngine, QPainter, QPalette,
+                           QPixmap)
+from PySide6.QtWidgets import QApplication, QLabel, QStyleOption, QWidget
 
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "bugos"
 
@@ -131,6 +132,62 @@ def _kies_thema(app: QApplication) -> bool:
     return app.palette().color(QPalette.ColorRole.Window).lightness() < 128
 
 
+def _lees_kdeglobals(pad: Path) -> dict[str, dict[str, str]]:
+    """De groepen en sleutels van één kdeglobals-bestand ({groep: {sleutel: waarde}}).
+
+    Een eigen kleine lezer (geen kreadconfig6): hij draait in de app zelf, elke keer dat kdeglobals verandert,
+    en mag dan niet wachten op een ander programma. KDE schrijft [Groep] en sleutel=waarde; een sleutel kan een
+    achtervoegsel zoals [$i] hebben, dat laten we weg. Kan het bestand niet gelezen worden: leeg."""
+    groepen: dict[str, dict[str, str]] = {}
+    groep = ""
+    try:
+        regels = pad.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return groepen
+    for regel in regels:
+        regel = regel.strip()
+        if not regel or regel.startswith("#"):
+            continue
+        if regel.startswith("[") and regel.endswith("]"):
+            groep = regel[1:-1]
+            continue
+        if "=" in regel:
+            sleutel, waarde = regel.split("=", 1)
+            sleutel = re.sub(r"\[\$[a-z]+\]$", "", sleutel.strip())
+            groepen.setdefault(groep, {})[sleutel] = waarde.strip()
+    return groepen
+
+
+def systeem_donker() -> bool | None:
+    """Staat het systeem (KDE) nu op donker? Dezelfde regel als 'bugos-theme status' en Instellingen (U325):
+    BugOSDark is donker, BugOSLight of niets is licht, een ander schema is donker als de vensters donker zijn.
+
+    Leest ~/.config/kdeglobals en daarna de systeembestanden (/etc/xdg), net als KDE. None: er is geen
+    kdeglobals (bijvoorbeeld in een test buiten KDE), dan weten we het niet en verandert er niets."""
+    config = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+    mappen = [config] + [Path(m) for m in (os.environ.get("XDG_CONFIG_DIRS") or "/etc/xdg").split(":") if m]
+    bestanden = [m / "kdeglobals" for m in mappen if (m / "kdeglobals").is_file()]
+    if not bestanden:
+        return None
+
+    def lees(groep: str, sleutel: str) -> str | None:
+        # Het eerste bestand dat de sleutel heeft, wint (het eigen bestand gaat voor dat van het systeem).
+        for b in bestanden:
+            waarde = _lees_kdeglobals(b).get(groep, {}).get(sleutel)
+            if waarde is not None:
+                return waarde
+        return None
+
+    schema = lees("General", "ColorScheme") or ""
+    if schema in ("BugOSDark", "BugOSLight", ""):
+        return schema == "BugOSDark"
+    try:
+        r, g, b = (int(x) for x in (lees("Colors:Window", "BackgroundNormal") or "").split(",")[:3])
+    except ValueError:
+        return False
+    return r * 299 + g * 587 + b * 114 < 128000
+
+
 def _laad_lettertypes() -> None:
     mappen = [Path("/usr/share/fonts/bugos"), Path("/usr/share/bugos/lettertypes")]
     extra = os.environ.get("BUGOS_LETTERS")
@@ -149,12 +206,12 @@ QWidget {{ color: {k['tekst']}; font-size: 14px; }}
 QWidget#venster, QWidget#pagina, QScrollArea, QScrollArea > QWidget > QWidget#pagina {{ background: {k['achter']}; }}
 QScrollArea {{ border: none; }}
 QLabel {{ background: transparent; }}
-QLabel[rol="titel"] {{ font-family: "{DISPLAY}"; font-size: 30px; font-weight: 600; letter-spacing: -0.5px; }}
+QLabel[rol="titel"] {{ font-family: "{DISPLAY}"; font-size: 28px; font-weight: 600; letter-spacing: -0.5px; }}
 QLabel[rol="groot"] {{ font-family: "{DISPLAY}"; font-size: 40px; font-weight: 600; letter-spacing: -0.8px; }}
 QLabel[rol="kop2"] {{ font-family: "{DISPLAY}"; font-size: 19px; font-weight: 600; }}
 QLabel[rol="kop3"] {{ font-size: 15px; font-weight: 600; }}
 QLabel[rol="rij"] {{ font-size: 15px; font-weight: 500; }}
-QLabel[rol="sub"] {{ color: {k['tekst2']}; font-size: 15px; }}
+QLabel[rol="sub"] {{ color: {k['tekst2']}; font-size: 14px; }}
 QLabel[rol="klein"] {{ color: {k['tekst2']}; font-size: 13px; }}
 QLabel[rol="sectie"] {{ color: {k['tekst2']}; font-size: 13px; font-weight: 600; }}
 QLabel[rol="appnaam"] {{ font-family: "{DISPLAY}"; font-size: 20px; font-weight: 600; letter-spacing: -0.3px; }}
@@ -164,9 +221,9 @@ QFrame[kaart="accent"] {{ background: {k['accent_zacht']}; border: 1px solid {k[
 QFrame#lijn {{ background: {k['rand']}; max-height: 1px; min-height: 1px; border: none; }}
 
 QPushButton {{ background: {k['knop']}; color: {k['tekst']}; border: 1px solid transparent; border-radius: 12px;
-  padding: 10px 18px; font-size: 14px; font-weight: 600; }}
+  padding: 6px 16px; font-size: 14px; font-weight: 600; }}
 QPushButton:hover {{ background: {k['knop_hover']}; }}
-QPushButton:focus {{ border: 2px solid {k['accent']}; padding: 9px 17px; }}
+QPushButton:focus {{ border: 2px solid {k['accent']}; padding: 5px 15px; }}
 QPushButton:disabled {{ color: {k['tekst3']}; }}
 QPushButton[soort="hoofd"] {{ background: {k['knop_hoofd']}; color: {k['accent_tekst']}; }}
 QPushButton[soort="hoofd"]:hover {{ background: {k['knop_hoofd_hover']}; }}
@@ -176,9 +233,11 @@ QPushButton[soort="stil"] {{ background: transparent; color: {k['tekst2']}; }}
 QPushButton[soort="stil"]:hover {{ background: {k['knop']}; color: {k['tekst']}; }}
 QPushButton[soort="rand"] {{ background: transparent; border: 1px solid {k['rand_sterk']}; }}
 QPushButton[soort="rand"]:hover {{ background: {k['knop']}; }}
-QPushButton[soort="rand"]:focus {{ border: 2px solid {k['accent']}; padding: 9px 17px; }}
-QPushButton[groot="true"] {{ padding: 13px 24px; font-size: 15px; border-radius: 12px; }}
-QPushButton[groot="true"]:focus {{ padding: 12px 23px; }}
+QPushButton[soort="rand"]:focus {{ border: 2px solid {k['accent']}; padding: 5px 15px; }}
+QPushButton[groot="true"] {{ padding: 10px 22px; font-size: 15px; border-radius: 12px; }}
+QPushButton[groot="true"]:focus {{ padding: 9px 21px; }}
+QPushButton[klein="true"] {{ padding: 4px 8px; }}
+QPushButton[klein="true"]:focus {{ padding: 3px 7px; }}
 
 QPushButton#tegel {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 16px; padding: 0; text-align: left; }}
 QPushButton#tegel:hover {{ background: {k['vlak_hover']}; border: 1px solid {k['rand_sterk']}; }}
@@ -188,18 +247,18 @@ QPushButton#keuze:hover {{ border: 2px solid {k['rand_sterk']}; }}
 QPushButton#keuze:focus {{ border: 2px dashed {k['accent']}; }}
 QPushButton#keuze:checked {{ border: 2px solid {k['accent']}; background: {k['vlak']}; }}
 
-QLineEdit {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 12px; padding: 11px 14px;
-  font-size: 15px; selection-background-color: {k['accent']}; }}
-QLineEdit:focus {{ border: 2px solid {k['accent']}; padding: 10px 13px; }}
+QLineEdit {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 12px; padding: 7px 12px;
+  font-size: 14px; selection-background-color: {k['accent']}; }}
+QLineEdit:focus {{ border: 2px solid {k['accent']}; padding: 6px 11px; }}
 
-QComboBox {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 12px; padding: 10px 14px; font-size: 14px; }}
-QComboBox:focus {{ border: 2px solid {k['accent']}; }}
+QComboBox {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 12px; padding: 6px 12px; font-size: 14px; }}
+QComboBox:focus {{ border: 2px solid {k['accent']}; padding: 5px 11px; }}
 QComboBox::drop-down {{ border: none; width: 28px; }}
 QComboBox QAbstractItemView {{ background: {k['vlak']}; border: 1px solid {k['rand']}; border-radius: 12px;
   selection-background-color: {k['accent_zacht']}; selection-color: {k['tekst']}; padding: 4px; }}
 
 QListWidget#zijbalk {{ background: transparent; border: none; outline: 0; font-size: 14px; }}
-QListWidget#zijbalk::item {{ padding: 10px 12px; border-radius: 12px; margin: 1px 0; color: {k['tekst']}; }}
+QListWidget#zijbalk::item {{ padding: 8px 12px; border-radius: 12px; margin: 1px 0; color: {k['tekst']}; }}
 QListWidget#zijbalk::item:hover {{ background: {k['knop']}; }}
 QListWidget#zijbalk::item:selected {{ background: {k['accent_zacht']}; color: {k['accent_gekozen']}; font-weight: 600; }}
 QWidget#zijkant {{ background: {k['zijbalk']}; border: none; }}
@@ -214,12 +273,12 @@ QProgressBar#dun[vol="true"]::chunk {{ background: {k['let_op']}; }}
 QFrame#rij {{ background: transparent; border-radius: 12px; }}
 QFrame#rij[klikbaar="true"]:hover {{ background: {k['knop']}; }}
 QFrame#rij[klikbaar="true"]:focus {{ background: {k['knop']}; border: 2px solid {k['accent']}; }}
-QPushButton#rond {{ min-width: 42px; max-width: 42px; min-height: 42px; max-height: 42px; border-radius: 21px;
+QPushButton#rond {{ min-width: 36px; max-width: 36px; min-height: 36px; max-height: 36px; border-radius: 18px;
   background: {k['knop']}; border: none; padding: 0; }}
 QPushButton#rond:hover {{ background: {k['knop_hover']}; }}
 QPushButton#rond:focus {{ border: 2px solid {k['accent']}; }}
 QPushButton#rond:disabled {{ background: transparent; }}
-QPushButton#rond_klein {{ min-width: 36px; max-width: 36px; min-height: 36px; max-height: 36px; border-radius: 18px;
+QPushButton#rond_klein {{ min-width: 32px; max-width: 32px; min-height: 32px; max-height: 32px; border-radius: 16px;
   background: transparent; border: none; padding: 0; }}
 QPushButton#rond_klein:hover {{ background: {k['knop_hover']}; }}
 QPushButton#rond_klein:focus {{ border: 2px solid {k['accent']}; }}
@@ -248,7 +307,9 @@ QMenu::item:selected {{ background: {k['knop']}; }}
 QMenu::item:disabled {{ color: {k['tekst3']}; }}
 QMenu::icon {{ padding-left: 8px; }}
 QMenu::separator {{ height: 1px; background: {k['rand']}; margin: 6px 8px; }}
-QToolTip {{ background: {k['tekst']}; color: {k['achter']}; border: none; border-radius: 8px; padding: 6px 10px; }}
+/* D-16: de tooltip volgt het thema (donker vlak in donker, licht in licht), met een rand zodat hij loskomt van wat
+   eronder ligt. Eerst was hij omgekeerd (de tekstkleur als achtergrond): een fel licht vlak in het donkere thema. */
+QToolTip {{ background: {k['vlak']}; color: {k['tekst']}; border: 1px solid {k['rand_sterk']}; border-radius: 8px; padding: 6px 10px; }}
 QCheckBox, QRadioButton {{ spacing: 10px; font-size: 15px; }}
 QSlider {{ min-height: 28px; }}
 QSlider::groove:horizontal {{ height: 8px; border-radius: 4px; background: {k['schuif_uit']}; }}
@@ -432,7 +493,184 @@ def maak_app(naam: str, bureaublad_bestand: str, args: Sequence[str], een_keer: 
     # De teksten van BugOS zijn Nederlands of Engels, dus van links naar rechts. Zonder dit draait Qt het hele
     # venster om zodra KDE een Arabische vertaling laadt: pijlen en schuifjes de verkeerde kant op (U275).
     app.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+    # Licht/donker live volgen: zet iemand het om (snelmenu, Instellingen, Welkom), dan kleurt dit venster
+    # meteen mee in plaats van pas na opnieuw openen (A-03, B-10).
+    app.setProperty("bugos_stijl", _stijl_adres(app))   # onze stijl, zie zet_thema
+    _volg_systeem(app)
     return app
+
+
+# ========================================================= licht/donker live ===
+# Een BugOS-app kiest zijn kleuren bij het starten (maak_app). Zet iemand daarna licht/donker om, dan volgt de
+# app nu meteen (A-03, B-10): zet_thema() vult K opnieuw, zet het palet en het stijlblad van de app opnieuw, en
+# vraagt elk venster en onderdeel dat zijn kleuren zelf 'vastlegde' om ze opnieuw te zetten.
+#
+# Hoe een onderdeel meedoet: geef het een methode thema_veranderd(). zet_thema() roept die aan bij elk
+# onderdeel dat er een heeft (bijvoorbeeld een venster dat zijn eigen stijlblad maakt, of een Chip met een
+# vaste kleur). Wat in paintEvent K leest, hoeft niets te doen: dat tekent bij de volgende keer vanzelf goed.
+# De BugOS-lijnicoontjes (lijn_icoon) tekenen zichzelf ook live; een QLabel met een icoontje krijgt het via
+# zet_label_icoon(), dan tekent zet_thema() het opnieuw.
+
+
+def _stijl_adres(app: QApplication) -> int:
+    """Het geheugenadres van de stijl van de app (0 zonder stijl): zo zien we of iemand anders hem verving."""
+    import shiboken6
+    stijl = app.style()
+    return int(shiboken6.getCppPointer(stijl)[0]) if stijl is not None else 0
+
+
+def zet_thema(donker: bool, app: QApplication | None = None) -> bool:
+    """Zet de kleuren van deze app op licht of donker, terwijl hij open is. True als er iets veranderde.
+
+    Ook als het thema hetzelfde bleef, zetten we de stijl (Fusion) en het palet terug: KDE kan bij een wissel
+    van de programmastijl (bugos-theme stuurt StyleChanged, A-01) zijn eigen stijl en palet in de app zetten."""
+    global DONKER
+    app = app or QApplication.instance()
+    if app is None:
+        return False
+    if _stijl_adres(app) != app.property("bugos_stijl"):
+        # KDE zette (na StyleChanged) een andere stijl in de app (Kvantum); BugOS-apps tekenen op Fusion.
+        # Herkennen aan het adres van de stijl: met een stijlblad is app.style() Qt's stijlblad-laag (zonder
+        # naam), en die maakt Qt alleen nieuw als er een andere stijl onder komt.
+        app.setStyle("Fusion")
+        app.setStyleSheet(_stijlblad(K))
+        app.setProperty("bugos_stijl", _stijl_adres(app))
+    if donker == DONKER:
+        app.setPalette(_palet(K))
+        return False
+    DONKER = donker
+    K.clear()
+    K.update(KLEUREN["donker" if donker else "licht"])
+    app.setPalette(_palet(K))
+    app.setStyleSheet(_stijlblad(K))
+    app.setProperty("bugos_stijl", _stijl_adres(app))   # ons eigen nieuwe stijlblad is geen vreemde stijl
+    _LIJN_CACHE.clear()
+    for w in app.allWidgets():
+        doe = getattr(w, "thema_veranderd", None)
+        if callable(doe):
+            try:
+                doe()
+            except RuntimeError:   # het onderdeel is net weggegooid (C++ al weg): overslaan
+                pass
+            except Exception:  # noqa: BLE001  (één onderdeel dat faalt, mag de rest van het venster niet tegenhouden)
+                import traceback
+                traceback.print_exc()
+        bewaard = getattr(w, "_bugos_icoon", None)
+        if bewaard is not None and isinstance(w, QLabel):
+            try:
+                zet_label_icoon(w, *bewaard)
+            except RuntimeError:
+                pass
+    for w in app.allWidgets():
+        w.update()   # opnieuw tekenen: paintEvent leest de nieuwe K, lijnicoontjes de nieuwe kleur
+    return True
+
+
+def _volg_systeem(app: QApplication) -> None:
+    """Houd kdeglobals in de gaten: verandert het kleurenschema, dan zet_thema().
+
+    Waarom het bestand en niet alleen Qt's colorSchemeChanged: BugOS-apps zetten hun eigen palet, en Qt meldt
+    niet altijd een wissel tussen twee schema's van KDE. Het bestand is de plek waar bugos-theme (en KDE) de
+    keuze opschrijft. KDE schrijft kdeglobals door een nieuw bestand op zijn plek te zetten; dan raakt de
+    wachter het bestand kwijt, dus na elke melding zetten we hem opnieuw. Een korte timer (300 ms) voegt de
+    meldingen van één wissel samen (kleurenschema, stijl, Plasma-stijl schrijven allemaal in kdeglobals).
+    BUGOS_THEMA=licht/donker (voorbeelden, tests): vast thema, niet volgen."""
+    if os.environ.get("BUGOS_THEMA") in ("licht", "donker"):
+        return
+    from PySide6.QtCore import QFileSystemWatcher, QTimer
+    config = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+    bestand = config / "kdeglobals"
+    wachter = QFileSystemWatcher(app)
+    timer = QTimer(app)
+    timer.setSingleShot(True)
+    timer.setInterval(300)
+
+    def bewaak() -> None:
+        # Het bestand als het er is; anders de dichtstbijzijnde map die er al is (een nieuw account heeft soms
+        # nog geen ~/.config): dan zien we het bestand of de map verschijnen en kijken we daarna verder.
+        if bestand.is_file():
+            if str(bestand) not in wachter.files():
+                wachter.addPath(str(bestand))
+            return
+        map_ = config
+        while not map_.is_dir() and map_.parent != map_:
+            map_ = map_.parent
+        if map_.is_dir() and str(map_) not in wachter.directories():
+            wachter.addPath(str(map_))
+
+    def kijk() -> None:
+        bewaak()
+        nu = systeem_donker()
+        if nu is not None:
+            zet_thema(nu, app)
+
+    wachter.fileChanged.connect(lambda _p: timer.start())
+    wachter.directoryChanged.connect(lambda _p: timer.start())
+    timer.timeout.connect(kijk)
+    try:   # Qt 6.5+: KDE meldt ook zelf een wissel van licht/donker
+        app.styleHints().colorSchemeChanged.connect(lambda *_a: timer.start())
+    except AttributeError:
+        pass
+    bewaak()
+    app._bugos_thema_wachter = (wachter, timer)   # bewaren: anders ruimt Python ze op
+
+
+def zet_label_icoon(lbl: QLabel, ic, maat: int | QSize) -> None:
+    """Zet een icoontje als plaatje in een QLabel, en onthoud het zodat zet_thema() het opnieuw tekent.
+
+    ic: een QIcon, of een functie die er een geeft (zoals logo_icoon: in donker een ander logo)."""
+    lbl._bugos_icoon = (ic, maat)
+    icoon_ = ic() if callable(ic) else ic
+    lbl.setPixmap(icoon_.pixmap(maat if isinstance(maat, QSize) else QSize(maat, maat)))
+
+
+# ========================================================= op het scherm ===
+# Een venster mag nooit groter zijn dan het scherm: op een laptop van 1280x800 bij 150 % is er maar 853 x 485 vrij.
+# Valt de onderkant eraf, dan zie je de knop 'Volgende' niet meer en kom je niet verder (Bugie-test).
+
+TAAKBALK = 48    # de BugOS-taakbalk onderin (logische px, zie de plasma-indeling: 2 * floor(gridUnit * 2.7 / 2))
+TITELBALK = 40   # ruimte voor de titelbalk die KWin boven het venster zet (Breeze, zonder randen: ~30 px)
+
+
+def vrije_ruimte(scherm=None) -> QRect | None:
+    """Waar een venster mag staan: het scherm zonder de taakbalk. Onder Wayland weet Qt niet waar de taakbalk staat
+    (availableGeometry is dan het hele scherm): dan trekken we hem er zelf af."""
+    scherm = scherm or QGuiApplication.primaryScreen()
+    if scherm is None:
+        return None
+    vrij = scherm.availableGeometry()
+    if vrij.width() <= 0 or vrij.height() <= 0:
+        return None
+    if vrij == scherm.geometry():
+        vrij = vrij.adjusted(0, 0, 0, -min(TAAKBALK, vrij.height() // 4))
+    return vrij
+
+
+def schermmaat(maat: tuple[int, int], minimum: tuple[int, int] | None = None, scherm=None
+               ) -> tuple[tuple[int, int], tuple[int, int] | None]:
+    """(maat, minimum) van een venster, ingekort tot wat er op het scherm vrij is (met de titelbalk erbij)."""
+    vrij = vrije_ruimte(scherm)
+    if vrij is None:
+        return maat, minimum
+    b, h = vrij.width(), max(200, vrij.height() - TITELBALK)
+    maat = (min(maat[0], b), min(maat[1], h))
+    if minimum is not None:
+        minimum = (min(minimum[0], b), min(minimum[1], h))
+    return maat, minimum
+
+
+def pas_in_scherm(venster: QWidget) -> None:
+    """Maak een venster dat te groot is (Welkom 1000x680, Hulp 880x760 ...) zo groot als er op het scherm vrij is.
+    Een venster zonder eigen maat laat Qt zelf passen (adjustSize)."""
+    if not venster.isWindow() or venster.windowState() & (Qt.WindowState.WindowMaximized | Qt.WindowState.WindowFullScreen):
+        return
+    scherm = venster.screen() if hasattr(venster, "screen") else None
+    (b, h), minimum = schermmaat((venster.width(), venster.height()),
+                                 (venster.minimumWidth(), venster.minimumHeight()), scherm)
+    if minimum is not None and minimum != (venster.minimumWidth(), venster.minimumHeight()):
+        venster.setMinimumSize(*minimum)
+    if venster.testAttribute(Qt.WidgetAttribute.WA_Resized) and (b, h) != (venster.width(), venster.height()):
+        venster.resize(b, h)
 
 
 def uitvoeren(app: QApplication, venster: QWidget) -> int:
@@ -442,6 +680,7 @@ def uitvoeren(app: QApplication, venster: QWidget) -> int:
     het afsluiten. Geef daarom het venster direct mee: uitvoeren(app, Venster())."""
     if app.property("bugos_een_keer"):
         luister(str(app.property("bugos_een_keer")), venster)
+    pas_in_scherm(venster)   # elk venster past op het scherm, met zijn titelbalk erbij (U133)
     venster.show()
     code = app.exec()
     server = getattr(venster, "_een_server", None)
@@ -478,7 +717,11 @@ LIJN = {
     "huis": '<path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1z"/>',
     "schakelaar": '<rect x="2.5" y="7" width="19" height="10" rx="5"/><circle cx="16.5" cy="12" r="2.5"/>',
     "computer": '<rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8.5 20h7M12 16.5V20"/>',
+    # Een envelop: e-mail (Haal alles van je oude pc: Thunderbird en Outlook).
+    "mail": '<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m4 7.5 8 6 8-6"/>',
     "wifi": '<path d="M2.8 9.2a13.5 13.5 0 0 1 18.4 0M5.8 12.6a9 9 0 0 1 12.4 0M8.9 16a4.6 4.6 0 0 1 6.2 0M12 19.4h.01"/>',
+    # Een netwerkstekker met kabel: voor 'verbonden via de kabel' (A-09), zodat een pc zonder wifi geen wifi-teken krijgt.
+    "kabel": '<rect x="7" y="3.5" width="10" height="9" rx="1.5"/><path d="M10 3.5v3M14 3.5v3M9.5 12.5v2.5h5v-2.5M12 15v5.5"/>',
     "bluetooth": '<path d="m7 7.5 10 9-5 4.5V3l5 4.5-10 9"/>',
     "geluid": '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18.3 6.4a8 8 0 0 1 0 11.2"/>',
     "printer": '<path d="M7 8.5V3.5h10v5"/><rect x="3.5" y="8.5" width="17" height="8" rx="2"/><path d="M7 13.5h10v7H7z"/>',
@@ -490,6 +733,9 @@ LIJN = {
     "film": '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="m10 9.5 4.5 2.5-4.5 2.5z"/>',
     "download": '<path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/>',
     "map": '<path d="M3.5 7a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>',
+    # Een doos (deksel en bak): een programma (.exe, .deb ...) of een archief (.zip) in Bestanden, zoals in het
+    # pictogramthema (tools/icons/places_folders.py, EIGEN["doos"]). Eerst tekende Bestanden daar een map (D-15).
+    "doos": '<rect x="3.5" y="4.5" width="17" height="4.5" rx="1.5"/><path d="M5 9v9.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V9M10 12.5h4"/>',
     "map-plus": '<path d="M3.5 7a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/><path d="M12 10.5v6M9 13.5h6"/>',
     "links": '<path d="m14.5 5.5-6.5 6.5 6.5 6.5"/>',
     "rechts": '<path d="m9.5 5.5 6.5 6.5-6.5 6.5"/>',
@@ -529,6 +775,12 @@ LIJN = {
     "toetsenbord": '<rect x="2.5" y="6.5" width="19" height="11" rx="2"/><path d="M6 10h.01M9.5 10h.01M13 10h.01'
                    'M16.5 10h.01M6 13.5h.01M9.5 13.5h3.5M16.5 13.5h.01"/>',
     "letter": '<path d="M5 19 12 4.5 19 19M7.6 13.5h8.8"/>',
+    "telefoon": '<rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M10.5 18.5h3"/>',
+    "microfoon": '<rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5M9 20.5h6"/>',
+    # Een weegschaal: 'Gebalanceerd' op Energie. Daar stond eerst een vinkje, zodat het leek alsof er twee keuzes
+    # aangevinkt waren als je 'Zuinig' koos (B-14).
+    "weegschaal": '<path d="M12 4v16M8.5 20h7M5 7h14"/><path d="M5 7l-2.5 6h5zM19 7l-2.5 6h5z"/>'
+                  '<path d="M2.5 13a2.5 2.5 0 0 0 5 0M16.5 13a2.5 2.5 0 0 0 5 0"/>',
 }
 
 
@@ -547,15 +799,79 @@ def lijn_pixmap(naam: str, kleur_: str | QColor, px: int, dikte: float = 2.0) ->
     return pm
 
 
+# Getekende lijnicoontjes, zodat een knop niet bij elke keer tekenen de SVG opnieuw maakt. De sleutel bevat de
+# echte kleur (#rrggbb), dus na een wissel van licht/donker tekent alles vanzelf in de nieuwe kleur.
+_LIJN_CACHE: dict[tuple, QPixmap] = {}
+# Python-kant van de icoon-tekenaars bewaren: QIcon houdt alleen de C++-kant vast. Ruimt Python de Python-kant
+# op, dan kan Qt onze pixmap() niet meer aanroepen (en tekent hij niets). Een paar honderd kleine objecten.
+_LIJN_TEKENAARS: list = []
+
+
+class _LijnTekenaar(QIconEngine):
+    """Tekent een BugOS-lijnicoon op het moment dat Qt hem nodig heeft, in de kleur van NU (A-03).
+
+    Eerst maakte lijn_icoon vaste plaatjes in de kleur van het moment van maken: na een wissel naar donker
+    bleven de icoontjes in de open app donkergrijs op donker. kleur_ en gekozen zijn een naam uit K
+    ('tekst2', 'accent') of een vaste kleur; een naam wordt bij elke keer tekenen opnieuw opgezocht."""
+
+    def __init__(self, naam: str, kleur_: str | QColor, gekozen: str | QColor | None):
+        super().__init__()
+        self.naam, self.kleur_, self.gekozen = naam, kleur_, gekozen
+        _LIJN_TEKENAARS.append(self)
+
+    def _pixmap(self, size: QSize, mode: QIcon.Mode, schaal: float = 1.0) -> QPixmap:
+        # De gekozen stand (in een lijst) in 'gekozen'; zonder 'gekozen' gewoon de normale kleur.
+        kleur_ = self.gekozen if (mode == QIcon.Mode.Selected and self.gekozen is not None) else self.kleur_
+        n = max(1, round(min(size.width(), size.height()) * schaal))
+        echt = QColor(K.get(kleur_, kleur_) if isinstance(kleur_, str) else kleur_).name()
+        sleutel = (self.naam, echt, n, mode == QIcon.Mode.Disabled)
+        pm = _LIJN_CACHE.get(sleutel)
+        if pm is None:
+            if len(_LIJN_CACHE) > 2000:   # nooit onbeperkt groeien (veel maten bij inzoomen)
+                _LIJN_CACHE.clear()
+            pm = lijn_pixmap(self.naam, echt, n)
+            if mode == QIcon.Mode.Disabled:
+                # Uitgeschakeld: zoals Qt dat met een gewoon icoon doet (grijzer), via de stijl van de app.
+                app = QApplication.instance()
+                if app is not None and app.style() is not None:
+                    pm = app.style().generatedIconPixmap(QIcon.Mode.Disabled, pm, QStyleOption())
+            _LIJN_CACHE[sleutel] = pm
+        pm = QPixmap(pm)   # een kopie: de beeldpuntverhouding hieronder mag de bewaarde niet veranderen
+        pm.setDevicePixelRatio(schaal)
+        return pm
+
+    def pixmap(self, size, mode, state):  # noqa: ARG002 (state: een lijnicoon heeft geen aan/uit-stand)
+        return self._pixmap(size, mode)
+
+    def scaledPixmap(self, size, mode, state, scale):  # noqa: N802, ARG002 (Qt-naam)
+        # Qt vraagt bij 150 % of 200 % om een scherp plaatje: size in logische punten, scale de verhouding.
+        return self._pixmap(size, mode, scale or 1.0)
+
+    def paint(self, painter, rect, mode, state):  # noqa: ARG002
+        apparaat = painter.device()
+        schaal = apparaat.devicePixelRatioF() if apparaat is not None else 1.0
+        painter.drawPixmap(rect, self._pixmap(rect.size(), mode, schaal))
+
+    def actualSize(self, size, mode, state):  # noqa: N802, ARG002
+        # Een lijnicoon is vierkant en kan elke maat aan.
+        kant = min(size.width(), size.height())
+        return QSize(kant, kant)
+
+    def clone(self):
+        return _LijnTekenaar(self.naam, self.kleur_, self.gekozen)
+
+    def key(self):
+        return "bugos-lijn"
+
+
 def lijn_icoon(naam: str, kleur_: str | QColor = "tekst2", maat: int = 20,
                gekozen: str | QColor | None = "accent") -> QIcon:
-    """Een QIcon van een lijnicoon; de gekozen stand (in een lijst) is rood."""
-    ic = QIcon()
-    for schaal in (1, 2, 3):
-        ic.addPixmap(lijn_pixmap(naam, kleur_, maat * schaal), QIcon.Mode.Normal)
-        if gekozen is not None:
-            ic.addPixmap(lijn_pixmap(naam, gekozen, maat * schaal), QIcon.Mode.Selected)
-    return ic
+    """Een QIcon van een lijnicoon; de gekozen stand (in een lijst) is rood.
+
+    Het icoon tekent zichzelf bij elke keer tekenen in de kleur van dat moment (licht of donker), zie
+    _LijnTekenaar. maat is de gewone maat; Qt vraagt zelf om grotere plaatjes bij een hogere schaal."""
+    del maat   # alleen nog voor de leesbaarheid van de aanroepen: de tekenaar kan elke maat aan
+    return QIcon(_LijnTekenaar(naam, kleur_, gekozen))
 
 
 def icoon(naam: str) -> QIcon:
@@ -569,13 +885,14 @@ def icoon(naam: str) -> QIcon:
 # Pas hier, onderaan: deze bestanden gebruiken zelf de kleuren en iconen hierboven.
 
 from bugos_widgets import (  # noqa: E402, F401  (doorgeven: apps halen dit uit bugos_ui)
-    Banner, Chip, Groep, IcoonChip, Kaart, KeuzeKaart, Knop, SchakelRij, Schakelaar, Schuif, Tegel, gewone_knop,
-    hoofdknop, label, lettertype, lijn, titel, uitleg, wit_icoon,
+    Banner, Chip, Groep, IcoonChip, Kaart, KeuzeKaart, Knop, SchakelRij, Schakelaar, Schuif, StreepKnop, Tegel,
+    gewone_knop, hoofdknop, label, lettertype, lijn, titel, uitleg, wit_icoon,
 )
 from bugos_pages import (  # noqa: E402, F401
     Held, SchijfKiezer, Voortgang, Zijbalk, Zoekveld, achtergrond_pad, kader, kop, kop_met_icoon, logo_icoon,
-    merk_label, pagina, raster, ronde_pixmap, schijf_info, schuifbaar, sectie,
+    merk_label, pagina, raster, ronde_pixmap, schijf_info, schuifbaar, sectie, sectie_met_knop,
 )
 from bugos_shell import (  # noqa: E402, F401
-    LEESBREEDTE, ZIJBALK_BREEDTE, ActieBalk, Melding, Pagina, Rij, Venster, app_kop, leeg_groep, ronde_knop,
+    LEESBREEDTE, ZIJBALK_BREEDTE, ActieBalk, Melding, Pagina, Rij, Venster, app_kop, leeg_groep, ronde_knop, vraag_ja,
+    vraag_tekst,
 )

@@ -25,3 +25,21 @@ epicgames|Heroic Games Launcher|com.heroicgameslauncher.hgl
 epicinstaller|Heroic Games Launcher|com.heroicgameslauncher.hgl
 goggalaxy|Heroic Games Launcher|com.heroicgameslauncher.hgl
 gog_galaxy|Heroic Games Launcher|com.heroicgameslauncher.hgl
+# Meer veelgebruikte Windows-installaties (D-04). De naam van het bestand is wat je van de website krijgt, bijv.
+# npp.8.7.1.Installer.x64.exe, Audacity-3.7.1-64bit.exe, paint.net.5.1.2.install.x64.exe. Staat de app al op BugOS
+# (zoals KWrite, Firefox en Ark), dan biedt bugos-exe aan hem meteen te openen in plaats van hem uit de Winkel te halen.
+^npp.|KWrite (Teksteditor)|org.kde.kwrite
+notepad++|KWrite (Teksteditor)|org.kde.kwrite
+notepadplusplus|KWrite (Teksteditor)|org.kde.kwrite
+audacity|Audacity|org.audacityteam.Audacity
+paint.net|Pinta|com.github.PintaProject.Pinta
+paintdotnet|Pinta|com.github.PintaProject.Pinta
+brave|Brave|com.brave.Browser
+signal-desktop|Signal|org.signal.Signal
+blender|Blender|org.blender.Blender
+inkscape|Inkscape|org.inkscape.Inkscape
+krita|Krita|org.kde.krita
+kdenlive|Kdenlive|org.kde.kdenlive
+handbrake|HandBrake|fr.handbrake.ghb
+keepass|KeePassXC|org.keepassxc.KeePassXC
+qbittorrent|qBittorrent|org.qbittorrent.qBittorrent

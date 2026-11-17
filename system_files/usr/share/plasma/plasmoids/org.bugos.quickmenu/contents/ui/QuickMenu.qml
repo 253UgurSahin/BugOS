@@ -102,12 +102,27 @@ Rectangle {
             columns: 3
             rowSpacing: 10
             columnSpacing: 10
-            SnelKnop { wat: "wifi"; icoon: "network-wireless"; tekst: snel.tr("Wifi", "Wi-Fi"); extra: "wifi" }
-            SnelKnop { wat: "bluetooth"; icoon: "network-bluetooth"; tekst: "Bluetooth"; extra: "bluetooth" }
+            // kortWaarom/waarom: wat een grijze tegel zegt (A-02). bugos-start-data --snel geeft null als de computer
+            // het niet heeft: geen wifi-kaart, geen bluetooth, geen luidspreker.
+            SnelKnop {
+                wat: "wifi"; icoon: "network-wireless"; tekst: snel.tr("Wifi", "Wi-Fi"); extra: "wifi"
+                kortWaarom: snel.tr("Geen wifi", "No Wi-Fi")
+                waarom: snel.tr("Deze computer heeft geen wifi. Met een kabel werkt internet gewoon.",
+                                "This computer has no Wi-Fi. Internet over a cable still works.")
+            }
+            SnelKnop {
+                wat: "bluetooth"; icoon: "network-bluetooth"; tekst: "Bluetooth"; extra: "bluetooth"
+                kortWaarom: snel.tr("Geen bluetooth", "No Bluetooth")
+                waarom: snel.tr("Deze computer heeft geen bluetooth.", "This computer has no Bluetooth.")
+            }
             SnelKnop { wat: "spel"; icoon: "input-gamepad"; tekst: snel.tr("Game-modus", "Game mode") }
             SnelKnop { wat: "donker"; icoon: "contrast"; tekst: snel.tr("Donker", "Dark") }
             SnelKnop { wat: "niet_storen"; icoon: "notifications-disabled"; tekst: snel.tr("Niet storen", "Do not disturb"); extra: "meldingen" }
-            SnelKnop { wat: "stil"; icoon: "audio-volume-muted"; tekst: snel.tr("Geluid uit", "Mute") }
+            SnelKnop {
+                wat: "stil"; icoon: "audio-volume-muted"; tekst: snel.tr("Geluid uit", "Mute")
+                kortWaarom: snel.tr("Geen geluid", "No sound")
+                waarom: snel.tr("Er is geen luidspreker of koptelefoon gevonden.", "No speaker or headphones were found.")
+            }
         }
 
         // Volume en (op een laptop) de helderheid van het scherm
@@ -274,92 +289,138 @@ Rectangle {
         }
     }
 
-    component SnelKnop: AbstractButton {
-        id: knop
+    // Een tegel van het snelmenu (wifi, bluetooth, game-modus, ...): klik = aan/uit.
+    //
+    // A-02 (VM-test): het pijltje (›) zat vroeger in de 'background' van de tegel. Dat ligt ONDER de knop, dus de klik
+    // ging naar de tegel zelf: het pijltje van 'Niet storen' zette niet storen aan in plaats van Instellingen te
+    // openen. En stond de tegel uit (geen wifi-kaart: status null), dan erfde het pijltje 'enabled: false' en deed
+    // het niets. Daarom is de tegel nu een gewoon Item met twee broertjes: de knop (de hele tegel) en het pijltje
+    // erboven. Het pijltje werkt ook als de tegel grijs is: Instellingen > Wifi legt dan uit wat er aan de hand is.
+    // Een grijze tegel zegt nu ook waarom: een korte regel op de tegel ('Geen wifi') en een uitleg bij het aanwijzen
+    // ('Deze computer heeft geen wifi'), want een grijze knop zonder reden lijkt kapot.
+    component SnelKnop: Item {
+        id: vak
         property string wat
         property string icoon
         property string tekst
         property string extra: ""
+        // Waarom de tegel grijs is: kort op de tegel en een hele zin bij het aanwijzen.
+        property string kortWaarom: snel.tr("Niet beschikbaar", "Not available")
+        property string waarom: snel.tr("Dit kan op deze computer niet.", "This is not available on this computer.")
         readonly property var stand: snel.status[wat]
         readonly property bool aan: stand === true
-        enabled: stand !== null && stand !== undefined
+        // null of ontbrekend = deze computer heeft het niet (bijv. geen wifi-kaart, geen geluid)
+        readonly property bool beschikbaar: stand !== null && stand !== undefined
+        // Alleen 'niet beschikbaar' zeggen als de status er al is; daarvoor staat er 'Even kijken…' bovenaan.
+        readonly property bool zonder: !snel.leeg && !beschikbaar
+        objectName: "tegel-" + wat
         Layout.fillWidth: true
         Layout.preferredWidth: 1
         implicitHeight: 92
-        hoverEnabled: true
-        Accessible.name: tekst
-        Accessible.checkable: true
-        Accessible.checked: aan
-        onClicked: snel.zet(wat, aan ? "uit" : "aan")
-        Keys.onReturnPressed: clicked()
-        Keys.onEnterPressed: clicked()
-        opacity: enabled ? 1 : 0.45
-        scale: pressed ? 0.96 : 1.0
-        Behavior on scale { NumberAnimation { duration: 90 } }
-        background: Rectangle {
-            radius: snel.o.rKaart
-            color: knop.aan ? "transparent" : (knop.hovered ? snel.vlakZweef : snel.vlak)
-            border.width: knop.aan ? 0 : 1
-            border.color: snel.lijnkleur
-            Rectangle {
-                anchors.fill: parent
+
+        // Aanwijzen werkt ook op een uitgeschakelde knop niet; een HoverHandler op het Item zelf wel.
+        HoverHandler { id: zweven }
+        ToolTip.visible: vak.zonder && zweven.hovered && !pijl.hovered
+        ToolTip.text: vak.waarom
+        ToolTip.delay: 300
+
+        AbstractButton {
+            id: knop
+            objectName: "knop-" + vak.wat
+            anchors.fill: parent
+            enabled: vak.beschikbaar
+            hoverEnabled: true
+            Accessible.name: vak.tekst
+            Accessible.description: vak.zonder ? vak.waarom : ""
+            Accessible.checkable: true
+            Accessible.checked: vak.aan
+            onClicked: snel.zet(vak.wat, vak.aan ? "uit" : "aan")
+            Keys.onReturnPressed: clicked()
+            Keys.onEnterPressed: clicked()
+            opacity: enabled ? 1 : 0.45
+            scale: pressed ? 0.96 : 1.0
+            Behavior on scale { NumberAnimation { duration: 90 } }
+            background: Rectangle {
                 radius: snel.o.rKaart
-                visible: knop.aan
-                gradient: Gradient {
-                    GradientStop { position: 0.0; color: snel.o.verloopBegin }
-                    GradientStop { position: 1.0; color: snel.rood }
+                color: vak.aan ? "transparent" : (knop.hovered ? snel.vlakZweef : snel.vlak)
+                border.width: vak.aan ? 0 : 1
+                border.color: snel.lijnkleur
+                Rectangle {
+                    anchors.fill: parent
+                    radius: snel.o.rKaart
+                    visible: vak.aan
+                    gradient: Gradient {
+                        GradientStop { position: 0.0; color: snel.o.verloopBegin }
+                        GradientStop { position: 1.0; color: snel.rood }
+                    }
+                }
+                Rectangle {
+                    anchors.fill: parent
+                    radius: snel.o.rKaart
+                    color: "transparent"
+                    border.width: knop.activeFocus ? 2 : 0
+                    border.color: snel.tekst
                 }
             }
-            Rectangle {
-                anchors.fill: parent
-                radius: snel.o.rKaart
-                color: "transparent"
-                border.width: knop.activeFocus ? 2 : 0
-                border.color: snel.tekst
-            }
-            // Pijltje naar de bijbehorende pagina van Instellingen (bijv. een netwerk kiezen)
-            Pijltje {
-                visible: knop.extra !== ""
-                naar: knop.extra
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.margins: 6
-                Accessible.name: snel.tr("Meer over ", "More about ") + knop.tekst.toLowerCase()
-                contentItem: Label {
-                    text: "›"
-                    color: knop.aan ? "white" : snel.tekst2
-                    font.pixelSize: Math.round(20 * snel.schaal)
+            contentItem: ColumnLayout {
+                spacing: vak.zonder ? 4 : 8
+                Rectangle {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: 4
+                    width: 36; height: 36; radius: 18
+                    color: vak.aan ? Qt.rgba(1, 1, 1, 0.22) : snel.o.knop
+                    Loader {
+                        anchors.centerIn: parent
+                        width: 20; height: 20
+                        sourceComponent: snel.icoonTekenaar
+                        onLoaded: {
+                            item.naam = vak.icoon
+                            // In Plasma: pictogram wit maken op een rode (aan) knop
+                            if (item.hasOwnProperty("wit")) item.wit = Qt.binding(() => vak.aan)
+                        }
+                    }
+                }
+                Label {
+                    text: vak.tekst
+                    Layout.fillWidth: true
                     horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
+                    elide: Text.ElideRight
+                    font.pixelSize: Math.round(snel.o.letterKlein * snel.schaal)
+                    font.weight: Font.Medium
+                    color: vak.aan ? "white" : snel.tekst
+                }
+                // De reden onder de naam, alleen bij een grijze tegel ('Geen wifi').
+                Label {
+                    objectName: "waarom-" + vak.wat
+                    visible: vak.zonder
+                    text: vak.kortWaarom
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
+                    elide: Text.ElideRight
+                    font.pixelSize: Math.round(11 * snel.schaal)
+                    color: snel.tekst2
                 }
             }
         }
-        contentItem: ColumnLayout {
-            spacing: 8
-            Rectangle {
-                Layout.alignment: Qt.AlignHCenter
-                Layout.topMargin: 4
-                width: 36; height: 36; radius: 18
-                color: knop.aan ? Qt.rgba(1, 1, 1, 0.22) : snel.o.knop
-                Loader {
-                    anchors.centerIn: parent
-                    width: 20; height: 20
-                    sourceComponent: snel.icoonTekenaar
-                    onLoaded: {
-                        item.naam = knop.icoon
-                        // In Plasma: pictogram wit maken op een rode (aan) knop
-                        if (item.hasOwnProperty("wit")) item.wit = Qt.binding(() => knop.aan)
-                    }
-                }
-            }
-            Label {
-                text: knop.tekst
-                Layout.fillWidth: true
+
+        // Pijltje naar de bijbehorende pagina van Instellingen (bijv. een netwerk kiezen). Boven de knop (later in de
+        // lijst = erbovenop), dus de klik komt hier en niet bij de tegel. Niet grijs met de tegel mee.
+        Pijltje {
+            id: pijl
+            objectName: "pijl-" + vak.wat
+            visible: vak.extra !== ""
+            enabled: !snel.leeg
+            naar: vak.extra
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: 6
+            Accessible.name: snel.tr("Meer over ", "More about ") + vak.tekst.toLowerCase()
+            contentItem: Label {
+                text: "›"
+                color: vak.aan ? "white" : snel.tekst2
+                font.pixelSize: Math.round(20 * snel.schaal)
                 horizontalAlignment: Text.AlignHCenter
-                elide: Text.ElideRight
-                font.pixelSize: Math.round(snel.o.letterKlein * snel.schaal)
-                font.weight: Font.Medium
-                color: knop.aan ? "white" : snel.tekst
+                verticalAlignment: Text.AlignVCenter
             }
         }
     }

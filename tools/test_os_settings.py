@@ -930,12 +930,13 @@ del _pr.ververs
 del venster.isActiveWindow
 
 # U368: 'Terug naar de vorige versie' vraagt het eerst, en zegt dat wachtwoord, nieuwe gebruikers en wifi ook teruggaan.
-from PySide6.QtWidgets import QMessageBox as _QMB2  # noqa: E402
+# (De vraag is de gedeelde BugOS-vraag, bugos_shell.VraagDialoog, niet meer een QMessageBox.)
+from bugos_shell import VraagDialoog as _QMB2  # noqa: E402
 
 _up = venster.paginas["updates"]
 _teksten, _gestart, _std = [], [], []
 _oud_exec, _oud_up = _QMB2.exec, _up.updates
-_QMB2.exec = lambda self: (_teksten.append(self.informativeText()), _std.append(self.defaultButton().text() if self.defaultButton() else ""))[0] or 0   # 'Annuleren'
+_QMB2.exec = lambda self: (_teksten.append(self.uitleg.text()), _std.append(self.standaard))[0] or 0   # 'Annuleren'
 _up.updates = lambda wat: _gestart.append(wat)
 _up.vraag_terug()
 _QMB2.exec, _up.updates = _oud_exec, _oud_up
@@ -995,6 +996,67 @@ _up.klaar_met("nu", 1, "error: Writing objects: No space left on device\n")
 klopt("vol" in _up.melding.tekst.text() and "online" not in _up.melding.tekst.text(),
       f"U411: updaten met een volle computer: dat wordt gezegd ({_up.melding.tekst.text()!r})")
 
+# B-01: 'Nu updaten' lukt niet omdat de updateserver deze versie niet kent (de VM: een image met de tag 'lokaal'):
+# niet 'Ben je online?' zeggen, want het internet werkt. Wel 'niet online' als dat echt zo is.
+_reg = ("error: Upgrading: Preparing import: Fetching manifest: failed to invoke method OpenImage: unable to retrieve "
+        "auth token: invalid username/password: unauthorized: authentication required\n")
+_dns = "error: pinging container registry ghcr.io: Get \"https://ghcr.io/v2/\": dial tcp: lookup ghcr.io: no such host\n"
+_uf = _sys.update_fout
+klopt("updateserver" in _uf(_reg) and "online?" not in _uf(_reg) and "updateserver" in _uf(_reg, True),
+      f"B-01: de updateserver kent deze versie niet: dat wordt gezegd, niet 'Ben je online?' ({_uf(_reg)!r})")
+klopt("niet online" in _uf(_dns) and "niet online" in _uf("error: x\n", False) and "niet online" in _uf(_reg, False),
+      f"B-01: geen internet (in de uitvoer, of NetworkManager zegt het): 'je computer is niet online' ({_uf(_dns)!r})")
+klopt("internet wel werkt" in _uf("error: something else\n", True) and "online?" in _uf("error: something else\n"),
+      "B-01: een andere fout terwijl het internet werkt: dat zeggen; weten we niets, dan de oude vraag")
+_oud_online = _sys.online
+_sys.online = lambda: True
+_up.klaar_met("nu", 1, _reg)
+_eerst01 = _up.melding.tekst.text()
+QThreadPool.globalInstance().waitForDone(5000)
+for _ in range(5):
+    app.processEvents()
+klopt("updateserver" in _eerst01 and "updateserver" in _up.melding.tekst.text() and _up.melding.property("soort") == "fout",
+      f"B-01: Instellingen zegt na 'Nu updaten' dat de updateserver deze versie niet kent ({_up.melding.tekst.text()!r})")
+_up.klaar_met("nu", 1, "error: something else\n")
+QThreadPool.globalInstance().waitForDone(5000)
+for _ in range(5):
+    app.processEvents()
+klopt("internet wel werkt" in _up.melding.tekst.text(),
+      f"B-01: daarna gevraagd: het internet werkt, dus geen 'Ben je online?' ({_up.melding.tekst.text()!r})")
+_sys.online = _oud_online
+
+# B-24: 'Terug naar de vorige versie' op een computer met maar één versie: meteen zeggen dat er geen oudere is, zonder
+# eerst de ernstige waarschuwing (wachtwoord, gebruikers en wifi gaan terug).
+from bugos_shell import VraagDialoog as _QDialog24  # noqa: E402  (de vraag van BugOS zelf)
+
+_gevraagd24: list = []
+_echt_exec24 = _QDialog24.exec
+_QDialog24.exec = lambda self: (_gevraagd24.append(self), 0)[1]   # Annuleren
+_oud_kt, _oud_vb = _sys.kan_terug, bi.VOORBEELD
+_sys.kan_terug = lambda: False
+bi.VOORBEELD = False
+_up.melding.hide()
+_up.vraag_terug()
+QThreadPool.globalInstance().waitForDone(5000)
+for _ in range(5):
+    app.processEvents()
+klopt(not _gevraagd24 and "geen oudere versie" in _up.melding.tekst.text() and _up.terug.isEnabled(),
+      f"B-24: geen vorige versie: meteen gezegd, zonder waarschuwing ({_up.melding.tekst.text()!r})")
+_sys.kan_terug = lambda: True
+_up.vraag_terug()
+QThreadPool.globalInstance().waitForDone(5000)
+for _ in range(5):
+    app.processEvents()
+klopt(len(_gevraagd24) == 1, "B-24: is er wel een vorige versie, dan eerst de waarschuwing (zoals altijd)")
+_sys.kan_terug = lambda: None
+_up.vraag_terug()
+QThreadPool.globalInstance().waitForDone(5000)
+for _ in range(5):
+    app.processEvents()
+klopt(len(_gevraagd24) == 2, "B-24: weten we het niet (rpm-ostree zegt niets), dan ook de waarschuwing")
+_sys.kan_terug, bi.VOORBEELD = _oud_kt, _oud_vb
+_QDialog24.exec = _echt_exec24
+
 # U445: de klok in het Engels volgt je regio: 2:05 PM in de VS, 9 November met 24 uur in Ierland.
 _uit445 = {}
 for _l445 in ("en_US.UTF-8", "en_IE.UTF-8", "de_DE.UTF-8"):
@@ -1019,12 +1081,13 @@ _n495 = bi.lees_netwerken("  :eduroam:70:WPA2 802.1X\n  :Station:60:OWE\n  :Thui
 _z495 = {n.naam: (n.beveiligd, n.zakelijk) for n in _n495}
 klopt(_z495 == {"eduroam": (True, True), "Station": (False, False), "Thuis": (True, False)},
       f"U495: eduroam is school/werk-wifi, OWE is open ({_z495})")
-_sn = sys.modules["bugos_settings_netwerk"]
-_open495 = []
-_oud495, _sn.kde_instelling = _sn.kde_instelling, (lambda m: _open495.append(m))
-venster.paginas["wifi"].verbind_met(_n495[0] if _n495[0].naam == "eduroam" else next(n for n in _n495 if n.zakelijk), False)
-_sn.kde_instelling = _oud495
-klopt(_open495 == ["kcm_networkmanagement"], f"U495: eduroam opent KDE's netwerkscherm in plaats van 'wachtwoord fout' ({_open495})")
+_edu495 = _n495[0] if _n495[0].naam == "eduroam" else next(n for n in _n495 if n.zakelijk)
+venster.paginas["wifi"].verbind_met(_edu495, False)
+_d495 = getattr(venster.paginas["wifi"], "zakelijk_dialoog", None)
+klopt(_d495 is not None and _d495.isVisible() and "eduroam" in _d495.windowTitle(),
+      "U495: eduroam opent BugOS' eigen venster voor wifi van school of werk (gebruikersnaam en wachtwoord, geen KDE)")
+if _d495 is not None:
+    _d495.reject()
 # U496: een HDMI-uitgang zonder scherm eraan staat niet in de lijst (dan is alles stil); de gekozen wel.
 _j496 = __import__("json").dumps([{"name": "speakers", "description": "Speakers", "ports": [{"availability": "available"}]},
                     {"name": "hdmi1", "description": "HDMI 1", "ports": [{"availability": "not available"}]},
@@ -1095,16 +1158,24 @@ else:
 _volg499 = [c[:2] for c in _o499 if c[0] in ("rfkill", "bluetoothctl")]
 klopt(_volg499[:1] == [("rfkill", "unblock")] and _volg499[-1] == ("bluetoothctl", "power") and len(_n499) >= 2,
       f"U499: bluetooth aan wacht tot de kaart terug is ({_volg499})")
-# U474: klok niet vanzelf: een knop naar KDE's Datum en tijd (niet naar 'Meer instellingen', dat is Regio en taal).
+# U474: klok niet vanzelf: 'Klok zelf instellen…' opent het BugOS-venster om de klok te zetten (geen KDE meer).
 _tp474 = venster.paginas["tijd"]
 _tp474.toon((sys.modules["bugos_config_account"].Tijd("Europe/Amsterdam", False, False), "nl_NL"))
 _sa474 = sys.modules["bugos_settings_account"]
 _open474 = []
-_oud474, _sa474.kde_instelling = _sa474.kde_instelling, (lambda m: _open474.append(m))
+
+
+class _NepKlok474:
+    def __init__(self, ouder):
+        _open474.append("klok")
+
+
+setattr(_NepKlok474, "exec", lambda self: 0)
+_oud474, _sa474.KlokDialoog = _sa474.KlokDialoog, _NepKlok474
 _tp474.zelf_rij.geklikt.emit()
-_sa474.kde_instelling = _oud474
-klopt(not _tp474.zelf_rij.isHidden() and _open474 == ["kcm_clock"] and "Meer instellingen" not in _tp474.klok_rij.uitleg.text(),
-      f"U474: klok zelf instellen opent Datum en tijd ({_open474}, {_tp474.klok_rij.uitleg.text()!r})")
+_sa474.KlokDialoog = _oud474
+klopt(not _tp474.zelf_rij.isHidden() and _open474 == ["klok"] and "Meer instellingen" not in _tp474.klok_rij.uitleg.text(),
+      f"U474: klok zelf instellen opent het BugOS-venster ({_open474}, {_tp474.klok_rij.uitleg.text()!r})")
 # U475/U480: 'Nu updaten' werkt daarna ook je eigen apps bij, en zegt pas dan 'Klaar' (geen herstart midden in die update).
 _nep480 = Path(tempfile.mkdtemp(prefix="bugos-nep480-"))
 (_nep480 / "flatpak").write_text(f"#!/usr/bin/bash\necho \"$*\" >>{_nep480}/log\n")
@@ -1129,6 +1200,14 @@ _sp2 = venster.paginas["scherm"]
 _sp2.toon((None, False, 1.0))
 _aan = {w: k.isEnabled() for w, k in _sp2.grootte.knoppen.items()}
 klopt(_aan[1.0] and not _aan[2.0] and not _aan[1.5], f"U397: op een klein scherm geen 150-200% (dan past niets meer) ({_aan})")
+# B-03: en dat staat er ook: de regel zegt waarom, en elke grijze knop heeft een tip (eerst gebeurde er gewoon niets).
+_uitleg03 = _sp2.grootte_rij.uitleg.text()
+klopt("past niet op dit scherm" in _uitleg03 and "100%" in _uitleg03
+      and all(k.toolTip() for w, k in _sp2.grootte.knoppen.items() if not k.isEnabled())
+      and not _sp2.grootte.knoppen[1.0].toolTip(),
+      f"B-03: de regel zegt waarom 125-200% niet kan, en de grijze knoppen hebben een tip ({_uitleg03!r})")
+klopt("QPushButton#keus:disabled" in mod_onderdelen.stijl(),
+      "B-03: een keuze die niet kan, is grijs (niet net zo als een knop die wel werkt)")
 # U407: een grootte kiezen vraagt de huidige schaal niet opnieuw (kscreen-doctor, tot 8 s): het venster blijft vlot.
 _oud407 = sys.modules["bugos_settings_scherm"].bi.schaal
 _gevraagd407 = []

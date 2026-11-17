@@ -3,13 +3,13 @@
 
 Zoals Instellingen in Windows, maar rustiger: de dingen die je echt gebruikt (wifi,
 bluetooth, printers, geluid, scherm, energie, uiterlijk, meldingen, muis, makkelijker zien,
-tijd en taal, inloggen, standaardprogramma's, updates) regel je hier zelf. Klik op een
+tijd en taal, inloggen, geïnstalleerde apps, standaardprogramma's, updates) regel je hier zelf. Klik op een
 netwerk om te verbinden, op een luidspreker om die te gebruiken. Wie meer wil, vindt per
 onderdeel 'Meer instellingen (voor gevorderden)'.
 
 Gebruik:  bugos-settings [pagina]
           pagina = start | wifi | bluetooth | printers | geluid | scherm | energie | uiterlijk | meldingen
-                   | muis | zien | tijd | inloggen | programmas | updates | over
+                   | muis | zien | tijd | inloggen | mijnapps | programmas | spelen | updates | over
 
 Hier staan de startpagina en het venster; de andere pagina's staan in /usr/lib/bugos/python/bugos_settings_*.py.
 """
@@ -22,20 +22,26 @@ sys.path.insert(0, "/usr/lib/bugos/python")
 
 import bugos_config as bi  # noqa: E402
 from bugos_ui import (  # noqa: E402
-    Groep, Rij, Schuif, Venster, label, leeg_groep, lijn_icoon, maak_app, sectie, start, t, uitvoeren, zoeksleutel,
+    K, Groep, Rij, Schuif, StreepKnop, Venster, label, leeg_groep, lijn_icoon, maak_app, px, schaal_css, sectie, start,
+    t, uitvoeren, zet_label_icoon, zoeksleutel,
 )
+import bugos_ui  # noqa: E402  (DONKER en zet_thema via de module: ze veranderen terwijl de app open is)
 from bugos_settings_account import InloggenPagina, TijdPagina  # noqa: E402
+# Geïnstalleerde apps: dezelfde lijst en hetzelfde verwijderen als 'Mijn apps' in de Winkel (bugos_apps).
+from bugos_settings_apps import AppsPagina  # noqa: E402
 from bugos_settings_meldingen import MeldingenPagina, PrintersPagina, ProgrammasPagina  # noqa: E402
 from bugos_settings_netwerk import BluetoothPagina, WifiPagina  # noqa: E402
+# Doorloop (tabjes die naar een tweede regel gaan) staat in bugos_settings_onderdelen, zodat de pagina's hem ook
+# kunnen gebruiken (Uiterlijk, D05); hier blijft hij onder dezelfde naam te vinden (de test kijkt naar inst.Doorloop).
 from bugos_settings_onderdelen import (  # noqa: E402,F401  (KiesDialoog en WachtwoordDialoog: voor de test)
-    Blad, KiesDialoog, Regelaar, WachtwoordDialoog, op_achtergrond, stijl,
+    Blad, Doorloop, KiesDialoog, Kolommen, Regelaar, WachtwoordDialoog, op_achtergrond, pagina_marge, stijl,
 )
 from bugos_settings_scherm import EnergiePagina, GeluidPagina, SchermPagina, UiterlijkPagina  # noqa: E402
 from bugos_settings_systeem import OverPagina, SpelenPagina, UpdatesPagina  # noqa: E402
 from bugos_settings_zien import MuisPagina, ZienPagina  # noqa: E402
-from PySide6.QtCore import QEvent, QSize, QTimer  # noqa: E402
+from PySide6.QtCore import QEvent, Qt, QTimer  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
+    QApplication, QButtonGroup, QFrame, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 
@@ -48,15 +54,15 @@ class StartPagina(Blad):
     uitleg_en = "Everything in one place, in plain words."
 
     def bouw(self) -> None:
-        # snel: de schuifjes die je het vaakst nodig hebt
-        rooster = QGridLayout()
-        rooster.setSpacing(12)
+        # snel: de schuifjes die je het vaakst nodig hebt. In Kolommen: vier naast elkaar, en op een half scherm
+        # (640 px) twee en twee in plaats van dat de pagina opzij schuift (B-02).
+        self.snel_rij = Kolommen(12)
         self.snel: dict[str, Schuif] = {}
         self.snel_uitleg: dict[str, QLabel] = {}
-        for i, (sleutel, ic, naam) in enumerate((("wifi", "wifi", t("Wifi", "Wi-Fi")),
+        for sleutel, ic, naam in (("wifi", "wifi", t("Wifi", "Wi-Fi")),
                                                  ("bt", "bluetooth", "Bluetooth"),
                                                  ("nacht", "maan", t("Nachtlicht", "Night light")),
-                                                 ("donker", "palet", t("Donker", "Dark")))):
+                                  ("donker", "palet", t("Donker", "Dark"))):
             vak = QFrame()
             vak.setObjectName("snel")
             vl = QVBoxLayout(vak)
@@ -64,7 +70,7 @@ class StartPagina(Blad):
             vl.setSpacing(10)
             boven = QHBoxLayout()
             ik = QLabel()
-            ik.setPixmap(lijn_icoon(ic, "tekst", 22, gekozen=None).pixmap(22, 22))
+            zet_label_icoon(ik, lijn_icoon(ic, "tekst", 22, gekozen=None), 22)   # kleurt mee met licht/donker
             boven.addWidget(ik)
             boven.addStretch(1)
             schuif = Schuif(False)
@@ -76,14 +82,15 @@ class StartPagina(Blad):
             vl.addWidget(uitleg)
             self.snel[sleutel] = schuif
             self.snel_uitleg[sleutel] = uitleg
-            rooster.addWidget(vak, 0, i)
-        self.lay.addLayout(rooster)
+            self.snel_rij.voeg(vak)
+        self.lay.addWidget(self.snel_rij)
         g = self.kaart()
         self.volume = Regelaar(50)
-        self.volume.veranderd.connect(lambda w: op_achtergrond(self, lambda: bi.zet_volume(w), lambda _u: None))
+        self.volume.veranderd.connect(self.zet_volume)
+        self.luidspreker = ""   # de naam van de luidspreker die nu gebruikt wordt (voor de regel 'Geluid en meldingen')
         g.voeg(Rij("geluid", t("Volume", "Volume"), "", self.volume))
         # zoeken
-        self.zoek_kop = sectie(t("Gevonden", "Found"))
+        self.zoek_kop = sectie(t("Gevonden", "Found"), wrap=True)
         self.zoek_kop.hide()
         self.lay.addWidget(self.zoek_kop)
         self.zoek_kaart = Groep()
@@ -106,7 +113,7 @@ class StartPagina(Blad):
         def lees():
             return {"wifi": bi.wifi_aan(), "netwerken": bi.netwerken(), "bt": bi.bt_aan(), "nacht": bi.nachtlicht(),
                     "donker": bi.donker(), "geluid": bi.geluid(), "heeft_wifi": bi.heeft_wifi(),
-                    "heeft_bt": bi.VOORBEELD or bi.bt_hardware()}
+                    "heeft_bt": bi.VOORBEELD or bi.bt_hardware(), "kabel": bi.kabel()}
         op_achtergrond(self, lees, self.toon)
 
     def toon(self, s) -> None:
@@ -126,16 +133,51 @@ class StartPagina(Blad):
         self.snel["bt"].parentWidget().setVisible(s.get("heeft_bt", True))   # ook geen Bluetooth zonder Bluetooth (U157)
         volume, _stil, uitgangen = s["geluid"]
         self.volume.zet(volume)
-        if nu:
-            self.rijen["wifi"].zet_uitleg(t(f"Verbonden met {nu.naam}", f"Connected to {nu.naam}"))
+        self.rijen["wifi"].zet_uitleg(self.netwerk_uitleg(nu, s))
         gebruikt = next((u for u in uitgangen if u.standaard), None)
+        self.luidspreker = gebruikt.omschrijving if gebruikt else ""
         if gebruikt:
             self.rijen["geluid"].zet_uitleg(f"{volume}% · {gebruikt.omschrijving}")
+
+    @staticmethod
+    def netwerk_uitleg(nu, s: dict) -> str:
+        """Wat de regel 'Wifi en internet' zegt. Eerst stond er op een pc aan een kabel (zonder wifi) 'Klik op een
+        netwerk om te verbinden.' (B-20)."""
+        if nu:
+            return t(f"Verbonden met {nu.naam}", f"Connected to {nu.naam}")
+        kabel = s.get("kabel")
+        stand = kabel[0] if isinstance(kabel, tuple) else ""
+        if stand == "verbonden":
+            return t("Verbonden met een netwerkkabel", "Connected by cable")
+        if not s.get("heeft_wifi", True):
+            return t("Geen wifi in deze computer · gebruik een netwerkkabel",
+                     "No Wi-Fi in this computer · use a network cable")
+        return GROEPEN[1].uitleg()
+
+    def zet_volume(self, waarde: int) -> None:
+        """Het volume veranderen, en de regel 'Geluid en meldingen' meteen mee (eerst bleef daar het oude getal staan
+        tot je de pagina opnieuw opende, B-20)."""
+        op_achtergrond(self, lambda: bi.zet_volume(waarde), lambda _u: None)
+        if self.luidspreker:
+            self.rijen["geluid"].zet_uitleg(f"{waarde}% · {self.luidspreker}")
 
     def zet_snel(self, sleutel: str, aan: bool) -> None:
         werk = {"wifi": lambda: bi.zet_wifi(aan), "bt": lambda: bi.zet_bt(aan),
                 "nacht": lambda: bi.zet_nachtlicht(aan), "donker": lambda: bi.zet_donker(aan)}[sleutel]
-        op_achtergrond(self, werk, lambda _u: QTimer.singleShot(1200, self.ververs))
+
+        def klaar(uitkomst) -> None:
+            # Donker gelukt: Instellingen zelf kleurt meteen mee (B-10), niet pas na opnieuw openen.
+            if sleutel == "donker" and uitkomst:
+                bugos_ui.zet_thema(aan)
+            QTimer.singleShot(1200, self.ververs)
+        op_achtergrond(self, werk, klaar)
+
+    def thema_veranderd(self) -> None:
+        # Ergens anders omgezet (snelmenu, Welkom): de tegel 'Donker' zegt meteen wat er echt aan staat (A-03).
+        # bugos_ui.DONKER is net door zet_thema gezet uit kdeglobals, dezelfde bron als bi.donker().
+        if "donker" in getattr(self, "snel", {}):   # (nog niet gebouwd: dan zet ververs() het later)
+            self.snel["donker"].zet_stil(bugos_ui.DONKER)
+            self.snel_uitleg["donker"].setText(t("Aan", "On") if bugos_ui.DONKER else t("Uit", "Off"))
 
     def zoek(self, tekst: str) -> None:
         woorden = zoeksleutel(tekst).split()   # (U268)
@@ -159,7 +201,7 @@ class StartPagina(Blad):
 
 PAGINAS: list[type[Blad]] = [StartPagina, WifiPagina, BluetoothPagina, PrintersPagina, GeluidPagina, SchermPagina,
                              EnergiePagina, UiterlijkPagina, MeldingenPagina, MuisPagina, ZienPagina, TijdPagina,
-                             InloggenPagina, ProgrammasPagina, SpelenPagina, UpdatesPagina, OverPagina]
+                             InloggenPagina, AppsPagina, ProgrammasPagina, SpelenPagina, UpdatesPagina, OverPagina]
 OUDE_NAMEN = {"schakelaars": "updates"}
 
 
@@ -199,9 +241,11 @@ GROEPEN: list[Indeling] = [
              [InloggenPagina, TijdPagina]),
     Indeling("zien", ZienPagina.icoon, "Makkelijker zien", "Easier to see",
              "Grotere letters, vergrootglas, voorlezen.", "Bigger text, magnifier, read aloud.", [ZienPagina]),
+    # Zoals Windows 11 (Apps > Geïnstalleerde apps): eerst je apps, met Verwijderen; dan de standaardprogramma's.
     Indeling("apps", SpelenPagina.icoon, "Apps en gamen", "Apps and gaming",
-             "Standaardprogramma's, game-modus en ontwikkelaarsmodus.", "Default programs, game mode and developer mode.",
-             [ProgrammasPagina, SpelenPagina]),
+             "Je apps verwijderen, standaardprogramma's, game-modus en ontwikkelaarsmodus.",
+             "Remove your apps, default programs, game mode and developer mode.",
+             [AppsPagina, ProgrammasPagina, SpelenPagina]),
     Indeling("systeem", UpdatesPagina.icoon, "Updates en info", "Updates and info",
              "Updates, terug naar de vorige versie, over deze computer.",
              "Updates, back to the previous version, about this computer.", [UpdatesPagina, OverPagina]),
@@ -219,27 +263,39 @@ class GroepPagina(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
-        rij = QHBoxLayout()
-        rij.setContentsMargins(40, 22, 40, 0)
-        rij.setSpacing(8)
+        # Naast elkaar; passen ze niet (grote letters, 150 %), dan gaat een tabje naar een tweede regel.
+        rij = Doorloop(4)
+        rij.setContentsMargins(*TABS_MARGE)
+        self.tab_rij = rij
         self.tabs: dict[str, QPushButton] = {}
         knoppen = QButtonGroup(self)
         for b in bladen:
-            k = QPushButton(b.naam())
-            k.setObjectName("tab")
-            k.setCheckable(True)
-            k.setMinimumHeight(36)
+            # Stille tabjes zoals in Windows 11: geen tweede rode knop naast de rode hoofdknop van de pagina.
+            k = StreepKnop(b.naam(), "tab")
+            k.setMinimumHeight(px(TAB_HOOGTE))
+            # Alleen met Tab krijgt een tabje de focus (en de rode focusrand), niet met de muis: anders stond er na
+            # een klik een rode rand om het ene en het zachtrode vlak op het andere tabje (B-13).
+            k.setFocusPolicy(Qt.FocusPolicy.TabFocus)
             k.clicked.connect(lambda _c=False, s=b.sleutel: self.toon(s))
             knoppen.addButton(k)
             rij.addWidget(k)
             self.tabs[b.sleutel] = k
-        rij.addStretch(1)
         lay.addLayout(rij)
         self.stapel = QStackedWidget()
         for b in bladen:
+            # Onder de tabjes begint de pagina hoger: de titel staat bijna even hoog als op een pagina zonder tabjes.
+            m = b.lay.contentsMargins()
+            b.lay.setContentsMargins(m.left(), BLAD_ONDER_TABS, m.right(), m.bottom())
             self.stapel.addWidget(b)
         lay.addWidget(self.stapel, 1)
         self.toon(bladen[0].sleutel, ververs=False)
+
+    def resizeEvent(self, e) -> None:  # noqa: N802
+        """De tabjes springen even ver in als de pagina eronder: smal (half scherm) minder (B-02)."""
+        super().resizeEvent(e)
+        zijkant = pagina_marge(self.width())
+        if self.tab_rij.contentsMargins().left() != zijkant:
+            self.tab_rij.setContentsMargins(zijkant, TABS_MARGE[1], zijkant, TABS_MARGE[3])
 
     @property
     def sleutel(self) -> str:   # wat er nu echt open is (voor Instellingen.huidige en de tests)
@@ -249,8 +305,21 @@ class GroepPagina(QWidget):
         blad = self.bladen[sleutel]
         self.stapel.setCurrentWidget(blad)
         self.tabs[sleutel].setChecked(True)
+        self.focus_op_gekozen()
         if ververs:
             blad.ververs()
+
+    def focus_op_gekozen(self) -> None:
+        """Staat de focus op een ander tabje dan het gekozen, dan naar het gekozen tabje.
+
+        Waarom: open je een pagina via het zoeken ('printer', 'achtergrond'), dan verdwijnt het resultaat waar je op
+        klikte, en geeft Qt de focus aan het volgende in de rij: het eerste tabje. Dat kreeg dan een rode rand, naast
+        het zachtrode gekozen tabje: twee tabjes leken gekozen (B-13). Wie met Tab door de tabjes loopt, merkt hier
+        niets van: dan is het tabje met de focus niet het gekozen, maar dat verandert alleen bij een keuze."""
+        focus = QApplication.focusWidget()
+        gekozen = next((k for k in self.tabs.values() if k.isChecked()), None)
+        if gekozen is not None and focus in self.tabs.values() and focus is not gekozen:
+            gekozen.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def ververs(self) -> None:
         self.stapel.currentWidget().ververs()
@@ -258,12 +327,23 @@ class GroepPagina(QWidget):
 
 # ================================================================ venster ===
 
-TAB_STIJL = """
-QPushButton#tab { border: 1px solid palette(mid); border-radius: 18px; padding: 6px 18px;
-                  background: transparent; font-weight: 600; }
-QPushButton#tab:hover { background: palette(midlight); }
-QPushButton#tab:checked { background: #DE2F3E; border-color: #DE2F3E; color: #FFFFFF; }
-"""
+TAB_HOOGTE = 32
+TABS_MARGE = (40, 16, 40, 0)    # de rij tabjes boven een pagina (links, boven, rechts, onder)
+BLAD_ONDER_TABS = 14            # de bovenmarge van een pagina onder de tabjes (een gewone pagina: 32)
+
+
+def tab_stijl() -> str:
+    """Tabjes zoals in Windows 11: stil (geen rand, geen rood vlak). Het gekozen tabje heeft rode letters op een
+    zacht rood vlak (zoals in de zijbalk) en een korte rode streep eronder (StreepKnop tekent die), die je ook
+    zonder kleur goed ziet (3:1)."""
+    return schaal_css(f"""
+QPushButton#tab {{ border: none; border-radius: 12px; padding: 5px 14px; background: transparent;
+                  color: {K['tekst2']}; font-size: 14px; font-weight: 600; }}
+QPushButton#tab:hover {{ background: {K['knop']}; color: {K['tekst']}; }}
+QPushButton#tab:checked {{ background: {K['accent_zacht']}; color: {K['accent_gekozen']}; }}
+QPushButton#tab:focus {{ border: 2px solid {K['accent']}; padding: 3px 12px; }}
+""")
+
 
 class Instellingen(Venster):
     def __init__(self, begin: str = "start"):
@@ -281,11 +361,18 @@ class Instellingen(Venster):
             self.groepen[g.sleutel] = groep
             for b in bladen:
                 self.paginas[b.sleutel] = b   # elke pagina blijft op zijn eigen sleutel te vinden
-        self.setStyleSheet(self.styleSheet() + TAB_STIJL)
+        self.setStyleSheet(self.styleSheet() + tab_stijl())
         self.zoekveld.textChanged.connect(self.zoeken)
+        # Klik je op het onderdeel dat al open is, dan kijkt de pagina opnieuw (B-07).
+        self.nav.opnieuw_gekozen.connect(lambda _rij: self.ga_naar(self.huidige()))
         begin = OUDE_NAMEN.get(begin, begin)
         self.ga_naar(begin if begin in self.paginas else "start")
         self.nav.setFocus()  # niet meteen in het zoekveld
+
+    def thema_veranderd(self) -> None:
+        # Het eigen stijlblad van dit venster heeft de kleuren van toen het gemaakt werd: opnieuw maken bij een
+        # wissel van licht/donker (A-03, B-10; bugos_ui.zet_thema roept dit aan).
+        self.setStyleSheet(stijl() + tab_stijl())
 
     def open_blad(self):
         """De pagina die je nu ziet (in een groep: die van het gekozen tabje)."""
@@ -310,6 +397,9 @@ class Instellingen(Venster):
         else:
             groep.toon(sleutel, ververs=False)
             super().ga_naar(g.sleutel)   # opent de groep (en ververst het gekozen tabje)
+            # Pas nu staat de groep in beeld: kwam de focus (van een verdwenen zoekresultaat) op een ander tabje, dan
+            # naar het gekozen tabje (B-13).
+            groep.focus_op_gekozen()
 
     def tweede_start(self, args: list[str]) -> None:
         """Instellingen was al open en wordt opnieuw gestart (bijv. vanuit het snelmenu): naar die pagina (U208)."""
@@ -322,7 +412,7 @@ class Instellingen(Venster):
 
     # Pagina's waar je een KDE-venster voor opent (koppelen, printer toevoegen) of een app voor installeert:
     # kom je terug in Instellingen, dan opnieuw kijken (U227).
-    VERVERS_BIJ_TERUGKOMEN = ("bluetooth", "printers", "programmas")
+    VERVERS_BIJ_TERUGKOMEN = ("bluetooth", "printers", "programmas", "mijnapps")
 
     def changeEvent(self, e) -> None:  # noqa: N802
         super().changeEvent(e)

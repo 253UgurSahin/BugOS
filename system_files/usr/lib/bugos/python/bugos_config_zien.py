@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import bugos_config as _c
+from bugos_base import t
 
 
 # ======================================================== makkelijker zien ===
@@ -263,7 +264,7 @@ def aanwijzers() -> list[Aanwijzer]:
     if _c.VOORBEELD:
         if _c._VB["aanwijzers"] is None:
             _c._VB["aanwijzers"] = [
-                Aanwijzer("event5", "Muis van Logitech", False, True, False, False, 50, False,
+                Aanwijzer("event5", t("Muis van Logitech", "Logitech mouse"), False, True, False, False, 50, False,
                           {"linkshandig", "natuurlijk", "snelheid"}),
                 Aanwijzer("event7", "Touchpad", True, True, False, True, 55, True,
                           {"aan", "linkshandig", "natuurlijk", "snelheid", "tikken"})]

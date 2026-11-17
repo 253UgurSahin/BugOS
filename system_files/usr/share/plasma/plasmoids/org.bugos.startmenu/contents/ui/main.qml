@@ -3,6 +3,7 @@
 
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Window   // Screen: de hoogte van het scherm, voor de hoogte van het menu (A-05)
 import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasma5support as P5Support
@@ -11,7 +12,7 @@ import org.kde.kirigami as Kirigami
 PlasmoidItem {
     id: root
 
-    property var gegevens: ({ apps: [], favorieten: [], recent: [], gebruiker: { naam: "" } })
+    property var gegevens: ({ apps: [], favorieten: [], recent: [], gebruiker: { naam: "" }, taakbalk_kan: false })
     readonly property bool nederlands: Qt.locale().name.indexOf("nl") === 0
 
     preferredRepresentation: compactRepresentation
@@ -25,7 +26,9 @@ PlasmoidItem {
         engine: "executable"
         connectedSources: []
         onNewData: (bron, data) => {
-            if (bron === "bugos-start-data") {
+            // Gewoon 'bugos-start-data', en de opdrachten uit het menu van de rechtermuisknop die daarna de nieuwe
+            // gegevens geven (vastmaken/losmaken aan Start of de taakbalk): dan staat de tegel er meteen bij.
+            if (root.geeftGegevens(bron)) {
                 if (data["exit code"] === 0 && data["stdout"]) {
                     try { root.gegevens = JSON.parse(data["stdout"]) } catch (e) { console.warn("BugOS startmenu:", e) }
                 } else {
@@ -36,13 +39,19 @@ PlasmoidItem {
         }
     }
     function voerUit(cmd) { opdracht.connectSource(cmd) }
+    function geeftGegevens(bron) {
+        return bron === "bugos-start-data" || /^bugos-start-data --(vastzetten|losmaken|taakbalk) /.test(bron)
+    }
     function aanhalen(tekst) { return "'" + String(tekst).replace(/'/g, "'\\''") + "'" }
 
     onExpandedChanged: if (root.expanded) voerUit("bugos-start-data")
     Component.onCompleted: voerUit("bugos-start-data")
 
     // Rechtermuisknop op Start: de snelle lijst van Windows (Win+X), met Taakbeheer.
-    // Plasma zet zijn eigen regels (aanpassen, verwijderen) er vanzelf onder.
+    // Alleen op de Start-knop zelf: een app in het geopende menu heeft zijn eigen menu (StartMenu.qml, appMenu),
+    // dat de rechtermuisknop aanneemt, zodat Plasma deze lijst daar niet meer laat zien.
+    // De eigen regels van Plasma (aanpassen, verwijderen) staan er niet onder: taakbalk en bureaublad staan op
+    // slot (bugos-panel, functie slot). Voor gevorderden: 'bugos-panel bewerken aan'.
     function tr(nl, en) { return nederlands ? nl : en }
     function startApp(desktop) { voerUit("bugos-start-data --start " + aanhalen("/usr/share/applications/" + desktop)) }
     Plasmoid.contextualActions: [
@@ -107,11 +116,17 @@ PlasmoidItem {
         id: menu
         schaal: Kirigami.Theme.defaultFont.pointSize > 0
             ? Math.min(1.5, Math.max(1, Kirigami.Theme.defaultFont.pointSize / 10)) : 1
-        // Verhouding zoals het startmenu van Windows 11: breed, en zo hoog als de inhoud (tussen 24 en 34 regels).
+        // Verhouding zoals het startmenu van Windows 11: breed en een vaste ruime hoogte (StartMenu.qml, vasteHoogte).
         Layout.preferredWidth: Kirigami.Units.gridUnit * 36
         Layout.preferredHeight: implicitHeight
         Layout.minimumWidth: Kirigami.Units.gridUnit * 24
-        Layout.minimumHeight: 420
+        // Ook het minimum op de echte hoogte (A-05/A-06, VM-test): met 'minimumHeight: 420' maakte Plasma de pop-up
+        // in de VM maar ~450 px hoog (de voorkeurshoogte telde niet mee), en dan viel 'Recent geopend' eronder weg.
+        Layout.minimumHeight: implicitHeight
+        Layout.maximumHeight: implicitHeight
+        // Nooit hoger dan het scherm min de taakbalk en wat ruimte: 680 op 1280x800, op een groter scherm hooguit 720.
+        // Screen is het scherm waar het menu op staat (0 zolang Plasma dat nog niet weet: dan 680).
+        maxHoogte: Screen.height > 0 ? Math.max(420, Math.min(720, Screen.height - 120)) : 680
         gegevens: root.gegevens
         nederlands: root.nederlands
         color: "transparent"
@@ -123,6 +138,12 @@ PlasmoidItem {
         onStart: pad => root.voerUit("bugos-start-data --start " + root.aanhalen(pad))
         onOpenBestand: pad => root.voerUit("bugos-start-data --open " + root.aanhalen(pad))
         onAanUit: actie => root.voerUit("bugos-start-data --aan-uit " + root.aanhalen(actie))
+        // Het menu van de rechtermuisknop op een app (StartMenu.qml, appMenu). Elke waarde tussen
+        // aanhalingstekens (aanhalen): een naam met een ' of ; erin wordt nooit een eigen opdracht.
+        onAppActie: (pad, actie) => root.voerUit("bugos-start-data --actie " + root.aanhalen(pad) + " " + root.aanhalen(actie))
+        onVastzetten: (id, aan) => root.voerUit("bugos-start-data " + (aan ? "--vastzetten " : "--losmaken ") + root.aanhalen(id))
+        onTaakbalk: (id, aan) => root.voerUit("bugos-start-data --taakbalk " + (aan ? "vastmaken " : "losmaken ") + root.aanhalen(id))
+        onVerwijderApp: flatpak => root.voerUit("bugos-start-data --verwijder " + root.aanhalen(flatpak))
         onSluiten: root.expanded = false
         Connections {
             target: root

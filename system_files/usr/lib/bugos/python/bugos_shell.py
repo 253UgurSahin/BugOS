@@ -6,16 +6,15 @@ Apps halen dit uit bugos_ui (from bugos_ui import Venster, Pagina, Rij ...); dit
 from __future__ import annotations
 
 from PySide6.QtCore import QRect, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QAccessible, QColor, QGuiApplication, QIcon
+from PySide6.QtGui import QAccessible, QColor, QIcon
 from PySide6.QtWidgets import (
-    QAbstractButton, QAccessibleWidget, QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QStackedWidget, QVBoxLayout,
-    QWidget,
+    QAbstractButton, QAbstractSlider, QAccessibleWidget, QDialog, QFrame, QGraphicsDropShadowEffect, QHBoxLayout,
+    QLabel, QLayout, QLineEdit, QPushButton, QScrollArea, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 import bugos_ui  # DONKER via de module lezen: maak_app zet hem pas als de app start
 from bugos_pages import Zijbalk, Zoekveld, logo_icoon, sectie
-from bugos_ui import LIJN, lijn_icoon, t
+from bugos_ui import LIJN, lijn_icoon, schermmaat, t
 from bugos_widgets import Groep, Knop, label
 
 
@@ -26,6 +25,7 @@ from bugos_widgets import Groep, Knop, label
 
 LEESBREEDTE = 880      # breder wordt de inhoud van een pagina niet: dat leest rustiger
 ZIJBALK_BREEDTE = 248
+RIJ_SPELING = 24        # px: een gestapelde Rij gaat pas weer naast elkaar met zoveel ruimte over (tegen schommelen)
 
 
 def app_kop(naam: str) -> QWidget:
@@ -35,7 +35,7 @@ def app_kop(naam: str) -> QWidget:
     lay.setContentsMargins(8, 0, 0, 6)
     lay.setSpacing(10)
     beeld = QLabel()
-    beeld.setPixmap(logo_icoon().pixmap(QSize(22, 22)))
+    bugos_ui.zet_label_icoon(beeld, logo_icoon, 22)   # volgt licht/donker, ook na een wissel (A-03)
     beeld.setFixedSize(22, 22)
     lay.addWidget(beeld)
     lay.addWidget(label(naam, "appnaam", wrap=False), 1)
@@ -57,9 +57,12 @@ def ronde_knop(icoon_naam: str, tip: str, klein: bool = False) -> QPushButton:
 class Rij(QFrame):
     """Eén regel in een kaart: icoontje, naam, een regel uitleg, en rechts een schuifje, knop of pijltje.
 
-    klikbaar=True: de hele regel is een knop (muis, Enter of spatie) en geeft 'geklikt'."""
+    klikbaar=True: de hele regel is een knop (muis, Enter of spatie) en geeft 'geklikt'.
+    Is de regel te smal (klein venster, 150 %, grote letters), dan gaan de knoppen of keuzes rechts onder de tekst,
+    zoals een instellingenkaart in Windows 11. Getallen (Taakbeheer) blijven altijd rechts staan, onder hun kopjes."""
 
     geklikt = Signal()
+    STAPELBAAR = True   # False: wat rechts staat, gaat nooit onder de tekst
 
     def __init__(self, icoon_naam: str | QIcon, titel_tekst: str, uitleg_tekst: str = "",
                  rechts: QWidget | None = None, klikbaar: bool = False, pijl: bool | None = None, hoogte: int = 60):
@@ -107,8 +110,73 @@ class Rij(QFrame):
             pijl = klikbaar and rechts is None
         if pijl:
             self.pijl = QLabel()
-            self.pijl.setPixmap(lijn_icoon("rechts", "tekst3", 16, gekozen=None).pixmap(16, 16))
+            bugos_ui.zet_label_icoon(self.pijl, lijn_icoon("rechts", "tekst3", 16, gekozen=None), 16)
             lay.addWidget(self.pijl, 0, Qt.AlignmentFlag.AlignVCenter)
+        self._gestapeld = False
+        if self._kan_stapelen():
+            # Anders legt de layout de breedte van één regel vast als minimum, en wordt de regel nooit smaller.
+            lay.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)
+
+    def _kan_stapelen(self) -> bool:
+        """Alleen iets om te bedienen (keuzes, knoppen, een schuifbalk) mag onder de tekst; getallen niet."""
+        r = getattr(self, "rechts", None)
+        if r is None or not self.STAPELBAAR:
+            return False
+        bediening = (QAbstractButton, QAbstractSlider)
+        return isinstance(r, bediening) or any(r.findChildren(b) for b in bediening)
+
+    def _titel_breedte(self) -> int:
+        """Hoe breed de titel op één regel is. Gemeten met de letter zelf, dus hetzelfde of hij nu afbreekt of niet
+        (anders springt de regel heen en weer)."""
+        self.titel.ensurePolished()
+        return self.titel.fontMetrics().horizontalAdvance(self.titel.text()) + 2
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        """Zo smal kan de regel: het schuifje, de knoppen of de keuzes kunnen onder de tekst, en een lange titel
+        breekt af (zie resizeEvent)."""
+        if not self._kan_stapelen():
+            return super().minimumSizeHint()
+        m = self.layout().contentsMargins()
+        tekst = min(self._titel_breedte(), bugos_ui.px(200))
+        breed = m.left() + m.right() + 24 + 14 + max(tekst, self.rechts.minimumSizeHint().width())
+        return QSize(breed, super().minimumSizeHint().height())
+
+    def resizeEvent(self, e) -> None:  # noqa: N802
+        """Te smal? Dan gaat wat rechts staat onder de tekst, zoals in Windows 11. Weer breed genoeg: terug naar
+        rechts. Het blijft hetzelfde onderdeel van de regel, dus de Tab-volgorde en de schermlezer veranderen niet.
+        Is zelfs de titel te lang voor de regel, dan breekt hij af (nooit afgeknipt)."""
+        super().resizeEvent(e)
+        if not hasattr(self, "_gestapeld") or not self._kan_stapelen():
+            return
+        lay = self.layout()
+        m = lay.contentsMargins()
+        titel = self._titel_breedte()
+        vast = m.left() + m.right() + 24 + 14
+        rechts = 14 + self.rechts.sizeHint().width() + (30 if self.pijl else 0)
+        nodig = vast + min(titel, bugos_ui.px(240)) + rechts
+        # Weer naast elkaar pas als er duidelijk ruimte is (een schuifbalk breed extra). Zonder die marge schommelde
+        # een pagina op sommige maten (Scherm bij 840 x 700): naast elkaar -> past -> geen schuifbalk -> breder ...
+        # en met de schuifbalk 10 px smaller -> onder elkaar -> te hoog -> schuifbalk: de regels sprongen steeds.
+        stapel = self.width() < (nodig + bugos_ui.px(RIJ_SPELING) if self._gestapeld else nodig)
+        # De titel breekt af als hij niet op één regel past: naast wat rechts staat, of (gestapeld) over de hele regel.
+        afbreken = self.width() < vast + titel + (0 if stapel else rechts)
+        if afbreken != self.titel.wordWrap():
+            self.titel.setWordWrap(afbreken)
+        if stapel == self._gestapeld:
+            return
+        self._gestapeld = stapel
+        blok = lay.itemAt(1).layout()       # titel + uitleg
+        if stapel:
+            lay.removeWidget(self.rechts)
+            blok.addSpacing(6)
+            blok.addWidget(self.rechts, 0, Qt.AlignmentFlag.AlignLeft)
+        else:
+            blok.removeWidget(self.rechts)
+            laatste = blok.itemAt(blok.count() - 1)
+            if laatste is not None and laatste.spacerItem() is not None:
+                blok.removeItem(laatste)
+            lay.insertWidget(2, self.rechts, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.updateGeometry()
 
     def zet_icoon(self, naam: str | QIcon) -> None:
         if isinstance(naam, QIcon):
@@ -116,7 +184,8 @@ class Rij(QFrame):
         else:
             naam = naam[5:] if naam.startswith("lijn:") else naam
             ic = lijn_icoon(naam, "tekst2", 22, gekozen=None) if naam in LIJN else QIcon.fromTheme(naam)
-        self.icoon.setPixmap(ic.pixmap(QSize(22, 22)))
+        # Via zet_label_icoon: bij een wissel van licht/donker tekent bugos_ui het opnieuw (A-03).
+        bugos_ui.zet_label_icoon(self.icoon, ic, 22)
 
     def zet_uitleg(self, tekst: str) -> None:
         self.uitleg.setText(tekst)
@@ -198,7 +267,7 @@ class Melding(QFrame):
         lay.setSpacing(12)
         self.tekst = label("", wrap=True)
         self.knop = Knop("", "stil")
-        self.knop.setMinimumHeight(36)
+        self.knop.setMinimumHeight(bugos_ui.px(32))
         lay.addWidget(self.tekst, 1)
         lay.addWidget(self.knop)
         self.actie = None
@@ -256,7 +325,12 @@ class ActieBalk(QFrame):
         schaduw.setOffset(0, 10)
         schaduw.setColor(QColor(0, 0, 0, 150 if bugos_ui.DONKER else 46))
         self.setGraphicsEffect(schaduw)
+        self._schaduw = schaduw
         self.hide()
+
+    def thema_veranderd(self) -> None:
+        # In donker een zwaardere schaduw (anders zie je hem niet), ook na een wissel van licht/donker (A-03).
+        self._schaduw.setColor(QColor(0, 0, 0, 150 if bugos_ui.DONKER else 46))
 
     def knop(self, sleutel: str, icoon_naam: str, tekst: str, actie) -> QPushButton:
         k = QPushButton(tekst)
@@ -286,11 +360,32 @@ class ActieBalk(QFrame):
         self.raise_()
 
     def plaats(self, gebied: QRect) -> None:
-        """Midden onderin 'gebied' (in de coördinaten van het venster)."""
+        """Midden onderin 'gebied' (in de coördinaten van het venster). Passen de woorden niet (smal venster, 150 %),
+        dan alleen de icoontjes, met de naam als tip en voor de schermlezer, zoals de knoppenbalk van Verkenner."""
         if self.isHidden():
             return
         self.setMaximumWidth(max(200, gebied.width() - 24))
+        for k in self.knoppen.values():                 # eerst met woorden proberen
+            volle = k.property("volle_tekst")
+            if volle and not k.text():                  # een nieuwe tekst van de app gaat voor
+                k.setText(volle)
         self.adjustSize()
+        alleen_icoon = self.sizeHint().width() > self.maximumWidth()
+        for k in self.knoppen.values():
+            if alleen_icoon:
+                # Het woord als tip en voor de schermlezer. Steeds opnieuw: de app kan het woord veranderen
+                # (Taakbeheer: 'Sluiten' of 'Stoppen').
+                naam = k.text() or k.property("volle_tekst") or ""
+                k.setProperty("volle_tekst", naam)
+                k.setToolTip(naam)
+                k.setAccessibleName(naam)
+                k.setText("")
+            else:
+                # Met woorden: geen vaste naam, dan leest de schermlezer altijd het woord dat er nu staat.
+                k.setToolTip("")
+                k.setAccessibleName("")
+        if alleen_icoon:
+            self.adjustSize()
         self.move(gebied.center().x() - self.width() // 2, gebied.bottom() - self.height() - 14)
         self.raise_()
 
@@ -332,7 +427,7 @@ class Pagina(QScrollArea):
     def kaart(self, kopje: str = "") -> Groep:
         """Een kaart met regels, eventueel met een kopje erboven."""
         if kopje:
-            self.lay.addWidget(sectie(kopje))
+            self.lay.addWidget(sectie(kopje, wrap=True))   # breekt af op een smalle pagina (B-02)
         g = Groep()
         g.lay.setContentsMargins(4, 4, 4, 4)
         self.lay.addWidget(g)
@@ -366,12 +461,9 @@ class Venster(QWidget):
         super().__init__()
         self.setObjectName("venster")
         self.setWindowTitle(titel_tekst or naam)
-        # Nooit groter dan het scherm (bijv. 1920x1080 op 200%): anders valt de onderkant eraf (U133).
-        scherm = QGuiApplication.primaryScreen()
-        vrij = scherm.availableGeometry() if scherm else None
-        if vrij is not None and vrij.width() > 0:
-            minimum = (min(minimum[0], vrij.width()), min(minimum[1], vrij.height()))
-            maat = (min(maat[0], vrij.width()), min(maat[1], vrij.height()))
+        # Nooit groter dan het scherm (bijv. 1920x1080 op 200 %, of 1280x800 op 150 %), met de taakbalk en de
+        # titelbalk erbij: anders valt de onderkant eraf (U133). Dezelfde maat als bugos_ui.uitvoeren gebruikt.
+        maat, minimum = schermmaat(maat, minimum)
         self.resize(*maat)
         self.setMinimumSize(*minimum)
         hoofd = QHBoxLayout(self)
@@ -382,12 +474,11 @@ class Venster(QWidget):
         self.zij.setFixedWidth(bugos_ui.px(ZIJBALK_BREEDTE))   # groeit mee met grote letters (U136)
         self.zij_lay = QVBoxLayout(self.zij)
         self.zij_lay.setContentsMargins(14, 22, 14, 14)
-        self.zij_lay.setSpacing(12)
+        self.zij_lay.setSpacing(10)
         self.zij_lay.addWidget(app_kop(naam))
         self.zoekveld = None
         if zoeken:
-            self.zoekveld = Zoekveld(zoeken)
-            self.zoekveld.setMinimumHeight(44)
+            self.zoekveld = Zoekveld(zoeken)   # 36 px, zoals elk invoerveld (groeit mee met grote letters)
             self.zij_lay.addWidget(self.zoekveld)
         self.nav = Zijbalk()
         self.zij_lay.addWidget(self.nav, 1)
@@ -438,3 +529,133 @@ class Venster(QWidget):
         if callable(ververs):
             ververs()
         self.pagina_gekozen.emit(sleutel)
+
+
+# =============================================================== vragen ===
+# Eén look voor elke vraag, zoals KiesDialoog: een kop, ruime marges, rechts 'Annuleren' (stil) en de rode knop.
+# Niet QMessageBox (met Qt's blauwe '?') of QInputDialog (geen kop, de knoppen verkeerd om).
+
+def als_dialoog(d: QDialog) -> None:
+    """Een klein BugOS-venstertje (een vraag, een naam) is een dialoog, geen gewoon venster (C-07): in de titelbalk
+    alleen het kruisje, geen 'minimaliseren' en 'maximaliseren' (een vraag van drie regels schermvullend maken of
+    in de taakbalk wegstoppen heeft geen zin, en dan raak je hem kwijt terwijl het venster erachter wacht).
+
+    Zo werkt het: de vlaggen hieronder zeggen het tegen X11/XWayland (Qt zet dan de Motif-hints), en op Wayland
+    beslist KWin zelf: een venster dat niet van grootte kan veranderen, krijgt geen knop 'maximaliseren'. Daarom
+    zet de dialoog zichzelf bij het tonen op een vaste maat (zie VraagDialoog.showEvent)."""
+    d.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.CustomizeWindowHint | Qt.WindowType.WindowTitleHint
+                     | Qt.WindowType.WindowCloseButtonHint)
+
+
+class VraagDialoog(QDialog):
+    """Een vraag met een kop, een uitleg, eventueel een invoerveld, en twee knoppen: stil 'nee', rood 'ja'."""
+
+    def __init__(self, ouder: QWidget | None, titel_tekst: str, tekst: str, ja: str, nee: str = "",
+                 veld: bool = False, waarde: str = "", wachtwoord: bool = False, enter_is_nee: bool = False):
+        super().__init__(ouder)
+        als_dialoog(self)   # alleen een kruisje in de titelbalk (C-07)
+        self.setWindowTitle(titel_tekst)
+        breed = schermmaat((bugos_ui.px(440), 0))[0][0]   # op een smal scherm (150 %) niet breder dan het scherm
+        self.setMinimumWidth(breed)
+        self.setMaximumWidth(max(breed, bugos_ui.px(560)))
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(24, 22, 24, 20)
+        lay.setSpacing(12)
+        self.kop = label(titel_tekst, "kop2")
+        lay.addWidget(self.kop)
+        self.uitleg = label(tekst, "klein" if veld else "sub", kopieerbaar=True)
+        self.uitleg.setVisible(bool(tekst))
+        lay.addWidget(self.uitleg)
+        self.veld: QLineEdit | None = None
+        self.oog: Knop | None = None
+        if veld:
+            self.veld = QLineEdit(waarde)
+            self.veld.setMinimumHeight(bugos_ui.px(36))
+            self.veld.setAccessibleName(titel_tekst)
+            lay.addWidget(self.veld)
+            if wachtwoord:
+                # Bolletjes; 'Laten zien' zoals bij WachtwoordDialoog. De tekst staat nergens anders (geen tip, geen log).
+                self.veld.setEchoMode(QLineEdit.EchoMode.Password)
+                self.oog = Knop(t("Laten zien", "Show"), "stil", "lijn:oog")
+                self.oog.setCheckable(True)
+                # Een aan/uit-knopje zoals een vinkje: spatie zet het om, Enter verstuurt nog steeds de vraag.
+                self.oog.setAutoDefault(False)
+                self.oog.toggled.connect(lambda aan: self.veld.setEchoMode(
+                    QLineEdit.EchoMode.Normal if aan else QLineEdit.EchoMode.Password))
+                lay.addWidget(self.oog, 0, Qt.AlignmentFlag.AlignLeft)
+        lay.addSpacing(4)
+        knoppen = QHBoxLayout()
+        knoppen.setSpacing(8)
+        knoppen.addStretch(1)
+        self.nee = Knop(nee or t("Annuleren", "Cancel"), "stil")
+        self.nee.clicked.connect(self.reject)
+        self.ja = Knop(ja, "hoofd")
+        self.ja.clicked.connect(self.accept)
+        knoppen.addWidget(self.nee)
+        knoppen.addWidget(self.ja)
+        lay.addLayout(knoppen)
+        # Enter uit gewoonte: bij iets dat je niet ongedaan maakt (teruggaan, weggooien) doet dat niets (U380).
+        # Sta je met Tab op een knop, dan doet Enter (net als spatie) die knop, zoals overal in Windows en KDE: beide
+        # knoppen blijven 'autoDefault'. De standaardknop telt alleen als er geen knop gekozen is (in het tekstveld).
+        standaard = self.nee if enter_is_nee else self.ja
+        standaard.setDefault(True)
+        if self.veld is not None:
+            if not wachtwoord:   # een lege naam kan niet; een leeg wachtwoord (open netwerk) mag de pagina zelf weigeren
+                self.veld.textChanged.connect(lambda tekst_: self.ja.setEnabled(bool(tekst_.strip())))
+                self.ja.setEnabled(bool(waarde.strip()))
+            self.veld.setFocus()
+        else:
+            standaard.setFocus()
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        """Precies zo hoog als de inhoud bij de echte breedte: geen lege strook boven de knoppen. (Qt rekende de hoogte
+        van een afgebroken uitleg uit bij een smallere breedte dan de minimale 440 px, en hield die ruimte dan over.)"""
+        lay = self.layout()
+        if lay is None:
+            return super().sizeHint()
+        breed = max(self.minimumWidth(), min(self.maximumWidth(), lay.totalSizeHint().width()))
+        hoog = lay.totalHeightForWidth(breed) if lay.hasHeightForWidth() else lay.totalSizeHint().height()
+        return QSize(breed, hoog)
+
+    def showEvent(self, e) -> None:  # noqa: N802
+        super().showEvent(e)
+        maat = self.sizeHint()
+        # Een vaste maat: precies de inhoud. Dan kan het venster niet van grootte veranderen, en geeft KWin het geen
+        # knop 'maximaliseren' (C-07, zie als_dialoog). De breedte blijft binnen de grenzen van __init__.
+        self.setFixedSize(maat)
+
+    @property
+    def standaard(self) -> str:
+        """De tekst van de knop die Enter kiest (voor de tests)."""
+        return self.nee.text() if self.nee.isDefault() else self.ja.text()
+
+
+def vraag_ja(ouder: QWidget | None, titel_tekst: str, tekst: str, ja: str, nee: str = "",
+             enter_is_nee: bool = False) -> bool:
+    """Vraag iets met ja of nee, in de BugOS-stijl. True als je op 'ja' klikt.
+
+        if vraag_ja(self, t("Printer verwijderen?", "Remove printer?"), t("...", "..."), t("Verwijderen", "Remove"),
+                    enter_is_nee=True): ...
+
+    nee: standaard 'Annuleren'. enter_is_nee=True: Enter doet het veilige (niets), voor iets dat je niet ongedaan
+    kunt maken."""
+    d = VraagDialoog(ouder, titel_tekst, tekst, ja, nee, enter_is_nee=enter_is_nee)
+    return d.exec() == QDialog.DialogCode.Accepted
+
+
+def vraag_tekst(ouder: QWidget | None, titel_tekst: str, vraag: str, tekst: str = "", ok: str = "",
+                wachtwoord: bool = False, kies_tot: int | None = None) -> str | None:
+    """Vraag een tekst (een naam, een wifi-wachtwoord). None bij Annuleren.
+
+    wachtwoord=True: je ziet bolletjes, met 'Laten zien' eronder. Geef het antwoord nooit door op een opdrachtregel
+    (gebruik stdin) en zet het nergens in een log. kies_tot: alleen dat stuk is gekozen (een bestandsnaam zonder
+    '.odt'), zodat je meteen een nieuwe naam typt."""
+    d = VraagDialoog(ouder, titel_tekst, vraag, ok or t("OK", "OK"), veld=True, waarde=tekst, wachtwoord=wachtwoord)
+    if d.veld is not None and tekst:
+        if kies_tot is not None and 0 < kies_tot <= len(tekst):
+            d.veld.setSelection(0, kies_tot)
+        else:
+            d.veld.selectAll()
+    if d.exec() != QDialog.DialogCode.Accepted or d.veld is None:
+        return None
+    return d.veld.text()

@@ -15,6 +15,14 @@ klopt() { if eval "$1"; then echo "OK    $2"; else echo "FOUT  $2"; fouten=$((fo
 nep() { printf '#!/usr/bin/bash\n%s\n' "$2" >"$TMP/bin/$1"; chmod +x "$TMP/bin/$1"; }
 # Een script met lib.sh uit deze map (niet die van de computer).
 kopie() { sed "s|/usr/share/bugos|$ROOT/system_files/usr/share/bugos|g" "$BIN/$1" >"$TMP/$1"; }
+# Zelfde, maar ook /etc/bugos en /var/lib/bugos in de tijdelijke map. bugos-updates bewaart daar de keuze
+# 'vanzelf'/'zelf updaten'. Met de gewone kopie schreef de test in de echte mappen van de computer: dat lukt alleen
+# als root (en verandert dan de computer), en als gewone gebruiker (de GitHub-runner) faalde de test.
+kopie_updates() {
+    mkdir -p "$TMP/etc-bugos" "$TMP/var-bugos"
+    sed -e "s|/usr/share/bugos|$ROOT/system_files/usr/share/bugos|g" -e "s|/etc/bugos|$TMP/etc-bugos|g" \
+        -e "s|/var/lib/bugos|$TMP/var-bugos|g" "$BIN/bugos-updates" >"$TMP/bugos-updates"
+}
 # Draai een gekopieerd script met de nep-programma's, in het Engels (C.UTF-8: die taal is er altijd); geeft de afsluitcode.
 draai() {
     local naam="$1"
@@ -29,7 +37,7 @@ for p in notify-send kdialog pkexec systemctl; do nep "$p" 'exit 0'; done
 nep id 'echo 0'   # doe alsof we beheerder zijn, dan vraagt bugos-updates geen wachtwoord
 
 # U005: "Nu updaten" mag niet "klaar" zeggen als de systeem-update mislukt.
-kopie bugos-updates
+kopie_updates
 nep flatpak 'exit 0'
 nep rpm-ostree 'exit 1'
 draai bugos-updates nu
@@ -47,12 +55,13 @@ klopt '[ $code -ne 0 ] && ! grep -q Done "$TMP/uit"' "updates terug: rollback mi
 nep rpm-ostree 'exit 0'
 draai bugos-updates terug
 klopt '[ $code -eq 0 ] && grep -q Done "$TMP/uit"' "updates terug: rollback gelukt -> 'Done'"
+# De 'terug' hierboven bewaarde 'zelf updaten' in de tijdelijke mappen. De controles hieronder beginnen met een
+# computer die nog nooit iets koos, dus die keuze weer weg.
+rm -rf "$TMP/etc-bugos" "$TMP/var-bugos"
 
 # U033/U034: "terug" zet automatische updates uit (anders komt de nieuwe versie terug), en twee keer
 # "terug" gaat niet weer vooruit.
-sed -e "s|/usr/share/bugos|$ROOT/system_files/usr/share/bugos|g" -e "s|/etc/bugos|$TMP/etc-bugos|g" \
-    -e "s|/var/lib/bugos|$TMP/var-bugos|g" "$BIN/bugos-updates" >"$TMP/bugos-updates"
-mkdir -p "$TMP/etc-bugos"
+kopie_updates
 echo UPDATES=auto >"$TMP/etc-bugos/updates.conf"
 nep systemctl 'echo "$*" >>"'"$TMP"'/systemctl"'
 nep rpm-ostree 'case "$1" in status) cat "'"$TMP"'/status.json";; rollback) echo rollback >>"'"$TMP"'/rollback";; esac'
@@ -85,6 +94,28 @@ klopt '[ $code -ne 0 ]' "U300: de oudere versie (met 'auto' in zijn eigen /etc) 
 for f in system/bugos-update-apps.service system/rpm-ostreed-automatic.service.d/50-bugos-keuze.conf user/flatpak-user-update.service.d/50-bugos-keuze.conf; do
     klopt 'grep -q "^ExecCondition=/usr/bin/bugos-updates mag-vanzelf" "$ROOT/system_files/usr/lib/systemd/'"$f"'"' "U300/U301: $f werkt alleen bij 'Updates vanzelf'"
 done
+# A-15: 'bugos-updates status' in een terminal liet alleen het interne woord 'hand' zien. Nu: een mens krijgt een zin,
+# een programma (geen terminal, of --kort) houdt het ene woord. (Hier staat de keuze op 'hand', zie hierboven.)
+draai bugos-updates status --kort
+klopt '[ $code -eq 0 ] && [ "$(cat "$TMP/uit")" = hand ]' "A-15: 'status --kort' geeft precies het woord 'hand' (voor scripts)"
+draai bugos-updates status
+klopt '[ "$(cat "$TMP/uit")" = hand ]' "A-15: 'status' zonder terminal (een programma leest het) geeft nog steeds alleen 'hand'"
+draai bugos-updates status --zin
+klopt 'grep -q "you choose when" "$TMP/uit" && ! grep -qx hand "$TMP/uit"' "A-15: 'status --zin' is een gewone zin, niet het woord 'hand'"
+# Een echte terminal nadoen kan met 'script' (util-linux); zonder dat programma slaan we dit ene stuk over.
+if command -v script >/dev/null 2>&1; then
+    HOME="$TMP/thuis" PATH="$TMP/bin:$PATH" LC_ALL=C.UTF-8 script -qec "bash '$TMP/bugos-updates' status" /dev/null >"$TMP/uit" 2>&1
+    klopt 'grep -q "you choose when" "$TMP/uit"' "A-15: 'status' in een terminal is een zin voor mensen"
+fi
+draai bugos-updates help
+klopt '[ $code -eq 0 ] && grep -q "Settings > Updates" "$TMP/uit" && ! grep -q "mag-vanzelf" "$TMP/uit"' \
+    "A-15: 'help' legt het uit voor mensen, zonder het interne 'mag-vanzelf'"
+draai bugos-updates onzin
+klopt '[ $code -eq 2 ] && ! grep -q "mag-vanzelf" "$TMP/uit"' "A-15: een onbekende keuze noemt 'mag-vanzelf' niet"
+# Elke aanroeper die het woord vergelijkt, vraagt er nu uitdrukkelijk om (--kort): zo hangt het niet af van een terminal.
+for f in bugos-updatecheck bugos-help bugos-welcome; do
+    klopt 'grep -Eq "bugos-updates status --kort|\"bugos-updates\", \"status\", \"--kort\"" "$BIN/'"$f"'"' "A-15: $f leest 'status --kort'"
+done
 rm -f "$TMP/var-bugos/updates.conf"
 printf '{"deployments":[{"booted":false,"timestamp":1000},{"booted":true,"timestamp":2000}]}' >"$TMP/status.json"
 rm -f "$TMP/rollback"
@@ -101,6 +132,30 @@ printf '{"deployments":[{"booted":true,"timestamp":2000}]}' >"$TMP/status.json"
 rm -f "$TMP/rollback"
 draai bugos-updates terug
 klopt '[ $code -eq 3 ] && [ ! -f "$TMP/rollback" ] && grep -q "no older version" "$TMP/uit"' "U041: terug zonder vorige versie: zegt dat (code 3)"
+# B-24: 'kan-terug' zegt dat al vóór de waarschuwing in Instellingen, zonder wachtwoord (geen pkexec, als gewone
+# gebruiker), en precies zoals 'terug' het zou zien.
+nep id 'echo 1000'
+nep pkexec 'echo "$*" >>"'"$TMP"'/pkexec"; exit 0'
+rm -f "$TMP/pkexec"
+draai bugos-updates kan-terug
+klopt '[ $code -eq 3 ] && [ ! -f "$TMP/rollback" ] && [ ! -f "$TMP/pkexec" ] && grep -q "no older version" "$TMP/uit"' \
+    "B-24: kan-terug met maar één versie: nee (code 3), zonder wachtwoord"
+for _st in '{"deployments":[{"booted":true,"timestamp":2000},{"booted":false,"timestamp":1000}]}' \
+    '{"deployments":[{"booted":false,"timestamp":1000},{"booted":true,"timestamp":2000}]}' \
+    '{"deployments":[{"booted":false,"timestamp":2000},{"booted":true,"timestamp":1000}]}'; do
+    printf '%s' "$_st" >"$TMP/status.json"
+    draai bugos-updates kan-terug
+    klopt '[ $code -eq 0 ] && [ ! -f "$TMP/pkexec" ]' "B-24: kan-terug: ja bij een oudere versie, 'terug' al gekozen of vastzetten ($_st)"
+done
+printf '{"deployments":[{"booted":true,"timestamp":1000},{"booted":false,"timestamp":2000}]}' >"$TMP/status.json"
+draai bugos-updates kan-terug
+klopt '[ $code -eq 3 ]' "B-24: kan-terug terwijl de oudste al draait (U044): nee, zoals 'terug'"
+: >"$TMP/status.json"
+draai bugos-updates kan-terug
+klopt '[ $code -eq 0 ]' "B-24: kan-terug zonder antwoord van rpm-ostree: ja (dan vraagt Instellingen het gewoon)"
+nep id 'echo 0'
+nep pkexec 'exit 0'
+printf '{"deployments":[{"booted":true,"timestamp":2000}]}' >"$TMP/status.json"
 # U044: al teruggegaan en opnieuw opgestart (de oudere draait, de nieuwere staat erna): niet weer vooruit.
 printf '{"deployments":[{"booted":true,"timestamp":1000},{"booted":false,"timestamp":2000}]}' >"$TMP/status.json"
 rm -f "$TMP/rollback"
@@ -164,7 +219,7 @@ printf '{"deployments":[{"booted":true,"timestamp":2000}]}' >"$TMP/status.json"
 draai bugos-updates nu
 klopt '[ $code -eq 0 ] && ! grep -q bugos-update-klaar "$TMP/uit"' "U041: nu, een update die nu pas binnenkomt: gewoon 'klaar', niet 'stond al klaar'"
 nep systemctl 'exit 0'
-kopie bugos-updates
+kopie_updates
 
 # U024: na "terug naar de vorige versie" staat de oude versie bovenaan; dat is geen nieuwe update.
 kopie bugos-updatecheck
@@ -346,9 +401,12 @@ rm -f "$TMP/bin/nproc"
 kopie bugos-game-mode
 nep powerprofilesctl 'echo balanced'
 nep notify-send 'echo "$*" >>"'"$TMP"'/meldingen"'
-rm -rf "$TMP/thuis/.config/bugos" "$TMP/meldingen"
+rm -rf "$TMP/thuis/.config/bugos" "$TMP/meldingen" "$TMP/dbus"
 draai bugos-game-mode aan
-klopt 'grep -q "log in again" "$TMP/meldingen"' "game-modus aan: zegt dat de FPS-teller na opnieuw inloggen komt"
+# 'aan' zegt het sinds A-04 (VM-test) via de schermmelding van Plasma (gdbus, osdService), zodat 'niet storen'
+# hem niet tegenhoudt; zonder Plasma via een gewone melding. Een van de twee moet het zeggen.
+klopt 'grep -q "log in again" "$TMP/meldingen" 2>/dev/null || grep -q "osdService.showText.*log in again" "$TMP/dbus" 2>/dev/null' \
+    "game-modus aan: zegt dat de FPS-teller na opnieuw inloggen komt"
 rm -f "$TMP/meldingen"
 MANGOHUD=1 draai bugos-game-mode uit
 klopt 'grep -q "log in again" "$TMP/meldingen"' "game-modus uit: zegt dat de FPS-teller na opnieuw inloggen weggaat"
@@ -470,7 +528,7 @@ klopt '! grep -q "^ *systemctl --global mask flatpak-user-update" "$ROOT/build_f
 # U117: 'Updates vanzelf' aan/uit zet ook de app-updates per gebruiker aan/uit (niet voor altijd uit in de bouw).
 mkdir -p "$TMP/user-units"
 touch "$TMP/user-units/flatpak-user-update.timer"
-kopie bugos-updates
+kopie_updates
 nep systemctl 'echo "$*" >>"'"$TMP"'/systemctl-log"'
 : >"$TMP/systemctl-log"
 BUGOS_SYSTEMD_USER="$TMP/user-units" draai bugos-updates hand
@@ -520,6 +578,33 @@ nep kwriteconfig6 'echo "$*" >>"'"$TMP"'/kw-thema"'
 : >"$TMP/kw-thema"
 draai bugos-theme donker
 klopt '! grep -q "AccentColor --delete" "$TMP/kw-thema"' "U373: licht/donker omzetten laat je eigen accentkleur staan"
+# A-01: open KDE-programma's (wachtwoordvraag van polkit, bureaubladmenu, klok-instellingen) hielden de lichte
+# Kvantum-knoppen bij donker. bugos-theme wisselt nu de stijlnaam (kvantum <-> kvantum-dark) en stuurt KDE's
+# StyleChanged-signaal, zodat ze de stijl opnieuw laden. Nep-KDE: widgetStyle in een bestand, gdbus schrijft een log.
+echo kvantum >"$TMP/stijl"
+nep kreadconfig6 'case "$*" in *ColorScheme*) cat "'"$TMP"'/schema" 2>/dev/null ;; *widgetStyle*) cat "'"$TMP"'/stijl" ;; esac'
+nep kwriteconfig6 'echo "$*" >>"'"$TMP"'/kw-thema"; case "$*" in *widgetStyle*) printf "%s" "${!#}" >"'"$TMP"'/stijl" ;; esac'
+nep gdbus 'echo "$*" >>"'"$TMP"'/gdbus-log"'
+: >"$TMP/gdbus-log"
+draai bugos-theme donker
+klopt '[ "$(cat "$TMP/stijl")" = kvantum-dark ] && grep -q "org.kde.KGlobalSettings.notifyChange 2 0" "$TMP/gdbus-log"' \
+    "A-01: donker: stijl kvantum-dark en open KDE-programma's horen het (StyleChanged)"
+: >"$TMP/gdbus-log"
+draai bugos-theme licht
+klopt '[ "$(cat "$TMP/stijl")" = kvantum ] && grep -q "notifyChange 2 0" "$TMP/gdbus-log"' \
+    "A-01: licht: stijl weer kvantum, en open programma's horen het ook"
+# Zelf een andere stijl gekozen (Breeze): bugos-theme laat die staan.
+echo Breeze >"$TMP/stijl"
+draai bugos-theme donker
+klopt '[ "$(cat "$TMP/stijl")" = Breeze ]' "A-01: een zelf gekozen stijl (Breeze) blijft staan bij licht/donker"
+# Al donker met de oude naam 'kvantum' (van vóór deze wissel): bij het inloggen 'kvantum-dark'.
+echo kvantum >"$TMP/stijl"
+echo BugOSDark >"$TMP/schema"
+nep flatpak 'exit 0'
+draai bugos-theme inloggen
+klopt '[ "$(cat "$TMP/stijl")" = kvantum-dark ]' "A-01: inloggen in donker zet de oude stijlnaam kvantum om naar kvantum-dark"
+rm -f "$TMP/bin/gdbus"
+nep kreadconfig6 'case "$*" in *ColorScheme*) cat "'"$TMP"'/schema" 2>/dev/null ;; esac'
 nep kwriteconfig6 'exit 0'
 # U302: van vóór de Engelse namen: 'BugOSDonker' wordt 'BugOSDark', en het oude game-modusbestand gaat weg.
 echo BugOSDonker >"$TMP/schema"
@@ -541,37 +626,109 @@ fi
 rm -f "$TMP/thuis/.local/share/bugos/windows/.update-timestamp"
 nep wine 'exit 0'
 # U180: de eerste start downloadt de apps niet over een telefoon-hotspot (later opnieuw).
-nep nm-online 'exit 0'
+nep nm-online 'echo nm-online >>"'"$TMP"'/nm-log"; exit 0'
 kopie bugos-first-boot
 sed -i -e "s|/var/lib/bugos|$TMP/var-bugos|g" -e "s|/usr/bin/bugos-updates|$TMP/bin/bugos-updates|g" "$TMP/bugos-first-boot"
 nep bugos-updates 'exit 0'   # updates vanzelf
 nep busctl 'echo "u 1"'
-nep flatpak 'echo "$*" >>"'"$TMP"'/flatpak-log"'
+# Een nep-flatpak die onthoudt wat er 'geïnstalleerd' is (fp-geinstalleerd): 'info' klopt alleen voor die apps,
+# 'install' zet de app erbij, behalve een app in fp-faal (dan mislukt het, zoals zonder internet). Alles in flatpak-log.
+: >"$TMP/fp-geinstalleerd"
+: >"$TMP/fp-faal"
+nep flatpak 'echo "$*" >>"'"$TMP"'/flatpak-log"
+laatste="${*: -1}"
+case "$1" in
+    info) grep -qxF -- "$laatste" "'"$TMP"'/fp-geinstalleerd" ;;
+    install) if grep -qxF -- "$laatste" "'"$TMP"'/fp-faal"; then exit 1; fi; echo "$laatste" >>"'"$TMP"'/fp-geinstalleerd" ;;
+    *) exit 0 ;;
+esac'
+LIJST_ECHT="$ROOT/system_files/usr/share/bugos/standaard-apps.txt"
+AANTAL="$(grep -cvE '^\s*(#|$)' "$LIJST_ECHT")"
 : >"$TMP/flatpak-log"
 draai bugos-first-boot
-klopt '[ "$code" -ne 0 ] && ! grep -q install "$TMP/flatpak-log"' "U180: eerste start over een hotspot: nog niets downloaden, later opnieuw"
+klopt '[ "$code" -ne 0 ] && ! grep -q "^install" "$TMP/flatpak-log"' "U180: eerste start over een hotspot: nog niets downloaden, later opnieuw"
 nep busctl 'exit 0'
 : >"$TMP/flatpak-log"
 draai bugos-first-boot
-klopt 'grep -q "org.kde.gwenview" "$TMP/flatpak-log" && grep -q "org.kde.okular" "$TMP/flatpak-log"' \
+klopt '[ "$code" -eq 0 ] && grep -q "org.kde.gwenview" "$TMP/flatpak-log" && grep -q "org.kde.okular" "$TMP/flatpak-log"' \
     "U224: na de installatie is er een programma voor foto's (Gwenview) en PDF's (Okular)"
+klopt 'grep -qx "install --system --noninteractive --or-update flathub org.mozilla.firefox" "$TMP/flatpak-log" && grep -q "flathub com.valvesoftware.Steam$" "$TMP/flatpak-log"' \
+    "Winkel: Firefox en Steam komen als Flatpak van Flathub (geen pakket meer in BugOS, dus te verwijderen)"
+klopt '[ "$(grep -c "^install" "$TMP/flatpak-log")" -eq "$AANTAL" ] && [ -e "$TMP/var-bugos/eerste-start-klaar" ] && [ "$(sort -u "$TMP/var-bugos/standaard-apps-klaargezet" | wc -l)" -eq "$AANTAL" ]' \
+    "Winkel: elke standaard-app apart geïnstalleerd en onthouden als klaargezet ($AANTAL apps)"
 klopt 'grep -q "remote-modify --system --enable flathub" "$TMP/flatpak-log"' "U466: een uitgeschakelde flathub wordt bij de eerste start weer aangezet"
-# U239: een computer die de eerste start al deed, krijgt alleen de nieuwe standaard-apps erbij (één keer).
-touch "$TMP/var-bugos/eerste-start-klaar"
-rm -f "$TMP/var-bugos/standaard-apps-2"
+# Daarna: alles is al klaar. Dan meteen stoppen, zonder op internet te wachten of flatpak iets te laten doen.
+: >"$TMP/flatpak-log"
+: >"$TMP/nm-log"
+draai bugos-first-boot
+klopt '[ "$code" -eq 0 ] && ! grep -qE "^(install|remote)" "$TMP/flatpak-log" && [ ! -s "$TMP/nm-log" ]' \
+    "Winkel: alles al klaargezet: de dienst stopt meteen (geen wachten op internet bij elke start)"
+# Je verwijdert Firefox zelf (Winkel of Instellingen > Apps): BugOS zet hem nooit meer vanzelf terug.
+sed -i '/^org.mozilla.firefox$/d' "$TMP/fp-geinstalleerd"
 : >"$TMP/flatpak-log"
 draai bugos-first-boot
-klopt 'grep -q "org.kde.gwenview" "$TMP/flatpak-log" && ! grep -q "LibreOffice" "$TMP/flatpak-log" && [ -e "$TMP/var-bugos/standaard-apps-2" ] && grep -q "standaard-apps-2" "$ROOT/system_files/usr/lib/systemd/system/bugos-first-boot.service"' \
-    "U239: al klaargezet: alleen Gwenview en Okular erbij, één keer"
-# U308: doe je updates zelf, dan ook de nieuwe standaard-apps niet vanzelf (en niet elke 5 minuten opnieuw proberen).
-rm -f "$TMP/var-bugos/standaard-apps-2"
+klopt '[ "$code" -eq 0 ] && ! grep -q "^install" "$TMP/flatpak-log"' \
+    "Winkel: een standaard-app die je zelf verwijderde, komt niet vanzelf terug"
+# Eén app lukt niet (de server hapert): de andere komen toch, en alleen die ene wordt later opnieuw geprobeerd.
+rm -f "$TMP/var-bugos/standaard-apps-klaargezet" "$TMP/var-bugos/eerste-start-klaar"
+: >"$TMP/fp-geinstalleerd"
+echo org.videolan.VLC >"$TMP/fp-faal"
 : >"$TMP/flatpak-log"
-nep bugos-updates 'exit 1'
 draai bugos-first-boot
-klopt '[ "$code" -eq 0 ] && ! grep -q install "$TMP/flatpak-log" && [ -e "$TMP/var-bugos/standaard-apps-2" ]' \
-    "U308: 'zelf updaten': de nieuwe standaard-apps komen niet vanzelf"
-klopt '[ -e "$TMP/var-bugos/standaard-apps-overgeslagen" ] && grep -q "rm -f /var/lib/bugos/standaard-apps-overgeslagen /var/lib/bugos/standaard-apps-2" "$BIN/bugos-updates"' \
+klopt '[ "$code" -ne 0 ] && grep -qx org.libreoffice.LibreOffice "$TMP/var-bugos/standaard-apps-klaargezet" && ! grep -qx org.videolan.VLC "$TMP/var-bugos/standaard-apps-klaargezet" && [ ! -e "$TMP/var-bugos/eerste-start-klaar" ]' \
+    "Winkel: lukt één app niet, dan komen de andere toch, en de dienst probeert het later opnieuw (Restart=on-failure)"
+: >"$TMP/fp-faal"
+: >"$TMP/flatpak-log"
+draai bugos-first-boot
+klopt '[ "$code" -eq 0 ] && [ "$(grep -c "^install" "$TMP/flatpak-log")" -eq 1 ] && grep -q "flathub org.videolan.VLC$" "$TMP/flatpak-log"' \
+    "Winkel: de volgende keer alleen de app die nog niet lukte"
+# Een computer van vóór deze versie (de oude vaste lijst: eerste-start-klaar en standaard-apps-2). LibreOffice, VLC,
+# Gwenview en Okular zette die al klaar (en wie ze verwijderde, krijgt ze niet terug); Firefox en Steam waren pakketten
+# die met deze update weg zijn: die komen als Flatpak, ook als je je updates zelf doet.
+rm -f "$TMP/var-bugos/"*
+touch "$TMP/var-bugos/eerste-start-klaar" "$TMP/var-bugos/standaard-apps-2"
+: >"$TMP/fp-geinstalleerd"
+: >"$TMP/flatpak-log"
+nep bugos-updates 'exit 1'   # zelf updaten
+draai bugos-first-boot
+klopt '[ "$code" -eq 0 ] && grep -q "flathub org.mozilla.firefox$" "$TMP/flatpak-log" && grep -q "flathub com.valvesoftware.Steam$" "$TMP/flatpak-log" && [ "$(grep -c "^install" "$TMP/flatpak-log")" -eq 2 ]' \
+    "Winkel: na de update van de oude versie: Firefox en Steam als Flatpak erbij, de al klaargezette apps niet opnieuw"
+# U239/U308: een nieuwe standaard-app in een latere BugOS-versie. Met 'zelf updaten' niet vanzelf (U308), wel
+# onthouden dat hij is overgeslagen (U320); met 'vanzelf' wel, één keer (U239).
+cp "$LIJST_ECHT" "$TMP/lijst-nieuw"
+echo org.voorbeeld.Nieuw >>"$TMP/lijst-nieuw"
+: >"$TMP/flatpak-log"
+export BUGOS_STANDAARD_APPS="$TMP/lijst-nieuw"
+draai bugos-first-boot
+klopt '[ "$code" -eq 0 ] && ! grep -q "^install" "$TMP/flatpak-log" && [ -e "$TMP/var-bugos/standaard-apps-overgeslagen" ]' \
+    "U308: 'zelf updaten': een nieuwe standaard-app komt niet vanzelf (wel onthouden voor later)"
+klopt 'grep -q "rm -f /var/lib/bugos/standaard-apps-overgeslagen" "$BIN/bugos-updates" && grep -q "systemctl start --no-block bugos-first-boot.service" "$BIN/bugos-updates"' \
     "U320: zet je updates later op 'vanzelf', dan komen de overgeslagen standaard-apps alsnog"
+nep bugos-updates 'exit 0'
+: >"$TMP/flatpak-log"
+draai bugos-first-boot
+klopt '[ "$code" -eq 0 ] && [ "$(grep -c "^install" "$TMP/flatpak-log")" -eq 1 ] && grep -q "flathub org.voorbeeld.Nieuw$" "$TMP/flatpak-log"' \
+    "U239: 'vanzelf': de nieuwe standaard-app komt erbij, alleen die"
+# Een kapotte regel in de lijst (geen app-id, of een optie) gaat nooit naar flatpak.
+printf '%s\n' "-rf.x.y" "geen-id" >"$TMP/lijst-kapot"
+: >"$TMP/flatpak-log"
+export BUGOS_STANDAARD_APPS="$TMP/lijst-kapot"
+draai bugos-first-boot
+unset BUGOS_STANDAARD_APPS
+klopt '[ "$code" -eq 0 ] && ! grep -qE "geen-id|-rf" "$TMP/flatpak-log"' "Winkel: alleen echte app-ids uit de lijst gaan naar flatpak"
+# De dienst: bij elke start (geen ConditionPathExists op een 'klaar'-bestand meer), met een timer als vangnet.
+klopt '! grep -q "^ConditionPathExists=!" "$SD/system/bugos-first-boot.service" && grep -q "^OnBootSec=" "$SD/system/bugos-first-boot.timer" && grep -q "^OnUnitInactiveSec=" "$SD/system/bugos-first-boot.timer" && grep -q "systemctl enable bugos-first-boot.timer" "$ROOT/build_files/build.sh"' \
+    "Winkel: geen internet bij de eerste start: de dienst probeert het opnieuw, en een timer later nog eens"
+klopt 'sd_goed "$SD/system/bugos-first-boot.timer" "$SD/system/bugos-first-boot.service"' "Winkel: systemd kan de timer lezen"
+klopt '! grep -qxE "\s*firefox\s*" "$ROOT/build_files/packages.txt" && ! grep -q "dnf5 install -y --skip-unavailable steam" "$ROOT/build_files/build.sh"' \
+    "Winkel: Firefox en Steam zitten niet meer als pakket in het beeld"
+# VM-test 2026-11-16: kinoite-main brengt Firefox zelf mee, met firefox-langpacks erbij; rpm -e --test firefox
+# weigerde daardoor, en dan had je twee Firefoxen (pakket en Flatpak). Samen weghalen.
+klopt 'grep -q "\"firefox,firefox-langpacks org.mozilla.firefox ja\"" "$ROOT/build_files/build.sh" && grep -q "rpm -e --test \"\${weg\[@\]}\"" "$ROOT/build_files/build.sh"'     "Winkel: Firefox gaat samen met zijn taalpakketten uit het beeld (anders weigert rpm)"
+klopt 'grep -q "^x-scheme-handler/https=org.mozilla.firefox.desktop" "$ROOT/system_files/etc/xdg/kde-mimeapps.list" && grep -q "^text/html=org.mozilla.firefox.desktop" "$ROOT/system_files/etc/xdg/kde-mimeapps.list"' \
+    "Winkel: Firefox (de Flatpak) is de standaardbrowser"
+klopt 'grep -q "^L+ /var/lib/flatpak/extension/org.mozilla.firefox.systemconfig/x86_64/stable .* /usr/share/bugos/firefox-systemconfig$" "$ROOT/system_files/usr/lib/tmpfiles.d/bugos-firefox.conf" && grep -qF "pref(\"browser.tabs.inTitlebar\", 0);" "$ROOT/system_files/usr/share/bugos/firefox-systemconfig/defaults/pref/bugos.js"' \
+    "Winkel: de BugOS-instellingen voor Firefox (zelfde vensterbalk) gelden ook voor de Flatpak"
 nep bugos-updates 'exit 0'
 klopt 'grep -q "^image/jpeg=org.kde.gwenview.desktop" "$ROOT/system_files/etc/xdg/kde-mimeapps.list" && grep -q "^application/pdf=org.kde.okular.desktop" "$ROOT/system_files/etc/xdg/kde-mimeapps.list"' \
     "U224: een foto opent standaard in Gwenview en een PDF in Okular"
@@ -635,5 +792,157 @@ klopt '[ "$(HOME="$TMP/thuis" PATH="$TMP/bin:$PATH" bash "$TMP/bugos-theme" stat
 nep kreadconfig6 'case "$*" in *ColorScheme*) echo BreezeDark ;; *BackgroundNormal*) echo 32,35,38,255 ;; esac'
 klopt '[ "$(HOME="$TMP/thuis" PATH="$TMP/bin:$PATH" bash "$TMP/bugos-theme" status 2>/dev/null)" = donker ]' \
     "U331: een donkere kleur met doorzichtigheid (r,g,b,a) telt ook als donker"
+# B-04: bugos-tijd (de klok, als beheerder via pkexec met een Nederlandse zin van BugOS). Als root roept het alleen
+# timedatectl aan, en alleen met een tijdzone die timedatectl zelf kent en een tijd in de goede vorm.
+kopie bugos-tijd
+nep id 'echo 0'
+nep timedatectl 'case "$1" in list-timezones) printf "Europe/Amsterdam\nEurope/Athens\n" ;; *) echo "$*" >>"'"$TMP"'/timedatectl" ;; esac'
+rm -f "$TMP/timedatectl"
+draai bugos-tijd vanzelf uit
+klopt '[ $code -eq 0 ] && grep -qx "set-ntp false" "$TMP/timedatectl"' "B-04: bugos-tijd vanzelf uit -> timedatectl set-ntp false"
+draai bugos-tijd zone Europe/Athens
+klopt '[ $code -eq 0 ] && grep -qx "set-timezone Europe/Athens" "$TMP/timedatectl"' "B-04: bugos-tijd zone -> timedatectl set-timezone"
+rm -f "$TMP/timedatectl"
+draai bugos-tijd zone "../../etc/shadow"
+klopt '[ $code -eq 2 ] && [ ! -f "$TMP/timedatectl" ]' "B-04: bugos-tijd weigert een rare tijdzone (draait als root)"
+draai bugos-tijd zone Mars/Olympus
+klopt '[ $code -eq 2 ] && [ ! -f "$TMP/timedatectl" ]' "B-04: bugos-tijd weigert een tijdzone die timedatectl niet kent"
+draai bugos-tijd klok "2026-11-14 13:05:00"
+klopt '[ $code -eq 0 ] && grep -qx "set-time 2026-11-14 13:05:00" "$TMP/timedatectl"' "B-04: bugos-tijd klok -> timedatectl set-time"
+rm -f "$TMP/timedatectl"
+draai bugos-tijd klok "morgen; rm -rf /"
+klopt '[ $code -eq 2 ] && [ ! -f "$TMP/timedatectl" ]' "B-04: bugos-tijd weigert een tijd in een andere vorm"
+nep id 'echo 1000'
+nep pkexec 'echo "$*" >"'"$TMP"'/pkexec"'
+draai bugos-tijd vanzelf aan
+klopt 'grep -qx "/usr/bin/bugos-tijd vanzelf aan" "$TMP/pkexec"' "B-04: als gewone gebruiker vraagt bugos-tijd het wachtwoord via pkexec (de eigen polkit-regel)"
+nep id 'echo 0'
+# B-06: KDE-bestandsvensters toonden de systeemdelen (composefs-wortel 100% vol, /boot, EFI, het btrfs-volume) als
+# schijven. bugos-hide-system-drives verbergt precies de volumes onder /, /sysroot, /boot en /boot/efi (udev:
+# UDISKS_IGNORE) en de composefs-wortel (x-gvfs-hide in utab), nooit een andere schijf. Met nep-findmnt/lsblk/udevadm.
+nep findmnt 'm=""; s=0; while [ $# -gt 0 ]; do case "$1" in -M) m="$2"; shift ;; FSTYPE) s=1 ;; esac; shift; done
+case "$m" in
+    /) if [ $s = 1 ]; then echo overlay; else echo composefs; fi ;;
+    /sysroot) echo /dev/sda3 ;;
+    /boot) echo /dev/sda2 ;;
+    /boot/efi) echo /dev/sda1 ;;
+    *) exit 1 ;;
+esac'
+nep lsblk 'for a; do d="$a"; done; case "$d" in /dev/sda1) printf "AAAA-1111\n\n" ;; /dev/sda2) printf "boot-uuid\n\n" ;; /dev/sda3) printf "bugos-btrfs\n\n" ;; esac'
+nep udevadm 'echo "$*" >>"'"$TMP"'/udevadm"'
+cp "$ROOT/system_files/usr/libexec/bugos-hide-system-drives" "$TMP/bugos-hide-system-drives"
+export BUGOS_UDEV_REGELS="$TMP/run/udev/90-bugos.rules" BUGOS_UTAB="$TMP/run/mount/utab"
+mkdir -p "$TMP/run/mount"
+echo "SRC=/dev/sdb1 TARGET=/run/media/test/FOTOS ROOT=/ OPTS=uhelper=udisks2" >"$BUGOS_UTAB"   # iets van udisks zelf
+draai bugos-hide-system-drives
+draai bugos-hide-system-drives   # twee keer: de regel in utab maar één keer
+klopt '[ $code -eq 0 ] && grep -q "ID_FS_UUID}==\"AAAA-1111\", ENV{UDISKS_IGNORE}=\"1\"" "$BUGOS_UDEV_REGELS" && grep -q "boot-uuid" "$BUGOS_UDEV_REGELS" && grep -q "bugos-btrfs" "$BUGOS_UDEV_REGELS"' \
+    "B-06: EFI, /boot en het systeemvolume krijgen UDISKS_IGNORE (niet meer als schijf in KDE)"
+klopt '[ "$(grep -c UDISKS_IGNORE "$BUGOS_UDEV_REGELS")" -eq 3 ] && ! grep -q "sdb\|FOTOS" "$BUGOS_UDEV_REGELS"' \
+    "B-06: alleen de systeemvolumes, nooit een andere schijf (zoals een schijf met foto's)"
+klopt '[ "$(grep -cxF "SRC=composefs TARGET=/ ROOT=/ OPTS=x-gvfs-hide" "$BUGOS_UTAB")" -eq 1 ] && grep -q "FOTOS" "$BUGOS_UTAB"' \
+    "B-06: de composefs-wortel krijgt x-gvfs-hide (één keer), wat er al in utab stond blijft"
+klopt 'grep -q "trigger --action=change --subsystem-match=block --property-match=ID_FS_UUID=boot-uuid" "$TMP/udevadm"' \
+    "B-06: udev bekijkt de systeemvolumes opnieuw, zodat udisks (en KDE) het meteen weten"
+klopt 'grep -qx "systemctl enable bugos-hide-system-drives.service" "$ROOT/build_files/build.sh" && grep -q "/usr/libexec/bugos-hide-system-drives" "$ROOT/build_files/build.sh"' \
+    "B-06: de dienst staat aan en het script is uitvoerbaar in het beeld"
+unset BUGOS_UDEV_REGELS BUGOS_UTAB
+
+# D-09: build.sh werkt geen pakketten van de basis bij. 'kwrite' in packages.txt haalde KWrite 26.08.3 binnen bovenop
+# kf6-kconfig 6.31 van de basis, en dan ging geen enkel .txt-bestand meer open. We knippen het installeerstuk uit
+# build.sh en draaien het met een nep-rpm (de 'basis' heeft kwrite en git) en een nep-dnf5 die zijn opdracht opschrijft.
+# Verwacht: dnf5 krijgt alleen de nieuwe pakketten, nooit kwrite of git.
+mkdir -p "$TMP/ctx"
+printf '# uitleg\nkwrite\nwine\n\ngit\nkio-fuse\n' >"$TMP/ctx/packages.txt"
+nep rpm 'case "$2" in kwrite|git) exit 0 ;; *) exit 1 ;; esac'
+nep dnf5 "echo \"\$@\" >>'$TMP/dnf5-log'"
+: >"$TMP/dnf5-log"
+sed -n '/^mapfile -t ALLE_PAKKETTEN/,/^fi$/p' "$ROOT/build_files/build.sh" | sed "s|/ctx/packages.txt|$TMP/ctx/packages.txt|" \
+    >"$TMP/installeer.sh"
+PATH="$TMP/bin:$PATH" bash "$TMP/installeer.sh" >/dev/null 2>&1
+klopt '[ "$(cat "$TMP/dnf5-log")" = "install -y --skip-unavailable wine kio-fuse" ]' \
+    "D-09: build.sh installeert alleen wat de basis nog niet heeft, en werkt KWrite van de basis niet bij ($(cat "$TMP/dnf5-log"))"
+# Heeft de basis alles al, dan roept build.sh dnf5 helemaal niet aan (dnf5 install zonder pakketten is een fout).
+nep rpm 'exit 0'
+: >"$TMP/dnf5-log"
+PATH="$TMP/bin:$PATH" bash "$TMP/installeer.sh" >/dev/null 2>&1
+klopt '[ ! -s "$TMP/dnf5-log" ]' "D-09: zit alles al in de basis, dan installeert build.sh niets"
+# D-09, de echte oorzaak: de basis bracht KWrite 26.08.3 mee bovenop KDE Frameworks 6.31. build.sh ziet met
+# LD_BIND_NOW=1 kwrite --version dat de editor niet start en werkt dan alle frameworks (alleen kf6 met versie 6.x,
+# niet kf6-kirigami-addons met een eigen nummering) samen bij. Nep-kwrite start pas na die update.
+sed -n '/^editor_start() {/,/^fi$/p' "$ROOT/build_files/build.sh" >"$TMP/editor.sh"
+nep rpm "printf 'kf6-kconfig 6.31.0\nkf6-kirigami-addons 1.15.0\nkf6-ktexteditor 6.31.0\nkf6-kconfig 6.31.0\n'"
+nep dnf5 "echo \"\$@\" >>'$TMP/dnf5-log'; : >'$TMP/kf6-bij'"
+nep kwrite "[ \"\$LD_BIND_NOW\" = 1 ] && [ -e '$TMP/kf6-bij' ]"
+nep kate 'exit 0'
+: >"$TMP/dnf5-log"; rm -f "$TMP/kf6-bij"
+PATH="$TMP/bin:$PATH" bash -e "$TMP/editor.sh" >/dev/null 2>&1
+code=$?
+klopt '[ "$code" -eq 0 ] && [ "$(cat "$TMP/dnf5-log")" = "upgrade -y kf6-kconfig kf6-ktexteditor" ]' \
+    "D-09: start de teksteditor niet, dan werkt build.sh alle KDE Frameworks samen bij ($(cat "$TMP/dnf5-log"))"
+# Start hij wel, dan blijft de basis precies de basis (geen dnf5).
+: >"$TMP/dnf5-log"
+PATH="$TMP/bin:$PATH" bash -e "$TMP/editor.sh" >/dev/null 2>&1
+klopt '[ ! -s "$TMP/dnf5-log" ]' "D-09: start de teksteditor gewoon, dan werkt build.sh niets bij"
+# Helpt de update niet, dan stopt de bouw (exit 1) in plaats van een beeld zonder werkende editor.
+nep kwrite 'exit 127'
+PATH="$TMP/bin:$PATH" bash -e "$TMP/editor.sh" >/dev/null 2>&1
+code=$?
+klopt '[ "$code" -ne 0 ]' "D-09: start de teksteditor ook na de update niet, dan stopt de bouw"
+rm -f "$TMP/bin/rpm" "$TMP/bin/dnf5" "$TMP/bin/kwrite" "$TMP/bin/kate" "$TMP/kf6-bij"
+
+# Standaard-Engels, maar internationaal (eigenaar 2026-11-16: "default taal Engels internationaal, pas als je de
+# taal weet aanpassen"). Fedora schrijft LANG=en_US als je bij het installeren 'English' laat staan; buiten de VS
+# maakt bugos-taal-standaard daar dag/maand, 24 uur en A4 van (voor iedereen, via /etc/xdg/plasma-localerc).
+TS="$ROOT/system_files/usr/libexec/bugos-taal-standaard"
+ZI="$TMP/zoneinfo"; mkdir -p "$ZI"
+printf 'NL	+5222+00454	Europe/Amsterdam
+US	+404251-0740023	America/New_York
+' >"$ZI/zone.tab"
+taal_geval() {  # taal_geval <naam> <LANG of leeg> <zone of leeg>: een nep-/etc, en draai het script
+    local e="$TMP/etc-$1"
+    rm -rf "$e"; mkdir -p "$e"
+    [ -n "$2" ] && echo "LANG=\"$2\"" >"$e/locale.conf"
+    [ -n "$3" ] && ln -s "../usr/share/zoneinfo/$3" "$e/localtime"
+    BUGOS_ETC="$e" BUGOS_ZONEINFO="$ZI" bash "$TS" >/dev/null 2>&1
+    echo "$e/xdg/plasma-localerc"
+}
+f="$(taal_geval nl-zone en_US.UTF-8 Europe/Amsterdam)"
+klopt 'grep -qx "LC_TIME=en_IE.UTF-8" "$f" && grep -qx "LC_PAPER=en_IE.UTF-8" "$f" && ! grep -q LC_MONETARY "$f"'     "Taal: Engels (VS) in Amsterdam wordt internationaal Engels (dag/maand, 24 uur, A4); geld blijft van het land"
+f="$(taal_geval vs en_US.UTF-8 America/New_York)"
+klopt '[ ! -e "$f" ]' "Taal: Engels (VS) in New York blijft Amerikaans"
+f="$(taal_geval nl nl_NL.UTF-8 Europe/Amsterdam)"
+klopt '[ ! -e "$f" ]' "Taal: koos je bij het installeren Nederlands (of een andere taal), dan blijft alles af"
+f="$(taal_geval geen-zone "" "")"
+klopt 'grep -qx "LC_TIME=en_IE.UTF-8" "$f"' "Taal: geen taal en geen tijdzone: internationaal Engels"
+e="$TMP/etc-al"; rm -rf "$e"; mkdir -p "$e/xdg"; echo "LANG=en_US.UTF-8" >"$e/locale.conf"; echo eigen >"$e/xdg/plasma-localerc"
+BUGOS_ETC="$e" BUGOS_ZONEINFO="$ZI" bash "$TS" >/dev/null 2>&1
+klopt '[ "$(cat "$e/xdg/plasma-localerc")" = eigen ]' "Taal: een bestaande /etc/xdg/plasma-localerc wordt nooit overschreven"
+klopt 'grep -qx "systemctl enable bugos-taal-standaard.service" "$ROOT/build_files/build.sh" && grep -q "/usr/libexec/bugos-taal-standaard" "$ROOT/build_files/build.sh" && sd_goed "$SD/system/bugos-taal-standaard.service" && grep -q "^Before=display-manager.service" "$SD/system/bugos-taal-standaard.service"'     "Taal: de dienst staat aan, is uitvoerbaar en draait vóór het inlogscherm"
+if command -v shellcheck >/dev/null 2>&1; then
+    klopt 'shellcheck "$TS"' "Taal: shellcheck vindt niets in bugos-taal-standaard"
+fi
+
+# Firefox en Steam werden Flatpaks: hun oude map moet mee (anders lege Firefox en alle spellen opnieuw downloaden).
+VA="$ROOT/system_files/usr/bin/bugos-verhuis-apps"
+VH="$TMP/verhuis-thuis"; rm -rf "$VH"
+mkdir -p "$VH/.mozilla/firefox/abc.default" "$VH/.local/share/Steam/steamapps"
+echo bladwijzers >"$VH/.mozilla/firefox/abc.default/places.sqlite"
+echo spel >"$VH/.local/share/Steam/steamapps/spel.acf"
+mkdir -p "$VH/.var/app/com.valvesoftware.Steam/.local/share/Steam"   # leeg, zoals Flatpak hem soms al maakt
+HOME="$VH" XDG_DATA_HOME="$VH/.local/share" BUGOS_GEEN_FLATPAKCHECK=1 PATH="$TMP/geen-pgrep:/usr/bin:/bin" bash "$VA" >/dev/null 2>&1
+klopt '[ "$(cat "$VH/.var/app/org.mozilla.firefox/.mozilla/firefox/abc.default/places.sqlite")" = bladwijzers ] && [ -L "$VH/.mozilla/firefox" ]'     "Verhuizen: het Firefox-profiel staat bij de losse Firefox, met een verwijzing op de oude plek"
+klopt '[ "$(cat "$VH/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/spel.acf")" = spel ] && [ -L "$VH/.local/share/Steam" ]'     "Verhuizen: Steam met je spellen staat bij de losse Steam (een lege map van Flatpak telt niet als 'al iets')"
+VH2="$TMP/verhuis-thuis2"; rm -rf "$VH2"
+mkdir -p "$VH2/.mozilla/firefox/oud.default" "$VH2/.var/app/org.mozilla.firefox/.mozilla/firefox/nieuw.default"
+HOME="$VH2" XDG_DATA_HOME="$VH2/.local/share" BUGOS_GEEN_FLATPAKCHECK=1 bash "$VA" >/dev/null 2>&1
+klopt '[ -d "$VH2/.mozilla/firefox/oud.default" ] && [ ! -L "$VH2/.mozilla/firefox" ] && [ -d "$VH2/.var/app/org.mozilla.firefox/.mozilla/firefox/nieuw.default" ]'     "Verhuizen: had de losse Firefox al een eigen profiel, dan blijft alles staan (nooit samenvoegen of overschrijven)"
+HOME="$VH" XDG_DATA_HOME="$VH/.local/share" BUGOS_GEEN_FLATPAKCHECK=1 bash "$VA" >/dev/null 2>&1
+klopt '[ -L "$VH/.mozilla/firefox" ] && [ -e "$VH/.local/share/bugos/verhuisd-org.mozilla.firefox" ]' "Verhuizen: een tweede keer doet niets"
+klopt 'grep -qx "Exec=/usr/bin/bugos-verhuis-apps" "$ROOT/system_files/etc/xdg/autostart/bugos-verhuis-apps.desktop"'     "Verhuizen: draait bij het inloggen"
+if command -v shellcheck >/dev/null 2>&1; then
+    klopt 'shellcheck "$VA"' "Verhuizen: shellcheck vindt niets in bugos-verhuis-apps"
+fi
+
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

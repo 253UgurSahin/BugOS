@@ -275,6 +275,26 @@ klopt(b.zelfde_schijf(docs / "kapot", thuis), "snelkoppeling: een kapotte koppel
 klopt(b.toon_naam("Recept.odt", False) == "Recept", "naam: bekende extensie verborgen")
 klopt(b.toon_naam("SpotifySetup.exe", False) == "SpotifySetup.exe", "naam: programma houdt zijn extensie")
 klopt(b.toon_naam("foto.jpg", True) == "foto.jpg", "naam: map houdt zijn naam")
+# D-15: één regel voor extensies. Gewone dingen (ook een webpagina) zonder; programma's, pakketten en archieven altijd
+# met, ook een vermomd programma ('foto.jpg.exe').
+klopt(b.toon_naam("notitie.txt", False) == "notitie" and b.toon_naam("pagina.html", False) == "pagina"
+      and b.toon_naam("spel.deb", False) == "spel.deb" and b.toon_naam("Setup.exe", False) == "Setup.exe"
+      and b.toon_naam("foto.jpg.exe", False) == "foto.jpg.exe" and b.toon_naam("app.AppImage", False) == "app.AppImage"
+      and b.toon_naam("map.zip", False) == "map.zip",
+      "D-15: extensies: verborgen bij documenten, webpagina's en media; altijd zichtbaar bij programma's en pakketten")
+import bugos_files_plekken as _pl15  # noqa: E402
+
+klopt(not (_pl15.VERBERG_EXT & _pl15.TOON_ALTIJD_EXT),
+      "D-15: geen programma of pakket in de lijst van te verbergen extensies")
+import bugos_ui as _ui15  # noqa: E402
+
+_tegels15 = (ROOT / "system_files/usr/lib/bugos/python/bugos_files_tegels.py").read_text(encoding="utf-8")
+klopt("doos" in _ui15.LIJN and '"doos": "doos"' in _tegels15 and '"doos": "map"' not in _tegels15
+      and _pl15.SOORTEN["exe"][1] == "doos" and _pl15.SOORTEN["deb"][1] == "doos",
+      "D-15: een .exe of .deb krijgt een doos op het papiertje, geen map")
+_klipper15 = (ROOT / "system_files/etc/xdg/klipperrc").read_text(encoding="utf-8")
+klopt("[General]" in _klipper15 and "KeepClipboardContents=false" in _klipper15,
+      "D-15: het klembord onthoudt niets van een vorige sessie (dan geen 'Plakken' als je nog niets kopieerde)")
 
 # 9. schijven herkennen (een nep-lijstje, zoals lsblk het geeft)
 # U139: een stick die er net in zit, wordt opengezet (KDE doet dat niet vanzelf), zodat Back-up en Overstap hem zien.
@@ -755,7 +775,8 @@ klopt(_klaar == [], f"U369: 'In gebruik nemen' wist geen andere stick die intuss
 # U058: exFAT kent hoogstens 11 tekens; "Stick van Bugie" (15) zou het wissen laten mislukken, dus een kortere naam.
 klopt(_stappen and "Stick van Bugie" not in _stappen[0] and "USB-stick" in _stappen[0],
       "U058: leegmaken van een stick met een lange naam (15 tekens) gebruikt een naam die exFAT kent")
-klopt(venster.ruimte_balk is not None and venster.status.text() == "1 aangesloten", "Deze computer: ruimte bovenaan, en 1 aangesloten")
+klopt(venster.ruimte_balk is not None and venster.status.text() == "1 USB-stick of schijf aangesloten",
+      "Deze computer: ruimte bovenaan, en 1 aangesloten (C-09a: zegt wat er aangesloten is)")
 from PySide6.QtCore import QEvent, Qt  # noqa: E402
 from PySide6.QtGui import QKeyEvent  # noqa: E402
 
@@ -830,6 +851,257 @@ _k.start()
 while not _uit and _k.elapsed() < 10000:
     app.processEvents()
 klopt(_uit == [False] and _teken.exists(), "U141: mislukt het hernoemen of repareren, dan gaat de schijf toch weer open")
+
+# ============================================================== C: bevindingen uit de VM-test (tester C2) ===
+from PySide6.QtCore import QPoint, QPointF  # noqa: E402
+from PySide6.QtGui import QContextMenuEvent, QMouseEvent  # noqa: E402
+from PySide6.QtWidgets import QApplication  # noqa: E402
+
+_c = TMP / "c-test"
+(_c / "Map A").mkdir(parents=True)
+(_c / "brief.txt").write_text("hallo")
+(_c / "foto.jxl").write_bytes(b"\xff\x0a")   # geen echte JPEG XL: alleen de naam telt hier
+venster.resize(1120, 740)
+venster.show()
+venster.ga_naar(_c)
+for _ in range(80):
+    app.processEvents()
+
+
+def _teksten(m) -> list[str]:
+    return [a.text() for a in m.actions() if a.text()]
+
+
+def _idx(naam):
+    return venster.sorteer.mapFromSource(venster.model.index(str(_c / naam)))
+
+
+# C-01: het menu op een tegel en op het lege vlak, zoals in de Verkenner van Windows.
+_punt = venster.lijst.visualRect(_idx("brief.txt")).center()
+_m = venster.maak_menu(_punt)
+klopt(_teksten(_m) == ["Openen", "Openen met", "Knippen", "Kopiëren", "Naam wijzigen", "Weggooien",
+                       "Eigenschappen"] and venster.gekozen() == [_c / "brief.txt"],
+      f"C-01: rechts op een bestand: Openen, Openen met, Knippen, Kopiëren, Naam wijzigen, Prullenbak, Eigenschappen "
+      f"({_teksten(_m)})")
+QApplication.clipboard().clear()
+_leeg_punt = QPoint(venster.lijst.viewport().width() - 5, venster.lijst.viewport().height() - 5)
+_m = venster.maak_menu(_leeg_punt)
+klopt(_teksten(_m) == ["Nieuwe map", "Nieuw tekstbestand", "Sorteren op"] and venster.gekozen() == [],
+      f"C-01: rechts op het lege vlak: Nieuwe map, Nieuw tekstbestand, Sorteren (zonder Plakken) ({_teksten(_m)})")
+venster.lijst.setCurrentIndex(_idx("Map A"))
+venster.kopieer()
+app.processEvents()
+_m = venster.maak_menu(_leeg_punt)
+klopt("Plakken" in _teksten(_m), f"C-01: met iets gekopieerd staat Plakken in het menu van het lege vlak ({_teksten(_m)})")
+venster.open_prullenbak()
+klopt(_teksten(venster.maak_menu(QPoint(5, 5))) == ["Zet terug", "Prullenbak leegmaken"],
+      "C-01: in de prullenbak: Zet terug en Leegmaken")
+venster.ga_naar(_c)
+for _ in range(40):
+    app.processEvents()
+# C-01: het menu komt bij het LOSLATEN van de rechterknop (op Wayland ging een menu bij het indrukken meteen dicht);
+# Qt's eigen muis-contextmenu (bij het indrukken) wordt ingeslikt.
+_gevraagd: list = []
+_oud_menu = venster.menu
+venster.menu = lambda punt, toetsenbord=False, globaal=None: _gevraagd.append((punt, globaal))
+_vp = venster.lijst.viewport()
+_cm = QContextMenuEvent(QContextMenuEvent.Reason.Mouse, _punt, _vp.mapToGlobal(_punt))
+QApplication.sendEvent(_vp, _cm)
+_na_indrukken = list(_gevraagd)
+for _soort in (QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonRelease):
+    QApplication.sendEvent(_vp, QMouseEvent(_soort, QPointF(_punt), QPointF(_vp.mapToGlobal(_punt)),
+                                            Qt.MouseButton.RightButton,
+                                            Qt.MouseButton.RightButton if _soort == QEvent.Type.MouseButtonPress
+                                            else Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier))
+for _ in range(10):
+    app.processEvents()
+venster.menu = _oud_menu
+klopt(_na_indrukken == [] and len(_gevraagd) == 1 and _gevraagd[0][0] == _punt,
+      f"C-01: het menu opent bij het loslaten van de rechterknop, niet bij het indrukken ({_na_indrukken}, {_gevraagd})")
+# C-01: ook het lege vlak van een lege map heeft een menu.
+_l = TMP / "c-leeg"
+_l.mkdir()
+venster.ga_naar(_l)
+for _ in range(40):
+    app.processEvents()
+_gevraagd.clear()
+venster.menu = lambda punt, toetsenbord=False, globaal=None: _gevraagd.append((punt, globaal))
+for _soort in (QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonRelease):
+    QApplication.sendEvent(venster.leeg, QMouseEvent(_soort, QPointF(20, 20), QPointF(20, 20),
+                                                     Qt.MouseButton.RightButton, Qt.MouseButton.NoButton,
+                                                     Qt.KeyboardModifier.NoModifier))
+for _ in range(10):
+    app.processEvents()
+venster.menu = _oud_menu
+klopt(venster.stapel.currentWidget() is venster.leeg and len(_gevraagd) == 1 and _gevraagd[0][0] is None,
+      f"C-01: rechts in een lege map: het menu van de map ({_gevraagd})")
+# C-01: Sorteren op grootte: mappen vooraan, dan het grootste bestand.
+venster.ga_naar(_c)
+(_c / "groot.txt").write_text("x" * 50000)
+for _ in range(60):
+    app.processEvents()
+venster.sorteer_op("grootte")
+_volgorde = [venster.sorteer.index(i, 0, venster.lijst.rootIndex()).data() for i in
+             range(venster.sorteer.rowCount(venster.lijst.rootIndex()))]
+venster.sorteer_op("naam")
+klopt(_volgorde[:2] == ["Map A", "groot.txt"], f"C-01: Sorteren op grootte: mappen eerst, dan het grootste ({_volgorde})")
+# C-01: Openen met: apps uit mimeinfo.cache die dit soort bestand kunnen openen (geen verborgen apps).
+_apps = thuis / ".local" / "share" / "applications"
+_apps.mkdir(parents=True, exist_ok=True)
+(_apps / "mimeinfo.cache").write_text("[MIME Cache]\ntext/plain=kladblok.desktop;geheim.desktop;\n")
+(_apps / "kladblok.desktop").write_text("[Desktop Entry]\nType=Application\nName=Kladblok\nExec=kladblok %f\n")
+(_apps / "geheim.desktop").write_text("[Desktop Entry]\nType=Application\nName=Geheim\nNoDisplay=true\nExec=g\n")
+from bugos_files_bewerken import openen_met_apps  # noqa: E402
+
+_om = [n for n, _p in openen_met_apps(_c / "brief.txt")]
+klopt("Kladblok" in _om and "Geheim" not in _om, f"C-01: Openen met: de apps voor tekst, zonder verborgen ({_om})")
+# D-01: een .exe (of .msi/.deb/.rpm) dubbelklikken gaat rechtstreeks naar BugOS' eigen helper, niet via kde-open
+# (KIO weigerde: "het starten van uitvoerbare bestanden is niet toegestaan"). En 'Openen met' noemt die helper, ook al
+# is zijn .desktop-bestand verborgen voor het startmenu.
+import bugos_files_venster as _fv  # noqa: E402
+
+(_c / "npp.8.7.1.Installer.x64.exe").write_bytes(b"MZ")
+(_c / "hello_2.10_amd64.DEB").write_bytes(b"!<arch>")
+for _ in range(80):   # het model ziet nieuwe bestanden pas na een paar rondjes van de event-loop
+    app.processEvents()
+_gestart: list = []
+_oud_start, _oud_open = _fv.start, _fv.QDesktopServices.openUrl
+_fv.start = lambda *cmd: (_gestart.append(cmd), True)[1]
+_fv.QDesktopServices.openUrl = staticmethod(lambda url: _gestart.append(("openUrl", url.toLocalFile())))
+for _naam in ("npp.8.7.1.Installer.x64.exe", "hello_2.10_amd64.DEB", "brief.txt"):
+    _idx_ = venster.sorteer.mapFromSource(venster.model.index(str(_c / _naam)))
+    venster.openen(_idx_)
+_fv.start, _fv.QDesktopServices.openUrl = _oud_start, _oud_open
+klopt(_gestart == [("bugos-exe", str(_c / "npp.8.7.1.Installer.x64.exe")),
+                   ("bugos-package", str(_c / "hello_2.10_amd64.DEB")),
+                   ("openUrl", str(_c / "brief.txt"))],
+      f"D-01: .exe naar bugos-exe, .deb naar bugos-package, de rest zoals altijd ({_gestart})")
+(_apps / "mimeinfo.cache").write_text("[MIME Cache]\ntext/plain=kladblok.desktop;geheim.desktop;\n"
+                                      "application/x-msdownload=bugos-exe.desktop;\n"
+                                      "application/vnd.microsoft.portable-executable=bugos-exe.desktop;\n"
+                                      "application/x-ms-dos-executable=bugos-exe.desktop;\n")
+(_apps / "bugos-exe.desktop").write_text((ROOT / "system_files/usr/share/applications/bugos-exe.desktop").read_text())
+_om = [n for n, _p in openen_met_apps(_c / "npp.8.7.1.Installer.x64.exe")]
+klopt(any("Windows" in n for n in _om), f"D-01: Openen met bij een .exe: Windows-programma (BugOS) staat erbij ({_om})")
+# Weer weg: de tests hierna tellen wat er in deze map staat.
+(_c / "npp.8.7.1.Installer.x64.exe").unlink()
+(_c / "hello_2.10_amd64.DEB").unlink()
+for _ in range(40):
+    app.processEvents()
+_sd = (ROOT / "system_files/usr/bin/bugos-start-data").read_text(encoding="utf-8")
+klopt('".exe": "bugos-exe"' in _sd and '".deb": "bugos-package"' in _sd,
+      "D-01: ook een .exe uit 'Recent' in het startmenu gaat naar bugos-exe (niet via xdg-open)")
+# C-02: een nieuw tekstbestand (leeg, .txt erbij), en nooit een bestaand bestand overschrijven.
+_oud_vt = venster.vraag_tekst
+_vragen: list = []
+venster.vraag_tekst = lambda titel, vraag, tekst, ok="", kies_tot=None: (_vragen.append((tekst, kies_tot)),
+                                                                        "Boodschappen")[1]
+venster.nieuw_tekstbestand()
+venster.nieuw_tekstbestand()
+venster.vraag_tekst = _oud_vt
+klopt((_c / "Boodschappen.txt").read_text() == "" and (_c / "Boodschappen (2).txt").exists()
+      and _vragen[0] == ("Nieuw tekstbestand.txt", len("Nieuw tekstbestand")),
+      f"C-02: Nieuw tekstbestand: leeg, .txt erbij, naam vooraf gekozen, en geen overschrijven ({_vragen[:1]})")
+klopt(not venster.tekst_knop.isHidden(), "C-02: een knop 'Nieuw tekstbestand' naast 'Nieuwe map'")
+# C-03: in een gewoon venster (1120 px) houden Plakken en Prullenbak leegmaken hun woord.
+venster.resize(1120, 740)
+for _ in range(20):
+    app.processEvents()
+venster.pas_knoppen()
+klopt(not venster.plak_knop.isHidden() and venster.plak_knop.text() == "Plakken",
+      f"C-03: 'Plakken' met zijn woord bij 1120 px ({venster.plak_knop.text()!r})")
+venster.open_prullenbak()
+for _ in range(10):
+    app.processEvents()
+klopt(venster.leeg_knop.text() == "Prullenbak leegmaken",
+      f"C-03: 'Prullenbak leegmaken' met zijn woord ({venster.leeg_knop.text()!r})")
+venster.ga_naar(_c)
+# C-04: een melding van de ene map staat niet meer in de volgende.
+venster.melding.toon("2 dingen gekopieerd.")
+venster.ga_naar(_c / "Map A")
+klopt(venster.melding.isHidden(), "C-04: naar een andere map: de melding van de vorige map is weg")
+venster.melding.toon("Iets")
+venster.open_computer()
+klopt(venster.melding.isHidden(), "C-04: ook naar Deze computer")
+venster.ga_naar(_c)
+# C-05: JPEG XL heet net als andere foto's zonder extensie, en krijgt (als Qt hem kan lezen) een voorbeeldje.
+klopt(b.toon_naam("vakantie.jxl", False) == "vakantie" and ".jxl" in b.AFBEELDING,
+      "C-05: een .jxl-foto toont zijn naam zonder extensie, net als een .jpg")
+# C-06: vensternamen: altijd '<plek> - Bestanden', met de naam uit de zijbalk.
+venster.ga_naar(thuis)
+_t_thuis = venster.windowTitle()
+venster.open_prullenbak()
+_t_bak = venster.windowTitle()
+venster.open_computer()
+_t_pc = venster.windowTitle()
+venster.ga_naar(_c)
+klopt((_t_thuis, _t_bak, _t_pc, venster.windowTitle()) ==
+      ("Thuis - Bestanden", "Prullenbak - Bestanden", "Deze computer - Bestanden", "c-test - Bestanden"),
+      f"C-06: vensternamen ({_t_thuis!r}, {_t_bak!r}, {_t_pc!r}, {venster.windowTitle()!r})")
+# C-08: na een vraag staat de focus weer op de tegels (niet op 'Thuis' in het pad).
+import bugos_shell  # noqa: E402
+
+venster.activateWindow()
+for _ in range(10):
+    app.processEvents()
+_oud_exec = bugos_shell.VraagDialoog.exec
+bugos_shell.VraagDialoog.exec = lambda self: 0
+venster.pad_lay.itemAt(0).widget().setFocus()
+import bugos_files_bewerken as _bew8  # noqa: E402
+
+_bew8.Bewerken.vraag_ja(venster, "Echt?", "Zeker weten?", "Ja")   # (venster.vraag_ja is hierboven vervangen)
+bugos_shell.VraagDialoog.exec = _oud_exec
+klopt(venster.focusWidget() is venster.lijst, f"C-08: na een vraag de focus op de tegels ({venster.focusWidget()})")
+# C-07: een BugOS-vraag is een dialoog met alleen een kruisje, en een vaste maat (dan geen 'maximaliseren').
+_vd = bugos_shell.VraagDialoog(venster, "Nieuwe map", "Naam van de map:", "Maken", veld=True, waarde="x")
+_vl = _vd.windowFlags()
+_vd.show()
+app.processEvents()
+klopt(bool(_vl & Qt.WindowType.WindowCloseButtonHint) and not _vl & Qt.WindowType.WindowMinimizeButtonHint
+      and not _vl & Qt.WindowType.WindowMaximizeButtonHint and _vd.minimumSize() == _vd.maximumSize(),
+      f"C-07: een vraag heeft alleen een kruisje en een vaste maat ({_vd.minimumSize()}, {_vd.maximumSize()})")
+_vd.close()
+# C-09: Deze computer.
+venster.open_computer()
+for _ in range(20):
+    app.processEvents()
+from PySide6.QtWidgets import QLabel  # noqa: E402
+
+klopt(venster.status.text() == "" and any(lb.text() == "Geen USB-stick aangesloten"
+                                          for lb in venster.computer.widget().findChildren(QLabel)),
+      f"C-09a: geen 'Niets aangesloten' onder de titel; 'Geen USB-stick aangesloten' in het kopje ({venster.status.text()!r})")
+venster.ruimte = {"afbeeldingen": 0, "videos": 0, "documenten": 0, "muziek": 0, "downloads": 0, "prullenbak": 0}
+venster.toon_ruimte()
+_leg = [k.text() for k in venster.legenda.items]
+klopt(any(x.startswith("Al het andere") for x in _leg) and not any(x.startswith("BugOS en apps") for x in _leg),
+      f"C-09b: de grijze rest heet 'Al het andere', niet nog een keer 'BugOS en apps' ({_leg})")
+_gestart: list = []
+import bugos_files_computer as _bfc  # noqa: E402
+
+_oud_start = _bfc.start
+_bfc.start = lambda *a: _gestart.append(a)
+from bugos_ui import Knop  # noqa: E402
+
+_ak = next(k for k in venster.computer.widget().findChildren(Knop) if k.text() == "Apps verwijderen die je niet gebruikt")
+_ak.click()
+_bfc.start = _oud_start
+klopt(_gestart == [("bugos-store", "--mijn-apps")], f"C-09e: 'Apps verwijderen' opent de Winkel bij Mijn apps ({_gestart})")
+_oud_tel = venster.tel_grootste
+venster.tel_grootste = lambda opnieuw=False: None
+venster.toon_grootste()
+venster.tel_grootste = _oud_tel
+klopt(venster.grootste_kaart.property("uitgelicht") == "true",
+      "C-09d: 'Zien wat ruimte inneemt' laat de lijst oplichten (en schuift erheen)")
+# C-09c: niets op de pagina houdt het muiswiel tegen (geen schuifje, keuzelijst of eigen schuifvlak): het wiel boven
+# een regel of kaart schuift zo de hele pagina. (Een nagemaakt wiel-event gaat in Qt niet naar de ouder, dus we kijken
+# naar wat er op de pagina staat.)
+from PySide6.QtWidgets import QAbstractScrollArea, QAbstractSlider, QAbstractSpinBox, QComboBox, QWidget  # noqa: E402,E501
+
+_pagina = venster.computer.widget()
+_eters = [w for w in _pagina.findChildren(QWidget) if isinstance(w, (QAbstractScrollArea, QAbstractSlider,
+                                                                     QAbstractSpinBox, QComboBox))]
+klopt(not _eters, f"C-09c: niets op Deze computer vangt het muiswiel zelf ({_eters})")
+venster.resize(1120, 740)
 
 venster.close()
 import shutil  # noqa: E402

@@ -26,7 +26,62 @@ The stick and the installer start in English. In the installer you pick your own
 A virtual PC is a "computer inside your computer". Your real computer stays exactly the way it is.
 
 - **Windows:** use [VirtualBox](https://www.virtualbox.org/). Make a new machine, choose the ISO, give it 4 GB of memory and a 40 GB disk, and turn on EFI.
-- **Linux:** use GNOME Boxes or virt-manager.
+- **Linux:** use GNOME Boxes or virt-manager, or `tools/vm-qemu.sh` (see below).
+
+## Building and testing on your own computer (without GitHub)
+
+`tools/iso-local.sh` builds BugOS and the USB stick locally. It does what `build.yml` and `iso.yml` do, but faster:
+a full build (system + ISO) takes about 20 minutes, the system alone about 10.
+
+**On Linux** (with podman, as root):
+
+```bash
+sudo tools/iso-local.sh . uit                          # system + ISO in ./uit
+sudo ALLEEN_BEELD=1 tools/iso-local.sh . uit           # only the system (for a VM that already runs BugOS)
+```
+
+**On Windows** (Docker Desktop): first export the repo with Linux line endings, then build in a podman container:
+
+```bash
+git -c core.autocrlf=false archive HEAD | tar -x -C /c/bouw/repo
+docker run --rm --privileged -v bugos-podman:/var/lib/containers \
+    -v C:/bouw/repo:/repo:ro -v C:/bouw/uit:/uit quay.io/podman/stable bash /repo/tools/iso-local.sh /repo /uit
+```
+
+The script uses the kernel's own overlay (not fuse-overlayfs, which was slow and left half-written files) in its
+own storage folder, and stops if that is not available. `ISO_ZSTD=19` packs the stick as small as GitHub does
+(much slower); the default 3 is fine for testing.
+
+### The fast round: update a test VM instead of reinstalling
+
+A BugOS installed from a local ISO gets its updates from GitHub (`ghcr.io/253ugursahin/bugos:latest`), like the real ISO. The steps below point a test VM at your own registry instead.
+
+Installing from the ISO takes 40-60 minutes. For every next round of fixes, let the test VM fetch the new system
+itself, the way a real BugOS update works:
+
+1. Once, on your computer: a small registry. `docker run -d --restart unless-stopped -p 5000:5000 --name bugos-registry registry:2`
+2. Once, in the VM: trust it. Put this in `/etc/containers/registries.conf.d/50-bugos-lokaal.conf`:
+   ```
+   [[registry]]
+   location = "10.0.2.2:5000"
+   insecure = true
+   ```
+   (`10.0.2.2` is your computer, seen from a VirtualBox or QEMU VM with NAT networking.)
+3. Each round: build only the system and put it in the registry
+   (`ALLEEN_BEELD=1 REGISTRY=host.docker.internal:5000` on Windows, `REGISTRY=localhost:5000` on Linux), then in the VM:
+   `sudo bootc switch --transport registry 10.0.2.2:5000/bugos:lokaal` and restart. After the first switch,
+   `sudo bootc upgrade` is enough.
+
+### QEMU on Linux
+
+`tools/vm-qemu.sh` runs BugOS in QEMU with KVM: fast, with a virtio graphics card (`GL=1` for 3D) and UEFI.
+
+```bash
+tools/vm-qemu.sh nieuw uit/BugOS-main-lokaal-*.iso    # install
+tools/vm-qemu.sh start                                 # after installing
+tools/vm-qemu.sh foto scherm.png                       # screenshot
+tools/vm-qemu.sh bewaar schoon / terug schoon          # snapshots (VM off)
+```
 
 ## Already on Fedora Atomic or another Universal Blue image? Then you can do it without a USB stick
 
@@ -36,7 +91,7 @@ Type this in the terminal:
 sudo bootc switch ghcr.io/253ugursahin/bugos:latest
 ```
 
-Then restart the computer. Want to go back? Use Settings > Updates, or hold Shift (or press Esc) while the computer starts and pick the previous version in the start-up menu.
+Then restart the computer. Want to go back? Use Settings > Updates and info, or hold Shift (or press Esc) while the computer starts and pick the previous version in the start-up menu.
 
 ## What should you test?
 
@@ -51,11 +106,24 @@ Then restart the computer. Want to go back? Use Settings > Updates, or hold Shif
 - [ ] Open **Something is not working** and mute the sound: do you get an "Unmute" button?
 - [ ] Open **Backup** and make a backup to a USB stick
 - [ ] Try **BugOS Switch** on a Windows PC (steps 1 and 2 are safe, they change nothing on your PC)
+- [ ] BugOS Switch step 2: add another folder (for example on D:), then remove it again with '(remove)'; the size at the top changes with it
+- [ ] On a PC with OneDrive: BugOS Switch asks about files that are only in OneDrive; choose No, and in BugOS the summary names them
+- [ ] In BugOS, **Bring everything from your old PC**: transfer, then **Undo everything**. Files from the old PC are in the trash, a file you changed in between stays, settings, Wi-Fi and printers are back to how they were
 - [ ] Open the **BugOS Store** and install something
+- [ ] After installing BugOS (with internet): Firefox, LibreOffice, VLC, Gwenview, Okular and Steam arrive by themselves within a few minutes, and Firefox opens web links. Firefox has the normal window title bar (no buttons in the tab bar)
+- [ ] Install BugOS **without internet**, sign in (it must not wait), then connect: within about 5 minutes the apps arrive (`systemctl status bugos-first-boot`)
+- [ ] A BugOS from before Firefox and Steam were Flatpaks, after the update and signing in: Firefox has your bookmarks and history, Steam still knows you and your games
+- [ ] Store → **My apps**: every app has **Remove** (also Firefox and Steam). Remove Firefox, restart twice: it does not come back by itself. Install it again from the Store: it is back
+- [ ] Settings → Apps and gaming → **Installed apps**: the same list, each with **Remove**; removing asks first and then the app is gone from the list
 - [ ] The ladybug at the bottom left is the **BugOS start menu**: search for "wifi" and open the page; the Windows key opens the menu
+- [ ] **Right-click an app in the start menu** (a pinned tile, a line in "All apps", a search result): a menu for that app, not the Start button's list. Firefox: "Open", "New window", "New private window" (opens a private window), "Pin to Start"/"Unpin from Start" (the tile appears or disappears at once, the menu stays open), "Pin to taskbar"/"Unpin from taskbar" (the icon appears or disappears on the taskbar at once), "Uninstall" (opens the Store on Firefox; nothing is removed until you confirm there). A BugOS app (Files) has no "Uninstall". The right-click never starts the app; a click next to the menu only closes it; the menu never sticks out of the start menu. Keyboard: Menu key or Shift+F10 on a highlighted app opens it, arrows and Enter choose, Esc closes. Right-click the Start button itself: still Task Manager, Settings, Files, Terminal, Something is not working
 - [ ] The **quick menu** (two sliders, next to the system tray): turn Wi-Fi off and on; the little arrow next to Wi-Fi opens Settings
 - [ ] Shut down from the start menu: you see the **BugOS shutdown screen** with big tiles; "Cancel" takes you back
-- [ ] Rather have the KDE menu? Settings → Appearance → Taskbar: turn the BugOS start menu off and on again
+- [ ] Rather have the KDE menu? Settings → Display and appearance → Appearance → Taskbar: turn the BugOS start menu off and on again
+- [ ] The taskbar and desktop are **locked**: right-click an empty spot on the desktop, the taskbar, the start button, the clock and the quick menu. Nowhere "Enter Edit Mode", "Add Widgets…" or "Configure…". The desktop menu ends with "Display settings" and "Change background", the clock's with "Adjust date and time" and "Notification settings", the quick menu's with "Wi-Fi and internet", "Sound settings" and "Open Settings"; each opens the right page in Settings
+- [ ] Everyday things still work while it is locked: right-click a running app on the taskbar → "Pin to Task Manager", drag the pinned apps into another order, unpin one; drag a file from Files onto the desktop, move it, rename it (F2); right-click an image → "Set as Wallpaper"; click the clock (the calendar opens and closes again)
+- [ ] For advanced users: `bugos-panel bewerken aan` unlocks (a notification says how to lock again; KDE's "Add Widgets…" is back, also after signing out and in), `bugos-panel bewerken uit` locks again
+- [ ] Coming from an older BugOS where you set the battery or network icon in the system tray to "Always shown": after the update it is still there, next to the quick menu. Turning the quick menu off (Settings → Appearance → Taskbar) brings back all KDE tray icons, turning it on again puts the quick menu back
 - [ ] Start the "try it first" stick: does the welcome screen appear with "Try first" and "Install BugOS"?
 - [ ] Is there no "Aurora" or "Fedora" anywhere on the stick (no "Welcome Center", one install button, English texts (or your chosen language))?
 - [ ] Install BugOS **without internet** (cable out, Wi-Fi off): does it work, and does BugOS start afterwards?
@@ -69,6 +137,45 @@ Then restart the computer. Want to go back? Use Settings > Updates, or hold Shif
 - [ ] Does the text look neat everywhere (the Inter font)? Are there no strange or too-small letters?
 - [ ] Lock the screen (Windows key + L): do you see the Stip background?
 - [ ] BugOS Switch on Windows: is the window sharp, also when Windows is set to 125% or 150%?
+
+### On real hardware (a virtual PC can't do this)
+
+A virtual PC has no graphics card, Wi-Fi, Bluetooth, printer or second screen. These checks need a real computer.
+Write down what you see; a photo of the screen helps when something is wrong.
+
+**Graphics card and installing**
+- [ ] Nvidia version on a PC with Secure Boot: after installing, the blue **MOK Manager** screen appears; with the password `bugos` BugOS starts, and games use the Nvidia card (Steam > a game > FPS counter in game mode)
+- [ ] Install from a real USB stick: the installer shows a percentage that goes up, and the time it says ("20 to 40 minutes") is about right. Note how long it really took and whether it was a USB 2 or USB 3 stick
+- [ ] The time zone is already right for your language (Dutch: Europe/Amsterdam); after the restart the clock shows the right time
+- [ ] At the end you get a BugOS window with **Restart now**, in the language you chose
+- [ ] A PC with a Windows drive that uses **BitLocker**: BugOS warns you before installing, and Enter means "Stop"
+
+**Screens**
+- [ ] Laptop with a TV or monitor on HDMI: Settings > Display and appearance > Display: **Extend**, **Duplicate**, **Only screen 1**, **Only screen 2**
+- [ ] Choose something that gives a black screen (for example the TV on the wrong input) and touch nothing: after 15 seconds everything goes back by itself
+- [ ] Choose the **main screen**: the taskbar moves along; "where is this screen" (left/right/above/below) matches where the mouse goes across
+- [ ] A 4K TV or a 144 Hz monitor: the resolution and refresh rate you pick stay after a restart
+- [ ] Pull out the cable while only the TV is on: the laptop screen comes back by itself
+- [ ] Windows key + P still switches between screens
+
+**Wi-Fi and Bluetooth**
+- [ ] A normal Wi-Fi network: connect with the password, and once with a wrong password (you get a clear message, no KDE window)
+- [ ] A school or work network (**eduroam**), if you have one: user name and password, connects; after signing out and in it connects again by itself, without asking anything
+- [ ] Unplug the network cable on a PC without Wi-Fi: Settings > Wi-Fi and internet says so, and **Connect** works after plugging it back in
+- [ ] Bluetooth: Settings > Devices > **Add a device**: pair a phone (you see "Do you see this code?") and headphones; afterwards they connect by themselves
+- [ ] Bluetooth off with a hardware switch or key on a laptop: Settings says to switch it back on first
+
+**Printer, sound and laptop keys**
+- [ ] Settings > Devices > Printers > **Add a printer**: a network printer is found by itself; a test page prints
+- [ ] A printer plugged in with USB shows up; a printer added by IP address works; a wrong address gives a clear message
+- [ ] Printer settings (paper, two-sided, black and white) are kept for the next print
+- [ ] Settings > Sound > **Microphone**: choose a USB headset, a webcam and a Bluetooth headset; the bar moves when you talk
+- [ ] Laptop: the keys for brightness and volume show the small on-screen indicator; a nearly empty battery gives a warning
+- [ ] Laptop: closing the lid and the power button do what Settings > Power says
+
+**Task Manager and help**
+- [ ] With a browser and a game open: Task Manager > Details stays calm (Task Manager itself uses little) and **End task** works
+- [ ] "Something is not working" on a nearly full disk: the storage check says so, and **What takes up the most space** shows your biggest folders
 
 ## Downloading BugOS Switch (for Windows)
 

@@ -15,7 +15,9 @@
 MARKER="$BUGOS_CONFIG/ontwikkelaar-aan"
 DOOS=dev
 # Dezelfde Fedora-versie als BugOS zelf (een vaste versie, niet 'latest') (U263).
-DOOS_BEELD="registry.fedoraproject.org/fedora-toolbox:$(. /etc/os-release 2>/dev/null && echo "${VERSION_ID:-44}")"
+# (Lezen met sed en niet met ". /etc/os-release" in een $(...): daar struikelt shellcheck 0.9 over, SC2031.)
+FEDORA_VERSIE="$(sed -n 's/^VERSION_ID=//p' /etc/os-release 2>/dev/null | tr -d '"' | head -n 1)"
+DOOS_BEELD="registry.fedoraproject.org/fedora-toolbox:${FEDORA_VERSIE:-44}"
 DEV_PAKKETTEN="git gcc gcc-c++ make cmake python3 python3-pip nodejs npm rust cargo golang jq"
 
 aan() {

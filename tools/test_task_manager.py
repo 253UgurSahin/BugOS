@@ -157,6 +157,23 @@ klopt(taken["Bureaublad (Plasma)"].beschermd and taken["Bureaublad (Plasma)"].so
       "groeperen: het bureaublad heeft een gewone naam en kan niet per ongeluk dicht")
 klopt(taken["Netwerk"].soort == "systeem" and taken["Netwerk"].beschermd, "groeperen: systeem (Netwerk) beschermd")
 klopt(next(x for x in m["taken"]).soort == "app", "volgorde: eerst de programma's")
+# Twee metingen vlak na elkaar (het venster komt in beeld en meet meteen opnieuw): 2 tikjes voor de hele computer, maar
+# Firefox kreeg er 6 bij. Dat gaf '300%' (gezien op een verse installatie). Nu: de vorige getallen, en nooit boven 100%.
+_m2 = bt.Meter()
+_m2.meet()
+processor(1501, 9501)
+proces(100, "firefox", FIREFOX, tijd=306, pss_kb=200_000)
+_kort = _m2.meet()
+_ff_kort = next((x for x in _kort["taken"] if x.naam == "Firefox webbrowser"), None)
+klopt(_ff_kort is not None and _ff_kort.processor <= 100 and _kort["processor"] <= 100,
+      f"meting vlak na de vorige: nooit meer dan 100% ({_ff_kort.processor if _ff_kort else None}%)")
+processor(2001, 10001)
+_lang = _m2.meet()
+_ff_lang = next((x for x in _lang["taken"] if x.naam == "Firefox webbrowser"), None)
+klopt(_ff_lang is not None and abs(_ff_lang.processor - 0.6) < 0.01 and abs(_lang["processor"] - 50.0) < 0.5,
+      f"de meting daarna telt vanaf de oude basis: Firefox 0,6% en de computer 50% ({_ff_lang.processor if _ff_lang else None}, {_lang['processor']})")
+processor(1500, 9500)
+proces(100, "firefox", FIREFOX, tijd=300, pss_kb=200_000)
 # Lange namen kort de kernel in tot 15 tekens; die moeten toch beschermd zijn.
 SESSIE = f"{GEBRUIKER}/session.slice"
 lang = [bt.Proces(400, "xdg-desktop-por", 1, 1, 1, True, f"{SESSIE}/xdg-desktop-portal-kde.service"),
@@ -230,6 +247,29 @@ klopt(soort == "let_op" and "Firefox webbrowser" in zin, "advies: druk -> noemt 
 soort, zin = bt.advies([10], 15, 16, m["taken"])
 klopt(soort == "let_op" and "geheugen" in zin and "Firefox webbrowser" in zin,
       "advies: geheugen bijna vol -> sluit iets, en noemt de grootste")
+# C-15: de zin volgt de echte drukte, met hysterese (erin bij een hogere waarde dan eruit), en zegt wat er druk is.
+soort, zin = bt.advies([5, 86], 4, 16, m["taken"])
+klopt(soort == "druk" and "Alles loopt soepel" not in zin and "Firefox webbrowser" in zin,
+      f"C-15: een processor op 86 % na een rustige meting: niet meer 'Alles loopt soepel', wel wie het is ({zin!r})")
+klopt(bt.advies([90, 86], 4, 16, m["taken"])[0] == "let_op", "C-15: twee keer boven 80 %: 'Je computer heeft het druk'")
+klopt(bt.advies([45, 45, 45], 4, 16, m["taken"], vorige="druk")[0] == "druk"
+      and bt.advies([45, 45, 45], 4, 16, m["taken"], vorige="goed")[0] == "goed",
+      "C-15: hysterese: 45 % blijft 'druk' als het druk was, maar wordt het niet vanuit rustig")
+klopt(bt.advies([70, 70, 70], 4, 16, m["taken"], vorige="let_op")[0] == "let_op"
+      and bt.advies([60, 60, 60], 4, 16, m["taken"], vorige="let_op")[0] == "druk"
+      and bt.advies([20, 20, 20], 4, 16, m["taken"], vorige="druk")[0] == "goed",
+      "C-15: hysterese: pas onder 65 % van 'heel druk' naar 'druk', onder 35 % weer rustig")
+# C-17: een script dat door een tolk draait (python3 /usr/bin/bugos-task-manager) heet voluit, niet 'bugos-task-mana'.
+proces(870, "bugos-task-mana", f"{GEBRUIKER}/app.slice/app-bugos\\x2dtask\\x2dmanager-5.scope")
+schrijf(PROC / "870" / "cmdline", "/usr/bin/python3\0/usr/bin/bugos-task-manager\0")
+proces(871, "Isolated Web Co", FIREFOX, ppid=100)
+schrijf(PROC / "871" / "cmdline", "/usr/lib64/firefox/firefox\0-contentproc\0")
+klopt(bt.volle_naam(870, "bugos-task-mana") == "bugos-task-manager" and bt.volle_naam(871, "Isolated Web Co")
+      == "Isolated Web Co", "C-17: de hele naam van een script (niet de 15 tekens van de kernel); Firefox' eigen titel blijft")
+import shutil as _sh17  # noqa: E402
+
+_sh17.rmtree(PROC / "870")
+_sh17.rmtree(PROC / "871")
 
 # 6. sluiten (veilig: alleen met nep-nummers)
 klopt("w.closeWindow()" in bt.sluit_script([100, 101]) and "[100, 101]" in bt.sluit_script([101, 100]),
@@ -280,6 +320,21 @@ klopt({x.naam: x for x in bt.opstart_lijst()}["Chat"].aan and "Exec=chat --stil"
       "U075: aanzetten maakt een eigen kopie met Hidden=false (en hij staat echt aan)")
 bt.zet_opstart({x.naam: x for x in bt.opstart_lijst()}["Chat"], False)
 klopt(not {x.naam: x for x in bt.opstart_lijst()}["Chat"].aan, "U075: en weer uit")
+# C-16: technische onderdelen van het systeem staan niet bij Opstarten, wat er wel staat heet gewoon; een eigen
+# opstartprogramma met zo'n naam blijft altijd staan.
+schrijf(etc / "org.kde.kunifiedpush-distributor.desktop",
+        "[Desktop Entry]\nType=Application\nName=Geünificeerde push-verdeler\nExec=x\n")
+schrijf(etc / "vboxclient.desktop", "[Desktop Entry]\nType=Application\nName=vboxclient\nExec=VBoxClient-all\n")
+schrijf(etc / "org.kde.kdeconnect.daemon.desktop", "[Desktop Entry]\nType=Application\nExec=kdeconnectd\n")
+schrijf(eigen / "spice-vdagent.desktop", "[Desktop Entry]\nType=Application\nName=Mijn spice\nExec=mijn-spice\n")
+_n16 = [x.naam for x in bt.opstart_lijst()]
+klopt("Geünificeerde push-verdeler" not in _n16 and "vboxclient" not in _n16
+      and "KDE Connect (je telefoon koppelen)" in _n16 and "org.kde.kdeconnect.daemon" not in _n16
+      and "Mijn spice" in _n16,
+      f"C-16: Opstarten zonder technische onderdelen, met gewone namen, en je eigen programma's blijven ({_n16})")
+for _w16 in ("org.kde.kunifiedpush-distributor.desktop", "vboxclient.desktop", "org.kde.kdeconnect.daemon.desktop"):
+    (etc / _w16).unlink()
+(eigen / "spice-vdagent.desktop").unlink()
 bt.zet_opstart({x.naam: x for x in bt.opstart_lijst()}["Chat"], True)
 klopt({x.naam: x for x in bt.opstart_lijst()}["Chat"].aan, "U075: na uit weer aan: staat aan")
 
@@ -337,8 +392,10 @@ try:
     klopt(achter["Bureaublad (Plasma)"].property("klikbaar") == "false"
           and achter["Netwerk"].property("klikbaar") == "false",
           "venster: het bureaublad en het netwerk kun je niet kiezen (horen bij BugOS)")
-    klopt(venster.statussen[0].tekst.text() == "Alles loopt soepel." and venster.kort["processor"].text() == "50%",
-          "venster: bovenaan hoe het gaat, en de processor")
+    # Bij 50 % zegt Taakbeheer niet meer 'Alles loopt soepel.' (C-15), maar dat hij flink bezig is.
+    klopt(venster.statussen[0].tekst.text().startswith("Je computer is flink bezig")
+          and venster.kort["processor"].text() == "50%",
+          f"venster: bovenaan hoe het gaat, en de processor ({venster.statussen[0].tekst.text()!r})")
     firefox_sleutel = next(s for s, r in venster.rijen.items() if r.taak.naam == "Firefox webbrowser")
     venster.kies(firefox_sleutel)
     klopt(not venster.balk.isHidden() and venster.balk.aantal.text() == "Firefox webbrowser"
@@ -352,6 +409,14 @@ try:
     app.processEvents()
     rijen = venster.paginas["opstarten"].findChildren(tb.OpstartRij)
     klopt(len(rijen) == 3, "venster: Opstarten toont de programma's met een schuifje")
+    # C-17: Details legt uit wat de grijze regels zijn (onder de tabel, en als tip op elke kolom).
+    _r17 = bt.ProcesRegel(1, "plasmashell", 1000, "jij", "", 0.0, 1, True, True, 5)
+    venster.proces_model.zet([_r17])
+    from PySide6.QtCore import Qt as _Qt17
+    _tip17 = venster.proces_model.data(venster.proces_model.index(0, 4), _Qt17.ItemDataRole.ToolTipRole)
+    klopt("Grijze regels" in venster.details_legenda.text() and "niet te beëindigen" in (_tip17 or ""),
+          f"C-17: Details zegt wat grijze regels betekenen ({_tip17!r})")
+    venster.proces_model.zet([])
     # Sluiten mag het venster niet laten vastlopen, ook als KWin traag antwoordt.
     import time as _tijd  # noqa: E402
     _gestopt: list = []
@@ -398,6 +463,28 @@ _d.stop()
 _d.wait(3000)
 klopt(_verborgen == 0 and _zichtbaar >= 1 and _tijd.time() - _t0 < 1.0,
       f"U311: Taakbeheer meet niet als het venster weg is, wel meteen weer in beeld, en stopt meteen ({_verborgen}, {_zichtbaar})")
+
+# D-16: lange namen in het midden ingekort (het eind zegt wat het is), en de tooltip volgt het thema (geen licht vlak
+# in het donkere thema).
+from PySide6.QtCore import Qt as _Qt16  # noqa: E402
+from PySide6.QtGui import QFontMetrics as _FM16  # noqa: E402
+
+import bugos_ui as _ui16  # noqa: E402
+
+_tabel16 = _tu.ProcesTabel(_tu.ProcesFilter())
+_naam16 = "polkit-kde-authentication-agent-1"
+_kort16 = _FM16(_tabel16.font()).elidedText(_naam16, _tabel16.textElideMode(), 160)
+klopt(_tabel16.textElideMode() == _Qt16.TextElideMode.ElideMiddle and _kort16.endswith("agent-1")
+      and len(_kort16) < len(_naam16), f"D-16: een lange naam wordt in het midden ingekort ({_kort16!r})")
+_tips16 = {}
+for _thema in ("licht", "donker"):
+    _k = _ui16.KLEUREN[_thema]
+    _blad = _ui16._stijlblad(_k)
+    _regel = next((r for r in _blad.splitlines() if r.startswith("QToolTip")), "")
+    _tips16[_thema] = _regel
+klopt(all(f"background: {_ui16.KLEUREN[th]['vlak']}" in r and f"color: {_ui16.KLEUREN[th]['tekst']}" in r
+          for th, r in _tips16.items()),
+      f"D-16: de tooltip heeft in licht en donker de kleuren van het thema zelf ({_tips16['donker'][:80]})")
 
 shutil.rmtree(TMP, ignore_errors=True)  # alleen onze eigen tijdelijke testmap
 print()

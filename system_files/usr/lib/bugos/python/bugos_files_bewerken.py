@@ -10,36 +10,121 @@ from __future__ import annotations
 
 import errno
 import os
-import shutil
-import subprocess
 from pathlib import Path
 
-from bugos_ui import lijn_icoon, t
+from bugos_ui import lijn_icoon, start, t
+from bugos_ui import vraag_ja as _vraag_ja, vraag_tekst as _vraag_tekst
+from bugos_shell import VraagDialoog
+from bugos_desktop import app_mappen, lees_bureaublad, vertaald
+from bugos_drives import mooie_maat
 from bugos_files_plekken import INFO_ROL, PAD_ROL, VERBERG_EXT, thuis, toon_naam
 from bugos_files_acties import (  # noqa: I001
     NAAM_FOUTEN, RECHTEN_FOUTEN, Klus, Weggooien, achter_uitleg, naar_prullenbak, op_losse_schijf, prullenbak_legen, terugzetten, vrije_naam,
     zelfde_schijf,
 )
-from PySide6.QtCore import QEvent, QMimeData, Qt, QTimer, QUrl
-from PySide6.QtWidgets import QApplication, QInputDialog, QLabel, QLineEdit, QMenu, QMessageBox
+from PySide6.QtCore import QEvent, QMimeData, QMimeDatabase, QModelIndex, QPoint, Qt, QTimer, QUrl
+from PySide6.QtWidgets import QApplication, QMenu
+
+
+# Bestanden die BugOS zelf opent, met een eigen helper (D-01). De standaardweg (QDesktopServices -> kde-open -> KIO)
+# weigert elk "uitvoerbaar" bestand: "Vanwege veiligheidsredenen is het starten van uitvoerbare bestanden niet
+# toegestaan in deze context", ook al is bugos-exe.desktop de standaard-app voor .exe. bugos-exe en bugos-package
+# voeren zelf niets blind uit: ze vragen eerst (Winkel-versie, doosje, Wine) en leggen uit als het niet lukt.
+# Op de extensie (hoofdletters tellen niet), want zo herkent ook de gebruiker een installatiebestand.
+EIGEN_OPENER = {".exe": "bugos-exe", ".msi": "bugos-exe", ".deb": "bugos-package", ".rpm": "bugos-package"}
+# Hun .desktop-bestanden zijn NoDisplay (niet in het startmenu), maar horen wel in 'Openen met' (D-01).
+EIGEN_APPS = {"bugos-exe.desktop", "bugos-package.desktop"}
+
+
+def eigen_opener(pad: Path) -> str | None:
+    """Het BugOS-programma dat dit bestand zelf opent (bugos-exe of bugos-package), of None: dan de gewone weg."""
+    return EIGEN_OPENER.get(pad.suffix.lower())
+
+
+def openen_met_apps(pad: Path, hoogstens: int = 12) -> list[tuple[str, str]]:
+    """(naam, pad van het .desktop-bestand) van de apps die dit soort bestand kunnen openen, voor 'Openen met'.
+
+    Uit de mimeinfo.cache van elke map met apps (die KDE en Flatpak bijhouden): per soort bestand (text/plain,
+    image/png ...) welke apps het kunnen. Ook de 'ouders' van de soort tellen (een .py is ook text/plain), zoals
+    de bestandsbeheerder van KDE. Verborgen apps (NoDisplay) niet. Elke app één keer, op naam."""
+    soort = QMimeDatabase().mimeTypeForFile(str(pad))
+    soorten = [soort.name()] + list(soort.allAncestors())
+    mappen = app_mappen()
+    gevonden: dict[str, None] = {}   # desktop-id's in volgorde (een dict onthoudt de volgorde, zonder dubbele)
+    for map_ in mappen:
+        try:
+            regels = (map_ / "mimeinfo.cache").read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        cache: dict[str, list[str]] = {}
+        for regel in regels:
+            if "=" in regel and not regel.startswith("["):
+                sleutel, waarde = regel.split("=", 1)
+                cache[sleutel.strip()] = [x for x in waarde.split(";") if x]
+        for s in soorten:
+            for desktop_id in cache.get(s, []):
+                gevonden.setdefault(desktop_id, None)
+    uit: dict[str, tuple[str, str]] = {}
+    for desktop_id in gevonden:
+        bestand = next((m / desktop_id for m in mappen if (m / desktop_id).is_file()), None)
+        c = lees_bureaublad(bestand) if bestand is not None else None
+        if c is None:
+            continue
+        s = c["Desktop Entry"]
+        # Verborgen apps niet, behalve die van BugOS zelf voor .exe/.msi/.deb/.rpm (die zijn alleen in het startmenu
+        # verborgen) (D-01).
+        verborgen = s.get("NoDisplay", "false").lower() == "true" and desktop_id not in EIGEN_APPS
+        if verborgen or s.get("Hidden", "false").lower() == "true":
+            continue
+        naam = vertaald(s, "Name") or desktop_id.removesuffix(".desktop")
+        uit.setdefault(naam.lower(), (naam, str(bestand)))
+    return sorted(uit.values(), key=lambda x: x[0].lower())[:hoogstens]
 
 
 class Bewerken:
     """Menu, kopiëren en plakken, weggooien en de prullenbak: een stukje van het venster Bestanden."""
 
     # ----------------------------------------------------------- menu
-    def menu(self, punt) -> None:
+    def _rechts_geklikt(self, waar, punt) -> None:
+        """De rechtermuisknop is losgelaten (RechtsKlik): het menu van de tegel eronder, of van de map zelf."""
+        if self.in_computer:
+            return   # Deze computer heeft eigen knoppen en menu's per schijf
+        if waar is self.leeg:
+            # Een lege map (of 'niks gevonden'): er staan geen tegels, dus het menu van de map zelf.
+            self.menu(None, globaal=self.leeg.mapToGlobal(punt))
+        else:
+            self.menu(punt)
+
+    def maak_menu(self, punt, toetsenbord: bool = False) -> QMenu:
+        """Het menu onder de rechtermuisknop, zoals in de Verkenner van Windows (C-01). Dezelfde acties als de
+        knoppenbalk onderin en de knoppen bovenin: niets dat alleen hier kan.
+
+          op een tegel:  Openen, Openen met ▸, Knippen, Kopiëren, Naam wijzigen, Weggooien, Eigenschappen
+          op leeg vlak:  Nieuwe map, Nieuw tekstbestand, Plakken (als er iets gekopieerd is), Sorteren op ▸
+          prullenbak:    Zet terug, Prullenbak leegmaken
+
+        punt: in de coördinaten van de tegels (viewport), of None (een lege map). toetsenbord: geopend met de
+        Menu-toets: dan geldt wat er gekozen is, ook als het punt niet op een tegel valt."""
         m = QMenu(self)
 
-        def actie(ic: str, tekst: str, doe, aan: bool = True) -> None:
+        def actie(ic: str, tekst: str, doe, aan: bool = True):
             a = m.addAction(lijn_icoon(ic, "tekst", 18, gekozen=None), tekst)
             a.triggered.connect(lambda _c=False, f=doe: f())
             a.setEnabled(aan)
+            return a
 
-        index = self.lijst.indexAt(punt)
-        if index.isValid() and not self.lijst.selectionModel().isSelected(index):
+        index = self.lijst.indexAt(punt) if punt is not None and self.stapel.currentWidget() is self.lijst \
+            else QModelIndex()
+        sel = self.lijst.selectionModel()
+        if index.isValid() and sel is not None and not sel.isSelected(index):
+            # Rechts op een tegel die niet gekozen was: alleen die (zoals Windows), niet ook de vorige keuze.
             self.lijst.setCurrentIndex(index)
-        gekozen = self.gekozen() if index.isValid() else []
+        if index.isValid() or (toetsenbord and punt is not None):
+            gekozen = self.gekozen()
+        else:
+            gekozen = []
+            if sel is not None:
+                sel.clearSelection()   # rechts op het lege vlak: het menu gaat over de map, niet over de keuze
         if self.in_prullenbak:
             actie("terug", t("Zet terug", "Restore"), self.zet_terug, bool(gekozen))
             m.addSeparator()
@@ -47,25 +132,112 @@ class Bewerken:
                   self.bak_model.rowCount() > 0)
         elif gekozen:
             actie("openen", t("Openen", "Open"), self.openen)
+            if len(gekozen) == 1 and gekozen[0].is_file():
+                # Openen met: de apps die dit soort bestand kunnen openen (uit hun .desktop-bestand).
+                apps = openen_met_apps(gekozen[0])
+                sub = m.addMenu(lijn_icoon("apps", "tekst", 18, gekozen=None), t("Openen met", "Open with"))
+                for naam, bestand in apps:
+                    a = sub.addAction(naam)
+                    a.triggered.connect(lambda _c=False, b=bestand, p=gekozen[0]: self.open_met(b, p))
+                if not apps:
+                    geen = sub.addAction(t("Geen andere app gevonden", "No other app found"))
+                    geen.setEnabled(False)
             m.addSeparator()
-            actie("kopieer", t("Kopiëren", "Copy"), self.kopieer)
             actie("schaar", t("Knippen", "Cut"), self.knip)
+            actie("kopieer", t("Kopiëren", "Copy"), self.kopieer)
             actie("potlood", t("Naam wijzigen", "Rename"), self.hernoem, len(gekozen) == 1)
             m.addSeparator()
-            actie("prullenbak", t("Naar de prullenbak", "Move to trash"), self.weggooien)
-            if shutil.which("dolphin"):
-                m.addSeparator()
-                actie("oog", t("Openen in Dolphin (voor gevorderden)", "Open in Dolphin (advanced)"), self.in_dolphin)
+            # Hetzelfde woord als de knop in de balk onderin (D-15). 'Weggooien' klopt ook op een USB-stick, waar
+            # het niet naar de prullenbak gaat (dan vraagt BugOS het eerst).
+            actie("prullenbak", t("Weggooien", "Delete"), self.weggooien)
+            m.addSeparator()
+            actie("meer", t("Eigenschappen", "Properties"), self.eigenschappen, len(gekozen) == 1)
         else:
-            actie("plak", t("Plakken", "Paste"), self.plak, self.klembord_heeft_bestanden())
             actie("map-plus", t("Nieuwe map", "New folder"), self.nieuwe_map)
-            if shutil.which("dolphin"):
+            actie("document", t("Nieuw tekstbestand", "New text file"), self.nieuw_tekstbestand)
+            if self.klembord_heeft_bestanden():   # alleen als er iets te plakken is (zoals de knop bovenin)
                 m.addSeparator()
-                actie("oog", t("Openen in Dolphin (voor gevorderden)", "Open in Dolphin (advanced)"), self.in_dolphin)
-        m.exec(self.lijst.viewport().mapToGlobal(punt))
+                actie("plak", t("Plakken", "Paste"), self.plak)
+            m.addSeparator()
+            sub = m.addMenu(lijn_icoon("onder", "tekst", 18, gekozen=None), t("Sorteren op", "Sort by"))
+            for sleutel, tekst_ in (("naam", t("Naam", "Name")), ("datum", t("Gewijzigd", "Date modified")),
+                                    ("grootte", t("Grootte", "Size")), ("soort", t("Soort", "Type"))):
+                a = sub.addAction(tekst_)
+                a.setCheckable(True)
+                a.setChecked(self.sorteer.sleutel == sleutel)
+                a.triggered.connect(lambda _c=False, s=sleutel: self.sorteer_op(s))
+        return m
 
-    def in_dolphin(self) -> None:
-        subprocess.Popen(["dolphin", str(self.huidig)], start_new_session=True)
+    def menu(self, punt, toetsenbord: bool = False, globaal: QPoint | None = None) -> None:
+        if self.in_computer:
+            return
+        m = self.maak_menu(punt, toetsenbord)
+        if globaal is None:
+            globaal = self.lijst.viewport().mapToGlobal(punt if punt is not None else QPoint(0, 0))
+        m.exec(globaal)
+        self.focus_terug()
+
+    def sorteer_op(self, sleutel: str) -> None:
+        """Sorteren op naam, datum, grootte of soort (mappen blijven altijd vooraan, zoals in Windows)."""
+        self.sorteer.zet_sleutel(sleutel)
+
+    def open_met(self, bureaublad: str, pad: Path) -> None:
+        """Open dit bestand met een andere app (uit 'Openen met'). gio start het .desktop-bestand met het bestand
+        erbij, net zoals de Winkel apps start; zonder gio doet kioclient het."""
+        import shutil
+        # Via de gedeelde start() van BugOS (los op de achtergrond), zoals de rest van Bestanden.
+        if shutil.which("gio"):
+            gelukt = start("gio", "launch", bureaublad, str(pad))
+        elif shutil.which("kioclient"):
+            gelukt = start("kioclient", "exec", bureaublad, str(pad))
+        else:
+            gelukt = False
+        if not gelukt:
+            self.melding.toon(t("Openen met een andere app lukte niet.", "Could not open with another app."), "fout")
+
+    def eigenschappen(self) -> None:
+        """Eigenschappen van één bestand of map: soort, grootte, plek en wanneer het veranderd is, in gewone woorden.
+        Een map tellen we niet helemaal (dat kan lang duren): dan hoeveel dingen erin staan."""
+        paden = self.gekozen()
+        if len(paden) != 1:
+            return
+        pad = paden[0]
+        regels = [t(f"Plek: {pad.parent}", f"Location: {pad.parent}")]
+        try:
+            st = pad.stat()
+        except OSError:
+            st = None
+        if pad.is_dir():
+            try:
+                n = sum(1 for _ in os.scandir(pad))
+                regels.insert(0, t(f"Map met {n} {'ding' if n == 1 else 'dingen'}",
+                                   f"Folder with {n} {'item' if n == 1 else 'items'}"))
+            except OSError:
+                regels.insert(0, t("Map", "Folder"))
+        else:
+            from PySide6.QtCore import QMimeDatabase
+            soort = QMimeDatabase().mimeTypeForFile(str(pad)).comment() or pad.suffix.lstrip(".").upper()
+            regels.insert(0, t(f"Soort: {soort}", f"Type: {soort}"))
+            if st is not None:
+                regels.insert(1, t(f"Grootte: {mooie_maat(st.st_size)}", f"Size: {mooie_maat(st.st_size)}"))
+        if st is not None:
+            from datetime import datetime
+            wanneer = datetime.fromtimestamp(st.st_mtime).strftime("%d-%m-%Y %H:%M")
+            regels.append(t(f"Gewijzigd: {wanneer}", f"Modified: {wanneer}"))
+        d = VraagDialoog(self, pad.name, "\n".join(regels), t("Sluiten", "Close"))
+        d.nee.hide()   # alleen kijken: één knop
+        d.exec()
+        self.focus_terug()
+
+    def focus_terug(self) -> None:
+        """Na een vraag of menu: de focus terug op de tegels (C-08). Anders zette Qt hem op het eerste wat het
+        vond, de knop 'Thuis' in het pad, met een rode rand eromheen."""
+        if self.in_computer:
+            return
+        doel = self.stapel.currentWidget()
+        if doel is self.lijst or doel is self.leeg:
+            # Een lege map heeft geen tegels: dan het lege vlak zelf (dat kan de focus hebben, zie venster).
+            doel.setFocus(Qt.FocusReason.OtherFocusReason)
 
     # ------------------------------------------- kopiëren en plakken
     def _naar_klembord(self, knip: bool) -> None:
@@ -231,23 +403,11 @@ class Bewerken:
 
     # ------------------------------------------------------------ vragen
     def vraag_tekst(self, titel: str, vraag: str, tekst: str, ok: str = "", kies_tot: int | None = None) -> str | None:
-        """kies_tot: alleen het begin kiezen (de naam zonder .odt), zoals in Windows (U507)."""
-        d = QInputDialog(self)
-        d.setWindowTitle(titel)
-        d.setLabelText(vraag)
-        d.setTextValue(tekst)
-        d.setOkButtonText(ok or t("Klaar", "OK"))
-        d.setCancelButtonText(t("Annuleren", "Cancel"))
-        for uitleg in d.findChildren(QLabel):
-            uitleg.setWordWrap(True)  # lange uitleg netjes over een paar regels
-        d.resize(460, d.sizeHint().height())
-        if kies_tot is not None:
-            def kies() -> None:
-                veld = d.findChild(QLineEdit)
-                if veld is not None:
-                    veld.setSelection(0, kies_tot)
-            QTimer.singleShot(0, kies)
-        return d.textValue().strip() if d.exec() else None
+        """De gedeelde BugOS-vraag (bugos_ui.vraag_tekst). kies_tot: alleen het begin kiezen (de naam zonder .odt),
+        zoals in Windows (U507). None als je annuleert."""
+        antwoord = _vraag_tekst(self, titel, vraag, tekst, ok=ok or t("OK", "OK"), kies_tot=kies_tot)
+        self.focus_terug()   # (C-08)
+        return antwoord.strip() if antwoord is not None else None
 
     def naam_fout(self, e: OSError) -> str:
         """Waarom een naam niet kon, in gewone woorden (niet 'Invalid argument') (U508)."""
@@ -263,15 +423,10 @@ class Bewerken:
         return e.strerror or t("er ging iets mis", "something went wrong")
 
     def vraag_ja(self, titel: str, tekst: str, ja: str) -> bool:
-        box = QMessageBox(self)
-        box.setWindowTitle(titel)
-        box.setText(tekst)
-        box.setIcon(QMessageBox.Icon.Warning)
-        ja_knop = box.addButton(ja, QMessageBox.ButtonRole.DestructiveRole)
-        nee = box.addButton(t("Annuleren", "Cancel"), QMessageBox.ButtonRole.RejectRole)
-        box.setDefaultButton(nee)
-        box.exec()
-        return box.clickedButton() is ja_knop
+        """Iets dat je niet ongedaan maakt (wissen, de prullenbak legen): Enter uit gewoonte doet dan niets."""
+        ja_ = _vraag_ja(self, titel, tekst, ja, enter_is_nee=True)
+        self.focus_terug()   # (C-08)
+        return ja_
 
     # ------------------------------------------- naam, map, weggooien
     def hernoem(self) -> None:
@@ -281,7 +436,7 @@ class Bewerken:
         oud = paden[0]
         verborgen_ext = not oud.is_dir() and toon_naam(oud.name, False) != oud.name
         nieuw = self.vraag_tekst(t("Naam wijzigen", "Rename"), t("Nieuwe naam:", "New name:"), oud.name,
-                                 kies_tot=len(oud.stem) if oud.suffix and not oud.is_dir() else None)
+                                 ok=t("Naam wijzigen", "Rename"), kies_tot=len(oud.stem) if oud.suffix and not oud.is_dir() else None)
         if not nieuw or nieuw == oud.name:
             return
         # De tegel laat 'Recept' zien zonder '.odt': typ je 'Taart', dan wordt het 'Taart.odt', niet een bestand
@@ -320,7 +475,7 @@ class Bewerken:
         if self.in_prullenbak or self.in_computer:
             return
         naam = self.vraag_tekst(t("Nieuwe map", "New folder"), t("Naam van de map:", "Folder name:"),
-                                t("Nieuwe map", "New folder"))
+                                t("Nieuwe map", "New folder"), ok=t("Maken", "Make"))
         if not naam:
             return
         if "/" in naam or naam in (".", ".."):   # '.' maakte een map naast deze, '..' een verborgen map (U509)
@@ -334,6 +489,35 @@ class Bewerken:
         except OSError as e:
             reden = self.naam_fout(e)
             self.melding.toon(t(f"De map maken lukte niet: {reden}.", f"Could not make the folder: {reden}."), "fout")
+
+    def nieuw_tekstbestand(self) -> None:
+        """Een leeg tekstbestand, zoals Nieuw > Tekstdocument in Windows (C-02). Eerst de naam, met 'Nieuw
+        tekstbestand' al gekozen (zonder .txt), zodat je meteen een eigen naam typt; Annuleren maakt niets. Typ je
+        geen soort, dan komt er .txt achter (de tegel laat .txt niet zien). Bestaat de naam al, dan '(2)' erachter:
+        nooit een bestaand bestand leegmaken."""
+        if self.in_prullenbak or self.in_computer:
+            return
+        standaard = t("Nieuw tekstbestand", "New text file")
+        naam = self.vraag_tekst(t("Nieuw tekstbestand", "New text file"), t("Naam van het bestand:", "File name:"),
+                                f"{standaard}.txt", ok=t("Maken", "Make"), kies_tot=len(standaard))
+        if not naam:
+            return
+        if "/" in naam or naam.strip(".") == "":
+            self.melding.toon(t("Een naam mag geen / bevatten en niet alleen uit punten bestaan.",
+                                "A name cannot contain / or be only dots."), "fout")
+            return
+        if not Path(naam).suffix:
+            naam += ".txt"
+        doel = vrije_naam(self.huidig / naam)
+        try:
+            # 'x': alleen maken als hij er nog niet is (ook als er intussen iets met die naam kwam).
+            with open(doel, "x", encoding="utf-8"):
+                pass
+            QTimer.singleShot(300, lambda: self.selecteer(doel))
+        except OSError as e:
+            reden = self.naam_fout(e)
+            self.melding.toon(t(f"Het bestand maken lukte niet: {reden}.", f"Could not make the file: {reden}."),
+                              "fout")
 
     def weggooien(self) -> None:
         if self.in_prullenbak:
@@ -441,6 +625,7 @@ class Bewerken:
             if self.in_prullenbak:
                 self.open_prullenbak(geschiedenis=False)
             elif self.in_computer:
+                self.grootste_tijd = -1e9   # de prullenbak in 'Wat de meeste ruimte inneemt' opnieuw tellen
                 self.vul_computer()
             if mislukt:
                 self.melding.toon(t(f"{mislukt} {'ding kon' if mislukt == 1 else 'dingen konden'} niet weg. "

@@ -28,13 +28,18 @@ libnotify
 # Voorbeeldjes van PDF's en video's in Bestanden (U172)
 poppler-utils
 ffmpegthumbnailer
+# Voorbeeldjes van JPEG XL (.jxl), AVIF en HEIC in Bestanden: de beeldplug-ins van KDE voor Qt (C-05). De basis brengt
+# ze waarschijnlijk al mee (Gwenview en de voorbeeldjes van KDE gebruiken ze); dan doet deze regel niets.
+kf6-kimageformats
 
 # --- Internet en apps ---
-# Firefox als gewoon programma: de fundering heeft geen browser in het systeem, en
-# de taakbalk en het startmenu van BugOS verwijzen naar Firefox.
-firefox
-# (KDE Discover voor "Meer apps zoeken" wordt apart geïnstalleerd in build.sh,
-# zonder de "aanbevolen" extra's: die zouden Fedora-pakketten laten zien.)
+# (Geen Firefox meer als pakket: Firefox komt als Flatpak van Flathub, zodat je hem kunt verwijderen en weer
+# installeren. bugos-first-boot zet hem klaar; zie /usr/share/bugos/standaard-apps.txt en build.sh.)
+# 'Teksteditor' in het startmenu is KWrite: de eenvoudige teksteditor van KDE (zoals Kladblok), uit dezelfde familie
+# als Kate. Kate zelf (met LSP, projecten, git en sessies) is voor programmeurs en heet in het startmenu gewoon Kate
+# (A-14). Brengt de basis KWrite al mee, dan doet deze regel niets.
+kwrite
+# (geen KDE Discover: de BugOS Winkel doet alle apps; build.sh haalt Discover weg, want de basis brengt hem mee)
 
 # --- Alle talen ---
 glibc-all-langpacks
@@ -42,10 +47,11 @@ glibc-all-langpacks
 # Telefoon en camera (MTP/PTP) openen in Bestanden: KDE geeft dan een gewone map door (U225)
 kio-fuse
 
-# Schijven: USB-sticks leegmaken (exFAT, werkt overal), repareren, en Schijfbeheer voor gevorderden
+# Schijven: USB-sticks leegmaken (exFAT, werkt overal) en repareren, in Bestanden zelf.
+# (Geen KDE Partition Manager meer: Bestanden doet de schijven zelf, met het pakket tools ook een tweede interne
+# schijf wissen. De basis brengt hem wel mee, dus alleen hier weglaten helpt niet: build.sh haalt hem weg, met kpmcore.)
 exfatprogs
 dosfstools
-kde-partitionmanager
 
 # --- Eén ontwerptaal: de BugOS-stijl voor alle KDE-programma's (zie tools/design/README.md) ---
 kvantum

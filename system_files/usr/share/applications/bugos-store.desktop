@@ -8,5 +8,5 @@ Exec=bugos-store %U
 Icon=bugos-store
 Categories=System;PackageManager;
 Keywords=winkel;store;apps;installeren;install;software;programma;
-MimeType=x-scheme-handler/appstream;
+MimeType=x-scheme-handler/appstream;x-scheme-handler/flatpak+https;application/vnd.flatpak.ref;application/vnd.flatpak.repo;application/vnd.flatpak;
 Terminal=false

@@ -12,8 +12,8 @@ import threading
 from pathlib import Path
 
 import bugos_config as bi
-from bugos_ui import Kaart, Knop, Rij, bestaat, draai, label, start, t
-from bugos_settings_onderdelen import Blad, Sein, op_achtergrond, schuifje
+from bugos_ui import Kaart, Knop, Rij, bestaat, draai, label, start, t, vraag_ja
+from bugos_settings_onderdelen import Blad, Doorloop, Sein, op_achtergrond, schuifje
 from PySide6.QtCore import QProcess, Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QVBoxLayout, QWidget
@@ -27,6 +27,7 @@ def status_van(script: str, *voor: str) -> bool:
         return script in ("bugos-updates", "bugos-panel")
     if not bestaat(script):
         return False
+    # draai() vangt de uitvoer op (geen terminal): bugos-updates geeft dan het ene woord, geen zin voor mensen (A-15).
     _, uit = draai(script, *voor, "status", timeout=5)
     return uit.strip().endswith(("aan", "auto"))
 
@@ -44,7 +45,12 @@ def op_live_stick() -> bool:
         return False
 
 
+VOORBEELD_VERSIE = "44.20261110"
+
+
 def versie() -> str:
+    if bi.VOORBEELD:   # foto's en tests: een echte versie, niet die van de computer waarop ze draaien
+        return VOORBEELD_VERSIE
     try:
         return json.loads(Path("/usr/share/bugos/image-info.json").read_text())["versie"]
     except (OSError, ValueError, KeyError):
@@ -54,6 +60,11 @@ def versie() -> str:
 def systeem_info() -> list[tuple[str, str]]:
     """Gegevens voor 'Over deze computer', in gewone taal."""
     info: list[tuple[str, str]] = [(t("BugOS-versie", "BugOS version"), versie() or "?")]
+    if bi.VOORBEELD:   # dezelfde regels als echt, met geloofwaardige gegevens (niet de computer van de foto)
+        return info + [(t("Processor", "Processor"), "Intel Core i5-1235U"), (t("Geheugen", "Memory"), "16 GB"),
+                       (t("Opslag", "Storage"), t("180 GB vrij van 256 GB", "180 GB free of 256 GB")),
+                       (t("Naam van deze computer", "Computer name"), "bugie-laptop"),
+                       (t("Linux-kern", "Linux kernel"), "6.17.7-300.fc44.x86_64")]
     try:
         for regel in Path("/proc/cpuinfo").read_text().splitlines():
             if regel.startswith("model name"):
@@ -80,6 +91,59 @@ def systeem_info() -> list[tuple[str, str]]:
         info.append((t("Naam van deze computer", "Computer name"), uit.strip()))
     info.append((t("Linux-kern", "Linux kernel"), platform.release()))
     return info
+
+
+def kan_terug() -> bool | None:
+    """Is er een versie om naar terug te gaan? True, False, of None als we het niet weten (dan gewoon vragen).
+    Zonder wachtwoord: 'bugos-updates kan-terug' leest alleen rpm-ostree status (B-24)."""
+    if bi.VOORBEELD:
+        return True
+    if not bestaat("bugos-updates"):
+        return None
+    code, _ = draai("bugos-updates", "kan-terug", timeout=30)
+    return True if code == 0 else False if code == 3 else None
+
+
+# Wat rpm-ostree zegt als de updateserver (de registry) deze versie niet kent of niet wil geven: het internet werkt
+# dan wél. Bijv. 'unable to retrieve auth token: invalid username/password: unauthorized' voor een image met een tag
+# die er niet (meer) is, of 'manifest unknown' (B-01).
+SERVER_WEIGERT = ("unauthorized", "manifest unknown", "name unknown", "denied:", "authentication required",
+                  "invalid username/password", "status 404", "status code 404", "statuscode 404")
+# Wat rpm-ostree, skopeo of curl zeggen als er geen internet is.
+GEEN_INTERNET = ("could not resolve", "temporary failure in name resolution", "name or service not known",
+                 "network is unreachable", "no route to host", "connection timed out", "i/o timeout",
+                 "no such host", "connection refused", "tls handshake timeout")
+
+
+def online() -> bool | None:
+    """Werkt het internet? (NetworkManager kijkt zelf even: 'full' = ja.) None als we het niet weten."""
+    if not bestaat("nmcli"):
+        return None
+    code, uit = draai("nmcli", "-t", "networking", "connectivity", "check", timeout=15)
+    if code != 0 or not uit.strip():
+        return None
+    return uit.strip().splitlines()[-1].strip() == "full"
+
+
+def update_fout(uit: str, internet: bool | None = None) -> str:
+    """Waarom 'Nu updaten' niet lukte, in gewone woorden. Eerst stond hier altijd 'Ben je online?', ook als de computer
+    gewoon online was maar de updateserver deze versie van BugOS niet kende: dan zocht je naar een internetprobleem
+    dat er niet was (B-01). internet: wat online() zei (None = niet gevraagd of niet te weten)."""
+    klein = uit.lower()
+    # Een netwerkfout in de uitvoer, of NetworkManager zegt 'niet online': dan is het echt het internet.
+    if internet is False or (internet is not True and any(w in klein for w in GEEN_INTERNET)):
+        return t("Dat lukte niet: je computer is niet online. Maak verbinding met internet en probeer het nog eens.",
+                 "That did not work: your computer is not online. Connect to the internet and try again.")
+    if any(w in klein for w in SERVER_WEIGERT):
+        return t("Dat lukte niet: de updateserver kent deze versie van BugOS niet. Je internet werkt wel; aan jouw kant "
+                 "kun je hier niets aan doen.",
+                 "That did not work: the update server does not know this version of BugOS. Your internet works; "
+                 "there is nothing you can do about this on your side.")
+    if internet is True:
+        return t("Dat lukte niet, terwijl je internet wel werkt. Probeer het later nog eens.",
+                 "That did not work, although your internet works. Try again later.")
+    return t("Dat lukte niet. Ben je online? Probeer het later nog eens.",
+             "That did not work. Are you online? Try again later.")
 
 
 def herstart() -> None:
@@ -165,7 +229,10 @@ class UpdatesPagina(Schakelaars, Blad):
                    t("Aan: BugOS houdt zichzelf stil bij. Uit: jij kiest wanneer.",
                      "On: BugOS quietly keeps itself up to date. Off: you choose when."), self.auto))
         knoppen = QWidget()
-        kr = QHBoxLayout(knoppen)
+        # Een Doorloop: op een half scherm (640 px) komt 'Terug naar de vorige versie' onder 'Nu updaten', en springt
+        # de rij minder in, in plaats van dat de pagina opzij schuift (B-02). 52 px: onder de tekst van de regel.
+        kr = Doorloop(8, smal_links=14)
+        knoppen.setLayout(kr)
         kr.setContentsMargins(52, 4, 14, 12)
         self.nu = Knop(t("Nu updaten", "Update now"), "gewoon", "lijn:verversen")
         self.nu.clicked.connect(lambda _c=False: None if bi.VOORBEELD else self.updates("nu"))
@@ -173,29 +240,39 @@ class UpdatesPagina(Schakelaars, Blad):
         self.terug.clicked.connect(lambda _c=False: None if bi.VOORBEELD else self.vraag_terug())
         kr.addWidget(self.nu)
         kr.addWidget(self.terug)
-        kr.addStretch(1)
         g.lay.addWidget(knoppen)
         self.bouw_rest()
 
     def vraag_terug(self) -> None:
+        """Eerst kijken of er wel een vorige versie is: zo niet, dan meteen dat zeggen, zonder eerst de ernstige
+        waarschuwing (B-24). Dat kijken leest rpm-ostree (even geduld), dus op de achtergrond."""
+        if bi.VOORBEELD:    # (foto's en tests: er is altijd een vorige versie)
+            self.na_kan_terug(True)
+            return
+        if self.terug is not None:
+            self.terug.setEnabled(False)   # niet twee keer klikken terwijl we kijken
+        op_achtergrond(self, kan_terug, self.na_kan_terug)
+
+    def na_kan_terug(self, kan: bool | None) -> None:
+        if self.terug is not None and not self.bezig:
+            self.terug.setEnabled(True)
+        if kan is False:
+            self.melding.toon(t("Er is geen oudere versie om naar terug te gaan.",
+                                "There is no older version to go back to."))
+            return
+        self.vraag_terug_echt()
+
+    def vraag_terug_echt(self) -> None:
         """Eerst zeggen wat 'terug' ook terugzet: wat sinds de update in het systeem veranderde, hoort bij de nieuwe
         versie (elke versie heeft zijn eigen /etc) (U368)."""
-        from PySide6.QtWidgets import QMessageBox
-        box = QMessageBox(self)
-        box.setIcon(QMessageBox.Icon.Question)
-        box.setWindowTitle(t("Terug naar de vorige versie", "Back to the previous version"))
-        box.setText(t("Terug naar de vorige versie?", "Go back to the previous version?"))
-        box.setInformativeText(t(
-            "Je bestanden blijven gewoon staan. Maar wat je sinds de laatste update in het systeem veranderde, gaat ook "
-            "terug: een nieuw wachtwoord (dan geldt het oude weer), nieuwe gebruikers, en wifi-netwerken die je sindsdien "
-            "toevoegde.",
-            "Your files stay where they are. But what you changed in the system since the last update goes back too: "
-            "a new password (the old one works again), new users, and Wi-Fi networks you added since."))
-        ja = box.addButton(t("Terug", "Go back"), QMessageBox.ButtonRole.AcceptRole)
-        annuleer = box.addButton(t("Annuleren", "Cancel"), QMessageBox.ButtonRole.RejectRole)
-        box.setDefaultButton(annuleer)   # Enter uit gewoonte = niets doen, zoals bij weggooien in Bestanden (U380)
-        box.exec()
-        if box.clickedButton() is ja:
+        if vraag_ja(self, t("Terug naar de vorige versie?", "Go back to the previous version?"), t(
+                "Je bestanden blijven gewoon staan. Maar wat je sinds de laatste update in het systeem veranderde, gaat "
+                "ook terug: een nieuw wachtwoord (dan geldt het oude weer), nieuwe gebruikers, en wifi-netwerken die je "
+                "sindsdien toevoegde.",
+                "Your files stay where they are. But what you changed in the system since the last update goes back "
+                "too: a new password (the old one works again), new users, and Wi-Fi networks you added since."),
+                t("Terug", "Go back"),
+                enter_is_nee=True):   # Enter uit gewoonte = niets doen, zoals bij weggooien in Bestanden (U380)
             self.updates("terug")
 
     def bouw_rest(self) -> None:
@@ -331,8 +408,19 @@ class UpdatesPagina(Schakelaars, Blad):
                                 "That did not work: your computer is full. Make room first (for example empty the trash "
                                 "in Files) and try again."), "fout", seconden=0)
         elif code != 0:
-            self.melding.toon(t("Dat lukte niet. Ben je online? Probeer het later nog eens.",
-                                "That did not work. Are you online? Try again later."), "fout", seconden=0)
+            # Meteen wat de uitvoer zegt; daarna nog even vragen of het internet werkt, en dan precies zeggen wat er
+            # mis is (B-01): 'niet online' of 'de updateserver kent deze versie niet', niet altijd 'Ben je online?'.
+            eerst = update_fout(uit)
+            self.melding.toon(eerst, "fout", seconden=0)
+
+            def precies(internet) -> None:
+                beter = update_fout(uit, internet)
+                try:
+                    if self.melding.tekst.text() == eerst and beter != eerst:   # (niet over een nieuwere melding heen)
+                        self.melding.toon(beter, "fout", seconden=0)
+                except RuntimeError:
+                    pass   # Instellingen is al dicht
+            op_achtergrond(self, online, precies)
         elif wat == "nu" and "bugos-update-klaar" in uit:
             self.melding.toon(t("Er staat al een nieuwe BugOS klaar. Start de computer opnieuw op om hem te gebruiken.",
                                 "A new BugOS is already waiting. Restart the computer to use it."),
@@ -416,20 +504,30 @@ class OverPagina(Blad):
         boven.lay.addWidget(logo)
         blok = QVBoxLayout()
         blok.setSpacing(2)
-        blok.addWidget(label(f"BugOS {versie()}".strip(), "groot", wrap=False))
-        blok.addWidget(label(t("Gratis, veilig en open. Gebouwd op Fedora en KDE.",
-                               "Free, safe and open. Built on Fedora and KDE."), "sub"))
+        # De versie op de regel eronder (die breekt af): een lang versienummer in de grote letter schoof de pagina met
+        # grote letters op een smal scherm opzij.
+        blok.addWidget(label("BugOS", "groot", wrap=False))
+        regel = t("Gratis, veilig en open. Gebouwd op Fedora en KDE.", "Free, safe and open. Built on Fedora and KDE.")
+        v = versie()
+        if v:
+            regel = t("Versie", "Version") + " " + v + " · " + regel
+        blok.addWidget(label(regel, "sub"))
         boven.lay.addLayout(blok, 1)
         self.lay.addWidget(boven)
         g = self.kaart()
         self.info = systeem_info()
         for sleutel, waarde in self.info:
+            # De waarde krijgt de vrije breedte (rechts uitgelijnd): een lange processornaam past op één regel, en
+            # breekt alleen af als het echt niet past. Marges zoals een gewone Rij.
             rij = QWidget()
+            rij.setObjectName("info")
             r = QHBoxLayout(rij)
-            r.setContentsMargins(16, 14, 16, 14)
-            r.addWidget(label(sleutel, "klein", wrap=False))
-            r.addStretch(1)
-            r.addWidget(label(waarde, "kop3", kopieerbaar=True), 0, Qt.AlignmentFlag.AlignRight)
+            r.setContentsMargins(14, 12, 12, 12)
+            r.setSpacing(16)
+            r.addWidget(label(sleutel, "klein", wrap=False), 0, Qt.AlignmentFlag.AlignVCenter)
+            w = label(waarde, "kop3", kopieerbaar=True)
+            w.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            r.addWidget(w, 1)
             g.voeg(rij)
         kopieer = Knop(t("Gegevens kopiëren", "Copy details"), "gewoon", "lijn:kopieer")
         kopieer.clicked.connect(self.kopieer)

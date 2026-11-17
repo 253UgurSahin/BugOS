@@ -266,7 +266,9 @@ def teken_papier(p: QPainter, r: QRectF, ext: str) -> None:
     p.drawPath(vouw)
     dpr = p.device().devicePixelRatioF() if p.device() else 1.0
     if soort in ("muziek", "film", "doos"):
-        icoon = {"muziek": "muziek", "film": "film", "doos": "map"}[soort]
+        # 'doos' (programma's, pakketten, archieven) is een doos, geen map: een .exe met een mapje erop leek een map
+        # die je kon openen (D-15).
+        icoon = {"muziek": "muziek", "film": "film", "doos": "doos"}[soort]
         m = w * 0.46
         pm = lijn_pixmap(icoon, QColor(kleur), int(m * dpr), 2.0)
         p.drawPixmap(QRectF(r.center().x() - m / 2, r.top() + h * 0.22, m, m), pm, QRectF())
@@ -400,9 +402,18 @@ class Sorteerder(QSortFilterProxyModel):
         super().__init__()
         self.zoek = ""
         self.wortel = ""
+        # Waarop gesorteerd wordt (menu 'Sorteren op', C-01): naam, datum (nieuwste eerst), grootte (grootste
+        # eerst) of soort (op extensie). Mappen staan altijd vooraan, zoals in Windows.
+        self.sleutel = "naam"
         self.collator = QCollator()
         self.collator.setNumericMode(True)
         self.collator.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+
+    def zet_sleutel(self, sleutel: str) -> None:
+        if sleutel not in ("naam", "datum", "grootte", "soort") or sleutel == self.sleutel:
+            return
+        self.sleutel = sleutel
+        self.invalidate()   # opnieuw sorteren (sort(0) blijft gewoon aan staan)
 
     def zet_zoek(self, tekst: str) -> None:
         if hasattr(self, "beginFilterChange"):  # Qt 6.10 en nieuwer
@@ -426,4 +437,17 @@ class Sorteerder(QSortFilterProxyModel):
         map_a, map_b = bron.isDir(a), bron.isDir(b)
         if map_a != map_b:
             return map_a
+        if self.sleutel == "datum":
+            da, db = bron.lastModified(a), bron.lastModified(b)
+            if da != db:
+                return da > db           # nieuwste eerst
+        elif self.sleutel == "grootte" and not map_a:
+            ga, gb = bron.size(a), bron.size(b)
+            if ga != gb:
+                return ga > gb           # grootste eerst
+        elif self.sleutel == "soort":
+            sa, sb = Path(bron.fileName(a)).suffix.lower(), Path(bron.fileName(b)).suffix.lower()
+            if sa != sb:
+                return self.collator.compare(sa, sb) < 0
+        # Gelijk (of op naam): op naam, met 'Foto 2' voor 'Foto 10'.
         return self.collator.compare(bron.fileName(a), bron.fileName(b)) < 0

@@ -8,13 +8,15 @@ venster (Bestanden in bugos_files_venster.py erft het).
 
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 
 from bugos_ui import lijn_icoon, platte_tip, t
 from bugos_drives import (
-    MAX_NAAM, Schijf, hernoem_stappen, klaarmaak_stappen, leegmaak_stappen, mooie_maat, openen_stappen,
-    repareer_stappen, schijven, uitwerp_stappen,
+    MAX_NAAM, VERBORGEN_FS, VERBORGEN_TYPES, Schijf, _alle, _plekken_van, dicht_stappen, fstab_noemt, fstab_sleutels,
+    hernoem_stappen, klaarmaak_stappen, leegmaak_stappen, lees_lsblk, mooie_maat, op_media_plek, openen_stappen,
+    repareer_stappen, schijven, stations_in_gebruik, systeem_plek, uitwerp_stappen,
 )
 from bugos_files_plekken import schijf_van, thuis, zit_in
 from bugos_files_onderdelen import SchijfRij
@@ -92,14 +94,24 @@ class Schijven:
                   vrij_spel and not x.op_slot and x.fs in MAX_NAAM)
             actie("vink", t("Controleren en repareren", "Check and repair"), lambda: self.repareer_schijf(x),
                   vrij_spel and not x.op_slot)
-            # Alleen voor schijven die je eruit kunt halen: nooit per ongeluk de Windows-schijf of een
-            # andere interne schijf wissen (daarvoor is Schijfbeheer, voor gevorderden).
+            # Een stick of externe schijf: leegmaken (exFAT, werkt overal), behalve als het systeem hem zelf gebruikt
+            # (BugOS draait ervan). Een tweede schijf in de computer alleen als hij nergens van opstart (geen
+            # Windows, geen BugOS, geen ander systeem): dan helemaal wissen en opnieuw in gebruik nemen, zoals
+            # 'Schijven en volumes' in Windows 11 (zie wis_bezwaar). Nooit de schijf van Windows.
             if x.los:
+                if not los_in_gebruik(x):
+                    actie("prullenbak", t("Leegmaken (alles wissen)…", "Erase (delete everything)…"),
+                          lambda: self.leegmaak_schijf(x), vrij_spel, "fout")
+            elif wisbare_interne_schijf(x):
+                # De hele schijf wordt gewist: dus alleen als er op geen enkel stuk van die schijf iets bezig is (een
+                # ander stuk dat net opengaat, hernoemd of gerepareerd wordt), niet alleen op dit stuk.
                 actie("prullenbak", t("Leegmaken (alles wissen)…", "Erase (delete everything)…"),
-                      lambda: self.leegmaak_schijf(x), vrij_spel, "fout")
+                      lambda: self.wis_interne_schijf(x), vrij_spel and not self._station_bezig(x.station), "fout")
         if x.los:
             m.addSeparator()
-            actie("uitwerpen", t("Veilig verwijderen", "Safely remove"), lambda: self.uitwerpen(x.station), vrij_spel)
+            # Grijs zolang er op een stuk van deze stick iets bezig is (uitwerpen weigert dat ook, zie uitwerpen).
+            actie("uitwerpen", t("Veilig verwijderen", "Safely remove"), lambda: self.uitwerpen(x.station),
+                  vrij_spel and not self._station_bezig(x.station))
         return m
 
     def _na_schijfklus(self, ok: bool) -> None:
@@ -110,34 +122,95 @@ class Schijven:
             else:
                 self.sluit_na_klus = False   # mislukt: open laten, zodat je de melding ziet
 
-    def beheer(self, x: Schijf, stappen: list[list[str]], bezig: str, gelukt: str, mislukt: str,
-               weer_open: bool = False) -> None:
-        """Voer een beheer-klus uit op de achtergrond, met een melding voor en na."""
-        if x.apparaat in self.bezig:
+    # ------------------------------------------------ wat er nu bezig is
+    def _klus_loopt(self) -> bool:
+        """Loopt er in dit venster nog een kopie, verplaatsing of weggooi-klus (Klus of Weggooien)?"""
+        return self.klus is not None and self.klus.isRunning()
+
+    def _wacht_op_klus(self) -> None:
+        """De melding van U386: eerst moet het kopiëren of weggooien klaar zijn. Tussen twee bestanden is een schijf
+        even 'vrij' (niets open), dus dichtzetten kan dan lukken terwijl de klus er nog van leest of op schrijft."""
+        self.melding.toon(t("Even wachten: er loopt nog iets (kopiëren of weggooien).",
+                            "One moment: something is still busy (copying or deleting)."), "let_op")
+
+    def _bezig_met(self, x: Schijf) -> bool:
+        """Is dit stuk, of de hele schijf eronder (wissen, veilig verwijderen), nu bezig? Dan begint dit venster er
+        niets nieuws aan: ook niet via een klik in de zijbalk of op Deze computer, want een stuk dat tijdens het
+        wissen weer opengaat, zou anders open staan op een schijf die net gewist wordt."""
+        return x.apparaat in self.bezig or (bool(x.station) and x.station in self.bezig)
+
+    def _station_bezig(self, station: str) -> bool:
+        """Is er op deze hele schijf iets bezig: de schijf zelf, of één van haar stukken (openen, naam wijzigen,
+        repareren)? Voor wissen telt de hele schijf, niet alleen het stuk waarop je klikte."""
+        return bool(station) and (station in self.bezig or any(
+            s.apparaat in self.bezig for s in self.lijst_schijven if s.station == station))
+
+    def draai_elk(self, opdrachten: list, klaar) -> None:
+        """Voer elke opdracht na elkaar uit, ook als er één mislukt (zoveel mogelijk weer openzetten), en roep daarna
+        klaar() aan. Anders dan draai(), dat bij de eerste fout stopt."""
+        rest = [list(o) for o in opdrachten]
+
+        def volgende(_ok: bool = True, _uitvoer: str = "") -> None:
+            if rest:
+                self.draai([rest.pop(0)], volgende)
+            else:
+                klaar()
+
+        volgende()
+
+    def beheer(self, x: Schijf, stappen: list, bezig: str, gelukt: str, mislukt: str,
+               weer_open: bool = False, ook_bezig: tuple | list = (), laatste: list[str] | None = None,
+               bij_fout=None) -> None:
+        """Voer een beheer-klus uit op de achtergrond, met een melding voor en na. Een stap is een opdracht
+        (['udisksctl', ...]) of een controle (een functie die True of False geeft, zie draai).
+
+        ook_bezig: nog meer sleutels die zolang 'bezig' zijn (bij wissen: de hele schijf en elk stuk ervan), zodat dit
+        venster er intussen niets anders aan begint. laatste: een slotstap die mag mislukken (zie draai).
+        bij_fout: wat er gebeurt als het mislukt, een functie(uitvoer) die (opdrachten, melding) geeft: die opdrachten
+        draaien eerst (elk mag mislukken, zie draai_elk; bijvoorbeeld weer openzetten wat dicht ging), daarna komt die
+        melding in plaats van 'mislukt'."""
+        sleutels = {x.apparaat, *ook_bezig}
+        if self._bezig_met(x) or sleutels & self.bezig:
             return
         if not shutil.which("gdbus") or not shutil.which("udisksctl"):
             self.melding.toon(t("Dat kan hier niet.", "That is not possible here."), "fout")
             return
-        if not self.in_prullenbak and not self.in_computer and x.wortel and zit_in(self.huidig, Path(x.wortel)):
-            self.ga_naar(thuis())  # zelf niet meer 'in' de schijf staan
-        self.bezig.add(x.apparaat)
+        # Zelf niet meer 'in' de schijf staan; bij wissen in geen enkel stuk van die schijf (ook niet in een ander
+        # stuk dan waarop je klikte).
+        plekken_ = [s.wortel for s in [x, *self.lijst_schijven] if s.wortel and (s is x or s.apparaat in sleutels)]
+        if not self.in_prullenbak and not self.in_computer and any(zit_in(self.huidig, Path(p)) for p in plekken_):
+            self.ga_naar(thuis())
+        self.bezig.update(sleutels)
         self.melding.toon(bezig, seconden=0)
 
-        def klaar(ok: bool, _uitvoer: str) -> None:
-            self.bezig.discard(x.apparaat)
+        def af(ok: bool, tekst: str) -> None:
+            self.bezig.difference_update(sleutels)
             self._zijbalk_sleutels = None
             QTimer.singleShot(0, lambda ok=ok: self._na_schijfklus(ok))
             self.vul_zijbalk()
-            self.melding.toon(gelukt if ok else mislukt, "goed" if ok else "fout", seconden=10)
+            self.melding.toon(tekst, "goed" if ok else "fout", seconden=10)
+
+        def klaar(ok: bool, uitvoer: str) -> None:
+            if ok or bij_fout is None:
+                af(ok, gelukt if ok else mislukt)
+                return
+            try:
+                terug, tekst = bij_fout(uitvoer)
+            except Exception:  # noqa: BLE001  gaat het uitzoeken zelf mis, dan gewoon de gewone melding
+                terug, tekst = [], mislukt
+            # Pas als ook het weer openzetten klaar is, is de schijf niet meer 'bezig' (en mag het venster dicht).
+            self.draai_elk(terug, lambda: af(False, tekst))
 
         # Naam wijzigen en repareren: de laatste stap zet hem weer open. Ook als het mislukte, anders blijft de
         # stick 'dicht' staan (U141).
-        if weer_open and stappen and stappen[-1][:2] == ["udisksctl", "mount"]:
+        if weer_open and stappen and isinstance(stappen[-1], list) and stappen[-1][:2] == ["udisksctl", "mount"]:
             self.draai(stappen[:-1], klaar, altijd=stappen[-1])
         else:
-            self.draai(stappen, klaar)
+            self.draai(stappen, klaar, laatste)
 
     def hernoem_schijf(self, x: Schijf) -> None:
+        if self._bezig_met(x):
+            return   # dit stuk of de schijf eronder is bezig (zie _bezig_met): eerst niet om een naam vragen
         maximum = MAX_NAAM.get(x.fs, 15)
         naam = self.vraag_tekst(t("Naam wijzigen", "Rename"),
                                 t(f"Nieuwe naam voor '{x.naam}' (hoogstens {maximum} tekens):",
@@ -154,6 +227,8 @@ class Schijven:
                     weer_open=True)
 
     def repareer_schijf(self, x: Schijf) -> None:
+        if self._bezig_met(x):
+            return   # dit stuk of de schijf eronder is bezig (zie _bezig_met)
         self.beheer(x, repareer_stappen(x),
                     t(f"'{x.naam}' controleren en repareren… Haal hem er niet uit.",
                       f"Checking and repairing '{x.naam}'… Do not unplug it."),
@@ -167,6 +242,14 @@ class Schijven:
                     weer_open=True)
 
     def leegmaak_schijf(self, x: Schijf) -> None:
+        # Loopt er in dit venster nog een kopie of weggooi-klus (misschien van of naar deze stick)? Dan niet, net als
+        # bij Veilig verwijderen (U386): tussen twee bestanden is de stick even 'vrij', dan lukt dichtzetten en wist
+        # BugOS de stick terwijl het kopiëren er nog van leest. Wat nog niet over was, is dan weg.
+        if self._klus_loopt():
+            self._wacht_op_klus()
+            return
+        if self._bezig_met(x):
+            return   # dit stuk of de stick is al bezig (zie _bezig_met)
         if not self.vraag_ja(t("Alles wissen?", "Erase everything?"),
                              t(f"Alles op '{x.naam}' wordt gewist. Dit kan niet ongedaan worden.\n\n"
                                "Daarna is hij leeg en werkt hij op elke computer (ook Windows en Mac).",
@@ -174,9 +257,10 @@ class Schijven:
                                "Afterwards it is empty and works on any computer (Windows and Mac too)."),
                              t("Alles wissen", "Erase everything")):
             return
-        # Zit precies dezelfde schijf er nog in? (Er kan intussen een andere stick in zitten.)
+        # Zit precies dezelfde schijf er nog in? (Er kan intussen een andere stick in zitten.) En gebruikt het
+        # systeem hem niet zelf (BugOS draait ervan)?
         nu = next((s for s in schijven() if s.apparaat == x.apparaat), None)
-        if not x.los or nu is None or (nu.station, nu.grootte, nu.naam, nu.udisks_deel) != (
+        if not x.los or nu is None or los_in_gebruik(x) or (nu.station, nu.grootte, nu.naam, nu.udisks_deel) != (
                 x.station, x.grootte, x.naam, x.udisks_deel):
             self.melding.toon(t(f"'{x.naam}' zit er niet meer in. Er is niets gewist.",
                                 f"'{x.naam}' is no longer there. Nothing was erased."), "fout")
@@ -185,14 +269,151 @@ class Schijven:
             return
         naam = x.naam if len(x.naam) <= MAX_NAAM["exfat"] and "(" not in x.naam else \
             (t("SD-kaart", "SD card") if x.soort == "kaart" else t("USB-stick", "USB stick"))   # (U151)
-        self.beheer(x, leegmaak_stappen(x, naam),
+        stappen: list = leegmaak_stappen(x, naam)
+        # Vlak vóór het formatteren (na het dichtzetten) nog één keer: is er intussen toch een kopie of weggooi-klus
+        # begonnen? Dan stopt de rij hier en wordt er niets gewist (draai behandelt een 'nee' als een fout).
+        # leegmaak_stappen = de stappen van dicht_stappen, dan formatteren, dan openen.
+        voor_wissen = len(dicht_stappen(x))
+        stappen[voor_wissen:voor_wissen] = [lambda: not self._klus_loopt()]
+        self.beheer(x, stappen,
                     t(f"'{x.naam}' leegmaken… Haal hem er niet uit.", f"Erasing '{x.naam}'… Do not unplug it."),
                     t(f"Klaar: '{naam}' is leeg.", f"Done: '{naam}' is empty."),
                     t("Leegmaken lukte niet. Haal de stick eruit, steek hem er opnieuw in en probeer het nog eens.",
                       "Erasing did not work. Unplug the stick, plug it in again and try again."))
 
+    def wis_interne_schijf(self, x: Schijf) -> None:
+        """Een tweede schijf in de computer (bijvoorbeeld de oude D: van Windows) helemaal wissen en opnieuw in
+        gebruik nemen. Eerst een duidelijke vraag met de naam en de grootte; Enter uit gewoonte doet niets.
+
+        Vier sloten, elk apart genoeg om niets te wissen: (1) wis_bezwaar vóór de vraag (zie de regels daar),
+        (2) na de vraag opnieuw, en het moet nog precies dezelfde schijf zijn, (3) na het dichtzetten, vlak vóór het
+        wissen, wis_controle (alles echt dicht, nog steeds dezelfde schijf, en er loopt geen kopie in dit venster), en
+        (4) udisks vraagt zelf het beheerderswachtwoord voor een schijf in de computer.
+
+        Zolang het duurt, is de hele schijf 'bezig' (de schijf en elk stuk ervan): klik je intussen op een ander stuk
+        van dezelfde schijf, dan gaat dat niet open. Stopt het voordat er iets gewist is (je annuleert het wachtwoord,
+        iets gaat niet dicht, de laatste controle zegt nee), dan gaat weer open wat BugOS dichtzette, en zegt de
+        melding dat er niets gewist is."""
+        # Loopt er in dit venster nog een kopie of weggooi-klus? Dan niet, net als bij Veilig verwijderen (U386).
+        # De vraag zegt 'zet eerst over wat je wilt houden': dat kopiëren moet dan wel eerst klaar zijn. Tussen twee
+        # bestanden is de schijf even 'vrij', dan lukt dichtzetten en is wat nog niet over was, weg.
+        if self._klus_loopt():
+            self._wacht_op_klus()
+            return
+        if self._station_bezig(x.station):
+            return   # er is al iets bezig op deze schijf (een stuk gaat open, of wordt hernoemd of gerepareerd)
+        st = _station_lsblk(x.station) if x.station else None
+        if st is None or wis_bezwaar(x):
+            self.melding.toon(t("Deze schijf kun je hier niet wissen.", "You cannot erase this drive here."), "fout")
+            return
+        voor = _identiteit(st)
+        delen = [s for s in self.lijst_schijven if s.station == x.station]
+        namen = ", ".join(f"'{s.naam}'" for s in delen) or f"'{x.naam}'"
+        maat = mooie_maat(int(st.get("size") or 0) or x.grootte)
+        if not self.vraag_ja(t("Deze schijf helemaal wissen?", "Erase this whole drive?"),
+                             t("Alles op deze schijf in je computer ({maat}) wordt gewist: {namen}, met alle bestanden "
+                               "erop. Dit kan niet ongedaan worden.\n\nZet eerst over wat je wilt houden. Daarna is "
+                               "de schijf leeg en klaar voor gebruik in deze computer. BugOS vraagt het "
+                               "beheerderswachtwoord.",
+                               "Everything on this drive in your computer ({maat}) will be erased: {namen}, with all "
+                               "the files on it. This cannot be undone.\n\nCopy what you want to keep first. "
+                               "Afterwards the drive is empty and ready to use in this computer. BugOS asks for the "
+                               "administrator password.").replace("{maat}", maat).replace("{namen}", namen),
+                             t("Alles wissen", "Erase everything")):
+            return
+        # Zit precies dezelfde schijf er nog (zelfde grootte, zelfde indeling, zelfde stukken), en mag het nog steeds?
+        # (Terwijl de vraag openstond, kan er van alles veranderd zijn.) Anders niets doen.
+        nu = _station_lsblk(x.station)
+        if nu is None or _identiteit(nu) != voor or wis_bezwaar(x):
+            self.melding.toon(t("De schijf is veranderd. Er is niets gewist.",
+                                "The drive has changed. Nothing was erased."), "fout")
+            self._zijbalk_sleutels = None
+            self.vul_zijbalk()
+            return
+        naam = x.naam if len(x.naam) <= MAX_NAAM["ext4"] and "(" not in x.naam else t("Opslag", "Storage")
+        # Alles op deze schijf dicht (en een geopend slot weer op slot), uit wat lsblk nú zegt: niet uit de lijst in
+        # de zijbalk, die kan een paar seconden oud zijn.
+        dicht = [s for s in schijven([nu]) if s.station == x.station]
+        stappen: list = [stap for s in dicht for stap in dicht_stappen(s)]
+        # Hoe ver het kwam, voor de melding en het weer openzetten als het misgaat: 'begonnen' = de laatste controle
+        # zei ja, dus udisks kreeg de opdracht om te wissen; 'gewist' = de nieuwe indeling staat erop, de oude is weg.
+        voortgang: set[str] = set()
+
+        def laatste_controle() -> bool:
+            """Vlak vóór het wissen nog één keer: loopt er intussen toch een kopie in dit venster, staat er nog iets
+            open, of is het een andere schijf? Dan stopt de rij hier en wordt er niets gewist (draai behandelt een
+            'nee' als een opdracht die mislukt)."""
+            if self._klus_loopt() or not wis_controle(x.station, voor):
+                return False
+            voortgang.add("begonnen")
+            return True
+
+        def oude_indeling_weg() -> bool:
+            """Een stap direct na de nieuwe indeling (Block.Format lukte): vanaf hier is er niets meer terug te zetten."""
+            voortgang.add("gewist")
+            return True
+
+        stappen.append(laatste_controle)
+        klaarmaken = klaarmaak_stappen(Schijf(apparaat=x.station, naam=naam, soort="intern", station=x.station), naam)
+        # klaarmaak_stappen: een nieuwe indeling (Block.Format), één stuk met ext4, en dat stuk openen. Openen is hier
+        # de slotstap die mag mislukken (laatste, zie draai): dan is de schijf toch leeg en klaar, en staat hij dicht
+        # links bij Schijven.
+        for stap in klaarmaken[:-1]:
+            stappen.append(stap)
+            if "org.freedesktop.UDisks2.Block.Format" in stap:
+                stappen.append(oude_indeling_weg)
+        openen = klaarmaken[-1]
+        # Stopt het voordat er iets gewist is, dan gaat weer open wat BugOS dichtzette (zoals bij naam wijzigen en
+        # repareren, U141). Zonder wachtwoordvraag (--no-user-interaction): na een geannuleerde vraag niet meteen
+        # weer een. Een versleuteld stuk dat al op slot ging, blijft op slot (dat vraagt zijn eigen wachtwoord): het
+        # pad /dev/mapper/luks-... bestaat dan niet meer, en die stap mislukt gewoon.
+        weer_open = [["udisksctl", "mount", "-b", s.fs_apparaat or s.apparaat, "--no-user-interaction"]
+                     for s in dicht if s.wortel]
+        mislukt = t("Wissen lukte niet. Er kan nog iets open zijn op de schijf: sluit dat en probeer het opnieuw.",
+                    "Erasing did not work. Something may still be open on the drive: close it and try again.")
+
+        def bij_fout(uitvoer: str) -> tuple[list, str]:
+            """Het ging mis: wat gaat er weer open, en wat zegt de melding? (zie beheer)"""
+            if "gewist" in voortgang:
+                # De oude indeling is al weg, er is niets meer om weer open te zetten. De schijf staat nu als nieuwe
+                # schijf links bij Schijven, met 'In gebruik nemen'.
+                return [], t("De schijf is gewist, maar klaarmaken lukte niet. Klik links bij Schijven op de nieuwe "
+                             "schijf en kies 'In gebruik nemen'.",
+                             "The drive was erased, but setting it up did not work. Click the new drive under Drives "
+                             "and choose 'Set up'.")
+            # Alleen weer openzetten als het nog precies dezelfde schijf is, onveranderd: niet een andere schijf die
+            # intussen /dev/sdb heet, en niet een schijf waar udisks toch al aan begon.
+            nu_ = _station_lsblk(x.station)
+            terug = weer_open if nu_ is not None and _identiteit(nu_) == voor else []
+            if "begonnen" not in voortgang:
+                # Iets ging niet dicht, of de laatste controle zei nee: udisks heeft niets gekregen om te wissen.
+                return terug, t("Er is niets gewist: er is nog iets bezig of open op de schijf, of de schijf is "
+                                "veranderd. Sluit wat erop openstaat en probeer het opnieuw.",
+                                "Nothing was erased: something on the drive is still busy or open, or the drive has "
+                                "changed. Close what is open on it and try again.")
+            if "Error.NotAuthorized" in uitvoer:
+                # udisks kijkt eerst of het mag (het beheerderswachtwoord: weggeklikt, fout of niet toegestaan) en
+                # doet pas daarna iets. Dus: niets gewist.
+                return terug, t("Er is niets gewist: daarvoor is het beheerderswachtwoord nodig.",
+                                "Nothing was erased: this needs the administrator password.")
+            # Wissen zelf ging mis: misschien is er al iets weg. Openzetten kan geen kwaad (alleen als de schijf nog
+            # onveranderd is, zie hierboven).
+            return terug, mislukt
+
+        # De hele schijf is bezig zolang dit duurt: de schijf zelf en elk stuk ervan (ook wat nu in de zijbalk staat).
+        delen_ = {x.station, *(s.apparaat for s in dicht),
+                  *(s.apparaat for s in self.lijst_schijven if s.station == x.station)}
+        self.beheer(x, stappen,
+                    t("De schijf wissen en klaarmaken… Dit duurt even.",
+                      "Erasing and setting up the drive… This takes a moment."),
+                    t("Klaar: '{naam}' is leeg en staat links bij Schijven.",
+                      "Done: '{naam}' is empty and listed under Drives.").replace("{naam}", naam),
+                    mislukt, ook_bezig=sorted(delen_), laatste=openen, bij_fout=bij_fout)
+
     def neem_in_gebruik(self, x: Schijf) -> None:
         """Een nieuwe, lege schijf klaarmaken (zoals Schijfbeheer in Windows), met één vraag: de naam."""
+        if self._bezig_met(x):
+            return   # deze schijf is al bezig (zie _bezig_met): niet eerst nog om een naam vragen
         standaard = t("USB-stick", "USB stick") if x.soort == "stick" else t("Opslag", "Storage")
         maximum = MAX_NAAM["exfat"] if x.los else 16   # een losse schijf wordt exFAT
         naam = self.vraag_tekst(
@@ -224,10 +445,14 @@ class Schijven:
                     t("Klaarmaken lukte niet. Probeer het nog eens, of vraag hulp.",
                       "Setting up did not work. Try again, or ask for help."))
 
-    def draai(self, stappen: list[list[str]], klaar, laatste: list[str] | None = None,
+    def draai(self, stappen: list, klaar, laatste: list[str] | None = None,
               altijd: list[str] | None = None) -> None:
-        """Voer opdrachten na elkaar uit, zonder dat het venster vastloopt (ook niet als KDE om een wachtwoord vraagt)."""
-        rij = [list(x) for x in stappen]
+        """Voer opdrachten na elkaar uit, zonder dat het venster vastloopt (ook niet als KDE om een wachtwoord vraagt).
+
+        Een stap kan ook een controle zijn: een functie zonder argumenten. Geeft die False (of gaat hij mis), dan
+        stopt de rij daar, net als bij een opdracht die mislukt. Zo kijkt 'wissen' vlak vóór het formatteren nog
+        of alles echt dicht is."""
+        rij = [x if callable(x) else list(x) for x in stappen]
         uitvoer: list[str] = []
 
         def start(opdracht: list[str], verder) -> None:
@@ -260,7 +485,15 @@ class Schijven:
                 else:
                     klaar(False, "".join(uitvoer))
             elif rij:
-                start(rij.pop(0), volgende)
+                stap = rij.pop(0)
+                if callable(stap):
+                    try:
+                        goed = bool(stap())
+                    except Exception:  # noqa: BLE001  een controle die misgaat, is een 'nee'
+                        goed = False
+                    volgende(goed)
+                else:
+                    start(stap, volgende)
             elif altijd:
                 start(altijd, lambda ok2: klaar(ok2, "".join(uitvoer)))
             elif laatste:
@@ -271,18 +504,22 @@ class Schijven:
         volgende()
 
     def open_schijf(self, x: Schijf) -> None:
+        # Is dit stuk, of de hele schijf eronder, bezig (wissen, veilig verwijderen, naam wijzigen, ...)? Dan niets:
+        # ook niet openen of erin gaan staan. Anders kon een klik in de zijbalk een ander stuk van een schijf weer
+        # openzetten terwijl BugOS die schijf wist (terwijl udisks om het beheerderswachtwoord vroeg).
+        if self._bezig_met(x):
+            return
         if x.nieuw:
             self.neem_in_gebruik(x)
             return
         if x.wortel:
             self.ga_naar(Path(x.wortel))
             return
-        if x.apparaat in self.bezig:
-            return
         opdracht = openen_stappen(x)
         if not shutil.which(opdracht[0]):
-            self.melding.toon(t(f"'{x.naam}' kan hier niet open. Probeer Dolphin (voor gevorderden).",
-                                f"'{x.naam}' cannot be opened here. Try Dolphin (advanced)."), "fout")
+            self.melding.toon(t("'{naam}' kan hier niet open. Haal hem eruit en steek hem er opnieuw in.",
+                                "'{naam}' cannot be opened here. Unplug it and plug it in again.").replace(
+                                    "{naam}", x.naam), "fout")
             return
         self.bezig.add(x.apparaat)
         self.melding.toon(t(f"'{x.naam}' openen…", f"Opening '{x.naam}'…"), seconden=0)
@@ -315,15 +552,14 @@ class Schijven:
 
     def uitwerpen(self, station: str) -> None:
         """Veilig verwijderen: alle delen van de stick dicht, dan de stroom eraf."""
-        if station in self.bezig:
-            return
+        if self._station_bezig(station):
+            return   # de stick, of een stuk ervan, is al bezig (openen, naam wijzigen, repareren, leegmaken)
         delen = [x for x in self.lijst_schijven if x.station == station]
         naam = delen[0].naam if delen else t("De schijf", "The drive")
         # Loopt er in dit venster nog een kopie (naar of van deze schijf)? Dan niet: tussen twee bestanden is de stick
         # even 'vrij', en dan zei BugOS 'je mag hem eruit halen' terwijl het kopiëren nog bezig was (U386).
-        if self.klus is not None and self.klus.isRunning():
-            self.melding.toon(t("Even wachten: er loopt nog iets (kopiëren of weggooien).",
-                                "One moment: something is still busy (copying or deleting)."), "let_op")
+        if self._klus_loopt():
+            self._wacht_op_klus()
             return
         stappen, laatste = uitwerp_stappen(self.lijst_schijven, station)
         if not shutil.which("udisksctl"):
@@ -348,3 +584,151 @@ class Schijven:
                                     f"'{naam}' is still busy. Close what is open on it and try again."), "fout")
 
         self.draai(stappen, klaar, laatste)
+
+
+# ===================================================== een interne schijf wissen ===
+# Wissen kan niet ongedaan worden. Daarom is elke regel hieronder een 'nee' die altijd wint: BugOS wist alleen een
+# losse dataschijf in de computer (de oude D: van Windows), en alleen als het álles op die schijf heeft kunnen
+# bekijken. Nooit de schijf van BugOS zelf, nooit de schijf waar BugOS van draait (ook niet de live-stick), nooit
+# een schijf die het systeem gebruikt (iets wat ergens anders open staat dan bij jou, /etc/fstab, swap, een btrfs
+# of RAID over meer schijven), en nooit een schijf waar een besturingssysteem op staat of van opstart.
+# Liever een keer 'dat kan hier niet' te veel dan één keer de verkeerde schijf leeg.
+
+# Stukken die iets opstarten of bij een systeem horen: EFI, 'gereserveerd voor Microsoft', Windows-herstel en
+# BIOS-opstart (VERBORGEN_TYPES), en de vaste soorten van Linux (systemd 'Discoverable Partitions') en macOS.
+OPSTART_TYPES = VERBORGEN_TYPES | {
+    "4f68bce3-e8cd-4db1-96e7-fbcaf984b709",  # Linux: het systeem zelf (x86-64)
+    "b921b045-1df0-41c3-af44-4c6f280d3fae",  # Linux: het systeem zelf (ARM 64)
+    "8484680c-9521-48c6-9c11-b0720656f69e",  # Linux: /usr (x86-64)
+    "bc13c2ff-59e6-4262-a352-b275fd6f7172",  # Linux: /boot (XBOOTLDR)
+    "0657fd6d-a4ab-43c4-84e5-0933c84b4f4f",  # Linux: swap
+    "4d21b016-b534-45c2-a9fb-5c16e091fd2d",  # Linux: /var
+    "e6d6d379-f507-44c2-a23c-238f2a3df928",  # Linux: LVM
+    "a19d880f-05fc-4d3b-a006-743f0f84911e",  # Linux: RAID
+    "48465300-0000-11aa-aa11-00306543ecac",  # macOS: HFS+
+    "7c3457ef-0000-11aa-aa11-00306543ecac",  # macOS: APFS
+    "426f6f74-0000-11aa-aa11-00306543ecac",  # macOS: opstarten
+    "0x82", "0x8e", "0xfd", "0xa5", "0xa6", "0xa9", "0xaf",   # oude indeling: swap, LVM, RAID, BSD, macOS
+}
+# Een opstartmedium dat als schijf in de computer zit (de live-stick als schijf in een virtuele computer).
+OPSTART_FS = {"iso9660", "udf"}
+# Waaraan BugOS een besturingssysteem herkent op een stuk dat open staat (bovenin dat stuk).
+OS_TEKENS = ("Windows/System32", "bootmgr", "EFI", "etc/os-release", "usr/lib/os-release", "ostree", "boot/loader",
+             "loader/entries", "grub", "grub2", "boot/grub", "boot/grub2", "root/ostree", "root/etc/os-release",
+             "root/usr/lib/os-release", "@/etc/os-release", "@/usr/lib/os-release")
+
+
+def _station_lsblk(station: str) -> dict | None:
+    """Wat lsblk nu over dit hele apparaat zegt (de ruwe regel, met alle stukken eronder); None als het er niet
+    (meer) is."""
+    for st in lees_lsblk():
+        if (st.get("path") or f"/dev/{st.get('name')}") == station and st.get("type") == "disk":
+            return st
+    return None
+
+
+def _identiteit(st: dict) -> tuple:
+    """Waaraan je deze schijf herkent, los van wat er open staat: grootte, indeling (met haar eigen nummer) en per
+    stuk het pad, de soort, het bestandssysteem, de UUID en de grootte. Zo wordt nooit een andere schijf gewist die
+    intussen dezelfde naam (/dev/sdb) kreeg."""
+    stukken = tuple((a.get("path") or a.get("name") or "", str(a.get("parttype") or "").lower(), a.get("fstype") or "",
+                     str(a.get("uuid") or "").lower(), str(a.get("size") or ""))
+                    for a in st.get("children") or [] if a.get("type") == "part")
+    return (str(st.get("size") or ""), str(st.get("ptuuid") or "").lower(), str(st.get("pttype") or "").lower(),
+            st.get("fstype") or "", stukken)
+
+
+def _opstart_vlag(a: dict, tabel: str) -> bool:
+    """Staat de opstart-vlag aan? Oude indeling (MBR): 'actief' (0x80), zo start de BIOS ervan op (Windows, en
+    Linux zoals Anaconda het op een oude pc installeert). GPT: 'nodig voor het platform' (bit 0) of 'legacy BIOS
+    bootable' (bit 2)."""
+    try:
+        vlag = int(str(a.get("partflags") or ""), 16)
+    except ValueError:
+        return False
+    return bool(vlag & 0x80) if tabel == "dos" else bool(vlag & 0x5)
+
+
+def _os_teken(plek: str) -> bool:
+    """Staat er bovenin dit open stuk iets van een besturingssysteem (Windows, Linux, een opstartmap)?"""
+    return any(os.path.lexists(os.path.join(plek, teken)) for teken in OS_TEKENS)
+
+
+def _te_bekijken(a: dict) -> bool:
+    """Kon BugOS zien wat er op dit stuk staat? Alleen als het open staat (op een plek van udisks voor jou), of een
+    geopend slot is met daarin iets dat open staat. Dicht, op slot of zonder herkenbaar bestandssysteem: niet te
+    zien, en wat je niet kunt zien, wist BugOS niet."""
+    if _plekken_van(a):
+        return True
+    kinderen = a.get("children") or []
+    return (a.get("fstype") or "") == "crypto_LUKS" and bool(kinderen) and all(_te_bekijken(k) for k in kinderen)
+
+
+def _bezwaar(st: dict, na_dicht: bool = False) -> str:
+    """Waarom deze hele schijf (een lsblk-regel) niet gewist mag worden, in een paar woorden; '' als het mag.
+
+    na_dicht: de laatste controle vlak vóór het wissen, nadat BugOS alles heeft dichtgezet. Dan mag er niets meer
+    open staan en niets meer 'boven' een stuk hangen (een geopend slot, LVM)."""
+    if st.get("type") != "disk":
+        return "geen hele schijf"
+    if st.get("rm") or st.get("hotplug") or st.get("tran") == "usb":
+        return "een losse schijf"   # sticks en externe schijven: daarvoor is 'Leegmaken' (exFAT)
+    if (st.get("kname") or st.get("name") or "") in stations_in_gebruik():
+        return "in gebruik door het systeem"
+    tabel = str(st.get("pttype") or "").lower()
+    if not tabel and any(str(k.get("parttype") or "").startswith("0x") for k in st.get("children") or []):
+        tabel = "dos"   # lsblk zonder PTTYPE: een soort als '0x07' bestaat alleen op de oude indeling (MBR)
+    sleutels = fstab_sleutels()
+    stukken = [k for k in st.get("children") or [] if k.get("type") == "part"] or ([st] if st.get("fstype") else [])
+    if not stukken:
+        return "er staat niets op"   # een lege schijf neem je in gebruik, die hoeft niet gewist
+    for a in _alle(st):
+        soort, fs = str(a.get("parttype") or "").lower(), a.get("fstype") or ""
+        if soort in OPSTART_TYPES:
+            return "een opstart- of systeemdeel"
+        if _opstart_vlag(a, tabel):
+            return "de opstart-vlag staat aan"
+        if fs in VERBORGEN_FS or fs in OPSTART_FS or fs == "BitLocker":
+            return "een systeemdeel (swap, LVM, RAID, BitLocker of een opstartmedium)"
+        if fstab_noemt(a, sleutels):
+            return "staat in /etc/fstab of /etc/crypttab"
+        if tabel == "dos" and fs == "ntfs":
+            return "Windows op de oude indeling"   # niet te zien of Windows ervan opstart
+        for m in _plekken_van(a):
+            if systeem_plek(m) or not op_media_plek(m):
+                return "in gebruik door het systeem"
+            if na_dicht:
+                return "staat nog open"
+            if _os_teken(m):
+                return "er staat een besturingssysteem op"
+        if na_dicht and a is not st and a.get("type") != "part":
+            return "nog in gebruik (een geopend slot of LVM)"
+    if not na_dicht and not all(_te_bekijken(a) for a in stukken):
+        return "nog dicht: BugOS kan niet zien wat erop staat"
+    return ""
+
+
+def wis_bezwaar(x: Schijf) -> str:
+    """Waarom de schijf onder dit stuk niet gewist mag worden; '' als het mag (een interne dataschijf)."""
+    if x.soort != "intern" or x.nieuw or not x.station:
+        return "geen interne dataschijf"
+    st = _station_lsblk(x.station)
+    return "niet (meer) gevonden" if st is None else _bezwaar(st)
+
+
+def wisbare_interne_schijf(x: Schijf) -> bool:
+    """Mag de interne schijf onder dit stuk helemaal gewist worden? (zie wis_bezwaar)"""
+    return not wis_bezwaar(x)
+
+
+def wis_controle(station: str, voor: tuple) -> bool:
+    """De laatste controle, vlak vóór het wissen (nadat alles is dichtgezet): is het nog precies dezelfde schijf,
+    staat er niets meer open, en zegt elke regel nog steeds dat het mag? Nee: dan wordt er niets gewist."""
+    nu = _station_lsblk(station)
+    return nu is not None and _identiteit(nu) == voor and not _bezwaar(nu, na_dicht=True)
+
+
+def los_in_gebruik(x: Schijf) -> bool:
+    """Gebruikt het systeem deze stick of externe schijf zelf (BugOS draait ervan, of hij hangt ergens via
+    /etc/fstab)? Dan geen 'Leegmaken'. Dezelfde blik in /proc en /sys als bij een interne schijf."""
+    return bool(x.station) and os.path.basename(x.station) in stations_in_gebruik()

@@ -1,0 +1,11 @@
+# BugOS: de mappen die een nieuwe gebruiker in zijn thuismap krijgt (xdg-user-dirs).
+# Zoals in Windows: Bureaublad, Documenten, Downloads, Muziek, Afbeeldingen en Video's. Geen "Templates" en
+# "Public": die gebruikt een gewone gebruiker nooit, en ze stonden als lege mappen tussen de rest in Bestanden.
+# (Wat hier niet staat, wijst naar de thuismap zelf en wordt niet gemaakt. De namen worden in de taal van de
+# gebruiker vertaald, bijvoorbeeld "Documenten".)
+DESKTOP=Desktop
+DOWNLOAD=Downloads
+DOCUMENTS=Documents
+MUSIC=Music
+PICTURES=Pictures
+VIDEOS=Videos

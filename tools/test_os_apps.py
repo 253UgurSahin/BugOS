@@ -564,6 +564,12 @@ bb.ruimte_genoeg = _echt_ruimte
 
 # ============================== U013: de Winkel ziet Firefox en Steam die al in BugOS zitten (geen Flatpak) ===
 os.environ.pop("BUGOS_GEINSTALLEERD", None)
+# De Winkel leest ook Flathub's lijst van alle apps (/var/lib/flatpak/appstream) en ververst die zelf (pakket store).
+# Deze test gaat over de BugOS-selectie: nooit de echte lijst van de computer waarop hij draait lezen (dat maakt hem
+# trager en afhankelijk van die computer), en nooit zelf 'flatpak update --appstream' starten. tools/test_native_store.py
+# test dat deel, met een nep-lijst. (Moet vóór laad(): de Winkel leest BUGOS_APPSTREAM bij het laden.)
+os.environ["BUGOS_APPSTREAM"] = str(TMP / "geen-flathub-lijst")
+os.environ["BUGOS_WINKEL_GEEN_VERVERS"] = "1"
 winkel = laad("bugos_winkel", "bugos-store")
 APPS = TMP / "applications"
 APPS.mkdir()
@@ -712,6 +718,30 @@ for pagina in (welkom.Uiterlijk(), welkom.Updates()):
     namen = [lezer(k)[1] for k in kaarten]
     klopt(kaarten and all(namen), f"U016: Welkom ({type(pagina).__name__}): elke keuze heeft een naam: {namen}")
 
+# A-09: Welkom > Internet op een pc met alleen een kabel (geen wifi-kaart): geen rode 'Wifi kiezen' meer en geen
+# wifi-teken, maar 'Verbonden via de kabel'. Mét wifi blijft de knop er gewoon.
+_oud_draai = welkom.draai
+welkom.draai = lambda *a, **k: (0, "ethernet:connected\nloopback:connected (externally)\n")
+klopt(welkom.netwerk_soort() == (False, True), f"A-09: alleen een kabel: geen wifi, wel kabel ({welkom.netwerk_soort()})")
+welkom.draai = lambda *a, **k: (0, "wifi:disconnected\nwifi-p2p:disconnected\nethernet:connecting (getting IP configuration)\n")
+klopt(welkom.netwerk_soort() == (True, False), "A-09: wifi-kaart, kabel nog aan het verbinden: wifi ja, kabel (nog) niet")
+welkom.draai = lambda *a, **k: (0, "wifi-p2p:disconnected\n")
+klopt(welkom.netwerk_soort() == (False, False), "A-09: alleen Wi-Fi Direct (wifi-p2p) telt niet als wifi om te kiezen")
+welkom.draai = lambda *a, **k: (8, "")
+klopt(welkom.netwerk_soort() == (True, False), "A-09: nmcli werkt niet: zoals vroeger, met de wifi-knop")
+welkom.draai = _oud_draai
+_inet = welkom.Internet()
+_inet.toon(True, False, True)
+klopt(_inet.kies.isHidden() and _inet.chip_icoon.lijn == "kabel"
+      and _inet.kop.text() in ("Verbonden via de kabel", "Connected by cable"),
+      f"A-09: kabel, geen wifi: geen 'Wifi kiezen', een kabel-teken en 'Verbonden via de kabel' ({_inet.kop.text()!r})")
+_inet.toon(False, False, False)
+klopt(_inet.kies.isHidden() and ("geen wifi" in _inet.sub.text() or "no Wi-Fi" in _inet.sub.text()),
+      f"A-09: offline zonder wifi-kaart: geen wifi-knop, en de pagina zegt dat er geen wifi is ({_inet.sub.text()!r})")
+_inet.toon(True, True, False)
+klopt(not _inet.kies.isHidden() and _inet.chip_icoon.lijn == "wifi", "A-09: online via wifi: de wifi-knop en het wifi-teken blijven")
+klopt("kabel" in bugos_ui.LIJN, "A-09: het lijn-icoon 'kabel' bestaat")
+
 # U074: Welkom > 'Wat ga je doen?': Volgende, Terug, Volgende start niets twee keer, en uitzetten na het starten kan
 # hier niet meer (het loopt al), dat zegt de pagina.
 _gestart: list = []
@@ -727,10 +757,34 @@ jij.bij_volgende()
 jij.oud.schuif.setChecked(True)
 jij.bij_volgende()
 welkom.start = _oud_start
-klopt(_gestart == [("bugos-developer", "aan"), ("bugos-light-mode", "aan"), ("steam",)] or
-      _gestart == [("bugos-developer", "aan"), ("steam",), ("bugos-light-mode", "aan")]
+klopt(_gestart == [("bugos-developer", "aan"), ("bugos-light-mode", "aan")]
       and not jij.dev.schuif.isEnabled() and not jij.al_bezig.isHidden(),
       f"U074: Welkom start elke keuze maar één keer, en zegt dat het al loopt ({_gestart})")
+# A-10: 'Ik ga gamen' start Steam niet meer midden in Welkom (Engelse vensters, en daarna vanzelf het inlogvenster).
+# Pas bij 'Aan de slag', stil (-silent), in de taal van BugOS, en de pagina zegt vooraf wat er gebeurt.
+klopt(jij.steam_straks[:2] == ("steam", "-silent") and not jij.steam_uitleg.isHidden() and jij.gamer.schuif.isEnabled(),
+      f"A-10: Steam wordt pas later stil klaargezet, met uitleg vooraf; het schuifje blijft vrij ({jij.steam_straks})")
+klopt(welkom.steam_stil(("steam",))[-2:] == ("-language", welkom.STEAM_TALEN.get(bugos_ui.TAAL, ""))
+      if bugos_ui.TAAL in welkom.STEAM_TALEN else welkom.steam_stil(("steam",)) == ("steam", "-silent"),
+      f"A-10: Steam krijgt de taal van BugOS mee ({welkom.steam_stil(('steam',))})")
+klopt(welkom.STEAM_TALEN["nl"] == "dutch" and welkom.steam_stil(()) == (), "A-10: Nederlands heet in Steam 'dutch'; geen Steam: niets")
+jij.gamer.schuif.setChecked(False)
+jij.bij_volgende()
+klopt(jij.steam_straks == () and jij.steam_uitleg.isHidden(), "A-10: via Terug 'gamen' weer uit: dan wordt Steam ook niet gestart")
+# Welkom afsluiten met 'gamen' aan: nu pas start Steam, één keer.
+_gestart.clear()
+welkom.start = lambda *a: _gestart.append(a)
+_wk_a10 = welkom.Welkom()
+_jij_a10 = next(p for p in _wk_a10.paginas if isinstance(p, welkom.Jij))
+_jij_a10.gamer.schuif.setChecked(True)
+_jij_a10.bij_volgende()
+_voor_a10 = list(_gestart)
+_wk_a10.steam_klaarzetten()
+_wk_a10.steam_klaarzetten()
+welkom.start = _oud_start
+klopt(not _voor_a10 and len(_gestart) == 1 and _gestart[0][:2] == ("steam", "-silent"),
+      f"A-10: Steam start pas bij 'Aan de slag', stil en maar één keer (ervoor {_voor_a10}, daarna {_gestart})")
+_wk_a10.deleteLater()
 # U130: geen Steam (ook niet als Flatpak): het schuifje gaat niet op slot met 'wordt klaargezet'.
 welkom.steam_opdracht = lambda: ()
 welkom.start = lambda *a: _gestart.append(a)
@@ -1534,12 +1588,13 @@ _ww2.tweede_start(["--zoek", "foto", "bewerken"])
 _z2 = _ww2.zoek.text()
 gestart.clear()
 _ww2.tweede_start(["appstream://org.example.NietBijOns"])
+_pag222 = (_ww2.stapel.currentIndex(), getattr(_ww2, "pagina_id", None))   # de eigen pagina 'niet gevonden'
 # U330: 'appstream:id' zonder // en een id in kleine letters (zo geeft KDE het soms door) vinden toch de app.
 _ww2.tweede_start(["appstream:org.videolan.vlc"])
 klopt(_ww2.zoek.text() == "VLC" and winkel.begin_uit(["appstream:org.videolan.VLC"]) == ("", "org.videolan.VLC"),
       f"U330: een Flathub-link zonder // of in kleine letters vindt toch de app in de Winkel ({_ww2.zoek.text()!r})")
-klopt(_z1 == "Firefox" and _z2 == "foto bewerken" and gestart == [("plasma-discover", "appstream://org.example.NietBijOns")],
-      f"U222: een tweede start van de Winkel gaat naar de gevraagde app of zoekt ({_z1!r}, {_z2!r}, {gestart})")
+klopt(_z1 == "Firefox" and _z2 == "foto bewerken" and gestart == [] and _pag222 == (1, "org.example.NietBijOns"),
+      f"U222: een tweede start van de Winkel gaat naar de gevraagde app of zoekt ({_z1!r}, {_z2!r}, {gestart}, {_pag222})")
 _ww2.deleteLater()
 _tb_tekst = (ROOT / "system_files/usr/bin/bugos-task-manager").read_text()
 klopt("def tweede_start" in _tb_tekst and "venster.tweede_start(sys.argv[1:])" in _tb_tekst,
@@ -1608,8 +1663,9 @@ klopt(all(k.accessibleName() and "…" not in k.accessibleName() for k in _kr) a
       f"U281: elk stukje van het pad heeft voor een schermlezer de hele naam ({[k.accessibleName() for k in _kr]})")
 # U282/U283: 'bezig'-meldingen halen 4,5:1, en de Plasma-schakelaar 'uit' 3:1 (staat in het gemaakte switch.svg).
 _bk = bugos_ui.KLEUREN
-klopt(all(_contrast(_bk[t]["accent_gekozen"], _bk[t]["accent_zacht"]) >= 4.5 for t in _bk)
-      and 'K["accent_gekozen"], K["accent_zacht"], "view-refresh"' in (ROOT / "system_files/usr/lib/bugos/python/bugos_widgets.py").read_text()
+# (C-11: de 'bezig'-melding is nu rustig grijs, geen rood-roze dat op een fout leek; ook dat haalt 4,5:1.)
+klopt(all(_contrast(_bk[t]["tekst"], _bk[t]["knop"]) >= 4.5 for t in _bk)
+      and '"bezig": (K["tekst"], K["knop"], "view-refresh")' in (ROOT / "system_files/usr/lib/bugos/python/bugos_widgets.py").read_text()
       and "A_SCHAKELAAR = 0.45" in (ROOT / "tools/plasma/buttons_draw.py").read_text(),
       "U282/U283: de 'bezig'-melding en de schakelaar 'uit' van Plasma halen genoeg contrast")
 _pv.close()

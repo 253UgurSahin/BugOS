@@ -199,8 +199,14 @@ import re  # noqa: E402
 
 import PySide6  # noqa: E402
 
+from PySide6.QtCore import QLibraryInfo  # noqa: E402
+
+# Waar de QML-modules van Qt staan: in de pip-versie van PySide6 zitten ze in het pakket zelf (PySide6/Qt/qml), in
+# BugOS (Fedora) bij de Qt van het systeem (/usr/lib64/qt6/qml). Vraag het Qt zelf, anders vond de test in het
+# gebouwde beeld niets en meldde hij elk type (Timer, Rectangle...) als 'bestaat niet'.
+_qml_mappen = {Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.QmlImportsPath)), Path(PySide6.__file__).parent / "Qt" / "qml"}
 _qt_types = set()
-for _f in (Path(PySide6.__file__).parent / "Qt" / "qml").rglob("*.qmltypes"):
+for _f in (f for _m in _qml_mappen if _m.is_dir() for f in _m.rglob("*.qmltypes")):
     _qt_types.update(re.findall(r'exports: \[[^\]]*?"[\w./]+/(\w+) ', _f.read_text(errors="replace")))
     _qt_types.update(re.findall(r'"[\w./]+/(\w+) \d', _f.read_text(errors="replace")))
 _plasma = {"PlasmoidItem"}   # van org.kde.plasma.plasmoid (niet in Qt zelf)
@@ -226,5 +232,108 @@ _ui = QML.parent.parent.parent.parent
 for _m in ("org.bugos.startmenu", "org.bugos.quickmenu"):
     _main = (_ui / _m / "contents" / "ui" / "main.qml").read_text(encoding="utf-8")
     klopt("schaal: Kirigami.Theme.defaultFont.pointSize" in _main, f"U084: {_m}: main.qml koppelt de letters aan Kirigami.Theme")
+
+# ---------------------------------------------------------------- VM-test (A-02, A-05, A-06, A-17, B-23) ---
+def klik(view: QQuickView, item: QQuickItem) -> None:
+    """Echt klikken (muis) midden op een onderdeel, zoals de tester deed: dan telt wat er bovenop ligt."""
+    p = item.mapToScene(QPointF(item.width() / 2, item.height() / 2)).toPoint()
+    QTest.mouseClick(view, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, p)
+    wacht(80)
+
+
+for stijl in ("Basic", "Fusion"):
+    os.environ["QT_QUICK_CONTROLS_STYLE"] = stijl
+    _qv = QQuickView()
+    _qv.setResizeMode(QQuickView.ResizeMode.SizeRootObjectToView)
+    _qv.setSource(QUrl.fromLocalFile(str(QML)))
+    _qv.resize(420, 640)
+    _qv.show()
+    _q = _qv.rootObject()
+    # Een pc zoals in de VM: geen wifi-kaart en geen bluetooth (null), niet storen uit.
+    _q.setProperty("status", {"wifi": None, "bluetooth": None, "spel": False, "donker": False, "volume": 40,
+                              "stil": False, "niet_storen": False})
+    _zet: list = []
+    _geopend: list = []
+    _q.zet.connect(lambda wat, waarde, g=_zet: g.append((wat, waarde)))
+    _q.open.connect(lambda wat, g=_geopend: g.append(wat))
+    wacht(200)
+    # A-02: het pijltje van 'Niet storen' opent Instellingen > Meldingen en zet niet storen NIET aan.
+    klik(_qv, _q.findChild(QQuickItem, "pijl-niet_storen"))
+    klopt(_geopend == ["meldingen"] and not _zet,
+          f"[{stijl}] A-02: het pijltje van 'Niet storen' opent Meldingen (open {_geopend}, zet {_zet})")
+    # A-02: de pijltjes van een grijze wifi- en bluetooth-tegel werken toch.
+    _geopend.clear()
+    klik(_qv, _q.findChild(QQuickItem, "pijl-wifi"))
+    klik(_qv, _q.findChild(QQuickItem, "pijl-bluetooth"))
+    klopt(_geopend == ["wifi", "bluetooth"] and not _zet,
+          f"[{stijl}] A-02: de pijltjes van grijze wifi- en bluetooth-tegels openen hun pagina ({_geopend})")
+    # A-02: een grijze tegel zegt waarom; een gewone tegel niet.
+    _w = _q.findChild(QQuickItem, "waarom-wifi")
+    _b = _q.findChild(QQuickItem, "waarom-bluetooth")
+    _d = _q.findChild(QQuickItem, "waarom-donker")
+    klopt(_w is not None and _w.isVisible() and _w.property("text") == "Geen wifi" and _b.isVisible()
+          and not _d.isVisible() and "geen wifi" in _q.findChild(QQuickItem, "tegel-wifi").property("waarom"),
+          f"[{stijl}] A-02: grijze tegels zeggen waarom ('Geen wifi', 'Deze computer heeft geen wifi')")
+    # De tegel zelf werkt nog gewoon (klikken = aan/uit), naast het pijltje.
+    _zet.clear()
+    klik(_qv, _q.findChild(QQuickItem, "knop-niet_storen"))
+    klopt(_zet == [("niet_storen", "aan")], f"[{stijl}] A-02: op de tegel zelf klikken zet niet storen aan ({_zet})")
+    _qv.close()
+
+_smpad = QML.parent.parent.parent.parent / "org.bugos.startmenu" / "contents" / "ui" / "StartMenu.qml"
+_v2 = QQuickView()
+_v2.setResizeMode(QQuickView.ResizeMode.SizeRootObjectToView)
+_v2.setSource(QUrl.fromLocalFile(str(_smpad)))
+_s2 = _v2.rootObject()
+_fav = [_app(f"app{i}.desktop", f"App {i}", "") for i in range(12)]
+_s2.setProperty("gegevens", {"apps": [dict(a, groep=f"Groep {i % 5}") for i, a in enumerate(_fav * 3)],
+                             "favorieten": _fav, "gebruiker": {"naam": "Test"},
+                             "recent": [{"naam": "boodschappen.txt", "pad": "/tmp/b.txt", "map": "Documenten"}]})
+# Zoals in Plasma (main.qml): het menu krijgt zijn eigen hoogte, op een scherm van 1280x800 hooguit 680.
+_s2.setProperty("maxHoogte", 680)
+wacht(100)
+_hoog = _s2.property("implicitHeight")
+_v2.resize(660, int(_hoog))
+_v2.show()
+wacht(200)
+# A-05: 12 vastgezette apps en 'Recent geopend' passen zonder scrollen in een menu van 1280x800.
+_beg = next(c for c in _s2.findChildren(QQuickItem) if c.metaObject().className().startswith("QQuickFlickable")
+            and c.property("contentHeight") > 0)
+klopt(560 <= _hoog <= 680 and _beg.property("contentHeight") <= _beg.height() + 1,
+      f"A-05: het startmenu is ruim (maar past op 1280x800) en 'Recent geopend' staat in beeld zonder scrollen "
+      f"(menu {_hoog}, inhoud {_beg.property('contentHeight'):.0f} in {_beg.height():.0f})")
+# A-05: een keer gescrold? Bij het openen weer bovenaan.
+_beg.setProperty("contentY", 80)
+QMetaObject.invokeMethod(_s2, "terugNaarBegin")
+klopt(_beg.property("contentY") == 0, "A-05: bij het openen staat de beginpagina weer bovenaan (geen afgeknipte rij)")
+# A-06: 'Alle apps' laat veel regels tegelijk zien (Windows: 8-10; de VM: ~3).
+_s2.findChild(QObject, "stapel").setProperty("currentIndex", 1)
+wacht(150)
+_al = _s2.findChild(QQuickItem, "alleLijst")
+# Een regel van de lijst (AppRegel) herkennen we aan zijn eigen eigenschap 'gemarkeerd' (de typenaam is in Qt een
+# gegenereerde naam zoals AbstractButton_QMLTYPE_12, daar valt niet op te zoeken).
+# Via childItems van de contentItem: de regels zijn daar visueel kind van, maar niet als QObject (findChildren).
+_regels = [c for c in _al.property("contentItem").childItems()
+           if isinstance(c.property("gemarkeerd"), bool) and c.height() > 0]
+_rh = _regels[0].height() if _regels else 0
+klopt(_al.property("count") > 10 and _rh > 0 and _al.height() / _rh >= 6,
+      f"A-06: 'Alle apps' toont minstens 6 regels tegelijk ({_al.height():.0f} / {_rh:.0f}, {len(_regels)} regels gemaakt)")
+_s2.findChild(QObject, "stapel").setProperty("currentIndex", 0)
+# A-17: het gebruikerstegeltje opent Instellingen > Account (de pagina 'inloggen') en sluit het menu.
+_gestart: list = []
+_dicht: list = []
+_s2.start.connect(lambda pad, g=_gestart: g.append(pad))
+_s2.sluiten.connect(lambda g=_dicht: g.append(True))
+wacht(50)
+klik(_v2, _s2.findChild(QQuickItem, "ikKnop"))
+klopt(_gestart == ["instelling:inloggen"] and _dicht, f"A-17: klikken op jezelf in het startmenu opent Account ({_gestart})")
+_v2.close()
+# B-23: het tandwiel en 'Instellingen openen' van het snelmenu sturen 'start' mee (dan gaat een open Instellingen
+# naar de startpagina; zonder pagina bleef het staan waar het was).
+_qmain = (QML.parent / "main.qml").read_text(encoding="utf-8")
+klopt('wat === "instellingen" ? "start" : wat' in _qmain and "instelling:start" in _qmain
+      and '"bugos-start-data --start instelling:")' not in _qmain,
+      "B-23: het snelmenu opent Instellingen op de startpagina ('instelling:start')")
+
 print(f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)
