@@ -36,6 +36,9 @@ jobs:
     # Met PYTHONUSERBASE vast blijft hij gevonden (2026-11-17: vier 'hulp'-tests faalden alleen op GitHub).
     env:
       PYTHONUSERBASE: /home/runner/.local
+      # Geen scherm op de bouwcomputer: Qt moet altijd 'offscreen' tekenen. Niet elke stap zette dit zelf (2026-11-17:
+      # test_backup.py crashte op GitHub met 'could not load the Qt platform plugin xcb'). De lokale CI deed het al.
+      QT_QPA_PLATFORM: offscreen
     steps:
       - uses: actions/checkout@v4
       - name: Shell-scripts nakijken (shellcheck)
