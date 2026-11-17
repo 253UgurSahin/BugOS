@@ -31,6 +31,11 @@ jobs:
   controle:
     name: Scripts controleren
     runs-on: ubuntu-24.04
+    # pip zet PySide6 hier in de gebruikersmap van de bouwcomputer (~/.local). Tests die een nep-thuismap gebruiken
+    # (HOME=$TMP/thuis, zoals 'hulp' in test_os_system.sh) vonden PySide6 dan niet meer: Python zoekt die map via HOME.
+    # Met PYTHONUSERBASE vast blijft hij gevonden (2026-11-17: vier 'hulp'-tests faalden alleen op GitHub).
+    env:
+      PYTHONUSERBASE: /home/runner/.local
     steps:
       - uses: actions/checkout@v4
       - name: Shell-scripts nakijken (shellcheck)
