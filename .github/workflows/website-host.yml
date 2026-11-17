@@ -1,0 +1,71 @@
+---
+# De BugOS-website op een gewone webhost (shared hosting) zetten. Zie docs/WEBSITE.md.
+# Op verzoek: Actions -> Website naar webhost -> Run workflow.
+#
+# Altijd: bouwt de site en geeft een zip (bugos-website) die je zelf kunt uploaden
+# (bijvoorbeeld met Bestandsbeheer in cPanel: uploaden en uitpakken in public_html).
+# Met "uploaden" aan: zet hem ook meteen op de host, via FTPS (standaard) of SFTP.
+# Nodig in Settings -> Secrets and variables -> Actions:
+#   secrets   FTP_SERVER (bijv. ftp.jouwdomein.nl), FTP_USERNAME, FTP_PASSWORD
+#   variables FTP_MAP (map op de host, standaard public_html/), FTP_PROTOCOL (ftps of sftp, standaard ftps)
+name: Website naar webhost
+
+on:
+  workflow_dispatch:
+    inputs:
+      uploaden:
+        description: "Ook meteen uploaden naar de host (FTP-secrets nodig)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website-host
+  cancel-in-progress: false
+
+jobs:
+  website:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Site bouwen en controleren dat de repo bijgewerkt is
+        run: |
+          python3 tools/website/build.py
+          git add -N website/
+          git diff --exit-code website/ || { echo "Draai: python3 tools/website/build.py en zet het resultaat in de repo"; exit 1; }
+
+      - name: Zip voor handmatig uploaden
+        uses: actions/upload-artifact@v4
+        with:
+          name: bugos-website
+          path: website/
+          include-hidden-files: true  # .htaccess hoort erbij
+          retention-days: 14
+
+      - name: Uploaden naar de host
+        if: ${{ inputs.uploaden }}
+        env:
+          SERVER: ${{ secrets.FTP_SERVER }}
+          GEBRUIKER: ${{ secrets.FTP_USERNAME }}
+          LFTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          MAP: ${{ vars.FTP_MAP || 'public_html/' }}
+          PROTOCOL: ${{ vars.FTP_PROTOCOL || 'ftps' }}
+        run: |
+          if [ -z "$SERVER" ] || [ -z "$GEBRUIKER" ] || [ -z "$LFTP_PASSWORD" ]; then
+            echo "::error::FTP_SERVER, FTP_USERNAME en FTP_PASSWORD ontbreken (Settings -> Secrets and variables -> Actions)."
+            exit 1
+          fi
+          sudo apt-get install -y -qq lftp >/dev/null
+          case "$PROTOCOL" in
+            sftp) URL="sftp://$SERVER"; INST="set sftp:auto-confirm yes;" ;;
+            ftps) URL="ftp://$SERVER";  INST="set ftp:ssl-force true; set ftp:ssl-protect-data true; set ssl:verify-certificate yes;" ;;
+            *) echo "::error::FTP_PROTOCOL moet ftps of sftp zijn"; exit 1 ;;
+          esac
+          # Alleen nieuwere bestanden, en er wordt nooit iets op de host weggegooid (ook niet wat er al stond).
+          lftp -u "$GEBRUIKER" --env-password "$URL" -e "$INST set net:max-retries 3; set net:timeout 30; \
+            mirror --reverse --only-newer --verbose --parallel=4 website/ $MAP; bye"
+          echo "Klaar: de website staat op $SERVER in $MAP"

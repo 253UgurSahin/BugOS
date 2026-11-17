@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{TAAL}}">
 <head>
 <meta charset="utf-8">
 {{CSP}}
@@ -9,11 +9,15 @@
 <meta name="theme-color" content="#050506">
 <meta property="og:title" content="BugOS: the computer that just works">
 <meta property="og:description" content="Free, can't break and collects nothing about you. For Bugie, gamers and developers.">
-<meta property="og:image" content="assets/og.png">
+<meta property="og:image" content="{{URL}}assets/og.png">
+<meta property="og:locale" content="{{OG_LOCALE}}">
+<meta property="og:site_name" content="BugOS">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+{{ALTERNATIEVEN}}
 <link rel="preload" href="fonts/funnel-display.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/atkinson-hyperlegible-next.woff2" as="font" type="font/woff2" crossorigin>
 <script>document.documentElement.classList.add("js");try{var t=new URLSearchParams(location.search).get("theme")||localStorage.getItem("bugos-theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
@@ -349,6 +353,36 @@ code { font-family: var(--f-code); font-size: .9em; }
 .win-knoppen span { width: 46px; display: grid; place-items: center; color: #1F1F1F; }
 .win-knoppen svg { width: 10px; height: 10px; }
 .win-venster > img { width: 100%; }
+/* BugOS Switch, step 1, as real text (so it is in the language of the page) */
+.sw { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 520px; background: #FFFFFF; color: #16171C; font-family: "Segoe UI", var(--f-tekst); text-align: left; }
+.sw-zij { position: relative; overflow: hidden; background: #0E0E11; color: #F2F2F4; padding: 30px 18px 26px; display: flex; flex-direction: column; gap: 6px; }
+.sw-zij::before { content: ""; position: absolute; left: 60%; bottom: -60%; width: 640px; height: 640px; transform: translateX(-50%); border-radius: 50%; pointer-events: none; background: repeating-radial-gradient(circle, transparent 0 34px, rgba(229,47,62,.32) 34px 35px), radial-gradient(closest-side, rgba(229,47,62,.55), rgba(229,47,62,0)); -webkit-mask-image: radial-gradient(closest-side, #000 30%, transparent); mask-image: radial-gradient(closest-side, #000 30%, transparent); }
+.sw-zij > * { position: relative; }
+.sw-merk { display: flex; align-items: center; gap: 10px; font: 650 22px/1 var(--f-display); letter-spacing: -0.02em; margin: 0 0 26px 8px; }
+.sw-merk img { width: 26px; height: 26px; }
+.sw-stappen { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14.5px; }
+.sw-stappen li { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 10px; color: #8E929C; }
+.sw-stappen li::before { content: ""; width: 22px; height: 22px; border-radius: 50%; border: 2px solid #4A4C55; box-sizing: border-box; flex: none; }
+.sw-stappen .klaar { color: #E6E7EA; }
+.sw-stappen .klaar::before { border: 0; background: #E52F3E url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 12.5 4 4 8-9'/%3E%3C/svg%3E") center / 14px no-repeat; }
+.sw-stappen .nu { color: #FFFFFF; font-weight: 600; background: rgba(255,255,255,.1); }
+.sw-stappen .nu::before { border: 0; background: radial-gradient(circle, #E52F3E 0 4px, #fff 4.5px); }
+.sw-noot { margin-top: auto; font-size: 12.5px; line-height: 1.45; color: #A6ABB6; padding: 0 8px; }
+.sw-main { display: grid; grid-template-rows: 1fr auto; min-width: 0; }
+.sw-inhoud { padding: 34px clamp(22px, 4vw, 44px) 20px; }
+.sw-stap { font: 600 12.5px/1 "Segoe UI", var(--f-tekst); letter-spacing: .06em; color: #C1222F; }
+.sw h3 { margin-top: 12px; font: 600 clamp(22px, 2.4vw, 28px)/1.2 "Segoe UI", var(--f-tekst); letter-spacing: -0.01em; color: #16171C; }
+.sw-lijst { list-style: none; margin: 22px 0 0; padding: 0; display: grid; gap: 16px; }
+.sw-lijst li { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 14px; align-items: start; }
+.sw-lijst .ok, .sw-lijst .let { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: #15985A; color: #fff; }
+.sw-lijst .let { background: #C46A09; font: 700 19px/1 "Segoe UI", var(--f-tekst); }
+.sw-lijst svg { width: 20px; height: 20px; }
+.sw-lijst b { display: block; font-size: 16px; font-weight: 600; color: #16171C; }
+.sw-lijst small { display: block; margin-top: 2px; font-size: 14px; line-height: 1.45; color: #4B505B; }
+.sw-voet { display: flex; justify-content: space-between; gap: 12px; padding: 16px clamp(22px, 4vw, 44px); border-top: 1px solid #ECE9E9; }
+.sw-voet span { display: inline-grid; place-items: center; min-width: 128px; height: 42px; padding: 0 18px; border-radius: 8px; background: #F1EFEF; font: 600 15px/1 "Segoe UI", var(--f-tekst); color: #16171C; }
+.sw-voet span:last-child { background: #DE2F3E; color: #fff; }
+@media (max-width: 680px) { .sw { grid-template-columns: 1fr; min-height: 0; } .sw-zij { display: none; } }
 .terugzetten { margin-top: 28px; text-align: center; color: var(--tekst2); font-size: 16.5px; }
 
 /* goed om te weten */
@@ -368,6 +402,35 @@ summary::-webkit-details-marker { display: none; }
 summary::after { content: ""; position: absolute; right: 24px; top: 50%; width: 26px; height: 26px; margin-top: -13px; border-radius: 50%; background: var(--bg2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238A8F9A' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M12 7v10M7 12h10'/%3E%3C/svg%3E") center / 16px no-repeat; transition: transform .3s var(--zacht); }
 details[open] summary::after { transform: rotate(45deg); }
 details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
+
+/* nieuw in deze versie */
+.nieuw-kop { display: flex; align-items: end; justify-content: space-between; gap: 32px; flex-wrap: wrap; margin-bottom: clamp(40px, 6vw, 72px); }
+.nieuw-kop .kop-blok { margin-bottom: 0; }
+.versie-groot { font: 700 clamp(88px, 13vw, 176px)/.8 var(--f-display); letter-spacing: -0.06em; color: transparent; -webkit-text-stroke: 1.5px var(--lijn2); user-select: none; }
+.versie-groot span { color: var(--rood); -webkit-text-stroke: 0; }
+.nieuws { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.nieuws > li { min-width: 0; position: relative; border-radius: 24px; background: var(--bg2); box-shadow: var(--tegel-rand); padding: 28px 26px 30px; display: flex; flex-direction: column; gap: 10px; transition: transform .45s var(--zacht), box-shadow .45s var(--zacht); }
+.nieuws > li:hover { transform: translateY(-4px); box-shadow: var(--tegel-rand), var(--schaduw-groot); }
+.nieuws .ic { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; background: var(--vlak); box-shadow: var(--tegel-rand); color: var(--rood); margin-bottom: 12px; }
+.nieuws .ic svg { width: 24px; height: 24px; }
+.nieuws h3 { font-size: clamp(21px, 1.8vw, 25px); letter-spacing: -0.025em; line-height: 1.12; }
+.nieuws p { color: var(--tekst2); font-size: 16.5px; line-height: 1.55; }
+.nieuws .tag { align-self: flex-start; margin-top: auto; padding-top: 10px; font: 500 12px/1 var(--f-code); letter-spacing: .1em; text-transform: uppercase; color: var(--tekst3); }
+.nieuws > li.uitgelicht { background: var(--nacht); color: var(--nacht-tekst); box-shadow: inset 0 0 0 1px var(--nacht-lijn); overflow: hidden; isolation: isolate; }
+.nieuws > li.uitgelicht::before { content: ""; position: absolute; right: -180px; top: -200px; width: 460px; height: 460px; z-index: -1; border-radius: 50%; pointer-events: none; background: repeating-radial-gradient(circle, transparent 0 38px, rgba(255,255,255,.05) 38px 39px), radial-gradient(closest-side, rgba(229,47,62,.32), transparent); }
+.nieuws > li.uitgelicht p { color: var(--nacht-tekst2); }
+.nieuws > li.uitgelicht .ic { background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); color: #FF6A5E; }
+.nieuws > li.uitgelicht .tag { color: #8C919B; }
+.alles-nieuw { margin-top: 28px; color: var(--tekst2); font-size: 16.5px; }
+.alles-nieuw a { color: var(--rood-tekst); text-underline-offset: 3px; }
+@media (max-width: 960px) { .nieuws { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px) { .nieuws { grid-template-columns: 1fr; } }
+
+/* taal */
+.rond.taal { font: 600 13px/1 var(--f-code); letter-spacing: .04em; text-decoration: none; }
+.talen { display: inline-flex; gap: 6px; align-items: center; }
+.talen a { text-decoration: underline; text-underline-offset: 3px; }
+.talen [aria-current] { text-decoration: none; color: var(--inkt); font-weight: 600; }
 
 /* download */
 .download { position: relative; isolation: isolate; overflow: hidden; background: var(--nacht); color: var(--nacht-tekst); }
@@ -429,8 +492,10 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
         <a href="#functies">Features</a>
         <a href="#overstappen">Switching</a>
         <a href="#weten">Questions</a>
+        <a href="#nieuw">What's new</a>
       </nav>
       <div class="acties">
+        <a class="rond taal" href="{{ANDER_PAD}}" hreflang="{{ANDER_TAAL}}" lang="{{ANDER_TAAL}}" aria-label="{{ANDER_NAAM}}" title="{{ANDER_NAAM}}">{{ANDER_KORT}}</a>
         <button class="rond" id="thema" type="button" aria-label="Light or dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" fill="currentColor"/></svg></button>
         <button class="rond" id="menuknop" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
         <a class="knop knop-rood" href="#download">Download</a>
@@ -444,7 +509,7 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
 <section class="held" id="boven">
   <div class="ringen" aria-hidden="true"></div>
   <div class="wrap">
-    <span class="label">BugOS 0.3 · Free and open</span>
+    <span class="label">BugOS {{VERSIE}} · Free and open</span>
     <h1>The computer that just works<span class="stip">.</span></h1>
     <p class="onder">BugOS is an operating system that can't break, keeps itself up to date and collects nothing about you. Made for Bugie, and just as nice for gamers and developers.</p>
     <div class="knoppen">
@@ -548,7 +613,7 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
         </li>
         <li class="moment">
           <time datetime="13:00">13:00</time>
-          <h3>Getting an app.</h3><p>The BugOS Store has well-known, safe apps. One click on Install and you're done. Updates happen by themselves.</p><span class="wie">The BugOS Store</span>
+          <h3>Getting an app.</h3><p>The BugOS Store has 69 well-known, safe apps, and finds every other app on Flathub too. One click on Install and you're done. Don't need it any more? Every app can be removed again in My apps.</p><span class="wie">The BugOS Store</span>
           <figure><div class="venster"><img loading="lazy" data-licht="assets/store-light.webp" data-donker="assets/store-dark.webp" src="assets/store-light.webp" width="2360" height="1600" alt="The BugOS Store with recommended apps: Firefox, LibreOffice, Gwenview, VLC and Steam are installed, Spotify has an Install button."></div></figure>
         </li>
         <li class="moment smal-beeld">
@@ -595,9 +660,9 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
         <div class="versie aan"><span class="bol"></span><b>BugOS 2026.11.02</b><small>today</small></div>
         <div class="versie"><span class="bol"></span><b>BugOS 2026.11.01</b><small>yesterday</small></div>
       </div>
-      <div class="meld goed" id="meld"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><span id="meldtekst">Everything works. Your computer is updated to the newest version.</span></div>
+      <div class="meld goed" id="meld" data-goed="Everything works. Your computer is updated to the newest version." data-kapot="Oops! After the update, the printer stopped working." data-gisteren="Fixed! Your computer is exactly like it was yesterday. The printer works."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><span id="meldtekst">Everything works. Your computer is updated to the newest version.</span></div>
       <div class="knoppen">
-        <button class="knop knop-glas" type="button" id="mis">Pretend something goes wrong</button>
+        <button class="knop knop-glas" type="button" id="mis" data-opnieuw="One more time">Pretend something goes wrong</button>
         <button class="knop knop-rood" type="button" id="terug" hidden>Pick yesterday</button>
       </div>
     </div>
@@ -698,16 +763,36 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
       <p class="lead rv">The little BugOS Switch program does the heavy lifting on your Windows computer. Nothing happens until you press a button.</p>
     </div>
     <ol class="stappen">
-      <li class="rv"><span class="nr">1</span><h3>Check</h3><p>Can your computer run BugOS? Overstap checks it for you.</p></li>
-      <li class="rv" style="--d:.08s"><span class="nr">2</span><h3>Bring along</h3><p>Your documents, photos, music, bookmarks and wallpaper go to a USB drive.</p></li>
-      <li class="rv" style="--d:.16s"><span class="nr">3</span><h3>Make room</h3><p>Want to keep Windows? Then Overstap makes room, so BugOS fits next to it.</p></li>
+      <li class="rv"><span class="nr">1</span><h3>Check</h3><p>Can your computer run BugOS? BugOS Switch checks it for you.</p></li>
+      <li class="rv" style="--d:.08s"><span class="nr">2</span><h3>Bring along</h3><p>Your files, bookmarks, wallpaper, settings, Wi-Fi names and printers go to a USB drive. Passwords never do.</p></li>
+      <li class="rv" style="--d:.16s"><span class="nr">3</span><h3>Make room</h3><p>Want to keep Windows? Then BugOS Switch makes room, so BugOS fits next to it.</p></li>
       <li class="rv" style="--d:.24s"><span class="nr">4</span><h3>Make a USB stick</h3><p>BugOS is downloaded, checked and put on a USB stick.</p></li>
     </ol>
     <figure class="win-venster rv" style="margin-bottom:0">
       <div class="win-balk" aria-hidden="true">{{MERK:winmerk}}BugOS Switch<div class="win-knoppen"><span><svg viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor"/></svg></span><span><svg viewBox="0 0 10 10"><rect x=".5" y=".5" width="9" height="9" fill="none" stroke="currentColor"/></svg></span><span><svg viewBox="0 0 10 10"><path d="M0 0l10 10M10 0 0 10" stroke="currentColor"/></svg></span></div></div>
-      <img loading="lazy" src="assets/switch-windows.webp" width="1320" height="840" alt="BugOS Switch on Windows, step 1: Can my computer run BugOS? With a green check mark next to 64-bit, memory, UEFI and graphics card.">
+      <div class="sw" role="img" aria-label="BugOS Switch on Windows, step 1 of 4: Can my computer run BugOS? Green check marks next to 64-bit, memory, UEFI and space on C:, and a tip to choose the Nvidia version.">
+        <div class="sw-zij" aria-hidden="true">
+          <div class="sw-merk"><img src="assets/bugos-mark-dark.svg" alt="" width="26" height="26">BugOS</div>
+          <ol class="sw-stappen"><li class="klaar">Welcome</li><li class="nu">Check</li><li>Take your files</li><li>Make space</li><li>Make USB stick</li></ol>
+          <p class="sw-noot">Nothing happens until you press a button.</p>
+        </div>
+        <div class="sw-main" aria-hidden="true">
+          <div class="sw-inhoud">
+            <div class="sw-stap">STEP 1 OF 4</div>
+            <h3>Can my computer run BugOS?</h3>
+            <ul class="sw-lijst">
+              <li><span class="ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 12.5 4 4 8-9"/></svg></span><div><b>64-bit</b><small>Your computer is 64-bit. Good!</small></div></li>
+              <li><span class="ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 12.5 4 4 8-9"/></svg></span><div><b>Memory</b><small>16 GB. Plenty.</small></div></li>
+              <li><span class="ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 12.5 4 4 8-9"/></svg></span><div><b>UEFI</b><small>Your computer boots the modern way (UEFI). Good!</small></div></li>
+              <li><span class="ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 12.5 4 4 8-9"/></svg></span><div><b>Space on C:</b><small>212 GB free. Enough to put BugOS next to Windows.</small></div></li>
+              <li><span class="let">!</span><div><b>Graphics</b><small>Nvidia found (GeForce RTX 3060). Choose the 'bugos-nvidia' version.</small></div></li>
+            </ul>
+          </div>
+          <div class="sw-voet"><span>Back</span><span>Next</span></div>
+        </div>
+      </div>
     </figure>
-    <p class="terugzetten">In BugOS you put everything back with one button, in the "Files from Windows" app.</p>
+    <p class="terugzetten">In BugOS, "Bring everything from your old PC" puts it all back with one button. Changed your mind? "Undo everything" puts it back the way it was.</p>
   </div>
 </section>
 
@@ -737,9 +822,51 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
         <details><summary>What if an update goes wrong?</summary><p>Then you pick yesterday's version when you start up. Everything is back the way it was. You can also do it from Settings, with the "Back to previous version" button.</p></details>
         <details><summary>Is it good for gaming?</summary><p>For sure. Steam with Proton is built in, controllers work in Steam games and game mode gets the most out of your computer. Games with strict anti-cheat (some online shooters) sometimes don't work; check protondb.com to be sure.</p></details>
         <details><summary>Will my printer work?</summary><p>Most printers work right away. Doesn't yours? Then open "Something is not working": BugOS checks it and helps you add the printer.</p></details>
-        <details><summary>Is BugOS safe?</summary><p>Yes. Programs can't change the system itself, apps run in their own closed-off space and updates come by themselves. On top of that, BugOS collects nothing about you.</p></details>
+        <details><summary>Is BugOS safe?</summary><p>Yes. Programs can't change the system itself, apps run in their own closed-off space and updates come by themselves. Every update carries BugOS's own signature, and your computer refuses one that doesn't. On top of that, BugOS collects nothing about you.</p></details>
+        <details><summary>Do my passwords come along from Windows?</summary><p>No, never. BugOS Switch takes your files, bookmarks, settings, Wi-Fi names and printers, but no passwords: not for your Wi-Fi, not from your browser and not from your e-mail. You sign in once more in BugOS, and that's it.</p></details>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- ============================================================ NIEUW -->
+<section class="sectie" id="nieuw">
+  <div class="wrap">
+    <div class="nieuw-kop">
+      <div class="kop-blok">
+        <span class="label">What's new</span>
+        <h2 class="rv">New in BugOS {{VERSIE}}.</h2>
+        <p class="lead rv">Safer updates, a smarter move from Windows and a lot of small things that make every day easier.</p>
+      </div>
+      <p class="versie-groot" aria-hidden="true">{{VERSIE_KOP}}<span>.</span>{{VERSIE_STAART}}</p>
+    </div>
+    <ul class="nieuws">
+      <li class="uitgelicht rv">
+        <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.3 7.5 9.5 4.3-1.2 7.5-4.9 7.5-9.5V6L12 3z"/><path d="m8.8 12.2 2.3 2.3 4.3-4.6"/></svg></span>
+        <h3>Signed updates</h3><p>Your computer only installs an update that carries BugOS's own signature. Even someone who broke into our account couldn't send you a fake one.</p><span class="tag">Safety</span>
+      </li>
+      <li class="rv" style="--d:.08s">
+        <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5h12M11 3.5l4 4-4 4"/><path d="M21 16.5H9M13 12.5l-4 4 4 4"/></svg></span>
+        <h3>Bring everything from your old PC</h3><p>Files, extra folders, bookmarks, settings, Wi-Fi names, printers, fonts and e-mail. Never a password. Changed your mind? Undo everything.</p><span class="tag">Switching</span>
+      </li>
+      <li class="rv" style="--d:.16s">
+        <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-6 5 12 2.5-6h4"/></svg></span>
+        <h3>A Task Manager</h3><p>Ctrl+Shift+Esc, just like in Windows. It tells you in plain words how your computer is doing, and closes a program that's stuck.</p><span class="tag">New app</span>
+      </li>
+      <li class="rv">
+        <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14l-1.2 11.1a2 2 0 0 1-2 1.9H8.2a2 2 0 0 1-2-1.9L5 8z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></svg></span>
+        <h3>69 apps, and every app can go</h3><p>The Store has more apps and searches all of Flathub. Firefox and Steam are normal apps now, so you can remove anything in My apps.</p><span class="tag">BugOS Store</span>
+      </li>
+      <li class="rv" style="--d:.08s">
+        <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 9h8M8 12.5h8M8 16h5"/></svg></span>
+        <h3>Right-click in the start menu</h3><p>Every app has its own menu, like in Windows 11: open a new window, pin it to Start or the taskbar, or uninstall it.</p><span class="tag">Start menu</span>
+      </li>
+      <li class="rv" style="--d:.16s">
+        <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.4 3.5 5.2 3.5 8.5s-1.1 6.1-3.5 8.5c-2.4-2.4-3.5-5.2-3.5-8.5s1.1-6.1 3.5-8.5z"/></svg></span>
+        <h3>English first, made for everyone</h3><p>BugOS starts in English and works with the date, time and keyboard of your country. You pick your own language while installing.</p><span class="tag">Languages</span>
+      </li>
+    </ul>
+    <p class="alles-nieuw">Want every detail? <a href="https://github.com/253UgurSahin/BugOS/commits/main">See all changes on GitHub</a>.</p>
   </div>
 </section>
 
@@ -784,7 +911,7 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
       <div class="optie">
         <h3 style="font-size:19px">Already on Fedora Atomic or Bazzite?</h3>
         <p>Switch without a USB stick. Type this in the terminal and restart:</p>
-        <div class="code"><code id="cmd">sudo bootc switch ghcr.io/253ugursahin/bugos:latest</code><button type="button" id="kopieer">Copy</button></div>
+        <div class="code"><code id="cmd">sudo bootc switch ghcr.io/253ugursahin/bugos:latest</code><button type="button" id="kopieer" data-klaar="Copied ✓">Copy</button></div>
       </div>
       <div class="optie">
         <h3 style="font-size:19px">What do you need?</h3>
@@ -796,7 +923,7 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
         </ul>
       </div>
     </div>
-    <p class="let-op"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>BugOS is still in development (version 0.3). Try it on a spare computer or in a virtual machine first.</p>
+    <p class="let-op"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>BugOS is still in development (version {{VERSIE}}). Try it on a spare computer or in a virtual machine first.</p>
   </div>
 </section>
 </main>
@@ -808,11 +935,11 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
         <a class="merk" href="#boven">{{MERK:voetmerk}}BugOS</a>
         <p style="margin-top:16px;max-width:22rem">The computer that just works. Free, safe and open, for everyone at home.</p>
       </div>
-      <div><h4>BugOS</h4><ul><li><a href="#verhaal">The story</a></li><li><a href="#dag">How it works</a></li><li><a href="#functies">Features</a></li><li><a href="#download">Download</a></li></ul></div>
-      <div><h4>Get involved</h4><ul><li><a href="https://github.com/253UgurSahin/BugOS">GitHub</a></li><li><a href="https://github.com/253UgurSahin/BugOS/blob/main/docs/TRANSLATING.md">Translate</a></li><li><a href="https://github.com/253UgurSahin/BugOS/blob/main/docs/BRAND.md">Brand guide</a></li></ul></div>
+      <div><h4>BugOS</h4><ul><li><a href="#verhaal">The story</a></li><li><a href="#dag">How it works</a></li><li><a href="#functies">Features</a></li><li><a href="#nieuw">What's new</a></li><li><a href="#download">Download</a></li></ul></div>
+      <div><h4>Get involved</h4><ul><li><a href="https://github.com/253UgurSahin/BugOS">GitHub</a></li><li><a href="https://github.com/253UgurSahin/BugOS/blob/main/docs/TRANSLATING.md">Translate</a></li><li><a href="https://github.com/253UgurSahin/BugOS/blob/main/docs/BRAND.md">Brand guide</a></li><li><a href="https://github.com/253UgurSahin/BugOS/blob/main/SECURITY.md">Report a security issue</a></li></ul></div>
       <div><h4>Built on</h4><ul><li><a href="https://fedoraproject.org">Fedora</a></li><li><a href="https://kde.org">KDE Plasma</a></li><li><a href="https://universal-blue.org">Universal Blue</a></li></ul></div>
     </div>
-    <div class="klein"><span>BugOS is free software under the GPL-3.0 license.</span><span>This website uses no cookies and no tracking.</span></div>
+    <div class="klein"><span>BugOS is free software under the GPL-3.0 license.</span><span>This website uses no cookies and no tracking.</span><span class="talen">{{TALEN}}</span></div>
   </div>
 </footer>
 
@@ -932,23 +1059,23 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
   var mis = document.getElementById("mis"), terug = document.getElementById("terug"), meld = document.getElementById("meld"),
       meldtekst = document.getElementById("meldtekst"), versies = document.querySelectorAll("#versies .versie");
   var vink = '<path d="m5 12.5 4.5 4.5L19 7.5"/>', kruis = '<path d="M7 7l10 10M17 7 7 17"/>';
-  var stap = "goed";
+  var stap = "goed", misTekst = mis.textContent;
   function zet(stand) {
     var svg = meld.querySelector("svg");
     if (stand === "kapot") {
       meld.className = "meld fout"; svg.innerHTML = kruis;
-      meldtekst.textContent = "Oops! After the update, the printer stopped working.";
+      meldtekst.textContent = meld.getAttribute("data-kapot");
       mis.hidden = true; terug.hidden = false; terug.focus();
     } else if (stand === "gisteren") {
       versies[0].classList.remove("aan"); versies[1].classList.add("aan");
       meld.className = "meld goed"; svg.innerHTML = vink;
-      meldtekst.textContent = "Fixed! Your computer is exactly like it was yesterday. The printer works.";
-      terug.hidden = true; mis.hidden = false; mis.textContent = "One more time"; mis.focus();
+      meldtekst.textContent = meld.getAttribute("data-gisteren");
+      terug.hidden = true; mis.hidden = false; mis.textContent = mis.getAttribute("data-opnieuw"); mis.focus();
     } else {
       versies[1].classList.remove("aan"); versies[0].classList.add("aan");
       meld.className = "meld goed"; svg.innerHTML = vink;
-      meldtekst.textContent = "Everything works. Your computer is updated to the newest version.";
-      mis.textContent = "Pretend something goes wrong";
+      meldtekst.textContent = meld.getAttribute("data-goed");
+      mis.textContent = misTekst;
     }
   }
   mis.addEventListener("click", function () {
@@ -963,11 +1090,11 @@ details p { color: var(--tekst2); padding: 0 24px 24px; max-width: 46rem; }
   schuif.addEventListener("input", schuifNaar); schuifNaar();
 
   // kopieerknop
-  var kopieer = document.getElementById("kopieer");
+  var kopieer = document.getElementById("kopieer"), kopieerTekst = kopieer.textContent;
   kopieer.addEventListener("click", function () {
     var tekst = document.getElementById("cmd").textContent;
     function selecteer() { var r = document.createRange(); r.selectNodeContents(document.getElementById("cmd")); var s = getSelection(); s.removeAllRanges(); s.addRange(r); }
-    function gelukt() { kopieer.textContent = "Copied ✓"; setTimeout(function () { kopieer.textContent = "Copy"; }, 2000); }
+    function gelukt() { kopieer.textContent = kopieer.getAttribute("data-klaar"); setTimeout(function () { kopieer.textContent = kopieerTekst; }, 2000); }
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(tekst).then(gelukt, selecteer);
     } else { selecteer(); }

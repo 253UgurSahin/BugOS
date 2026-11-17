@@ -13,7 +13,8 @@
   <a href="docs/TESTING.md">Try it</a> ·
   <a href="docs/PLAN.md">The plan</a> ·
   <a href="docs/BRAND.md">Brand style</a> ·
-  <a href="docs/TRANSLATING.md">Translate</a>
+  <a href="docs/TRANSLATING.md">Translate</a> ·
+  <a href="docs/WEBSITE.md">Website</a>
 </p>
 
 ## The story
@@ -114,7 +115,7 @@ system_files/          everything that goes into BugOS (apps, style, logo, fonts
 iso_live/              the "try it first" USB stick
 disk_config/           settings for the classic USB stick (ISO)
 windows-switch/      the Windows program for switching over
-website/               the BugOS website
+website/               the BugOS website (English and Dutch; see docs/WEBSITE.md)
 branding/              logos, colors and fonts (see docs/BRAND.md)
 tools/                 little helpers for the makers (logo, background, translations)
 .github/workflows/     the "bakery" that builds BugOS automatically

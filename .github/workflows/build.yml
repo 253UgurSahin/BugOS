@@ -71,10 +71,11 @@ jobs:
           sudo apt-get install -y -qq gir1.2-gtk-3.0 gir1.2-gtk-4.0 python3-gi >/dev/null
           /usr/bin/python3 tools/gtk/preview.py --check
 
-      - name: Website is bijgewerkt (gebouwd uit tools/website/page.html)
+      - name: Website is bijgewerkt (gebouwd uit tools/website/page.html, nl.json en site.json)
         run: |
           python3 tools/website/build.py
-          git diff --exit-code website/index.html || { echo "Draai: python3 tools/website/build.py"; exit 1; }
+          git add -N website/
+          git diff --exit-code website/ || { echo "Draai: python3 tools/website/build.py"; exit 1; }
 
       - name: Menu's (QML) laden zonder Plasma
         run: |

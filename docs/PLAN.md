@@ -115,6 +115,7 @@ The most important idea: **BugOS can't break.**
 | `iso.yml` | Makes a USB stick (ISO) on request. By default that is the "try first" stick with the new installer. On request it puts the ISO in pieces of less than 2 GB in a GitHub Release. |
 | `windows-switch.yml` | Checks the Windows program on a real Windows computer and packs it. With a version tag (like `v0.2`) it turns it into a download. |
 | `website.yml` | Puts the website (`website/`) online through GitHub Pages. Set to manual for now. |
+| `website-host.yml` | Builds the website for a normal web host (shared hosting): a zip to upload by hand, or straight to the host over FTPS/SFTP. See [WEBSITE.md](WEBSITE.md). |
 
 ## The roadmap
 
