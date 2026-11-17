@@ -240,4 +240,9 @@ jobs:
             exit 0
           fi
           echo "${{ secrets.GITHUB_TOKEN }}" | cosign login ghcr.io -u "${{ github.actor }}" --password-stdin
-          cosign sign -y --key env://COSIGN_PRIVATE_KEY "${REGISTRY}/${{ matrix.image }}@${DIGEST}"
+          # Het klassieke formaat (een .sig-tag naast het beeld): BugOS-computers controleren met containers/image
+          # (policy.json, use-sigstore-attachments), en dat leest alleen dat formaat. cosign 3 maakt anders standaard
+          # een "bundle" (een sha256-...-tag zonder .sig) die rpm-ostree niet ziet: dan zou elke update geweigerd
+          # worden zodra de openbare sleutel in BugOS staat (2026-11-17, nagedaan met een wegwerpsleutel).
+          cosign sign -y --new-bundle-format=false --use-signing-config=false \
+            --key env://COSIGN_PRIVATE_KEY "${REGISTRY}/${{ matrix.image }}@${DIGEST}"
