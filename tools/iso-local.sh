@@ -47,8 +47,12 @@ else
     BASIS=ghcr.io/ublue-os/kinoite-main:${FEDORA:-44}
     NAAM=bugos
 fi
-# De naam die BugOS op de stick en na het installeren krijgt (voor updates).
-IMAGE_REF="ghcr.io/253ugursahin/${NAAM}:lokaal"
+# De naam die BugOS op de stick en na het installeren krijgt: daar haalt de computer later zijn updates. Dat is
+# :latest op GitHub, net als bij de ISO van iso.yml. Eerst stond hier :lokaal, maar die tag bestaat alleen op de
+# bouwcomputer: een computer van een lokale ISO kon zo nooit updates ophalen (2026-11-17). Testen met een eigen
+# registry kan nog steeds: 'bootc switch --transport registry 10.0.2.2:5000/bugos:lokaal' (docs/TESTING.md).
+# (Het beeld zelf komt bij een lokale bouw uit de OCI-map van stap 1, IMAGE_SOURCE; de tag hier is alleen het adres.)
+IMAGE_REF="ghcr.io/253ugursahin/${NAAM}:latest"
 # Titanoboa: dezelfde vaste versie als in .github/workflows/iso.yml.
 TITANOBOA=5c457c3d0518bd17e754be0fd98a60d29d26abb4
 VERSIE="$(date -u +%Y.%m.%d)"
