@@ -79,7 +79,9 @@ jobs:
       - name: Menu's (QML) laden zonder Plasma
         run: |
           sudo apt-get install -y -qq libegl1 libgl1 libxkbcommon0 libfontconfig1 >/dev/null
-          pip install -q PySide6-Essentials
+          # Systeembreed (sudo), net als op BugOS zelf: in ~/.local vond een Python-proces met -I (de index van de
+          # Winkel, maak_index_apart) PySide6 niet, en een test met een nep-thuismap ook niet (2026-11-17).
+          sudo pip install -q --break-system-packages PySide6-Essentials
           QT_QPA_PLATFORM=offscreen python3 tools/qml-test.py
 
       - name: Bestanden testen (veilig weggooien, terugzetten, kopiëren)
