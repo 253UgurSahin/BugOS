@@ -265,6 +265,8 @@ def test_live() -> None:
     klopt("echo \"$STICK_MODUS\" >/usr/share/bugos/stick-modus" in bouw and "stick-manifest.json" in bouw
           and 'ostreecontainer ${INSTALL_BRON}' in bouw,
           "30: build.sh schrijft de stick-modus en het manifest, en de kickstart gebruikt de gekozen bron")
+    klopt(not re.search(r"skopeo inspect[^\n]*SKOPEO_ARGS", bouw) and not re.search(r"skopeo copy[^\n]*INSPECT_ARGS", bouw),
+          "30: skopeo inspect krijgt --authfile (INSPECT_ARGS), skopeo copy --src-authfile (SKOPEO_ARGS): niet verwisseld")
     klopt('[ -n "${IMAGE_SOURCE:-}" ]' in bouw and "BUGOS_OFFLINE=1" in bouw,
           "30: een lokale bouw (IMAGE_SOURCE) is altijd een offline stick (die BugOS staat niet op GitHub)")
     test_klaar(app, live)

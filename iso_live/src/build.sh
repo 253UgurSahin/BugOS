@@ -31,9 +31,12 @@ mount -o remount,rw /proc/sys || true
 #    tijdens het bouwen, het komt niet in de ISO): zie iso_live/Containerfile.
 # ---------------------------------------------------------------------------
 STICK_OCI=/var/lib/bugos-stick/bugos
+# skopeo copy wil --src-authfile/--src-tls-verify, skopeo inspect --authfile/--tls-verify.
 SKOPEO_ARGS=()
+INSPECT_ARGS=()
 if [ -s /run/secrets/ghcr ]; then
     SKOPEO_ARGS+=(--src-authfile /run/secrets/ghcr)
+    INSPECT_ARGS+=(--authfile /run/secrets/ghcr)
 fi
 # IMAGE_SOURCE (alleen voor lokaal testen): haal hem uit een andere opslagplaats,
 # bijvoorbeeld een eigen registry op localhost:5000 (dan IMAGE_SOURCE_TLS=false).
@@ -41,6 +44,7 @@ fi
 BRON="${IMAGE_SOURCE:-${IMAGE_REF%:*}}"
 if [ "${IMAGE_SOURCE_TLS:-true}" = false ]; then
     SKOPEO_ARGS+=(--src-tls-verify=false)
+    INSPECT_ARGS+=(--tls-verify=false)
 fi
 # Precies dezelfde versie als waar de live-omgeving op gebouwd is (IMAGE_DIGEST,
 # door iso.yml doorgegeven). Anders kan er tussendoor een nieuwere BugOS op
@@ -76,8 +80,8 @@ else
     INSTALL_BRON="--url=${BRON_REF} --transport=registry"
     # Controle: is precies deze versie er, en is het een bootc-beeld? En de lagen met hun grootte, voor de
     # voortgang tijdens het installeren (bugos_voortgang.py); dat is een klein bestand, niet BugOS zelf.
-    skopeo inspect "${SKOPEO_ARGS[@]}" "docker://${BRON_REF}" --format '{{index .Labels "containers.bootc"}}' | grep -qx 1
-    skopeo inspect "${SKOPEO_ARGS[@]}" --raw "docker://${BRON_REF}" >/usr/share/bugos/stick-manifest.json
+    skopeo inspect "${INSPECT_ARGS[@]}" "docker://${BRON_REF}" --format '{{index .Labels "containers.bootc"}}' | grep -qx 1
+    skopeo inspect "${INSPECT_ARGS[@]}" --raw "docker://${BRON_REF}" >/usr/share/bugos/stick-manifest.json
     python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); assert m["layers"], "geen lagen"' /usr/share/bugos/stick-manifest.json
 fi
 # Voor bugos-live: zegt het "installeren kan zonder internet" of "verbind eerst met internet"?
