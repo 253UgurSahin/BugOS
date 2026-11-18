@@ -806,10 +806,6 @@
    "<h2 class=\"rv\">Probeer BugOS.<br>Het is gratis.</h2>"
   ],
   [
-   "Start from a USB stick and look around first. Your computer only changes when you press \"Install BugOS\".",
-   "Start vanaf een USB-stick en kijk eerst rond. Je computer verandert pas als je op \"BugOS installeren\" drukt."
-  ],
-  [
    "Welcome to BugOS, running from the USB stick: two buttons, Try first and Install BugOS.",
    "Welkom bij BugOS, vanaf de USB-stick: twee knoppen, Eerst proberen en BugOS installeren."
   ],
@@ -916,6 +912,14 @@
   [
    ">Checksum</a>",
    ">Controlegetal</a>"
+  ],
+  [
+   "Start from a USB stick and look around first. Your computer only changes when you press \"Install BugOS\". Installing fetches BugOS over the internet, so you always get exactly the version you tried.",
+   "Start vanaf een USB-stick en kijk eerst rond. Je computer verandert pas als je op \"BugOS installeren\" drukt. Bij het installeren haalt hij BugOS via internet op, precies de versie die je probeerde."
+  ],
+  [
+   "<li><b>Internet</b> for installing</li>",
+   "<li><b>Internet</b> om te installeren</li>"
   ]
  ]
 }

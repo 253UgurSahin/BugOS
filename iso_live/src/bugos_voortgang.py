@@ -23,18 +23,25 @@ import time
 from contextlib import contextmanager
 
 BLOB_MAP = os.path.join("ostree", "repo", "refs", "heads", "ostree", "container", "blob")
+# Stick die van internet installeert (build.sh stap 1): geen OCI-map, wel het manifest met de lagen en hun grootte.
+MANIFEST = "/usr/share/bugos/stick-manifest.json"
 
 
-def lagen(oci_map: str) -> dict[str, int]:
-    """{hex: grootte in bytes} van alle lagen in de OCI-map. OSError/ValueError/KeyError als het geen OCI-map is.
+def lagen(oci_map: str, manifest_pad: str = MANIFEST) -> dict[str, int]:
+    """{hex: grootte in bytes} van alle lagen: uit de OCI-map, of (installeren van internet) uit het manifest dat
+    build.sh bewaarde. OSError/ValueError/KeyError als geen van beide er is.
     Dezelfde laag twee keer in het manifest telt één keer (ostree leest hem ook één keer in)."""
     if not os.path.isdir(oci_map) and ":" in oci_map:   # 'map:tag' (oci-transport met een naam)
         oci_map = oci_map.rsplit(":", 1)[0]
-    with open(os.path.join(oci_map, "index.json"), encoding="utf-8") as f:
-        index = json.load(f)
-    alg, hexd = index["manifests"][0]["digest"].split(":", 1)
-    with open(os.path.join(oci_map, "blobs", alg, hexd), encoding="utf-8") as f:
-        manifest = json.load(f)
+    if os.path.isdir(oci_map):
+        with open(os.path.join(oci_map, "index.json"), encoding="utf-8") as f:
+            index = json.load(f)
+        alg, hexd = index["manifests"][0]["digest"].split(":", 1)
+        with open(os.path.join(oci_map, "blobs", alg, hexd), encoding="utf-8") as f:
+            manifest = json.load(f)
+    else:
+        with open(manifest_pad, encoding="utf-8") as f:
+            manifest = json.load(f)
     uit = {}
     for laag in manifest["layers"]:
         uit[laag["digest"].split(":", 1)[1]] = int(laag["size"])

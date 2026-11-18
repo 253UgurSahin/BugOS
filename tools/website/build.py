@@ -112,7 +112,7 @@ ZELFDE = {
     "BugOS Store", "Steam", "EN", "NL", "English", "Nederlands", ".", "“", "”", "$", "#", "!",
     "BugOS for Nvidia", "Download (.iso)", "BugOS Switch (.zip)", "distrobox enter dev", "code BugOS",
     "git clone https://github.com/253UgurSahin/BugOS", "0 trackers", "trackers", "accounts", "bug", "Computer",
-    "computer", "Privacy", "Download (.iso)", "Download BugOS", "BugOS 2026.11.01", "BugOS 2026.11.02",
+    "computer", "Privacy", "Download (.iso)", "Internet", "Download BugOS", "BugOS 2026.11.01", "BugOS 2026.11.02",
 }
 
 
@@ -124,22 +124,20 @@ def instellingen() -> dict:
     pad = cfg.get("pad", "/").strip() or "/"
     pad = "/" + pad.strip("/") + "/" if pad != "/" else "/"
     return {"url": url, "pad": pad, "https": bool(cfg.get("https")), "versie": str(cfg["versie"]),
-            "sourceforge": cfg.get("sourceforge", "").strip()}
+            "downloads": cfg.get("downloads", "").strip()}
 
 
 def downloads(cfg: dict) -> dict[str, str]:
-    """De downloadknoppen: rechtstreeks naar de hele ISO op SourceForge (iso.yml zet hem daar onder een vaste
-    naam), of, zonder SourceForge-project, naar de releasepagina op GitHub."""
-    sf = cfg["sourceforge"]
-    if not sf:
+    """De downloadknoppen: rechtstreeks naar de hele ISO (iso.yml zet hem onder een vaste naam op je webhost, in de
+    map uit site.json), of, zonder die map, naar de releasepagina op GitHub."""
+    basis = cfg["downloads"]
+    if not basis:
         rel = "https://github.com/253UgurSahin/BugOS/releases"
         return {"ISO_BUGOS": rel, "ISO_NVIDIA": rel, "SHA_BUGOS": rel, "SHA_NVIDIA": rel}
-    assert re.fullmatch(r"[a-z0-9-]+", sf), "sourceforge in site.json: alleen kleine letters, cijfers en -"
-    basis = f"https://sourceforge.net/projects/{sf}/files"
-    return {"ISO_BUGOS": f"{basis}/bugos/BugOS.iso/download",
-            "ISO_NVIDIA": f"{basis}/bugos-nvidia/BugOS-Nvidia.iso/download",
-            "SHA_BUGOS": f"{basis}/bugos/BugOS.iso.sha256/download",
-            "SHA_NVIDIA": f"{basis}/bugos-nvidia/BugOS-Nvidia.iso.sha256/download"}
+    assert re.fullmatch(r"(https://[A-Za-z0-9.-]+/)?[A-Za-z0-9_./-]*/", basis) and ".." not in basis, \
+        "downloads in site.json: een map met / aan het eind (download/) of een https-adres"
+    return {"ISO_BUGOS": f"{basis}BugOS.iso", "ISO_NVIDIA": f"{basis}BugOS-Nvidia.iso",
+            "SHA_BUGOS": f"{basis}BugOS.iso.sha256", "SHA_NVIDIA": f"{basis}BugOS-Nvidia.iso.sha256"}
 
 
 class Teksten(HTMLParser):

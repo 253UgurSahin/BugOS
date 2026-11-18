@@ -38,6 +38,20 @@ def geheugen_gb() -> float:
 WIFI_OPNIEUW = 30.0
 
 
+def stick_offline() -> bool:
+    """Staat BugOS zelf op de stick (installeren zonder internet), of haalt het installatieprogramma BugOS van internet?
+    build.sh (stap 1) schrijft 'online' of 'offline' in /usr/share/bugos/stick-modus. BUGOS_STICK_MODUS gaat voor
+    (tests). Weten we het niet, dan offline: dat is wat een stick zonder dat bestand (van vóór deze keuze) doet."""
+    modus = os.environ.get("BUGOS_STICK_MODUS", "")
+    if not modus:
+        try:
+            with open("/usr/share/bugos/stick-modus", encoding="utf-8") as f:
+                modus = f.read().strip()
+        except OSError:
+            modus = "offline"
+    return modus != "online"
+
+
 def net_toestand(vraag_wifi: bool) -> tuple[bool, bool | None]:
     """(online, heeft_wifi). Draait op de achtergrond: nmcli kan blijven hangen, en dan mag het venster niet vastlopen.
 
@@ -156,6 +170,7 @@ class Live(Achtergrond):
         rij.addStretch(1)
         lay.addLayout(rij)
 
+        self._offline_stick = stick_offline()
         self._heeft_wifi: bool | None = None
         self._wifi_gevraagd = float("-inf")
         self._bezig = False
@@ -167,12 +182,14 @@ class Live(Achtergrond):
         self.kijk_internet()
 
     def kijk_internet(self) -> None:
-        """Laat zien of er internet is. Installeren kan altijd.
+        """Laat zien of er internet is.
 
-        BugOS zit zelf op de stick, dus voor het installeren is geen internet
-        nodig. Internet is alleen handig om alvast rond te kijken (websites,
-        apps uit de Winkel). Daarom blijft de knop "BugOS installeren" altijd
-        aan, en is "Wifi kiezen" er alleen voor het gemak.
+        Offline stick: BugOS zit zelf op de stick, dus voor het installeren is
+        geen internet nodig. Internet is alleen handig om alvast rond te kijken.
+        Daarom blijft de knop "BugOS installeren" altijd aan.
+        Gewone stick: het installatieprogramma haalt BugOS van internet. Zonder
+        internet staat "BugOS installeren" uit en zegt de chip waarom; "Wifi
+        kiezen" helpt dan verder. Proberen kan altijd.
         nmcli draait op de achtergrond; de wifi-kaart vragen we hooguit elke 30 s.
         """
         if self._bezig:
@@ -196,11 +213,20 @@ class Live(Achtergrond):
         self.wifi.setVisible(not online and self._heeft_wifi is True)
         if online:
             self.wifi_fout.hide()
-        self.chip.setText(t("✓  Je hebt internet", "✓  You are online") if online
-                          else t("Geen internet? Geen probleem: BugOS installeert vanaf de stick",
-                                 "No internet? No problem: BugOS installs from the stick"))
-        # Allebei "goed": zonder internet is er niets mis.
-        self.chip.setStyleSheet(Chip("", "goed").styleSheet())
+        if self._offline_stick:
+            self.chip.setText(t("✓  Je hebt internet", "✓  You are online") if online
+                              else t("Geen internet? Geen probleem: BugOS installeert vanaf de stick",
+                                     "No internet? No problem: BugOS installs from the stick"))
+            # Allebei "goed": zonder internet is er niets mis.
+            self.chip.setStyleSheet(Chip("", "goed").styleSheet())
+            return
+        # Gewone stick: installeren haalt BugOS (een paar GB) van internet.
+        self.chip.setText(t("✓  Je hebt internet: klaar om te installeren", "✓  You are online: ready to install") if online
+                          else t("Verbind met internet om BugOS te installeren. Proberen kan ook zonder.",
+                                 "Connect to the internet to install BugOS. Trying it works without."))
+        self.chip.setStyleSheet(Chip("", "goed" if online else "let_op").styleSheet())
+        self.installeren.setEnabled(online)
+        self.installeren.setStyleSheet(ROOD_UIT)
 
     def kies_wifi(self) -> None:
         try:

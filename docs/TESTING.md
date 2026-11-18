@@ -111,7 +111,8 @@ Then restart the computer. Want to go back? Use Settings > Updates and info, or 
 - [ ] In BugOS, **Bring everything from your old PC**: transfer, then **Undo everything**. Files from the old PC are in the trash, a file you changed in between stays, settings, Wi-Fi and printers are back to how they were
 - [ ] Open the **BugOS Store** and install something
 - [ ] After installing BugOS (with internet): Firefox, LibreOffice, VLC, Gwenview, Okular and Steam arrive by themselves within a few minutes, and Firefox opens web links. Firefox has the normal window title bar (no buttons in the tab bar)
-- [ ] Install BugOS **without internet**, sign in (it must not wait), then connect: within about 5 minutes the apps arrive (`systemctl status bugos-first-boot`)
+- [ ] On the normal stick **without internet**: "Install BugOS" is off and the stick says to connect first; "Choose Wi-Fi" helps; after connecting the button turns on
+- [ ] Install BugOS, then pull the cable / turn Wi-Fi off before the first start, sign in (it must not wait), then connect: within about 5 minutes the apps arrive (`systemctl status bugos-first-boot`)
 - [ ] A BugOS from before Firefox and Steam were Flatpaks, after the update and signing in: Firefox has your bookmarks and history, Steam still knows you and your games
 - [ ] Store → **My apps**: every app has **Remove** (also Firefox and Steam). Remove Firefox, restart twice: it does not come back by itself. Install it again from the Store: it is back
 - [ ] Settings → Apps and gaming → **Installed apps**: the same list, each with **Remove**; removing asks first and then the app is gone from the list
@@ -126,7 +127,7 @@ Then restart the computer. Want to go back? Use Settings > Updates and info, or 
 - [ ] Coming from an older BugOS where you set the battery or network icon in the system tray to "Always shown": after the update it is still there, next to the quick menu. Turning the quick menu off (Settings → Appearance → Taskbar) brings back all KDE tray icons, turning it on again puts the quick menu back
 - [ ] Start the "try it first" stick: does the welcome screen appear with "Try first" and "Install BugOS"?
 - [ ] Is there no "Aurora" or "Fedora" anywhere on the stick (no "Welcome Center", one install button, English texts (or your chosen language))?
-- [ ] Install BugOS **without internet** (cable out, Wi-Fi off): does it work, and does BugOS start afterwards?
+- [ ] With an **offline** stick (`iso.yml` with "offline" on): install BugOS **without internet** (cable out, Wi-Fi off): does it work, and does BugOS start afterwards?
 
 ### The new design
 

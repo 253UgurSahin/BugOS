@@ -66,6 +66,6 @@ jobs:
             *) echo "::error::FTP_PROTOCOL moet ftps of sftp zijn"; exit 1 ;;
           esac
           # Alleen nieuwere bestanden, en er wordt nooit iets op de host weggegooid (ook niet wat er al stond).
-          lftp -u "$GEBRUIKER" --env-password "$URL" -e "$INST set net:max-retries 3; set net:timeout 30; \
+          lftp -u "$GEBRUIKER" --env-password "$URL" -e "$INST set cmd:fail-exit yes; set net:max-retries 3; set net:timeout 30; \
             mirror --reverse --only-newer --verbose --parallel=4 website/ $MAP; bye"
           echo "Klaar: de website staat op $SERVER in $MAP"

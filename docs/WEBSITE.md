@@ -38,35 +38,37 @@ is built from the latest sources.
 
 **Another language?** Add it to `TALEN` in `build.py` and make `tools/website/<code>.json` like `nl.json`.
 
-## The download buttons (SourceForge)
+## The download buttons (ISO on your own web host)
 
-GitHub allows at most 2 GB per file, and the ISO is about 6 GB. On GitHub it is therefore in pieces
-(BugOS Switch glues them together). For the "Download (.iso)" buttons, `iso.yml` also puts the whole
-ISO in one piece on [SourceForge](https://sourceforge.net) (free for open source, no size limit,
-mirrors all over the world), under a fixed name:
+GitHub allows at most 2 GB per file. On GitHub the ISO is therefore in pieces (BugOS Switch glues them
+together). For the "Download (.iso)" buttons, `iso.yml` also puts the whole ISO in one piece on your own
+web host, next to the website, under a fixed name:
 
-| Button | File on SourceForge |
+| Button | File on the host (with `ISO_MAP` = `public_html/download/`) |
 |---|---|
-| BugOS | `bugos/BugOS.iso` (+ `BugOS.iso.sha256`) |
-| BugOS for Nvidia | `bugos-nvidia/BugOS-Nvidia.iso` (+ `BugOS-Nvidia.iso.sha256`) |
-| BugOS Switch | not on SourceForge: `releases/latest/download/BugOS-Switch.zip` on GitHub |
+| BugOS | `download/BugOS.iso` (+ `BugOS.iso.sha256`) |
+| BugOS for Nvidia | `download/BugOS-Nvidia.iso` (+ `BugOS-Nvidia.iso.sha256`) |
+| BugOS Switch | not on the host: `releases/latest/download/BugOS-Switch.zip` on GitHub |
 
-Every new ISO replaces the file with the same name, so the buttons never change. (A mirror can
-serve the previous ISO for a short while after an upload.)
+Every new ISO replaces the file with the same name (it is uploaded under a temporary name first, so a
+visitor never gets half a file), so the buttons never change. `"downloads"` in `tools/website/site.json`
+says where the buttons point (`download/` by default; empty sends them to the GitHub releases page).
+
+**How big is it?** The normal stick no longer carries a second copy of BugOS: the installer downloads
+BugOS during installation (exactly the version on the stick), so the ISO is about half the size it was.
+Installing needs internet; trying BugOS from the stick does not, and the stick says so. Need a stick
+that installs without internet? Run **BugOS ISO maken** with "offline" on (about twice as big).
+
+**Check your host first:** a host may limit the file size or the monthly traffic. Each download is a
+few GB, so 100 downloads are a few hundred GB.
 
 **Set up once:**
 
-1. Make a free account on sourceforge.net and a project named `bugos` (Create → "Create a Project").
-   A different name? Put it in `"sourceforge"` in `tools/website/site.json` and build the site again.
-2. On your own computer, make an SSH key just for this: `ssh-keygen -t ed25519 -f bugos-sf -N ""`.
-   Add `bugos-sf.pub` to SourceForge: Account Settings → SSH Settings.
-3. In GitHub (Settings → Secrets and variables → Actions):
-   - secret `SF_SSH_KEY`: the whole content of the private key `bugos-sf`
-   - variable `SF_USER`: your SourceForge user name
-   - variable `SF_PROJECT`: `bugos`
-4. Run Actions → **BugOS ISO maken** with "publiceren" on, once for `bugos` and once for `bugos-nvidia`.
-   The run summary shows the SourceForge link. Without the secrets the run still works, but only
-   puts the pieces on GitHub, and says so with a warning.
+1. The FTP secrets from "Putting it on a shared host" below (`FTP_SERVER`, `FTP_USERNAME`,
+   `FTP_PASSWORD`, and optionally the variable `FTP_PROTOCOL`).
+2. The variable `ISO_MAP`: the folder on the host, with `/` at the end, for example `public_html/download/`.
+3. Run Actions → **BugOS ISO maken** with "publiceren" on, once for `bugos` and once for `bugos-nvidia`.
+   Without `ISO_MAP` the run still works, but only puts the pieces on GitHub, and says so with a warning.
 
 **BugOS Switch:** the button downloads `BugOS-Switch.zip` from the newest normal (not pre-) release.
 Make it by pushing a tag like `v0.4` and running Actions → **Windows-overstap** on that tag.
@@ -102,6 +104,7 @@ Make it by pushing a tag like `v0.4` and running Actions → **Windows-overstap*
   microphone or location. The full Content-Security-Policy is a `<meta>` tag in each page,
   with the fingerprints of its own scripts, so it also works on hosts that ignore `.htaccess`.
 - Pages are always fresh; pictures stay in the browser for 7 days, fonts for a year.
+- `.iso` files are always saved as a file, never opened in the browser.
 - Pages, SVG and the manifest are sent compressed (gzip).
 
 Every part is wrapped in `<IfModule>`, so a host without one of those modules skips it instead of
