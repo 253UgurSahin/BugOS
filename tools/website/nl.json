@@ -822,20 +822,12 @@
    "Voor de meeste computers en laptops, met een Intel- of AMD-processor."
   ],
   [
-   "About 5.6 GB · 64-bit",
-   "Ongeveer 5,6 GB · 64-bit"
-  ],
-  [
    "<h3>BugOS for Nvidia</h3>",
    "<h3>BugOS voor Nvidia</h3>"
   ],
   [
    "Do you have an Nvidia graphics card (GTX 16 or RTX)? Then the right driver is already in there.",
    "Heb je een Nvidia-videokaart (GTX 16 of RTX)? Dan zit de juiste driver er al in."
-  ],
-  [
-   "About 6 GB · 64-bit",
-   "Ongeveer 6 GB · 64-bit"
   ],
   [
    "<h3>Still on Windows?</h3>",
@@ -912,6 +904,18 @@
   [
    "This website uses no cookies and no tracking.",
    "Deze website gebruikt geen cookies en volgt je niet."
+  ],
+  [
+   "About 5.6 GB · 64-bit · <a",
+   "Ongeveer 5,6 GB · 64-bit · <a"
+  ],
+  [
+   "About 6 GB · 64-bit · <a",
+   "Ongeveer 6 GB · 64-bit · <a"
+  ],
+  [
+   ">Checksum</a>",
+   ">Controlegetal</a>"
   ]
  ]
 }

@@ -112,7 +112,7 @@ ZELFDE = {
     "BugOS Store", "Steam", "EN", "NL", "English", "Nederlands", ".", "“", "”", "$", "#", "!",
     "BugOS for Nvidia", "Download (.iso)", "BugOS Switch (.zip)", "distrobox enter dev", "code BugOS",
     "git clone https://github.com/253UgurSahin/BugOS", "0 trackers", "trackers", "accounts", "bug", "Computer",
-    "computer", "Privacy", "Download BugOS", "BugOS 2026.11.01", "BugOS 2026.11.02",
+    "computer", "Privacy", "Download (.iso)", "Download BugOS", "BugOS 2026.11.01", "BugOS 2026.11.02",
 }
 
 
@@ -123,7 +123,23 @@ def instellingen() -> dict:
         url += "/"
     pad = cfg.get("pad", "/").strip() or "/"
     pad = "/" + pad.strip("/") + "/" if pad != "/" else "/"
-    return {"url": url, "pad": pad, "https": bool(cfg.get("https")), "versie": str(cfg["versie"])}
+    return {"url": url, "pad": pad, "https": bool(cfg.get("https")), "versie": str(cfg["versie"]),
+            "sourceforge": cfg.get("sourceforge", "").strip()}
+
+
+def downloads(cfg: dict) -> dict[str, str]:
+    """De downloadknoppen: rechtstreeks naar de hele ISO op SourceForge (iso.yml zet hem daar onder een vaste
+    naam), of, zonder SourceForge-project, naar de releasepagina op GitHub."""
+    sf = cfg["sourceforge"]
+    if not sf:
+        rel = "https://github.com/253UgurSahin/BugOS/releases"
+        return {"ISO_BUGOS": rel, "ISO_NVIDIA": rel, "SHA_BUGOS": rel, "SHA_NVIDIA": rel}
+    assert re.fullmatch(r"[a-z0-9-]+", sf), "sourceforge in site.json: alleen kleine letters, cijfers en -"
+    basis = f"https://sourceforge.net/projects/{sf}/files"
+    return {"ISO_BUGOS": f"{basis}/bugos/BugOS.iso/download",
+            "ISO_NVIDIA": f"{basis}/bugos-nvidia/BugOS-Nvidia.iso/download",
+            "SHA_BUGOS": f"{basis}/bugos/BugOS.iso.sha256/download",
+            "SHA_NVIDIA": f"{basis}/bugos-nvidia/BugOS-Nvidia.iso.sha256/download"}
 
 
 class Teksten(HTMLParser):
@@ -207,6 +223,7 @@ def pagina_voor(sjabloon: str, taal: tuple, cfg: dict) -> str:
         "TAAL": code, "OG_LOCALE": locale, "URL": cfg["url"], "ALTERNATIEVEN": "\n".join(alternatieven),
         "ANDER_PAD": rel(ander), "ANDER_TAAL": ander[0], "ANDER_NAAM": ander[3], "ANDER_KORT": ander[4],
         "TALEN": talen, "VERSIE": cfg["versie"], "VERSIE_KOP": hoofd, "VERSIE_STAART": staart,
+        **downloads(cfg),
     }
     return re.sub(r"\{\{([A-Z_]+)\}\}", lambda m: vul[m.group(1)] if m.group(1) in vul else m.group(0), sjabloon)
 

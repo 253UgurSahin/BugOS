@@ -38,6 +38,39 @@ is built from the latest sources.
 
 **Another language?** Add it to `TALEN` in `build.py` and make `tools/website/<code>.json` like `nl.json`.
 
+## The download buttons (SourceForge)
+
+GitHub allows at most 2 GB per file, and the ISO is about 6 GB. On GitHub it is therefore in pieces
+(BugOS Switch glues them together). For the "Download (.iso)" buttons, `iso.yml` also puts the whole
+ISO in one piece on [SourceForge](https://sourceforge.net) (free for open source, no size limit,
+mirrors all over the world), under a fixed name:
+
+| Button | File on SourceForge |
+|---|---|
+| BugOS | `bugos/BugOS.iso` (+ `BugOS.iso.sha256`) |
+| BugOS for Nvidia | `bugos-nvidia/BugOS-Nvidia.iso` (+ `BugOS-Nvidia.iso.sha256`) |
+| BugOS Switch | not on SourceForge: `releases/latest/download/BugOS-Switch.zip` on GitHub |
+
+Every new ISO replaces the file with the same name, so the buttons never change. (A mirror can
+serve the previous ISO for a short while after an upload.)
+
+**Set up once:**
+
+1. Make a free account on sourceforge.net and a project named `bugos` (Create → "Create a Project").
+   A different name? Put it in `"sourceforge"` in `tools/website/site.json` and build the site again.
+2. On your own computer, make an SSH key just for this: `ssh-keygen -t ed25519 -f bugos-sf -N ""`.
+   Add `bugos-sf.pub` to SourceForge: Account Settings → SSH Settings.
+3. In GitHub (Settings → Secrets and variables → Actions):
+   - secret `SF_SSH_KEY`: the whole content of the private key `bugos-sf`
+   - variable `SF_USER`: your SourceForge user name
+   - variable `SF_PROJECT`: `bugos`
+4. Run Actions → **BugOS ISO maken** with "publiceren" on, once for `bugos` and once for `bugos-nvidia`.
+   The run summary shows the SourceForge link. Without the secrets the run still works, but only
+   puts the pieces on GitHub, and says so with a warning.
+
+**BugOS Switch:** the button downloads `BugOS-Switch.zip` from the newest normal (not pre-) release.
+Make it by pushing a tag like `v0.4` and running Actions → **Windows-overstap** on that tag.
+
 ## Putting it on a shared host (cPanel, DirectAdmin, Plesk, ...)
 
 1. In `tools/website/site.json`, fill in:

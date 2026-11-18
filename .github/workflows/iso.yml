@@ -10,8 +10,9 @@
 #   publiceren = aan  -> de ISO komt als download in een GitHub Release (alleen de live-stick; de klassieke
 #                        stick blijft een test-download van 7 dagen) (U362).
 #                        GitHub staat maar 2 GB per bestand toe, dus de ISO
-#                        wordt in stukjes geknipt. BugOS Overstap (Windows)
-#                        plakt ze vanzelf weer aan elkaar.
+#                        wordt in stukjes geknipt. BugOS Switch (Windows)
+#                        plakt ze vanzelf weer aan elkaar. Met SF_SSH_KEY, SF_USER en SF_PROJECT ingesteld
+#                        komt de hele ISO ook in één stuk op SourceForge (voor de downloadknop op de website).
 name: BugOS ISO maken
 
 on:
@@ -144,6 +145,48 @@ jobs:
           ls -la uit
           echo "naam=${NAAM}" >> "$GITHUB_OUTPUT"
 
+      # De hele ISO in één stuk op SourceForge, onder een vaste naam, zodat de knop op de website er
+      # rechtstreeks naar kan wijzen (GitHub staat maar 2 GB per bestand toe). Zie docs/WEBSITE.md.
+      # Nodig: secret SF_SSH_KEY (privésleutel van een SSH-sleutel die bij je SourceForge-account staat),
+      # variables SF_USER (je SourceForge-gebruikersnaam) en SF_PROJECT (bijv. bugos).
+      - name: Naar SourceForge (één bestand, voor de website)
+        if: ${{ inputs.publiceren }}
+        env:
+          SF_SSH_KEY: ${{ secrets.SF_SSH_KEY }}
+          SF_USER: ${{ vars.SF_USER }}
+          SF_PROJECT: ${{ vars.SF_PROJECT }}
+          SOORT: ${{ steps.naam.outputs.soort }}
+          NAAM: ${{ steps.klaar.outputs.naam }}
+          DATUM: ${{ steps.naam.outputs.datum }}
+          DIGEST: ${{ steps.ophalen.outputs.digest }}
+        run: |
+          if [ -z "$SF_SSH_KEY" ] || [ -z "$SF_USER" ] || [ -z "$SF_PROJECT" ]; then
+            echo "::warning::SourceForge is niet ingesteld (SF_SSH_KEY, SF_USER, SF_PROJECT): de ISO komt alleen in stukjes op GitHub, en de downloadknop op de website werkt nog niet."
+            exit 0
+          fi
+          [[ "$SF_PROJECT" =~ ^[a-z0-9-]+$ && "$SF_USER" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "::error::SF_USER of SF_PROJECT heeft rare tekens"; exit 1; }
+          if [ "$SOORT" = nvidia ]; then MAP=bugos-nvidia; VAST=BugOS-Nvidia.iso; else MAP=bugos; VAST=BugOS.iso; fi
+          mkdir -p sf && cd sf
+          # Een harde link: geen tweede kopie van 6 GB op de bouwcomputer.
+          ln "../uit/${NAAM}" "${VAST}"
+          sha256sum "${VAST}" > "${VAST}.sha256"
+          printf 'BugOS %s, gebouwd op %s\nBestand: %s\nSysteem: %s\n' "$SOORT" "$DATUM" "$NAAM" "$DIGEST" > LEESMIJ.txt
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SF_SSH_KEY" > ~/.ssh/sf && chmod 600 ~/.ssh/sf
+          SSH="ssh -i $HOME/.ssh/sf -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30"
+          DOEL="${SF_USER}@frs.sourceforge.net:/home/frs/project/${SF_PROJECT}/${MAP}/"
+          # Eerst de ISO, dan pas het controlegetal: zo past het controlegetal nooit bij een half bestand.
+          for poging in 1 2 3; do
+            rsync -e "$SSH" --partial --progress --times "${VAST}" "$DOEL" && break
+            [ "$poging" = 3 ] && { echo "::error::Uploaden naar SourceForge lukte niet"; exit 1; }
+            sleep $((poging * 30))
+          done
+          rsync -e "$SSH" --times "${VAST}.sha256" LEESMIJ.txt "$DOEL"
+          rm -f ~/.ssh/sf
+          URL="https://sourceforge.net/projects/${SF_PROJECT}/files/${MAP}/${VAST}/download"
+          echo "Klaar: ${URL}"
+          echo "### Op SourceForge: [${VAST}](${URL})" >> "$GITHUB_STEP_SUMMARY"
+
       - name: ISO klaarzetten om te downloaden (7 dagen)
         if: ${{ !inputs.publiceren }}
         uses: actions/upload-artifact@v4
@@ -186,7 +229,7 @@ jobs:
           body: |
             BugOS voor op een USB-stick (${{ steps.naam.outputs.soort }}).
 
-            **Makkelijkst:** gebruik BugOS Overstap op Windows. Die downloadt dit vanzelf en maakt de USB-stick.
+            **Makkelijkst:** download de hele ISO in één bestand via de BugOS-website, of gebruik BugOS Switch op Windows. Die downloadt dit vanzelf en maakt de USB-stick.
 
             **Zelf doen:** download alle `.deel`-bestanden en plak ze aan elkaar:
             - Linux/macOS: `cat ${{ steps.klaar.outputs.naam }}.deel* > ${{ steps.klaar.outputs.naam }}`

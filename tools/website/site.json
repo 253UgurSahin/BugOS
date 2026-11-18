@@ -1,7 +1,8 @@
 {
-  "_uitleg": "Instellingen voor de website. 'url': het volledige adres waar de site komt te staan, met / aan het eind (bijvoorbeeld https://bugos.nl/). Leeg laten mag: dan komen er geen canonical-links en geen sitemap. 'pad': de map op de server, vanaf de domeinnaam (/ als de site in de hoofdmap staat, /bugos/ als hij in een submap staat). 'https': true zet de doorverwijzing naar https aan in .htaccess (alleen als je host een certificaat heeft). Daarna: python3 tools/website/build.py",
+  "_uitleg": "Instellingen voor de website. 'url': het volledige adres waar de site komt te staan, met / aan het eind (bijvoorbeeld https://bugos.nl/). Leeg laten mag: dan komen er geen canonical-links en geen sitemap. 'pad': de map op de server, vanaf de domeinnaam (/ als de site in de hoofdmap staat, /bugos/ als hij in een submap staat). 'https': true zet de doorverwijzing naar https aan in .htaccess (alleen als je host een certificaat heeft). Daarna: python3 tools/website/build.py 'sourceforge': de naam van het SourceForge-project waar iso.yml de hele ISO neerzet (leeg: de knoppen gaan naar de releasepagina op GitHub).",
   "url": "",
   "pad": "/",
   "https": false,
-  "versie": "0.4"
+  "versie": "0.4",
+  "sourceforge": "bugos"
 }
