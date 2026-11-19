@@ -13,7 +13,8 @@
   <a href="docs/TESTING.md">Try it</a> ·
   <a href="docs/PLAN.md">The plan</a> ·
   <a href="docs/BRAND.md">Brand style</a> ·
-  <a href="docs/TRANSLATING.md">Translate</a>
+  <a href="docs/TRANSLATING.md">Translate</a> ·
+  <a href="docs/WEBSITE.md">Website</a>
 </p>
 
 ## The story
@@ -114,7 +115,7 @@ system_files/          everything that goes into BugOS (apps, style, logo, fonts
 iso_live/              the "try it first" USB stick
 disk_config/           settings for the classic USB stick (ISO)
 windows-switch/      the Windows program for switching over
-website/               the BugOS website
+website/               the BugOS website (English and Dutch; see docs/WEBSITE.md)
 branding/              logos, colors and fonts (see docs/BRAND.md)
 tools/                 little helpers for the makers (logo, background, translations)
 .github/workflows/     the "bakery" that builds BugOS automatically
@@ -123,7 +124,8 @@ docs/                  explanations, plan and brand style
 
 ## License
 
-GPL-3.0. BugOS is and stays free and open.
+BugOS's own work is free to use and its source code is open to everyone, but it may not be used commercially:
+[PolyForm Noncommercial 1.0.0](LICENSE). Parts made by others keep their own licenses; see [NOTICE.md](NOTICE.md).
 The fonts are under the SIL Open Font License (see [`branding/fonts/`](branding/fonts/)).
 
 BugOS is its own system, built on `kinoite-main` from [Universal Blue](https://universal-blue.org) (just like Bazzite),

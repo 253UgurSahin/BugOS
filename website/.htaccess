@@ -1,0 +1,73 @@
+# BugOS website, for Apache shared hosting (cPanel, DirectAdmin, Plesk, ...).
+# Made by tools/website/build.py from tools/website/htaccess: change that file (or site.json) and build again.
+# Every block is inside <IfModule>, so a host without that module simply skips it.
+
+DirectoryIndex index.html
+Options -Indexes
+AddDefaultCharset utf-8
+ErrorDocument 404 /404.html
+
+# Types that some older hosts don't know yet
+<IfModule mod_mime.c>
+  AddType image/webp .webp
+  AddType image/svg+xml .svg
+  AddType font/woff2 .woff2
+  AddType application/manifest+json .webmanifest
+  AddType application/x-iso9660-image .iso
+  AddType text/plain .sha256
+  AddCharset utf-8 .html .css .js .svg .txt .xml .webmanifest
+</IfModule>
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  # https: set "https": true in tools/website/site.json once your host has a certificate
+  # Never serve hidden files (.git, .env, ...) or the source files of the build
+  RewriteRule (^|/)\.(?!well-known/) - [F,L]
+  RewriteRule \.(md|py|json|bak|log|sh)$ - [F,L]
+  # Short addresses: /nl and /nl/ go to the Dutch page, /index.html goes to /
+  RewriteRule ^nl/?$ /nl.html [R=301,L]
+  RewriteCond %{THE_REQUEST} \s/+(.*/)?index\.html[\s?] [NC]
+  RewriteRule ^(.*/)?index\.html$ /$1 [R=301,L]
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set X-Frame-Options "DENY"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+  Header always set Cross-Origin-Opener-Policy "same-origin"
+  # The full Content-Security-Policy is in each page (a <meta> tag with the hashes of its own scripts);
+  # this adds the part a <meta> tag cannot do: no other site may put BugOS in a frame.
+  Header always set Content-Security-Policy "frame-ancestors 'none'"
+  # Strict-Transport-Security: comes with "https": true in tools/website/site.json
+  # Pages always fresh; pictures and fonts may stay in the browser for a while
+  <FilesMatch "\.(html|webmanifest|xml|txt)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+  <FilesMatch "\.(webp|png|svg|ico)$">
+    Header set Cache-Control "public, max-age=604800"
+  </FilesMatch>
+  # De ISO's (iso.yml zet ze in download/): altijd als bestand opslaan, nooit in de browser openen
+  <FilesMatch "\.iso$">
+    Header set Content-Disposition "attachment"
+    Header set Cache-Control "public, max-age=3600"
+  </FilesMatch>
+  <FilesMatch "\.woff2$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+</IfModule>
+
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresDefault "access plus 1 hour"
+  ExpiresByType text/html "access plus 0 seconds"
+  ExpiresByType image/webp "access plus 7 days"
+  ExpiresByType image/png "access plus 7 days"
+  ExpiresByType image/svg+xml "access plus 7 days"
+  ExpiresByType font/woff2 "access plus 1 year"
+</IfModule>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml application/xml application/javascript image/svg+xml application/manifest+json
+</IfModule>

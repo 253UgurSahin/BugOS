@@ -29,7 +29,7 @@ The most important idea: **BugOS can't break.**
 | Installing | USB stick, also next to Windows, plus a Windows switching program | Switching should be easy. |
 | Computers | Normal PCs and laptops, Nvidia, old PCs (with light mode) | Light mode turns on by itself on slow computers. |
 | Privacy | No account and no data collection | Your computer belongs to you. |
-| License | GPL-3.0 | Always free and open. |
+| License | PolyForm Noncommercial 1.0.0 (own work) | Free for everyone at home, at school and at non-profits; the source code stays open; no commercial use. Parts by others keep their own licenses ([NOTICE.md](../NOTICE.md)). |
 
 ## How is BugOS put together? (the house)
 
@@ -115,6 +115,7 @@ The most important idea: **BugOS can't break.**
 | `iso.yml` | Makes a USB stick (ISO) on request. By default that is the "try first" stick with the new installer. On request it puts the ISO in pieces of less than 2 GB in a GitHub Release. |
 | `windows-switch.yml` | Checks the Windows program on a real Windows computer and packs it. With a version tag (like `v0.2`) it turns it into a download. |
 | `website.yml` | Puts the website (`website/`) online through GitHub Pages. Set to manual for now. |
+| `website-host.yml` | Builds the website for a normal web host (shared hosting): a zip to upload by hand, or straight to the host over FTPS/SFTP. See [WEBSITE.md](WEBSITE.md). |
 
 ## The roadmap
 
@@ -136,7 +137,7 @@ The most important idea: **BugOS can't break.**
 - [x] **Windows switch**: PC check, take files along, make room, download BugOS and write the USB stick
 - [x] In BugOS: bring back the files from Windows with one button
 - [x] **"Try first" USB stick** with the new installer (Anaconda WebUI). It asks few questions, warns about BitLocker and explains the blue key screen for Nvidia.
-- [x] **The stick is BugOS**: BugOS itself is on the stick and installs without internet. No more Aurora or Fedora names or logos on the stick, in the installer and in the installed system (welcome screen, terminal, sign-in screen, "About this system", start menu, store). The stick starts in English; you choose your language, keyboard and time zone in the installer (the date and time page is no longer hidden).
+- [x] **The stick is BugOS**: you try BugOS itself from the stick. The installer then downloads exactly that version from GitHub (so the ISO is about half the size); a stick with "offline" on in `iso.yml` carries BugOS itself and installs without internet. No more Aurora or Fedora names or logos on the stick, in the installer and in the installed system (welcome screen, terminal, sign-in screen, "About this system", start menu, store). The stick starts in English; you choose your language, keyboard and time zone in the installer (the date and time page is no longer hidden).
 - [x] A download place for the ISO: GitHub Releases, in pieces of less than 2 GB. BugOS Switch glues them back together by itself.
 - [x] **Signed updates** (2026-11-17): GitHub signs every BugOS with cosign (classic `.sig` format, which rpm-ostree reads); `etc/pki/containers/bugos.pub` is in BugOS, so PCs only install an update with that signature. The packages on GitHub are public, so every BugOS PC can fetch updates without signing in. See docs/ONDERTEKENEN.md.
 - [ ] **Sign the Windows program**, so Windows doesn't show a warning. This normally costs money (a certificate). For open-source projects it can be free through [SignPath Foundation](https://signpath.org). The owner of the repo has to apply, so **this is a task for the manager**.

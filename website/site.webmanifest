@@ -1,0 +1,23 @@
+{
+  "name": "BugOS",
+  "short_name": "BugOS",
+  "description": "The computer that just works. Free, can't break and collects nothing about you.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "browser",
+  "lang": "en",
+  "background_color": "#050506",
+  "theme_color": "#050506",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

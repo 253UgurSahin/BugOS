@@ -1,0 +1,8 @@
+{
+  "_uitleg": "Instellingen voor de website. 'url': het volledige adres waar de site komt te staan, met / aan het eind (bijvoorbeeld https://bugos.nl/). Leeg laten mag: dan komen er geen canonical-links en geen sitemap. 'pad': de map op de server, vanaf de domeinnaam (/ als de site in de hoofdmap staat, /bugos/ als hij in een submap staat). 'https': true zet de doorverwijzing naar https aan in .htaccess (alleen als je host een certificaat heeft). Daarna: python3 tools/website/build.py 'downloads': waar iso.yml de hele ISO's neerzet, gezien vanaf de website: een map naast de site (download/, past bij ISO_MAP public_html/download/) of een volledig adres. Leeg: de knoppen gaan naar de releasepagina op GitHub.",
+  "url": "",
+  "pad": "/",
+  "https": false,
+  "versie": "0.4",
+  "downloads": "download/"
+}

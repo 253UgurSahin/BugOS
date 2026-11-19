@@ -17,7 +17,7 @@
 
     Starten: dubbelklik op "Start BugOS Switch.bat".
 
-    Licentie: GPL-3.0-or-later. Onderdeel van BugOS.
+    Licentie: PolyForm Noncommercial 1.0.0 (zie LICENSE en NOTICE.md). Onderdeel van BugOS.
 #>
 
 param(

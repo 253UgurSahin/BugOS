@@ -1,0 +1,929 @@
+{
+ "_uitleg": "Nederlandse vertaling van de website. Elk paar: [Engels stuk zoals het in de gebouwde pagina staat, Nederlands]. {v} is de versie uit site.json. Langere stukken gaan eerst. Klopt een Engels stuk niet meer, dan stopt build.py en zegt welk.",
+ "vertalingen": [
+  [
+   "BugOS is a free operating system that can't break, keeps itself up to date and collects nothing about you. Made for Bugie, and just as nice for gamers and developers.",
+   "BugOS is een gratis besturingssysteem dat niet stuk kan, zichzelf bijwerkt en niets over je verzamelt. Gemaakt voor Bugie, en net zo fijn voor gamers en ontwikkelaars."
+  ],
+  [
+   "content=\"BugOS: the computer that just works\"",
+   "content=\"BugOS: de computer die gewoon werkt\""
+  ],
+  [
+   "Free, can't break and collects nothing about you. For Bugie, gamers and developers.",
+   "Gratis, kan niet stuk en verzamelt niets over je. Voor Bugie, gamers en ontwikkelaars."
+  ],
+  [
+   "\"BugOS, back to top\"",
+   "\"BugOS, terug naar boven\""
+  ],
+  [
+   "\"Main menu\"",
+   "\"Hoofdmenu\""
+  ],
+  [
+   "aria-label=\"Menu\"",
+   "aria-label=\"Menu openen\""
+  ],
+  [
+   "\"Light or dark\"",
+   "\"Licht of donker\""
+  ],
+  [
+   ">The story<",
+   ">Het verhaal<"
+  ],
+  [
+   ">How it works<",
+   ">Hoe het werkt<"
+  ],
+  [
+   ">Features<",
+   ">Functies<"
+  ],
+  [
+   ">Switching<",
+   ">Overstappen<"
+  ],
+  [
+   ">Questions<",
+   ">Vragen<"
+  ],
+  [
+   ">What's new<",
+   ">Wat is er nieuw<"
+  ],
+  [
+   "The computer that just works<span class=\"stip\">",
+   "De computer die gewoon werkt<span class=\"stip\">"
+  ],
+  [
+   "BugOS is an operating system that can't break, keeps itself up to date and collects nothing about you. Made for Bugie, and just as nice for gamers and developers.",
+   "BugOS is een besturingssysteem dat niet stuk kan, zichzelf bijwerkt en niets over je verzamelt. Gemaakt voor Bugie, en net zo fijn voor gamers en ontwikkelaars."
+  ],
+  [
+   ">Download BugOS<",
+   ">Download BugOS<"
+  ],
+  [
+   ">Read the story<",
+   ">Lees het verhaal<"
+  ],
+  [
+   ">Free</li>",
+   ">Gratis</li>"
+  ],
+  [
+   ">No account</li>",
+   ">Geen account</li>"
+  ],
+  [
+   ">0 trackers</li>",
+   ">0 trackers</li>"
+  ],
+  [
+   ">Built on Universal Blue, Fedora and KDE</li>",
+   ">Gebouwd op Universal Blue, Fedora en KDE</li>"
+  ],
+  [
+   "The BugOS desktop: the start menu with a 'Good afternoon' greeting and pinned apps, next to the BugOS Store, on the red Dot wallpaper.",
+   "Het BugOS-bureaublad: het startmenu met de groet 'Goedemiddag' en vastgezette apps, naast de BugOS Winkel, op de rode Stip-achtergrond."
+  ],
+  [
+   "<b>Updated last night</b><small>Nothing for you to do.</small>",
+   "<b>Vannacht bijgewerkt</b><small>Jij hoeft niets te doen.</small>"
+  ],
+  [
+   "\"BugOS in four numbers\"",
+   "\"BugOS in vier getallen\""
+  ],
+  [
+   "<span>Free, and it stays free</span>",
+   "<span>Gratis, en dat blijft zo</span>"
+  ],
+  [
+   "<span>Trackers, ads or accounts</span>",
+   "<span>Trackers, reclame of accounts</span>"
+  ],
+  [
+   "<span>Versions kept, always</span>",
+   "<span>Versies bewaard, altijd</span>"
+  ],
+  [
+   "<span>Choice to go back to yesterday</span>",
+   "<span>Keuze om terug te gaan naar gisteren</span>"
+  ],
+  [
+   "A <b>bug</b> is a little mistake in a computer. A <b>ladybug</b> eats the bugs that hurt your plants, and people say it brings <b>good luck</b>. That's why it's our logo. <b>BugOS cleans up the bugs</b>, so you can just do what you sat down at the computer for.",
+   "Een <b>bug</b> is een klein foutje in een computer. Een <b>lieveheersbeestje</b> eet de beestjes op die je planten kapotmaken, en men zegt dat het <b>geluk</b> brengt. Daarom is het ons logo. <b>BugOS ruimt de bugs op</b>, zodat jij gewoon kunt doen waarvoor je achter de computer ging zitten."
+  ],
+  [
+   "How the BugOS logo is built: two wings (1), four dots (2) and a head with two white spots (3), drawn with circles and one straight line.",
+   "Hoe het BugOS-logo is opgebouwd: twee vleugels (1), vier stippen (2) en een kop met twee witte vlekjes (3), getekend met cirkels en één rechte lijn."
+  ],
+  [
+   "Every part means something.",
+   "Elk deel betekent iets."
+  ],
+  [
+   "<h3>Two wings</h3>",
+   "<h3>Twee vleugels</h3>"
+  ],
+  [
+   "Today and yesterday. BugOS always keeps the previous version. If something goes wrong, you just fly on the other one.",
+   "Vandaag en gisteren. BugOS bewaart altijd de vorige versie. Gaat er iets mis, dan vlieg je gewoon verder op de andere."
+  ],
+  [
+   "<h3>Four dots</h3>",
+   "<h3>Vier stippen</h3>"
+  ],
+  [
+   "Four promises: it can't break, it's easy, it's yours and it's free.",
+   "Vier beloftes: het kan niet stuk, het is makkelijk, het is van jou en het is gratis."
+  ],
+  [
+   "<h3>A friendly head</h3>",
+   "<h3>Een vriendelijke kop</h3>"
+  ],
+  [
+   "With two white spots, just like a real ladybug. BugOS is never scary.",
+   "Met twee witte vlekjes, net als een echt lieveheersbeestje. BugOS is nooit eng."
+  ],
+  [
+   "The whole bug is drawn with round shapes and one straight line: the gap between the wings.",
+   "Het hele beestje is getekend met ronde vormen en één rechte lijn: de spleet tussen de vleugels."
+  ],
+  [
+   "Our rule: the Bugie test",
+   "Onze regel: de Bugie-test"
+  ],
+  [
+   "If Bugie doesn't get it, we make it again.",
+   "Snapt Bugie het niet, dan maken we het opnieuw."
+  ],
+  [
+   "That's the Bugie test. Every button, every word and every screen in BugOS has to pass it. If Bugie gets it, everyone gets it.",
+   "Dat is de Bugie-test. Elke knop, elk woord en elk scherm in BugOS moet erdoorheen. Snapt Bugie het, dan snapt iedereen het."
+  ],
+  [
+   "<h3>Big buttons</h3>",
+   "<h3>Grote knoppen</h3>"
+  ],
+  [
+   "Everything is big enough to hit, even without glasses.",
+   "Alles is groot genoeg om te raken, ook zonder bril."
+  ],
+  [
+   "<h3>Plain words</h3>",
+   "<h3>Gewone woorden</h3>"
+  ],
+  [
+   "No computer talk. It just says what happens: \"Make a backup\", \"Choose a USB stick\".",
+   "Geen computertaal. Er staat gewoon wat er gebeurt: \"Maak een back-up\", \"Kies een USB-stick\"."
+  ],
+  [
+   "<h3>Nothing can break</h3>",
+   "<h3>Niets kan stuk</h3>"
+  ],
+  [
+   "Every update is a complete new version. The previous one is always kept.",
+   "Elke update is een complete nieuwe versie. De vorige wordt altijd bewaard."
+  ],
+  [
+   "<h3>Nothing disappears</h3>",
+   "<h3>Niets verdwijnt</h3>"
+  ],
+  [
+   "BugOS never just throws something away. Not during a backup or an update either.",
+   "BugOS gooit nooit zomaar iets weg. Ook niet tijdens een back-up of een update."
+  ],
+  [
+   "BugOS Welcome, step 3 of 6: Light or dark? Two big cards to choose from.",
+   "BugOS Welkom, stap 3 van 6: Licht of donker? Twee grote kaarten om uit te kiezen."
+  ],
+  [
+   "BugOS Welcome: turning it on for the first time, step by step.",
+   "BugOS Welkom: de eerste keer aanzetten, stap voor stap."
+  ],
+  [
+   ">A day at home<",
+   ">Een dag thuis<"
+  ],
+  [
+   "One computer. Everyone at home.",
+   "Eén computer. Iedereen thuis."
+  ],
+  [
+   "The whole family shares one computer. This is a normal day with BugOS.",
+   "Het hele gezin deelt één computer. Zo ziet een gewone dag met BugOS eruit."
+  ],
+  [
+   "<h3>The computer is ready.</h3>",
+   "<h3>De computer staat klaar.</h3>"
+  ],
+  [
+   "You turn on the computer. The updates were already done last night, quietly in the background. You don't notice a thing.",
+   "Je zet de computer aan. De updates zijn vannacht al gedaan, rustig op de achtergrond. Je merkt er niets van."
+  ],
+  [
+   ">Automatic updates<",
+   ">Automatische updates<"
+  ],
+  [
+   "Settings, Updates: the 'Automatic updates' switch is on.",
+   "Instellingen, Updates: de schakelaar 'Automatische updates' staat aan."
+  ],
+  [
+   "<h3>The printer is acting up.</h3>",
+   "<h3>De printer doet raar.</h3>"
+  ],
+  [
+   "Open \"Something is not working\". BugOS checks the wifi, sound, the printer and more. If there's a problem, there's a button that fixes it for you.",
+   "Open \"Er werkt iets niet\". BugOS controleert de wifi, het geluid, de printer en meer. Is er een probleem, dan is er een knop die het voor je oplost."
+  ],
+  [
+   ">Help in one click<",
+   ">Hulp met één klik<"
+  ],
+  [
+   "Something is not working: everything has been checked, with a green dot next to internet, wifi, bluetooth, sound, printer, storage and updates.",
+   "Er werkt iets niet: alles is gecontroleerd, met een groene stip bij internet, wifi, bluetooth, geluid, printer, opslag en updates."
+  ],
+  [
+   "<h3>The holiday photos.</h3>",
+   "<h3>De vakantiefoto's.</h3>"
+  ],
+  [
+   "In Files, your photos, documents and downloads each have their own place, just like in Windows. You see a small preview of every file right away. Click something, and the bottom shows what you can do with it.",
+   "In Bestanden hebben je foto's, documenten en downloads elk hun eigen plek, net als in Windows. Je ziet meteen een klein voorbeeld van elk bestand. Klik iets aan, en onderin staat wat je ermee kunt doen."
+  ],
+  [
+   ">The file manager<",
+   ">De verkenner<"
+  ],
+  [
+   "Files, the BugOS file manager: the Pictures folder with folders and previews of the photos.",
+   "Bestanden, de verkenner van BugOS: de map Afbeeldingen met mappen en voorbeelden van de foto's."
+  ],
+  [
+   "<h3>Getting an app.</h3>",
+   "<h3>Een app halen.</h3>"
+  ],
+  [
+   "The BugOS Store has 60+ well-known, safe apps, and finds every other app on Flathub too. One click on Install and you're done. Don't need it any more? Every app can be removed again in My apps.",
+   "De BugOS Winkel heeft 60+ bekende, veilige apps, en vindt ook elke andere app op Flathub. Eén klik op Installeren en klaar. Heb je hem niet meer nodig? Elke app kan weer weg in Mijn apps."
+  ],
+  [
+   ">The BugOS Store<",
+   ">De BugOS Winkel<"
+  ],
+  [
+   "The BugOS Store with recommended apps: Firefox, LibreOffice, Gwenview, VLC and Steam are installed, Spotify has an Install button.",
+   "De BugOS Winkel met aanbevolen apps: Firefox, LibreOffice, Gwenview, VLC en Steam zijn geïnstalleerd, Spotify heeft een knop Installeren."
+  ],
+  [
+   "<h3>Time to game.</h3>",
+   "<h3>Tijd om te gamen.</h3>"
+  ],
+  [
+   "Game mode on in the quick menu, plug in the controller, play. Steam is set up for you, and the Nvidia version of BugOS has the right driver built in.",
+   "Game-modus aan in het snelmenu, controller erin, spelen. Steam staat al voor je klaar, en de Nvidia-versie van BugOS heeft de juiste driver ingebouwd."
+  ],
+  [
+   ">For gamers<",
+   ">Voor gamers<"
+  ],
+  [
+   "The quick menu with big buttons for Wi-Fi, Bluetooth, game mode, dark, do not disturb and mute, and a volume slider. Dark is on.",
+   "Het snelmenu met grote knoppen voor wifi, bluetooth, game-modus, donker, niet storen en geluid uit, en een volumeschuif. Donker staat aan."
+  ],
+  [
+   "<h3>Time to code.</h3>",
+   "<h3>Tijd om te programmeren.</h3>"
+  ],
+  [
+   "Settings → Apps and gaming → Developer mode. One switch sets up VS Code, containers and programming languages. Everything lives in its own little box, so the system stays intact. Nobody else at home sees any of it.",
+   "Instellingen → Apps en gamen → Ontwikkelaarsmodus. Eén schakelaar zet VS Code, containers en programmeertalen klaar. Alles woont in een eigen doosje, dus het systeem blijft heel. Niemand anders thuis ziet er iets van."
+  ],
+  [
+   ">For developers<",
+   ">Voor ontwikkelaars<"
+  ],
+  [
+   "A terminal: developer mode is on and a project opens in VS Code.",
+   "Een terminal: de ontwikkelaarsmodus staat aan en een project gaat open in VS Code."
+  ],
+  [
+   "# Developer mode is on",
+   "# Ontwikkelaarsmodus staat aan"
+  ],
+  [
+   "✓ ready to code",
+   "✓ klaar om te programmeren"
+  ],
+  [
+   ">Unbreakable<",
+   ">Onbreekbaar<"
+  ],
+  [
+   "Something went wrong? Pick yesterday.",
+   "Ging er iets mis? Kies gisteren."
+  ],
+  [
+   "BugOS is updated as a whole, as one new version. The previous version is kept. Does something not work after an update? Then pick yesterday's version when you start up, and everything is back the way it was.",
+   "BugOS wordt in zijn geheel bijgewerkt, als één nieuwe versie. De vorige versie blijft bewaard. Werkt er na een update iets niet? Kies dan bij het opstarten de versie van gisteren, en alles is weer zoals het was."
+  ],
+  [
+   "Updates happen by themselves, quietly in the background",
+   "Updates gaan vanzelf, rustig op de achtergrond"
+  ],
+  [
+   "Only active after a restart, never in the middle of your work",
+   "Pas actief na een herstart, nooit midden in je werk"
+  ],
+  [
+   "Rather choose yourself? One switch in Settings",
+   "Liever zelf kiezen? Eén schakelaar in Instellingen"
+  ],
+  [
+   "<span>Boot menu</span><span>Try it yourself</span>",
+   "<span>Opstartmenu</span><span>Probeer het zelf</span>"
+  ],
+  [
+   "<small>today</small>",
+   "<small>vandaag</small>"
+  ],
+  [
+   "<small>yesterday</small>",
+   "<small>gisteren</small>"
+  ],
+  [
+   "Everything works. Your computer is updated to the newest version.",
+   "Alles werkt. Je computer is bijgewerkt naar de nieuwste versie."
+  ],
+  [
+   "Oops! After the update, the printer stopped working.",
+   "Oei! Na de update doet de printer het niet meer."
+  ],
+  [
+   "Fixed! Your computer is exactly like it was yesterday. The printer works.",
+   "Opgelost! Je computer is precies zoals hij gisteren was. De printer doet het."
+  ],
+  [
+   "\"One more time\"",
+   "\"Nog een keer\""
+  ],
+  [
+   ">Pretend something goes wrong<",
+   ">Doe alsof er iets misgaat<"
+  ],
+  [
+   ">Pick yesterday<",
+   ">Kies gisteren<"
+  ],
+  [
+   ">Also in BugOS<",
+   ">Ook in BugOS<"
+  ],
+  [
+   "Everything you need. Nothing you don't understand.",
+   "Alles wat je nodig hebt. Niets wat je niet snapt."
+  ],
+  [
+   "<h3>One-button backup</h3>",
+   "<h3>Back-up met één knop</h3>"
+  ],
+  [
+   "Plug in a USB drive, press the button and your documents, photos, music and videos are safe. Nothing is ever thrown away.",
+   "Steek een USB-schijf in, druk op de knop en je documenten, foto's, muziek en video's zijn veilig. Er wordt nooit iets weggegooid."
+  ],
+  [
+   "Backup: choose what goes along (documents, pictures, music, videos, desktop, downloads) and a USB stick, then press Make backup.",
+   "Back-up: kies wat er mee gaat (documenten, afbeeldingen, muziek, video's, bureaublad, downloads) en een USB-stick, en druk op Back-up maken."
+  ],
+  [
+   "<h3>One search for everything</h3>",
+   "<h3>Eén zoekbalk voor alles</h3>"
+  ],
+  [
+   "Open the start menu and type what you're looking for: an app or a setting.",
+   "Open het startmenu en typ wat je zoekt: een app of een instelling."
+  ],
+  [
+   "The start menu: a greeting, a search box for apps and settings, pinned apps, and buttons to lock, sign out, restart and shut down.",
+   "Het startmenu: een groet, een zoekvak voor apps en instellingen, vastgezette apps, en knoppen om te vergrendelen, af te melden, opnieuw op te starten en af te sluiten."
+  ],
+  [
+   "<h3>Windows programs</h3>",
+   "<h3>Windows-programma's</h3>"
+  ],
+  [
+   "Double-click an .exe and it starts. Is there a better version for BugOS? Then BugOS tells you.",
+   "Dubbelklik op een .exe en hij start. Is er een betere versie voor BugOS? Dan zegt BugOS het je."
+  ],
+  [
+   "<h3>Fast on old PCs</h3>",
+   "<h3>Snel op oude pc's</h3>"
+  ],
+  [
+   "Not much memory? BugOS turns off the heavy effects by itself.",
+   "Weinig geheugen? BugOS zet de zware effecten vanzelf uit."
+  ],
+  [
+   "<h3>Movies and music</h3>",
+   "<h3>Films en muziek</h3>"
+  ],
+  [
+   "All common files play right away. Nothing extra needed.",
+   "Alle gewone bestanden spelen meteen af. Niets extra nodig."
+  ],
+  [
+   "<h3>Files from Windows</h3>",
+   "<h3>Bestanden uit Windows</h3>"
+  ],
+  [
+   "Bring your documents, photos, bookmarks and even your wallpaper along from your old computer.",
+   "Neem je documenten, foto's, bladwijzers en zelfs je achtergrond mee van je oude computer."
+  ],
+  [
+   "Your files from Windows: documents, bookmarks and wallpaper, put back from the USB stick with one button.",
+   "Je bestanden uit Windows: documenten, bladwijzers en achtergrond, met één knop teruggezet van de USB-stick."
+  ],
+  [
+   "<h3>Settings in plain words</h3>",
+   "<h3>Instellingen in gewone woorden</h3>"
+  ],
+  [
+   "Everything in one place, in everyday words. The switches you use most are right at the top.",
+   "Alles op één plek, in woorden van elke dag. De schakelaars die je het meest gebruikt staan bovenaan."
+  ],
+  [
+   "Settings: ten groups in the sidebar, switches for night light and dark, a volume slider and a list of all settings with a short explanation each.",
+   "Instellingen: tien groepen in de zijbalk, schakelaars voor nachtlicht en donker, een volumeschuif en een lijst van alle instellingen met elk een korte uitleg."
+  ],
+  [
+   "<h3>In your language</h3>",
+   "<h3>In jouw taal</h3>"
+  ],
+  [
+   "English by default, with Dutch and other languages ready too. Volunteers translate without writing code.",
+   "Standaard Engels, en Nederlands en andere talen staan ook klaar. Vrijwilligers vertalen zonder code te schrijven."
+  ],
+  [
+   "<h3>Nvidia and controllers</h3>",
+   "<h3>Nvidia en controllers</h3>"
+  ],
+  [
+   "The right driver is built in. Xbox and PlayStation controllers work right away.",
+   "De juiste driver zit erin. Xbox- en PlayStation-controllers werken meteen."
+  ],
+  [
+   "<h3>Light or dark</h3>",
+   "<h3>Licht of donker</h3>"
+  ],
+  [
+   "Pick what you like to look at. Everything follows along. Try it below.",
+   "Kies waar je graag naar kijkt. Alles doet mee. Probeer het hieronder."
+  ],
+  [
+   "<span class=\"label\">Light or dark</span>",
+   "<span class=\"label\">Licht of donker</span>"
+  ],
+  [
+   ">You choose.<",
+   ">Jij kiest.<"
+  ],
+  [
+   "Go ahead, slide it back and forth. Every app, every menu and the wallpaper follow along.",
+   "Ga je gang, schuif maar heen en weer. Elke app, elk menu en de achtergrond doen mee."
+  ],
+  [
+   "The BugOS desktop in dark.",
+   "Het BugOS-bureaublad in donker."
+  ],
+  [
+   "The BugOS desktop in light.",
+   "Het BugOS-bureaublad in licht."
+  ],
+  [
+   "<span class=\"etiket l\">Light</span><span class=\"etiket r\">Dark</span>",
+   "<span class=\"etiket l\">Licht</span><span class=\"etiket r\">Donker</span>"
+  ],
+  [
+   "\"Slide between light and dark\"",
+   "\"Schuif tussen licht en donker\""
+  ],
+  [
+   "<li class=\"rv\">trackers</li><li class=\"rv\" style=\"--d:.08s\">ads</li><li class=\"rv\" style=\"--d:.16s\">accounts</li>",
+   "<li class=\"rv\">trackers</li><li class=\"rv\" style=\"--d:.08s\">reclame</li><li class=\"rv\" style=\"--d:.16s\">accounts</li>"
+  ],
+  [
+   "Your computer is yours. BugOS collects nothing, shows no ads and never asks for an account. This website doesn't use cookies either.",
+   "Je computer is van jou. BugOS verzamelt niets, laat geen reclame zien en vraagt nooit om een account. Deze website gebruikt ook geen cookies."
+  ],
+  [
+   "From Windows to BugOS in four steps.",
+   "Van Windows naar BugOS in vier stappen."
+  ],
+  [
+   "The little BugOS Switch program does the heavy lifting on your Windows computer. Nothing happens until you press a button.",
+   "Het programmaatje BugOS Switch doet het zware werk op je Windows-computer. Er gebeurt niets tot jij op een knop drukt."
+  ],
+  [
+   "<h3>Check</h3>",
+   "<h3>Controleren</h3>"
+  ],
+  [
+   "Can your computer run BugOS? BugOS Switch checks it for you.",
+   "Kan je computer BugOS aan? BugOS Switch kijkt het voor je na."
+  ],
+  [
+   "<h3>Bring along</h3>",
+   "<h3>Meenemen</h3>"
+  ],
+  [
+   "Your files, bookmarks, wallpaper, settings, Wi-Fi names and printers go to a USB drive. Passwords never do.",
+   "Je bestanden, bladwijzers, achtergrond, instellingen, wifi-namen en printers gaan naar een USB-schijf. Wachtwoorden nooit."
+  ],
+  [
+   "<h3>Make room</h3>",
+   "<h3>Ruimte maken</h3>"
+  ],
+  [
+   "Want to keep Windows? Then BugOS Switch makes room, so BugOS fits next to it.",
+   "Wil je Windows houden? Dan maakt BugOS Switch ruimte, zodat BugOS ernaast past."
+  ],
+  [
+   "<h3>Make a USB stick</h3>",
+   "<h3>USB-stick maken</h3>"
+  ],
+  [
+   "BugOS is downloaded, checked and put on a USB stick.",
+   "BugOS wordt gedownload, gecontroleerd en op een USB-stick gezet."
+  ],
+  [
+   "BugOS Switch on Windows, step 1 of 4: Can my computer run BugOS? Green check marks next to 64-bit, memory, UEFI and space on C:, and a tip to choose the Nvidia version.",
+   "BugOS Switch op Windows, stap 1 van 4: Kan mijn computer BugOS aan? Groene vinkjes bij 64-bit, geheugen, UEFI en ruimte op C:, en een tip om de Nvidia-versie te kiezen."
+  ],
+  [
+   "<li class=\"klaar\">Welcome</li><li class=\"nu\">Check</li><li>Take your files</li><li>Make space</li><li>Make USB stick</li>",
+   "<li class=\"klaar\">Welkom</li><li class=\"nu\">Controleren</li><li>Bestanden meenemen</li><li>Ruimte maken</li><li>USB-stick maken</li>"
+  ],
+  [
+   "Nothing happens until you press a button.",
+   "Er gebeurt niks zonder dat jij op een knop drukt."
+  ],
+  [
+   ">STEP 1 OF 4<",
+   ">STAP 1 VAN 4<"
+  ],
+  [
+   "<h3>Can my computer run BugOS?</h3>",
+   "<h3>Kan mijn computer BugOS aan?</h3>"
+  ],
+  [
+   "<small>Your computer is 64-bit. Good!</small>",
+   "<small>Je computer is 64-bit. Goed!</small>"
+  ],
+  [
+   "<b>Memory</b><small>16 GB. Plenty.</small>",
+   "<b>Geheugen</b><small>16 GB. Ruim genoeg.</small>"
+  ],
+  [
+   "<small>Your computer boots the modern way (UEFI). Good!</small>",
+   "<small>Je computer start op de moderne manier (UEFI). Goed!</small>"
+  ],
+  [
+   "<b>Space on C:</b><small>212 GB free. Enough to put BugOS next to Windows.</small>",
+   "<b>Ruimte op C:</b><small>212 GB vrij. Genoeg om BugOS naast Windows te zetten.</small>"
+  ],
+  [
+   "<b>Graphics</b><small>Nvidia found (GeForce RTX 3060). Choose the 'bugos-nvidia' version.</small>",
+   "<b>Videokaart</b><small>Nvidia gevonden (GeForce RTX 3060). Kies de versie 'bugos-nvidia'.</small>"
+  ],
+  [
+   "<span>Back</span><span>Next</span>",
+   "<span>Terug</span><span>Volgende</span>"
+  ],
+  [
+   "In BugOS, \"Bring everything from your old PC\" puts it all back with one button. Changed your mind? \"Undo everything\" puts it back the way it was.",
+   "In BugOS zet \"Haal alles van je oude pc\" alles met één knop terug. Toch niet? \"Alles terugdraaien\" maakt het weer zoals het was."
+  ],
+  [
+   ">Good to know<",
+   ">Goed om te weten<"
+  ],
+  [
+   ">What do you need?<",
+   ">Wat heb je nodig?<"
+  ],
+  [
+   "<th scope=\"col\">Part</th><th scope=\"col\">Minimum</th><th scope=\"col\">Nice to have</th>",
+   "<th scope=\"col\">Onderdeel</th><th scope=\"col\">Minimaal</th><th scope=\"col\">Fijn om te hebben</th>"
+  ],
+  [
+   "<th scope=\"row\">Computer</th><td>64-bit, Intel or AMD</td><td>From the last 10 years</td>",
+   "<th scope=\"row\">Computer</th><td>64-bit, Intel of AMD</td><td>Uit de laatste 10 jaar</td>"
+  ],
+  [
+   "<th scope=\"row\">Memory</th><td>4 GB</td><td>8 GB or more</td>",
+   "<th scope=\"row\">Geheugen</th><td>4 GB</td><td>8 GB of meer</td>"
+  ],
+  [
+   "<th scope=\"row\">Storage</th><td>40 GB</td><td>128 GB, on an SSD</td>",
+   "<th scope=\"row\">Opslag</th><td>40 GB</td><td>128 GB, op een SSD</td>"
+  ],
+  [
+   "<th scope=\"row\">USB stick</th>",
+   "<th scope=\"row\">USB-stick</th>"
+  ],
+  [
+   "<th scope=\"row\">Graphics card</th><td>Intel, AMD or Nvidia</td><td>Nvidia GTX 16 or RTX</td>",
+   "<th scope=\"row\">Videokaart</th><td>Intel, AMD of Nvidia</td><td>Nvidia GTX 16 of RTX</td>"
+  ],
+  [
+   "<summary>Is BugOS really free?</summary>",
+   "<summary>Is BugOS echt gratis?</summary>"
+  ],
+  [
+   "<summary>Will my Windows programs work?</summary>",
+   "<summary>Werken mijn Windows-programma's?</summary>"
+  ],
+  [
+   "Many will. Double-click an .exe and BugOS starts it with Wine. For well-known programs, like Spotify or Zoom, BugOS offers the real BugOS version right away. Some programs, like Adobe or the newest Office, don't work; for those, BugOS suggests a good alternative.",
+   "Veel wel. Dubbelklik op een .exe en BugOS start hem met Wine. Voor bekende programma's, zoals Spotify of Zoom, biedt BugOS meteen de echte BugOS-versie aan. Sommige programma's, zoals Adobe of de nieuwste Office, werken niet; daarvoor stelt BugOS een goed alternatief voor."
+  ],
+  [
+   "<summary>Can I keep Windows?</summary>",
+   "<summary>Kan ik Windows houden?</summary>"
+  ],
+  [
+   "Yes. BugOS Switch can make Windows a bit smaller, so BugOS fits next to it. When you start up, you pick which one you want to use.",
+   "Ja. BugOS Switch kan Windows wat kleiner maken, zodat BugOS ernaast past. Bij het opstarten kies je welke je wilt gebruiken."
+  ],
+  [
+   "<summary>What if an update goes wrong?</summary>",
+   "<summary>Wat als een update misgaat?</summary>"
+  ],
+  [
+   "Then you pick yesterday's version when you start up. Everything is back the way it was. You can also do it from Settings, with the \"Back to previous version\" button.",
+   "Dan kies je bij het opstarten de versie van gisteren. Alles is weer zoals het was. Het kan ook vanuit Instellingen, met de knop \"Terug naar de vorige versie\"."
+  ],
+  [
+   "<summary>Is it good for gaming?</summary>",
+   "<summary>Is het goed om op te gamen?</summary>"
+  ],
+  [
+   "For sure. Steam with Proton is built in, controllers work in Steam games and game mode gets the most out of your computer. Games with strict anti-cheat (some online shooters) sometimes don't work; check protondb.com to be sure.",
+   "Zeker. Steam met Proton zit erin, controllers werken in Steam-games en de game-modus haalt het meeste uit je computer. Games met strenge anti-cheat (sommige online shooters) werken soms niet; kijk voor de zekerheid op protondb.com."
+  ],
+  [
+   "<summary>Will my printer work?</summary>",
+   "<summary>Werkt mijn printer?</summary>"
+  ],
+  [
+   "Most printers work right away. Doesn't yours? Then open \"Something is not working\": BugOS checks it and helps you add the printer.",
+   "De meeste printers werken meteen. Die van jou niet? Open dan \"Er werkt iets niet\": BugOS kijkt het na en helpt je de printer toe te voegen."
+  ],
+  [
+   "<summary>Is BugOS safe?</summary>",
+   "<summary>Is BugOS veilig?</summary>"
+  ],
+  [
+   "Yes. Programs can't change the system itself, apps run in their own closed-off space and updates come by themselves. Every update carries BugOS's own signature, and your computer refuses one that doesn't. On top of that, BugOS collects nothing about you.",
+   "Ja. Programma's kunnen het systeem zelf niet veranderen, apps draaien in hun eigen afgesloten ruimte en updates komen vanzelf. Elke update draagt de eigen handtekening van BugOS, en je computer weigert er een zonder. En BugOS verzamelt niets over je."
+  ],
+  [
+   "<summary>Do my passwords come along from Windows?</summary>",
+   "<summary>Gaan mijn wachtwoorden mee uit Windows?</summary>"
+  ],
+  [
+   "No, never. BugOS Switch takes your files, bookmarks, settings, Wi-Fi names and printers, but no passwords: not for your Wi-Fi, not from your browser and not from your e-mail. You sign in once more in BugOS, and that's it.",
+   "Nee, nooit. BugOS Switch neemt je bestanden, bladwijzers, instellingen, wifi-namen en printers mee, maar geen wachtwoorden: niet van je wifi, niet uit je browser en niet van je e-mail. Je meldt je in BugOS nog één keer aan, en klaar."
+  ],
+  [
+   ">What's new</span>",
+   ">Wat is er nieuw</span>"
+  ],
+  [
+   "New in BugOS {v}.",
+   "Nieuw in BugOS {v}."
+  ],
+  [
+   "Safer updates, a smarter move from Windows and a lot of small things that make every day easier.",
+   "Veiligere updates, slimmer overstappen vanaf Windows en heel veel kleine dingen die elke dag makkelijker maken."
+  ],
+  [
+   "<h3>Signed updates</h3>",
+   "<h3>Ondertekende updates</h3>"
+  ],
+  [
+   "Your computer only installs an update that carries BugOS's own signature. Even someone who broke into our account couldn't send you a fake one.",
+   "Je computer installeert alleen een update met de eigen handtekening van BugOS. Zelfs iemand die in ons account inbreekt, kan je geen nep-update sturen."
+  ],
+  [
+   "<span class=\"tag\">Safety</span>",
+   "<span class=\"tag\">Veiligheid</span>"
+  ],
+  [
+   "<h3>Bring everything from your old PC</h3>",
+   "<h3>Haal alles van je oude pc</h3>"
+  ],
+  [
+   "Files, extra folders, bookmarks, settings, Wi-Fi names, printers, fonts and e-mail. Never a password. Changed your mind? Undo everything.",
+   "Bestanden, extra mappen, bladwijzers, instellingen, wifi-namen, printers, lettertypen en e-mail. Nooit een wachtwoord. Toch niet? Alles terugdraaien."
+  ],
+  [
+   "<span class=\"tag\">Switching</span>",
+   "<span class=\"tag\">Overstappen</span>"
+  ],
+  [
+   "<h3>A Task Manager</h3>",
+   "<h3>Taakbeheer</h3>"
+  ],
+  [
+   "Ctrl+Shift+Esc, just like in Windows. It tells you in plain words how your computer is doing, and closes a program that's stuck.",
+   "Ctrl+Shift+Esc, net als in Windows. Het zegt in gewone woorden hoe het met je computer gaat, en sluit een programma dat vastzit."
+  ],
+  [
+   "<span class=\"tag\">New app</span>",
+   "<span class=\"tag\">Nieuwe app</span>"
+  ],
+  [
+   "<h3>60+ apps, and every app can go</h3>",
+   "<h3>60+ apps, en elke app kan weg</h3>"
+  ],
+  [
+   "The Store has more apps and searches all of Flathub. Firefox and Steam are normal apps now, so you can remove anything in My apps.",
+   "De Winkel heeft meer apps en zoekt in heel Flathub. Firefox en Steam zijn nu gewone apps, dus je kunt alles verwijderen in Mijn apps."
+  ],
+  [
+   "<span class=\"tag\">BugOS Store</span>",
+   "<span class=\"tag\">BugOS Winkel</span>"
+  ],
+  [
+   "<h3>Right-click in the start menu</h3>",
+   "<h3>Rechtsklikken in het startmenu</h3>"
+  ],
+  [
+   "Every app has its own menu, like in Windows 11: open a new window, pin it to Start or the taskbar, or uninstall it.",
+   "Elke app heeft zijn eigen menu, zoals in Windows 11: een nieuw venster openen, vastzetten aan Start of de taakbalk, of verwijderen."
+  ],
+  [
+   "<span class=\"tag\">Start menu</span>",
+   "<span class=\"tag\">Startmenu</span>"
+  ],
+  [
+   "<h3>English first, made for everyone</h3>",
+   "<h3>Eerst Engels, gemaakt voor iedereen</h3>"
+  ],
+  [
+   "BugOS starts in English and works with the date, time and keyboard of your country. You pick your own language while installing.",
+   "BugOS start in het Engels en werkt met de datum, tijd en het toetsenbord van jouw land. Je kiest je eigen taal tijdens het installeren."
+  ],
+  [
+   "<span class=\"tag\">Languages</span>",
+   "<span class=\"tag\">Talen</span>"
+  ],
+  [
+   "Want every detail? <a",
+   "Alle details? <a"
+  ],
+  [
+   ">See all changes on GitHub<",
+   ">Bekijk alle wijzigingen op GitHub<"
+  ],
+  [
+   "<h2 class=\"rv\">Try BugOS.<br>It's free.</h2>",
+   "<h2 class=\"rv\">Probeer BugOS.<br>Het is gratis.</h2>"
+  ],
+  [
+   "Welcome to BugOS, running from the USB stick: two buttons, Try first and Install BugOS.",
+   "Welkom bij BugOS, vanaf de USB-stick: twee knoppen, Eerst proberen en BugOS installeren."
+  ],
+  [
+   "Running from the USB stick: nothing on your computer has changed yet.",
+   "Vanaf de USB-stick: er is nog niets aan je computer veranderd."
+  ],
+  [
+   "For most computers and laptops, with an Intel or AMD processor.",
+   "Voor de meeste computers en laptops, met een Intel- of AMD-processor."
+  ],
+  [
+   "<h3>BugOS for Nvidia</h3>",
+   "<h3>BugOS voor Nvidia</h3>"
+  ],
+  [
+   "Do you have an Nvidia graphics card (GTX 16 or RTX)? Then the right driver is already in there.",
+   "Heb je een Nvidia-videokaart (GTX 16 of RTX)? Dan zit de juiste driver er al in."
+  ],
+  [
+   "<h3>Still on Windows?</h3>",
+   "<h3>Nog op Windows?</h3>"
+  ],
+  [
+   "BugOS Switch picks the right version, brings your files along and makes the USB stick for you.",
+   "BugOS Switch kiest de juiste versie, neemt je bestanden mee en maakt de USB-stick voor je."
+  ],
+  [
+   "For Windows 10 and 11",
+   "Voor Windows 10 en 11"
+  ],
+  [
+   "Already on Fedora Atomic or Bazzite?",
+   "Al op Fedora Atomic of Bazzite?"
+  ],
+  [
+   "Switch without a USB stick. Type this in the terminal and restart:",
+   "Stap over zonder USB-stick. Typ dit in de terminal en start opnieuw op:"
+  ],
+  [
+   "data-klaar=\"Copied ✓\">Copy<",
+   "data-klaar=\"Gekopieerd ✓\">Kopieer<"
+  ],
+  [
+   "<li><b>64-bit</b> computer</li>",
+   "<li><b>64-bit</b> computer</li>"
+  ],
+  [
+   "<li><b>4 GB</b> memory</li>",
+   "<li><b>4 GB</b> geheugen</li>"
+  ],
+  [
+   "<li><b>40 GB</b> free space</li>",
+   "<li><b>40 GB</b> vrije ruimte</li>"
+  ],
+  [
+   "<li><b>8 GB</b> USB stick</li>",
+   "<li><b>8 GB</b> USB-stick</li>"
+  ],
+  [
+   "BugOS is still in development (version {v}). Try it on a spare computer or in a virtual machine first.",
+   "BugOS is nog in ontwikkeling (versie {v}). Probeer het eerst op een reservecomputer of in een virtuele machine."
+  ],
+  [
+   "The computer that just works. Free, safe and open, for everyone at home.",
+   "De computer die gewoon werkt. Gratis, veilig en open, voor iedereen thuis."
+  ],
+  [
+   "<h4>Get involved</h4>",
+   "<h4>Doe mee</h4>"
+  ],
+  [
+   ">Translate<",
+   ">Vertalen<"
+  ],
+  [
+   ">Brand guide<",
+   ">Huisstijl<"
+  ],
+  [
+   ">Report a security issue<",
+   ">Een beveiligingsprobleem melden<"
+  ],
+  [
+   "<h4>Built on</h4>",
+   "<h4>Gebouwd op</h4>"
+  ],
+  [
+   "This website uses no cookies and no tracking.",
+   "Deze website gebruikt geen cookies en volgt je niet."
+  ],
+  [
+   "About 5.6 GB · 64-bit · <a",
+   "Ongeveer 5,6 GB · 64-bit · <a"
+  ],
+  [
+   "About 6 GB · 64-bit · <a",
+   "Ongeveer 6 GB · 64-bit · <a"
+  ],
+  [
+   ">Checksum</a>",
+   ">Controlegetal</a>"
+  ],
+  [
+   "Start from a USB stick and look around first. Your computer only changes when you press \"Install BugOS\". Installing fetches BugOS over the internet, so you always get exactly the version you tried.",
+   "Start vanaf een USB-stick en kijk eerst rond. Je computer verandert pas als je op \"BugOS installeren\" drukt. Bij het installeren haalt hij BugOS via internet op, precies de versie die je probeerde."
+  ],
+  [
+   "<li><b>Internet</b> for installing</li>",
+   "<li><b>Internet</b> om te installeren</li>"
+  ],
+  [
+   "BugOS {v} · Free · Open code",
+   "BugOS {v} · Gratis · Open code"
+  ],
+  [
+   "Yes, for everyone at home, at school and at non-profits, and it stays that way. The source code is open, so anyone can see how it works and help improve it. Making money with BugOS (selling it, putting it on computers you sell, or using it in a business) is not allowed without permission. There are no ads and you don't need an account.",
+   "Ja, voor iedereen thuis, op school en bij organisaties zonder winstoogmerk, en dat blijft zo. De broncode is open, dus iedereen kan zien hoe het werkt en meehelpen het beter te maken. Geld verdienen met BugOS (het verkopen, het op computers zetten die je verkoopt, of het in een bedrijf gebruiken) mag niet zonder toestemming. Er is geen reclame en je hebt geen account nodig."
+  ],
+  [
+   "BugOS is free for noncommercial use (PolyForm Noncommercial license).",
+   "BugOS is gratis voor niet-commercieel gebruik (PolyForm Noncommercial-licentie)."
+  ],
+  [
+   ">License</a>",
+   ">Licentie</a>"
+  ]
+ ]
+}

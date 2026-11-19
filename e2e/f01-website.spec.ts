@@ -224,3 +224,53 @@ test('F01-N2 a page that does not exist gives a 404, not the home page', async (
   const response = await page.request.get('/this-page-does-not-exist');
   expect(response.status()).toBe(404);
 });
+
+test('F01-L1 English is the default: / is English and links to the Dutch page, which links back', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('The computer that just works.');
+  await page.getByRole('link', { name: 'Nederlands' }).first().click();
+  await expect(page).toHaveURL(/nl\.html$/);
+  await expect(page.locator('html')).toHaveAttribute('lang', 'nl');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('De computer die gewoon werkt.');
+  await page.getByRole('link', { name: 'English' }).first().click();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+});
+
+test('F01-L2 the Dutch page passes the accessibility scan in light and dark, and its demo speaks Dutch', async ({ page }) => {
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    await page.goto('/nl.html');
+    await scrollThrough(page);
+    await expectAccessible(page);
+  }
+  const wrong = page.getByRole('button', { name: 'Doe alsof er iets misgaat' });
+  await wrong.scrollIntoViewIfNeeded();
+  await wrong.click();
+  await expect(page.getByText('Oei! Na de update doet de printer het niet meer.')).toBeVisible();
+  await page.getByRole('button', { name: 'Kies gisteren' }).click();
+  await expect(page.getByRole('button', { name: 'Nog een keer' })).toBeVisible();
+});
+
+test('F01-L3 the Dutch page: every image loads and every link inside the page goes somewhere', async ({ page }) => {
+  await page.goto('/nl.html');
+  await scrollThrough(page);
+  const broken = await page.evaluate(() => [...document.images]
+    .filter((img) => img.getClientRects().length && img.getBoundingClientRect().width > 0)
+    .filter((img) => !img.complete || img.naturalWidth === 0).map((img) => img.currentSrc || img.src));
+  expect(broken).toEqual([]);
+  const missing = await page.evaluate(() => [...document.querySelectorAll('a[href^="#"]')]
+    .map((a) => a.getAttribute('href')!)
+    .filter((href) => href !== '#' && !document.getElementById(href.slice(1))));
+  expect(missing).toEqual([]);
+});
+
+test('F01-S1 the shared-hosting files are there: 404 page, robots.txt and the web manifest', async ({ page }) => {
+  for (const path of ['/404.html', '/robots.txt', '/site.webmanifest']) {
+    const response = await page.request.get(path);
+    expect(response.status(), path).toBe(200);
+  }
+  await page.goto('/404.html');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('This page flew away.');
+  await expectAccessible(page);
+});

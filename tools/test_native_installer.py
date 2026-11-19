@@ -235,6 +235,40 @@ def test_live() -> None:
     klopt(duur < 0.5, f"22: een trage nmcli laat het venster niet vastlopen ({duur:.2f} s)")
     wacht(app, lambda: not w._bezig, 8)
     w.close()
+
+    # 30. Gewone stick (build.sh: stick-modus 'online'): het installatieprogramma haalt BugOS van internet. Zonder
+    # internet staat 'BugOS installeren' uit en zegt de chip waarom; met internet staat hij aan. Proberen kan altijd.
+    nep("nmcli", f'case "$*" in *CONNECTIVITY*) cat \'{TMP}/conn\' ;; *TYPE*) cat \'{TMP}/types\' ;; esac')
+    os.environ["BUGOS_STICK_MODUS"] = "online"
+    try:
+        (TMP / "conn").write_text("none\n", encoding="utf-8")
+        (TMP / "types").write_text("wifi\n", encoding="utf-8")
+        wo = live.Live()
+        wo.timer.stop()
+        wo.show()
+        wacht(app, lambda: not wo._bezig, 8)
+        klopt(not wo.installeren.isEnabled() and "Connect to the internet" in wo.chip.text() and not wo.wifi.isHidden(),
+              f"30: online-stick zonder internet: 'Install BugOS' staat uit, de chip zegt waarom, 'Choose Wi-Fi' staat er ({wo.chip.text()})")
+        (TMP / "conn").write_text("full\n", encoding="utf-8")
+        wo.kijk_internet()
+        wacht(app, lambda: not wo._bezig, 8)
+        klopt(wo.installeren.isEnabled() and "ready to install" in wo.chip.text() and wo.wifi.isHidden(),
+              f"30: online-stick met internet: 'Install BugOS' staat aan ({wo.chip.text()})")
+        wo.close()
+        VASTHOUDEN.append(wo)   # niet halverwege door Python laten opruimen (dat liet Qt vallen, zie w0)
+    finally:
+        os.environ.pop("BUGOS_STICK_MODUS", None)
+        (TMP / "conn").write_text("none\n", encoding="utf-8")
+        nep("nmcli", "sleep 3; echo full")   # zoals de tests hiervoor het achterlieten
+    klopt(live.stick_offline(), "30: zonder stick-modus (oude stick, of de test): offline, zoals vroeger")
+    bouw = bron("build.sh")
+    klopt("echo \"$STICK_MODUS\" >/usr/share/bugos/stick-modus" in bouw and "stick-manifest.json" in bouw
+          and 'ostreecontainer ${INSTALL_BRON}' in bouw,
+          "30: build.sh schrijft de stick-modus en het manifest, en de kickstart gebruikt de gekozen bron")
+    klopt(not re.search(r"skopeo inspect[^\n]*SKOPEO_ARGS", bouw) and not re.search(r"skopeo copy[^\n]*INSPECT_ARGS", bouw),
+          "30: skopeo inspect krijgt --authfile (INSPECT_ARGS), skopeo copy --src-authfile (SKOPEO_ARGS): niet verwisseld")
+    klopt('[ -n "${IMAGE_SOURCE:-}" ]' in bouw and "BUGOS_OFFLINE=1" in bouw,
+          "30: een lokale bouw (IMAGE_SOURCE) is altijd een offline stick (die BugOS staat niet op GitHub)")
     test_klaar(app, live)
     test_start(app, live)
 
@@ -562,6 +596,9 @@ def maak_oci(map_: Path, lagen: dict[str, int]) -> None:
         {"layers": [{"digest": f"sha256:{h}", "size": g} for h, g in lagen.items()]}), encoding="utf-8")
 
 
+VASTHOUDEN: list = []
+
+
 def test_voortgang() -> None:
     import re
     import threading
@@ -572,6 +609,17 @@ def test_voortgang() -> None:
     # 1. De lagen en hun grootte uit de OCI-map op de stick.
     klopt(v.lagen(str(oci)) == {"a": 100, "b": 300, "c": 600}, f"1: lagen() leest de OCI-map ({v.lagen(str(oci))})")
     klopt(v.lagen(str(oci) + ":latest") == {"a": 100, "b": 300, "c": 600}, "1: ook met ':naam' erachter (oci-transport)")
+    # 1b. Installeren van internet: geen OCI-map, wel het manifest dat build.sh bewaarde.
+    man = TMP / "stick-manifest.json"
+    man.write_text(json.dumps({"layers": [{"digest": "sha256:x", "size": 7}, {"digest": "sha256:y", "size": 3}]}),
+                   encoding="utf-8")
+    klopt(v.lagen("ghcr.io/253ugursahin/bugos@sha256:abc", str(man)) == {"x": 7, "y": 3},
+          "1b: van internet: lagen() leest het bewaarde manifest")
+    try:
+        v.lagen("ghcr.io/253ugursahin/bugos@sha256:abc", str(TMP / "bestaat-niet.json"))
+        klopt(False, "1b: geen OCI-map en geen manifest: een fout (dan alleen de minuten)")
+    except OSError:
+        klopt(True, "1b: geen OCI-map en geen manifest: een fout (dan alleen de minuten)")
     # 2. Wat er al binnen is, en hoeveel procent dat is (naar grootte, niet naar aantal).
     phys = TMP / "sysimage"
     klopt(v.binnen(str(phys)) == set(), "2: binnen() zolang de map er nog niet is: niets")

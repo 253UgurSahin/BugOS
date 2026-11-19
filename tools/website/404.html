@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Page not found · BugOS</title>
+<style>
+/* No fonts or pictures from the site: this page can be shown at any address, also deep inside a folder. */
+:root { --bg: #FFFFFF; --inkt: #0E0F12; --tekst2: #5A5F6B; --lijn: #DEDADA; --rood: #DE2F3E; --merk-kop: #16171C; --merk-oog: #FFFFFF; color-scheme: light dark; }
+@media (prefers-color-scheme: dark) { :root { --bg: #08080A; --inkt: #F2F2F4; --tekst2: #A2A7B1; --lijn: #2B2C31; --rood: #F04452; --merk-kop: #F4F2F2; --merk-oog: #16171C; } }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: var(--bg); color: var(--inkt); font: 400 18px/1.6 "Segoe UI", system-ui, -apple-system, sans-serif; text-align: center; }
+main { max-width: 34rem; }
+svg { width: 88px; height: 88px; }
+h1 { margin: 22px 0 8px; font-size: clamp(34px, 7vw, 52px); line-height: 1.05; letter-spacing: -0.03em; }
+h1 span { color: var(--rood); }
+p { margin: 0; color: var(--tekst2); }
+p + p { margin-top: 6px; }
+.knoppen { margin-top: 30px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+a { display: inline-flex; align-items: center; min-height: 48px; padding: 0 22px; border-radius: 999px; font-weight: 600; text-decoration: none; color: var(--inkt); border: 1px solid var(--lijn); }
+a.hoofd { background: #DE2F3E; border-color: #DE2F3E; color: #fff; }
+a:hover { filter: brightness(.95); }
+</style>
+</head>
+<body>
+<main>
+  <svg viewBox="0 0 256 256" aria-hidden="true">{{MERK}}</svg>
+  <h1>This page flew away<span>.</span></h1>
+  <p>The address may be old or mistyped. Nothing is broken.</p>
+  <p lang="nl">Deze pagina is weggevlogen. Het adres is misschien oud of verkeerd getypt.</p>
+  <div class="knoppen">
+    <a class="hoofd" href="{{PAD}}">Go to BugOS</a>
+    <a href="{{PAD}}nl.html" lang="nl">Naar BugOS in het Nederlands</a>
+  </div>
+</main>
+</body>
+</html>

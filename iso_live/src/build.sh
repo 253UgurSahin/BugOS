@@ -13,27 +13,30 @@ mkdir -p "$(realpath /root)"
 mount -o remount,rw /proc/sys || true
 
 # ---------------------------------------------------------------------------
-# 1. BugOS zelf op de stick zetten.
-#    Vroeger haalde het installatieprogramma BugOS tijdens het installeren van
-#    internet. Dat werkte niet zonder internet, niet zolang het pakket op
-#    GitHub privé is, en het duurde lang. Nu zit BugOS zelf op de stick en
-#    installeert het programma vanaf daar.
-#    Hoe: als "OCI-map" (de ingepakte lagen, precies zoals ze in GitHub
-#    Packages staan) in /var/lib/bugos-stick/bugos. Het installatieprogramma
-#    leest die rechtstreeks (ostreecontainer --transport=oci).
-#    Waarom niet uitgepakt in de containeropslag (zoals Bazzite)?
-#    BugOS haalt bestanden van de fundering (Fedora Kinoite) weg; die "verwijderd"-merktekens
-#    (whiteouts) kan de opslag binnen deze bouwstap niet aanmaken ("open
-#    /etc/.wh.bazaar: invalid argument"). Een OCI-map wordt niet uitgepakt,
-#    dus dat probleem bestaat dan niet. Nadeel: de stick wordt een paar GB
-#    groter, omdat de ingepakte lagen niet met de live-omgeving gedeeld worden.
+# 1. Waar het installatieprogramma BugOS vandaan haalt.
+#    Gewone stick (iso.yml): van internet, uit GitHub Packages, precies de
+#    versie waar de live-omgeving op gebouwd is (IMAGE_DIGEST). Zo staat BugOS
+#    maar één keer op de stick (als live-omgeving) en is de ISO ongeveer de
+#    helft kleiner. Installeren heeft dan wel internet nodig; bugos-live
+#    zegt dat en helpt met wifi. (Zonder internet installeren: de klassieke
+#    ISO, of een stick met BUGOS_OFFLINE=1.)
+#    Offline stick (BUGOS_OFFLINE=1, en altijd bij een lokale bouw met
+#    IMAGE_SOURCE, want die BugOS staat niet op GitHub): BugOS zelf op de stick
+#    als "OCI-map" (de ingepakte lagen) in /var/lib/bugos-stick/bugos. Het
+#    installatieprogramma leest die rechtstreeks (ostreecontainer --transport=oci).
+#    Waarom niet uitgepakt in de containeropslag (zoals Bazzite)? BugOS haalt
+#    bestanden van de fundering weg; die "verwijderd"-merktekens (whiteouts)
+#    kan de opslag binnen deze bouwstap niet aanmaken.
 #    Het wachtwoord voor GitHub Packages komt als "secret" binnen (alleen
 #    tijdens het bouwen, het komt niet in de ISO): zie iso_live/Containerfile.
 # ---------------------------------------------------------------------------
 STICK_OCI=/var/lib/bugos-stick/bugos
+# skopeo copy wil --src-authfile/--src-tls-verify, skopeo inspect --authfile/--tls-verify.
 SKOPEO_ARGS=()
+INSPECT_ARGS=()
 if [ -s /run/secrets/ghcr ]; then
     SKOPEO_ARGS+=(--src-authfile /run/secrets/ghcr)
+    INSPECT_ARGS+=(--authfile /run/secrets/ghcr)
 fi
 # IMAGE_SOURCE (alleen voor lokaal testen): haal hem uit een andere opslagplaats,
 # bijvoorbeeld een eigen registry op localhost:5000 (dan IMAGE_SOURCE_TLS=false).
@@ -41,6 +44,7 @@ fi
 BRON="${IMAGE_SOURCE:-${IMAGE_REF%:*}}"
 if [ "${IMAGE_SOURCE_TLS:-true}" = false ]; then
     SKOPEO_ARGS+=(--src-tls-verify=false)
+    INSPECT_ARGS+=(--tls-verify=false)
 fi
 # Precies dezelfde versie als waar de live-omgeving op gebouwd is (IMAGE_DIGEST,
 # door iso.yml doorgegeven). Anders kan er tussendoor een nieuwere BugOS op
@@ -50,18 +54,38 @@ if [ -n "${IMAGE_DIGEST:-}" ]; then
 else
     BRON_REF="${BRON}:${IMAGE_REF##*:}"
 fi
-rm -rf "$STICK_OCI"
-mkdir -p "$(dirname "$STICK_OCI")"
-# Lokale bouw (tools/iso-local.sh): IMAGE_SOURCE=oci:<map> is een OCI-map die als volume in deze bouwstap zit. Dan
-# een gewone kopie van map naar map, zonder registry en zonder netwerk. Anders (iso.yml): uit de registry.
-if [[ "${IMAGE_SOURCE:-}" == oci:* ]]; then
-    skopeo copy "$IMAGE_SOURCE" "oci:${STICK_OCI}"
-else
-    skopeo copy "${SKOPEO_ARGS[@]}" "docker://${BRON_REF}" "oci:${STICK_OCI}"
+if [ -n "${IMAGE_SOURCE:-}" ]; then
+    BUGOS_OFFLINE=1
 fi
-# Controle: kan het installatieprogramma hem lezen, en is het een bootc-beeld?
-skopeo inspect "oci:${STICK_OCI}" --format '{{index .Labels "containers.bootc"}}' | grep -qx 1
-du -sh "$STICK_OCI"
+mkdir -p /usr/share/bugos
+if [ "${BUGOS_OFFLINE:-0}" = 1 ]; then
+    STICK_MODUS=offline
+    INSTALL_BRON="--url=${STICK_OCI} --transport=oci"
+    rm -rf "$STICK_OCI"
+    mkdir -p "$(dirname "$STICK_OCI")"
+    # Lokale bouw (tools/iso-local.sh): IMAGE_SOURCE=oci:<map> is een OCI-map die als volume in deze bouwstap zit.
+    # Dan een gewone kopie van map naar map, zonder registry en zonder netwerk. Anders uit de registry.
+    if [[ "${IMAGE_SOURCE:-}" == oci:* ]]; then
+        skopeo copy "$IMAGE_SOURCE" "oci:${STICK_OCI}"
+    else
+        skopeo copy "${SKOPEO_ARGS[@]}" "docker://${BRON_REF}" "oci:${STICK_OCI}"
+    fi
+    # Controle: kan het installatieprogramma hem lezen, en is het een bootc-beeld?
+    skopeo inspect "oci:${STICK_OCI}" --format '{{index .Labels "containers.bootc"}}' | grep -qx 1
+    du -sh "$STICK_OCI"
+else
+    STICK_MODUS=online
+    # Een digest is verplicht: zonder vaste versie zou de stick installeren wat er die dag op GitHub staat.
+    [ -n "${IMAGE_DIGEST:-}" ] || { echo "build.sh: een stick die van internet installeert heeft IMAGE_DIGEST nodig" >&2; exit 1; }
+    INSTALL_BRON="--url=${BRON_REF} --transport=registry"
+    # Controle: is precies deze versie er, en is het een bootc-beeld? En de lagen met hun grootte, voor de
+    # voortgang tijdens het installeren (bugos_voortgang.py); dat is een klein bestand, niet BugOS zelf.
+    skopeo inspect "${INSPECT_ARGS[@]}" "docker://${BRON_REF}" --format '{{index .Labels "containers.bootc"}}' | grep -qx 1
+    skopeo inspect "${INSPECT_ARGS[@]}" --raw "docker://${BRON_REF}" >/usr/share/bugos/stick-manifest.json
+    python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); assert m["layers"], "geen lagen"' /usr/share/bugos/stick-manifest.json
+fi
+# Voor bugos-live: zegt het "installeren kan zonder internet" of "verbind eerst met internet"?
+echo "$STICK_MODUS" >/usr/share/bugos/stick-modus
 
 # ---------------------------------------------------------------------------
 # 2. Kernel: voor Secure Boot moet de live-stick een door Fedora ondertekende
@@ -279,8 +303,8 @@ tail -n 60 /tmp/anaconda.log | run0 --user=liveuser --setenv=WAYLAND_DISPLAY=way
     --title=BugOS --text="Installing BugOS did not work. If this happened before copying started, nothing on your computer was changed. Take a photo of this screen and report it at github.com/253UgurSahin/BugOS/issues\nThat page is public: check the photo for your name, your computer's name or other personal details first.\n\nHet installeren van BugOS is niet gelukt. Gebeurde dit voordat het kopiëren begon, dan is er niets aan je computer veranderd. Maak een foto van dit scherm en meld het op github.com/253UgurSahin/BugOS/issues\nDie pagina is openbaar: kijk eerst of je naam, de naam van je computer of andere persoonlijke gegevens op de foto staan."
 %end
 
-# BugOS vanaf de stick zelf installeren (zie stap 1): geen internet nodig.
-ostreecontainer --url=/var/lib/bugos-stick/bugos --transport=oci --no-signature-verification
+# BugOS installeren: van internet (gewone stick) of van de stick zelf (offline stick), zie stap 1.
+ostreecontainer ${INSTALL_BRON} --no-signature-verification
 %include /usr/share/anaconda/post-scripts/bugos-updates.ks
 
 # Merkteken voor bugos-install: het installeren is gelukt. Dit is de laatste echte stap (daarna kopieert Anaconda
@@ -297,10 +321,9 @@ chmod 0644 /run/bugos-install/gelukt
 %end
 EOF
 
-# Na het installeren: updates voortaan van GitHub halen. BugOS kwam van de
-# stick (OCI-map); zonder dit zou de computer later in die map op de stick
-# naar updates zoeken. bootc switch --mutate-in-place past alleen
-# die verwijzing aan, er wordt niets gedownload.
+# Na het installeren: updates voortaan van GitHub halen, van de gewone tag (latest). BugOS kwam van een vaste
+# versie (digest) of van de OCI-map op de stick; zonder dit zou de computer daar naar updates blijven zoeken.
+# bootc switch --mutate-in-place past alleen die verwijzing aan, er wordt niets gedownload.
 cat >/usr/share/anaconda/post-scripts/bugos-updates.ks <<EOF
 %post --erroronfail --log=/tmp/bugos_logs/bootc-switch.log
 bootc switch --mutate-in-place --transport registry ${IMAGE_REF}

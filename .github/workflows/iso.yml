@@ -10,8 +10,12 @@
 #   publiceren = aan  -> de ISO komt als download in een GitHub Release (alleen de live-stick; de klassieke
 #                        stick blijft een test-download van 7 dagen) (U362).
 #                        GitHub staat maar 2 GB per bestand toe, dus de ISO
-#                        wordt in stukjes geknipt. BugOS Overstap (Windows)
-#                        plakt ze vanzelf weer aan elkaar.
+#                        wordt in stukjes geknipt. BugOS Switch (Windows)
+#                        plakt ze vanzelf weer aan elkaar. Met de variable ISO_MAP (en de FTP-secrets van
+#                        website-host.yml) komt de hele ISO ook in één stuk op je eigen webhost, voor de
+#                        downloadknop op de website (zie docs/WEBSITE.md).
+#   offline = aan     -> BugOS staat ook zelf op de stick: installeren kan zonder internet, maar de ISO is
+#                        ongeveer twee keer zo groot. Standaard uit: het installatieprogramma haalt BugOS van internet.
 name: BugOS ISO maken
 
 on:
@@ -35,6 +39,11 @@ on:
         options: [live, klassiek]
       publiceren:
         description: "Als download publiceren (GitHub Release)"
+        required: false
+        default: false
+        type: boolean
+      offline:
+        description: "BugOS ook zelf op de stick (installeren zonder internet; ISO ongeveer twee keer zo groot)"
         required: false
         default: false
         type: boolean
@@ -121,6 +130,7 @@ jobs:
             --build-arg IMAGE_REF="${{ steps.naam.outputs.image }}" \
             --build-arg IMAGE_DIGEST="${{ steps.ophalen.outputs.digest }}" \
             --build-arg BUGOS_VARIANT="${{ steps.naam.outputs.soort }}" \
+            --build-arg BUGOS_OFFLINE="${{ inputs.offline && '1' || '0' }}" \
             -t localhost/bugos-live:latest iso_live
           df -h / /mnt /mnt/containers
           sudo btrfs filesystem df /mnt/containers || true
@@ -128,11 +138,31 @@ jobs:
           sudo podman image prune -f || true
           df -h / /mnt /mnt/containers
 
-      - name: ISO maken (Titanoboa)
+      # Titanoboa (vaste versie), maar met grotere blokken voor squashfs (1 MB in plaats van 128 KB): zstd vindt
+      # dan meer herhaling, en de stick wordt kleiner. Zelfde aanroep als de action van Titanoboa doet.
+      - name: ISO maken (Titanoboa, blokken van 1 MB)
         id: iso
-        uses: ublue-os/titanoboa@5c457c3d0518bd17e754be0fd98a60d29d26abb4
-        with:
-          image-ref: localhost/bugos-live:latest
+        env:
+          TITANOBOA: 5c457c3d0518bd17e754be0fd98a60d29d26abb4
+        run: |
+          mkdir -p titanoboa/output
+          curl -fsSL --retry 3 -o titanoboa/build_iso.sh \
+            "https://raw.githubusercontent.com/ublue-os/titanoboa/${TITANOBOA}/build_iso.sh"
+          grep -q -- '-comp zstd -Xcompression-level 19' titanoboa/build_iso.sh \
+            || { echo "::error::build_iso.sh van Titanoboa is veranderd: geen 'zstd niveau 19' gevonden"; exit 1; }
+          sed -i 's/-comp zstd -Xcompression-level 19/-comp zstd -Xcompression-level 19 -b 1M/' titanoboa/build_iso.sh
+          chmod +x titanoboa/build_iso.sh
+          sudo podman run --rm -i \
+            --cap-add sys_admin --security-opt label=disable \
+            -v "$PWD/titanoboa/build_iso.sh":/src/build_iso.sh:ro \
+            --mount type=image,source=localhost/bugos-live:latest,dst=/rootfs \
+            -v "$PWD/titanoboa/output":/output \
+            quay.io/fedora/fedora:latest /src/build_iso.sh
+          ISO="$(find titanoboa/output -name '*.iso' | head -1)"
+          [ -f "$ISO" ] || { echo "::error::Titanoboa maakte geen ISO"; exit 1; }
+          sudo chown "$(id -u):$(id -g)" "$ISO"
+          ls -la "$ISO"
+          echo "iso-dest=$ISO" >> "$GITHUB_OUTPUT"
 
       - name: Naam en controlegetal
         id: klaar
@@ -143,6 +173,49 @@ jobs:
           (cd uit && sha256sum "${NAAM}" | tee "${NAAM}.sha256")
           ls -la uit
           echo "naam=${NAAM}" >> "$GITHUB_OUTPUT"
+
+      # De hele ISO in één stuk op je eigen webhost, onder een vaste naam, zodat de knop op de website er
+      # rechtstreeks naar kan wijzen (GitHub staat maar 2 GB per bestand toe). Zie docs/WEBSITE.md.
+      # Nodig: dezelfde secrets als website-host.yml (FTP_SERVER, FTP_USERNAME, FTP_PASSWORD, en de variable
+      # FTP_PROTOCOL: ftps of sftp), plus de variable ISO_MAP: de map op de host, bijv. public_html/download/.
+      - name: Naar je webhost (één bestand, voor de website)
+        if: ${{ inputs.publiceren }}
+        env:
+          SERVER: ${{ secrets.FTP_SERVER }}
+          GEBRUIKER: ${{ secrets.FTP_USERNAME }}
+          LFTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          PROTOCOL: ${{ vars.FTP_PROTOCOL || 'ftps' }}
+          ISO_MAP: ${{ vars.ISO_MAP }}
+          SOORT: ${{ steps.naam.outputs.soort }}
+          NAAM: ${{ steps.klaar.outputs.naam }}
+          DATUM: ${{ steps.naam.outputs.datum }}
+          DIGEST: ${{ steps.ophalen.outputs.digest }}
+        run: |
+          if [ -z "$ISO_MAP" ] || [ -z "$SERVER" ] || [ -z "$GEBRUIKER" ] || [ -z "$LFTP_PASSWORD" ]; then
+            echo "::warning::Uploaden naar je webhost staat uit (ISO_MAP of de FTP-secrets ontbreken): de ISO komt alleen in stukjes op GitHub, en de downloadknop op de website werkt nog niet."
+            exit 0
+          fi
+          [[ "$ISO_MAP" =~ ^[A-Za-z0-9_./-]+/$ && "$ISO_MAP" != *..* ]] || { echo "::error::ISO_MAP moet een gewone map met / aan het eind zijn, bijv. public_html/download/"; exit 1; }
+          if [ "$SOORT" = nvidia ]; then VAST=BugOS-Nvidia.iso; else VAST=BugOS.iso; fi
+          mkdir -p host && cd host
+          # Een harde link: geen tweede kopie van vele GB op de bouwcomputer.
+          ln "../uit/${NAAM}" "${VAST}"
+          sha256sum "${VAST}" > "${VAST}.sha256"
+          printf 'BugOS %s, gebouwd op %s\nBestand: %s\nSysteem: %s\n' "$SOORT" "$DATUM" "$NAAM" "$DIGEST" > "${VAST%.iso}.txt"
+          sudo apt-get install -y -qq lftp >/dev/null
+          case "$PROTOCOL" in
+            sftp) URL="sftp://$SERVER"; INST="set sftp:auto-confirm yes;" ;;
+            ftps) URL="ftp://$SERVER";  INST="set ftp:ssl-force true; set ftp:ssl-protect-data true; set ssl:verify-certificate yes;" ;;
+            *) echo "::error::FTP_PROTOCOL moet ftps of sftp zijn"; exit 1 ;;
+          esac
+          # Eerst onder een tijdelijke naam, dan in één keer hernoemen: een bezoeker krijgt nooit een half bestand,
+          # en het controlegetal komt pas daarna (dan past het nooit bij een oude ISO).
+          lftp -u "$GEBRUIKER" --env-password "$URL" -e "$INST set cmd:fail-exit yes; set net:max-retries 5; set net:timeout 60; \
+            mkdir -p -f $ISO_MAP; cd $ISO_MAP; \
+            put -c ${VAST} -o ${VAST}.deel; rm -f ${VAST}; mv ${VAST}.deel ${VAST}; \
+            put ${VAST}.sha256; put ${VAST%.iso}.txt; bye"
+          echo "Klaar: ${VAST} staat in ${ISO_MAP} op ${SERVER}"
+          echo "### Op je webhost: ${ISO_MAP}${VAST}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: ISO klaarzetten om te downloaden (7 dagen)
         if: ${{ !inputs.publiceren }}
@@ -186,7 +259,7 @@ jobs:
           body: |
             BugOS voor op een USB-stick (${{ steps.naam.outputs.soort }}).
 
-            **Makkelijkst:** gebruik BugOS Overstap op Windows. Die downloadt dit vanzelf en maakt de USB-stick.
+            **Makkelijkst:** download de hele ISO in één bestand via de BugOS-website, of gebruik BugOS Switch op Windows. Die downloadt dit vanzelf en maakt de USB-stick.
 
             **Zelf doen:** download alle `.deel`-bestanden en plak ze aan elkaar:
             - Linux/macOS: `cat ${{ steps.klaar.outputs.naam }}.deel* > ${{ steps.klaar.outputs.naam }}`

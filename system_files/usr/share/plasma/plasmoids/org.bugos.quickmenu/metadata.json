@@ -11,7 +11,7 @@
         "Description[en]": "Quick buttons: Wi-Fi, Bluetooth, sound, game mode, dark and do not disturb",
         "Icon": "preferences-system",
         "Id": "org.bugos.quickmenu",
-        "License": "GPL-3.0-or-later",
+        "License": "PolyForm-Noncommercial-1.0.0",
         "Name": "BugOS Snelmenu",
         "Name[en]": "BugOS Quick Menu",
         "Version": "0.1",
