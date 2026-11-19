@@ -11,7 +11,7 @@
         "Description[en]": "The empty space on the taskbar: right-click it to open Task Manager, just like in Windows",
         "Icon": "bugos-task-manager",
         "Id": "org.bugos.taskbar",
-        "License": "GPL-3.0-or-later",
+        "License": "PolyForm-Noncommercial-1.0.0",
         "Name": "BugOS Taakbalkruimte",
         "Name[en]": "BugOS Taskbar Space",
         "Version": "0.1",

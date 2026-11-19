@@ -11,7 +11,7 @@
         "Description[en]": "The clock on the taskbar: time and date, small and the same size, like in Windows. Click for the calendar.",
         "Icon": "preferences-system-time",
         "Id": "org.bugos.clock",
-        "License": "GPL-3.0-or-later",
+        "License": "PolyForm-Noncommercial-1.0.0",
         "Name": "BugOS Klok",
         "Name[en]": "BugOS Clock",
         "Version": "0.1",

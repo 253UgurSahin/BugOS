@@ -203,7 +203,7 @@ jobs:
             --label org.opencontainers.image.title="BugOS" \
             --label org.opencontainers.image.description="BugOS: Linux as easy as Windows" \
             --label org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}" \
-            --label org.opencontainers.image.licenses="GPL-3.0-or-later" \
+            --label org.opencontainers.image.licenses="PolyForm-Noncommercial-1.0.0" \
             --label containers.bootc=1 \
             -t localhost/${{ matrix.image }}:build .
 

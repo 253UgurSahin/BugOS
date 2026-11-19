@@ -29,7 +29,7 @@ The most important idea: **BugOS can't break.**
 | Installing | USB stick, also next to Windows, plus a Windows switching program | Switching should be easy. |
 | Computers | Normal PCs and laptops, Nvidia, old PCs (with light mode) | Light mode turns on by itself on slow computers. |
 | Privacy | No account and no data collection | Your computer belongs to you. |
-| License | GPL-3.0 | Always free and open. |
+| License | PolyForm Noncommercial 1.0.0 (own work) | Free for everyone at home, at school and at non-profits; the source code stays open; no commercial use. Parts by others keep their own licenses ([NOTICE.md](../NOTICE.md)). |
 
 ## How is BugOS put together? (the house)
 

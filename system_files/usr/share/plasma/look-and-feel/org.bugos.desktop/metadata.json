@@ -6,7 +6,7 @@
         "Description": "BugOS: knoppen waar je ze verwacht",
         "Description[en]": "BugOS: buttons where you expect them",
         "Id": "org.bugos.desktop",
-        "License": "GPL-3.0-or-later",
+        "License": "PolyForm-Noncommercial-1.0.0",
         "Name": "BugOS",
         "Version": "0.1",
         "Website": "https://github.com/253UgurSahin/BugOS"

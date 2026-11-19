@@ -7,7 +7,7 @@
         "Description[en]": "The BugOS start menu: big search bar, pinned apps and recent files",
         "Icon": "bugos-logo",
         "Id": "org.bugos.startmenu",
-        "License": "GPL-3.0-or-later",
+        "License": "PolyForm-Noncommercial-1.0.0",
         "Name": "BugOS Startmenu",
         "Name[en]": "BugOS Start Menu",
         "Version": "0.1",

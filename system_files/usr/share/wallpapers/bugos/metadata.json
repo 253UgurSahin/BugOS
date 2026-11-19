@@ -2,7 +2,7 @@
     "KPlugin": {
         "Authors": [{ "Name": "BugOS" }],
         "Id": "bugos",
-        "License": "GPL-3.0-or-later",
+        "License": "PolyForm-Noncommercial-1.0.0",
         "Name": "BugOS Dot",
         "Name[nl]": "BugOS Stip"
     }

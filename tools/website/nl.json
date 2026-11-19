@@ -54,10 +54,6 @@
    ">Wat is er nieuw<"
   ],
   [
-   "BugOS {v} · Free and open",
-   "BugOS {v} · Gratis en open"
-  ],
-  [
    "The computer that just works<span class=\"stip\">",
    "De computer die gewoon werkt<span class=\"stip\">"
   ],
@@ -650,10 +646,6 @@
    "<summary>Is BugOS echt gratis?</summary>"
   ],
   [
-   "Yes. BugOS is free and will stay free. The source code is open (GPL-3.0), so anyone can see how it works. There are no ads and you don't need an account.",
-   "Ja. BugOS is gratis en blijft gratis. De broncode is open (GPL-3.0), dus iedereen kan zien hoe het werkt. Er is geen reclame en je hebt geen account nodig."
-  ],
-  [
    "<summary>Will my Windows programs work?</summary>",
    "<summary>Werken mijn Windows-programma's?</summary>"
   ],
@@ -894,10 +886,6 @@
    "<h4>Gebouwd op</h4>"
   ],
   [
-   "BugOS is free software under the GPL-3.0 license.",
-   "BugOS is vrije software onder de GPL-3.0-licentie."
-  ],
-  [
    "This website uses no cookies and no tracking.",
    "Deze website gebruikt geen cookies en volgt je niet."
   ],
@@ -920,6 +908,22 @@
   [
    "<li><b>Internet</b> for installing</li>",
    "<li><b>Internet</b> om te installeren</li>"
+  ],
+  [
+   "BugOS {v} · Free · Open code",
+   "BugOS {v} · Gratis · Open code"
+  ],
+  [
+   "Yes, for everyone at home, at school and at non-profits, and it stays that way. The source code is open, so anyone can see how it works and help improve it. Making money with BugOS (selling it, putting it on computers you sell, or using it in a business) is not allowed without permission. There are no ads and you don't need an account.",
+   "Ja, voor iedereen thuis, op school en bij organisaties zonder winstoogmerk, en dat blijft zo. De broncode is open, dus iedereen kan zien hoe het werkt en meehelpen het beter te maken. Geld verdienen met BugOS (het verkopen, het op computers zetten die je verkoopt, of het in een bedrijf gebruiken) mag niet zonder toestemming. Er is geen reclame en je hebt geen account nodig."
+  ],
+  [
+   "BugOS is free for noncommercial use (PolyForm Noncommercial license).",
+   "BugOS is gratis voor niet-commercieel gebruik (PolyForm Noncommercial-licentie)."
+  ],
+  [
+   ">License</a>",
+   ">Licentie</a>"
   ]
  ]
 }

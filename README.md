@@ -124,7 +124,8 @@ docs/                  explanations, plan and brand style
 
 ## License
 
-GPL-3.0. BugOS is and stays free and open.
+BugOS's own work is free to use and its source code is open to everyone, but it may not be used commercially:
+[PolyForm Noncommercial 1.0.0](LICENSE). Parts made by others keep their own licenses; see [NOTICE.md](NOTICE.md).
 The fonts are under the SIL Open Font License (see [`branding/fonts/`](branding/fonts/)).
 
 BugOS is its own system, built on `kinoite-main` from [Universal Blue](https://universal-blue.org) (just like Bazzite),
