@@ -120,6 +120,10 @@ jobs:
           echo "digest=$(sudo podman image inspect --format '{{ .Digest }}' "$IMG")" >> "$GITHUB_OUTPUT"
 
       - name: Live-omgeving bouwen
+        # Invoer van wie de workflow start, gaat via env en niet rechtstreeks in de opdracht: zo kan die tekst
+        # nooit als shell-code meedoen (tools/test_repo controleert dat voor elke workflow).
+        env:
+          OFFLINE: ${{ inputs.offline && '1' || '0' }}
         run: |
           # --secret: het inlogbestand, zodat de bouw BugOS zelf op de stick kan zetten
           # (iso_live/src/build.sh stap 1). Het komt niet in de ISO terecht.
@@ -130,7 +134,7 @@ jobs:
             --build-arg IMAGE_REF="${{ steps.naam.outputs.image }}" \
             --build-arg IMAGE_DIGEST="${{ steps.ophalen.outputs.digest }}" \
             --build-arg BUGOS_VARIANT="${{ steps.naam.outputs.soort }}" \
-            --build-arg BUGOS_OFFLINE="${{ inputs.offline && '1' || '0' }}" \
+            --build-arg BUGOS_OFFLINE="$OFFLINE" \
             -t localhost/bugos-live:latest iso_live
           df -h / /mnt /mnt/containers
           sudo btrfs filesystem df /mnt/containers || true
