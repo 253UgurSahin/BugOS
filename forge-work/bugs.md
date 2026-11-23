@@ -75,12 +75,12 @@ evidence: VM test 2026-11-23, screenshot s9; tools/test_native_store.py "B009: .
 cause: choosing a topic in the side bar (onderwerp_gekozen) never reset the scroll bar, so "My apps" kept the position from the search results. It happens every time you scroll in the results first, not by chance.
 fixed in: branch fix/open-punten-b008-b009
 
-## B010 [low] [upstream] Notepad++ under Wine 11.21: each menu on its own line
+## B010 [low] [parked] Notepad++ under Wine 11.21: each menu on its own line
 steps: install Notepad++ (.exe) and open it
 expected: one menu bar line (File Edit Search ...)
 actual: Wine lays out the menu bar 111 px wide, so the menus wrap two per line
 cause: a Wine regression between 11.0 (fine) and 11.21 (Fedora 44, staging). Not BugOS: it also happens without BugOS's colours. Details and what was tried are in docs/PLAN.md, "Windows programs"
-status: BugOS cannot fix this itself. BugOS offers KWrite first. Report to bugs.winehq.org (needs the owner's OK) or wait for a newer Wine
+status: parked by the owner on 2026-11-23: not reported to WineHQ and not worked on for now. Only Notepad++ was tested (Wine's own Notepad is fine), so it is not certain that the cause is outside BugOS. BugOS offers KWrite first. Look again if other Windows programs show the same thing.
 
 ## Added after the VM test (2026-11-23): erase a stick in Backup, with the user's OK
 Backup now also shows a stick that you cannot write to (an old installer stick) or that BugOS cannot read, with an "Erase…" button. A chosen stick has "Erase this stick…". It never erases without "Erase everything" in a warning (default button: Cancel). It never offers a drive inside the computer, a stick BugOS runs from or that the system uses, or a locked encrypted stick. Just before formatting (after closing the stick) it checks again that it is the same stick. Tests: tools/test_backup.py "leegmaken: ..."
