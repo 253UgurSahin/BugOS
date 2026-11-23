@@ -16,10 +16,12 @@ Terugzetten kan ook met één knop.
 import getpass
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
 
 sys.path.insert(0, "/usr/lib/bugos/python")
@@ -146,25 +148,53 @@ def schijven() -> list[Path]:
         pass
     gebruiker = getpass.getuser()
     gevonden = schijven_in((Path("/run/media") / gebruiker, Path("/media") / gebruiker, Path("/media")))
-    # Eén keer lsblk lezen voor twee vragen: welke schijven zitten ín de computer, en zit er een lege stick in (B008).
-    lijst = alle_schijven()
+    # Eén keer lsblk lezen voor alle vragen: welke schijven zitten ín de computer, en zit er een stick in die
+    # BugOS (nog) niet kan gebruiken: leeg (B008), alleen-lezen of onleesbaar (dan kun je hem leegmaken).
+    ruw = alle_ruw()
+    lijst = alle_schijven(ruw)
     interne = interne_plekken(lijst)
     LAATSTE_INTERNE.clear()
     LAATSTE_INTERNE.update(interne)
-    LAATSTE_NIEUWE[:] = nieuwe_sticks(lijst)
+    LAATSTE_RUW[:] = ruw or []
+    LAATSTE_LIJST[:] = lijst or []
+    LAATSTE_BIJZONDER[:] = bijzondere_sticks(ruw, lijst, in_gebruik(), ZICHT)
     return zonder_interne(gevonden, interne)
 
 
-def alle_schijven() -> list | None:
-    """Alle schijven volgens bugos_drives (lsblk), of None als dat hier niet kan (geen lsblk, een test)."""
+def alle_ruw() -> list | None:
+    """Wat lsblk over alle schijven zegt (de ruwe lijst), of None als dat hier niet kan."""
     try:
         import bugos_drives
-        return bugos_drives.schijven()
+        return bugos_drives.lees_lsblk()
     except Exception:  # noqa: BLE001  zonder lsblk: niets weten
         return None
 
 
-LAATSTE_NIEUWE: list = []   # de lege sticks (nog nooit klaargemaakt), van de laatste keer kijken (B008)
+def alle_schijven(ruw: list | None = None) -> list | None:
+    """Alle schijven volgens bugos_drives, of None als dat hier niet kan (geen lsblk, een test).
+    ruw: wat lsblk al zei (dan niet nog eens lezen)."""
+    try:
+        import bugos_drives
+        return bugos_drives.schijven(ruw) if ruw is not None else bugos_drives.schijven()
+    except Exception:  # noqa: BLE001  zonder lsblk: niets weten
+        return None
+
+
+def in_gebruik() -> set[str]:
+    """De hele schijven (sdb, ...) die het systeem zelf gebruikt (BugOS draait ervan, /etc/fstab, swap). Die
+    worden nooit gewist, wat lsblk er ook over zegt. Weet het niet zeker (geen /proc)? Dan een lege set: de andere
+    controles (systeemplekken in lsblk) gelden nog steeds."""
+    try:
+        import bugos_drives
+        return bugos_drives.stations_in_gebruik()
+    except Exception:  # noqa: BLE001
+        return set()
+
+
+LAATSTE_RUW: list = []        # wat lsblk de laatste keer zei
+LAATSTE_LIJST: list = []      # de schijven van bugos_drives, van de laatste keer kijken
+LAATSTE_BIJZONDER: list = []  # de sticks die BugOS nog niet kan gebruiken (zie bijzondere_sticks)
+ZICHT: dict[str, int] = {}    # hoe vaak achter elkaar een stick er onbruikbaar uitzag (zie bijzondere_sticks)
 
 
 def nieuwe_sticks(lijst: list | None) -> list:
@@ -175,7 +205,115 @@ def nieuwe_sticks(lijst: list | None) -> list:
     return [s for s in lijst or [] if getattr(s, "nieuw", False) and getattr(s, "los", False)]
 
 
-# De naam die een lege stick krijgt na het klaarmaken (exFAT: hoogstens 15 tekens).
+def los_station(st: dict) -> bool:
+    """Is dit (een regel van lsblk voor een hele schijf) iets wat je eruit haalt: een USB-stick, een externe
+    schijf of een SD-kaart? Dezelfde regels als bugos_drives.schijven, want die lijst noemt een onleesbare stick
+    niet, en die willen we hier juist vinden."""
+    import bugos_drives
+    naam = st.get("name") or ""
+    if st.get("type") != "disk" or naam.startswith(("zram", "loop", "ram", "nbd")):
+        return False
+    if naam.startswith("mmcblk"):
+        return not re.fullmatch(r"mmcblk\d+(boot\d+|rpmb)", naam) and bugos_drives.mmc_soort(naam) != "MMC"
+    return bool(st.get("rm") or st.get("hotplug") or st.get("tran") == "usb")
+
+
+def station_id(st: dict) -> tuple:
+    """Waaraan je dezelfde stick herkent: plek, grootte, merk en indeling. Zit er na de vraag een andere stick op
+    dezelfde plek (/dev/sdb), dan klopt dit niet meer en wordt er niets gewist (zoals in Bestanden, U369)."""
+    return (st.get("path"), st.get("size"), (st.get("model") or "").strip(), st.get("ptuuid"))
+
+
+@dataclass
+class Bijzonder:
+    """Een stick die erin zit maar waar je (nog) geen back-up op kunt zetten.
+
+    soort: 'leeg' (nooit klaargemaakt, B008), 'alleen-lezen' (open, maar je mag er niet op schrijven, bv. een oude
+    installatiestick) of 'onleesbaar' (BugOS kan hem niet openen: onbekend of kapot bestandssysteem)."""
+    soort: str
+    station: str           # de hele stick, bv. /dev/sdb: die wordt helemaal opnieuw ingedeeld
+    naam: str              # wat je ziet, bv. "USB-stick (16 GB)"
+    id: tuple              # station_id, om vlak voor het wissen te controleren
+    delen: list = field(default_factory=list)   # de stukken van bugos_drives op deze stick (om eerst dicht te doen)
+
+
+def bijzondere_sticks(ruw: list | None, lijst: list | None, gebruikt: set[str], zicht: dict[str, int]) -> list:
+    """De sticks die erin zitten maar die Back-up niet in de lijst kan zetten, met wat eraan te doen is.
+
+    Nooit: een schijf in de computer, een stick waar BugOS zelf van draait of die het systeem gebruikt (gebruikt,
+    of een systeemplek in lsblk), en een versleutelde stick die nog op slot zit (dan eerst het wachtwoord, niet
+    wissen). 'alleen-lezen' en 'onleesbaar' pas als de stick er twee keer achter elkaar zo uitzag (zicht telt):
+    een stick die er net in zit, is de eerste seconden nog dicht, en dan moet er niet 'onleesbaar' flitsen."""
+    import bugos_drives
+    lijst = lijst or []
+    uit: list = []
+    nu_gezien: set[str] = set()
+    for s in nieuwe_sticks(lijst):
+        st = next((r for r in ruw or [] if r.get("path") == s.station), {})
+        uit.append(Bijzonder("leeg", s.station, s.naam, station_id(st) if st else (s.station,), [s]))
+    for st in ruw or []:
+        pad = st.get("path") or ""
+        if not pad or not los_station(st) or any(b.station == pad for b in uit):
+            continue
+        if os.path.basename(pad) in gebruikt or \
+                any(bugos_drives.systeem_plek(m) for a in bugos_drives._alle(st) for m in bugos_drives._plekken_van(a)):
+            continue   # BugOS draait ervan, of het systeem gebruikt hem: nooit aanbieden om te wissen
+        if not (bugos_drives._getal(st.get("size")) or 0):
+            continue   # een kaartlezer zonder kaart: 0 bytes, niets om te doen
+        delen = [s for s in lijst if s.station == pad]
+        if any(s.op_slot for s in delen):
+            continue   # versleuteld en op slot: eerst openen met het wachtwoord, niet wissen
+        if any(s.wortel and os.access(s.wortel, os.W_OK) for s in delen):
+            continue   # (een stuk van) deze stick is gewoon bruikbaar: hij staat al in de lijst
+        soort = "alleen-lezen" if any(s.wortel for s in delen) else "onleesbaar"
+        nu_gezien.add(pad)
+        zicht[pad] = zicht.get(pad, 0) + 1
+        if zicht[pad] < 2:
+            continue
+        maat = bugos_drives.mooie_maat(bugos_drives._getal(st.get("size")) or 0)
+        naam = delen[0].naam if delen else t(f"USB-stick ({maat})", f"USB stick ({maat})")
+        uit.append(Bijzonder(soort, pad, naam, station_id(st), delen))
+    for pad in list(zicht):
+        if pad not in nu_gezien:
+            del zicht[pad]   # eruit, of nu bruikbaar: de volgende keer telt weer vanaf nul
+    return uit
+
+
+def gekozen_stick(schijf: Path, lijst: list) -> object | None:
+    """Het stuk van bugos_drives bij de gekozen map (bv. /run/media/jij/STICK), als dat een stick, externe schijf of
+    SD-kaart is. Een schijf in de computer niet: die wis je hier nooit (dat kan in Bestanden, met meer vragen)."""
+    echt = _echt(schijf)
+    return next((s for s in lijst if s.wortel and _echt(s.wortel) == echt and s.los and s.soort != "cd"), None)
+
+
+def wis_stappen(station: str, delen: list, naam: str) -> list[list[str]]:
+    """Alles op een stick wissen en hem opnieuw klaarmaken: eerst elk open stuk dicht (en een open versleuteld stuk
+    weer op slot), dan de hele stick opnieuw indelen met één stuk exFAT (werkt ook op Windows en Mac), en openen.
+    De hele stick, niet alleen het stuk dat je zag: een oude installatiestick heeft er meer, en die moeten ook weg,
+    anders blijft hij half bruikbaar. De vraag ervoor zegt dat ook ('alles op deze stick')."""
+    import bugos_drives
+    stappen: list[list[str]] = []
+    for s in delen:
+        stappen += bugos_drives.dicht_stappen(s)
+    schoon = bugos_drives.Schijf(apparaat=station, naam=naam, soort="stick", station=station)
+    return stappen + bugos_drives.klaarmaak_stappen(schoon, naam)
+
+
+def zelfde_stick(station: str, voor: tuple, mag_open: bool = False) -> bool:
+    """De laatste controle vlak vóór het wissen (na het dichtzetten): zit precies dezelfde stick er nog, is het nog
+    steeds iets wat je eruit haalt, gebruikt het systeem hem niet, en staat er niets meer open? Nee: niets wissen.
+    mag_open: de eerste controle, meteen na de vraag (dan staat de stick nog open; dichtzetten komt daarna)."""
+    import bugos_drives
+    st = next((r for r in bugos_drives.lees_lsblk() if r.get("path") == station), None)
+    if st is None or station_id(st) != voor or not los_station(st):
+        return False
+    if os.path.basename(station) in in_gebruik():
+        return False
+    return mag_open or not any(bugos_drives._plekken_van(a) for a in bugos_drives._alle(st))
+
+
+# De naam die een stick krijgt na het klaarmaken of leegmaken. exFAT: hoogstens 11 tekens (zo staat het in
+# bugos_drives.MAX_NAAM: udisks weigert een langere naam, en dan mislukt het formatteren).
 BACKUP_NAAM = ("Back-up", "Backup")
 
 
@@ -676,9 +814,18 @@ def venster() -> int:
             lay.addWidget(sectie(t("Kies een schijf", "Choose a drive")))
             self.kiezer = SchijfKiezer(t("Steek een USB-schijf in…", "Plug in a USB drive…"))
             lay.addWidget(self.kiezer)
+            # Leegmaken van de gekozen stick: klein en rustig onder de lijst, niet naast 'Maak back-up' (daar klik
+            # je anders per ongeluk op). Alleen aan voor een stick, externe schijf of SD-kaart (gekozen_stick).
+            wis_rij = QHBoxLayout()
+            wis_rij.addStretch(1)
+            self.wis_gekozen = Knop(t("Deze stick leegmaken…", "Erase this stick…"), "stil", "lijn:prullenbak")
+            wis_rij.addWidget(self.wis_gekozen)
+            lay.addLayout(wis_rij)
             # B008: een lege stick (nog nooit klaargemaakt) ging niet open en bleef dus onzichtbaar. Nu zeggen we
-            # dat hij erin zit, en kun je hem hier meteen klaarmaken. Een eigen balk, niet self.melding: die
-            # rij wordt elke 3 seconden ververst en zou anders het 'Klaar!' van een back-up wegvegen.
+            # dat hij erin zit, en kun je hem hier meteen klaarmaken. Net zo voor een stick waar je niet op mag
+            # schrijven (een oude installatiestick) of die BugOS niet kan lezen: die kun je hier leegmaken, als jij
+            # dat goedvindt. Een eigen balk, niet self.melding: die rij wordt elke 3 seconden ververst en zou
+            # anders het 'Klaar!' van een back-up wegvegen.
             self.nieuw_rij = QWidget()
             nieuw_lay = QHBoxLayout(self.nieuw_rij)
             nieuw_lay.setContentsMargins(0, 0, 0, 0)
@@ -689,7 +836,8 @@ def venster() -> int:
             nieuw_lay.addWidget(self.klaarmaak)
             self.nieuw_rij.hide()
             lay.addWidget(self.nieuw_rij)
-            self.klaarmaker: QProcess | None = None   # de stap van het klaarmaken die nu loopt (None: niets)
+            self.bijzonder: Bijzonder | None = None   # de stick waar de balk nu over gaat
+            self.klaarmaker: QProcess | None = None   # de stap van het klaar- of leegmaken die nu loopt (None: niets)
             self.klaar_stappen: list[list[str]] = []  # de stappen die daarna nog komen
             self.melding = Banner()
             lay.addWidget(self.melding)
@@ -725,7 +873,8 @@ def venster() -> int:
             self.maak.clicked.connect(self.maak_backup)
             self.terugzetten.clicked.connect(self.zet_terug)
             self.een_terug.clicked.connect(self.zet_een_terug)
-            self.klaarmaak.clicked.connect(self.maak_stick_klaar)
+            self.klaarmaak.clicked.connect(self.klik_bijzonder)
+            self.wis_gekozen.clicked.connect(self.wis_gekozen_stick)
             self.kiezer.gewijzigd.connect(self.knoppen)
             self.timer = QTimer(self)
             self.timer.timeout.connect(self.ververs_schijven)
@@ -738,7 +887,7 @@ def venster() -> int:
             return Path(g) if g else None
 
         def druk(self) -> bool:
-            """Zijn we bezig (ruimte tellen, kopiëren of een lege stick klaarmaken)?"""
+            """Zijn we bezig (ruimte tellen, kopiëren, of een stick klaar- of leegmaken)?"""
             return self.proces.state() != QProcess.ProcessState.NotRunning or \
                 (self.teller is not None and self.teller.isRunning()) or self.klaarmaker is not None
 
@@ -749,6 +898,9 @@ def venster() -> int:
             self.maak.setEnabled(s is not None and not alleen_terugzetten(s))
             self.terugzetten.setEnabled(s is not None and bool(backups_op(s)))
             self.een_terug.setEnabled(self.terugzetten.isEnabled())
+            # Leegmaken alleen voor een stick, externe schijf of SD-kaart die het systeem niet zelf gebruikt.
+            self.wis_gekozen.setVisible(s is not None and gekozen_stick(s, LAATSTE_LIJST) is not None)
+            self.wis_gekozen.setEnabled(self.wis_gekozen.isVisible())
 
         def ververs_schijven(self) -> None:
             if self.druk():
@@ -762,78 +914,159 @@ def venster() -> int:
                     extra += t("  ·  heeft al een back-up", "  ·  already has a backup")
                 items.append((str(s), s.name, extra))
             self.kiezer.zet(items)
-            self.toon_nieuwe()
+            self.toon_bijzonder()
             self.knoppen()
 
-        def toon_nieuwe(self) -> None:
-            """B008: zit er een lege stick in? Zeg het, met de knop 'Klaarmaken' ernaast."""
-            if not LAATSTE_NIEUWE:
+        def toon_bijzonder(self) -> None:
+            """Zit er een stick in die BugOS nog niet kan gebruiken? Zeg wat er is, met de knop om het op te lossen:
+            leeg -> 'Klaarmaken' (B008); alleen-lezen of onleesbaar -> 'Leegmaken' (pas na jouw akkoord)."""
+            if not LAATSTE_BIJZONDER:
+                self.bijzonder = None
                 self.nieuw_rij.hide()
                 return
-            x = LAATSTE_NIEUWE[0]   # meer dan één lege stick tegelijk: eerst de eerste, daarna komt de volgende
-            self.nieuw_uitleg.zet(
-                t(f"'{x.naam}' zit erin, maar is nog leeg: hij is nooit klaargemaakt. Maak hem eerst klaar, dan kun "
-                  "je er een back-up op zetten.",
-                  f"'{x.naam}' is plugged in, but it is still empty: it was never set up. Set it up first, then you "
-                  "can put a backup on it."), "let_op")
+            x = self.bijzonder = LAATSTE_BIJZONDER[0]   # meer tegelijk: eerst de eerste, daarna de volgende
+            if x.soort == "leeg":
+                tekst = t(f"'{x.naam}' zit erin, maar is nog leeg: hij is nooit klaargemaakt. Maak hem eerst klaar, "
+                          "dan kun je er een back-up op zetten.",
+                          f"'{x.naam}' is plugged in, but it is still empty: it was never set up. Set it up first, "
+                          "then you can put a backup on it.")
+                self.klaarmaak.setText(t("Klaarmaken", "Set up"))
+            elif x.soort == "alleen-lezen":
+                tekst = t(f"Op '{x.naam}' mag je niet schrijven (bijvoorbeeld een oude installatiestick), dus er kan "
+                          "geen back-up op. Heb je wat erop staat niet meer nodig? Dan kun je hem leegmaken.",
+                          f"You cannot write to '{x.naam}' (an old installer stick, for example), so a backup cannot "
+                          "go on it. If you no longer need what is on it, you can erase it.")
+                self.klaarmaak.setText(t("Leegmaken…", "Erase…"))
+            else:
+                tekst = t(f"'{x.naam}' zit erin, maar BugOS kan hem niet lezen. Misschien is hij beschadigd, of "
+                          "gemaakt voor een ander apparaat. Heb je wat erop staat niet nodig? Dan kun je hem leegmaken.",
+                          f"'{x.naam}' is plugged in, but BugOS cannot read it. It may be damaged, or made for another "
+                          "device. If you do not need what is on it, you can erase it.")
+                self.klaarmaak.setText(t("Leegmaken…", "Erase…"))
+            self.nieuw_uitleg.zet(tekst, "let_op")
             self.nieuw_rij.show()
 
-        def maak_stick_klaar(self) -> None:
-            """B008: een lege stick klaarmaken (indelen en formatteren als exFAT, net als 'In gebruik nemen' in
-            Bestanden), zodat hij daarna gewoon in de lijst staat. Er staat niets op, maar we vragen het toch:
-            formatteren is iets wat je zelf kiest."""
-            if not LAATSTE_NIEUWE or self.druk():
+        def vraag_wissen(self, naam: str, extra: str) -> bool:
+            """De vraag vóór het wissen: wat er gebeurt, dat het niet terug kan, en 'Annuleren' als standaard (een
+            Enter te veel wist dus niets). Alleen 'Alles wissen' gaat door."""
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Icon.Warning)
+            box.setWindowTitle(t("Alles wissen?", "Erase everything?"))
+            box.setText(t(f"Alles op '{naam}' wordt gewist.", f"Everything on '{naam}' will be erased."))
+            box.setInformativeText(
+                (extra + "\n\n" if extra else "") +
+                t(f"Dit kan niet ongedaan worden. Daarna is de stick leeg, heet hij '{t(*BACKUP_NAAM)}' en werkt hij "
+                  "op elke computer (ook Windows en Mac).",
+                  f"This cannot be undone. Afterwards the stick is empty, is called '{t(*BACKUP_NAAM)}' and works "
+                  "on any computer (Windows and Mac too)."))
+            wis = box.addButton(t("Alles wissen", "Erase everything"), QMessageBox.ButtonRole.DestructiveRole)
+            nee = box.addButton(t("Annuleren", "Cancel"), QMessageBox.ButtonRole.RejectRole)
+            box.setDefaultButton(nee)
+            box.setEscapeButton(nee)
+            box.exec()
+            return box.clickedButton() is wis
+
+        def klik_bijzonder(self) -> None:
+            """De knop naast de balk: een lege stick klaarmaken (B008), of een onbruikbare stick leegmaken."""
+            x = self.bijzonder
+            if x is None or self.druk():
                 return
-            x = LAATSTE_NIEUWE[0]
             naam = t(*BACKUP_NAAM)
-            vraag = QMessageBox.question(
-                self, t("Stick klaarmaken?", "Set up the stick?"),
-                t(f"BugOS maakt '{x.naam}' klaar voor gebruik. Hij heet daarna '{naam}' en werkt ook op Windows en "
-                  "Mac.\n\nEr staat nu niets op. Zit er toch iets op wat je nodig hebt? Kies dan Annuleren.",
-                  f"BugOS gets '{x.naam}' ready to use. It will be called '{naam}' and also works on Windows and "
-                  "Mac.\n\nThere is nothing on it now. If it does have something you need, choose Cancel."),
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Cancel)
-            if vraag != QMessageBox.StandardButton.Yes:
+            if x.soort == "leeg":
+                # Er staat niets op, maar we vragen het toch: formatteren is iets wat je zelf kiest.
+                vraag = QMessageBox.question(
+                    self, t("Stick klaarmaken?", "Set up the stick?"),
+                    t(f"BugOS maakt '{x.naam}' klaar voor gebruik. Hij heet daarna '{naam}' en werkt ook op Windows "
+                      "en Mac.\n\nEr staat nu niets op. Zit er toch iets op wat je nodig hebt? Kies dan Annuleren.",
+                      f"BugOS gets '{x.naam}' ready to use. It will be called '{naam}' and also works on Windows and "
+                      "Mac.\n\nThere is nothing on it now. If it does have something you need, choose Cancel."),
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                    QMessageBox.StandardButton.Cancel)
+                if vraag != QMessageBox.StandardButton.Yes:
+                    return
+            elif not self.vraag_wissen(x.naam, t("BugOS kan niet zien wat erop staat.",
+                                                 "BugOS cannot see what is on it.")):
                 return
-            # Zit precies dezelfde lege stick er nog in? Tijdens de vraag kan er een andere op die plek zijn
-            # gekomen, en die mag niet gewist worden (net als in Bestanden, U369).
-            nu = next((s for s in nieuwe_sticks(alle_schijven()) if s.station == x.station), None)
-            if nu is None or (nu.grootte, nu.udisks_deel) != (x.grootte, x.udisks_deel):
-                self.melding.zet(t(f"'{x.naam}' zit er niet meer in. Er is niets veranderd.",
-                                   f"'{x.naam}' is no longer there. Nothing was changed."), "fout")
+            self.start_wissen(x.station, x.id, x.delen, x.naam, leeg=x.soort == "leeg")
+
+        def wis_gekozen_stick(self) -> None:
+            """'Deze stick leegmaken…': de gekozen stick helemaal wissen, na een duidelijke vraag. De vraag zegt
+            hoeveel erop staat en of er back-ups van BugOS op staan: die zijn daarna ook weg."""
+            s = self.gekozen()
+            if s is None or self.druk():
+                return
+            x = gekozen_stick(s, LAATSTE_LIJST)
+            if x is None:
+                return
+            st = next((r for r in LAATSTE_RUW if r.get("path") == x.station), None)
+            if st is None:
+                return
+            import bugos_drives
+            delen = [d for d in LAATSTE_LIJST if d.station == x.station]
+            regels = []
+            if x.grootte and x.vrij is not None and x.grootte > x.vrij:
+                regels.append(t(f"Er staat nu {bugos_drives.mooie_maat(x.grootte - x.vrij)} op.",
+                                f"It now holds {bugos_drives.mooie_maat(x.grootte - x.vrij)}."))
+            if backups_op(s):
+                regels.append(t("Ook de back-ups van BugOS op deze stick zijn daarna weg.",
+                                "The BugOS backups on this stick will be gone too."))
+            if len(delen) > 1:
+                regels.append(t(f"De stick heeft {len(delen)} delen; ze worden allemaal gewist.",
+                                f"The stick has {len(delen)} parts; they will all be erased."))
+            if not self.vraag_wissen(x.naam, " ".join(regels)):
+                return
+            self.start_wissen(x.station, station_id(st), delen, x.naam, leeg=False)
+
+        def start_wissen(self, station: str, voor: tuple, delen: list, oude_naam: str, leeg: bool) -> None:
+            """Na jouw 'ja': dichtzetten, nog één keer controleren of het precies die stick is, dan wissen en
+            opnieuw klaarmaken. Elke stap op de achtergrond (zie klaar_stap)."""
+            # Na de vraag (die even open kan staan) eerst kijken: zit dezelfde stick er nog, en gebruikt het systeem
+            # hem niet? Daarna nog een keer vlak vóór het formatteren (na het dichtzetten): zelfde_stick.
+            if not zelfde_stick(station, voor, mag_open=True):
+                self.melding.zet(t(f"'{oude_naam}' zit er niet meer in. Er is niets gewist.",
+                                   f"'{oude_naam}' is no longer there. Nothing was erased."), "fout")
                 self.ververs_schijven()
                 return
             if not shutil.which("gdbus") or not shutil.which("udisksctl"):
-                self.melding.zet(t("Dat kan hier niet. Maak de stick klaar in Bestanden.",
-                                   "That is not possible here. Set up the stick in Files."), "fout")
+                self.melding.zet(t("Dat kan hier niet. Gebruik Bestanden om de stick klaar te maken.",
+                                   "That is not possible here. Use Files to set up the stick."), "fout")
                 return
-            import bugos_drives
-            # Dezelfde stappen als Bestanden: indeling, één stuk met exFAT (werkt overal), en dat stuk openen.
-            self.klaar_stappen = [list(c) for c in bugos_drives.klaarmaak_stappen(nu, naam)]
+            naam = t(*BACKUP_NAAM)
+            stappen: list = wis_stappen(station, delen, naam)
+            # De controle komt na het dichtzetten en vóór het eerste formatteren (de eerste gdbus-stap).
+            eerste_wis = next(i for i, c in enumerate(stappen) if c[0] == "gdbus")
+            stappen.insert(eerste_wis, lambda: zelfde_stick(station, voor))
+            self.klaar_stappen = stappen
+            self.wis_leeg = leeg
             self.melding.zet(t(f"'{naam}' klaarmaken… Haal de stick er niet uit.",
-                               f"Getting '{naam}' ready… Do not unplug the stick."), "bezig")
+                               f"Getting '{naam}' ready… Do not unplug the stick.") if leeg else
+                             t(f"'{oude_naam}' leegmaken… Haal de stick er niet uit.",
+                               f"Erasing '{oude_naam}'… Do not unplug the stick."), "bezig")
             self.nieuw_rij.hide()
-            self.kiezer.setEnabled(False)
-            self.maak.setEnabled(False)
-            self.terugzetten.setEnabled(False)
-            self.een_terug.setEnabled(False)
+            for knop in (self.kiezer, self.maak, self.terugzetten, self.een_terug, self.wis_gekozen):
+                knop.setEnabled(False)
             self.klaar_stap()
 
         def klaar_stap(self, code: int = 0, status=None) -> None:
-            """Voer de stappen van het klaarmaken één voor één uit, zonder dat het venster vastloopt (udisks kan om
-            een wachtwoord vragen; dat venster komt van KDE zelf). Wordt ook aangeroepen als een stap klaar is."""
+            """Voer de stappen van het klaar- of leegmaken één voor één uit, zonder dat het venster vastloopt
+            (udisks kan om een wachtwoord vragen; dat venster komt van KDE zelf). Wordt ook aangeroepen als een
+            stap klaar is. Een stap kan ook een controle zijn (een functie): False betekent stoppen, niets wissen."""
             if self.klaarmaker is not None:
                 self.klaarmaker.deleteLater()
                 self.klaarmaker = None
                 if code != 0 or status != QProcess.ExitStatus.NormalExit:
-                    # Een stap mislukte (of je annuleerde het wachtwoord): stoppen, niet de volgende stap proberen.
-                    self.klaar_stappen = []
-                    self.kiezer.setEnabled(True)
-                    self.ververs_schijven()
-                    self.melding.zet(t("Klaarmaken lukte niet. Haal de stick eruit, steek hem er weer in en probeer "
-                                       "het opnieuw. Of maak hem klaar in Bestanden.",
-                                       "Setting up did not work. Unplug the stick, plug it in again and try again. "
-                                       "Or set it up in Files."), "fout")
+                    self.klaar_mislukt()
+                    return
+            # Controles meteen uitvoeren (ze duren een fractie van een seconde), opdrachten op de achtergrond.
+            while self.klaar_stappen and callable(self.klaar_stappen[0]):
+                controle = self.klaar_stappen.pop(0)
+                try:
+                    ok = bool(controle())
+                except Exception:  # noqa: BLE001  gaat het controleren mis, dan zeker niet wissen
+                    ok = False
+                if not ok:
+                    self.klaar_mislukt(t("De stick is veranderd of wordt gebruikt. Er is niets gewist.",
+                                         "The stick changed or is in use. Nothing was erased."))
                     return
             if not self.klaar_stappen:
                 # Alles gelukt: de stick staat open en komt nu gewoon in de lijst.
@@ -842,6 +1075,8 @@ def venster() -> int:
                 self.ververs_schijven()
                 self.melding.zet(t(f"Klaar: '{naam}' staat nu in de lijst. Druk op 'Maak back-up'.",
                                    f"Done: '{naam}' is now in the list. Press 'Make backup'."), "goed")
+                if self.sluit_na:
+                    QTimer.singleShot(0, self.close)
                 return
             cmd = self.klaar_stappen.pop(0)
             self.klaarmaker = QProcess(self)
@@ -851,6 +1086,22 @@ def venster() -> int:
             self.klaarmaker.errorOccurred.connect(
                 lambda fout: fout == QProcess.ProcessError.FailedToStart and self.klaar_stap(1, None))
             self.klaarmaker.start(cmd[0], cmd[1:])
+
+        def klaar_mislukt(self, tekst: str = "") -> None:
+            """Een stap mislukte (of je annuleerde het wachtwoord): stoppen, niet de volgende stap proberen."""
+            self.klaar_stappen = []
+            self.kiezer.setEnabled(True)
+            self.ververs_schijven()
+            self.melding.zet(tekst or (
+                t("Klaarmaken lukte niet. Haal de stick eruit, steek hem er weer in en probeer het opnieuw. Of maak "
+                  "hem klaar in Bestanden.",
+                  "Setting up did not work. Unplug the stick, plug it in again and try again. Or set it up in "
+                  "Files.") if getattr(self, "wis_leeg", True) else
+                t("Leegmaken lukte niet. Haal de stick eruit, steek hem er weer in en probeer het opnieuw. Zit er "
+                  "een schuifje op de stick (schrijfbeveiliging)? Zet dat dan eerst om.",
+                  "Erasing did not work. Unplug the stick, plug it in again and try again. Does the stick have a "
+                  "small switch (write protection)? Flip it first.")), "fout")
+            self.sluit_na = False   # de foutmelding moet je kunnen lezen
 
         def volgende(self) -> None:
             if not self.wachtrij:
@@ -976,6 +1227,15 @@ def venster() -> int:
                 self.melding.zet(t("Nog even bezig…", "Still busy…"), "bezig")
 
         def closeEvent(self, e) -> None:  # noqa: N802
+            if self.klaarmaker is not None or self.klaar_stappen:
+                # Een stick wordt klaar- of leeggemaakt: nooit halverwege stoppen (een half geformatteerde stick
+                # werkt nergens meer). Het venster gaat vanzelf dicht als het klaar is.
+                e.ignore()
+                self.sluit_na = True
+                self.melding.zet(t("Even wachten: de stick wordt nog klaargemaakt. Het venster gaat daarna vanzelf "
+                                   "dicht.", "One moment: the stick is still being set up. The window closes by "
+                                   "itself afterwards."), "bezig")
+                return
             if self.teller is not None and self.teller.isRunning():
                 # Nog aan het tellen (er is nog niets gekopieerd): stop het tellen, en sluit daarna.
                 e.ignore()
