@@ -57,6 +57,19 @@ actual: "Not connected": the sample data says Home, the sample network list stil
 evidence: photo studio inside the built image (settings-donker.png); tools/test_edges.py "wifi is verbonden met 'Home' uit de lijst"
 fixed in: 85233e4
 
+## B008 [low] [open] Backup does not see a new, empty USB stick and does not say why
+steps: plug in a stick without a file system (never formatted, or wiped); open Backup
+expected: BugOS sees the stick and offers to prepare it, or says that it has to be formatted first
+actual: Backup keeps saying "Plug in a USB drive..."; nothing tells you the stick is there but empty
+evidence: VM test 2026-11-23 (BugOS-3, virtual USB stick via dummy_hcd); after formatting it as FAT32 it showed up at once
+note: most sticks from a shop are already formatted (FAT32/exFAT), so this is rare
+
+## B009 [low] [to check] Store "My apps" once opened scrolled down a little (search bar out of view)
+steps: Store, search "calculator", open a Flathub app page, click "My apps" in the side bar
+expected: "My apps" at the top, with the search bar
+actual: once the page opened about 70 px down; after removing an app it was at the top again
+evidence: VM test 2026-11-23, screenshot s9; not tried a second time, so maybe not reproducible
+
 ## To check
 - The numbered dots in the logo drawing (.opbouw .nr): checked after scrolling the whole page; axe finds no problem there.
 - The text on top of the big photo at the top (menu, heading, "Download", the four facts): axe cannot work out the contrast over a picture. Check by eye in light and dark (see test-plan.md, manual).

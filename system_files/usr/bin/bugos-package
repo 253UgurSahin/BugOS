@@ -295,14 +295,20 @@ if [ "$SOORT" = rpm ]; then
     # shellcheck disable=SC2016  # $1 is voor de bash in het doosje
     INSTALL='sudo dnf install -y "$1"'
 else
+    # --allow-downgrades: wie op een .deb dubbelklikt, wil precies die versie. Stond er al een nieuwere versie in het
+    # doosje, dan weigerde apt met -y ("Packages were downgraded and -y was used without --allow-downgrades") en zei
+    # BugOS alleen "lukte niet" (VM-test 2026-11-23, hello 2.8 over hello 2.10).
     # shellcheck disable=SC2016
-    INSTALL='sudo apt-get update && sudo apt-get install -y "$1"'
+    INSTALL='sudo apt-get update && sudo apt-get install -y --allow-downgrades "$1"'
 fi
 
 # Programma's van dit pakket naar het startmenu brengen.
+# --export-label none: zonder dit heet het programma in het startmenu "Galculator (on bugos-ubuntu)". Die technische
+# naam van het doosje zegt Bugie niets (VM-test 2026-11-23); het bestand zelf heet nog steeds bugos-ubuntu-<app>.desktop,
+# dus BugOS en distrobox herkennen het nog als programma uit het doosje.
 # shellcheck disable=SC2016
 # Tellen hoeveel er naar het startmenu gingen: een pakket zonder programma met een venster heeft er geen (U195).
-EXPORT='n=0; f=0; for d in $( (rpm -qlp "$1" 2>/dev/null || dpkg-deb -c "$1" 2>/dev/null | awk '\''{print $6}'\'') | grep -E '\''share/applications/.*\.desktop$'\''); do if distrobox-export --app "$(basename "$d" .desktop)" >/dev/null 2>&1; then n=$((n+1)); else f=1; fi; done; echo "bugos-startmenu=$n"; [ "$n" -gt 0 ] || exit $f'
+EXPORT='n=0; f=0; for d in $( (rpm -qlp "$1" 2>/dev/null || dpkg-deb -c "$1" 2>/dev/null | awk '\''{print $6}'\'') | grep -E '\''share/applications/.*\.desktop$'\''); do if distrobox-export --app "$(basename "$d" .desktop)" --export-label none >/dev/null 2>&1; then n=$((n+1)); else f=1; fi; done; echo "bugos-startmenu=$n"; [ "$n" -gt 0 ] || exit $f'
 
 # Stap 3 (of de enige stap): installeren in het doosje.
 # 'INSTALL || exit 1': EXPORT bestaat uit meer opdrachten; met && zou alleen de eerste van een gelukte installatie

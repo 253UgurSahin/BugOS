@@ -1,6 +1,8 @@
 # Als iemand een Windows-installatie opent waarvan de naam dit woord bevat,
 # biedt BugOS eerst de echte BugOS-versie (uit de Winkel) aan.
-# Opmaak: woord-in-bestandsnaam|Naam voor de gebruiker|Flathub-ID  (^woord: de naam moet ermee beginnen)
+# Opmaak: woord-in-bestandsnaam|Naam voor de gebruiker|Flathub-ID[|Engelse naam]  (^woord: de naam moet ermee beginnen)
+# De Engelse naam is alleen nodig als de naam een Nederlands woord bevat ("KWrite (Teksteditor)"); zonder
+# vierde veld is de naam in elke taal dezelfde.
 steam|Steam|com.valvesoftware.Steam
 discord|Discord|com.discordapp.Discord
 spotify|Spotify|com.spotify.Client
@@ -28,9 +30,9 @@ gog_galaxy|Heroic Games Launcher|com.heroicgameslauncher.hgl
 # Meer veelgebruikte Windows-installaties (D-04). De naam van het bestand is wat je van de website krijgt, bijv.
 # npp.8.7.1.Installer.x64.exe, Audacity-3.7.1-64bit.exe, paint.net.5.1.2.install.x64.exe. Staat de app al op BugOS
 # (zoals KWrite, Firefox en Ark), dan biedt bugos-exe aan hem meteen te openen in plaats van hem uit de Winkel te halen.
-^npp.|KWrite (Teksteditor)|org.kde.kwrite
-notepad++|KWrite (Teksteditor)|org.kde.kwrite
-notepadplusplus|KWrite (Teksteditor)|org.kde.kwrite
+^npp.|KWrite (Teksteditor)|org.kde.kwrite|KWrite (Text editor)
+notepad++|KWrite (Teksteditor)|org.kde.kwrite|KWrite (Text editor)
+notepadplusplus|KWrite (Teksteditor)|org.kde.kwrite|KWrite (Text editor)
 audacity|Audacity|org.audacityteam.Audacity
 paint.net|Pinta|com.github.PintaProject.Pinta
 paintdotnet|Pinta|com.github.PintaProject.Pinta
