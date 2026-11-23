@@ -384,5 +384,95 @@ klopt('t("Eén bestand of map terugzetten"' in _bron and "self.een_terug.clicked
       "D-12: het venster heeft de knop 'Eén bestand of map terugzetten'")
 _app12.processEvents()   # het venstertje echt opruimen (deleteLater) voor het einde
 
+# B008: een nieuwe, lege stick (nog geen bestandssysteem) ging niet open en bleef onzichtbaar. Back-up moet hem
+# nu herkennen om klaar te maken; een lege schijf ín de computer niet (die hoort niet bij een back-up, U226).
+import bugos_drives as _bd8  # noqa: E402
+
+_lsblk8 = [
+    {"name": "sdb", "kname": "sdb", "path": "/dev/sdb", "type": "disk", "size": 16 * 10**9, "fstype": None,
+     "rm": True, "hotplug": True, "tran": "usb", "children": None},
+    {"name": "sdc", "kname": "sdc", "path": "/dev/sdc", "type": "disk", "size": 500 * 10**9, "fstype": None,
+     "rm": False, "hotplug": False, "tran": "sata", "children": None},
+]
+_nieuw8 = bb.nieuwe_sticks(_bd8.schijven(_lsblk8))
+klopt(len(_nieuw8) == 1 and _nieuw8[0].station == "/dev/sdb" and _nieuw8[0].nieuw,
+      f"B008: een lege USB-stick wordt gezien (om klaar te maken), een lege schijf in de computer niet "
+      f"({[s.station for s in _nieuw8]})")
+klopt(bb.nieuwe_sticks(None) == [] and bb.interne_plekken([]) == set(),
+      "B008: zonder lsblk (None) of zonder schijven: geen lege sticks en geen interne plekken")
+_stap8 = _bd8.klaarmaak_stappen(_nieuw8[0], "Back-up") if _nieuw8 else []
+klopt(len(_stap8) == 3 and any("exfat" in a for a in _stap8[1]) and _stap8[2] == ["udisksctl", "mount", "-b", "/dev/sdb1"],
+      "B008: klaarmaken = indelen, één stuk exFAT (werkt ook op Windows en Mac) en dat stuk openen")
+klopt(all(len(n) <= _bd8.MAX_NAAM["exfat"] for n in bb.BACKUP_NAAM),
+      f"B008: de naam voor de klaargemaakte stick past in exFAT (hoogstens {_bd8.MAX_NAAM['exfat']} tekens)")
+klopt("self.klaarmaak.clicked.connect(self.klik_bijzonder)" in _bron
+      and "stappen.insert(eerste_wis, lambda: zelfde_stick(station, voor))" in _bron,
+      "B008: het venster heeft de knop 'Klaarmaken' en kijkt vlak voor het wissen of het nog dezelfde stick is")
+
+# Leegmaken (na akkoord): welke sticks biedt Back-up aan om te wissen, en welke nooit?
+_schrijfbaar = TMP / "schrijfbare-stick"
+_schrijfbaar.mkdir()
+
+
+def _stick(naam: str, delen: list, **extra) -> dict:
+    """Een regel van lsblk voor een USB-stick van 16 GB met deze stukken."""
+    return {"name": naam, "kname": naam, "path": f"/dev/{naam}", "type": "disk", "size": 16 * 10**9, "fstype": None,
+            "rm": True, "hotplug": True, "tran": "usb", "model": "Stick", "ptuuid": f"id-{naam}",
+            "children": delen, **extra}
+
+
+def _deel(naam: str, fs: str | None, plek: str | None = None, label: str = "") -> dict:
+    return {"name": naam, "kname": naam, "path": f"/dev/{naam}", "type": "part", "size": 16 * 10**9 - 2**20,
+            "fstype": fs, "fssize": 16 * 10**9 - 2**20, "fsavail": 10**9, "label": label,
+            "mountpoints": [plek] if plek else [None]}
+
+
+_ruw_w = [
+    _stick("sdb", None),                                                   # leeg: klaarmaken
+    _stick("sdc", [_deel("sdc1", "iso9660", "/bestaat/niet/BUGOS", "BUGOS")]),  # open, alleen-lezen
+    _stick("sdd", [_deel("sdd1", None)]),                                  # onleesbaar (geen bekend bestandssysteem)
+    _stick("sde", [_deel("sde1", "exfat", str(_schrijfbaar), "GOED")]),    # gewoon bruikbaar: niets aanbieden
+    _stick("sdf", [_deel("sdf1", "crypto_LUKS")]),                         # op slot: eerst het wachtwoord
+    _stick("sdg", [_deel("sdg1", None)]),                                  # het systeem gebruikt hem (fstab)
+    _stick("sdh", [_deel("sdh1", "ext4", "/run/initramfs/live")]),         # BugOS draait ervan (live-stick)
+    {**_stick("sda", [_deel("sda1", None)]), "rm": False, "hotplug": False, "tran": "sata"},   # in de computer
+]
+_lijst_w = _bd8.schijven(_ruw_w)
+_zicht: dict = {}
+_eerste = bb.bijzondere_sticks(_ruw_w, _lijst_w, {"sdg"}, _zicht)
+_tweede = bb.bijzondere_sticks(_ruw_w, _lijst_w, {"sdg"}, _zicht)
+klopt([(b.soort, b.station) for b in _eerste] == [("leeg", "/dev/sdb")],
+      f"leegmaken: de eerste keer alleen de lege stick; 'onleesbaar' flitst niet bij een stick die net opengaat "
+      f"({[(b.soort, b.station) for b in _eerste]})")
+klopt(sorted((b.soort, b.station) for b in _tweede) ==
+      [("alleen-lezen", "/dev/sdc"), ("leeg", "/dev/sdb"), ("onleesbaar", "/dev/sdd")],
+      f"leegmaken: daarna ook de alleen-lezen- en de onleesbare stick, nooit een bruikbare, versleutelde, "
+      f"gebruikte, live- of interne schijf ({sorted((b.soort, b.station) for b in _tweede)})")
+bb.bijzondere_sticks([_stick("sdb", None)], _bd8.schijven([_stick("sdb", None)]), set(), _zicht)
+klopt(_zicht == {}, f"leegmaken: een stick die eruit is, telt de volgende keer weer vanaf nul ({_zicht})")
+_ro = next(b for b in _tweede if b.soort == "alleen-lezen")
+_st_w = bb.wis_stappen(_ro.station, _ro.delen, "Back-up")
+klopt(_st_w[0] == ["udisksctl", "unmount", "-b", "/dev/sdc1"] and len(_st_w) == 4
+      and any("'dos'" in a for a in _st_w[1]) and _st_w[1][_st_w[1].index("--object-path") + 1].endswith("/sdc")
+      and _st_w[3] == ["udisksctl", "mount", "-b", "/dev/sdc1"],
+      "leegmaken: eerst dicht, dan de hele stick opnieuw indelen (exFAT) en openen")
+_gek = bb.gekozen_stick(_schrijfbaar, _lijst_w)
+klopt(_gek is not None and _gek.station == "/dev/sde" and bb.gekozen_stick(TMP / "thuis", _lijst_w) is None,
+      "leegmaken: 'Deze stick leegmaken' hoort bij de gekozen stick, niet bij een gewone map")
+_echte_lsblk, _echt_in_gebruik = _bd8.lees_lsblk, bb.in_gebruik
+_bd8.lees_lsblk = lambda: _ruw_w
+# Een vast lijstje: de computer (of container) waarop de test draait, heeft zelf ook een sdc of sdd in gebruik.
+bb.in_gebruik = lambda: {"sdg"}
+_id_c = bb.station_id(_ruw_w[1])
+klopt(bb.zelfde_stick("/dev/sdc", _id_c, mag_open=True) and not bb.zelfde_stick("/dev/sdc", _id_c)
+      and not bb.zelfde_stick("/dev/sdc", ("/dev/sdc", 32 * 10**9, "Ander", "x"), mag_open=True)
+      and not bb.zelfde_stick("/dev/sda", bb.station_id(_ruw_w[-1]), mag_open=True)
+      and bb.zelfde_stick("/dev/sdd", bb.station_id(_ruw_w[2])),
+      "leegmaken: vlak voor het wissen: dezelfde stick, niets meer open, geen andere stick op die plek, "
+      "nooit een schijf in de computer")
+klopt(not bb.zelfde_stick("/dev/sdg", bb.station_id(_ruw_w[5]), mag_open=True),
+      "leegmaken: nooit een stick die het systeem zelf gebruikt (fstab, swap, BugOS draait ervan)")
+_bd8.lees_lsblk, bb.in_gebruik = _echte_lsblk, _echt_in_gebruik
+
 print(f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)

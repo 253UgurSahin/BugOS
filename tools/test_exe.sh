@@ -64,7 +64,7 @@ klopt '[ "$(zoek tsetup-x64.5.1.exe)" = "Telegram|org.telegram.desktop" ] && [ -
     "U190: Telegram herkennen aan het begin van de naam, niet in ChatGPTSetup of MinecraftSetup"
 
 # D-04: veelgebruikte Windows-installaties krijgen ook een BugOS-versie aangeboden (op de echte bestandsnamen).
-klopt '[ "$(zoek npp.8.7.1.Installer.x64.exe)" = "KWrite (Teksteditor)|org.kde.kwrite" ] && [ "$(zoek Audacity-3.7.1-64bit.exe)" = "Audacity|org.audacityteam.Audacity" ] && [ "$(zoek paint.net.5.1.2.install.x64.exe)" = "Pinta|com.github.PintaProject.Pinta" ] && [ "$(zoek 7z2408-x64.exe)" = "Ark|org.kde.ark" ] && [ "$(zoek OBS-Studio-31.0.0-Windows-Installer.exe)" = "OBS Studio|com.obsproject.Studio" ] && [ "$(zoek LibreOffice_25.2.0_Win_x86-64.msi)" = "LibreOffice|org.libreoffice.LibreOffice" ]' \
+klopt '[ "$(zoek npp.8.7.1.Installer.x64.exe)" = "KWrite (Teksteditor)|org.kde.kwrite|KWrite (Text editor)" ] && [ "$(zoek Audacity-3.7.1-64bit.exe)" = "Audacity|org.audacityteam.Audacity" ] && [ "$(zoek paint.net.5.1.2.install.x64.exe)" = "Pinta|com.github.PintaProject.Pinta" ] && [ "$(zoek 7z2408-x64.exe)" = "Ark|org.kde.ark" ] && [ "$(zoek OBS-Studio-31.0.0-Windows-Installer.exe)" = "OBS Studio|com.obsproject.Studio" ] && [ "$(zoek LibreOffice_25.2.0_Win_x86-64.msi)" = "LibreOffice|org.libreoffice.LibreOffice" ]' \
     "D-04: Notepad++, Audacity, Paint.NET, 7-Zip, OBS en LibreOffice: eerst de BugOS-versie aangeboden"
 klopt '[ -z "$(zoek happynpp.exe)" ] && [ -z "$(zoek spel.exe)" ]' "D-04: 'npp.' alleen aan het begin van de naam (niet in happynpp.exe)"
 
@@ -80,6 +80,15 @@ rm -f "$TMP/gio" "$TMP/winkel" "$TMP/wine-gestart"
 XDG_DATA_HOME="$TMP/thuis/.local/share" draai "$TMP/npp.8.7.1.Installer.x64.exe" >/dev/null
 klopt 'grep -q "BugOS heeft al KWrite" "$TMP/dialogen" && grep -q "launch .*org.kde.kwrite.desktop" "$TMP/gio" 2>/dev/null && [ ! -e "$TMP/winkel" ] && [ ! -e "$TMP/wine-gestart" ]' \
     "D-04: Notepad++ met KWrite al op de computer: KWrite openen aangeboden (niet de Winkel, niet Wine)"
+# VM-test 2026-11-23: in het Engels stond er "BugOS already has KWrite (Teksteditor)". Nu de Engelse naam uit het
+# vierde veld van alternatives.txt, en in het Nederlands nog steeds de Nederlandse.
+: >"$TMP/dialogen"
+XDG_DATA_HOME="$TMP/thuis/.local/share" HOME="$TMP/thuis" PATH="$TMP/bin:$PATH" LANG=en_US.UTF-8 \
+    bash "$TMP/exe" "$TMP/npp.8.7.1.Installer.x64.exe" >/dev/null 2>&1
+klopt 'grep -q "BugOS already has KWrite (Text editor)" "$TMP/dialogen" && ! grep -q "Teksteditor" "$TMP/dialogen"' \
+    "Notepad++ in het Engels: 'KWrite (Text editor)', geen Nederlands woord in de Engelse vraag"
+klopt '[ "$(zoek Audacity-3.7.1-64bit.exe)" = "Audacity|org.audacityteam.Audacity" ]' \
+    "Een regel zonder Engelse naam geeft nog steeds 'naam|id' (geen lege derde kolom)"
 rm -f "$TMP/thuis/.local/share/applications/org.kde.kwrite.desktop"
 
 # D-02: Wine maakt alleen de laatste map (zoals de echte wineboot: mkdir zonder -p). Op een nieuwe computer bestaat
@@ -95,6 +104,18 @@ klopt '[ "$code" = 0 ] && [ -d "$TMP/thuis/.local/share/bugos/windows" ] && ! gr
     "D-02: eerste keer op een nieuwe computer (zonder ~/.local/share/bugos): het klaarzetten lukt ($code)"
 klopt '[ "$(cat "$TMP/wineboot" 2>/dev/null)" = "DISPLAY=weg WAYLAND=weg" ] && grep -q "DISPLAY=:0" "$TMP/wine-gestart" 2>/dev/null' \
     "D-05: Windows klaarzetten zonder Wine-vensters, het programma daarna gewoon in beeld ($(cat "$TMP/wineboot" 2>/dev/null))"
+
+# VM-test 2026-11-23: de eerste keer klaarzetten duurde ruim 3 minuten, maar de melding ("een minuutje") verdween na
+# een paar seconden. Nu blijft hij staan (--expire-time=0) en wordt hij aan het eind vervangen (zelfde nummer), zodat
+# er geen 'Even geduld' blijft hangen. Een nep-notify-send schrijft zijn argumenten op en geeft nummer 42 terug.
+nep notify-send 'echo "$*" >>"'"$TMP"'/meldingen"; echo 42'
+rm -rf "$TMP/thuis/.local" "$TMP/meldingen"
+draai "$TMP/spel.exe" >/dev/null
+klopt 'head -1 "$TMP/meldingen" | grep -q -- "--expire-time=0" && head -1 "$TMP/meldingen" | grep -q "paar minuten" && ! grep -q "minuutje" "$TMP/meldingen"' \
+    "Eerste keer Windows klaarzetten: de melding blijft staan en zegt eerlijk 'een paar minuten'"
+klopt 'tail -1 "$TMP/meldingen" | grep -q -- "--replace-id=42" && tail -1 "$TMP/meldingen" | grep -q "Klaar"' \
+    "Eerste keer Windows klaarzetten: aan het eind wordt dezelfde melding vervangen door 'Klaar'"
+nep notify-send 'exit 0'
 
 # Een half klaargezette Windows-map (zonder kernel32.dll, van een eerste keer die halverwege stopte) wordt opzij gezet
 # en opnieuw gemaakt; een complete map blijft gewoon staan (VM-test 2026-11-16: "could not load kernel32.dll").

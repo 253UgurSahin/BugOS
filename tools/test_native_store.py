@@ -690,6 +690,44 @@ w.lijst.setCurrentRow(_rij_mijn)
 klopt(w.zoek.text() == "" and w.kop.text() == "Mijn apps",
       f"C-10: tijdens het zoeken 'Mijn apps' kiezen laat Mijn apps zien ({w.kop.text()!r})")
 w.lijst.setCurrentRow(0)
+# B009: wie in een lijst omlaag schoof en dan een ander onderwerp kiest, begint bovenaan (met de zoekbalk in beeld).
+# In de VM was dat 'Mijn apps' (met genoeg apps om te schuiven) na zoekresultaten. De oorzaak geldt voor elk
+# onderwerp: onderwerp_gekozen zette de schuifbalk nooit terug. Hier is 'Mijn apps' te kort om te schuiven (Qt zet
+# de waarde dan zelf op 0, ook zonder fix), dus de test wisselt tussen twee onderwerpen die allebei lang genoeg
+# zijn: zo faalt hij echt zonder de fix. Een laag venster, zodat er iets te schuiven valt.
+_maat_b009 = w.size()
+w.resize(_maat_b009.width(), 480)
+_balk = w.scroll.verticalScrollBar()
+_lang_b009 = []   # de onderwerpen waarin je minstens 70 px kunt schuiven
+for _i in range(w.lijst.count()):
+    if w.lijst.item(_i) is None or w.lijst.item(_i).isHidden():
+        continue
+    w.lijst.setCurrentRow(_i)
+    even(50)
+    if _balk.maximum() >= 70:
+        _lang_b009.append(_i)
+if len(_lang_b009) >= 2:
+    w.lijst.setCurrentRow(_lang_b009[0])
+    even(50)
+    _balk.setValue(70)
+    _voor_b009 = _balk.value()
+    w.lijst.setCurrentRow(_lang_b009[1])
+    even(50)
+    _na_b009 = _balk.value()
+else:
+    _voor_b009 = _na_b009 = -1
+klopt(_voor_b009 == 70 and _na_b009 == 0,
+      f"B009: na schuiven begint een ander onderwerp bovenaan (was {_voor_b009}, nu {_na_b009}, lang: {_lang_b009})")
+w.lijst.setCurrentRow(0)
+even(50)
+_balk.setValue(min(70, _balk.maximum()))
+w.lijst.setCurrentRow(_rij_mijn)
+even(50)
+klopt(_balk.value() == 0 and w.kop.text() == "Mijn apps",
+      f"B009: 'Mijn apps' opent bovenaan, met de zoekbalk in beeld (nu {_balk.value()})")
+w.lijst.setCurrentRow(0)
+w.resize(_maat_b009)
+even(50)
 # D-14: tijdens het zoeken licht er geen onderwerp op in de zijbalk (de oude pagina bleef gekleurd terwijl je
 # zoekresultaten zag); na het zoeken weer wel. Een klik op het onderwerp stopt het zoeken nog steeds (C-10).
 w.zoek.setText("muziek")

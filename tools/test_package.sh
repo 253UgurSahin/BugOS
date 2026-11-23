@@ -122,6 +122,20 @@ rm -f "$TMP/doos-log" "$TMP/gevraagd"
 LANG=nl_NL.UTF-8 installeer "$TMP/eigen_1.0_amd64.deb" >/dev/null 2>&1
 klopt '! grep -q "distrobox stop" "$TMP/doos-log" && ! grep -q "podman pull\|distrobox create" "$TMP/doos-log" && grep -q "een paar minuten" "$TMP/gevraagd"' \
     "D-08: draaide het doosje al (een programma eruit is open), dan blijft het aan; geen nieuw doosje"
+# VM-test 2026-11-23: (1) een oudere .deb over een nieuwere versie in het doosje mislukte ("-y was used without
+# --allow-downgrades"); (2) in het startmenu stond "Galculator (on bugos-ubuntu)". Nep-apt-get en nep-distrobox-export
+# schrijven hun argumenten op; nep-dpkg-deb zegt dat het pakket één programma met een venster heeft.
+nep apt-get 'echo "$*" >>"'"$TMP"'/apt-args"; exit 0'
+nep rpm 'exit 1'
+nep dpkg-deb 'echo "-rw-r--r-- root/root 100 2024-01-01 00:00 ./usr/share/applications/eigen.desktop"'
+nep distrobox-export 'echo "$*" >>"'"$TMP"'/export-args"; exit 0'
+rm -f "$TMP/apt-args" "$TMP/export-args"
+LANG=nl_NL.UTF-8 installeer "$TMP/eigen_1.0_amd64.deb" >/dev/null 2>&1
+klopt 'grep -q -- "install -y --allow-downgrades" "$TMP/apt-args" 2>/dev/null' \
+    ".deb installeren: ook als er al een nieuwere versie in het doosje staat (--allow-downgrades)"
+klopt 'grep -q -- "--app eigen --export-label none" "$TMP/export-args" 2>/dev/null' \
+    ".deb naar het startmenu: zonder '(on bugos-ubuntu)' achter de naam (--export-label none)"
+rm -f "$TMP/bin/rpm" "$TMP/bin/dpkg-deb" "$TMP/bin/distrobox-export"
 rm -f "$TMP/bin/systemd-run" "$TMP/bin/apt-get"
 nep podman 'exit 0'
 nep skopeo 'exit 1'

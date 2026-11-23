@@ -25,22 +25,22 @@ TOON="${TOON//>/›}"
 ALTERNATIEVEN=/usr/share/bugos/alternatives.txt
 
 # Is er een beter, echt Linux-alternatief? Dan dat eerst aanbieden.
+# Uitvoer: "naam|id", of "naam|id|Engelse naam" als de regel in alternatives.txt een Engelse naam heeft (een vierde
+# veld). Zonder vierde veld is de naam in elke taal dezelfde (een merknaam zoals "Audacity").
 zoek_alternatief() {
     local klein
     klein="$(echo "$NAAM" | tr '[:upper:]' '[:lower:]')"
-    while IFS='|' read -r woord app id; do
+    while IFS='|' read -r woord app id app_en; do
         case "$woord" in '#'* | '') continue ;; esac
         # Een woord dat met ^ begint, moet aan het begin van de naam staan ('^tsetup' is Telegram, maar
         # 'ChatGPTSetup.exe' niet) (U190).
         if [[ "$woord" == ^* ]]; then
             [[ "$klein" == "${woord#^}"* ]] || continue
-            echo "$app|$id"
-            return 0
+        elif [[ "$klein" != *"$woord"* ]]; then
+            continue
         fi
-        if [[ "$klein" == *"$woord"* ]]; then
-            echo "$app|$id"
-            return 0
-        fi
+        echo "$app|$id${app_en:+|$app_en}"
+        return 0
     done <"$ALTERNATIEVEN"
     return 1
 }
@@ -61,8 +61,11 @@ geinstalleerde_app() {
 }
 
 if ALT="$(zoek_alternatief)"; then
-    APP="${ALT%%|*}"
-    ID="${ALT##*|}"
+    # Naam, Flathub-ID en (soms) een Engelse naam. In het Engels stond er eerst "KWrite (Teksteditor)": de naam uit
+    # alternatives.txt is Nederlands als er een beschrijving bij staat (VM-test 2026-11-23). Andere talen krijgen
+    # de Engelse naam, net als de rest van de tekst (t() valt terug op het Engels).
+    IFS='|' read -r APP ID APP_EN <<<"$ALT"
+    APP="$(t "$APP" "${APP_EN:-$APP}")"
     if DESKTOP="$(geinstalleerde_app "$ID")"; then
         # Al op BugOS: aanbieden hem meteen te openen (gio start het .desktop-bestand, zoals Bestanden dat doet).
         if vraag "$(t \
@@ -132,14 +135,62 @@ if [ -d "$WINEPREFIX" ] && ! wine_compleet; then
     mv -- "$WINEPREFIX" "$WINEPREFIX-onaf-$(date +%Y%m%d-%H%M%S)" 2>/dev/null || rm -rf -- "$WINEPREFIX"
 fi
 
+# Eén melding die blijft staan en die we bijwerken (notify-send --replace-id), zoals bugos-package doet.
+# Waarom: in de VM-test (2026-11-23, 4 cores) duurde de eerste keer ruim 3 minuten. De oude melding zei "een minuutje"
+# en verdween na een paar seconden; daarna zag je minutenlang niets, en dan dubbelklik je nog eens. Nu blijft de melding
+# staan (--expire-time=0) tot het programma start, met elke minuut hoe lang BugOS al bezig is.
+# Kan notify-send geen nummer teruggeven (oud of geen meldingendienst), dan één gewone melding, zoals vroeger.
+MELDING_ID=""
+voortgang() {
+    local id
+    id="$(notify-send --app-name=BugOS --icon=bugos-logo --hint=string:desktop-entry:bugos-settings \
+        --expire-time=0 --print-id ${MELDING_ID:+--replace-id="$MELDING_ID"} "$1" "$2" 2>/dev/null)" || id=""
+    if [[ "$id" =~ ^[0-9]+$ ]]; then
+        MELDING_ID="$id"
+    elif [ -z "$MELDING_ID" ]; then
+        melding "$1" "$2"
+        MELDING_ID=geen   # niet elke minuut een nieuwe losse melding
+    fi
+}
+
+# De blijvende melding weer weghalen: vervangen door een korte die vanzelf verdwijnt (een melding sluiten kan
+# notify-send zelf niet). Alleen als er echt een blijvende melding staat.
+voortgang_klaar() {
+    [[ "$MELDING_ID" =~ ^[0-9]+$ ]] || return 0
+    notify-send --app-name=BugOS --icon=bugos-logo --hint=string:desktop-entry:bugos-settings \
+        --expire-time=5000 --replace-id="$MELDING_ID" "$1" "$2" >/dev/null 2>&1 || true
+    MELDING_ID=""
+}
+
 if [ ! -d "$WINEPREFIX" ]; then
-    melding "$(t "Even geduld..." "Please wait...")" \
-        "$(t "De eerste keer zet BugOS alles klaar voor Windows-programma's. Dit duurt een minuutje." \
-            "The first time, BugOS prepares everything for Windows programs. This takes a minute.")"
+    WACHT_TITEL="$(t "Even geduld..." "Please wait...")"
+    WACHT_TEKST="$(t "De eerste keer zet BugOS alles klaar voor Windows-programma's. Dit duurt een paar minuten; je kunt intussen gewoon doorwerken." \
+        "The first time, BugOS prepares everything for Windows programs. This takes a few minutes; you can keep working.")"
+    voortgang "$WACHT_TITEL" "$WACHT_TEKST"
     # Wine maakt alleen de laatste map zelf: ~/.local/share/bugos bestaat op een nieuwe computer nog niet, en dan
     # mislukte het klaarzetten altijd ("chdir ... No such file or directory") (D-02). Dus de map erboven eerst maken.
     mkdir -p -- "$(dirname "$WINEPREFIX")" 2>/dev/null
-    if ! wine_klaarzetten; then
+    # Klaarzetten op de achtergrond, en intussen elke minuut de melding bijwerken: een stap van minuten zonder teken
+    # van leven lijkt vastgelopen. De afsluitcode van wine_klaarzetten komt via wait terug.
+    wine_klaarzetten &
+    KLAAR_PID=$!
+    BEGIN=$SECONDS
+    VOLGENDE=60
+    while kill -0 "$KLAAR_PID" 2>/dev/null; do
+        sleep 1
+        if [ $((SECONDS - BEGIN)) -ge "$VOLGENDE" ]; then
+            voortgang "$WACHT_TITEL" "$WACHT_TEKST $(t "(al $((VOLGENDE / 60)) min. bezig)" "($((VOLGENDE / 60)) min. so far)")"
+            VOLGENDE=$((VOLGENDE + 60))
+        fi
+    done
+    KLAAR_CODE=0
+    wait "$KLAAR_PID" || KLAAR_CODE=$?
+    if [ "$KLAAR_CODE" = 0 ]; then
+        voortgang_klaar "$(t "Klaar" "Ready")" "$(t "\"$TOON\" start nu." "\"$TOON\" is starting now.")"
+    else
+        voortgang_klaar "$(t "Niet gelukt" "Did not work")" ""
+    fi
+    if [ "$KLAAR_CODE" != 0 ]; then
         # Een half klaargezette Windows-map werkt later ook niet: weg ermee, dan de volgende keer opnieuw.
         rm -rf -- "$WINEPREFIX"
         if schijf_vol "$WINEPREFIX"; then

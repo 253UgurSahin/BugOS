@@ -178,7 +178,15 @@ The most important idea: **BugOS can't break.**
   Two testers walked through the installed system in VirtualBox; their 42 findings were fixed (dark-mode dialogs,
   quick-menu arrows, start-menu height, Settings at half-screen width, and more). Also removed: Partition Manager and
   the Xwayland Video Bridge tray icon (owner's choice). Local build is now about 20 minutes (see TESTING.md).
-- [ ] Test the apps area (Store installs, Back-up to a USB drive, `.exe` and `.deb`) in the VM
+- [x] **Test the apps area in the VM** (2026-11-23, VirtualBox, build of 2026-11-17, with a virtual USB stick made by the
+  kernel's USB gadget, so BugOS saw a real `usb` drive). Works: the Store (search in the list and in all of Flathub, an
+  app page from Flathub, install without a password, open, remove with Cancel as the safe default); Backup to a FAT32
+  stick and Restore (a deleted file comes back, a newer file on the computer is kept); a Notepad++ `.exe` (Wine set-up,
+  installer, start menu entry, and "BugOS already has KWrite" for the real file name); a `.deb` (galculator: in its box,
+  in the start menu, starts). Fixed: the first Wine set-up took over 3 minutes while the notice said "a minute" and
+  vanished (now it stays and counts the minutes); "KWrite (Teksteditor)" in English; `.deb` programs were called
+  "… (on bugos-ubuntu)" in the start menu; an older `.deb` over a newer version failed. Fixed afterwards: B008 (Backup now
+  sees an empty stick and offers "Set up") and B009 ("My apps" opened scrolled down), see `forge-work/bugs.md`.
 - [ ] Try the "try first" stick on a real PC
 - [x] Start menu and quick menu by default (tested outside Plasma: tools/qml-test.py, tools/test_start_data.py, tools/test_logout.py)
 - [ ] Check the start menu, quick menu and shutdown screen on a real PC (Windows key, picking Wi-Fi, shutting down) — see TESTING.md
@@ -192,6 +200,7 @@ The most important idea: **BugOS can't break.**
 - **Old PCs:** BugOS needs a 64-bit computer with at least 4 GB of memory. Very old PCs (from the Windows XP days) won't work.
 - **Windows programs:** not everything works through Wine. Anti-cheat in some online games and heavy programs like Adobe and the newest Office often don't work. That's why BugOS always explains what the alternative is.
   Known (VM test 2026-11-16, Wine 11.21): Notepad++ 8.7 installs and works, but its menu bar shows each menu on its own line. BugOS only sets Wine's colours, not its fonts or sizes, so this looks like a Wine problem; BugOS offers KWrite first anyway. Check again with a newer Wine.
+  Narrowed down on 2026-11-23 (containers, Xvfb, Notepad++ 8.9.9.1): a Wine regression, not BugOS. It happens with Fedora 44's Wine 11.21 (staging, wow64), with and without BugOS's colours. It does not happen with Fedora 43's Wine 11.0. Wine's own Notepad is fine. `WINEDEBUG=+menu` shows Wine laying out the menu bar 111 px wide (at 96 DPI; 140 px at 120 DPI) instead of the window width. Nothing helped: resizing, another Windows version (win7/win8.1), hiding Notepad++'s "+ ▼ ✕", or the `DPIUNAWARE` compatibility layer. Next step: report it to bugs.winehq.org with this trace, or wait for a newer Wine.
 - **Its own system on `kinoite-main`:** BugOS no longer builds on Aurora. Just like Bazzite, it builds on Universal Blue's plain base (Fedora Kinoite with codecs and drivers); the Nvidia version uses `kinoite-nvidia`. Because of that, BugOS is also called BugOS on the inside (`ID=bugos`, `ID_LIKE=fedora`) and handles its own updates: `rpm-ostreed-automatic.timer` for the system (staged, active after a restart) and `bugos-update-apps.timer` for the Flatpak apps (daily).
 
 ## Glossary
