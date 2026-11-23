@@ -57,18 +57,23 @@ actual: "Not connected": the sample data says Home, the sample network list stil
 evidence: photo studio inside the built image (settings-donker.png); tools/test_edges.py "wifi is verbonden met 'Home' uit de lijst"
 fixed in: 85233e4
 
-## B008 [low] [open] Backup does not see a new, empty USB stick and does not say why
+## B008 [low] [fixed] Backup does not see a new, empty USB stick and does not say why
 steps: plug in a stick without a file system (never formatted, or wiped); open Backup
 expected: BugOS sees the stick and offers to prepare it, or says that it has to be formatted first
 actual: Backup keeps saying "Plug in a USB drive..."; nothing tells you the stick is there but empty
 evidence: VM test 2026-11-23 (BugOS-3, virtual USB stick via dummy_hcd); after formatting it as FAT32 it showed up at once
 note: most sticks from a shop are already formatted (FAT32/exFAT), so this is rare
+fix: Backup now shows "'USB stick (16 GB)' is plugged in, but it is still empty" with a "Set up" button. After a yes it formats the stick as exFAT named "Backup", with the same steps as "Set up" in Files, and the stick shows up in the list. Just before wiping, it checks again that it is still the same empty stick (U369). An empty drive inside the computer is not offered (U226).
+evidence: tools/test_backup.py "B008: ..."
+fixed in: branch fix/open-punten-b008-b009
 
-## B009 [low] [to check] Store "My apps" once opened scrolled down a little (search bar out of view)
+## B009 [low] [fixed] Store "My apps" once opened scrolled down a little (search bar out of view)
 steps: Store, search "calculator", open a Flathub app page, click "My apps" in the side bar
 expected: "My apps" at the top, with the search bar
 actual: once the page opened about 70 px down; after removing an app it was at the top again
-evidence: VM test 2026-11-23, screenshot s9; not tried a second time, so maybe not reproducible
+evidence: VM test 2026-11-23, screenshot s9; tools/test_native_store.py "B009: ..."
+cause: choosing a topic in the side bar (onderwerp_gekozen) never reset the scroll bar, so "My apps" kept the position from the search results. It happens every time you scroll in the results first, not by chance.
+fixed in: branch fix/open-punten-b008-b009
 
 ## To check
 - The numbered dots in the logo drawing (.opbouw .nr): checked after scrolling the whole page; axe finds no problem there.

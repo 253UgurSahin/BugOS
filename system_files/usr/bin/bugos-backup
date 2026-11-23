@@ -146,10 +146,37 @@ def schijven() -> list[Path]:
         pass
     gebruiker = getpass.getuser()
     gevonden = schijven_in((Path("/run/media") / gebruiker, Path("/media") / gebruiker, Path("/media")))
-    interne = interne_plekken()
+    # Eén keer lsblk lezen voor twee vragen: welke schijven zitten ín de computer, en zit er een lege stick in (B008).
+    lijst = alle_schijven()
+    interne = interne_plekken(lijst)
     LAATSTE_INTERNE.clear()
     LAATSTE_INTERNE.update(interne)
+    LAATSTE_NIEUWE[:] = nieuwe_sticks(lijst)
     return zonder_interne(gevonden, interne)
+
+
+def alle_schijven() -> list | None:
+    """Alle schijven volgens bugos_drives (lsblk), of None als dat hier niet kan (geen lsblk, een test)."""
+    try:
+        import bugos_drives
+        return bugos_drives.schijven()
+    except Exception:  # noqa: BLE001  zonder lsblk: niets weten
+        return None
+
+
+LAATSTE_NIEUWE: list = []   # de lege sticks (nog nooit klaargemaakt), van de laatste keer kijken (B008)
+
+
+def nieuwe_sticks(lijst: list | None) -> list:
+    """B008: een nieuwe of gewiste stick heeft nog geen bestandssysteem. Hij gaat dan niet open, dus hij stond niet
+    in de lijst, en Back-up bleef 'Steek een USB-schijf in' zeggen terwijl hij erin zat. bugos_drives ziet zo'n
+    stick wel (nieuw=True, net als bij 'In gebruik nemen' in Bestanden). Alleen schijven die je eruit haalt: een
+    lege schijf ín de computer hoort niet bij een back-up (U226); die maak je klaar in Bestanden."""
+    return [s for s in lijst or [] if getattr(s, "nieuw", False) and getattr(s, "los", False)]
+
+
+# De naam die een lege stick krijgt na het klaarmaken (exFAT: hoogstens 15 tekens).
+BACKUP_NAAM = ("Back-up", "Backup")
 
 
 def schijven_in(basissen, is_koppel=os.path.ismount) -> list[Path]:
@@ -192,13 +219,12 @@ def _echt(pad) -> str:
 LAATSTE_INTERNE: set[str] = set()   # de schijven in de computer, van de laatste keer kijken
 
 
-def interne_plekken() -> set[str]:
-    """Waar de schijven ín de computer open staan (een tweede schijf, de Windows-schijf)."""
-    try:
-        import bugos_drives
-        return {s.wortel for s in bugos_drives.schijven() if s.soort == "intern" and s.wortel}
-    except Exception:  # noqa: BLE001  zonder lsblk: niets weten
-        return set()
+def interne_plekken(lijst: list | None = None) -> set[str]:
+    """Waar de schijven ín de computer open staan (een tweede schijf, de Windows-schijf).
+    lijst: de schijven die schijven() al las (dan niet nog een keer lsblk); zonder lijst leest hij ze zelf."""
+    if lijst is None:
+        lijst = alle_schijven()
+    return {s.wortel for s in lijst or [] if s.soort == "intern" and s.wortel}
 
 
 def zonder_interne(paden: list[Path], interne: set[str]) -> list[Path]:
@@ -650,6 +676,21 @@ def venster() -> int:
             lay.addWidget(sectie(t("Kies een schijf", "Choose a drive")))
             self.kiezer = SchijfKiezer(t("Steek een USB-schijf in…", "Plug in a USB drive…"))
             lay.addWidget(self.kiezer)
+            # B008: een lege stick (nog nooit klaargemaakt) ging niet open en bleef dus onzichtbaar. Nu zeggen we
+            # dat hij erin zit, en kun je hem hier meteen klaarmaken. Een eigen balk, niet self.melding: die
+            # rij wordt elke 3 seconden ververst en zou anders het 'Klaar!' van een back-up wegvegen.
+            self.nieuw_rij = QWidget()
+            nieuw_lay = QHBoxLayout(self.nieuw_rij)
+            nieuw_lay.setContentsMargins(0, 0, 0, 0)
+            nieuw_lay.setSpacing(12)
+            self.nieuw_uitleg = Banner("", "let_op")
+            self.klaarmaak = Knop(t("Klaarmaken", "Set up"), "rand", "lijn:opslag")
+            nieuw_lay.addWidget(self.nieuw_uitleg, 1)
+            nieuw_lay.addWidget(self.klaarmaak)
+            self.nieuw_rij.hide()
+            lay.addWidget(self.nieuw_rij)
+            self.klaarmaker: QProcess | None = None   # de stap van het klaarmaken die nu loopt (None: niets)
+            self.klaar_stappen: list[list[str]] = []  # de stappen die daarna nog komen
             self.melding = Banner()
             lay.addWidget(self.melding)
             self.balk = Voortgang()
@@ -684,6 +725,7 @@ def venster() -> int:
             self.maak.clicked.connect(self.maak_backup)
             self.terugzetten.clicked.connect(self.zet_terug)
             self.een_terug.clicked.connect(self.zet_een_terug)
+            self.klaarmaak.clicked.connect(self.maak_stick_klaar)
             self.kiezer.gewijzigd.connect(self.knoppen)
             self.timer = QTimer(self)
             self.timer.timeout.connect(self.ververs_schijven)
@@ -696,9 +738,9 @@ def venster() -> int:
             return Path(g) if g else None
 
         def druk(self) -> bool:
-            """Zijn we bezig (ruimte tellen of kopiëren)?"""
+            """Zijn we bezig (ruimte tellen, kopiëren of een lege stick klaarmaken)?"""
             return self.proces.state() != QProcess.ProcessState.NotRunning or \
-                (self.teller is not None and self.teller.isRunning())
+                (self.teller is not None and self.teller.isRunning()) or self.klaarmaker is not None
 
         def knoppen(self) -> None:
             if self.druk():
@@ -720,7 +762,95 @@ def venster() -> int:
                     extra += t("  ·  heeft al een back-up", "  ·  already has a backup")
                 items.append((str(s), s.name, extra))
             self.kiezer.zet(items)
+            self.toon_nieuwe()
             self.knoppen()
+
+        def toon_nieuwe(self) -> None:
+            """B008: zit er een lege stick in? Zeg het, met de knop 'Klaarmaken' ernaast."""
+            if not LAATSTE_NIEUWE:
+                self.nieuw_rij.hide()
+                return
+            x = LAATSTE_NIEUWE[0]   # meer dan één lege stick tegelijk: eerst de eerste, daarna komt de volgende
+            self.nieuw_uitleg.zet(
+                t(f"'{x.naam}' zit erin, maar is nog leeg: hij is nooit klaargemaakt. Maak hem eerst klaar, dan kun "
+                  "je er een back-up op zetten.",
+                  f"'{x.naam}' is plugged in, but it is still empty: it was never set up. Set it up first, then you "
+                  "can put a backup on it."), "let_op")
+            self.nieuw_rij.show()
+
+        def maak_stick_klaar(self) -> None:
+            """B008: een lege stick klaarmaken (indelen en formatteren als exFAT, net als 'In gebruik nemen' in
+            Bestanden), zodat hij daarna gewoon in de lijst staat. Er staat niets op, maar we vragen het toch:
+            formatteren is iets wat je zelf kiest."""
+            if not LAATSTE_NIEUWE or self.druk():
+                return
+            x = LAATSTE_NIEUWE[0]
+            naam = t(*BACKUP_NAAM)
+            vraag = QMessageBox.question(
+                self, t("Stick klaarmaken?", "Set up the stick?"),
+                t(f"BugOS maakt '{x.naam}' klaar voor gebruik. Hij heet daarna '{naam}' en werkt ook op Windows en "
+                  "Mac.\n\nEr staat nu niets op. Zit er toch iets op wat je nodig hebt? Kies dan Annuleren.",
+                  f"BugOS gets '{x.naam}' ready to use. It will be called '{naam}' and also works on Windows and "
+                  "Mac.\n\nThere is nothing on it now. If it does have something you need, choose Cancel."),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Cancel)
+            if vraag != QMessageBox.StandardButton.Yes:
+                return
+            # Zit precies dezelfde lege stick er nog in? Tijdens de vraag kan er een andere op die plek zijn
+            # gekomen, en die mag niet gewist worden (net als in Bestanden, U369).
+            nu = next((s for s in nieuwe_sticks(alle_schijven()) if s.station == x.station), None)
+            if nu is None or (nu.grootte, nu.udisks_deel) != (x.grootte, x.udisks_deel):
+                self.melding.zet(t(f"'{x.naam}' zit er niet meer in. Er is niets veranderd.",
+                                   f"'{x.naam}' is no longer there. Nothing was changed."), "fout")
+                self.ververs_schijven()
+                return
+            if not shutil.which("gdbus") or not shutil.which("udisksctl"):
+                self.melding.zet(t("Dat kan hier niet. Maak de stick klaar in Bestanden.",
+                                   "That is not possible here. Set up the stick in Files."), "fout")
+                return
+            import bugos_drives
+            # Dezelfde stappen als Bestanden: indeling, één stuk met exFAT (werkt overal), en dat stuk openen.
+            self.klaar_stappen = [list(c) for c in bugos_drives.klaarmaak_stappen(nu, naam)]
+            self.melding.zet(t(f"'{naam}' klaarmaken… Haal de stick er niet uit.",
+                               f"Getting '{naam}' ready… Do not unplug the stick."), "bezig")
+            self.nieuw_rij.hide()
+            self.kiezer.setEnabled(False)
+            self.maak.setEnabled(False)
+            self.terugzetten.setEnabled(False)
+            self.een_terug.setEnabled(False)
+            self.klaar_stap()
+
+        def klaar_stap(self, code: int = 0, status=None) -> None:
+            """Voer de stappen van het klaarmaken één voor één uit, zonder dat het venster vastloopt (udisks kan om
+            een wachtwoord vragen; dat venster komt van KDE zelf). Wordt ook aangeroepen als een stap klaar is."""
+            if self.klaarmaker is not None:
+                self.klaarmaker.deleteLater()
+                self.klaarmaker = None
+                if code != 0 or status != QProcess.ExitStatus.NormalExit:
+                    # Een stap mislukte (of je annuleerde het wachtwoord): stoppen, niet de volgende stap proberen.
+                    self.klaar_stappen = []
+                    self.kiezer.setEnabled(True)
+                    self.ververs_schijven()
+                    self.melding.zet(t("Klaarmaken lukte niet. Haal de stick eruit, steek hem er weer in en probeer "
+                                       "het opnieuw. Of maak hem klaar in Bestanden.",
+                                       "Setting up did not work. Unplug the stick, plug it in again and try again. "
+                                       "Or set it up in Files."), "fout")
+                    return
+            if not self.klaar_stappen:
+                # Alles gelukt: de stick staat open en komt nu gewoon in de lijst.
+                naam = t(*BACKUP_NAAM)
+                self.kiezer.setEnabled(True)
+                self.ververs_schijven()
+                self.melding.zet(t(f"Klaar: '{naam}' staat nu in de lijst. Druk op 'Maak back-up'.",
+                                   f"Done: '{naam}' is now in the list. Press 'Make backup'."), "goed")
+                return
+            cmd = self.klaar_stappen.pop(0)
+            self.klaarmaker = QProcess(self)
+            self.klaarmaker.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+            self.klaarmaker.finished.connect(self.klaar_stap)
+            # Kon de opdracht niet eens starten? Dan komt 'finished' nooit: zelf als mislukt afhandelen.
+            self.klaarmaker.errorOccurred.connect(
+                lambda fout: fout == QProcess.ProcessError.FailedToStart and self.klaar_stap(1, None))
+            self.klaarmaker.start(cmd[0], cmd[1:])
 
         def volgende(self) -> None:
             if not self.wachtrij:

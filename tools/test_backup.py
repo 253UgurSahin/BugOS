@@ -384,5 +384,29 @@ klopt('t("Eén bestand of map terugzetten"' in _bron and "self.een_terug.clicked
       "D-12: het venster heeft de knop 'Eén bestand of map terugzetten'")
 _app12.processEvents()   # het venstertje echt opruimen (deleteLater) voor het einde
 
+# B008: een nieuwe, lege stick (nog geen bestandssysteem) ging niet open en bleef onzichtbaar. Back-up moet hem
+# nu herkennen om klaar te maken; een lege schijf ín de computer niet (die hoort niet bij een back-up, U226).
+import bugos_drives as _bd8  # noqa: E402
+
+_lsblk8 = [
+    {"name": "sdb", "kname": "sdb", "path": "/dev/sdb", "type": "disk", "size": 16 * 10**9, "fstype": None,
+     "rm": True, "hotplug": True, "tran": "usb", "children": None},
+    {"name": "sdc", "kname": "sdc", "path": "/dev/sdc", "type": "disk", "size": 500 * 10**9, "fstype": None,
+     "rm": False, "hotplug": False, "tran": "sata", "children": None},
+]
+_nieuw8 = bb.nieuwe_sticks(_bd8.schijven(_lsblk8))
+klopt(len(_nieuw8) == 1 and _nieuw8[0].station == "/dev/sdb" and _nieuw8[0].nieuw,
+      f"B008: een lege USB-stick wordt gezien (om klaar te maken), een lege schijf in de computer niet "
+      f"({[s.station for s in _nieuw8]})")
+klopt(bb.nieuwe_sticks(None) == [] and bb.interne_plekken([]) == set(),
+      "B008: zonder lsblk (None) of zonder schijven: geen lege sticks en geen interne plekken")
+_stap8 = _bd8.klaarmaak_stappen(_nieuw8[0], "Back-up") if _nieuw8 else []
+klopt(len(_stap8) == 3 and any("exfat" in a for a in _stap8[1]) and _stap8[2] == ["udisksctl", "mount", "-b", "/dev/sdb1"],
+      "B008: klaarmaken = indelen, één stuk exFAT (werkt ook op Windows en Mac) en dat stuk openen")
+klopt(len(bb.BACKUP_NAAM[0]) <= 15 and len(bb.BACKUP_NAAM[1]) <= 15,
+      "B008: de naam voor de klaargemaakte stick past in exFAT (hoogstens 15 tekens)")
+klopt("self.klaarmaak.clicked.connect(self.maak_stick_klaar)" in _bron and "nieuwe_sticks(alle_schijven())" in _bron,
+      "B008: het venster heeft de knop 'Klaarmaken' en kijkt vlak voor het wissen of het nog dezelfde lege stick is")
+
 print(f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)

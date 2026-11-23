@@ -185,8 +185,8 @@ The most important idea: **BugOS can't break.**
   installer, start menu entry, and "BugOS already has KWrite" for the real file name); a `.deb` (galculator: in its box,
   in the start menu, starts). Fixed: the first Wine set-up took over 3 minutes while the notice said "a minute" and
   vanished (now it stays and counts the minutes); "KWrite (Teksteditor)" in English; `.deb` programs were called
-  "… (on bugos-ubuntu)" in the start menu; an older `.deb` over a newer version failed. Still open: see B008 and B009 in
-  `forge-work/bugs.md`.
+  "… (on bugos-ubuntu)" in the start menu; an older `.deb` over a newer version failed. Fixed afterwards: B008 (Backup now
+  sees an empty stick and offers "Set up") and B009 ("My apps" opened scrolled down), see `forge-work/bugs.md`.
 - [ ] Try the "try first" stick on a real PC
 - [x] Start menu and quick menu by default (tested outside Plasma: tools/qml-test.py, tools/test_start_data.py, tools/test_logout.py)
 - [ ] Check the start menu, quick menu and shutdown screen on a real PC (Windows key, picking Wi-Fi, shutting down) — see TESTING.md

@@ -1911,6 +1911,12 @@ class Winkel(Venster):
             self._niets_voor = None
         self.melding_weg = True   # 'X is geïnstalleerd' hoort niet bij een ander onderwerp (C-12)
         self.toon()
+        # B009: een ander onderwerp begint bovenaan, met de zoekbalk in beeld. Vroeger bleef de schuifbalk staan
+        # waar hij in de zoekresultaten was (bv. 70 px omlaag na 'calculator' en een Flathub-app), zodat 'Mijn apps'
+        # half weggeschoven opende. Nu meteen én na de opbouw (singleShot): toon() zet de kaarten pas daarna neer,
+        # en een te korte lijst zou de waarde anders weer verschuiven.
+        self.scroll.verticalScrollBar().setValue(0)
+        QTimer.singleShot(0, lambda: self.scroll.verticalScrollBar().setValue(0))
 
     def zijbalk_klik(self, _item) -> None:
         """Een klik op het onderwerp dat al gekozen was, terwijl je zoekt: dan komt er geen 'ander onderwerp'-sein,
