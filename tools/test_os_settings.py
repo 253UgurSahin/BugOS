@@ -270,6 +270,8 @@ def login_hulpje(wortel: Path) -> Path:
     (wortel / "bin").mkdir(parents=True, exist_ok=True)
     tekst = (BIN / "bugos-login").read_text(encoding="utf-8")
     tekst = tekst.replace("/usr/lib/plasmalogin", f"{wortel}/usr/lib/plasmalogin").replace("/etc/", f"{wortel}/etc/")
+    # Of SDDM er ook staat, bepaalt de test zelf (in het image staat het er echt, voor de proef met het inlogscherm).
+    tekst = tekst.replace("/usr/bin/sddm", f"{wortel}/usr/bin/sddm")
     (wortel / "login").write_text(tekst, encoding="utf-8")
     nep_id = wortel / "bin" / "id"
     # 'id -u' (wie ben ik): 0; 'id -u <naam>' (de gebruiker die vanzelf inlogt): een gewone gebruiker (U247)
@@ -294,9 +296,17 @@ klopt(r.returncode == 0 and pl.is_file() and f"User={ik}" in pl.read_text() and 
       and not (wortel / "etc" / "sddm.conf.d").exists(),
       "U002: met Plasma Login komt 'zonder wachtwoord' in /etc/plasmalogin.conf.d")
 klopt(login(wortel, "status", ik).stdout.strip() == "aan", "U002: status leest Plasma Login")
+# Staat SDDM er ook (de proef met het BugOS-inlogscherm), dan daar hetzelfde: zo blijft het werken na een wissel.
+(wortel / "usr" / "bin").mkdir(parents=True)
+(wortel / "usr" / "bin" / "sddm").write_text("#!/usr/bin/bash\n")
+(wortel / "usr" / "bin" / "sddm").chmod(0o755)
+r = login(wortel, "aan", ik)
+sd = wortel / "etc" / "sddm.conf.d" / "50-bugos-login.conf"
+klopt(r.returncode == 0 and sd.is_file() and sd.read_text() == pl.read_text(),
+      "U002: staat SDDM er ook, dan daar hetzelfde (wisselen van inlogscherm houdt het aan)")
 r = login(wortel, "uit", ik)
-klopt(r.returncode == 0 and not pl.exists() and login(wortel, "status", ik).stdout.strip() == "uit",
-      "U002: weer uit haalt het bestand weg")
+klopt(r.returncode == 0 and not pl.exists() and not sd.exists() and login(wortel, "status", ik).stdout.strip() == "uit",
+      "U002: weer uit haalt het bestand weg (bij allebei)")
 wortel = TMP / "login-sddm"
 login_hulpje(wortel)
 r = login(wortel, "aan", ik)
