@@ -1,0 +1,38 @@
+#!/usr/bin/bash
+# bugos-webapp - een website als app openen: een eigen venster zonder adresbalk (zoals Microsoft 365 in het
+# startmenu, bugos-windows). Met de browser die je in Welkom koos als die dat kan (Edge, Chrome, Chromium, Brave:
+# --app), anders een andere geïnstalleerde browser die het kan, en anders gewoon in een nieuw venster.
+#
+#   bugos-webapp https://...
+set -u
+ADRES="${1:-}"
+# Alleen een gewoon https-adres: geen spaties, aanhalingstekens, $, ` of \.
+# shellcheck disable=SC1003  # (de ' staat bewust in de lijst van verboden tekens)
+PATROON='^https://[A-Za-z0-9.-]+(/[^[:space:]"`$\\'"'"']*)?$'
+if ! [[ "$ADRES" =~ $PATROON ]]; then
+    echo "Gebruik: bugos-webapp https://..." >&2
+    exit 2
+fi
+
+KAN_APP=(com.microsoft.Edge com.google.Chrome org.chromium.Chromium com.brave.Browser)
+heeft() { flatpak info "$1" >/dev/null 2>&1; }
+kan_app() {
+    local b
+    for b in "${KAN_APP[@]}"; do [ "$b" = "$1" ] && return 0; done
+    return 1
+}
+
+GEKOZEN="$(bugos-browser status 2>/dev/null || true)"
+if [ -n "$GEKOZEN" ] && kan_app "$GEKOZEN" && heeft "$GEKOZEN"; then
+    exec flatpak run "$GEKOZEN" --app="$ADRES"
+fi
+for b in "${KAN_APP[@]}"; do
+    if heeft "$b"; then
+        exec flatpak run "$b" --app="$ADRES"
+    fi
+done
+# Firefox heeft geen app-venster: dan een nieuw venster van de standaardbrowser.
+if [ "$GEKOZEN" = org.mozilla.firefox ] && heeft org.mozilla.firefox; then
+    exec flatpak run org.mozilla.firefox --new-window "$ADRES"
+fi
+exec xdg-open "$ADRES"

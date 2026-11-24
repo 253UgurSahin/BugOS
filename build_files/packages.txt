@@ -64,3 +64,7 @@ sddm-wayland-plasma
 # --- Android-apps: Waydroid (Android in een container, elke app in een eigen venster; docs/STANDALONE.md). ---
 # Staat klaar maar is nog leeg: Android zelf (ongeveer 1 GB) haalt bugos-android pas als je erom vraagt.
 waydroid
+
+# AppImage-programma's van websites (bugos-appimage): de meeste hebben FUSE 2 nodig (libfuse.so.2). Zonder pakt
+# bugos-appimage ze eerst uit (trager). Brengt de basis het al mee, dan doet deze regel niets.
+fuse-libs

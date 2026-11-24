@@ -8,6 +8,11 @@ application/x-redhat-package-manager=bugos-package.desktop
 application/vnd.debian.binary-package=bugos-package.desktop
 application/vnd.android.package-archive=bugos-android.desktop
 application/x-deb=bugos-package.desktop
+# AppImage en .run-installatieprogramma's van websites: installeren in het startmenu (bugos-appimage).
+application/vnd.appimage=bugos-appimage.desktop
+application/x-iso9660-appimage=bugos-appimage.desktop
+application/x-appimage=bugos-appimage.desktop
+application/x-makeself=bugos-appimage.desktop
 inode/directory=bugos-files.desktop
 # Een "Installeren"-link of -bestand van Flathub opent de BugOS Winkel, die de app zelf laat zien (U326; geen KDE Discover meer).
 x-scheme-handler/appstream=bugos-store.desktop

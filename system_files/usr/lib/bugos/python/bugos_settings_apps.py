@@ -8,9 +8,12 @@ kopie hier). Installeren doe je in de Winkel; de knop 'Meer apps in de Winkel' b
 
 from __future__ import annotations
 
+import subprocess
+from pathlib import Path
+
 import bugos_apps
 import bugos_config as bi
-from bugos_ui import TAAL, Knop, Rij, leeg_groep, start, t
+from bugos_ui import TAAL, Knop, Rij, leeg_groep, start, t, vraag_ja
 from bugos_settings_onderdelen import Blad, op_achtergrond
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHBoxLayout, QWidget
@@ -49,8 +52,45 @@ def lees_apps() -> list[dict]:
             # Waar komt hij vandaan? Meestal Flathub; een app van ergens anders zeggen we eerlijk.
             uitleg = t("Van Flathub", "From Flathub") if info[app_id].get("bron") == "flathub" else \
                 t("Niet uit Flathub", "Not from Flathub")
-        apps.append({"id": app_id, "naam": naam, "uitleg": uitleg})
+        apps.append({"id": app_id, "naam": naam, "uitleg": uitleg, "soort": "flatpak"})
+    if not bi.VOORBEELD:
+        apps += andere_apps()
     return apps
+
+
+def andere_apps() -> list[dict]:
+    """Programma's van buiten de Winkel, zoals in 'Apps' van Windows: AppImages die je met BugOS installeerde
+    (bugos-appimage) en Windows-programma's (Wine). Elk met zijn eigen manier van verwijderen."""
+    uit: list[dict] = []
+    try:
+        import bugos_appimage
+        for a in bugos_appimage.lijst():
+            uit.append({"id": f"appimage:{a['id']}", "naam": a["naam"], "soort": "appimage", "sleutel": a["id"],
+                        "icoon": a["icoon"], "uitleg": t("Linux-programma van een website (AppImage)",
+                                                         "Linux program from a website (AppImage)")})
+    except OSError:
+        pass
+    try:
+        import bugos_windows
+        for p in bugos_windows.programmas():
+            uit.append({"id": f"windows:{p['sleutel']}", "naam": p["naam"], "soort": "windows",
+                        "sleutel": p["sleutel"], "uitleg": t("Windows-programma", "Windows program")})
+    except OSError:
+        pass
+    return uit
+
+
+def app_icoon(app: dict):
+    """Het pictogram: van de Winkel, van de AppImage zelf, of het Windows-teken."""
+    from PySide6.QtGui import QIcon, QPixmap
+    if app.get("soort") == "appimage":
+        icoon = app.get("icoon") or ""
+        if icoon.startswith("/") and Path(icoon).is_file():
+            return QIcon(QPixmap(icoon)) if not icoon.endswith(".svg") else QIcon(icoon)
+        return QIcon.fromTheme("application-x-executable")
+    if app.get("soort") == "windows":
+        return QIcon.fromTheme("bugos-exe", QIcon.fromTheme("application-x-ms-dos-executable"))
+    return bugos_apps.app_icoon(app["id"])
 
 
 class AppsPagina(Blad):
@@ -60,7 +100,7 @@ class AppsPagina(Blad):
     uitleg_en = "The apps on this computer. Remove what you no longer use; get new apps from the Store."
     zoekwoorden = ("apps app programma's programma geïnstalleerd geinstalleerd verwijderen weghalen deïnstalleren "
                    "installeren winkel mijn apps firefox steam installed apps programs remove uninstall delete "
-                   "store my apps android apk waydroid fdroid")
+                   "store my apps android apk waydroid fdroid appimage windows wine exe office microsoft 365")
 
     def bouw(self) -> None:
         self.bezig: str | None = None   # het id van de app die nu verwijderd wordt (dan kan er niet nog een bij)
@@ -81,6 +121,10 @@ class AppsPagina(Blad):
         self.android = Knop(t("Android-apps", "Android apps"), "rand", "lijn:telefoon")
         self.android.clicked.connect(lambda _c=False: None if bi.VOORBEELD else start("bugos-android"))
         self.lay.addWidget(self.android, 0, Qt.AlignmentFlag.AlignLeft)
+        # Windows-programma's: onderdelen van Microsoft, Microsoft 365, de C:-schijf (bugos-windows).
+        self.windows = Knop(t("Windows-programma's", "Windows programs"), "rand", "lijn:computer")
+        self.windows.clicked.connect(lambda _c=False: None if bi.VOORBEELD else start("bugos-windows"))
+        self.lay.addWidget(self.windows, 0, Qt.AlignmentFlag.AlignLeft)
 
     def ververs(self) -> None:
         # Tijdens het verwijderen niet opnieuw lezen: dan zou de knop 'Bezig…' verdwijnen.
@@ -106,11 +150,14 @@ class AppsPagina(Blad):
             weg.clicked.connect(lambda _c=False, a=app: self.vraag(a))
             weg.setEnabled(self.bezig is None)
             self.knoppen[app["id"]] = weg
-            self.lijst.voeg(Rij(bugos_apps.app_icoon(app["id"]), app["naam"], app["uitleg"], weg))
+            self.lijst.voeg(Rij(app_icoon(app), app["naam"], app["uitleg"], weg))
 
     def vraag(self, app: dict) -> None:
         """Verwijderen? Dezelfde vraag als in de Winkel (met het vinkje voor de bestanden van de app)."""
         if self.bezig is not None:
+            return
+        if app.get("soort") in ("appimage", "windows"):
+            self.vraag_ander(app)
             return
         met_gegevens = bugos_apps.vraag_verwijderen(self, app["naam"])
         if met_gegevens is None:
@@ -132,6 +179,47 @@ class AppsPagina(Blad):
             return bugos_apps.verwijder_nu(opdracht)
 
         op_achtergrond(self, werk, lambda uitkomst: self.verwijderd(app, uitkomst))
+
+    def vraag_ander(self, app: dict) -> None:
+        """Een AppImage (meteen weg, na een vraag) of een Windows-programma (zijn eigen verwijderprogramma, zoals in
+        Windows; dat vraagt zelf)."""
+        if app["soort"] == "appimage":
+            if not vraag_ja(self, t(f"{app['naam']} verwijderen?", f"Remove {app['naam']}?"),
+                            t("Het programma gaat van de computer en uit je startmenu.",
+                              "The program is removed from the computer and your start menu."),
+                            t("Verwijderen", "Remove"), enter_is_nee=True):
+                return
+            import bugos_appimage
+            gelukt = bugos_appimage.verwijder(app["sleutel"])
+            self.melding.toon(t(f"{app['naam']} is verwijderd.", f"{app['naam']} has been removed.") if gelukt else
+                              t("Verwijderen lukte niet.", "Removing did not work."), "goed" if gelukt else "fout")
+            self.ververs()
+            return
+        import bugos_windows
+        opdracht = bugos_windows.verwijder_opdracht(app["sleutel"])
+        if not opdracht:
+            return
+        self.bezig = app["id"]
+        for knop in self.knoppen.values():
+            knop.setEnabled(False)
+        self.knoppen[app["id"]].setText(t("Bezig…", "Working…"))
+        self.melding.toon(t(f"Het verwijderprogramma van {app['naam']} start…",
+                            f"Starting the uninstaller of {app['naam']}…"), "info", seconden=0)
+
+        def werk() -> tuple[int, str]:
+            try:
+                r = subprocess.run(opdracht, env=bugos_windows.omgeving(), capture_output=True, text=True,
+                                   timeout=3600)
+                return r.returncode, ""
+            except (OSError, subprocess.SubprocessError):
+                return 1, ""
+
+        def klaar_windows(uitkomst) -> None:
+            self.bezig = None
+            self.melding.hide()   # het verwijderprogramma liet zelf zien hoe het ging
+            self.ververs()
+
+        op_achtergrond(self, werk, klaar_windows)
 
     def verwijderd(self, app: dict, uitkomst) -> None:
         """Het verwijderen is klaar (gelukt of niet). Niet 'klaar': zo heet al de methode van Blad die de pagina afmaakt."""

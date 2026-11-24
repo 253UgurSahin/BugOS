@@ -34,7 +34,8 @@ Did something go wrong after an update? Then you go back to yesterday's version 
 |---|---|
 | **Just easy** | Wi-Fi, Bluetooth, sound and printers work right away. Big buttons and everyday words. |
 | **Apps in one click** | The BugOS Store has well-known, safe apps. Downloads from a website work too. |
-| **Windows programs** | Double-click an `.exe` and it starts. Is there a better version for BugOS? Then BugOS suggests it. |
+| **Windows programs** | Double-click an `.exe` and it starts. Is there a better version for BugOS? Then BugOS suggests it. Missing Visual C++ or .NET? Add it in *Windows programs*. Microsoft 365 (Word, Excel, PowerPoint, Outlook) goes in your start menu with one switch. |
+| **Linux and Android apps from anywhere** | Double-click an AppImage and it lands in your start menu, with its own name and icon. Android apps run in their own windows (F-Droid or an `.apk`; no Google Play). |
 | **Gaming** | Steam, game mode and controller support are built in, and there is a version with the Nvidia driver. |
 | **Programming** | One switch sets up VS Code, containers and programming languages. |
 | **Updates by themselves** | Quietly in the background, and only active when you restart. Rather choose yourself? You can do that too. |

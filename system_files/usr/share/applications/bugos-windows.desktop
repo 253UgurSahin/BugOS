@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Windows programs
+Name[nl]=Windows-programma's
+GenericName=Programs and features
+GenericName[nl]=Programma's en onderdelen
+Comment=Your Windows programs, components from Microsoft and Microsoft 365
+Comment[nl]=Je Windows-programma's, onderdelen van Microsoft en Microsoft 365
+Exec=bugos-windows
+Icon=bugos-exe
+Categories=System;
+Keywords=windows;wine;exe;msi;office;microsoft;365;word;excel;dotnet;.net;visual c++;directx;winetricks;programs;
+Keywords[nl]=windows;wine;exe;msi;office;microsoft;365;word;excel;dotnet;.net;visual c++;directx;winetricks;programma's;onderdelen;
+Terminal=false

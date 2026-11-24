@@ -132,5 +132,48 @@ BOUW="$ROOT/build_files/build.sh"
 klopt 'grep -qF "fcontext -a -t textrel_shlib_t" "$BOUW" && grep -qF "/usr/lib/wine-wow64/.+-windows/" "$BOUW" && grep -qF "matchpathcon" "$BOUW"' \
     "D-03: build.sh zet textrel_shlib_t op /usr/lib64/wine-wow64 (en stopt de bouw als het niet klopt)"
 
+# Microsoft Office: niet Wine proberen, maar Microsoft 365 (web-apps) in het startmenu aanbieden.
+nep kdialog 'printf "%s\n" "$@" >>"'"$TMP"'/dialogen"; [ -f "'"$TMP"'/nee" ] && exit 1; exit 0'
+nep bugos-windows 'echo "$*" >>"'"$TMP"'/bugos-windows"'
+nep wine 'echo "$*" >>"'"$TMP"'/wine-gestart"; exit 0'
+nep winepath 'echo "C:\\pad\\$(basename "$2")"'
+nep wineboot 'mkdir -p "$WINEPREFIX/drive_c/windows/system32" "$WINEPREFIX/drive_c/windows/syswow64" && touch "$WINEPREFIX/drive_c/windows/system32/kernel32.dll" "$WINEPREFIX/drive_c/windows/syswow64/kernel32.dll" "$WINEPREFIX/system.reg"'
+touch "$TMP/OfficeSetup.exe" "$TMP/Setup.X64.nl-nl_O365ProPlusRetail_abc.exe" "$TMP/opruimen.bat" "$TMP/kapot.exe"
+rm -f "$TMP/wine-gestart" "$TMP/bugos-windows" "$TMP/nee"
+: >"$TMP/dialogen"
+code="$(draai "$TMP/OfficeSetup.exe")"
+klopt '[ "$code" = 0 ] && grep -q "Microsoft Office" "$TMP/dialogen" && grep -qx "office aan" "$TMP/bugos-windows" && [ ! -e "$TMP/wine-gestart" ]' \
+    "Office: Microsoft 365 in het startmenu aangeboden, Wine niet gestart"
+rm -f "$TMP/bugos-windows"
+touch "$TMP/nee"
+draai "$TMP/Setup.X64.nl-nl_O365ProPlusRetail_abc.exe" >/dev/null
+klopt '[ ! -e "$TMP/bugos-windows" ] && grep -q "start /wait /unix" "$TMP/wine-gestart"' \
+    "Office (O365 Setup.X64): Nee kiezen probeert het installatieprogramma toch"
+rm -f "$TMP/wine-gestart"
+draai "$TMP/opruimen.bat" >/dev/null
+klopt '[ ! -e "$TMP/wine-gestart" ] && grep -q "Windows-script" "$TMP/dialogen"' ".bat: eerst gevraagd; Nee doet niets"
+rm -f "$TMP/nee"
+draai "$TMP/opruimen.bat" >/dev/null
+klopt 'grep -q "^cmd /c C:.pad.opruimen.bat" "$TMP/wine-gestart"' ".bat: Ja opent het met cmd van Windows"
+nep wine 'exit 1'
+rm -f "$TMP/bugos-windows"
+: >"$TMP/dialogen"
+draai "$TMP/kapot.exe" >/dev/null
+klopt 'grep -q "Visual C++" "$TMP/dialogen" && [ -e "$TMP/bugos-windows" ]' \
+    "programma stopt meteen: onderdelen van Microsoft aangeboden (Windows-programma's)"
+# Dezelfde herkenning als bugos_windows.is_office_installatie (Instellingen en het venster gebruiken die).
+OFFICE_RE="$(grep -o 'officesetup|o365.*\\. \]\]' "$ROOT/system_files/usr/bin/bugos-exe" | sed 's/ \]\]$//')"
+verschil=0
+for n in OfficeSetup.exe Setup.X64.nl-nl_O365ProPlusRetail.exe "Microsoft 365 setup.exe" office2021.exe \
+    "Office 19 Pro.exe" setup.x86.en-us_HomeStudent.exe spel.exe LibreOffice_25.2.0_Win_x86-64.msi officetools.exe \
+    npp.8.7.1.Installer.x64.exe; do
+    b=nee
+    # shellcheck disable=SC2076
+    if eval "[[ \"\${n,,}\" =~ $OFFICE_RE ]]"; then b=ja; fi
+    p="$(PYTHONPATH="$ROOT/system_files/usr/lib/bugos/python" python3 -c 'import sys, bugos_windows as w; print("ja" if w.is_office_installatie(sys.argv[1]) else "nee")' "$n")"
+    [ "$b" = "$p" ] || { echo "      verschil bij $n: bash $b, python $p"; verschil=1; }
+done
+klopt '[ -n "$OFFICE_RE" ] && [ "$verschil" = 0 ]' "Office-herkenning in bugos-exe en bugos_windows.py is hetzelfde"
+
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

@@ -56,13 +56,18 @@ def in_quarantaine_kan(pad: Path) -> bool:
     return begin == b"\x7fELF" or begin[:2] == b"#!"
 
 
-EIGEN_OPENER = {".exe": "bugos-exe", ".msi": "bugos-exe", ".deb": "bugos-package", ".rpm": "bugos-package"}
+EIGEN_OPENER = {".exe": "bugos-exe", ".msi": "bugos-exe", ".bat": "bugos-exe", ".cmd": "bugos-exe", ".lnk": "bugos-exe",
+                ".deb": "bugos-package", ".rpm": "bugos-package",
+                # Linux-programma's van een website: AppImage in je startmenu, een .run-installatieprogramma in een
+                # terminal (bugos-appimage vraagt eerst).
+                ".appimage": "bugos-appimage", ".run": "bugos-appimage"}
 # Hun .desktop-bestanden zijn NoDisplay (niet in het startmenu), maar horen wel in 'Openen met' (D-01).
-EIGEN_APPS = {"bugos-exe.desktop", "bugos-package.desktop"}
+EIGEN_APPS = {"bugos-exe.desktop", "bugos-package.desktop", "bugos-appimage.desktop"}
 
 
 def eigen_opener(pad: Path) -> str | None:
-    """Het BugOS-programma dat dit bestand zelf opent (bugos-exe of bugos-package), of None: dan de gewone weg."""
+    """Het BugOS-programma dat dit bestand zelf opent (bugos-exe, bugos-package of bugos-appimage), of None: dan de
+    gewone weg."""
     return EIGEN_OPENER.get(pad.suffix.lower())
 
 
