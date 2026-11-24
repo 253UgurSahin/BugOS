@@ -1,0 +1,12 @@
+#!/usr/bin/bash
+# bugos-sessie - de proefsessie 'BugOS (nieuwe schil, proef)' (docs/STANDALONE.md, fase 1).
+#
+# Fase 1: dezelfde sessie als de gewone (KWin, sessiebeheer, portalen, wachtwoordvraag), maar met de eigen BugOS-schil
+# (bugos-shell) in plaats van Plasma. Dat regelt BUGOS_SCHIL=1: startplasma geeft de omgeving door aan systemd, en
+# plasma-plasmashell.service start dan /usr/libexec/bugos-schil-of-plasma, die bugos-shell kiest.
+# De gewone sessie verandert niet: daar is BUGOS_SCHIL leeg (zie /etc/xdg/plasma-workspace/env/bugos-schil.sh).
+export BUGOS_SCHIL=1
+if [ -x /usr/libexec/plasma-dbus-run-session-if-needed ]; then
+    exec /usr/libexec/plasma-dbus-run-session-if-needed /usr/bin/startplasma-wayland
+fi
+exec /usr/bin/startplasma-wayland

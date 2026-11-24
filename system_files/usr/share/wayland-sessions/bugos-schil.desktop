@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=BugOS (new shell, preview)
+Name[nl]=BugOS (nieuwe schil, proef)
+Comment=BugOS with its own shell instead of Plasma (docs/STANDALONE.md, phase 1)
+Comment[nl]=BugOS met zijn eigen schil in plaats van Plasma (docs/STANDALONE.md, fase 1)
+Exec=/usr/bin/bugos-sessie
+TryExec=/usr/bin/bugos-shell
+DesktopNames=KDE
+X-KDE-PluginInfo-Version=1

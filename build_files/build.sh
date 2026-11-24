@@ -22,7 +22,8 @@ cp -av --remove-destination /ctx/system_files/. /
 # alleen de programma's in /usr/bin uitvoerbaar.
 (cd /ctx/system_files && find . -type f -print0) | while IFS= read -r -d '' f; do chmod 0644 "/${f#./}"; done
 (cd /ctx/system_files && find . -mindepth 1 -type d -print0) | while IFS= read -r -d '' d; do chmod 0755 "/${d#./}"; done
-chmod 0755 /usr/bin/bugos-* /usr/libexec/bugos-user-check /usr/libexec/bugos-hide-system-drives /usr/libexec/bugos-taal-standaard
+chmod 0755 /usr/bin/bugos-* /usr/libexec/bugos-user-check /usr/libexec/bugos-hide-system-drives /usr/libexec/bugos-taal-standaard \
+    /usr/libexec/bugos-schil-of-plasma
 # De Python-onderdelen van BugOS vooraf vertalen: /usr is straks alleen-lezen, dus anders doet elke app dat bij
 # elke start opnieuw. Met een controlegetal (checked-hash): ostree zet de tijden van bestanden gelijk, en een
 # veranderd bestand (usr-overlay bij het zoeken naar een fout) wordt dan toch opnieuw gelezen (U313, U319).

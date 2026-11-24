@@ -1,0 +1,9 @@
+#!/usr/bin/bash
+# bugos-schil-of-plasma - start de schil van deze sessie: de eigen BugOS-schil (bugos-shell) in de proefsessie
+# 'BugOS (nieuwe schil, proef)' (BUGOS_SCHIL=1, gezet door bugos-sessie), anders gewoon Plasma.
+# Gestart door plasma-plasmashell.service (drop-in 50-bugos-schil.conf). Beide nemen de naam org.kde.plasmashell
+# op D-Bus, waar de dienst (Type=dbus) op wacht.
+if [ "${BUGOS_SCHIL:-}" = 1 ] && [ -x /usr/bin/bugos-shell ]; then
+    exec /usr/bin/bugos-shell
+fi
+exec /usr/bin/plasmashell --no-respawn "$@"
