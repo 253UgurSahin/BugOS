@@ -20,10 +20,21 @@ class Meldingen : public QObject
     Q_OBJECT
     Q_CLASSINFO("D-Bus Interface", "org.freedesktop.Notifications")
     Q_PROPERTY(QVariantList lijst READ lijst NOTIFY lijstVeranderd)
+    // Het meldingencentrum (de bel): de laatste meldingen, nieuwste eerst, ook die je tijdens 'niet storen' niet zag.
+    Q_PROPERTY(QVariantList geschiedenis READ geschiedenis NOTIFY geschiedenisVeranderd)
+    Q_PROPERTY(int ongelezen READ ongelezen NOTIFY geschiedenisVeranderd)
 public:
     explicit Meldingen(QObject *ouder = nullptr);
     bool aanmelden();
     QVariantList lijst() const { return m_lijst; }
+    QVariantList geschiedenis() const { return m_geschiedenis; }
+    int ongelezen() const { return m_ongelezen; }
+
+    // Het meldingencentrum: alles weg, één weg, alles gezien (de bel opent), of een knop van een oude melding.
+    Q_INVOKABLE void wisGeschiedenis();
+    Q_INVOKABLE void uitGeschiedenis(uint id);
+    Q_INVOKABLE void allesGelezen();
+    Q_INVOKABLE void actieUitGeschiedenis(uint id, const QString &sleutel);
 
     // Vanuit de QML: een kaartje dichtklikken (reden 2) of een knop erop (actie).
     Q_INVOKABLE void sluit(uint id);
@@ -44,12 +55,16 @@ Q_SIGNALS:
     Q_SCRIPTABLE void NotificationClosed(uint id, uint reason);
     Q_SCRIPTABLE void ActionInvoked(uint id, const QString &action_key);
     void lijstVeranderd();
+    void geschiedenisVeranderd();
 
 private:
     void weg(uint id, uint reden);
     bool nietStoren() const;
 
+    void bewaarInGeschiedenis(const QVariantMap &kaartje);
     QVariantList m_lijst;
+    QVariantList m_geschiedenis;
+    int m_ongelezen = 0;
     QHash<uint, QTimer *> m_klokken;
     uint m_volgende = 1;
 };

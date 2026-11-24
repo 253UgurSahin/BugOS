@@ -15,6 +15,7 @@ add_executable(bugos-shell
     src/schil.cpp
     src/instellingen.cpp
     src/systeemvak.cpp
+    src/osd.cpp
 )
 target_link_libraries(bugos-shell PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::DBus)
 

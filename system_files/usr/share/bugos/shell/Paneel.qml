@@ -131,6 +131,35 @@ LaagVenster {
             }
         }
 
+        // De bel: het meldingencentrum (alleen op het hoofdscherm), met het aantal nieuwe meldingen.
+        PaneelKnop {
+            id: belKnop
+            objectName: "belKnop"
+            visible: paneel.hoofd
+            naam: meldingen.ongelezen > 0
+                  ? paneel.r.tr(meldingen.ongelezen + " nieuwe meldingen", meldingen.ongelezen + " new notifications")
+                  : paneel.r.tr("Meldingen", "Notifications")
+            actief: paneel.r.open === "meldingen"
+            o: paneel.r.o
+            maat: paneel.r.paneelHoogte - 8
+            onGeklikt: paneel.r.toon("meldingen", paneel.screen)
+            // Een belletje van twee vormen (geen pictogramthema nodig).
+            Item {
+                anchors.centerIn: parent
+                width: 18; height: 20
+                Rectangle { x: 3; y: 2; width: 12; height: 13; radius: 6; color: "transparent"; border.width: 2; border.color: paneel.r.o.tekst }
+                Rectangle { x: 1; y: 12; width: 16; height: 2; radius: 1; color: paneel.r.o.tekst }
+                Rectangle { x: 7; y: 16; width: 4; height: 3; radius: 1.5; color: paneel.r.o.tekst }
+            }
+            Rectangle {
+                visible: meldingen.ongelezen > 0
+                anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 4
+                width: Math.max(16, teller.implicitWidth + 8); height: 16; radius: 8
+                color: paneel.r.o.accent
+                Text { id: teller; anchors.centerIn: parent; text: meldingen.ongelezen > 9 ? "9+" : meldingen.ongelezen; color: "white"; font.pixelSize: 10; font.bold: true }
+            }
+        }
+
         PaneelKnop {
             id: snelKnop
             objectName: "snelKnop"

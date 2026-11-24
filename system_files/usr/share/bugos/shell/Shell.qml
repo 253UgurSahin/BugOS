@@ -9,6 +9,7 @@
 //   meldingen     lijst (de kaartjes), sluit(id), actie(id, sleutel): de meldingendienst org.freedesktop.Notifications
 //   instellingen  lees(naam), bewaar(naam, tekst), veranderd(naam), achtergrondBeeld(donker), bureaubladMap
 //   systeemvak    een lijst (titel, icoon, status, uitleg, heeftMenu) met activeer/menu/menuKlik/contextMenu/...
+//   osd           icoon, tekst, waarde (-1: alleen tekst), maximum en het sein getoond(): volume, helderheid, ...
 //
 // Per scherm een taakbalk en een bureaublad (Instantiator over Qt.application.screens). De menu's gaan open op het
 // scherm waar je klikte (menuScherm); de Meta-toets opent het startmenu op het hoofdscherm.
@@ -140,9 +141,11 @@ Houder {
         if (wat === "start") {
             startData([], "gegevens")
             startMenu.terugNaarBegin()
-        } else if (wat === "snel") {
-            startData(["--snel"], "snel")
+        } else if (wat === "snel" || wat === "meldingen") {
+            startData(["--snel"], "snel")   // ook voor 'niet storen' in het meldingencentrum
         }
+        if (wat === "meldingen")
+            meldingen.allesGelezen()
     }
     function sluitAlles() {
         open = ""
@@ -412,6 +415,164 @@ Houder {
             }
         }
         Shortcut { sequence: "Escape"; onActivated: root.sluitAlles() }
+    }
+
+    // ------------------------------------------------------------------------------------- meldingencentrum
+    property LaagVenster meldingenCentrum: LaagVenster {
+        objectName: "meldingenCentrum"
+        soort: "rechts"
+        marge: 8
+        screen: root.menuScherm
+        width: 400
+        height: Math.min(centrumKolom.implicitHeight + 32,
+                         (root.menuScherm ? root.menuScherm.height : 800) - root.paneelHoogte - 80)
+        visible: root.open === "meldingen"
+        onVisibleChanged: if (visible) requestActivate()
+
+        Rectangle {
+            anchors.fill: parent
+            radius: 12
+            color: root.o.vlak
+            border.color: root.o.rand
+            ColumnLayout {
+                id: centrumKolom
+                anchors.fill: parent
+                anchors.margins: 16
+                spacing: 12
+                RowLayout {
+                    Text {
+                        Layout.fillWidth: true
+                        text: root.tr("Meldingen", "Notifications")
+                        color: root.o.tekst
+                        font.pixelSize: 18
+                        font.bold: true
+                    }
+                    PaneelKnop {
+                        objectName: "nietStorenKnop"
+                        naam: root.tr("Niet storen", "Do not disturb")
+                        actief: root.snelStatus.niet_storen === true
+                        o: root.o
+                        maat: 32
+                        breedte: nietStorenTekst.implicitWidth + 20
+                        onGeklikt: root.startData(["--zet", "niet_storen", root.snelStatus.niet_storen === true ? "uit" : "aan"], "snel")
+                        Text {
+                            id: nietStorenTekst
+                            anchors.centerIn: parent
+                            text: root.snelStatus.niet_storen === true ? root.tr("Niet storen: aan", "Do not disturb: on")
+                                                                      : root.tr("Niet storen", "Do not disturb")
+                            color: root.snelStatus.niet_storen === true ? root.o.accent : root.o.tekst2
+                            font.pixelSize: 13
+                        }
+                    }
+                    PaneelKnop {
+                        objectName: "allesWissen"
+                        visible: meldingen.geschiedenis.length > 0
+                        naam: root.tr("Alles wissen", "Clear all")
+                        o: root.o
+                        maat: 32
+                        breedte: wisTekst.implicitWidth + 20
+                        onGeklikt: meldingen.wisGeschiedenis()
+                        Text { id: wisTekst; anchors.centerIn: parent; text: root.tr("Alles wissen", "Clear all"); color: root.o.tekst2; font.pixelSize: 13 }
+                    }
+                }
+                Text {
+                    visible: meldingen.geschiedenis.length === 0
+                    Layout.fillWidth: true
+                    Layout.topMargin: 24
+                    Layout.bottomMargin: 24
+                    horizontalAlignment: Text.AlignHCenter
+                    text: root.tr("Geen meldingen. Alles is rustig.", "No notifications. All quiet.")
+                    color: root.o.tekst2
+                    font.pixelSize: 14
+                }
+                ListView {
+                    id: centrumLijst
+                    objectName: "centrumLijst"
+                    visible: meldingen.geschiedenis.length > 0
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.preferredHeight: contentHeight
+                    clip: true
+                    spacing: 8
+                    model: meldingen.geschiedenis
+                    delegate: Melding {
+                        required property var modelData
+                        width: centrumLijst.width
+                        melding: modelData
+                        toonTijd: true
+                        o: root.o
+                        onDicht: meldingen.uitGeschiedenis(modelData.id)
+                        onActie: sleutel => meldingen.actieUitGeschiedenis(modelData.id, sleutel)
+                    }
+                }
+            }
+        }
+        Shortcut { sequence: "Escape"; onActivated: root.sluitAlles() }
+    }
+
+    // ------------------------------------------------------------------------------------- volume, helderheid (OSD)
+    property LaagVenster osdVenster: LaagVenster {
+        objectName: "osdVenster"
+        soort: "osd"
+        marge: root.paneelHoogte + 48
+        screen: root.hoofdScherm
+        width: 300
+        height: 56
+        visible: osdKlok.running
+        Timer { id: osdKlok; interval: 1800 }
+        Connections {
+            target: osd
+            function onGetoond() { osdKlok.restart() }
+        }
+        Rectangle {
+            anchors.fill: parent
+            radius: 28
+            color: root.o.vlak
+            border.color: root.o.rand
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 18
+                anchors.rightMargin: 20
+                spacing: 12
+                Image {
+                    Layout.preferredWidth: 22; Layout.preferredHeight: 22
+                    sourceSize.width: 44; sourceSize.height: 44
+                    visible: osd.icoon !== ""
+                    source: visible ? "image://icon/" + osd.icoon : ""
+                }
+                Text {
+                    visible: osd.waarde < 0
+                    Layout.fillWidth: true
+                    text: osd.tekst
+                    color: root.o.tekst
+                    font.pixelSize: 15
+                    elide: Text.ElideRight
+                    textFormat: Text.PlainText
+                }
+                Rectangle {
+                    objectName: "osdBalk"
+                    visible: osd.waarde >= 0
+                    Layout.fillWidth: true
+                    height: 6
+                    radius: 3
+                    color: root.o.rand
+                    Rectangle {
+                        width: parent.width * Math.min(1, Math.max(0, osd.waarde / Math.max(1, osd.maximum)))
+                        height: parent.height
+                        radius: 3
+                        color: root.o.accent
+                    }
+                }
+                Text {
+                    visible: osd.waarde >= 0
+                    text: osd.waarde
+                    color: root.o.tekst
+                    font.pixelSize: 14
+                    Layout.preferredWidth: 30
+                    horizontalAlignment: Text.AlignRight
+                }
+            }
+        }
     }
 
     // ------------------------------------------------------------------------------------- meldingen

@@ -141,6 +141,33 @@ class NepMeldingen(QObject):
         self._lijst = lijst
         self.lijstVeranderd.emit()
 
+    geschiedenisVeranderd = Signal()
+    _geschiedenis: list = []
+    _ongelezen = 0
+    geschiedenis = Property("QVariantList", lambda self: self._geschiedenis, notify=geschiedenisVeranderd)
+    ongelezen = Property(int, lambda self: self._ongelezen, notify=geschiedenisVeranderd)
+
+    def zet_geschiedenis(self, lijst, ongelezen):
+        self._geschiedenis, self._ongelezen = lijst, ongelezen
+        self.geschiedenisVeranderd.emit()
+
+    @Slot()
+    def allesGelezen(self):  # noqa: N802
+        self.zet_geschiedenis(self._geschiedenis, 0)
+
+    @Slot()
+    def wisGeschiedenis(self):  # noqa: N802
+        self.zet_geschiedenis([], 0)
+
+    @Slot(int)
+    def uitGeschiedenis(self, id_):  # noqa: N802
+        self.zet_geschiedenis([m for m in self._geschiedenis if m["id"] != id_], self._ongelezen)
+
+    @Slot(int, str)
+    def actieUitGeschiedenis(self, id_, sleutel):  # noqa: N802
+        self.acties.append((int(id_), sleutel))
+        self.uitGeschiedenis(id_)
+
     @Slot(int)
     def sluit(self, id_):
         self.gesloten.append(int(id_))
@@ -241,6 +268,23 @@ class NepSysteemvak(QAbstractListModel):
         self.geklikt.append((rij, id_))
 
 
+class NepOsd(QObject):
+    getoond = Signal()
+
+    def __init__(self):
+        super().__init__()
+        self._icoon, self._tekst, self._waarde, self._maximum = "", "", -1, 100
+
+    icoon = Property(str, lambda self: self._icoon, notify=getoond)
+    tekst = Property(str, lambda self: self._tekst, notify=getoond)
+    waarde = Property(int, lambda self: self._waarde, notify=getoond)
+    maximum = Property(int, lambda self: self._maximum, notify=getoond)
+
+    def toon(self, icoon, tekst, waarde):
+        self._icoon, self._tekst, self._waarde = icoon, tekst, waarde
+        self.getoond.emit()
+
+
 class NepPictogram(QQuickImageProvider):
     def __init__(self):
         super().__init__(QQuickImageProvider.ImageType.Pixmap)
@@ -254,6 +298,7 @@ class NepPictogram(QQuickImageProvider):
 app = QGuiApplication(sys.argv)
 opdracht, schil, meldingen = NepOpdracht(), NepSchil(), NepMeldingen()
 instellingen, systeemvak = NepInstellingen(TMP / "config" / "bugos", BUREAUBLAD), NepSysteemvak()
+osd = NepOsd()
 engine = QQmlApplicationEngine()
 engine.addImageProvider("icon", NepPictogram())
 ctx = engine.rootContext()
@@ -262,6 +307,7 @@ ctx.setContextProperty("schil", schil)
 ctx.setContextProperty("meldingen", meldingen)
 ctx.setContextProperty("instellingen", instellingen)
 ctx.setContextProperty("systeemvak", systeemvak)
+ctx.setContextProperty("osd", osd)
 fout_meldingen: list[str] = []
 engine.warnings.connect(lambda ws: fout_meldingen.extend(w.toString() for w in ws))
 engine.load(QUrl.fromLocalFile(str(SHELL / "Shell.qml")))
@@ -505,6 +551,56 @@ klopt((["bugos-start-data", "--start", "/home/x/Bureaublad/Steam.desktop"], "") 
 roep(root, "bureaubladWissel")
 klopt(schil.bureaublad_getoond == [True], "Bureaublad tonen (het strookje rechts)")
 klopt(paneel is not None and paneel.findChild(QObject, "systeemvak") is not None, "de taakbalk van het hoofdscherm heeft het systeemvak")
+
+# ===================================================================================================== fase 3 ===
+# De bel en het meldingencentrum
+bel = paneel.findChild(QObject, "belKnop")
+meldingen.zet_geschiedenis([
+    {"id": 21, "app": "Steam", "icoon": "steam", "kop": "Update klaar", "tekst": "", "knoppen": [{"sleutel": "open", "tekst": "Openen"}],
+     "standaard": False, "dringend": False, "tijd": "09:12"},
+    {"id": 20, "app": "BugOS", "icoon": "bugos-logo", "kop": "Firefox is klaar", "tekst": "", "knoppen": [],
+     "standaard": False, "dringend": False, "tijd": "09:10"}], 2)
+wacht()
+klopt(bel is not None and bel.property("visible") and "2" in bel.property("naam"),
+      f"de bel op de taakbalk telt de nieuwe meldingen ({bel.property('naam') if bel else None})")
+centrum = venster("meldingenCentrum")
+QMetaObject.invokeMethod(root, "toon", Q_ARG("QVariant", "meldingen"), Q_ARG("QVariant", None))
+wacht(200)
+klopt(centrum.isVisible() and meldingen.property("ongelezen") == 0, "de bel opent het meldingencentrum; alles is gezien")
+lijst = centrum.findChild(QObject, "centrumLijst")
+klopt(lijst is not None and lijst.property("count") == 2, f"het meldingencentrum toont de bewaarde meldingen ({lijst.property('count') if lijst else None})")
+if FOTO:
+    centrum.grabWindow().save(f"{FOTO}/meldingencentrum.png")
+meldingen.acties.clear()
+eerste = lijst.property("contentItem").childItems()[0]
+eerste.actie.emit("open")
+wacht()
+klopt(meldingen.acties == [(21, "open")] and len(meldingen.property("geschiedenis")) == 1,
+      "een knop op een oude melding gaat naar de app, en de melding gaat uit het centrum")
+opdracht.uitgevoerd.clear()
+centrum.findChild(QObject, "nietStorenKnop").geklikt.emit()
+wacht()
+klopt((["bugos-start-data", "--zet", "niet_storen", "aan"], "snel") in opdracht.uitgevoerd, "niet storen aanzetten vanuit het centrum")
+centrum.findChild(QObject, "allesWissen").geklikt.emit()
+wacht()
+klopt(len(meldingen.property("geschiedenis")) == 0, "Alles wissen")
+QMetaObject.invokeMethod(root, "sluitAlles")
+
+# De schermmelding bij de volumetoetsen (OSD)
+osd_v = venster("osdVenster")
+klopt(not osd_v.isVisible(), "de schermmelding is er niet vanzelf")
+osd.toon("audio-volume-medium", "", 40)
+wacht(100)
+balk = osd_v.findChild(QObject, "osdBalk")
+klopt(osd_v.isVisible() and balk.property("visible"), "volumetoets: de schermmelding met een balk")
+if FOTO:
+    osd_v.grabWindow().save(f"{FOTO}/osd.png")
+osd.toon("audio-volume-muted", "Geluid uit", -1)
+wacht(100)
+klopt(osd_v.isVisible() and not balk.property("visible"), "geluid uit: alleen tekst")
+wacht(2000)
+klopt(not osd_v.isVisible(), "na een paar tellen gaat de schermmelding weg")
+klopt(("osd", 96) in schil.lagen, f"de schermmelding staat onderaan, boven de taakbalk ({[l for l in schil.lagen if l[0] == 'osd']})")
 
 # De bestanden voor de sessie
 bureaublad = (ROOT / "system_files/usr/share/applications/bugos-shell.desktop").read_text()

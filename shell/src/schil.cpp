@@ -76,6 +76,12 @@ bool Schil::laag(QWindow *venster, const QString &soort, int marge)
         l->setMargins(QMargins(0, 0, marge, marge));
         l->setExclusiveZone(0);
         l->setKeyboardInteractivity(W::KeyboardInteractivityNone);
+    } else if (soort == QLatin1String("osd")) {
+        l->setLayer(W::LayerOverlay);
+        l->setAnchors(W::Anchors(W::AnchorBottom));
+        l->setMargins(QMargins(0, 0, 0, marge));
+        l->setExclusiveZone(0);
+        l->setKeyboardInteractivity(W::KeyboardInteractivityNone);
     } else if (soort == QLatin1String("achtergrond")) {
         l->setLayer(W::LayerBackground);
         l->setAnchors(W::Anchors(W::AnchorTop | W::AnchorBottom | W::AnchorLeft | W::AnchorRight));

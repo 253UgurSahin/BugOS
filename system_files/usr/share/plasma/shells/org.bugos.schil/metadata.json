@@ -1,0 +1,15 @@
+{
+    "KPackageStructure": "Plasma/Shell",
+    "KPlugin": {
+        "Description": "BugOS shell: the lock screen of the BugOS session (docs/STANDALONE.md)",
+        "Description[nl]": "BugOS-schil: het vergrendelscherm van de BugOS-sessie (docs/STANDALONE.md)",
+        "Icon": "bugos-logo",
+        "Id": "org.bugos.schil",
+        "License": "PolyForm-Noncommercial-1.0.0",
+        "Name": "BugOS shell",
+        "Name[nl]": "BugOS-schil",
+        "Version": "1"
+    },
+    "X-KDE-ParentApp": "org.kde.plasmashell",
+    "X-Plasma-APIVersion": "2"
+}

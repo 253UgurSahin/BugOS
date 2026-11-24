@@ -7,6 +7,7 @@ Rectangle {
     id: kaart
     property var melding: ({})
     property var o
+    property bool toonTijd: false   // in het meldingencentrum: hoe laat de melding kwam
     signal dicht()
     signal actie(string sleutel)
 
@@ -44,11 +45,12 @@ Rectangle {
             spacing: 4
             Text {
                 Layout.fillWidth: true
-                text: kaart.melding.app || ""
+                text: [kaart.melding.app || "", kaart.toonTijd ? (kaart.melding.tijd || "") : ""].filter(x => x !== "").join(" · ")
                 visible: text !== ""
                 color: kaart.o.tekst2
                 font.pixelSize: 11
                 elide: Text.ElideRight
+                textFormat: Text.PlainText
             }
             Text {
                 Layout.fillWidth: true

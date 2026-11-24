@@ -9,6 +9,7 @@
 #include "instellingen.h"
 #include "meldingen.h"
 #include "opdracht.h"
+#include "osd.h"
 #include "schil.h"
 #include "systeemvak.h"
 
@@ -94,6 +95,7 @@ int main(int argc, char *argv[])
     Meldingen meldingen;
     Schil schil;
     Instellingen instellingen;
+    Osd osd;
     Systeemvak systeemvak(QDBusConnection::sessionBus());
     if (!opties.isSet(geenDbus)) {
         // Eerst de meldingen: die zijn nodig vanaf het eerste moment van de sessie.
@@ -101,6 +103,7 @@ int main(int argc, char *argv[])
             std::fprintf(stderr, "bugos-shell: de meldingendienst is al van een ander programma\n");
         if (!schil.aanmelden())
             std::fprintf(stderr, "bugos-shell: org.kde.plasmashell is al van een ander programma\n");
+        osd.aanmelden();   // op dezelfde verbinding als org.kde.plasmashell (Schil)
         systeemvak.start();
     }
 
@@ -112,6 +115,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("schil"), &schil);
     engine.rootContext()->setContextProperty(QStringLiteral("instellingen"), &instellingen);
     engine.rootContext()->setContextProperty(QStringLiteral("systeemvak"), &systeemvak);
+    engine.rootContext()->setContextProperty(QStringLiteral("osd"), &osd);
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app,
                      []() { QCoreApplication::exit(1); }, Qt::QueuedConnection);
     engine.load(QUrl::fromLocalFile(opties.value(qmlOptie)));

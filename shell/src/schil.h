@@ -22,6 +22,7 @@ public:
     //   paneel      onderaan, over de hele breedte, met gereserveerde ruimte (hoogte = exclusieve zone)
     //   links/rechts een menu boven de taakbalk, links of rechts (marge = afstand tot de rand en de taakbalk)
     //   melding     rechtsonder, boven alles, zonder toetsenbord
+    //   osd         onderaan in het midden, boven alles (volume, helderheid), zonder toetsenbord
     //   achtergrond de onderste laag, over het hele scherm
     //   vangnet     een doorzichtige laag over het scherm: een klik ernaast sluit een open menu
     //   menu        een los menu (rechtermuisknop), op een plek die plaats() zet

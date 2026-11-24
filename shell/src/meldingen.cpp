@@ -10,6 +10,7 @@
 namespace {
 constexpr int STANDAARD_MS = 6000;   // zoals Plasma: een melding zonder eigen tijd blijft 6 seconden staan
 constexpr int MAX_KAARTJES = 5;      // nooit meer dan vijf tegelijk op het scherm
+constexpr int MAX_GESCHIEDENIS = 50; // zoveel bewaart het meldingencentrum
 }
 
 Meldingen::Meldingen(QObject *ouder)
@@ -110,12 +111,6 @@ uint Meldingen::Notify(const QString &app_name, uint replaces_id, const QString 
     }
     const bool heeftStandaard = actions.contains(QStringLiteral("default"));
 
-    if (nietStoren() && !dringend) {
-        // Niet storen: geen kaartje. De app hoort dat de melding 'vervallen' is, zodat hij niet blijft wachten.
-        QTimer::singleShot(0, this, [this, id]() { Q_EMIT NotificationClosed(id, 1); });
-        return id;
-    }
-
     const QVariantMap kaartje{
         {QStringLiteral("id"), id},
         {QStringLiteral("app"), app_name},
@@ -125,7 +120,18 @@ uint Meldingen::Notify(const QString &app_name, uint replaces_id, const QString 
         {QStringLiteral("knoppen"), knoppen},
         {QStringLiteral("standaard"), heeftStandaard},
         {QStringLiteral("dringend"), dringend},
+        {QStringLiteral("tijd"), QDateTime::currentDateTime().toString(QStringLiteral("HH:mm"))},
     };
+    // 'transient': een melding die alleen nu telt (bijv. volume); die bewaren we niet.
+    if (!hints.value(QStringLiteral("transient")).toBool())
+        bewaarInGeschiedenis(kaartje);
+
+    if (nietStoren() && !dringend) {
+        // Niet storen: geen kaartje (wel in het meldingencentrum). De app hoort dat de melding 'vervallen' is, zodat
+        // hij niet blijft wachten.
+        QTimer::singleShot(0, this, [this, id]() { Q_EMIT NotificationClosed(id, 1); });
+        return id;
+    }
     if (plek >= 0) {
         m_lijst[plek] = kaartje;
     } else {
@@ -148,6 +154,8 @@ uint Meldingen::Notify(const QString &app_name, uint replaces_id, const QString 
 
 void Meldingen::CloseNotification(uint id)
 {
+    // De app zegt zelf dat de melding niet meer klopt: ook uit het meldingencentrum.
+    uitGeschiedenis(id);
     weg(id, 3);
 }
 
@@ -158,6 +166,7 @@ void Meldingen::sluit(uint id)
 
 void Meldingen::actie(uint id, const QString &sleutel)
 {
+    uitGeschiedenis(id);   // gedaan: hoeft niet meer in het meldingencentrum
     Q_EMIT ActionInvoked(id, sleutel.isEmpty() ? QStringLiteral("default") : sleutel);
     weg(id, 2);
 }
@@ -173,4 +182,54 @@ void Meldingen::weg(uint id, uint reden)
             return;
         }
     }
+}
+
+void Meldingen::bewaarInGeschiedenis(const QVariantMap &kaartje)
+{
+    const uint id = kaartje.value(QStringLiteral("id")).toUInt();
+    for (int i = 0; i < m_geschiedenis.size(); ++i) {
+        if (m_geschiedenis.at(i).toMap().value(QStringLiteral("id")).toUInt() == id) {
+            m_geschiedenis.removeAt(i);   // een vervangen melding (replaces_id): de nieuwe bovenaan
+            break;
+        }
+    }
+    m_geschiedenis.prepend(kaartje);
+    while (m_geschiedenis.size() > MAX_GESCHIEDENIS)
+        m_geschiedenis.removeLast();
+    ++m_ongelezen;
+    Q_EMIT geschiedenisVeranderd();
+}
+
+void Meldingen::uitGeschiedenis(uint id)
+{
+    for (int i = 0; i < m_geschiedenis.size(); ++i) {
+        if (m_geschiedenis.at(i).toMap().value(QStringLiteral("id")).toUInt() == id) {
+            m_geschiedenis.removeAt(i);
+            m_ongelezen = qMin(m_ongelezen, int(m_geschiedenis.size()));
+            Q_EMIT geschiedenisVeranderd();
+            return;
+        }
+    }
+}
+
+void Meldingen::wisGeschiedenis()
+{
+    m_geschiedenis.clear();
+    m_ongelezen = 0;
+    Q_EMIT geschiedenisVeranderd();
+}
+
+void Meldingen::allesGelezen()
+{
+    if (m_ongelezen == 0)
+        return;
+    m_ongelezen = 0;
+    Q_EMIT geschiedenisVeranderd();
+}
+
+void Meldingen::actieUitGeschiedenis(uint id, const QString &sleutel)
+{
+    Q_EMIT ActionInvoked(id, sleutel.isEmpty() ? QStringLiteral("default") : sleutel);
+    uitGeschiedenis(id);
+    weg(id, 2);
 }

@@ -49,6 +49,17 @@ klopt "grep -q \"NotificationClosed (uint32 \$id, uint32 3)\" \"\$TMP/monitor\""
 klopt "grep -q \"NotificationClosed (uint32 \$id3, uint32 1)\" \"\$TMP/monitor\"" "meldingen: niet storen: geen kaartje, meteen vervallen"
 klopt "gdbus call --session --dest org.kde.plasmashell --object-path /PlasmaShell --method org.kde.PlasmaShell.activateLauncherMenu >/dev/null" \
     "de Meta-toets: activateLauncherMenu werkt"
+# Fase 3: de schermmelding bij de volumetoets, zoals het geluid van KDE hem vraagt (org.kde.osdService).
+gdbus monitor --session --dest org.kde.plasmashell >"$TMP/osd-monitor" 2>&1 &
+osdmon=$!
+sleep 0.3
+klopt "gdbus call --session --dest org.kde.plasmashell --object-path /org/kde/osdService --method org.kde.osdService.volumeChanged 40 >/dev/null" \
+    "OSD: volumeChanged werkt (de volumetoetsen tonen weer iets)"
+klopt "gdbus call --session --dest org.kde.plasmashell --object-path /org/kde/osdService --method org.kde.osdService.wifiEnabledChanged false >/dev/null" \
+    "OSD: wifiEnabledChanged werkt"
+sleep 0.3
+kill "$osdmon" 2>/dev/null
+klopt "grep -q \"osdProgress (.audio-volume-medium., 40, 100\" \"\$TMP/osd-monitor\"" "OSD: het sein osdProgress (het vergrendelscherm van KDE luistert ernaar)"
 wait "$pid"
 code=$?
 klopt "[ $code -eq 0 ] && grep -q \"bugos-shell: OK\" \"\$TMP/uit\"" "bugos-shell liep en stopte netjes (code $code)"
