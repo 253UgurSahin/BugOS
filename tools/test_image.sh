@@ -93,6 +93,17 @@ for u in flatpak-system-update.timer uupd.timer rpm-ostree-countme.timer; do
     klopt '[ "$(systemctl is-enabled "$u" 2>/dev/null)" = masked ]' "dienst: $u van de basis staat uit (masked)"
 done
 klopt '[ "$(systemctl --global is-enabled bugos-updatecheck.timer 2>/dev/null)" = enabled ]' "dienst: bugos-updatecheck.timer staat aan voor elke gebruiker"
+# Het inlogscherm: Plasma Login blijft de standaard; SDDM met het BugOS-thema staat klaar voor de proef
+# (bugos-inlogscherm, docs/STANDALONE.md).
+if [ -f /usr/lib/systemd/system/plasmalogin.service ]; then
+    klopt '[ "$(readlink /etc/systemd/system/display-manager.service)" = /usr/lib/systemd/system/plasmalogin.service ]' \
+        "inlogscherm: Plasma Login is de standaard (ook nu SDDM erbij staat)"
+fi
+if [ -x /usr/bin/sddm ]; then
+    klopt '[ -f /usr/share/sddm/themes/bugos/Main.qml ] && [ -f /usr/lib/sddm/sddm.conf.d/50-bugos.conf ] && command -v sddm-greeter-qt6 >/dev/null' \
+        "inlogscherm: SDDM met het BugOS-thema en de Qt 6-versie van het inlogscherm staan klaar"
+fi
+klopt '[ -f /usr/share/plasma/shells/org.bugos.schil/contents/lockscreen/LockScreen.qml ]' "vergrendelscherm: het BugOS-pakket staat erin"
 klopt 'grep -qx "UPDATES=auto" /etc/bugos/updates.conf' "updates: standaard automatisch"
 klopt 'grep -q "^AutomaticUpdatePolicy=stage" /etc/rpm-ostreed.conf' "updates: rpm-ostree zet updates klaar (stage)"
 # IPv6, connect, not running: meldingen van de bouwcontainer zelf, geen fouten in de diensten.

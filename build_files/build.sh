@@ -73,6 +73,15 @@ if [ "${#PAKKETTEN[@]}" -gt 0 ]; then
     dnf5 install -y --skip-unavailable "${PAKKETTEN[@]}"
 fi
 
+# Het inlogscherm: Plasma Login blijft de standaard. SDDM (packages.txt) staat erbij voor de proef met het BugOS-
+# inlogscherm (bugos-inlogscherm sddm). Het installeren van SDDM kan hem via de presets van Fedora aanzetten
+# (display-manager.service): hier dus expliciet terug naar Plasma Login. Is er geen Plasma Login, dan blijft alles zoals
+# de basis het had.
+if [ -f /usr/lib/systemd/system/plasmalogin.service ]; then
+    systemctl disable sddm.service >/dev/null 2>&1 || true
+    systemctl enable --force plasmalogin.service
+fi
+
 # D-09: de teksteditor moet echt starten. De basis van Universal Blue (kinoite-main:44 van 2026-11-16) zet zelf Kate
 # erbij en haalt daarvoor kate, kate-libs en KWrite 26.08.3 uit 'updates', gebouwd tegen KDE Frameworks 6.32; de
 # frameworks van de basis bleven op 6.31 (Fedora's eigen Kinoite had nog 26.08.2, dat paste). De eis van kate-libs op

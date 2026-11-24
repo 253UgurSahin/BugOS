@@ -48,7 +48,7 @@ bestaande motor. Weg B blijft later mogelijk, omdat de schil met gewone Wayland-
 | Schermmelding bij volume- en helderheidstoetsen (OSD, in plasmashell) | `org.kde.osdService` in `bugos-shell` | 3 |
 | Meldingengeschiedenis (in plasmashell) | Meldingencentrum achter de bel op de taakbalk | 3 |
 | Afmelden, opnieuw opstarten, uitzetten (wat je ziet) | Het BugOS-uitzetscherm (`Logout.qml`, was er al) | (al klaar) |
-| Inlogscherm | Plasma Login Manager heeft zijn scherm vast in het programma: alleen de achtergrond is van BugOS. Een eigen inlogscherm vraagt een andere inlogbeheerder (zie hieronder) | open |
+| Inlogscherm | Proef: SDDM met het BugOS-thema (`/usr/share/sddm/themes/bugos`), aan met `sudo bugos-inlogscherm sddm`; de standaard blijft Plasma Login | 3 (proef) |
 | Sessie (startplasma, ksmserver) | Blijft voorlopig: onzichtbaar loodgieterswerk; pas nodig als plasma-workspace uit het image gaat | 4 |
 | Takenlijst (libtaskmanager uit plasma-workspace) | Eigen Wayland-client (plasma-window-management) | 4 |
 | plasma-workspace en Plasma-pakketten | Uit het image | 4 |
@@ -76,14 +76,24 @@ bestaande motor. Weg B blijft later mogelijk, omdat de schil met gewone Wayland-
 
 Elke fase eindigt met een werkende computer: de proefsessie blijft naast de gewone bestaan tot fase 4.
 
-## Open keuze: het inlogscherm
+## Het inlogscherm (proef met SDDM)
 
 Fedora 44 gebruikt Plasma Login Manager. Het scherm daarvan zit vast in het programma (Main.qml in de qrc, nagekeken in
-plasma-login-manager); alleen de achtergrond is in te stellen, en die is al van BugOS. Een eigen inlogscherm kan op twee
-manieren:
-1. **Overstappen op SDDM** met een eigen BugOS-thema (SDDM heeft een gedocumenteerde manier om een QML-thema te maken). Raakt het
-   inloggen van iedereen, dus eerst als proef.
-2. **Wachten** tot Plasma Login Manager thema's ondersteunt, en tot die tijd alleen de BugOS-achtergrond.
+plasma-login-manager); alleen de achtergrond is in te stellen. Daarom (keuze van de eigenaar, 2026-11-24): SDDM met een
+eigen BugOS-thema, eerst als proef.
+
+- BugOS bevat SDDM (`sddm`, `sddm-wayland-plasma` in packages.txt), maar zet het niet aan: `build.sh` houdt Plasma Login
+  als standaard (`systemctl enable --force plasmalogin.service`).
+- Proberen: `sudo bugos-inlogscherm sddm` en opnieuw opstarten. Terug: `sudo bugos-inlogscherm plasma`.
+  Automatisch inloggen (`bugos-login`) gaat mee.
+- Het thema volgt de afspraken uit de broncode van SDDM (GreeterApp.cpp, GreeterProxy.h, UserModel, SessionModel).
+  Lukt het laden niet, dan toont SDDM zijn ingebouwde scherm: inloggen kan dan nog steeds.
+- Start SDDM helemaal niet, dan zet het vangnet (`sddm.service.d/50-bugos-vangnet.conf` met OnFailure=
+  `bugos-inlogscherm-terug.service`) vanzelf Plasma Login terug en start het.
+- Kun je niet inloggen terwijl SDDM wel draait: Ctrl+Alt+F3, inloggen, `sudo bugos-inlogscherm plasma`. Terug naar een
+  vorige BugOS bij het opstarten helpt hier niet: de keuze staat in /etc.
+- Veilig bekijken zonder iets te veranderen: `sddm-greeter-qt6 --test-mode --theme /usr/share/sddm/themes/bugos`.
+- Werkt de proef goed (inloggen, automatisch inloggen, de proefsessie kiezen), dan wordt SDDM de standaard.
 
 ## Android-apps
 

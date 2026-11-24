@@ -5,6 +5,6 @@ Name[nl]=Quarantaine (BugOS)
 Comment=Try an app without it reaching your files
 Comment[nl]=Een app proberen zonder dat hij bij je bestanden kan
 Exec=bugos-quarantaine --venster %f
-Icon=security-medium
+Icon=bugos-logo
 NoDisplay=true
 Terminal=false

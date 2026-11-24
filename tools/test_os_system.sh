@@ -1052,5 +1052,59 @@ if command -v shellcheck >/dev/null 2>&1; then
     klopt 'shellcheck -x "$BIN/bugos-browser"' "Browser: shellcheck vindt niets in bugos-browser"
 fi
 
+# Het inlogscherm wisselen (bugos-inlogscherm, de proef met SDDM en het BugOS-thema).
+kopie bugos-inlogscherm
+IS="$TMP/inlog"
+mkdir -p "$IS/systemd" "$IS/thema" "$IS/plasmalogin.conf.d" "$IS/sddm.conf.d"
+touch "$IS/thema/Main.qml"
+sed -i -e "s|/etc/plasmalogin.conf.d|$IS/plasmalogin.conf.d|g" -e "s|/etc/sddm.conf.d|$IS/sddm.conf.d|g" "$TMP/bugos-inlogscherm"
+# Een nep-systemctl die display-manager.service echt omzet (zoals Alias= in de diensten), en alles opschrijft.
+nep systemctl 'echo "$*" >>"'"$IS"'/log"
+case "$1" in
+    cat) [ -e "'"$IS"'/geen-$2" ] && exit 1; exit 0 ;;
+    enable) [ "$2" = --force ] && shift; [ -e "'"$IS"'/kapot-$2" ] && exit 1
+            ln -sfn "/usr/lib/systemd/system/$2" "'"$IS"'/systemd/display-manager.service" ;;
+    disable) case "$(readlink "'"$IS"'/systemd/display-manager.service")" in */"$2") rm -f "'"$IS"'/systemd/display-manager.service" ;; esac ;;
+esac
+exit 0'
+ln -sfn /usr/lib/systemd/system/plasmalogin.service "$IS/systemd/display-manager.service"
+inlog() { BUGOS_SYSTEMD_MAP="$IS/systemd" BUGOS_SDDM_THEMA="$IS/thema" BUGOS_INLOG_PROEF="$IS/proef" draai bugos-inlogscherm "$@"; }
+inlog status
+klopt 'grep -qx plasma "$TMP/uit"' "inlogscherm: de standaard is Plasma Login"
+printf '[Autologin]\nUser=bugie\nSession=plasma\n' >"$IS/plasmalogin.conf.d/50-bugos-login.conf"
+inlog sddm
+klopt '[ "$code" -eq 0 ] && [ "$(readlink "$IS/systemd/display-manager.service")" = /usr/lib/systemd/system/sddm.service ] && [ -e "$IS/proef" ]' \
+    "inlogscherm: 'sddm' zet het BugOS-inlogscherm aan (na opnieuw opstarten)"
+klopt 'cmp -s "$IS/plasmalogin.conf.d/50-bugos-login.conf" "$IS/sddm.conf.d/50-bugos-login.conf"' \
+    "inlogscherm: automatisch inloggen gaat mee naar SDDM"
+inlog status
+klopt 'grep -qx sddm "$TMP/uit"' "inlogscherm: status zegt sddm"
+inlog plasma
+klopt '[ "$code" -eq 0 ] && [ "$(readlink "$IS/systemd/display-manager.service")" = /usr/lib/systemd/system/plasmalogin.service ] && [ ! -e "$IS/proef" ]' \
+    "inlogscherm: 'plasma' zet het gewone inlogscherm terug"
+: >"$IS/log"
+inlog sddm
+inlog plasma --nu
+klopt 'grep -qx "start plasmalogin.service" "$IS/log" && grep -qx "reset-failed sddm.service" "$IS/log"' \
+    "inlogscherm: het vangnet (SDDM start niet) start meteen weer Plasma Login"
+touch "$IS/kapot-sddm.service"
+inlog sddm
+klopt '[ "$code" -ne 0 ] && [ "$(readlink "$IS/systemd/display-manager.service")" = /usr/lib/systemd/system/plasmalogin.service ]' \
+    "inlogscherm: lukt SDDM aanzetten niet, dan blijft Plasma Login (nooit zonder inlogscherm)"
+rm -f "$IS/kapot-sddm.service"
+touch "$IS/geen-sddm.service"
+inlog sddm
+klopt '[ "$code" -eq 3 ] && grep -qx plasma <(BUGOS_SYSTEMD_MAP="$IS/systemd" bash "$TMP/bugos-inlogscherm" status)' \
+    "inlogscherm: zonder SDDM op de computer gebeurt er niets"
+rm -f "$IS/geen-sddm.service" "$IS/thema/Main.qml"
+inlog sddm
+klopt '[ "$code" -eq 3 ]' "inlogscherm: zonder het BugOS-thema niet naar SDDM"
+nep systemctl 'exit 0'
+klopt 'grep -q "systemctl enable --force plasmalogin.service" "$ROOT/build_files/build.sh" && grep -qx sddm "$ROOT/build_files/packages.txt"' \
+    "inlogscherm: SDDM staat in BugOS, maar de bouw houdt Plasma Login als standaard"
+if command -v shellcheck >/dev/null 2>&1; then
+    klopt 'shellcheck "$BIN/bugos-inlogscherm"' "inlogscherm: shellcheck vindt niets"
+fi
+
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

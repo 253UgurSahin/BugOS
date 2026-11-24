@@ -55,3 +55,8 @@ dosfstools
 
 # --- Eén ontwerptaal: de BugOS-stijl voor alle KDE-programma's (zie tools/design/README.md) ---
 kvantum
+
+# --- Inlogscherm (proef): SDDM met het BugOS-inlogscherm (thema 'bugos', docs/STANDALONE.md). ---
+# Staat uit: de standaard blijft Plasma Login (build.sh zet dat expliciet terug). Proberen: sudo bugos-inlogscherm sddm.
+sddm
+sddm-wayland-plasma

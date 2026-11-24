@@ -1,0 +1,7 @@
+[Unit]
+Description=BugOS: SDDM start niet, terug naar het gewone inlogscherm (Plasma Login)
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bugos-inlogscherm plasma --nu

@@ -96,6 +96,7 @@ jobs:
           bash tools/test_shell_dbus.sh /tmp/schil/bugos-shell
           QT_QPA_PLATFORM=offscreen python3 tools/test_shell.py
           QT_QPA_PLATFORM=offscreen python3 tools/test_lockscreen.py
+          QT_QPA_PLATFORM=offscreen python3 tools/test_sddm_thema.py
 
       - name: Bestanden testen (veilig weggooien, terugzetten, kopiëren)
         run: QT_QPA_PLATFORM=offscreen python3 tools/test_files.py
