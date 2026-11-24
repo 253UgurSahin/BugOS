@@ -34,7 +34,7 @@ from bugos_settings_netwerk import BluetoothPagina, WifiPagina  # noqa: E402
 # Doorloop (tabjes die naar een tweede regel gaan) staat in bugos_settings_onderdelen, zodat de pagina's hem ook
 # kunnen gebruiken (Uiterlijk, D05); hier blijft hij onder dezelfde naam te vinden (de test kijkt naar inst.Doorloop).
 from bugos_settings_onderdelen import (  # noqa: E402,F401  (KiesDialoog en WachtwoordDialoog: voor de test)
-    Blad, Doorloop, KiesDialoog, Kolommen, Regelaar, WachtwoordDialoog, op_achtergrond, pagina_marge, stijl,
+    Blad, Doorloop, KiesDialoog, Kolommen, Regelaar, WachtwoordDialoog, op_achtergrond, pagina_marge, stijl, tegelijk,
 )
 from bugos_settings_scherm import EnergiePagina, GeluidPagina, SchermPagina, UiterlijkPagina  # noqa: E402
 from bugos_settings_systeem import OverPagina, SpelenPagina, UpdatesPagina  # noqa: E402
@@ -110,34 +110,56 @@ class StartPagina(Blad):
                 self.rijen.setdefault(klasse.sleutel, rij)
 
     def ververs(self) -> None:
-        def lees():
-            return {"wifi": bi.wifi_aan(), "netwerken": bi.netwerken(), "bt": bi.bt_aan(), "nacht": bi.nachtlicht(),
-                    "donker": bi.donker(), "geluid": bi.geluid(), "heeft_wifi": bi.heeft_wifi(),
-                    "heeft_bt": bi.VOORBEELD or bi.bt_hardware(), "kabel": bi.kabel()}
-        op_achtergrond(self, lees, self.toon)
+        # Twee klusjes, en in elk klusje alles tegelijk: de tegels en regels zijn er zodra hun eigen antwoord er is.
+        # Eerst stond alles na elkaar in één klusje (tien programma's), en vroeg 'netwerken' nmcli om opnieuw naar
+        # wifi te zoeken (enkele seconden): zo lang stond er '…' bij Bluetooth, Nachtlicht, Donker en het volume.
+        # Voor 'Verbonden met ...' is opnieuw zoeken niet nodig: het netwerk waarmee je verbonden bent, kent
+        # NetworkManager altijd (de pagina Wifi zoekt wel opnieuw).
+        def snel():
+            bt, nacht, donker, geluid, heeft_bt = tegelijk(bi.bt_aan, bi.nachtlicht, bi.donker, bi.geluid,
+                                                           lambda: bi.VOORBEELD or bi.bt_hardware())
+            return {"bt": bt, "nacht": nacht, "donker": donker, "geluid": geluid, "heeft_bt": heeft_bt}
+
+        def netwerk():
+            wifi, netwerken, heeft_wifi, kabel = tegelijk(bi.wifi_aan, lambda: bi.netwerken(zoeken=False),
+                                                          bi.heeft_wifi, bi.kabel)
+            return {"wifi": wifi, "netwerken": netwerken, "heeft_wifi": heeft_wifi, "kabel": kabel}
+        op_achtergrond(self, snel, self.toon)
+        op_achtergrond(self, netwerk, self.toon)
 
     def toon(self, s) -> None:
+        """s: wat ververs() las; alles samen, of een deel ervan (de tegels en regels die erbij horen)."""
         if not s:
             return
-        nu = next((n for n in s["netwerken"] if n.verbonden), None)
-        for sleutel, aan, uitleg in (
-                ("wifi", s["wifi"], (nu.naam if nu else t("Niet verbonden", "Not connected")) if s["wifi"]
-                 else t("Uit", "Off")),
-                ("bt", s["bt"], t("Aan", "On") if s["bt"] else t("Uit", "Off")),
-                ("nacht", s["nacht"], t("'s Avonds warmer", "Warmer at night") if s["nacht"] else t("Uit", "Off")),
-                ("donker", s["donker"], t("Aan", "On") if s["donker"] else t("Uit", "Off"))):
+        tegels = []
+        if "wifi" in s:
+            nu = next((n for n in s["netwerken"] if n.verbonden), None)
+            tegels.append(("wifi", s["wifi"], (nu.naam if nu else t("Niet verbonden", "Not connected")) if s["wifi"]
+                           else t("Uit", "Off")))
+        if "bt" in s:
+            tegels.append(("bt", s["bt"], t("Aan", "On") if s["bt"] else t("Uit", "Off")))
+        if "nacht" in s:
+            tegels.append(("nacht", s["nacht"],
+                           t("'s Avonds warmer", "Warmer at night") if s["nacht"] else t("Uit", "Off")))
+        if "donker" in s:
+            tegels.append(("donker", s["donker"], t("Aan", "On") if s["donker"] else t("Uit", "Off")))
+        for sleutel, aan, uitleg in tegels:
             self.snel[sleutel].zet_stil(bool(aan))
             self.snel_uitleg[sleutel].setText(uitleg)
-        # Een pc zonder wifi (aan een kabel): geen wifi-tegel die niets doet (U111).
-        self.snel["wifi"].parentWidget().setVisible(s.get("heeft_wifi", True))
-        self.snel["bt"].parentWidget().setVisible(s.get("heeft_bt", True))   # ook geen Bluetooth zonder Bluetooth (U157)
-        volume, _stil, uitgangen = s["geluid"]
-        self.volume.zet(volume)
-        self.rijen["wifi"].zet_uitleg(self.netwerk_uitleg(nu, s))
-        gebruikt = next((u for u in uitgangen if u.standaard), None)
-        self.luidspreker = gebruikt.omschrijving if gebruikt else ""
-        if gebruikt:
-            self.rijen["geluid"].zet_uitleg(f"{volume}% · {gebruikt.omschrijving}")
+        if "wifi" in s:
+            # Een pc zonder wifi (aan een kabel): geen wifi-tegel die niets doet (U111).
+            self.snel["wifi"].parentWidget().setVisible(s.get("heeft_wifi", True))
+            self.rijen["wifi"].zet_uitleg(self.netwerk_uitleg(nu, s))
+        if "bt" in s:
+            # Ook geen Bluetooth-tegel zonder Bluetooth (U157).
+            self.snel["bt"].parentWidget().setVisible(s.get("heeft_bt", True))
+        if "geluid" in s:
+            volume, _stil, uitgangen = s["geluid"]
+            self.volume.zet(volume)
+            gebruikt = next((u for u in uitgangen if u.standaard), None)
+            self.luidspreker = gebruikt.omschrijving if gebruikt else ""
+            if gebruikt:
+                self.rijen["geluid"].zet_uitleg(f"{volume}% · {gebruikt.omschrijving}")
 
     @staticmethod
     def netwerk_uitleg(nu, s: dict) -> str:
@@ -303,6 +325,8 @@ class GroepPagina(QWidget):
 
     def toon(self, sleutel: str, ververs: bool = True) -> None:
         blad = self.bladen[sleutel]
+        if ververs:
+            blad.zorg_gebouwd()   # eerst bouwen, dan tonen: geen half lege pagina in beeld (zie Blad: uitgesteld)
         self.stapel.setCurrentWidget(blad)
         self.tabs[sleutel].setChecked(True)
         self.focus_op_gekozen()
@@ -349,10 +373,13 @@ class Instellingen(Venster):
     def __init__(self, begin: str = "start"):
         super().__init__(t("Instellingen", "Settings"), zoeken=t("Zoek een instelling", "Search settings"),
                          maat=(1120, 820))
-        self.setStyleSheet(stijl())
+        # Het stijlblad één keer, vóór de pagina's: een tweede setStyleSheet() na het bouwen liet Qt elk onderdeel
+        # van elke pagina opnieuw opmaken (een flink deel van de tijd voor het venster er was).
+        self.setStyleSheet(stijl() + tab_stijl())
         self.groepen: dict[str, GroepPagina] = {}
         for g in GROEPEN:
-            bladen = [klasse(self) for klasse in g.paginas]
+            # Uitgesteld: een pagina wordt pas gebouwd als je hem opent (zie Blad). Zo is het venster er meteen.
+            bladen = [klasse(self, uitgesteld=True) for klasse in g.paginas]
             if len(bladen) == 1:
                 self.voeg_pagina(bladen[0].sleutel, g.icoon, g.naam(), bladen[0])
                 continue
@@ -361,7 +388,6 @@ class Instellingen(Venster):
             self.groepen[g.sleutel] = groep
             for b in bladen:
                 self.paginas[b.sleutel] = b   # elke pagina blijft op zijn eigen sleutel te vinden
-        self.setStyleSheet(self.styleSheet() + tab_stijl())
         self.zoekveld.textChanged.connect(self.zoeken)
         # Klik je op het onderdeel dat al open is, dan kijkt de pagina opnieuw (B-07).
         self.nav.opnieuw_gekozen.connect(lambda _rij: self.ga_naar(self.huidige()))
@@ -373,6 +399,15 @@ class Instellingen(Venster):
         # Het eigen stijlblad van dit venster heeft de kleuren van toen het gemaakt werd: opnieuw maken bij een
         # wissel van licht/donker (A-03, B-10; bugos_ui.zet_thema roept dit aan).
         self.setStyleSheet(stijl() + tab_stijl())
+
+    def _kies(self, rij: int) -> None:
+        """Een onderdeel van de zijbalk opent: eerst de pagina bouwen (in een groep: die van het gekozen tabje), dan
+        pas in beeld."""
+        w = self.paginas.get(self.nav.sleutel(rij))
+        blad = w.stapel.currentWidget() if isinstance(w, GroepPagina) else w
+        if isinstance(blad, Blad):
+            blad.zorg_gebouwd()
+        super()._kies(rij)
 
     def open_blad(self):
         """De pagina die je nu ziet (in een groep: die van het gekozen tabje)."""
@@ -431,7 +466,9 @@ class Instellingen(Venster):
         # Nooit midden in een update of het teruggaan stoppen (dan stopt rpm-ostree ook): wacht tot het
         # klaar is en ga dan vanzelf dicht, zoals Bestanden doet bij het kopiëren.
         updates = self.paginas.get("updates")
-        if updates is not None and (getattr(updates, "bezig", False) or getattr(updates, "bezig_keuze", False)):
+        # (Nooit geopend: dan loopt er ook niets, en hoeft hij niet eerst gebouwd te worden.)
+        if updates is not None and updates.gebouwd and (getattr(updates, "bezig", False)
+                                                        or getattr(updates, "bezig_keuze", False)):
             self.sluit_na_update = True
             updates.melding.toon(t("Even wachten: de update is nog bezig. Daarna gaat Instellingen vanzelf dicht.",
                                    "One moment: the update is still busy. Settings closes by itself afterwards."),

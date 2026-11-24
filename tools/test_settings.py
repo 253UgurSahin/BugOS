@@ -519,6 +519,82 @@ klopt("Standaardgebruiker maken" in _menu22 and not any("ewone" in x for x in _m
       f"B-22: 'Standaardgebruiker maken', niet 'Gewone gebruiker maken' ({_menu22})")
 venster.hide()
 
+# P01: Instellingen opent meteen. Eerst bouwde het venster alle 18 pagina's, en vroegen een paar pagina's daarbij
+# (terwijl je wachtte) zeven scripts hoe iets stond (bugos-panel, bugos-updates, game-modus, ...): op een oudere laptop
+# seconden voor je een venster zag. Nu: geen enkel programma op de GUI-draad bij het openen, een pagina wordt pas
+# gebouwd als je hem opent, en hoe iets staat komt daarna op de achtergrond.
+import subprocess as _sp  # noqa: E402
+import threading as _th  # noqa: E402
+import time as _tijd  # noqa: E402
+
+_nep01 = Path(tempfile.mkdtemp(prefix="bugos-settings-p01-"))
+for _naam in ("bugos-panel", "bugos-updates", "bugos-game-mode", "bugos-developer", "bugos-light-mode", "hostname"):
+    (_nep01 / _naam).write_text('#!/bin/sh\nsleep 0.2\n[ "$(eval echo \\${$#})" = status ] && echo aan\nexit 0\n')
+    (_nep01 / _naam).chmod(0o755)
+_oud01 = (os.environ["PATH"], bi.VOORBEELD, _sp.Popen.__init__)
+_gui01: list = []
+
+
+def _popen01(self, args, *a, **k):
+    if _th.current_thread() is _th.main_thread():
+        _gui01.append(os.path.basename(str(args[0] if isinstance(args, (list, tuple)) else args)))
+    return _oud01[2](self, args, *a, **k)
+
+
+os.environ["PATH"] = f"{_nep01}:{_oud01[0]}"
+bi.VOORBEELD = False
+_sp.Popen.__init__ = _popen01
+try:
+    _begin01 = _tijd.perf_counter()
+    _v01 = mod.Instellingen("start")
+    _duur01 = _tijd.perf_counter() - _begin01
+    _ongebouwd = [k for k, p in _v01.paginas.items() if isinstance(p, mod.Blad) and not p.gebouwd]
+    klopt(not _gui01, f"P01: bij het openen draait er geen programma terwijl je wacht ({_gui01}, {_duur01:.2f} s)")
+    klopt(_v01.paginas["start"].gebouwd and len(_ongebouwd) == len(mod.PAGINAS) - 1,
+          f"P01: alleen Start is gebouwd; de rest pas als je hem opent ({len(_ongebouwd)} van {len(mod.PAGINAS)} nog niet)")
+    _v01.ga_naar("uiterlijk")
+    _ui01 = _v01.paginas["uiterlijk"]
+    _schakels01 = list(_ui01.schakels.values())
+    _op_slot01 = all(not s.isEnabled() for s in _schakels01)
+    for _ in range(50):
+        _klaar_werk()
+        if all(s.isEnabled() for s in _schakels01):
+            break
+        _tijd.sleep(0.05)
+    klopt(_ui01.gebouwd and not _gui01 and _op_slot01 and all(s.isEnabled() and s.isChecked() for s in _schakels01),
+          f"P01: Uiterlijk gebouwd bij het openen; de taakbalk-schakelaars op slot tot het antwoord er is, dan 'aan' "
+          f"({_gui01})")
+    _v01.ga_naar("updates")
+    _upd01 = _v01.paginas["updates"]
+    for _ in range(50):
+        _klaar_werk()
+        if _upd01.auto.isEnabled():
+            break
+        _tijd.sleep(0.05)
+    klopt(_upd01.auto.isEnabled() and _upd01.auto.isChecked() and not _gui01,
+          "P01: 'Updates vanzelf' leest zijn stand op de achtergrond")
+    _v01.ga_naar("over")
+    klopt(not _gui01 and any(k == "Naam van deze computer" for k, _w in _v01.paginas["over"].info),
+          f"P01: Over deze computer: de naam van de computer zonder een programma te starten ({_gui01})")
+    _v01.close()
+finally:
+    _sp.Popen.__init__ = _oud01[2]
+    os.environ["PATH"], bi.VOORBEELD = _oud01[0], _oud01[1]
+    _klaar_werk()
+    shutil.rmtree(_nep01, ignore_errors=True)
+from bugos_settings_onderdelen import tegelijk as _tegelijk  # noqa: E402
+
+_begin01 = _tijd.perf_counter()
+_uit01 = _tegelijk(lambda: (_tijd.sleep(0.3), 1)[1], lambda: (_tijd.sleep(0.3), 2)[1], lambda: 3)
+klopt(_uit01 == (1, 2, 3) and _tijd.perf_counter() - _begin01 < 0.55,
+      f"P01: tegelijk() doet het tegelijk en houdt de volgorde ({_uit01}, {_tijd.perf_counter() - _begin01:.2f} s)")
+try:
+    _tegelijk(lambda: 1, lambda: 1 / 0)
+    _fout01 = False
+except ZeroDivisionError:
+    _fout01 = True
+klopt(_fout01, "P01: gaat in tegelijk() één ding mis, dan het geheel (zoals eerst, na elkaar)")
+
 print()
 print("Alles goed." if not fouten else f"{fouten} fout(en).")
 sys.exit(1 if fouten else 0)

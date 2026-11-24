@@ -10,7 +10,7 @@ import bugos_ui
 from bugos_ui import (Chip, Groep, KeuzeKaart, Knop, Rij, Voortgang, label, leeg_groep, lijn_icoon, schermmaat, sectie,
                       t)
 from bugos_settings_onderdelen import (Blad, Doorloop, Keuzes, KiesDialoog, Kolommen, Regelaar, dichtstbij,
-                                       op_achtergrond, schuifje)
+                                       op_achtergrond, schuifje, tegelijk)
 from bugos_settings_systeem import Schakelaars
 from PySide6.QtCore import QProcess, QSize, Qt, QTimer
 from PySide6.QtGui import QPixmap
@@ -95,7 +95,10 @@ class GeluidPagina(Blad):
         self.mic_lijst = kaart_zonder_kop(self.lay)
 
     def ververs(self) -> None:
-        op_achtergrond(self, lambda: (*bi.geluid(), bi.microfoon()), self.toon)
+        def lees():
+            geluid, mic = tegelijk(bi.geluid, bi.microfoon)   # tegelijk, niet na elkaar (zie tegelijk)
+            return (*geluid, mic)
+        op_achtergrond(self, lees, self.toon)
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:
@@ -541,9 +544,10 @@ class SchermPagina(Blad):
 
     def ververs(self) -> None:
         def lees():
-            schermen = bi.beeldschermen()   # één keer kscreen-doctor (de grootte staat erin)
+            # één keer kscreen-doctor (de grootte staat erin); de rest tegelijk (zie tegelijk)
+            schermen, helder, nacht = tegelijk(bi.beeldschermen, bi.helderheid, bi.nachtlicht)
             hoofd = next((s for s in schermen or [] if s.hoofd), None)
-            return bi.helderheid(), bi.nachtlicht(), hoofd.schaal if hoofd else bi.schaal(), schermen
+            return helder, nacht, hoofd.schaal if hoofd else bi.schaal(), schermen
         op_achtergrond(self, lees, self.toon)
 
     def toon(self, uitkomst) -> None:
@@ -935,8 +939,9 @@ class EnergiePagina(Blad):
         g.voeg(self.deksel_rij)
 
     def ververs(self) -> None:
-        op_achtergrond(self, lambda: (bi.batterij(), bi.energieprofiel(), bi.scherm_uit_na(), bi.slaap_na(),
-                                      bi.aanuit_knop(), bi.deksel(), bi.tijden_profiel(), bi.batterij_tijd()), self.toon)
+        op_achtergrond(self, lambda: tegelijk(bi.batterij, bi.energieprofiel, bi.scherm_uit_na, bi.slaap_na,
+                                              bi.aanuit_knop, bi.deksel, bi.tijden_profiel, bi.batterij_tijd),
+                       self.toon)
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:

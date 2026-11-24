@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import bugos_config as bi
 from bugos_ui import Groep, Knop, Rij, sectie, t
-from bugos_settings_onderdelen import Blad, Doorloop, Regelaar, op_achtergrond, schuifje
+from bugos_settings_onderdelen import Blad, Doorloop, Regelaar, op_achtergrond, schuifje, tegelijk
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 
@@ -63,9 +63,10 @@ class ZienPagina(Blad):
         g3.voeg(self.lezer_rij)
 
     def ververs(self) -> None:
-        op_achtergrond(self, lambda: (bi.grote_tekst(), bi.grote_aanwijzer(), bi.schud_aanwijzer(),
-                                      bi.toetshulp("plaktoetsen"), bi.toetshulp("langzame_toetsen"),
-                                      bi.toetshulp("schermlezer"), bi.kan_schermlezer()), self.toon)
+        op_achtergrond(self, lambda: tegelijk(bi.grote_tekst, bi.grote_aanwijzer, bi.schud_aanwijzer,
+                                              lambda: bi.toetshulp("plaktoetsen"),
+                                              lambda: bi.toetshulp("langzame_toetsen"),
+                                              lambda: bi.toetshulp("schermlezer"), bi.kan_schermlezer), self.toon)
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:
@@ -109,7 +110,7 @@ class MuisPagina(Blad):
                      "Like in Windows. Off: one click opens a file or folder."), self.dubbel))
 
     def ververs(self) -> None:
-        op_achtergrond(self, lambda: (bi.aanwijzers(), bi.dubbelklik()), self.toon)
+        op_achtergrond(self, lambda: tegelijk(bi.aanwijzers, bi.dubbelklik), self.toon)
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:

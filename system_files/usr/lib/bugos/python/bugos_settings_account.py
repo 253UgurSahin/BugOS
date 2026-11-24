@@ -11,6 +11,7 @@ import bugos_config as bi
 from bugos_ui import TAAL, K, Knop, Rij, label, leeg_groep, ronde_pixmap, t, vraag_ja, vraag_tekst
 from bugos_settings_onderdelen import (
     Blad, Doorloop, Keuzes, KiesDialoog, WachtwoordDialoog, dichtstbij, meer_knop, op_achtergrond, schuifje,
+    tegelijk,
 )
 from PySide6.QtCore import QDate, QDateTime, QLocale, Qt, QTime, QTimer
 from PySide6.QtGui import QIcon, QImage, QPixmap
@@ -194,10 +195,12 @@ class TijdPagina(Blad):
         self.vul_toetsenborden(None, bi.Indeling("us"), False, {})
 
     def ververs(self) -> None:
-        op_achtergrond(self, lambda: (bi.tijd(), bi.taal()), self.toon)
+        op_achtergrond(self, lambda: tegelijk(bi.tijd, bi.taal), self.toon)
         # Wat er verder op de pagina staat in een tweede klusje: toon() blijft zoals het was (tests roepen het aan).
-        op_achtergrond(self, lambda: (bi.toetsenborden(), bi.systeem_toetsenbord(), bi.gebruiker().beheerder,
-                                      dict(bi.alle_toetsenborden()), bi.regio()), self.toon_rest)
+        # (Alles tegelijk, niet na elkaar: zie tegelijk.)
+        op_achtergrond(self, lambda: tegelijk(bi.toetsenborden, bi.systeem_toetsenbord,
+                                              lambda: bi.gebruiker().beheerder, lambda: dict(bi.alle_toetsenborden()),
+                                              bi.regio), self.toon_rest)
 
     def toon_rest(self, uitkomst) -> None:
         if not isinstance(uitkomst, tuple):   # niet te lezen: dan wat we weten, nooit eeuwig 'even kijken'
@@ -715,7 +718,7 @@ class InloggenPagina(Blad):
         self.g3.voeg(self.voeg_rij)
 
     def ververs(self) -> None:
-        op_achtergrond(self, lambda: (bi.gebruiker(), bi.slot_na(), bi.slot_na_slapen(), bi.mensen()), self.toon)
+        op_achtergrond(self, lambda: tegelijk(bi.gebruiker, bi.slot_na, bi.slot_na_slapen, bi.mensen), self.toon)
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:

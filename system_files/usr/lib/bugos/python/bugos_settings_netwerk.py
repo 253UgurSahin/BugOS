@@ -7,7 +7,7 @@ from pathlib import Path
 import bugos_config as bi
 from bugos_ui import (K, Banner, Groep, Knop, Rij, label, leeg_groep, lijn_icoon, schermmaat, schuifbaar,
                       sectie_met_knop, t, vraag_tekst)
-from bugos_settings_onderdelen import Blad, Doorloop, Keuzes, meer_knop, op_achtergrond, schuifje
+from bugos_settings_onderdelen import Blad, Doorloop, Keuzes, meer_knop, op_achtergrond, schuifje, tegelijk
 from PySide6.QtCore import ClassInfo, QEventLoop, QObject, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (QDialog, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QStackedWidget,
@@ -649,7 +649,8 @@ class WifiPagina(Blad):
 
     def ververs(self, opnieuw: bool = False) -> None:
         self.hoofd.zet_uitleg(t("Even zoeken…", "Searching…"))
-        op_achtergrond(self, lambda: (bi.wifi_aan(), bi.netwerken(opnieuw), bi.kabel(), bi.heeft_wifi()), self.toon)
+        op_achtergrond(self, lambda: tegelijk(bi.wifi_aan, lambda: bi.netwerken(opnieuw), bi.kabel, bi.heeft_wifi),
+                       self.toon)
 
     def showEvent(self, e) -> None:  # noqa: N802
         super().showEvent(e)
@@ -1682,8 +1683,8 @@ class BluetoothPagina(Blad):
         self.lijst = self.kaart()
 
     def ververs(self) -> None:
-        op_achtergrond(self, lambda: (bi.bt_aan(), bi.bt_apparaten(), bi.VOORBEELD or bi.bt_hardware(),
-                                      bi.bt_hard_uit()), self.toon)
+        op_achtergrond(self, lambda: tegelijk(bi.bt_aan, bi.bt_apparaten, lambda: bi.VOORBEELD or bi.bt_hardware(),
+                                              bi.bt_hard_uit), self.toon)
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:
