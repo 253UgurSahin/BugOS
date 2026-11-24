@@ -144,6 +144,7 @@ PlasmoidItem {
         onVastzetten: (id, aan) => root.voerUit("bugos-start-data " + (aan ? "--vastzetten " : "--losmaken ") + root.aanhalen(id))
         onTaakbalk: (id, aan) => root.voerUit("bugos-start-data --taakbalk " + (aan ? "vastmaken " : "losmaken ") + root.aanhalen(id))
         onVerwijderApp: flatpak => root.voerUit("bugos-start-data --verwijder " + root.aanhalen(flatpak))
+        onQuarantaine: pad => root.voerUit("bugos-start-data --quarantaine " + root.aanhalen(pad))
         onSluiten: root.expanded = false
         Connections {
             target: root

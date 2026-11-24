@@ -1,0 +1,360 @@
+#!/usr/bin/python3
+"""BugOS Quarantaine - een app proberen zonder dat hij bij je spullen kan.
+
+    bugos-quarantaine [opties] <wat> [argumenten voor de app...]
+    bugos-quarantaine --lijst            de bewaarde quarantaines
+    bugos-quarantaine --weg <naam>       een bewaarde quarantaine weggooien
+
+<wat>: een app uit het startmenu (.desktop), een Flatpak-id (org.mozilla.firefox), een Windows-programma (.exe of
+.msi), een AppImage, of een programma (naam of pad).
+
+Opties:
+    --internet        de app mag op internet (standaard niet)
+    --bewaar <naam>   een bewaarde quarantaine gebruiken (of maken) en na afloop bewaren
+    --terminal        zonder venster, in deze terminal (standaard als je het in een terminal typt)
+    --venster         met het BugOS-venster (standaard vanuit het startmenu en Bestanden)
+
+Zonder --bewaar gooit de terminal de quarantaine na afloop weg; het venster vraagt het je.
+Hoe de doos in elkaar zit: zie /usr/lib/bugos/python/bugos_quarantaine.py.
+"""
+
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/bugos/python")
+
+import bugos_quarantaine as q  # noqa: E402
+
+GEBRUIK = __doc__.split("Zonder --bewaar")[0]
+
+
+def taal() -> str:
+    for v in ("LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"):
+        w = os.environ.get(v, "")
+        if w and w not in ("C", "POSIX") and not w.startswith("C."):
+            return w.split(":")[0].split(".")[0].split("_")[0]
+    return "en"
+
+
+def tt(nl: str, en: str) -> str:
+    """Tekst zonder Qt (voor de terminal): bugos_base.t laadt geen Qt."""
+    from bugos_base import t
+    return t(nl, en)
+
+
+def lees_args(args: list[str]) -> tuple[dict, str, list[str]] | None:
+    opties = {"internet": False, "bewaar": "", "modus": ""}
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--internet":
+            opties["internet"] = True
+        elif a == "--bewaar" and i + 1 < len(args):
+            opties["bewaar"] = q.slug(args[i + 1])
+            i += 1
+        elif a in ("--terminal", "--venster"):
+            opties["modus"] = a[2:]
+        elif a == "--":
+            i += 1
+            break
+        elif a.startswith("--"):
+            return None
+        else:
+            break
+        i += 1
+    if i >= len(args):
+        return None
+    return opties, args[i], args[i + 1:]
+
+
+# ============================================================================================== terminal ===
+
+def in_terminal(opties: dict, doel: q.Doel) -> int:
+    """Voor ontwikkelaars: de app draait in deze terminal (je ziet zijn uitvoer), en daarna een samenvatting."""
+    map_ = q.nieuwe_map(doel, opties["bewaar"])
+    cmd, env = q.opdracht(doel, map_ / "home", opties["internet"], terminal=True)
+    print(tt(f"🔒 {doel.naam} in quarantaine (internet {'aan' if opties['internet'] else 'uit'}). Thuismap: {map_ / 'home'}",
+             f"🔒 {doel.naam} in quarantine (internet {'on' if opties['internet'] else 'off'}). Home: {map_ / 'home'}"),
+          file=sys.stderr)
+    try:
+        code = subprocess.call(cmd, env={**os.environ, **env})
+    except FileNotFoundError:
+        print(tt("bwrap (bubblewrap) ontbreekt.", "bwrap (bubblewrap) is missing."), file=sys.stderr)
+        code = 127
+    except KeyboardInterrupt:
+        code = 130
+    n, grootte = q.omvang(map_ / "home")
+    print(tt(f"🔒 Klaar (code {code}). De app schreef {n} bestanden ({q.maat_tekst(grootte)}).",
+             f"🔒 Done (code {code}). The app wrote {n} files ({q.maat_tekst(grootte)})."), file=sys.stderr)
+    if opties["bewaar"]:
+        print(tt(f"   Bewaard in {map_}", f"   Kept in {map_}"), file=sys.stderr)
+    else:
+        q.weggooien(map_)
+        print(tt("   Weggegooid. (Bewaren? Gebruik --bewaar <naam>.)", "   Thrown away. (Keep it? Use --bewaar <name>.)"),
+              file=sys.stderr)
+    return code
+
+
+# ================================================================================================ venster ===
+
+def venster_app(opties: dict, doel: q.Doel) -> int:
+    from bugos_ui import (Banner, Chip, Kaart, Knop, SchakelRij, label, maak_app, start, t, uitvoeren)
+    from PySide6.QtCore import QProcess, QProcessEnvironment, Qt, QTimer
+    from PySide6.QtWidgets import QApplication, QComboBox, QHBoxLayout, QVBoxLayout, QWidget
+
+    class Quarantaine(QWidget):
+        """Drie standen in één venster: kiezen (internet, nieuw of bewaard), draaien (Stoppen, Map bekijken) en
+        klaar (Weggooien, Bewaren, Bekijken)."""
+
+        def __init__(self):
+            super().__init__()
+            self.setWindowTitle(t(f"Quarantaine: {doel.naam}", f"Quarantine: {doel.naam}"))
+            self.resize(620, 460)
+            self.map: Path | None = None
+            self.proces: QProcess | None = None
+            self.gestopt_door_jou = False
+            lay = QVBoxLayout(self)
+            lay.setContentsMargins(32, 28, 32, 24)
+            lay.setSpacing(14)
+            kop_rij = QHBoxLayout()
+            self.kop = label(t(f"{doel.naam} in quarantaine", f"{doel.naam} in quarantine"), "titel")
+            kop_rij.addWidget(self.kop, 1)
+            self.chip = Chip(t("Quarantaine", "Quarantine"), "let_op")
+            kop_rij.addWidget(self.chip, 0, Qt.AlignmentFlag.AlignTop)
+            lay.addLayout(kop_rij)
+            self.uitleg = label(t("De app krijgt een eigen, lege thuismap en kan niet bij jouw bestanden. Alles wat hij "
+                                  "schrijft, komt in die map. Na afloop kies je: weggooien of bewaren.",
+                                  "The app gets its own, empty home folder and cannot reach your files. Everything it "
+                                  "writes goes into that folder. Afterwards you choose: throw it away or keep it."),
+                                "sub")
+            lay.addWidget(self.uitleg)
+
+            # --- kiezen
+            self.keuze = Kaart(marge=18, ruimte=12)
+            self.internet = SchakelRij(t("Internet toestaan", "Allow internet"),
+                                       t("Uit: de app kan nergens heen (veiliger voor een onbekend programma).",
+                                         "Off: the app cannot go anywhere (safer for an unknown program)."),
+                                       opties["internet"], "lijn:wereld")
+            self.keuze.lay.addWidget(self.internet)
+            self.welke = QComboBox()
+            self.welke.addItem(t("Nieuwe, lege quarantaine", "New, empty quarantine"), "")
+            for p in q.bewaarde(q.slug(doel.naam)):
+                self.welke.addItem(t(f"Verder met bewaard: {p.name}", f"Continue saved: {p.name}"), p.name)
+            if opties["bewaar"]:
+                i = self.welke.findData(opties["bewaar"])
+                if i < 0:
+                    self.welke.addItem(opties["bewaar"], opties["bewaar"])
+                    i = self.welke.count() - 1
+                self.welke.setCurrentIndex(i)
+            self.welke.setVisible(self.welke.count() > 1)
+            self.keuze.lay.addWidget(self.welke)
+            lay.addWidget(self.keuze)
+
+            # --- draaien en klaar
+            self.melding = Banner("", "info")
+            self.melding.hide()
+            lay.addWidget(self.melding)
+            lay.addStretch(1)
+
+            rij = QHBoxLayout()
+            rij.setSpacing(10)
+            self.links = Knop(t("Annuleren", "Cancel"), "stil")
+            self.links.clicked.connect(self.links_klik)
+            self.bekijk = Knop(t("Map bekijken", "View folder"), "rand", "lijn:map")
+            self.bekijk.clicked.connect(self.map_bekijken)
+            self.bekijk.hide()
+            self.tweede = Knop(t("Bewaren", "Keep"), "rand")
+            self.tweede.clicked.connect(self.bewaar)
+            self.tweede.hide()
+            self.hoofd = Knop(t("Starten", "Start"), "hoofd", groot=True)
+            self.hoofd.setMinimumWidth(160)
+            self.hoofd.clicked.connect(self.hoofd_klik)
+            self.hoofd.setDefault(True)
+            rij.addWidget(self.links)
+            rij.addStretch(1)
+            rij.addWidget(self.bekijk)
+            rij.addWidget(self.tweede)
+            rij.addWidget(self.hoofd)
+            lay.addLayout(rij)
+            self.stand = "kiezen"
+
+        # ------------------------------------------------------------------ knoppen per stand
+        def links_klik(self) -> None:
+            if self.stand == "draait":
+                self.stop()
+            else:
+                self.close()
+
+        def hoofd_klik(self) -> None:
+            if self.stand == "kiezen":
+                self.starten()
+            elif self.stand == "klaar":
+                self.weg_of_klaar()
+
+        # ------------------------------------------------------------------ starten
+        def starten(self) -> None:
+            bewaard = self.welke.currentData() or ""
+            try:
+                self.map = q.nieuwe_map(doel, bewaard)
+            except (OSError, ValueError) as e:
+                self.toon_fout(t(f"De quarantainemap kon niet gemaakt worden ({e}).",
+                                 f"The quarantine folder could not be made ({e})."))
+                return
+            self.bewaard = bool(bewaard)
+            internet = self.internet.schuif.isChecked()
+            cmd, env = q.opdracht(doel, self.map / "home", internet)
+            omgeving = QProcessEnvironment.systemEnvironment()
+            for k, v in env.items():
+                omgeving.insert(k, v)
+            self.proces = QProcess(self)
+            self.proces.setProcessEnvironment(omgeving)
+            # Wat de app zegt (stdout en stderr) in een logboek in de quarantainemap: handig om te zien wat er misging.
+            self.proces.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+            self.proces.setStandardOutputFile(str(self.map / "uitvoer.log"))
+            self.proces.finished.connect(self.klaar)
+            self.proces.errorOccurred.connect(self.fout_bij_starten)
+            self.proces.start(cmd[0], cmd[1:])
+            self.stand = "draait"
+            self.keuze.hide()
+            self.kop.setText(t(f"{doel.naam} draait in quarantaine", f"{doel.naam} is running in quarantine"))
+            self.uitleg.setText(t(f"Internet: {'aan' if internet else 'uit'}. Alles wat de app schrijft, komt in "
+                                  "zijn eigen map. Sluit de app als je klaar bent, of druk op Stoppen.",
+                                  f"Internet: {'on' if internet else 'off'}. Everything the app writes goes into its "
+                                  "own folder. Close the app when you are done, or press Stop."))
+            self.links.setText(t("Stoppen", "Stop"))
+            self.hoofd.hide()
+            self.bekijk.show()
+
+        def fout_bij_starten(self, fout) -> None:
+            if fout == QProcess.ProcessError.FailedToStart:
+                self.toon_fout(t("Starten lukte niet: bubblewrap (bwrap) of het programma ontbreekt.",
+                                 "Starting failed: bubblewrap (bwrap) or the program is missing."))
+                self.naar_klaar(-1)
+
+        def stop(self) -> None:
+            if self.proces is not None and self.proces.state() != QProcess.ProcessState.NotRunning:
+                self.gestopt_door_jou = True
+                self.proces.terminate()
+                QTimer.singleShot(3000, lambda: self.proces is not None and self.proces.kill())
+
+        # ------------------------------------------------------------------ klaar
+        def klaar(self, code: int, _status) -> None:
+            self.naar_klaar(code)
+
+        def naar_klaar(self, code: int) -> None:
+            if self.stand == "klaar":
+                return
+            self.stand = "klaar"
+            n, grootte = q.omvang(self.map / "home") if self.map else (0, 0)
+            self.kop.setText(t(f"{doel.naam} is gestopt", f"{doel.naam} has stopped"))
+            tekst = t(f"De app schreef {n} bestanden ({q.maat_tekst(grootte)}) in zijn quarantainemap.",
+                      f"The app wrote {n} files ({q.maat_tekst(grootte)}) into its quarantine folder.")
+            if code not in (0, -1) and not self.gestopt_door_jou:
+                tekst += " " + t(f"Hij stopte met code {code}; wat hij zei, staat in uitvoer.log in de map.",
+                                 f"It stopped with code {code}; what it said is in uitvoer.log in the folder.")
+            self.uitleg.setText(tekst)
+            self.chip.setText(t("Gestopt", "Stopped"))
+            self.chip.soort = "grijs"
+            self.chip.thema_veranderd()
+            self.links.hide()
+            self.bekijk.setVisible(self.map is not None)
+            if getattr(self, "bewaard", False):
+                self.tweede.setText(t("Weggooien", "Throw away"))
+                self.tweede.show()
+                self.hoofd.setText(t("Klaar", "Done"))
+            else:
+                self.tweede.setText(t("Bewaren", "Keep"))
+                self.tweede.setVisible(self.map is not None)
+                self.hoofd.setText(t("Weggooien", "Throw away"))
+            self.hoofd.show()
+            self.hoofd.setFocus()
+            self.raise_()
+            self.activateWindow()
+
+        def weg_of_klaar(self) -> None:
+            if not getattr(self, "bewaard", False) and self.map is not None:
+                q.weggooien(self.map)
+                self.map = None
+            self.close()
+
+        def bewaar(self) -> None:
+            if self.map is None:
+                return
+            if getattr(self, "bewaard", False):   # de tweede knop is dan 'Weggooien'
+                q.weggooien(self.map)
+                self.map = None
+                self.close()
+                return
+            nieuw = q.bewaren(self.map, doel.naam)
+            self.map = None
+            self.melding.zet(t(f"Bewaard als '{nieuw.name}'. Start de app later opnieuw in quarantaine en kies "
+                               "'Verder met bewaard'.",
+                               f"Kept as '{nieuw.name}'. Start the app in quarantine again later and choose "
+                               "'Continue saved'."), "goed")
+            self.melding.show()
+            self.tweede.hide()
+            self.bekijk.hide()
+            self.hoofd.setText(t("Klaar", "Done"))
+            self.bewaard = True
+
+        def map_bekijken(self) -> None:
+            if self.map is not None:
+                # De hele map: home/ (wat de app schreef) en uitvoer.log (wat hij zei).
+                start("bugos-files", str(self.map))
+
+        def toon_fout(self, tekst: str) -> None:
+            self.melding.zet(tekst, "fout")
+            self.melding.show()
+
+        def closeEvent(self, e) -> None:  # noqa: N802
+            # Dicht terwijl de app nog draait: eerst de app stoppen (die mag niet los doorlopen).
+            if self.stand == "draait":
+                self.stop()
+                e.ignore()
+                return
+            # Dicht na afloop zonder te kiezen: een tijdelijke quarantaine gaat weg (zoals beloofd: niets blijft).
+            if self.stand == "klaar" and not getattr(self, "bewaard", False) and self.map is not None:
+                q.weggooien(self.map)
+                self.map = None
+            super().closeEvent(e)
+
+    app = QApplication.instance() or maak_app("bugos-quarantaine", "bugos-quarantaine", sys.argv)
+    return uitvoeren(app, Quarantaine())
+
+
+def main(args: list[str]) -> int:
+    if args[:1] in (["-h"], ["--help"]):
+        print(GEBRUIK)
+        return 0
+    if args == ["--lijst"]:
+        for p in q.bewaarde():
+            n, grootte = q.omvang(p / "home")
+            print(f"{p.name}\t{n} {tt('bestanden', 'files')}\t{q.maat_tekst(grootte)}\t{p}")
+        return 0
+    if len(args) == 2 and args[0] == "--weg":
+        pad = q.bewaar_map() / q.slug(args[1])
+        if not pad.is_dir():
+            print(tt("Die bewaarde quarantaine bestaat niet.", "That saved quarantine does not exist."), file=sys.stderr)
+            return 1
+        q.weggooien(pad)
+        return 0
+    gelezen = lees_args(args)
+    if gelezen is None:
+        print(GEBRUIK, file=sys.stderr)
+        return 2
+    opties, wat, rest = gelezen
+    doel = q.bepaal_doel(wat, rest, taal())
+    if doel is None:
+        print(tt(f"Dit kan ik niet in quarantaine starten: {wat}", f"I cannot start this in quarantine: {wat}"),
+              file=sys.stderr)
+        return 2
+    modus = opties["modus"] or ("terminal" if sys.stdin.isatty() and sys.stdout.isatty() else "venster")
+    if modus == "terminal":
+        return in_terminal(opties, doel)
+    return venster_app(opties, doel)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

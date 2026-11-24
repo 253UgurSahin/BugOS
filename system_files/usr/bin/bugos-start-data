@@ -15,6 +15,7 @@ Het startmenu op de taakbalk (QML) roept dit aan en krijgt JSON terug.
   bugos-start-data --losmaken <id>         -> app losmaken van Start (idem)
   bugos-start-data --taakbalk vastmaken|losmaken <id>  -> app op de taakbalk zetten of eraf halen (idem)
   bugos-start-data --verwijder <flatpak-id>  -> de Winkel openen op die app, om hem te verwijderen
+  bugos-start-data --quarantaine <pad>   -> de app (.desktop) openen in quarantaine (bugos-quarantaine)
 """
 
 import configparser
@@ -202,7 +203,19 @@ def lees_desktop(pad: Path) -> dict | None:
         "acties": desktop_acties(cp, d),
         # Het Flatpak-id ('org.mozilla.firefox') als je de app kunt verwijderen, anders leeg.
         "verwijder": flatpak if APP_ID_VORM.match(flatpak) else "",
+        # 'Openen in quarantaine' (bugos-quarantaine): voor elke app, behalve de onderdelen van BugOS zelf.
+        "quarantaine": not pad.name.startswith("bugos-") and quarantaine_kan(),
     }
+
+
+_QUARANTAINE: list[bool] = []
+
+
+def quarantaine_kan() -> bool:
+    """Is bugos-quarantaine er? Eén keer kijken, niet per app."""
+    if not _QUARANTAINE:
+        _QUARANTAINE.append(bool(shutil.which("bugos-quarantaine")))
+    return _QUARANTAINE[0]
 
 
 # Een Flatpak-id zoals de Winkel die kent (org.mozilla.firefox): letters, cijfers, _ en -, met punten ertussen.
@@ -979,6 +992,12 @@ def main(args: list[str]) -> int:
     if len(args) == 3 and args[0] == "--actie":
         # Een eigen actie van de app ('new-private-window'): de opdracht komt uit het .desktop-bestand zelf.
         return 0 if start_actie(args[1], args[2]) else 1
+    if len(args) == 2 and args[0] == "--quarantaine":
+        # 'Openen in quarantaine': alleen een echt .desktop-bestand, en altijd met het venster.
+        if args[1].endswith(".desktop") and os.path.isfile(args[1]):
+            los_starten("bugos-quarantaine", "--venster", args[1])
+            return 0
+        return 1
     if len(args) == 2 and args[0] == "--verwijder":
         verwijder(args[1])
         return 0

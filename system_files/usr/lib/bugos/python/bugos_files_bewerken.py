@@ -31,6 +31,31 @@ from PySide6.QtWidgets import QApplication, QMenu
 # toegestaan in deze context", ook al is bugos-exe.desktop de standaard-app voor .exe. bugos-exe en bugos-package
 # voeren zelf niets blind uit: ze vragen eerst (Winkel-versie, doosje, Wine) en leggen uit als het niet lukt.
 # Op de extensie (hoofdletters tellen niet), want zo herkent ook de gebruiker een installatiebestand.
+# Wat je met de rechtermuisknop 'Openen in quarantaine' kunt (bugos-quarantaine).
+QUARANTAINE_SOORTEN = (".exe", ".msi", ".appimage", ".desktop")
+
+
+def in_quarantaine_kan(pad: Path) -> bool:
+    """Een programma dat je in quarantaine kunt proberen: een Windows-programma, een AppImage, een starter (.desktop)
+    of een uitvoerbaar bestand. Geen mappen en geen gewone documenten."""
+    import os
+    import shutil
+    if not shutil.which("bugos-quarantaine") or not pad.is_file():
+        return False
+    if pad.suffix.lower() in QUARANTAINE_SOORTEN:
+        return True
+    # Uitvoerbaar is niet genoeg: op een USB-stick (FAT, exFAT) is elk bestand 'uitvoerbaar'. Alleen een echt
+    # programma (ELF) of een script (#!).
+    if not os.access(pad, os.X_OK):
+        return False
+    try:
+        with open(pad, "rb") as f:
+            begin = f.read(4)
+    except OSError:
+        return False
+    return begin == b"\x7fELF" or begin[:2] == b"#!"
+
+
 EIGEN_OPENER = {".exe": "bugos-exe", ".msi": "bugos-exe", ".deb": "bugos-package", ".rpm": "bugos-package"}
 # Hun .desktop-bestanden zijn NoDisplay (niet in het startmenu), maar horen wel in 'Openen met' (D-01).
 EIGEN_APPS = {"bugos-exe.desktop", "bugos-package.desktop"}
@@ -142,6 +167,11 @@ class Bewerken:
                 if not apps:
                     geen = sub.addAction(t("Geen andere app gevonden", "No other app found"))
                     geen.setEnabled(False)
+                # Een programma (Windows-programma, AppImage, starter of uitvoerbaar bestand) eerst veilig proberen:
+                # in quarantaine kan het niet bij je bestanden (bugos-quarantaine).
+                if in_quarantaine_kan(gekozen[0]):
+                    actie("slot", t("Openen in quarantaine", "Open in quarantine"),
+                          lambda p=gekozen[0]: start("bugos-quarantaine", "--venster", str(p)))
             m.addSeparator()
             actie("schaar", t("Knippen", "Cut"), self.knip)
             actie("kopieer", t("Kopiëren", "Copy"), self.kopieer)
