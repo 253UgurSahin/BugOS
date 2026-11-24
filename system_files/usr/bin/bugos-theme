@@ -53,10 +53,12 @@ stijl_zet() {
     "" | kvantum | kvantum-dark) ;;
     *) return 0 ;;   # iemand koos zelf een andere stijl (bijv. Breeze of Oxygen): laten staan
     esac
-    if [ "$nu" != "$nieuw" ]; then
-        kwriteconfig6 --file kdeglobals --group KDE --key widgetStyle --notify "$nieuw" 2>/dev/null ||
-            kwriteconfig6 --file kdeglobals --group KDE --key widgetStyle "$nieuw"
-    fi
+    # Zelfde naam: niets te doen, en ook niets te melden. StyleChanged laat ELK open KDE-programma (en plasmashell)
+    # zijn stijl opnieuw opbouwen; bij dezelfde naam doet dat niets zichtbaars (zie hierboven), maar het kost op een
+    # oudere laptop wel seconden processortijd, net terwijl alles van kleur wisselt (bijv. nog eens op Donker klikken).
+    [ "$nu" != "$nieuw" ] || return 0
+    kwriteconfig6 --file kdeglobals --group KDE --key widgetStyle --notify "$nieuw" 2>/dev/null ||
+        kwriteconfig6 --file kdeglobals --group KDE --key widgetStyle "$nieuw"
     [ "${2:-}" = melden ] || return 0
     # Hetzelfde signaal dat KDE's eigen Instellingen sturen na een andere stijl: KGlobalSettings.notifyChange
     # met 2 (StyleChanged). Elk open KDE-programma leest dan widgetStyle opnieuw. gdbus zit in glib2 (altijd
@@ -187,6 +189,7 @@ windows_kleuren() {
         return 0
     fi
     (
+        exec 7>&- 9>&-   # de sloten van licht/donker niet vasthouden zolang Wine (en wineserver) loopt
         # Eén tegelijk: snel licht-donker-licht, dan wint de laatste (U148).
         exec 8>"$prefix/.bugos-kleuren.slot"
         flock -w 120 8 2>/dev/null || exit 0
@@ -199,44 +202,78 @@ windows_kleuren() {
     disown 2>/dev/null || true
 }
 
-case "${1:-status}" in
-licht | donker)
-    if [ "$1" = donker ]; then
-        schema=BugOSDark kv=BugOSDark
-    else
-        schema=BugOSLight kv=BugOS
+# ---- Snel licht-donker-licht: de laatste keuze wint -------------------------------------------------------------
+# Welkom, het snelmenu en Instellingen starten bugos-theme los, dus bij snel klikken lopen er meerdere tegelijk. Zonder
+# volgorde kon een oudere (tragere) keuze als laatste klaar zijn: dan stond het systeem op donker terwijl je als
+# laatste licht koos, en kreeg elk open programma twee of drie keer alle kleuren en stijlen te verwerken.
+#   - Elke keuze schrijft meteen een eigen kenmerk in thema-keuze (de nieuwste keuze staat daar altijd).
+#   - Het eigenlijke omzetten gebeurt één tegelijk (thema.slot). Wie het slot krijgt en niet meer de nieuwste is,
+#     stopt meteen: de nieuwere doet het.
+#   - Het trage deel (Terminal, Windows-programma's) daarna los op de achtergrond, ook alleen voor de nieuwste.
+KEUZE="$BUGOS_CONFIG/thema-keuze"
+SLOT="$BUGOS_CONFIG/thema.slot"
+MIJN_KEUZE=""
+
+keuze_onthouden() {
+    MIJN_KEUZE="${EPOCHREALTIME:-$(date +%s.%N)} $$ $1"
+    mkdir -p "$BUGOS_CONFIG" 2>/dev/null
+    # Eerst een eigen bestand, dan verplaatsen: wie leest, ziet nooit een half geschreven regel.
+    if ! { printf '%s\n' "$MIJN_KEUZE" >"$KEUZE.$$" && mv -f "$KEUZE.$$" "$KEUZE"; } 2>/dev/null; then
+        rm -f "$KEUZE.$$" 2>/dev/null
+        MIJN_KEUZE=""   # kon niet schrijven (bijv. een volle schijf): dan gewoon omzetten, zonder volgorde
     fi
-    plasma-apply-colorscheme "$schema" >/dev/null 2>&1
-    kvantum_zet "$kv"
-    # Ook de KDE-programma's die al open zijn (wachtwoordvraag, bureaubladmenu, klok-instellingen): zie stijl_zet.
-    stijl_zet "$1" melden
-    terminal_zet "$1"
-    # De Plasma-stijl "bugos" volgt het kleurenschema; zet hem alleen terug als er
-    # nog een Breeze-stijl van vroeger stond (BugOS zette toen default/breeze-dark).
-    stijl="$(kreadconfig6 --file plasmarc --group Theme --key name 2>/dev/null)"
-    case "$stijl" in
-    "" | default | breeze-dark | breeze-light) plasma-apply-desktoptheme bugos >/dev/null 2>&1 ;;
-    esac
-    windows_kleuren "$1"
-    # Zeg eerlijk of het lukte: Instellingen toont dan 'Dat lukte niet' in plaats van 'Klaar' (U342).
-    [ "$(huidig)" = "$1" ] || exit 1
-    ;;
-status)
-    huidig
-    ;;
-inloggen)
-    oude_namen
-    gtk_laag
-    flatpak_toegang
-    terminal_zet "$(huidig)"
-    # Wie al donker had met de oude naam "kvantum": nu "kvantum-dark", anders verandert de naam bij de volgende
-    # wissel naar licht niet en blijven open programma's donker (A-01). Zelf gekozen stijlen blijven staan.
-    stijl_zet "$(huidig)"
-    exec "$0" eerste-keer
-    ;;
-eerste-keer)
+}
+
+nog_de_nieuwste() {
+    local nieuwste=""
+    [ -n "$MIJN_KEUZE" ] || return 0
+    read -r nieuwste 2>/dev/null <"$KEUZE" || return 0
+    [ "$nieuwste" = "$MIJN_KEUZE" ]
+}
+
+# Het slot (fd 9) pakken. Wacht op een keuze die nog bezig is, maar kijkt intussen of er een nieuwere keuze kwam: dan
+# stopt deze meteen (geeft 1), nog vóór de nieuwere klaar is. Zo is de nieuwste altijd als laatste klaar, ook voor
+# Instellingen, dat na 'gelukt' zijn eigen kleuren zet. Na 20 s (een vorige hangt) of zonder flock toch door: liever
+# omzetten dan niets doen.
+slot_pakken() {
+    local i
+    mkdir -p "$BUGOS_CONFIG" 2>/dev/null
+    { exec 9>"$SLOT"; } 2>/dev/null || return 0
+    command -v flock >/dev/null 2>&1 || return 0
+    for ((i = 0; i < 400; i++)); do
+        flock -n 9 2>/dev/null && return 0
+        nog_de_nieuwste || return 1
+        sleep 0.05
+    done
+    return 0
+}
+
+# Na het zichtbare omzetten, los op de achtergrond: wat je pas ziet in een nieuw venster (de Terminal) of een
+# Windows-programma. Even wachten en met lage voorrang: op een oudere laptop vochten Wine en Konsole anders om de
+# processor met plasmashell en de open programma's die net van kleur wisselen. Klik je intussen weer, dan doet alleen
+# de nieuwste keuze dit (één keer Wine, niet drie keer).
+achteraf() {
+    (
+        exec 9>&-   # het slot van het omzetten niet vasthouden: een nieuwe keuze moet meteen kunnen
+        renice -n 10 -p "$BASHPID" >/dev/null 2>&1
+        ionice -c 3 -p "$BASHPID" >/dev/null 2>&1
+        sleep "${BUGOS_THEMA_ACHTERAF:-1}"
+        nog_de_nieuwste || exit 0
+        { exec 7>"$BUGOS_CONFIG/thema-achteraf.slot"; } 2>/dev/null && { flock -w 60 7 2>/dev/null || exit 0; }
+        nog_de_nieuwste || exit 0
+        terminal_zet "$1"
+        exec 7>&-
+        windows_kleuren "$1"
+    ) </dev/null >/dev/null 2>&1 &
+    # Instellingen wacht tot bugos-theme klaar is (en leest zijn uitvoer): daarom alles naar /dev/null, dan wacht het
+    # niet op dit achtergrond-deel.
+    disown 2>/dev/null || true
+}
+
+eerste_keer() {
+    local gelukt stijl nieuw_stijl iconen plasma
     MARKER="$BUGOS_CONFIG/thema-1"
-    [ -f "$MARKER" ] && exit 0
+    [ -f "$MARKER" ] && return 0
     gelukt=1  # merkteken alleen als alles lukte; anders bij de volgende keer inloggen opnieuw
     geen_accent
     # Kvantum: zonder eigen instelling kiest hij zijn eigen standaard (niet BugOS).
@@ -263,6 +300,62 @@ eerste-keer)
     if [ "$gelukt" = 1 ]; then
         mkdir -p "$BUGOS_CONFIG" && touch "$MARKER"
     fi
+}
+
+case "${1:-status}" in
+licht | donker)
+    # Eerst onthouden dat dit de nieuwste keuze is, pas dan op een vorige wachten (zie keuze_onthouden).
+    keuze_onthouden "$1"
+    # Intussen alweer omgezet: die nieuwere keuze zet het om (en zegt of dat lukte). Voor deze is er niets mis.
+    slot_pakken || exit 0
+    nog_de_nieuwste || exit 0
+    if [ "$1" = donker ]; then
+        schema=BugOSDark kv=BugOSDark
+    else
+        schema=BugOSLight kv=BugOS
+    fi
+    # Wat je ziet eerst, en niets anders ertussen (9>&-: wat we starten, houdt het slot niet vast).
+    # 1. Het kleurenschema. Hierop wisselen de taakbalk en het startmenu, alle open KDE-programma's, de BugOS-apps
+    #    (die kijken naar kdeglobals) en GTK-programma's (KDE schrijft hun kleuren zelf). Tegelijk de Kvantum-
+    #    instelling: een ander bestand, dat pas bij stap 2 gelezen wordt.
+    kvantum_zet "$kv" 9>&- &
+    plasma-apply-colorscheme "$schema" 9>&- >/dev/null 2>&1
+    wait
+    # 2. De knoppen en velden (Kvantum) van KDE-programma's die al open zijn (wachtwoordvraag, bureaubladmenu,
+    #    klok-instellingen): zie stijl_zet.
+    stijl_zet "$1" melden 9>&-
+    # 3. De Plasma-stijl "bugos" volgt het kleurenschema; zet hem alleen terug als er
+    #    nog een Breeze-stijl van vroeger stond (BugOS zette toen default/breeze-dark).
+    stijl="$(kreadconfig6 --file plasmarc --group Theme --key name 2>/dev/null)"
+    case "$stijl" in
+    "" | default | breeze-dark | breeze-light) plasma-apply-desktoptheme bugos 9>&- >/dev/null 2>&1 ;;
+    esac
+    # Zeg eerlijk of het lukte: Instellingen toont dan 'Dat lukte niet' in plaats van 'Klaar' (U342).
+    [ "$(huidig)" = "$1" ] || exit 1
+    # Daarna, los: de Terminal en de Windows-programma's (zie achteraf).
+    achteraf "$1"
+    ;;
+status)
+    huidig
+    ;;
+inloggen)
+    # Eerst wat traag kan zijn en kdeglobals niet raakt (bestanden kopiëren, flatpak), buiten het slot: een keuze in
+    # Welkom die nu al komt, hoeft daar niet op te wachten.
+    gtk_laag
+    flatpak_toegang
+    # Dan wat kdeglobals leest en schrijft, één tegelijk met licht/donker: anders kon dit een keuze die net in Welkom
+    # gemaakt werd, terugzetten (oude stijl bij nieuwe kleuren).
+    slot_pakken
+    oude_namen
+    terminal_zet "$(huidig)"
+    # Wie al donker had met de oude naam "kvantum": nu "kvantum-dark", anders verandert de naam bij de volgende
+    # wissel naar licht niet en blijven open programma's donker (A-01). Zelf gekozen stijlen blijven staan.
+    stijl_zet "$(huidig)"
+    eerste_keer
+    ;;
+eerste-keer)
+    slot_pakken
+    eerste_keer
     ;;
 *)
     echo "Gebruik: bugos-theme licht|donker|status|inloggen|eerste-keer" >&2

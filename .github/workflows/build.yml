@@ -99,6 +99,8 @@ jobs:
         run: bash tools/test_game_mode.sh
       - name: Lichte stand testen (uit zet je eigen instellingen terug; met nep-programma's)
         run: bash tools/test_light_mode.sh
+      - name: Licht/donker testen (snel zichtbaar, laatste keuze wint; met nep-programma's)
+        run: bash tools/test_theme.sh
       - name: Taakbalk instellen testen (lukt het niet, dan volgende keer opnieuw; met nep-programma's)
         run: bash tools/test_panel.sh
       - name: Windows-programma openen testen (rare namen, mislukte Wine-start; met nep-programma's)

@@ -17,11 +17,19 @@
 
 set -u
 command -v flatpak >/dev/null 2>&1 || exit 0
+# Nooit haast: lage voorrang voor de processor en de schijf, ook als Winkel of bugos-browser dit starten (de diensten
+# doen dat zelf al). Op een oudere laptop maakte het installeren anders alles traag, ook licht/donker in Welkom.
+renice -n 10 -p $$ >/dev/null 2>&1
+ionice -c 3 -p $$ >/dev/null 2>&1
 flatpak remotes --system --columns=name 2>/dev/null | grep -qx flathub || exit 0
 
 WIL=()
 GTK=0
+# Wat er al staat, uit dezelfde lijst (de stijl-stukjes zijn zelf ook runtimes): geen 'flatpak info' per stuk.
+# Elke flatpak-opdracht kost even (op de eerste dag, met een koude schijf, al gauw een seconde).
+declare -A ER=()
 while read -r id tak; do
+    [ -n "$id" ] && ER["$id//$tak"]=1
     case "$id" in
     org.kde.Platform) WIL+=("org.kde.KStyle.Kvantum//$tak") ;;
     org.gnome.Platform) GTK=1 ;;
@@ -36,7 +44,7 @@ done < <(flatpak list --system --runtime --columns=application,branch 2>/dev/nul
 [ "$GTK" = 1 ] && WIL+=("org.gtk.Gtk3theme.Breeze//3.22")
 
 for ref in "${WIL[@]}"; do
-    flatpak info --system "$ref" >/dev/null 2>&1 && continue
+    [ -n "${ER[$ref]:-}" ] && continue
     flatpak install --system --noninteractive --assumeyes flathub "$ref" >/dev/null 2>&1 ||
         echo "BugOS: stijl $ref is (nog) niet te krijgen; de app gebruikt dan de standaardstijl." >&2
 done
