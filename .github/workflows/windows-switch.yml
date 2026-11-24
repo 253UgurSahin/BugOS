@@ -62,6 +62,9 @@ jobs:
           try { $printers = @(Get-NetwerkPrinters); "Netwerkprinters: $($printers.Count)" } catch { "Printers niet te lezen (printerdienst uit?): $($_.Exception.Message)" }
           $programmas = @(Get-Programmas); "Programma's: $($programmas.Count)"; $programmas | Select-Object -First 5 | ForEach-Object { "  $($_.naam) ($($_.versie))" }
           "Browserprofielen: $(@(Get-ChromiumProfielen).Count) Chromium, $(@(Get-FirefoxProfielen).Count) Firefox"
+          # GitHub sluit deze stap af met 'exit $LASTEXITCODE'. Op een runner zonder wifi laat netsh (Get-WifiNetwerken)
+          # code 1 achter, ook al ging alles goed (de lijst is dan gewoon leeg). Fouten hierboven stoppen de stap zelf al.
+          $global:LASTEXITCODE = 0
 
       - name: Venster nakijken (plaatjes van elke pagina, 100% en 150%)
         shell: powershell
