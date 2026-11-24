@@ -22,10 +22,14 @@ onderdeel dat mislukt, mag de rest niet tegenhouden. Met BUGOS_INSTELLINGEN_VOOR
 
 from __future__ import annotations
 
+import codecs
 import getpass
 import json
 import os
 import re
+import subprocess
+import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -62,60 +66,330 @@ def mapnaam(win: str) -> str:
 
 # =============================================================== de stick ===
 
-def _op_schijf(schijf: Path) -> list[Path]:
-    """De overstap-map op één schijf: BugOS-Switch, of anders BugOS-Overstap van de oude versie.
-    Staan ze er allebei (beide versies gebruikt), dan alleen de nieuwe: anders staat de stick er twee keer."""
-    for naam, bestand in MAPPEN:
+def _naam_in(map_: Path, naam: str, is_map: bool) -> Path | None:
+    """map_/naam, of anders dezelfde naam met andere hoofdletters ('bugos-switch', 'BUGOS-SWITCH.JSON'). Windows let
+    niet op hoofdletters, Linux op NTFS en ext4 wel: een map die iemand zelf hernoemde of kopieerde, vinden we zo
+    toch. None als hij er niet is."""
+    pad = map_ / naam
+    if pad.is_dir() if is_map else pad.is_file():
+        return pad
+    klein = naam.casefold()
+    try:
+        for kind in map_.iterdir():
+            if kind.name.casefold() == klein and (kind.is_dir() if is_map else kind.is_file()):
+                return kind
+    except OSError:
+        pass
+    return None
+
+
+def infobestand(map_: Path) -> Path | None:
+    """bugos-switch.json (of het oude bugos-overstap.json) in de map op de stick, ook met andere hoofdletters."""
+    for _naam, bestand in MAPPEN:
         try:
-            if (schijf / naam / bestand).is_file():
-                return [schijf / naam]
+            pad = _naam_in(map_, bestand, is_map=False)
         except OSError:   # een stick die net uitgetrokken wordt
             continue
-    return []
+        if pad is not None:
+            return pad
+    return None
+
+
+def _op_schijf(schijf: Path) -> list[Path]:
+    """De overstap-map op één schijf: BugOS-Switch, of anders BugOS-Overstap van de oude versie.
+    Staan ze er allebei (beide versies gebruikt), dan alleen de nieuwe: anders staat de stick er twee keer.
+
+    Zonder infobestand telt de map ook, als er een van de zes mappen (Documents ...) in staat. Windows schrijft
+    bugos-switch.json als allerlaatste: haalde iemand de stick er te vroeg uit (of zonder 'Veilig verwijderen', met
+    de schrijfcache van Windows aan), dan ontbreekt juist dat bestand, en zag BugOS de hele stick niet. Dan doen we
+    wat er als map op staat, zoals bij versie 1 (info() geeft dan {})."""
+    zonder_info: list[Path] = []
+    for naam, bestand in MAPPEN:
+        try:
+            map_ = _naam_in(schijf, naam, is_map=True)
+            if map_ is None:
+                continue
+            if _naam_in(map_, bestand, is_map=False) is not None:
+                return [map_]
+            if not zonder_info and any((map_ / w).is_dir() for w in KOPPELING):
+                zonder_info.append(map_)
+        except OSError:   # een stick die net uitgetrokken wordt
+            continue
+    return zonder_info
+
+
+# ------------------------------------------------------------- de stick openzetten ---
+# KDE zet een USB-schijf niet vanzelf open (automount staat uit, U139). Zolang hij dicht is, staat hij niet in
+# /run/media en ziet Overstap hem niet. bugos_drives.losse_openen probeert het openen één keer per schijf (U164:
+# een stick die je zelf dichtzette, gaat niet steeds weer open). Voor Overstap was één keer te weinig: lukte die
+# ene keer niet, dan bleef de stick dicht tot je hem eruit haalde, en bleef het venster 'Steek de USB-schijf in…'
+# zeggen. En dat gebeurt echt:
+#   - net ingestoken: lsblk ziet de schijf al, udisks nog niet ('Error looking up object for device'), zeker bij een
+#     USB-harde schijf (udisks vraagt die eerst uit);
+#   - NTFS (zo komen USB-harde schijven uit de winkel) die Windows niet netjes afsloot (eruit getrokken zonder
+#     'Veilig verwijderen', of na Snel opstarten): de kernel weigert hem dan om te schrijven, lezen mag wel. Overstap
+#     leest alleen van de stick, dus dan alleen-lezen (-o ro).
+# Daarom hier: een paar keer opnieuw, met steeds wat langer ertussen (OPEN_WACHT), daarna niet meer. Nooit met een
+# wachtwoordvraag (--no-user-interaction): een losse schijf openen mag wie aan de computer zit (udisks:
+# filesystem-mount, allow_active). Wat er misgaat, zegt stick_melding() in het venster.
+
+OPEN_WACHT: tuple[float, ...] = (1.0, 2.0, 4.0, 8.0)   # seconden tussen de pogingen: 5 pogingen in ~15 seconden
+LOSSE_SOORTEN = ("stick", "extern", "kaart")
+
+
+@dataclass
+class _Poging:
+    aantal: int = 0             # hoe vaak we het probeerden
+    volgende: float = 0.0       # niet voor deze tijd (time.monotonic) opnieuw
+    open_gezien: bool = False   # stond open (door ons of iemand anders): daarna nooit meer zelf openzetten (U164)
+    geweigerd: bool = False     # udisks zegt 'mag niet': opnieuw proberen helpt dan niet
+    alleen_lezen: bool = False  # alleen-lezen opengezet (een NTFS die Windows niet netjes afsloot)
+    fout: str = ""              # wat udisksctl de laatste keer zei
+
+
+_pogingen: dict[str, _Poging] = {}   # per apparaat (/dev/sdb1)
+_losse: list = []                    # de losse schijven van de laatste keer kijken (bugos_drives.Schijf)
+_slot = threading.Lock()
+_draad: list = []                    # niet leeg: het openzetten loopt op de achtergrond
+
+
+def _udisks_open(apparaat: str, alleen_lezen: bool = False) -> tuple[int, str]:
+    cmd = ["udisksctl", "mount", "-b", apparaat] + (["-o", "ro"] if alleen_lezen else []) + ["--no-user-interaction"]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)
+        return r.returncode, (r.stdout or "") + (r.stderr or "")
+    except (OSError, subprocess.SubprocessError) as e:
+        return 127, str(e)
+
+
+def _open_een(apparaat: str, p: _Poging) -> bool:
+    """Eén poging om een losse schijf open te zetten. True als hij nu open staat."""
+    code, uit = _udisks_open(apparaat)
+    if code == 0:
+        return True
+    tekst = uit.lower()
+    if "alreadymounted" in tekst or "already mounted" in tekst:
+        return True          # iemand anders (Welkom, Bestanden) was net eerder
+    if "notauthorized" in tekst or "not authorized" in tekst:
+        p.geweigerd, p.fout = True, uit.strip()
+        return False
+    if "looking up object" not in tekst and code != 127:
+        # Niet 'udisks kent hem nog niet', en udisksctl is er wel: vaak een NTFS die Windows niet netjes afsloot.
+        # Lezen is genoeg voor Overstap.
+        code, uit2 = _udisks_open(apparaat, alleen_lezen=True)
+        if code == 0:
+            p.alleen_lezen = True
+            return True
+        uit = uit2 or uit
+    p.fout = uit.strip()
+    return False
+
+
+def stick_openen() -> int:
+    """Eén keer kijken (lsblk) en de losse schijven die dicht zijn openzetten, met de regels hierboven. Geeft hoeveel
+    er opengingen. Draait op de achtergrond (stick_openen_op_achtergrond)."""
+    try:
+        import bugos_drives as bd
+        ruw = bd.lees_lsblk()
+        lijst = bd.schijven(ruw) if ruw else None
+    except Exception:  # noqa: BLE001  zonder lsblk/udisks: dan alleen kijken wat er al open is
+        return 0
+    if lijst is None:
+        return 0   # lsblk gaf even niets (de systeemschijf staat er altijd in): niets weten en niets vergeten (U200)
+    losse = [s for s in lijst if s.soort in LOSSE_SOORTEN]
+    with _slot:
+        _losse[:] = losse
+        nog = {s.fs_apparaat or s.apparaat for s in losse}
+        for sleutel in [k for k in _pogingen if k not in nog]:
+            del _pogingen[sleutel]   # eruit gehaald: steek je hem weer in, dan begint het opnieuw (U183)
+    gedaan = 0
+    for s in losse:
+        sleutel = s.fs_apparaat or s.apparaat
+        with _slot:
+            p = _pogingen.setdefault(sleutel, _Poging())
+            if s.wortel:
+                p.open_gezien = True
+            if (s.wortel or p.open_gezien or p.geweigerd or s.op_slot or s.nieuw or not s.fs
+                    or p.aantal > len(OPEN_WACHT) or time.monotonic() < p.volgende):
+                continue
+            p.aantal += 1
+        gelukt = _open_een(sleutel, p)   # buiten het slot: udisks kan even duren
+        with _slot:
+            if gelukt:
+                p.open_gezien, p.fout = True, ""
+                gedaan += 1
+            elif p.aantal <= len(OPEN_WACHT):
+                p.volgende = time.monotonic() + OPEN_WACHT[p.aantal - 1]
+    return gedaan
+
+
+def _nog_wachten() -> float | None:
+    """Over hoeveel seconden de volgende poging mag; None als er niets meer te proberen is."""
+    nu = time.monotonic()
+    with _slot:
+        tijden = [p.volgende - nu for p in _pogingen.values()
+                  if 0 < p.aantal <= len(OPEN_WACHT) and not p.open_gezien and not p.geweigerd]
+    return max(0.0, min(tijden)) if tijden else None
+
+
+def stick_openen_op_achtergrond() -> None:
+    """stick_openen() in een eigen draad (udisks kan even duren: het venster loopt niet vast). Mislukt een poging, dan
+    probeert de draad het zelf opnieuw na OPEN_WACHT, zonder op het volgende kijken van het venster te wachten."""
+    with _slot:
+        if _draad:
+            return
+        _draad.append(1)
+
+    def werk() -> None:
+        try:
+            while True:
+                if stick_openen():
+                    stick_openen()   # meteen nog eens kijken: dan weet stick_melding dat hij nu open staat
+                wacht = _nog_wachten()
+                if wacht is None:
+                    break
+                time.sleep(min(wacht, 15.0) + 0.05)
+        except Exception:  # noqa: BLE001  zonder lsblk/udisks: dan niet
+            pass
+        finally:
+            with _slot:
+                _draad.clear()
+
+    threading.Thread(target=werk, daemon=True, name="bugos-stick-openen").start()
+
+
+def openen_bezig() -> bool:
+    """Loopt het openzetten nog (of wacht het op de volgende poging)? Dan kijkt het venster vaker."""
+    return bool(_draad)
+
+
+def stick_melding(gevonden: list[Path] | None = None) -> tuple[str, str]:
+    """Wat het venster zegt als er geen BugOS Switch-map gevonden is, maar er wel een losse schijf in zit: (tekst,
+    soort) voor een Banner, of ('', '') als er niets te zeggen is. Anders bleef het stil 'Steek de USB-schijf in…'
+    zeggen terwijl de schijf er al in zat."""
+    if gevonden:
+        return "", ""
+    with _slot:
+        losse = list(_losse)
+        pogingen = {k: _Poging(**vars(p)) for k, p in _pogingen.items()}
+    bezig = op_slot = kapot = dicht = leeg = None
+    for s in losse:
+        p = pogingen.get(s.fs_apparaat or s.apparaat, _Poging())
+        if s.nieuw or (not s.fs and not s.op_slot):
+            continue   # een lege schijf (nog niet in gebruik genomen): daar kan geen BugOS-Switch op staan
+        if s.wortel:
+            leeg = leeg or s
+        elif s.op_slot:
+            op_slot = op_slot or s
+        elif p.geweigerd or p.aantal > len(OPEN_WACHT):
+            kapot = kapot or s
+        elif p.open_gezien and not _draad:
+            dicht = dicht or s      # stond open, en jij (of Bestanden) zette hem dicht: niet zelf weer openzetten
+        else:
+            bezig = bezig or s      # nog niet geprobeerd, of de volgende poging komt nog
+    if bezig is not None:
+        return t(f"BugOS zet '{bezig.naam}' open…", f"BugOS is opening '{bezig.naam}'…"), "bezig"
+    if op_slot is not None:
+        n = op_slot.naam
+        return t(f"'{n}' zit op slot (versleuteld, bijvoorbeeld met BitLocker). Open hem eerst in Bestanden met je "
+                 "wachtwoord of herstelsleutel; daarna ziet BugOS hem vanzelf.",
+                 f"'{n}' is locked (encrypted, for example with BitLocker). First open it in Files with your password "
+                 "or recovery key; then BugOS will notice it automatically."), "let_op"
+    if kapot is not None:
+        n = kapot.naam
+        return t(f"'{n}' zit erin, maar BugOS krijgt hem niet open. Haal hem eruit en steek hem opnieuw in. Lukt het "
+                 "dan nog niet: steek hem in je Windows-pc, laat Windows hem controleren (rechtsklik op de schijf, "
+                 "Eigenschappen, Extra, Controleren) en haal hem er daarna uit met 'Hardware veilig verwijderen'.",
+                 f"'{n}' is plugged in, but BugOS can't open it. Take it out and plug it in again. If that doesn't "
+                 "help: plug it into your Windows PC, let Windows check it (right-click the drive, Properties, Tools, "
+                 "Check) and then take it out with 'Safely Remove Hardware'."), "let_op"
+    if dicht is not None:
+        n = dicht.naam
+        return t(f"'{n}' zit erin, maar staat dicht. Haal hem eruit en steek hem opnieuw in, of open hem in Bestanden.",
+                 f"'{n}' is plugged in, but closed. Take it out and plug it in again, or open it in Files."), "info"
+    if leeg is not None:
+        n = leeg.naam
+        return t(f"Op '{n}' staat geen map BugOS-Switch. Is dit de goede schijf? BugOS Switch op je Windows-pc zet "
+                 "die map erop.", f"There is no BugOS-Switch folder on '{n}'. Is this the right drive? BugOS Switch "
+                 "on your Windows PC puts that folder on it."), "info"
+    return "", ""
+
+
+def _open_plekken() -> list[Path]:
+    """Alles wat nu open staat (/proc/self/mountinfo), behalve de plekken van het systeem zelf: zo vinden we ook een
+    schijf die ergens anders dan /run/media/<naam> open staat (/mnt, /media/<label> als udisks schijven deelt)."""
+    try:
+        import bugos_drives as bd
+        return [Path(k.plek) for k in bd.koppelingen() if k.bron.startswith("/dev/") and not bd.systeem_plek(k.plek)]
+    except Exception:  # noqa: BLE001
+        return []
 
 
 def zoek_overstap(openen: bool = True) -> list[Path]:
     """Zoek op alle aangesloten schijven naar de map BugOS-Switch (of de oude BugOS-Overstap).
-    openen: een stick die er net in zit, eerst openzetten (KDE doet dat niet vanzelf, U139). Welkom kijkt ook."""
+    openen: een stick die er net in zit, eerst openzetten (KDE doet dat niet vanzelf, U139), op de achtergrond: de
+    volgende keer kijken ziet hem open. Welkom kijkt ook."""
     if os.environ.get("BUGOS_SCHIJVEN"):  # voor tests en screenshots
         return [m for p in os.environ["BUGOS_SCHIJVEN"].split(":") for m in _op_schijf(Path(p))]
     if openen:
-        try:
-            import bugos_drives
-            bugos_drives.losse_openen_op_achtergrond()
-        except Exception:  # noqa: BLE001  zonder udisks/lsblk gewoon kijken wat er al open is
-            pass
-    gebruiker = getpass.getuser()
-    gevonden = []
-    gezien: set[Path] = set()
-    for basis in (Path("/run/media") / gebruiker, Path("/media") / gebruiker, Path("/media")):
+        stick_openen_op_achtergrond()
+    try:
+        gebruiker = getpass.getuser()
+    except (KeyError, OSError):
+        gebruiker = ""
+    plekken: list[Path] = []
+    for basis in ([Path("/run/media") / gebruiker, Path("/media") / gebruiker] if gebruiker else []) + [Path("/media")]:
         try:
             if basis.is_dir():
-                for schijf in basis.iterdir():
-                    for map_ in _op_schijf(schijf):
-                        # Op Fedora is /media een koppeling naar /run/media: dan vonden we dezelfde stick twee keer
-                        # (VM-test 2026-11-16). Het echte pad telt, één keer.
-                        echt = map_.resolve()
-                        if echt not in gezien:
-                            gezien.add(echt)
-                            gevonden.append(map_)
+                plekken.extend(basis.iterdir())
         except OSError:
             continue
+    plekken.extend(_open_plekken())
+    gevonden = []
+    gezien: set[Path] = set()
+    for schijf in plekken:
+        for map_ in _op_schijf(schijf):
+            # Op Fedora is /media een koppeling naar /run/media: dan vonden we dezelfde stick twee keer (VM-test
+            # 2026-11-16). En een stick die in mountinfo staat, staat er ook zo. Het echte pad telt, één keer.
+            try:
+                echt = map_.resolve()
+            except OSError:
+                continue
+            if echt not in gezien:
+                gezien.add(echt)
+                gevonden.append(map_)
     return gevonden
 
 
+def lees_tekst(pad: Path) -> str:
+    """Een tekstbestand dat Windows schreef, in welke codering ook. PowerShell 5.1 schrijft met 'Set-Content -Encoding
+    UTF8' UTF-8 mét BOM (EF BB BF), met 'Out-File' of '>' UTF-16 (FF FE), met 'Set-Content' zonder -Encoding de oude
+    Windows-tekenset (cp1252); PowerShell 7 schrijft UTF-8 zonder BOM. OSError als het niet te lezen is."""
+    data = pad.read_bytes()
+    for bom, codering in ((codecs.BOM_UTF32_LE, "utf-32"), (codecs.BOM_UTF32_BE, "utf-32"), (codecs.BOM_UTF8, "utf-8-sig"),
+                          (codecs.BOM_UTF16_LE, "utf-16"), (codecs.BOM_UTF16_BE, "utf-16")):
+        if data.startswith(bom):   # UTF-32 eerst: zijn BOM begint met die van UTF-16
+            return data.decode(codering, errors="replace").lstrip("\ufeff")
+    if len(data) >= 2 and b"\x00" in data[:2]:
+        # UTF-16 zonder BOM: JSON begint met een gewoon teken ('{'), dus de nul staat ervoor (BE) of erachter (LE).
+        return data.decode("utf-16-be" if data[0] == 0 else "utf-16-le", errors="replace")
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data.decode("cp1252", errors="replace")
+
+
 def info(map_: Path) -> dict:
-    """bugos-switch.json van de stick (of het oude bugos-overstap.json). Kapot of geen object: {} (dan doen we
+    """bugos-switch.json van de stick (of het oude bugos-overstap.json). Kapot, leeg of geen object: {} (dan doen we
     alleen wat er als map op de stick staat, zoals bij versie 1)."""
-    for _naam, bestand in MAPPEN:
-        try:
-            data = json.loads((map_ / bestand).read_text(encoding="utf-8-sig"))
-        except FileNotFoundError:
-            continue
-        except (OSError, ValueError):
-            return {}
-        return data if isinstance(data, dict) else {}
-    return {}
+    pad = infobestand(map_)
+    if pad is None:
+        return {}
+    try:
+        data = json.loads(lees_tekst(pad))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def versie(i: dict) -> int:

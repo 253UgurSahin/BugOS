@@ -212,7 +212,7 @@ def pas(schaal: str, groot: bool = False, teksten: bool = False, smal: bool = Fa
         elif app_naam == "welcome":
             for i in range(venster.stapels.count()):
                 venster.stapels.setCurrentIndex(i)
-                kijk(app_naam, ("hallo", "internet", "uiterlijk", "updates", "jij", "klaar")[i], venster, True)
+                kijk(app_naam, ("hallo", "internet", "browser", "uiterlijk", "updates", "jij", "klaar")[i], venster, True)
         elif app_naam == "tasks":
             for s in ("programmas", "prestaties", "opstarten"):
                 venster.ga_naar(s)

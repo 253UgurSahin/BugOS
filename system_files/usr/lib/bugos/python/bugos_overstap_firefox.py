@@ -267,7 +267,7 @@ def lees_bron(b: Bron) -> list:
             return []
         if b.soort == "firefox":
             return firefox_bladwijzers(lees_mozlz4(b.pad))
-        return chrome_bladwijzers(json.loads(b.pad.read_text(encoding="utf-8-sig")))
+        return chrome_bladwijzers(json.loads(ot.lees_tekst(b.pad)))
     except (OSError, ValueError, UnicodeDecodeError, RecursionError):
         return []
 
