@@ -148,6 +148,25 @@ os.environ["XDG_DATA_HOME"] = str(_echt)
 vang(bi.zet_achtergrond, str(_link / "wallpapers" / "bugos-eigen" / "nu-1.jpg"))
 klopt((_echt / "wallpapers" / "bugos-eigen" / "nu-1.jpg").exists(),
       "U356: de huidige eigen foto via een andere weg nog eens kiezen gooit hem niet weg")
+# Fase 2 van de eigen schil (docs/STANDALONE.md): de keuze staat ook in ~/.config/bugos/achtergrond, en in de
+# proefsessie (BUGOS_SCHIL=1, geen Plasma) is dat genoeg: dan geen plasma-apply-wallpaperimage.
+_conf = Path(tempfile.mkdtemp(prefix="bugos-conf-"))
+_oud_conf = os.environ.get("XDG_CONFIG_HOME")
+os.environ["XDG_CONFIG_HOME"] = str(_conf)
+opdr3, _ = vang(bi.zet_achtergrond, "/usr/share/wallpapers/bugos")
+klopt((_conf / "bugos" / "achtergrond").read_text().strip() == "/usr/share/wallpapers/bugos"
+      and any(c[0] == "plasma-apply-wallpaperimage" for c in opdr3),
+      "schil: de achtergrond staat ook in ~/.config/bugos/achtergrond (en Plasma krijgt hem gewoon)")
+os.environ["BUGOS_SCHIL"] = "1"
+opdr4, gelukt4 = vang(bi.zet_achtergrond, "/usr/share/wallpapers/bugos/contents/images/3840x2160.jpg")
+os.environ.pop("BUGOS_SCHIL", None)
+klopt(not any(c[0] == "plasma-apply-wallpaperimage" for c in opdr4)
+      and (_conf / "bugos" / "achtergrond").read_text().strip().endswith("3840x2160.jpg"),
+      f"schil: in de proefsessie zonder Plasma alleen het bestand ({opdr4})")
+if _oud_conf is None:
+    os.environ.pop("XDG_CONFIG_HOME", None)
+else:
+    os.environ["XDG_CONFIG_HOME"] = _oud_conf
 if _oud_data is None:
     os.environ.pop("XDG_DATA_HOME", None)
 else:

@@ -1,6 +1,7 @@
 #include "schil.h"
 
 #include <QDBusConnection>
+#include <QDBusMessage>
 #include <QMargins>
 #include <QWindow>
 
@@ -80,6 +81,12 @@ bool Schil::laag(QWindow *venster, const QString &soort, int marge)
         l->setAnchors(W::Anchors(W::AnchorTop | W::AnchorBottom | W::AnchorLeft | W::AnchorRight));
         l->setExclusiveZone(-1);
         l->setKeyboardInteractivity(W::KeyboardInteractivityNone);
+    } else if (soort == QLatin1String("menu")) {
+        l->setLayer(W::LayerOverlay);
+        l->setAnchors(W::Anchors(W::AnchorTop | W::AnchorLeft));
+        l->setMargins(QMargins(marge, marge, 0, 0));
+        l->setExclusiveZone(0);
+        l->setKeyboardInteractivity(W::KeyboardInteractivityExclusive);
     } else if (soort == QLatin1String("vangnet")) {
         l->setLayer(W::LayerTop);
         l->setAnchors(W::Anchors(W::AnchorTop | W::AnchorBottom | W::AnchorLeft | W::AnchorRight));
@@ -95,4 +102,29 @@ bool Schil::laag(QWindow *venster, const QString &soort, int marge)
     Q_UNUSED(marge)
     return false;
 #endif
+}
+
+bool Schil::plaats(QWindow *venster, int x, int y)
+{
+#ifdef BUGOS_LAYERSHELL
+    if (!venster || !heeftLagen())
+        return false;
+    LayerShellQt::Window *l = LayerShellQt::Window::get(venster);
+    if (!l)
+        return false;
+    l->setMargins(QMargins(qMax(0, x), qMax(0, y), 0, 0));
+    return true;
+#else
+    if (venster)
+        venster->setPosition(x, y);
+    return false;
+#endif
+}
+
+void Schil::bureaubladTonen(bool tonen)
+{
+    QDBusMessage m = QDBusMessage::createMethodCall(QStringLiteral("org.kde.KWin"), QStringLiteral("/KWin"),
+                                                    QStringLiteral("org.kde.KWin"), QStringLiteral("showDesktop"));
+    m << tonen;
+    QDBusConnection::sessionBus().call(m, QDBus::NoBlock);
 }

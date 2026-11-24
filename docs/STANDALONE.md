@@ -38,9 +38,12 @@ bestaande motor. Weg B blijft later mogelijk, omdat de schil met gewone Wayland-
 | Bureaublad-achtergrond | Achtergrondvenster (layer-shell, onderste laag) | 1 |
 | Meldingen (in plasmashell) | Eigen meldingendienst `org.freedesktop.Notifications` in `bugos-shell` | 1 |
 | Meta-toets opent het startmenu | `org.kde.plasmashell /PlasmaShell activateLauncherMenu`, door `bugos-shell` zelf | 1 |
-| Systeemvak (StatusNotifierItem: Steam, Discord ...) | Eigen systeemvak (StatusNotifierWatcher + host) | 2 |
-| Pictogrammen op het bureaublad | Eigen bureaublad (Bestanden-onderdelen) | 2 |
-| Meerdere schermen | Paneel en achtergrond per scherm | 2 |
+| Systeemvak (StatusNotifierItem: Steam, Discord ...) | Eigen systeemvak: host, en zelf de watcher als kded er niet is; menu's via dbusmenu | 2 |
+| Pictogrammen op het bureaublad | Eigen bureaublad: je bureaubladmap als pictogrammen, met een menu | 2 |
+| Meerdere schermen | Taakbalk en bureaublad per scherm; menu's op het scherm waar je klikte | 2 |
+| Rechtermuisknopmenu's van de taakbalk | Start (Win+X), een app (Nieuw venster, Vastmaken, Sluiten), een lege plek, het bureaublad | 2 |
+| Vastgezette apps op de taakbalk | `~/.config/bugos/taakbalk`, vanuit het startmenu en de takenlijst | 2 |
+| Achtergrond (plasma-apply-wallpaperimage) | `~/.config/bugos/achtergrond` (Instellingen schrijft het), licht/donker uit een pakket | 2 |
 | Vergrendelscherm (kscreenlocker-greeter) | Eigen greeter-thema of eigen vergrendelscherm | 3 |
 | Inlogscherm (plasma-login/SDDM-thema) | Eigen inlogscherm | 3 |
 | Sessie (startplasma, ksmserver) | `bugos-sessie` (systemd user-units, eigen afmelden) | 3 |
@@ -48,11 +51,13 @@ bestaande motor. Weg B blijft later mogelijk, omdat de schil met gewone Wayland-
 
 ## Fases
 
-1. **Proefsessie** (nu): `bugos-shell` met paneel, startmenu, snelmenu, klok, takenlijst, achtergrond en meldingen.
+1. **Proefsessie** (gebouwd 2026-11-24): `bugos-shell` met paneel, startmenu, snelmenu, klok, takenlijst, achtergrond en meldingen.
    Kies op het inlogscherm **"BugOS (nieuwe schil, proef)"**. De gewone sessie blijft precies zoals hij was, dus er
    gaat niets stuk.
-2. **Compleet voor elke dag**: systeemvak, bureaubladpictogrammen, meerdere schermen, sneltoetsen (Alt+F1, Win+D),
-   rechtermuisknopmenu's van de taakbalk, ontwerp afmaken.
+2. **Compleet voor elke dag** (gebouwd 2026-11-24): systeemvak, bureaubladpictogrammen, meerdere schermen,
+   rechtermuisknopmenu's, vastmaken aan de taakbalk, Bureaublad tonen, je eigen achtergrond.
+   Nog open voor een volgende ronde: de meldingengeschiedenis (de bel), uitleg bij het aanwijzen van een pictogram
+   in het systeemvak, Alt+F1 (de Meta-toets werkt al; Win+D doet KWin zelf), slepen op het bureaublad.
 3. **Eigen sessie**: eigen vergrendel- en inlogscherm, eigen sessiebeheer en afmelden, eigen takenlijst-client.
 4. **De nieuwe schil wordt de standaard**, en de Plasma-pakketten gaan uit het image.
 

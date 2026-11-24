@@ -1242,6 +1242,20 @@ def eigen_achtergrond_map() -> Path:
     return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "wallpapers" / "bugos-eigen"
 
 
+def bewaar_schil_achtergrond(pad: str) -> bool:
+    """Bewaar de gekozen achtergrond voor de eigen BugOS-schil: ~/.config/bugos/achtergrond (één regel, het pad).
+    Veilig: eerst een tijdelijk bestand, dan in één keer op zijn plek."""
+    try:
+        map_ = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "bugos"
+        map_.mkdir(parents=True, exist_ok=True)
+        tijdelijk = map_ / ".achtergrond.nieuw"
+        tijdelijk.write_text(pad + "\n", encoding="utf-8")
+        os.replace(tijdelijk, map_ / "achtergrond")
+        return True
+    except OSError:
+        return False
+
+
 def zet_achtergrond(pad: str) -> bool:
     if _c.VOORBEELD:
         return True
@@ -1261,7 +1275,13 @@ def zet_achtergrond(pad: str) -> bool:
                 pad = str(doel)
         except OSError:
             pass   # kopiëren lukt niet (vol?): dan het origineel gebruiken
-    gelukt = _c.draai("plasma-apply-wallpaperimage", pad, timeout=15)[0] == 0
+    # De eigen BugOS-schil (bugos-shell, docs/STANDALONE.md) leest de achtergrond uit ~/.config/bugos/achtergrond.
+    # Altijd bewaren, ook in de gewone sessie: dan klopt hij ook in de proefsessie met de nieuwe schil.
+    bewaard = bewaar_schil_achtergrond(pad)
+    if os.environ.get("BUGOS_SCHIL") == "1":
+        gelukt = bewaard   # geen Plasma in deze sessie: de schil ziet het bestand veranderen
+    else:
+        gelukt = _c.draai("plasma-apply-wallpaperimage", pad, timeout=15)[0] == 0
     if gelukt:
         # Pas na het instellen de oude eigen foto's weg (lukte het niet, dan blijft de vorige gewoon staan) (U343).
         try:

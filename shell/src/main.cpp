@@ -6,14 +6,19 @@
 //   bugos-shell --geen-dbus       zonder de D-Bus-namen (naast een draaiende Plasma, tests)
 //   bugos-shell --stop-na <ms>    na zoveel milliseconden stoppen (de rooktest in CI)
 
+#include "instellingen.h"
 #include "meldingen.h"
 #include "opdracht.h"
 #include "schil.h"
+#include "systeemvak.h"
 
 #include <QCommandLineParser>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QDBusConnection>
 #include <QIcon>
+#include <QMimeDatabase>
+#include <QSettings>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickImageProvider>
@@ -22,6 +27,25 @@
 #include <cstdio>
 
 // image://icon/<naam of pad>: een pictogram uit het thema (QIcon::fromTheme), of een bestand.
+// image://icon/bestand:<pad>: het pictogram van een bestand op het bureaublad (een starter: zijn eigen Icon=,
+// een map: een map, anders het pictogram van de soort bestand).
+static QIcon bestandIcoon(const QString &pad)
+{
+    const QFileInfo info(pad);
+    if (info.isDir())
+        return QIcon::fromTheme(QStringLiteral("folder"));
+    if (pad.endsWith(QLatin1String(".desktop"))) {
+        QSettings starter(pad, QSettings::IniFormat);
+        const QString naam = starter.value(QStringLiteral("Desktop Entry/Icon")).toString();
+        if (!naam.isEmpty())
+            return naam.startsWith(QLatin1Char('/')) ? QIcon(naam) : QIcon::fromTheme(naam);
+    }
+    static QMimeDatabase soorten;
+    const QMimeType soort = soorten.mimeTypeForFile(info);
+    return QIcon::fromTheme(soort.iconName(), QIcon::fromTheme(soort.genericIconName(),
+                                                               QIcon::fromTheme(QStringLiteral("text-x-generic"))));
+}
+
 class Pictogram : public QQuickImageProvider
 {
 public:
@@ -35,7 +59,9 @@ public:
         const int b = gevraagd.width() > 0 ? gevraagd.width() : 48;
         const int h = gevraagd.height() > 0 ? gevraagd.height() : b;
         QIcon ic;
-        if (id.startsWith(QLatin1Char('/')) && QFileInfo::exists(id))
+        if (id.startsWith(QLatin1String("bestand:")))
+            ic = bestandIcoon(id.mid(8));
+        else if (id.startsWith(QLatin1Char('/')) && QFileInfo::exists(id))
             ic = QIcon(id);
         else
             ic = QIcon::fromTheme(id, QIcon::fromTheme(QStringLiteral("application-x-executable")));
@@ -48,8 +74,6 @@ public:
 
 int main(int argc, char *argv[])
 {
-    // De schil leest zijn eigen instellingen (vastgezette apps) met XMLHttpRequest uit ~/.config/bugos.
-    qputenv("QML_XHR_ALLOW_FILE_READ", "1");
     QGuiApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("bugos-shell"));
     app.setOrganizationName(QStringLiteral("BugOS"));
@@ -69,23 +93,25 @@ int main(int argc, char *argv[])
     Opdracht opdracht;
     Meldingen meldingen;
     Schil schil;
+    Instellingen instellingen;
+    Systeemvak systeemvak(QDBusConnection::sessionBus());
     if (!opties.isSet(geenDbus)) {
         // Eerst de meldingen: die zijn nodig vanaf het eerste moment van de sessie.
         if (!meldingen.aanmelden())
             std::fprintf(stderr, "bugos-shell: de meldingendienst is al van een ander programma\n");
         if (!schil.aanmelden())
             std::fprintf(stderr, "bugos-shell: org.kde.plasmashell is al van een ander programma\n");
+        systeemvak.start();
     }
 
     QQmlApplicationEngine engine;
     engine.addImageProvider(QStringLiteral("icon"), new Pictogram);   // dezelfde naam als in StartMenu.qml
+    engine.addImageProvider(QStringLiteral("vak"), new VakPictogrammen);
     engine.rootContext()->setContextProperty(QStringLiteral("opdracht"), &opdracht);
     engine.rootContext()->setContextProperty(QStringLiteral("meldingen"), &meldingen);
     engine.rootContext()->setContextProperty(QStringLiteral("schil"), &schil);
-    // Waar de achtergronden staan (images/ en images_dark/). BUGOS_ACHTERGROND_MAP voor een test.
-    const QString achtergrond = qEnvironmentVariable("BUGOS_ACHTERGROND_MAP",
-                                                     QStringLiteral("/usr/share/wallpapers/bugos/contents"));
-    engine.rootContext()->setContextProperty(QStringLiteral("achtergrondMap"), achtergrond);
+    engine.rootContext()->setContextProperty(QStringLiteral("instellingen"), &instellingen);
+    engine.rootContext()->setContextProperty(QStringLiteral("systeemvak"), &systeemvak);
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app,
                      []() { QCoreApplication::exit(1); }, Qt::QueuedConnection);
     engine.load(QUrl::fromLocalFile(opties.value(qmlOptie)));

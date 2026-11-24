@@ -24,9 +24,15 @@ public:
     //   melding     rechtsonder, boven alles, zonder toetsenbord
     //   achtergrond de onderste laag, over het hele scherm
     //   vangnet     een doorzichtige laag over het scherm: een klik ernaast sluit een open menu
+    //   menu        een los menu (rechtermuisknop), op een plek die plaats() zet
     // Zonder layer-shell (een test, of X11) doet dit niets: dan zijn het gewone vensters.
     Q_INVOKABLE bool laag(QWindow *venster, const QString &soort, int marge = 0);
     Q_INVOKABLE bool heeftLagen() const;
+    // Een menu ('menu') op x, y zetten (vanaf linksboven van het scherm, binnen de ruimte naast de taakbalk). Kan elke
+    // keer opnieuw, ook als het venster al bestaat.
+    Q_INVOKABLE bool plaats(QWindow *venster, int x, int y);
+    // Bureaublad tonen (Win+D): KWin zet alle vensters opzij, of terug.
+    Q_INVOKABLE void bureaubladTonen(bool tonen);
 
 public Q_SLOTS:
     Q_SCRIPTABLE void activateLauncherMenu();

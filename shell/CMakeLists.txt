@@ -13,6 +13,8 @@ add_executable(bugos-shell
     src/opdracht.cpp
     src/meldingen.cpp
     src/schil.cpp
+    src/instellingen.cpp
+    src/systeemvak.cpp
 )
 target_link_libraries(bugos-shell PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::DBus)
 
@@ -27,3 +29,10 @@ elseif(BUGOS_LAYERSHELL_VERPLICHT)
     message(FATAL_ERROR "bugos-shell: layer-shell-qt niet gevonden (layer-shell-qt-devel)")
 endif()
 install(TARGETS bugos-shell RUNTIME DESTINATION bin)
+
+# De test van het systeemvak (tools/test_shell_dbus.sh): alleen met -DBUGOS_TESTS=ON, niet in BugOS zelf.
+option(BUGOS_TESTS "Testprogramma's bouwen" OFF)
+if(BUGOS_TESTS)
+    add_executable(systeemvak-test test/systeemvak_test.cpp src/systeemvak.cpp)
+    target_link_libraries(systeemvak-test PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::DBus)
+endif()

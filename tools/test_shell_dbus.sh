@@ -5,6 +5,9 @@
 #  - de Meta-toets: KWin roept org.kde.plasmashell /PlasmaShell activateLauncherMenu aan, en dat lukt.
 # Er verandert niets aan je computer: een eigen sessiebus, een eigen tijdelijke configuratiemap.
 #
+#  - het systeemvak (fase 2): systeemvak-test naast bugos-shell (cmake -DBUGOS_TESTS=ON) speelt twee apps met een
+#    pictogram en een menu na, op dezelfde soort eigen bus.
+#
 # Gebruik:  bash tools/test_shell_dbus.sh <pad naar bugos-shell>
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -18,7 +21,7 @@ fouten=0
 klopt() { if eval "$1"; then echo "OK    $2"; else echo "FOUT  $2"; fouten=$((fouten + 1)); fi; }
 mkdir -p "$TMP/config"
 export XDG_CONFIG_HOME="$TMP/config" QT_QPA_PLATFORM=offscreen
-export BUGOS_ACHTERGROND_MAP="$ROOT/system_files/usr/share/wallpapers/bugos/contents"
+export BUGOS_ACHTERGROND_PAKKET="$ROOT/system_files/usr/share/wallpapers/bugos"
 "$BIN" --qml "$ROOT/system_files/usr/share/bugos/shell/Shell.qml" --stop-na 8000 >"$TMP/uit" 2>"$TMP/fout" &
 pid=$!
 for _ in $(seq 100); do
@@ -56,3 +59,12 @@ fi
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
 '
+
+VAK="$(dirname "$BIN")/systeemvak-test"
+if [ -x "$VAK" ]; then
+    echo "--- het systeemvak (systeemvak-test)"
+    dbus-run-session -- "$VAK" 2>&1 | grep -v "fd limit\|XDG_RUNTIME_DIR"
+    [ "${PIPESTATUS[0]}" -eq 0 ] || exit 1
+else
+    echo "(geen systeemvak-test naast bugos-shell: bouw met cmake -DBUGOS_TESTS=ON)"
+fi
