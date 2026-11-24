@@ -606,11 +606,11 @@ klopt(("osd", 96) in schil.lagen, f"de schermmelding staat onderaan, boven de ta
 bureaublad = (ROOT / "system_files/usr/share/applications/bugos-shell.desktop").read_text()
 klopt("Exec=/usr/bin/bugos-shell" in bureaublad and "org_kde_plasma_window_management" in bureaublad
       and "NoDisplay=true" in bureaublad, "bugos-shell.desktop: KWin geeft de schil de vensterlijst")
-sessie = (ROOT / "system_files/usr/share/wayland-sessions/bugos-schil.desktop").read_text()
-klopt("Exec=/usr/bin/bugos-sessie" in sessie, "de proefsessie 'BugOS (nieuwe schil, proef)' staat op het inlogscherm")
+sessie = (ROOT / "system_files/usr/share/wayland-sessions/bugos-klassiek.desktop").read_text()
+klopt("Exec=/usr/bin/bugos-sessie klassiek" in sessie, "fase 4: 'BugOS klassiek (Plasma)' staat op het inlogscherm als terugweg")
 keuze = (ROOT / "system_files/usr/libexec/bugos-schil-of-plasma").read_text()
-klopt("BUGOS_SCHIL" in keuze and "exec /usr/bin/bugos-shell" in keuze and "exec /usr/bin/plasmashell" in keuze,
-      "de dienst van de schil kiest: bugos-shell in de proefsessie, anders gewoon Plasma")
+klopt("BUGOS_SCHIL" in keuze and 'exec "$SHELL_BIN"' in keuze and 'exec "$PLASMA_BIN"' in keuze,
+      "de dienst van de schil kiest: bugos-shell (standaard), anders het klassieke Plasma")
 dropin = (ROOT / "system_files/usr/lib/systemd/user/plasma-plasmashell.service.d/50-bugos-schil.conf").read_text()
 klopt("ExecStart=\n" in dropin and "ExecStart=/usr/libexec/bugos-schil-of-plasma" in dropin,
       "plasma-plasmashell.service start de keuze in plaats van plasmashell")

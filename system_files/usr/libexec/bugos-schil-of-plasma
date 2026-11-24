@@ -1,9 +1,44 @@
 #!/usr/bin/bash
-# bugos-schil-of-plasma - start de schil van deze sessie: de eigen BugOS-schil (bugos-shell) in de proefsessie
-# 'BugOS (nieuwe schil, proef)' (BUGOS_SCHIL=1, gezet door bugos-sessie), anders gewoon Plasma.
-# Gestart door plasma-plasmashell.service (drop-in 50-bugos-schil.conf). Beide nemen de naam org.kde.plasmashell
-# op D-Bus, waar de dienst (Type=dbus) op wacht.
-if [ "${BUGOS_SCHIL:-}" = 1 ] && [ -x /usr/bin/bugos-shell ]; then
-    exec /usr/bin/bugos-shell
+# bugos-schil-of-plasma - start het bureaublad van deze sessie: het nieuwe BugOS-bureaublad (bugos-shell) als
+# BUGOS_SCHIL=1 (zie /etc/xdg/plasma-workspace/env/bugos-schil.sh en bugos-schil), anders het klassieke (Plasma).
+# Gestart door plasma-plasmashell.service (drop-in 50-bugos-schil.conf); bij een crash start systemd het opnieuw.
+#
+# Het vangnet: start de nieuwe schil binnen anderhalve minuut drie keer, dan loopt hij steeds vast. Dan krijg je voor de
+# rest van deze sessie het klassieke bureaublad, en een melding (zodra Plasma meldingen kan tonen). Bij de volgende keer
+# inloggen probeert BugOS het gewoon weer met het nieuwe.
+RT="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+STARTS="$RT/bugos-schil-starts"
+NOOD="$RT/bugos-schil-noodstand"
+SHELL_BIN="${BUGOS_SHELL_BIN:-/usr/bin/bugos-shell}"
+PLASMA_BIN="${BUGOS_PLASMA_BIN:-/usr/bin/plasmashell}"
+VENSTER=90
+GRENS=3
+
+if [ "${BUGOS_SCHIL:-}" = 1 ] && [ -x "$SHELL_BIN" ] && [ ! -e "$NOOD" ]; then
+    nu="$(date +%s)"
+    recent=0
+    nieuw=""
+    if [ -f "$STARTS" ]; then
+        while read -r t; do
+            case "$t" in '' | *[!0-9]*) continue ;; esac
+            if [ $((nu - t)) -lt "$VENSTER" ]; then
+                recent=$((recent + 1))
+                nieuw="$nieuw$t"$'\n'
+            fi
+        done <"$STARTS"
+    fi
+    if [ "$recent" -lt "$GRENS" ]; then
+        printf '%s%s\n' "$nieuw" "$nu" >"$STARTS" 2>/dev/null || true
+        exec "$SHELL_BIN"
+    fi
+    # Steeds vastgelopen: noodstand voor deze sessie.
+    touch "$NOOD" 2>/dev/null || true
+    (
+        sleep 10
+        notify-send --app-name=BugOS --icon=bugos-logo \
+            "Het nieuwe BugOS-bureaublad startte niet goed" \
+            "Je hebt nu het klassieke bureaublad. Bij de volgende keer inloggen probeert BugOS het weer. Blijft het gebeuren? Kies dan 'BugOS klassiek' op het inlogscherm." \
+            >/dev/null 2>&1 || true
+    ) &
 fi
-exec /usr/bin/plasmashell --no-respawn "$@"
+exec "$PLASMA_BIN" --no-respawn "$@"

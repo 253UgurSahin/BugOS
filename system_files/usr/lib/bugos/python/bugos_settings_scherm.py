@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 
@@ -1075,6 +1076,18 @@ class UiterlijkPagina(Schakelaars, Blad):
         self.eigen = Knop(t("Eigen foto kiezen…", "Choose your own photo…"), "gewoon", "lijn:foto")
         self.eigen.clicked.connect(self.kies_foto)
         self.lay.addWidget(self.eigen, 0, Qt.AlignmentFlag.AlignLeft)
+        # Fase 4 (docs/STANDALONE.md): het nieuwe BugOS-bureaublad is de standaard; uit = het klassieke (Plasma). Werkt
+        # bij de volgende keer inloggen (bugos-schil). Op het inlogscherm staat ook altijd 'BugOS klassiek'.
+        if bugos_ui.bestaat("bugos-schil") or bi.VOORBEELD:
+            b = self.kaart(t("Bureaublad", "Desktop"))
+            b.voeg(Rij("huis", t("Het nieuwe BugOS-bureaublad", "The new BugOS desktop"),
+                       t("Uit: het klassieke bureaublad (Plasma). Werkt na opnieuw inloggen.",
+                         "Off: the classic desktop (Plasma). Takes effect after signing in again."),
+                       self.schakel("bugos-schil", "bureaublad")))
+        # De taakbalk van het klassieke bureaublad (bugos-panel stelt Plasma in). Het nieuwe bureaublad heeft die
+        # altijd: daar zou 'BugOS-startmenu: uit' alleen verwarren.
+        if os.environ.get("BUGOS_SCHIL") == "1" and not bi.VOORBEELD:
+            return
         g = self.kaart(t("Taakbalk", "Taskbar"))
         for onderdeel, ic, (nl, en), (unl, uen) in (
                 ("startmenu", "apps", ("BugOS-startmenu", "BugOS start menu"),

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=BugOS classic (Plasma)
+Name[nl]=BugOS klassiek (Plasma)
+Comment=The classic BugOS desktop, if the new one does not work well (docs/STANDALONE.md)
+Comment[nl]=Het klassieke BugOS-bureaublad, als het nieuwe niet goed werkt (docs/STANDALONE.md)
+Exec=/usr/bin/bugos-sessie klassiek
+DesktopNames=KDE
+X-KDE-PluginInfo-Version=1

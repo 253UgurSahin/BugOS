@@ -56,8 +56,7 @@ bestaande motor. Weg B blijft later mogelijk, omdat de schil met gewone Wayland-
 ## Fases
 
 1. **Proefsessie** (gebouwd 2026-11-24): `bugos-shell` met paneel, startmenu, snelmenu, klok, takenlijst, achtergrond en meldingen.
-   Kies op het inlogscherm **"BugOS (nieuwe schil, proef)"**. De gewone sessie blijft precies zoals hij was, dus er
-   gaat niets stuk.
+   (Toen een aparte proefsessie; sinds fase 4 de gewone sessie 'BugOS'.)
 2. **Compleet voor elke dag** (gebouwd 2026-11-24): systeemvak, bureaubladpictogrammen, meerdere schermen,
    rechtermuisknopmenu's, vastmaken aan de taakbalk, Bureaublad tonen, je eigen achtergrond.
    Nog open voor een volgende ronde: de meldingengeschiedenis (de bel), uitleg bij het aanwijzen van een pictogram
@@ -72,9 +71,25 @@ bestaande motor. Weg B blijft later mogelijk, omdat de schil met gewone Wayland-
    - Bewust niet in fase 3: de sessie zelf (startplasma) en de takenlijst-client. Die zie je niet, en ze zijn pas
      nodig als plasma-workspace uit het image gaat (fase 4). Ze nu vervangen zou alleen risico geven.
    - Het inlogscherm: zie "Open keuze" hieronder.
-4. **De nieuwe schil wordt de standaard**, en de Plasma-pakketten gaan uit het image.
+4. **De nieuwe schil is de standaard** (gebouwd 2026-11-24).
+   - De gewone sessie (op het inlogscherm 'BugOS') geeft het nieuwe bureaublad: `/etc/xdg/plasma-workspace/env/bugos-schil.sh`
+     vraagt `bugos-schil kies` en zet dan `BUGOS_SCHIL=1` en `PLASMA_DEFAULT_SHELL=org.bugos.schil`.
+   - Terugweg: de sessie **'BugOS klassiek (Plasma)'** op het inlogscherm, de schakelaar **Instellingen > Uiterlijk >
+     Het nieuwe BugOS-bureaublad**, of `bugos-schil klassiek`. Een beheerder kan het voor de hele computer kiezen:
+     `echo klassiek | sudo tee /etc/bugos/schil`.
+   - Vangnet: start de nieuwe schil binnen anderhalve minuut drie keer (hij loopt steeds vast), dan krijg je voor de rest
+     van die sessie het klassieke bureaublad, met een melding (`bugos-schil-of-plasma`).
+   - **Bewust niet: de Plasma-pakketten uit het image.** `plasma-workspace` is meer dan Plasma: het bevat ook het
+     opstarten van de sessie (startplasma, ksmserver), het afmeldscherm waarin het BugOS-uitzetscherm draait
+     (ksmserver-logout-greeter), de takenlijst-bibliotheek die de schil gebruikt (libtaskmanager), het herstellen van
+     lettertypes en muis bij het inloggen (kcminit), en de pictogrammen van Windows-programma's in het systeemvak
+     (xembedsniproxy). Andere pakketten (powerdevil, plasma-nm, xdg-desktop-portal-kde, kscreenlocker) hangen eraan.
+     Het eruit halen betekent die hele laag opnieuw schrijven, zonder het te kunnen testen, en dan verdwijnt ook
+     'BugOS klassiek' als terugweg. Het blijft dus, net als KWin, als onzichtbare motor. Pas als het nieuwe bureaublad
+     een tijd goed werkt op echte computers, kan een volgende stap (een eigen sessie zonder startplasma, een eigen
+     takenlijst-client) de klassieke sessie overbodig maken.
 
-Elke fase eindigt met een werkende computer: de proefsessie blijft naast de gewone bestaan tot fase 4.
+Elke fase eindigt met een werkende computer. Sinds fase 4 is 'BugOS klassiek (Plasma)' de terugweg.
 
 ## Het inlogscherm (proef met SDDM)
 

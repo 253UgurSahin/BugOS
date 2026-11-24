@@ -194,10 +194,9 @@ meta = json.loads((PAKKET / "metadata.json").read_text())
 klopt(meta.get("KPackageStructure") == "Plasma/Shell" and meta.get("X-Plasma-APIVersion") == "2"
       and meta["KPlugin"]["Id"] == "org.bugos.schil",
       "het pakket: Plasma/Shell, API-versie 2 (anders valt kscreenlocker terug op KDE), id org.bugos.schil")
-sessie = (ROOT / "system_files/usr/bin/bugos-sessie").read_text()
 env = (ROOT / "system_files/etc/xdg/plasma-workspace/env/bugos-schil.sh").read_text()
-klopt("PLASMA_DEFAULT_SHELL=org.bugos.schil" in sessie and "unset-environment" in env and "PLASMA_DEFAULT_SHELL" in env,
-      "alleen in de proefsessie: bugos-sessie kiest het pakket, de gewone sessie haalt het weg")
+klopt("export PLASMA_DEFAULT_SHELL=org.bugos.schil" in env and "unset-environment" in env,
+      "met het nieuwe bureaublad het BugOS-vergrendelscherm; klassiek haalt het weg (bugos-schil.sh)")
 
 print()
 print("Alles goed." if not fouten else f"{fouten} fout(en).")

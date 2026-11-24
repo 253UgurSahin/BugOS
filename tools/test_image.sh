@@ -104,6 +104,12 @@ if [ -x /usr/bin/sddm ]; then
         "inlogscherm: SDDM met het BugOS-thema en de Qt 6-versie van het inlogscherm staan klaar"
 fi
 klopt '[ -f /usr/share/plasma/shells/org.bugos.schil/contents/lockscreen/LockScreen.qml ]' "vergrendelscherm: het BugOS-pakket staat erin"
+# Fase 4: de gewone sessie heet 'BugOS' (het nieuwe bureaublad), met 'BugOS klassiek (Plasma)' ernaast.
+if [ -f /usr/share/wayland-sessions/plasma.desktop ]; then
+    klopt 'grep -qx "Name=BugOS" /usr/share/wayland-sessions/plasma.desktop && [ -f /usr/share/wayland-sessions/bugos-klassiek.desktop ]' \
+        "inlogscherm: de sessies 'BugOS' en 'BugOS klassiek (Plasma)'"
+fi
+klopt '[ -x /usr/bin/bugos-shell ] && [ "$(/usr/bin/bugos-schil kies)" = nieuw ]' "het nieuwe bureaublad is de standaard (bugos-shell is gebouwd)"
 klopt 'grep -qx "UPDATES=auto" /etc/bugos/updates.conf' "updates: standaard automatisch"
 klopt 'grep -q "^AutomaticUpdatePolicy=stage" /etc/rpm-ostreed.conf' "updates: rpm-ostree zet updates klaar (stage)"
 # IPv6, connect, not running: meldingen van de bouwcontainer zelf, geen fouten in de diensten.

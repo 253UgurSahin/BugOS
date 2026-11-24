@@ -25,7 +25,7 @@ from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QVBoxLayout, QW
 def status_van(script: str, *voor: str) -> bool:
     """Vraag een bugos-script of iets aan staat."""
     if bi.VOORBEELD:
-        return script in ("bugos-updates", "bugos-panel")
+        return script in ("bugos-updates", "bugos-panel", "bugos-schil")
     if not bestaat(script):
         return False
     # draai() vangt de uitvoer op (geen terminal): bugos-updates geeft dan het ene woord, geen zin voor mensen (A-15).

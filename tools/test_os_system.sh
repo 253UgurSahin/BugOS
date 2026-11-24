@@ -1106,5 +1106,64 @@ if command -v shellcheck >/dev/null 2>&1; then
     klopt 'shellcheck "$BIN/bugos-inlogscherm"' "inlogscherm: shellcheck vindt niets"
 fi
 
+# Fase 4: het nieuwe bureaublad is de standaard (bugos-schil), met 'BugOS klassiek' en een vangnet.
+kopie bugos-schil
+SCH="$TMP/schil"
+mkdir -p "$SCH/bin" "$SCH/rt"
+printf '#!/bin/sh\necho bugos-shell\n' >"$SCH/bin/bugos-shell"
+printf '#!/bin/sh\necho plasmashell "$@"\n' >"$SCH/bin/plasmashell"
+chmod +x "$SCH/bin/bugos-shell" "$SCH/bin/plasmashell"
+schil() { BUGOS_SHELL_BIN="$SCH/bin/bugos-shell" BUGOS_SCHIL_SYSTEEM="$SCH/systeem" draai bugos-schil "$@"; }
+rm -f "$TMP/thuis/.config/bugos/schil"
+schil kies
+klopt 'grep -qx nieuw "$TMP/uit"' "schil: de standaard is het nieuwe bureaublad"
+BUGOS_KLASSIEK=1 schil kies
+klopt 'grep -qx klassiek "$TMP/uit"' "schil: de sessie 'BugOS klassiek' geeft het klassieke"
+schil klassiek
+schil kies
+klopt 'grep -qx klassiek "$TMP/uit" && grep -qx klassiek "$TMP/thuis/.config/bugos/schil"' "schil: jouw keuze klassiek telt"
+schil bureaublad status
+klopt 'grep -qx uit "$TMP/uit"' "schil: de schakelaar in Instellingen staat dan uit"
+schil bureaublad aan
+schil kies
+klopt 'grep -qx nieuw "$TMP/uit"' "schil: de schakelaar aan: weer het nieuwe"
+BUGOS_KLASSIEK=1 schil bureaublad status
+klopt 'grep -qx aan "$TMP/uit"' "schil: in de klassieke sessie toont de schakelaar toch je voorkeur"
+rm -f "$TMP/thuis/.config/bugos/schil"
+echo klassiek >"$SCH/systeem"
+schil kies
+klopt 'grep -qx klassiek "$TMP/uit"' "schil: een beheerder kan klassiek kiezen voor de hele computer"
+rm -f "$SCH/systeem"
+BUGOS_SHELL_BIN="$SCH/geen" BUGOS_SCHIL_SYSTEEM="$SCH/systeem" draai bugos-schil kies
+klopt 'grep -qx klassiek "$TMP/uit"' "schil: zonder bugos-shell altijd klassiek"
+schil rm-rf
+klopt '[ "$code" -eq 2 ]' "schil: onbekend: code 2"
+# Het opstartscript van de sessie (bugos-schil.sh, gelezen door startplasma)
+ENV_SH="$ROOT/system_files/etc/xdg/plasma-workspace/env/bugos-schil.sh"
+nep bugos-schil "echo \${NEP_KEUZE:-nieuw}"
+env_na() { (sed "s|/usr/bin/bugos-schil|$TMP/bin/bugos-schil|" "$ENV_SH" >"$SCH/env.sh"; PATH="$TMP/bin:$PATH" NEP_KEUZE="$1" bash -c '. "$0"; echo "${BUGOS_SCHIL:-}|${PLASMA_DEFAULT_SHELL:-}"' "$SCH/env.sh"); }
+klopt '[ "$(env_na nieuw)" = "1|org.bugos.schil" ]' "sessie: nieuw zet BUGOS_SCHIL en het BugOS-vergrendelscherm"
+klopt '[ "$(BUGOS_SCHIL=1 PLASMA_DEFAULT_SHELL=x env_na klassiek)" = "|" ]' "sessie: klassiek haalt ze weg"
+rm -f "$TMP/bin/bugos-schil"
+# Het vangnet (bugos-schil-of-plasma): drie keer starten binnen anderhalve minuut, dan klassiek voor deze sessie.
+WRAP="$ROOT/system_files/usr/libexec/bugos-schil-of-plasma"
+start_schil() { BUGOS_SCHIL="${1:-1}" XDG_RUNTIME_DIR="$SCH/rt" BUGOS_SHELL_BIN="$SCH/bin/bugos-shell" BUGOS_PLASMA_BIN="$SCH/bin/plasmashell" \
+    PATH="$TMP/bin:$PATH" bash "$WRAP" 2>/dev/null; }
+rm -f "$SCH/rt/"*
+klopt '[ "$(start_schil)" = bugos-shell ] && [ "$(start_schil)" = bugos-shell ] && [ "$(start_schil)" = bugos-shell ]' \
+    "vangnet: de eerste drie keer start de nieuwe schil"
+klopt '[ "$(start_schil)" = "plasmashell --no-respawn" ] && [ -e "$SCH/rt/bugos-schil-noodstand" ]' \
+    "vangnet: loopt hij steeds vast, dan het klassieke bureaublad voor deze sessie"
+klopt '[ "$(start_schil)" = "plasmashell --no-respawn" ]' "vangnet: en dat blijft zo tot je opnieuw inlogt"
+rm -f "$SCH/rt/"*
+printf '%s\n' 1 2 3 >"$SCH/rt/bugos-schil-starts"
+klopt '[ "$(start_schil)" = bugos-shell ]' "vangnet: oude starts (lang geleden) tellen niet"
+klopt '[ "$(start_schil 0)" = "plasmashell --no-respawn" ]' "klassiek: plasmashell, zoals altijd"
+klopt 'grep -qx "Exec=/usr/bin/bugos-sessie klassiek" "$ROOT/system_files/usr/share/wayland-sessions/bugos-klassiek.desktop" && grep -q "Name=BugOS" "$ROOT/build_files/style.sh"' \
+    "inlogscherm: 'BugOS' (het nieuwe) en 'BugOS klassiek (Plasma)'"
+if command -v shellcheck >/dev/null 2>&1; then
+    klopt 'shellcheck "$BIN/bugos-schil" "$BIN/bugos-sessie" "$WRAP"' "schil: shellcheck vindt niets"
+fi
+
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

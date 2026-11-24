@@ -254,6 +254,13 @@ Image=file:///usr/share/wallpapers/bugos/contents/images_dark/3840x2160.jpg
 PreviewImage=file:///usr/share/wallpapers/bugos/contents/screenshot.jpg
 EOF
 fi
+# Fase 4 (docs/STANDALONE.md): de gewone sessie is het nieuwe BugOS-bureaublad (bugos-schil), dus op het inlogscherm
+# heet hij 'BugOS', niet 'Plasma (Wayland)'. Het klassieke bureaublad is de sessie 'BugOS klassiek (Plasma)'.
+if [ -f /usr/share/wayland-sessions/plasma.desktop ]; then
+    sed -i -e '/^Name\[/d' -e '/^Comment\[/d' -e 's/^Name=.*/Name=BugOS/' \
+        -e 's/^Comment=.*/Comment=The BugOS desktop/' /usr/share/wayland-sessions/plasma.desktop
+    grep -qx 'Name=BugOS' /usr/share/wayland-sessions/plasma.desktop
+fi
 # Oudere systemen met SDDM: daar ook de BugOS-achtergrond.
 if [ -d /usr/share/sddm/themes/breeze ]; then
     printf '[General]\nbackground=/usr/share/wallpapers/bugos/contents/images_dark/3840x2160.jpg\ntype=image\n' \
