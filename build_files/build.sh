@@ -82,6 +82,12 @@ if [ -f /usr/lib/systemd/system/plasmalogin.service ]; then
     systemctl enable --force plasmalogin.service
 fi
 
+# Android-apps (Waydroid, packages.txt): de dienst blijft uit tot je Android klaarzet in 'Android-apps'
+# (bugos-android-root zet hem dan aan). Zonder klaargezet Android start hij toch niet, en kost hij alleen opstarttijd.
+if [ -f /usr/lib/systemd/system/waydroid-container.service ]; then
+    systemctl disable waydroid-container.service >/dev/null 2>&1 || true
+fi
+
 # D-09: de teksteditor moet echt starten. De basis van Universal Blue (kinoite-main:44 van 2026-11-16) zet zelf Kate
 # erbij en haalt daarvoor kate, kate-libs en KWrite 26.08.3 uit 'updates', gebouwd tegen KDE Frameworks 6.32; de
 # frameworks van de basis bleven op 6.31 (Fedora's eigen Kinoite had nog 26.08.2, dat paste). De eis van kate-libs op

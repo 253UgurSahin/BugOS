@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Android apps
+Name[nl]=Android-apps
+GenericName=Android apps on BugOS
+GenericName[nl]=Android-apps op BugOS
+Comment=Use Android apps and games, each in its own window
+Comment[nl]=Android-apps en -spellen gebruiken, elk in een eigen venster
+Exec=bugos-android %f
+Icon=bugos-logo
+Terminal=false
+Categories=System;
+Keywords=android;apk;waydroid;fdroid;apps;games;
+Keywords[nl]=android;apk;waydroid;fdroid;apps;spellen;
+MimeType=application/vnd.android.package-archive;

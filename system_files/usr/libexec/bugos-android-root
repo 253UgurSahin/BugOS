@@ -1,0 +1,77 @@
+#!/usr/bin/bash
+# bugos-android-root - het deel van Android-apps (Waydroid) dat als beheerder moet. Alleen via pkexec, vanuit
+# bugos-android (polkit: org.bugos.android, één keer je wachtwoord).
+#
+#   bugos-android-root klaarzetten   Android (LineageOS, zonder Google) downloaden en klaarzetten (ongeveer 1 GB),
+#                                    elke app in een eigen venster, en de Android-dienst aan
+#   bugos-android-root verwijderen   de Android-dienst uit en Android van de computer (de apps en hun gegevens weg)
+#
+# Waydroid regelt zelf de videokaart (op Nvidia tekent Android dan zonder videokaart: trager, maar het werkt).
+# Wat het zegt, komt op stdout: bugos-android laat de laatste regel zien als voortgang.
+set -u
+WAYDROID="${BUGOS_WAYDROID:-/usr/bin/waydroid}"
+DATA="${BUGOS_WAYDROID_DATA:-/var/lib/waydroid}"
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Alleen als beheerder (via pkexec)." >&2
+    exit 1
+fi
+if [ ! -x "$WAYDROID" ]; then
+    echo "Waydroid ontbreekt op deze computer (werk BugOS bij)." >&2
+    exit 3
+fi
+
+# Elke app in een eigen venster (zoals gewone apps), in plaats van één groot Android-scherm. Een vaste eigenschap in
+# waydroid.cfg ([properties]); Waydroid neemt die over bij elke start van Android.
+eigen_vensters() {
+    python3 -I - "$DATA/waydroid.cfg" <<'PY'
+import configparser, sys
+pad = sys.argv[1]
+cfg = configparser.ConfigParser()
+cfg.optionxform = str
+cfg.read(pad)
+if not cfg.has_section("properties"):
+    cfg.add_section("properties")
+cfg.set("properties", "persist.waydroid.multi_windows", "true")
+with open(pad + ".nieuw", "w") as f:
+    cfg.write(f)
+import os
+os.replace(pad + ".nieuw", pad)
+PY
+}
+
+# Internet in Android: de firewall van Fedora (firewalld) houdt het netwerk van Android (de brug waydroid0) anders
+# tegen, en dan krijgt Android geen adres en geen internet. Alleen die ene brug gaat in de zone 'trusted'.
+firewall() {
+    command -v firewall-cmd >/dev/null 2>&1 || return 0
+    firewall-cmd --permanent --zone=trusted "--$1-interface=waydroid0" >/dev/null 2>&1 || true
+    if firewall-cmd --state >/dev/null 2>&1; then
+        firewall-cmd --reload >/dev/null 2>&1 || true
+    fi
+}
+
+case "${1:-}" in
+klaarzetten)
+    # -s VANILLA: zonder Google-apps (die mag BugOS niet meeleveren). Nog eens klaarzetten (het vorige stopte
+    # halverwege) mag: Waydroid haalt alleen wat nog ontbreekt.
+    if ! "$WAYDROID" init -s VANILLA; then
+        echo "Android klaarzetten lukte niet." >&2
+        exit 1
+    fi
+    eigen_vensters || echo "Eigen vensters per app instellen lukte niet; Android werkt wel." >&2
+    firewall add
+    systemctl enable --now waydroid-container.service || { echo "De Android-dienst starten lukte niet." >&2; exit 1; }
+    echo "KLAAR"
+    ;;
+verwijderen)
+    systemctl disable --now waydroid-container.service >/dev/null 2>&1 || true
+    firewall remove
+    # Alleen de map van Waydroid zelf, nooit iets anders.
+    case "$DATA" in */waydroid) rm -rf --one-file-system "$DATA" ;; esac
+    echo "KLAAR"
+    ;;
+*)
+    echo "Gebruik: bugos-android-root klaarzetten | verwijderen" >&2
+    exit 2
+    ;;
+esac

@@ -60,7 +60,7 @@ class AppsPagina(Blad):
     uitleg_en = "The apps on this computer. Remove what you no longer use; get new apps from the Store."
     zoekwoorden = ("apps app programma's programma geïnstalleerd geinstalleerd verwijderen weghalen deïnstalleren "
                    "installeren winkel mijn apps firefox steam installed apps programs remove uninstall delete "
-                   "store my apps")
+                   "store my apps android apk waydroid fdroid")
 
     def bouw(self) -> None:
         self.bezig: str | None = None   # het id van de app die nu verwijderd wordt (dan kan er niet nog een bij)
@@ -76,6 +76,11 @@ class AppsPagina(Blad):
         rij.addWidget(self.winkel)
         rij.addStretch(1)
         self.lay.addWidget(rij_w, 0, Qt.AlignmentFlag.AlignLeft)
+        # Android-apps (Waydroid): klaarzetten, F-Droid en .apk-bestanden in een eigen venster (bugos-android). Onder
+        # de Winkel-knop, niet ernaast: naast elkaar paste het niet op een half scherm (T-FIT).
+        self.android = Knop(t("Android-apps", "Android apps"), "rand", "lijn:telefoon")
+        self.android.clicked.connect(lambda _c=False: None if bi.VOORBEELD else start("bugos-android"))
+        self.lay.addWidget(self.android, 0, Qt.AlignmentFlag.AlignLeft)
 
     def ververs(self) -> None:
         # Tijdens het verwijderen niet opnieuw lezen: dan zou de knop 'Bezig…' verdwijnen.

@@ -110,7 +110,30 @@ eigen BugOS-thema, eerst als proef.
 - Veilig bekijken zonder iets te veranderen: `sddm-greeter-qt6 --test-mode --theme /usr/share/sddm/themes/bugos`.
 - Werkt de proef goed (inloggen, automatisch inloggen, de proefsessie kiezen), dan wordt SDDM de standaard.
 
-## Android-apps
+## Android-apps (gebouwd 2026-11-24)
 
-Komt los hiervan: Waydroid (Android in een container, elke app in een eigen venster), met dubbelklik op een `.apk`,
-Android-apps in het startmenu, en F-Droid of Aurora Store. Google Play mag niet worden meegeleverd.
+Waydroid: een echt Android (LineageOS, zonder Google) in een container. Elke app krijgt een eigen venster en komt in
+het startmenu, zoals een gewone app.
+
+- **Android-apps** in het startmenu (`bugos-android`), ook via Instellingen > Apps en gamen > Geïnstalleerde apps.
+  - Nog niet klaar: één knop, **Android klaarzetten**. Dat is ongeveer 1 GB downloaden, en het vraagt één keer je
+    wachtwoord (`pkexec /usr/libexec/bugos-android-root klaarzetten`, polkit `org.bugos.android`).
+  - Klaar: **Appwinkel F-Droid installeren**, **Een .apk-bestand installeren…**, Android starten of stoppen, en
+    **Android verwijderen** (alle Android-apps en hun gegevens weg).
+- **Dubbelklik op een `.apk`** opent Android-apps en installeert de app, na een vraag. Is Android nog niet klaar, dan
+  zet BugOS het eerst klaar en installeert daarna meteen die app.
+- Wat klaarzetten doet (als beheerder): `waydroid init -s VANILLA` (zonder Google), elke app een eigen venster
+  (`persist.waydroid.multi_windows=true` in `/var/lib/waydroid/waydroid.cfg`), de firewall laat het netwerk van
+  Android door (`waydroid0` in de zone `trusted`), en `waydroid-container.service` aan. In het image staat die dienst
+  uit (`build.sh`) tot je Android klaarzet.
+- Terminal: `bugos-android status | klaarzetten | installeer <apk> | fdroid | start | stop | verwijderen`.
+- De logica staat in `bugos_android.py`. `tools/test_android.py` test alles met een nagemaakte Waydroid.
+
+Eerlijk over de grenzen:
+- **Geen Google Play.** Dat mag BugOS niet meeleveren. Apps komen uit F-Droid of als `.apk`. Apps die Google nodig
+  hebben (sommige bank-apps, apps met Google-inlog of -meldingen) werken niet.
+- **Apps die alleen voor telefoonprocessors (ARM) gemaakt zijn, werken niet** op een gewone pc. Het meeste uit
+  F-Droid werkt wel.
+- **Nvidia:** Android tekent dan zonder videokaart. Dat is trager, maar het werkt.
+- Nog niet getest op een echte computer (hier alleen met een nagemaakte Waydroid). Waydroid heeft de binder van de
+  kernel nodig; die zit in de kernel van Fedora.

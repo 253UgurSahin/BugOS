@@ -148,6 +148,8 @@ jobs:
         run: QT_QPA_PLATFORM=offscreen python3 tools/test_switch_stick.py
       - name: Quarantaine testen (een app proberen zonder dat hij bij je bestanden kan; met nep-bwrap en, als die werkt, een echte)
         run: QT_QPA_PLATFORM=offscreen python3 tools/test_quarantaine.py
+      - name: Android-apps testen (klaarzetten, een .apk installeren, F-Droid, verwijderen; met een nep-Waydroid)
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_android.py
       # The native packages (BugOS's own pages instead of KDE's). Each branch brought its own test file but none
       # added it here; tools/test_edges.py (F10-H1) wants every tools/test_* file to be run by this workflow.
       - name: Native account testen (klok met de hand, andere mensen, eigen foto, toetsenborden; met nagedane D-Bus)

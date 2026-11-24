@@ -6,6 +6,7 @@ application/vnd.microsoft.portable-executable=bugos-exe.desktop
 application/x-rpm=bugos-package.desktop
 application/x-redhat-package-manager=bugos-package.desktop
 application/vnd.debian.binary-package=bugos-package.desktop
+application/vnd.android.package-archive=bugos-android.desktop
 application/x-deb=bugos-package.desktop
 inode/directory=bugos-files.desktop
 # Een "Installeren"-link of -bestand van Flathub opent de BugOS Winkel, die de app zelf laat zien (U326; geen KDE Discover meer).
