@@ -859,6 +859,23 @@ jij2.bij_volgende()
 welkom.start, welkom.steam_opdracht = _oud_start, _oud_steam
 klopt(not _gestart and jij2.gamer.schuif.isEnabled(), "U130: zonder Steam: niets 'klaargezet' en het schuifje blijft vrij")
 klopt(not jij2.steam_nog.isHidden(), "U181: zonder Steam (nog): de pagina zegt dat Steam nog komt")
+# Microsoft 365 in Welkom: aan zet Word, Excel ... in het startmenu (bugos-windows office aan); via Terug weer uit
+# kan gewoon (het zijn alleen starters); niets veranderd: niets starten.
+_gestart.clear()
+_oud_bestaat = welkom.bestaat
+welkom.start, welkom.bestaat = (lambda *a: _gestart.append(a)), (lambda naam: naam == "bugos-windows")
+jij_o = welkom.Jij()
+jij_o.bij_volgende()
+_niets = list(_gestart)
+jij_o.office.schuif.setChecked(True)
+jij_o.bij_volgende()
+jij_o.bij_volgende()
+jij_o.office.schuif.setChecked(False)
+jij_o.bij_volgende()
+welkom.start, welkom.bestaat = _oud_start, _oud_bestaat
+klopt(not _niets and _gestart == [("bugos-windows", "office", "aan"), ("bugos-windows", "office", "uit")]
+      and jij_o.office.schuif.isEnabled(),
+      f"Welkom: 'Ik gebruik Microsoft Office' zet Microsoft 365 in het startmenu, één keer, en weer uit kan ({_gestart})")
 # U179: de lichte stand stond al aan (vanzelf op een oudere pc): dan staat het schuifje ook aan.
 _ls = TMP / "nep-ls-u179"
 _ls.mkdir()

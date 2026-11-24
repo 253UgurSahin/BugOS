@@ -623,7 +623,17 @@ class Jij(Pagina):
         self.oud = SchakelRij(t("Mijn computer is wat ouder", "My computer is a bit older"),
                               t("Zware effecten uit, zodat alles vlot blijft.", "Heavy effects off, so everything stays fast."),
                               False, "lijn:ster", "neutraal")
-        for w in (self.gamer, self.dev, self.oud):
+        # Microsoft 365: Word, Excel, PowerPoint, Outlook en OneDrive als apps in het startmenu (de echte Office, in de
+        # browser; bugos-windows office). Office zelf installeren met een .exe werkt niet goed op BugOS.
+        self.office = SchakelRij(t("Ik gebruik Microsoft Office", "I use Microsoft Office"),
+                                 t("Word, Excel, PowerPoint, Outlook en OneDrive in je startmenu, elk in een eigen "
+                                   "venster. Het is de echte Office van Microsoft, in je browser; gratis met een "
+                                   "Microsoft-account.",
+                                   "Word, Excel, PowerPoint, Outlook and OneDrive in your start menu, each in its own "
+                                   "window. It is the real Office from Microsoft, in your browser; free with a "
+                                   "Microsoft account."), office_staat(), "lijn:document", "neutraal")
+        self.office_begin = self.office.schuif.isChecked()
+        for w in (self.gamer, self.dev, self.office, self.oud):
             g.voeg(w)
         self.lay.addWidget(g)
         # Wat al gestart is, gaat door (ook als je via Terug hier weer komt): elk maar één keer starten (U074).
@@ -672,6 +682,11 @@ class Jij(Pagina):
             self.gestart.add(naam)
             rij.schuif.setEnabled(False)   # niet meer uit te zetten hier: het loopt al
             self.al_bezig.show()
+        # Microsoft 365: alleen starters in het startmenu, dus aan en weer uit kan gewoon (ook via Terug).
+        office = self.office.schuif.isChecked()
+        if office != self.office_begin and bestaat("bugos-windows"):
+            start("bugos-windows", "office", "aan" if office else "uit")
+            self.office_begin = office
         # Gamen: Steam starten we hier niet meer (A-10), dat gebeurt pas bij 'Aan de slag' (Welkom.steam_klaarzetten),
         # stil. Er loopt dus nog niets: het schuifje blijft vrij, en via Terug kun je het weer uitzetten.
         if self.gamer.schuif.isChecked():
@@ -688,6 +703,15 @@ class Jij(Pagina):
             self.steam_straks = ()
             self.steam_uitleg.hide()
             self.steam_nog.hide()
+
+
+def office_staat() -> bool:
+    """Staat Microsoft 365 al in het startmenu (bugos_windows.office_staat)?"""
+    try:
+        import bugos_windows
+        return bugos_windows.office_staat()
+    except (ImportError, OSError):
+        return False
 
 
 def steam_opdracht() -> tuple:

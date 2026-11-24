@@ -26,6 +26,7 @@ website. Dit is wat BugOS dan doet (gebouwd 2026-11-24).
   startmenu** aan: Word, Excel, PowerPoint, Outlook en OneDrive als web-apps, elk in een eigen venster (de echte Office
   in je browser, gratis met een Microsoft-account). Nee kiezen probeert het installatieprogramma toch.
 - **Start een programma meteen niet**, dan vraagt BugOS of je onderdelen van Microsoft wilt toevoegen.
+- **Welkom** > "Wat ga je doen?" heeft de schakelaar **Ik gebruik Microsoft Office**: dan staat Microsoft 365 meteen in het startmenu.
 - **Windows-programma's** (in het startmenu, en in Instellingen > Geïnstalleerde apps) = `bugos-windows`:
   - je Windows-programma's, met **Verwijderen** (hun eigen verwijderprogramma, zoals in Windows);
   - **Onderdelen van Microsoft**: Visual C++ 2015-2022, .NET Framework 4.8, .NET Desktop Runtime 8,
