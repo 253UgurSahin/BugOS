@@ -2098,7 +2098,9 @@ class Winkel(Venster):
         self.ververs_alles()
         # Zonder --noninteractive: dan mag KDE om een wachtwoord vragen (een gezinslid dat geen beheerder is,
         # krijgt anders nooit de vraag en het installeren mislukt stil). -y beantwoordt de rest.
-        self.start_flatpak(["install", "-y", "flathub", app["id"]])
+        # --system: zoals bugos-first-boot. Staat flathub ook bij de gebruiker (ontwikkelaarsmodus zet die neer voor wie
+        # geen beheerder is), dan vroeg flatpak anders 'welke installatie?', en dat kan zonder terminal niemand zeggen.
+        self.start_flatpak(["install", "--system", "-y", "flathub", app["id"]])
 
     def mijn_apps_erbij(self) -> None:
         """'Mijn apps' in de zijbalk, één keer (ook na je eerste app, zonder de Winkel opnieuw te openen) (U081)."""

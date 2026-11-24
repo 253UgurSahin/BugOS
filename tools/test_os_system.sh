@@ -295,19 +295,76 @@ klopt '[[ "$(hulp controle_updates)" == let_op* ]]' "hulp: nieuwere versie klaar
 
 # U007: ontwikkelaarsmodus mag niet AAN zeggen als het klaarzetten mislukt (bijv. geen internet).
 kopie bugos-developer
+# shellcheck disable=SC2034  # gelezen in de controles (via eval)
+LOGBOEK_DEV="$TMP/thuis/.local/state/bugos/ontwikkelaar.log"
 nep flatpak 'exit 1'
 nep distrobox 'case "$1" in list) exit 0;; *) exit 1;; esac'
 nep kdialog 'echo "$*" >>"'"$TMP"'/vensters"'
+nep nmcli 'echo none'
 draai bugos-developer aan
 klopt '[ $code -ne 0 ] && [ "$(HOME="$TMP/thuis" XDG_CONFIG_HOME="$TMP/thuis/.config" bash "$TMP/bugos-developer" status)" = uit ]' \
     "ontwikkelaar: alles mislukt -> afsluitcode niet 0 en status uit"
-klopt 'grep -qi "online" "$TMP/vensters" 2>/dev/null' "ontwikkelaar: mislukt -> uitleg 'Are you online?'"
+klopt 'grep -qi "not online" "$TMP/vensters" 2>/dev/null' "ontwikkelaar: mislukt en NetworkManager zegt 'none' -> 'You are not online'"
+# Online (NetworkManager: full), maar VS Code lukt niet: dat zeggen, nooit 'Are you online?', en het logboek blijft.
+nep flatpak 'echo "error: Unable to load summary from remote flathub: Server returned status 503" >&2; exit 1'
+nep nmcli 'echo full'
+rm -f "$TMP/vensters"
+draai bugos-developer aan
+klopt '[ $code -ne 0 ] && grep -q "Visual Studio Code could not be installed" "$TMP/vensters" && ! grep -qi "online" "$TMP/vensters"' \
+    "ontwikkelaar: online maar VS Code mislukt -> dat wordt gezegd, geen 'Are you online?'"
+klopt 'grep -q "status 503" "$LOGBOEK_DEV" && grep -qF "$LOGBOEK_DEV" "$TMP/vensters"' \
+    "ontwikkelaar: wat flatpak zei blijft in ~/.local/state/bugos/ontwikkelaar.log, en de melding noemt dat bestand"
+# Een gastnetwerk met een inlogpagina (NetworkManager: portal): eerst inloggen.
+nep nmcli 'echo portal'
+rm -f "$TMP/vensters"
+draai bugos-developer aan
+klopt 'grep -qi "log in" "$TMP/vensters" && ! grep -qi "are you online" "$TMP/vensters"' "ontwikkelaar: wifi met inlogpagina -> 'log in'"
 # U411: mislukt omdat de computer vol is: dat zeggen, niet 'ben je online?'.
 nep flatpak 'echo "error: No space left on device" >&2; exit 1'
+nep nmcli 'echo none'
 rm -f "$TMP/vensters"
 draai bugos-developer aan
 klopt 'grep -qi "full" "$TMP/vensters" && ! grep -qi "online" "$TMP/vensters"' "U411: ontwikkelaar: computer vol -> dat wordt gezegd"
+nep nmcli 'echo full'
+# VS Code zoals de Winkel: systeembreed van de flathub van het systeem, met -y en zonder --noninteractive (dan mag KDE
+# om een wachtwoord vragen). Eerst --user zonder flathub voor de gebruiker: dat mislukte altijd.
+nep flatpak 'echo "$*" >>"'"$TMP"'/flatpak-args"; case "$1" in info) exit 1;; remotes) echo flathub;; esac; exit 0'
+nep distrobox 'exit 0'
+rm -f "$TMP/flatpak-args" "$TMP/thuis/.config/bugos/ontwikkelaar-aan"
+draai bugos-developer aan
+klopt '[ $code -eq 0 ] && grep -qx "install --system -y flathub com.visualstudio.code" "$TMP/flatpak-args" && ! grep -q -- "--user" "$TMP/flatpak-args"' \
+    "ontwikkelaar: VS Code systeembreed van Flathub, zoals de Winkel (geen --noninteractive, geen --user)"
+# Geen flathub op het systeem (bugos-first-boot nog niet klaar): dan de bron voor de gebruiker erbij, en voor jou alleen.
+nep flatpak 'echo "$*" >>"'"$TMP"'/flatpak-args"; case "$1" in info|remotes) exit 1;; esac; exit 0'
+rm -f "$TMP/flatpak-args" "$TMP/thuis/.config/bugos/ontwikkelaar-aan"
+draai bugos-developer aan
+klopt '[ $code -eq 0 ] && grep -qx "remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo" "$TMP/flatpak-args" && grep -qx "install --user -y --noninteractive flathub com.visualstudio.code" "$TMP/flatpak-args"' \
+    "ontwikkelaar: geen flathub op het systeem -> eerst de flathub van de gebruiker, dan VS Code voor jou"
+# Lukt systeembreed niet (geen beheerder, of Annuleren bij het wachtwoord): dan voor jou alleen.
+nep flatpak 'echo "$*" >>"'"$TMP"'/flatpak-args"; case "$1 $2" in info*) exit 1;; remotes*) echo flathub;; "install --system") echo "error: Not authorized" >&2; exit 1;; esac; exit 0'
+rm -f "$TMP/flatpak-args" "$TMP/thuis/.config/bugos/ontwikkelaar-aan"
+draai bugos-developer aan
+klopt '[ $code -eq 0 ] && grep -q "install --user" "$TMP/flatpak-args"' "ontwikkelaar: systeembreed geweigerd -> VS Code voor jou alleen"
+# Het Fedora-beeld ophalen lukt niet terwijl je online bent (een gastnetwerk dat de server tegenhoudt): dat zeggen.
 nep flatpak 'exit 0'
+nep distrobox 'case "$1" in list) exit 0;; create) echo "Error: pinging container registry registry.fedoraproject.org: dial tcp: i/o timeout" >&2; exit 1;; esac; exit 0'
+rm -f "$TMP/vensters"
+draai bugos-developer aan
+klopt '[ $code -ne 0 ] && grep -q "dev box could not be made" "$TMP/vensters" && grep -qi "guest network" "$TMP/vensters" && ! grep -qi "are you online" "$TMP/vensters"' \
+    "ontwikkelaar: Fedora-beeld niet te halen terwijl je online bent -> 'dev box could not be made', geen 'Are you online?'"
+# De pakketten in het doosje lukken niet: dat zeggen, en het halve doosje dat we net maakten weer weg.
+nep distrobox 'echo "$*" >>"'"$TMP"'/distrobox-args"; case "$1" in list) exit 0;; enter) exit 1;; esac; exit 0'
+rm -f "$TMP/vensters" "$TMP/distrobox-args"
+draai bugos-developer aan
+klopt '[ $code -ne 0 ] && grep -q "installing the developer tools" "$TMP/vensters" && grep -q "^rm --force dev" "$TMP/distrobox-args"' \
+    "ontwikkelaar: pakketten in het doosje mislukt -> dat wordt gezegd, en het halve doosje gaat weg"
+nep distrobox 'echo "$*" >>"'"$TMP"'/distrobox-args"; case "$1" in list) echo "x | dev | y";; enter) exit 1;; esac; exit 0'
+rm -f "$TMP/distrobox-args"
+draai bugos-developer aan
+klopt '[ $code -ne 0 ] && ! grep -q "^rm" "$TMP/distrobox-args"' "ontwikkelaar: een doosje dat er al was, blijft altijd staan"
+rm -f "$TMP/bin/nmcli" "$TMP/thuis/.config/bugos/ontwikkelaar-aan"
+nep flatpak 'exit 0'
+nep distrobox 'case "$1" in list) exit 0;; *) exit 1;; esac'
 draai bugos-developer aan
 klopt '[ $code -ne 0 ] && [ ! -e "$TMP/thuis/.config/bugos/ontwikkelaar-aan" ]' "ontwikkelaar: dev-doosje mislukt -> niet aan"
 nep distrobox 'case "$1" in list) exit 0;; enter) exit 1;; *) exit 0;; esac'
@@ -652,10 +709,12 @@ nep busctl 'exit 0'
 draai bugos-first-boot
 klopt '[ "$code" -eq 0 ] && grep -q "org.kde.gwenview" "$TMP/flatpak-log" && grep -q "org.kde.okular" "$TMP/flatpak-log"' \
     "U224: na de installatie is er een programma voor foto's (Gwenview) en PDF's (Okular)"
-klopt 'grep -qx "install --system --noninteractive --or-update flathub org.mozilla.firefox" "$TMP/flatpak-log" && grep -q "flathub com.valvesoftware.Steam$" "$TMP/flatpak-log"' \
-    "Winkel: Firefox en Steam komen als Flatpak van Flathub (geen pakket meer in BugOS, dus te verwijderen)"
-klopt '[ "$(grep -c "^install" "$TMP/flatpak-log")" -eq "$AANTAL" ] && [ -e "$TMP/var-bugos/eerste-start-klaar" ] && [ "$(sort -u "$TMP/var-bugos/standaard-apps-klaargezet" | wc -l)" -eq "$AANTAL" ]' \
-    "Winkel: elke standaard-app apart geïnstalleerd en onthouden als klaargezet ($AANTAL apps)"
+klopt '! grep -q "org.mozilla.firefox" "$TMP/flatpak-log" && grep -qx "install --system --noninteractive --or-update flathub com.valvesoftware.Steam" "$TMP/flatpak-log"' \
+    "Winkel: Steam komt als Flatpak van Flathub; Firefox niet meer vanzelf (je kiest je browser in Welkom)"
+klopt 'grep -qx org.mozilla.firefox "$TMP/var-bugos/standaard-apps-klaargezet"' \
+    "Browser: op een nieuwe computer telt Firefox als klaargezet (komt later ook nooit vanzelf)"
+klopt '[ "$(grep -c "^install" "$TMP/flatpak-log")" -eq "$AANTAL" ] && [ -e "$TMP/var-bugos/eerste-start-klaar" ] && [ "$(sort -u "$TMP/var-bugos/standaard-apps-klaargezet" | wc -l)" -eq "$((AANTAL + 1))" ]' \
+    "Winkel: elke standaard-app apart geïnstalleerd en onthouden als klaargezet ($AANTAL apps, plus Firefox als 'niet vanzelf')"
 klopt 'grep -q "remote-modify --system --enable flathub" "$TMP/flatpak-log"' "U466: een uitgeschakelde flathub wordt bij de eerste start weer aangezet"
 # Daarna: alles is al klaar. Dan meteen stoppen, zonder op internet te wachten of flatpak iets te laten doen.
 : >"$TMP/flatpak-log"
@@ -663,8 +722,8 @@ klopt 'grep -q "remote-modify --system --enable flathub" "$TMP/flatpak-log"' "U4
 draai bugos-first-boot
 klopt '[ "$code" -eq 0 ] && ! grep -qE "^(install|remote)" "$TMP/flatpak-log" && [ ! -s "$TMP/nm-log" ]' \
     "Winkel: alles al klaargezet: de dienst stopt meteen (geen wachten op internet bij elke start)"
-# Je verwijdert Firefox zelf (Winkel of Instellingen > Apps): BugOS zet hem nooit meer vanzelf terug.
-sed -i '/^org.mozilla.firefox$/d' "$TMP/fp-geinstalleerd"
+# Je verwijdert een standaard-app zelf (Winkel of Instellingen > Apps): BugOS zet hem nooit meer vanzelf terug.
+sed -i '/^org.videolan.VLC$/d' "$TMP/fp-geinstalleerd"
 : >"$TMP/flatpak-log"
 draai bugos-first-boot
 klopt '[ "$code" -eq 0 ] && ! grep -q "^install" "$TMP/flatpak-log"' \
@@ -724,9 +783,9 @@ klopt '! grep -qxE "\s*firefox\s*" "$ROOT/build_files/packages.txt" && ! grep -q
     "Winkel: Firefox en Steam zitten niet meer als pakket in het beeld"
 # VM-test 2026-11-16: kinoite-main brengt Firefox zelf mee, met firefox-langpacks erbij; rpm -e --test firefox
 # weigerde daardoor, en dan had je twee Firefoxen (pakket en Flatpak). Samen weghalen.
-klopt 'grep -q "\"firefox,firefox-langpacks org.mozilla.firefox ja\"" "$ROOT/build_files/build.sh" && grep -q "rpm -e --test \"\${weg\[@\]}\"" "$ROOT/build_files/build.sh"'     "Winkel: Firefox gaat samen met zijn taalpakketten uit het beeld (anders weigert rpm)"
-klopt 'grep -q "^x-scheme-handler/https=org.mozilla.firefox.desktop" "$ROOT/system_files/etc/xdg/kde-mimeapps.list" && grep -q "^text/html=org.mozilla.firefox.desktop" "$ROOT/system_files/etc/xdg/kde-mimeapps.list"' \
-    "Winkel: Firefox (de Flatpak) is de standaardbrowser"
+klopt 'grep -q "\"firefox,firefox-langpacks org.mozilla.firefox nee\"" "$ROOT/build_files/build.sh" && grep -q "rpm -e --test \"\${weg\[@\]}\"" "$ROOT/build_files/build.sh"'     "Winkel: Firefox gaat samen met zijn taalpakketten uit het beeld (anders weigert rpm)"
+klopt '! grep -qE "^(x-scheme-handler/https?|text/html)=" "$ROOT/system_files/etc/xdg/kde-mimeapps.list"' \
+    "Browser: BugOS zet geen vaste standaardbrowser meer (je kiest hem in Welkom)"
 klopt 'grep -q "^L+ /var/lib/flatpak/extension/org.mozilla.firefox.systemconfig/x86_64/stable .* /usr/share/bugos/firefox-systemconfig$" "$ROOT/system_files/usr/lib/tmpfiles.d/bugos-firefox.conf" && grep -qF "pref(\"browser.tabs.inTitlebar\", 0);" "$ROOT/system_files/usr/share/bugos/firefox-systemconfig/defaults/pref/bugos.js"' \
     "Winkel: de BugOS-instellingen voor Firefox (zelfde vensterbalk) gelden ook voor de Flatpak"
 nep bugos-updates 'exit 0'
@@ -942,6 +1001,55 @@ klopt '[ -L "$VH/.mozilla/firefox" ] && [ -e "$VH/.local/share/bugos/verhuisd-or
 klopt 'grep -qx "Exec=/usr/bin/bugos-verhuis-apps" "$ROOT/system_files/etc/xdg/autostart/bugos-verhuis-apps.desktop"'     "Verhuizen: draait bij het inloggen"
 if command -v shellcheck >/dev/null 2>&1; then
     klopt 'shellcheck "$VA"' "Verhuizen: shellcheck vindt niets in bugos-verhuis-apps"
+fi
+
+# Browser kiezen in Welkom (bugos-browser, 2026-11-24): installeren, standaard maken, en zonder internet later.
+kopie bugos-browser
+: >"$TMP/fp-geinstalleerd"
+: >"$TMP/fp-faal"
+: >"$TMP/flatpak-log"
+: >"$TMP/xdg-log"
+nep xdg-settings 'echo "xdg-settings $*" >>"'"$TMP"'/xdg-log"'
+nep xdg-mime 'echo "xdg-mime $*" >>"'"$TMP"'/xdg-log"'
+nep kwriteconfig6 'echo "kwriteconfig6 $*" >>"'"$TMP"'/xdg-log"'
+nep bugos-panel 'echo "bugos-panel $*" >>"'"$TMP"'/xdg-log"'
+nep bugos-flatpak-style 'exit 0'
+nep flatpak 'echo "$*" >>"'"$TMP"'/flatpak-log"
+laatste="${*: -1}"
+case "$1" in
+    info) grep -qxF -- "$laatste" "'"$TMP"'/fp-geinstalleerd" ;;
+    install) echo "$laatste" >>"'"$TMP"'/fp-geinstalleerd" ;;
+    *) exit 0 ;;
+esac'
+nep nm-online 'exit 0'
+nep nmcli 'echo full'
+draai bugos-browser kies "com.google.Chrome; rm -rf ~"
+klopt '[ "$code" -eq 2 ] && ! grep -q "^install" "$TMP/flatpak-log"' "Browser: alleen een browser uit de lijst gaat naar flatpak"
+draai bugos-browser kies com.google.Chrome
+klopt '[ "$code" -eq 0 ] && grep -qx "install --user -y flathub com.google.Chrome" "$TMP/flatpak-log" && grep -q "xdg-settings set default-web-browser com.google.Chrome.desktop" "$TMP/xdg-log" && grep -q "xdg-mime default com.google.Chrome.desktop x-scheme-handler/https" "$TMP/xdg-log"' \
+    "Browser: Chrome gekozen: geïnstalleerd en de standaardbrowser"
+klopt 'grep -q "bugos-panel taakbalk vastmaken com.google.Chrome.desktop" "$TMP/xdg-log" && grep -q "bugos-panel taakbalk losmaken org.mozilla.firefox.desktop" "$TMP/xdg-log"' \
+    "Browser: Chrome op de taakbalk in plaats van Firefox"
+draai bugos-browser status
+klopt 'grep -qx com.google.Chrome "$TMP/uit" && [ ! -e "$TMP/thuis/.config/bugos/browser.open" ]' "Browser: de keuze is onthouden, er staat niets meer open"
+# Zonder internet: onthouden, en bij het volgende inloggen (bugos-browser later) alsnog.
+nep nmcli 'echo none'
+: >"$TMP/flatpak-log"
+draai bugos-browser kies com.brave.Browser
+klopt '[ "$code" -ne 0 ] && ! grep -q "^install" "$TMP/flatpak-log" && [ -e "$TMP/thuis/.config/bugos/browser.open" ]' \
+    "Browser: geen internet: niets installeren, de keuze blijft open staan"
+draai bugos-browser later
+klopt '! grep -q "^install" "$TMP/flatpak-log" && [ -e "$TMP/thuis/.config/bugos/browser.open" ]' "Browser: bij inloggen nog steeds geen internet: later"
+nep nmcli 'echo full'
+draai bugos-browser later
+klopt 'grep -qx "install --user -y flathub com.brave.Browser" "$TMP/flatpak-log" && [ ! -e "$TMP/thuis/.config/bugos/browser.open" ]' \
+    "Browser: bij inloggen met internet komt de gekozen browser alsnog"
+: >"$TMP/flatpak-log"
+draai bugos-browser later
+klopt '! grep -q "^install" "$TMP/flatpak-log"' "Browser: daarna doet inloggen niets meer"
+klopt 'grep -qx "Exec=/usr/bin/bugos-browser later" "$ROOT/system_files/etc/xdg/autostart/bugos-browser.desktop"' "Browser: draait bij het inloggen"
+if command -v shellcheck >/dev/null 2>&1; then
+    klopt 'shellcheck -x "$BIN/bugos-browser"' "Browser: shellcheck vindt niets in bugos-browser"
 fi
 
 echo "$fouten fout(en)."

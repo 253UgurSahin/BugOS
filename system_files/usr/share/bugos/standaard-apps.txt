@@ -8,8 +8,8 @@
 # Komt er later een regel bij (een nieuwe BugOS-versie), dan krijgen computers die de eerste start al deden die app
 # ook, één keer.
 
-# Internet: de browser. Zat tot 2026-11 als pakket in BugOS (niet te verwijderen); nu een Flatpak.
-org.mozilla.firefox
+# Internet: geen vaste browser meer. Je kiest hem zelf in Welkom (bugos-browser): Firefox, Chrome, Edge, Brave of
+# Chromium. Wie BugOS al had (toen zat Firefox erin), houdt Firefox: zie bugos-first-boot.
 # Kantoor: brieven, rekenbladen en presentaties (opent ook Word- en Excel-bestanden).
 org.libreoffice.LibreOffice
 # Films en muziek.

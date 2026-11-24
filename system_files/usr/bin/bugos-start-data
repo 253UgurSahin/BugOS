@@ -375,7 +375,20 @@ def favoriet_ids() -> list[str]:
                 ids = [x for x in cfg.get("General", "Prepend").split(";") if x]
         except configparser.Error:
             pass
+        # De browser die je in Welkom koos (bugos-browser) staat op de plek van Firefox in de standaardlijst.
+        gekozen = gekozen_browser()
+        if gekozen and gekozen not in ids:
+            ids = [gekozen if i in ("org.mozilla.firefox.desktop", "firefox.desktop") else i for i in ids]
     return ids
+
+
+def gekozen_browser() -> str:
+    """De desktop-id van de browser die je in Welkom koos (~/.config/bugos/browser, van bugos-browser), of ''."""
+    try:
+        app_id = (HOME / ".config/bugos/browser").read_text().split("\n", 1)[0].strip()
+    except OSError:
+        return ""
+    return f"{app_id}.desktop" if APP_ID_VORM.match(app_id) else ""
 
 
 def favorieten(apps: list[dict]) -> list[dict]:

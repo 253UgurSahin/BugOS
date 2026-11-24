@@ -742,6 +742,70 @@ _inet.toon(True, True, False)
 klopt(not _inet.kies.isHidden() and _inet.chip_icoon.lijn == "wifi", "A-09: online via wifi: de wifi-knop en het wifi-teken blijven")
 klopt("kabel" in bugos_ui.LIJN, "A-09: het lijn-icoon 'kabel' bestaat")
 
+# W-01 (2026-11-24, een echte laptop op gastwifi): na het verbinden deed 'Opnieuw kijken' zichtbaar niets. Nu: per
+# regel lezen (een nmcli-waarschuwing op stderr), NetworkManager echt opnieuw laten kijken, en 'portal' (eerst inloggen)
+# en 'limited' (verbonden, geen internet) eerlijk uitleggen.
+def _nep_nmcli(conn: str, check: str, devs: str):
+    def nep(*a, **_k):
+        if "check" in a:
+            return 0, check
+        if "CONNECTIVITY" in a:
+            return 0, conn
+        if "TYPE,STATE,CONNECTION" in a:
+            return 0, devs
+        return 0, "\n".join(r.rsplit(":", 1)[0] for r in devs.splitlines())
+    return nep
+
+
+welkom.draai = _nep_nmcli("Warning: nmcli (1.52.0) and NetworkManager (1.50.0) versions don't match.\nfull\n", "full", "")
+klopt(welkom.internet_stand() == "full", f"W-01: een waarschuwing van nmcli maakt 'full' niet stuk ({welkom.internet_stand()})")
+welkom.draai = _nep_nmcli("limited\n", "full\n", "wifi:connected:ASW Guest\n")
+klopt(welkom.net_toestand()[0] == "full", f"W-01: oude stand, maar verbonden: NetworkManager kijkt opnieuw ({welkom.net_toestand()})")
+welkom.draai = _nep_nmcli("portal\n", "portal\n", "wifi:connected:ASW Guest\nethernet:unavailable:\n")
+_nt = welkom.net_toestand()
+klopt(_nt == ("portal", True, False, "ASW Guest"), f"W-01: gastwifi met inlogpagina ({_nt})")
+welkom.draai = _nep_nmcli("unknown\n", "unknown\n", "wifi:connected:Thuis\\:5G\n")
+_nt = welkom.net_toestand()
+klopt(_nt[0] == "full" and _nt[3] == "Thuis:5G", f"W-01: 'unknown' met een verbinding telt als online (U090) ({_nt})")
+welkom.draai = _nep_nmcli("none\n", "none\n", "wifi:disconnected:\n")
+klopt(welkom.net_toestand()[0] == "none", "W-01: niet verbonden: geen internet")
+welkom.draai = _oud_draai
+_inet.toon(False, True, False, "portal", "ASW Guest")
+klopt(not _inet.inloggen.isHidden() and _inet.kies.isHidden() and "ASW Guest" in _inet.kop.text(),
+      f"W-01: portal: 'Inlogpagina openen' in plaats van 'Wifi kiezen' ({_inet.kop.text()!r})")
+_inet.toon(False, True, False, "limited", "ASW Guest")
+klopt(_inet.inloggen.isHidden() and not _inet.kies.isHidden() and _inet.status.soort == "let_op"
+      and "ASW Guest" in _inet.kop.text(), f"W-01: limited: verbonden maar zonder internet ({_inet.kop.text()!r})")
+_inet.toon(True, True, False, "full", "ASW Guest")
+klopt("ASW Guest" in _inet.kop.text() and _inet.status.soort == "goed", f"W-01: online via wifi met de naam ({_inet.kop.text()!r})")
+welkom.Kijker.start = lambda self: None   # niet echt nmcli draaien
+_inet.kijker = None
+_inet.ververs(nu_kijken=True)
+klopt(not _inet.opnieuw.isEnabled() and _inet.kijker.nu_kijken, "W-01: 'Opnieuw kijken' laat zien dat hij kijkt")
+_inet._bekend("full", True, False, "ASW Guest")
+klopt(_inet.opnieuw.isEnabled() and _inet.status.soort == "goed", "W-01: na het kijken is de knop weer vrij")
+del welkom.Kijker.start
+
+# Browser kiezen (2026-11-24): niet meer altijd Firefox. Vijf keuzes, niets vooraf gekozen; Volgende start
+# bugos-browser één keer, en niets kiezen start niets.
+_gestart_b: list = []
+_oud_start_b = welkom.start
+welkom.start = lambda *a: _gestart_b.append(a)
+_br = welkom.Browser()
+klopt(len(_br.knoppen) == 5 and _br.gekozen() == "" and "org.mozilla.firefox" in _br.knoppen,
+      f"Browser: vijf browsers, geen vooraf gekozen ({list(_br.knoppen)})")
+_br.bij_volgende()
+klopt(_gestart_b == [], "Browser: niets gekozen: niets installeren")
+_br.knoppen["com.google.Chrome"].click()
+_br.bij_volgende()
+_br.bij_volgende()
+klopt(_gestart_b == [("bugos-browser", "kies", "com.google.Chrome")], f"Browser: Chrome gekozen, één keer ({_gestart_b})")
+welkom.start = _oud_start_b
+_wk_b = welkom.Welkom()
+klopt(isinstance(_wk_b.paginas[2], welkom.Browser) and len(_wk_b.zij.stappen) == len(_wk_b.paginas) == 7,
+      "Browser: de derde stap in Welkom, en de zijbalk telt mee")
+_wk_b.deleteLater()
+
 # U074: Welkom > 'Wat ga je doen?': Volgende, Terug, Volgende start niets twee keer, en uitzetten na het starten kan
 # hier niet meer (het loopt al), dat zegt de pagina.
 _gestart: list = []

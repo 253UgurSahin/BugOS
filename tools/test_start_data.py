@@ -323,6 +323,21 @@ klopt(sd.niet_storen_tot_in_toekomst(_kde(datetime.now() + timedelta(hours=1)))
       and not sd.niet_storen_tot_in_toekomst(_kde(_u - timedelta(hours=2)) + ",UTC"),
       "U072: snelmenu leest 'niet storen tot' met komma-seconden en tijdzone goed")
 
+# Browser kiezen in Welkom (2026-11-24): de gekozen browser staat in het startmenu op de plek van Firefox.
+_oud_home = sd.HOME
+sd.HOME = TMP / "browser-thuis"
+(sd.HOME / ".config" / "bugos").mkdir(parents=True)
+try:
+    _zonder = sd.favoriet_ids()
+    (sd.HOME / ".config" / "bugos" / "browser").write_text("com.google.Chrome\n")
+    _met = sd.favoriet_ids()
+    (sd.HOME / ".config" / "bugos" / "browser").write_text("rm -rf ~\n")
+    _kapot = sd.favoriet_ids()
+finally:
+    sd.HOME = _oud_home
+klopt("org.mozilla.firefox.desktop" in _zonder and _met[0] == "com.google.Chrome.desktop"
+      and "org.mozilla.firefox.desktop" not in _met and _kapot == _zonder,
+      f"Browser: Chrome gekozen staat in het startmenu op de plek van Firefox ({_met[:2]})")
 # A-07 (VM-test): op Kinoite is /home een koppeling naar /var/home. HOME zegt '/home/test', recently-used.xbel
 # '/var/home/test/Documenten/...'. Het startmenu moet dan gewoon 'Documenten' tonen, niet het technische pad.
 _echt = TMP / "a07" / "var" / "home" / "test"

@@ -723,6 +723,45 @@ def post_merkteken(map_: Path) -> Path:
     return script
 
 
+def test_geenschijf() -> None:
+    """31. Welke schijven telt bugos-live geenschijf, en ziet het Intel RAID (met een nep-/sys)?"""
+    sys.path.insert(0, str(PY))
+    live = sys.modules.get("bugos_live") or laad("bugos_live", SRC / "bugos-live")
+    blok = TMP / "sys-block"
+    for naam, grootte in (("sda", 500_107_862_016), ("sdb", 31_000_000_000), ("zram0", 8_000_000_000),
+                          ("loop0", 3_000_000_000), ("sdc", 0), ("sr0", 4_000_000), ("nvme0n1", 256_060_514_304),
+                          ("mmcblk0", 4_000_000_000)):
+        (blok / naam).mkdir(parents=True)
+        (blok / naam / "size").write_text(str(grootte // 512) + "\n", encoding="utf-8")
+    r = live.doel_schijven(str(blok), stick="sdb")
+    klopt(r == ["nvme0n1", "sda"], f"31: schijven: niet de stick, zram, loop, een lege kaartlezer, cd of < 8 GB ({r})")
+    leeg = TMP / "sys-block-leeg"
+    (leeg / "sdb").mkdir(parents=True)
+    (leeg / "sdb" / "size").write_text(str(31_000_000_000 // 512), encoding="utf-8")
+    (leeg / "zram0").mkdir()
+    klopt(live.doel_schijven(str(leeg), stick="sdb") == [], "31: alleen de stick en zram: geen schijf")
+    pci = TMP / "sys-pci"
+    for naam, klasse, maker in (("0000:00:02.0", "0x030000", "0x8086"), ("0000:00:17.0", "0x010601", "0x8086")):
+        (pci / naam).mkdir(parents=True)
+        (pci / naam / "class").write_text(klasse + "\n", encoding="utf-8")
+        (pci / naam / "vendor").write_text(maker + "\n", encoding="utf-8")
+    klopt(not live.intel_raid(str(pci)), "31: AHCI (klasse 0x0106): geen RAID")
+    (pci / "0000:00:17.0" / "class").write_text("0x010400\n", encoding="utf-8")
+    klopt(live.intel_raid(str(pci)), "31: Intel RST in RAID-stand (klasse 0x0104, Intel) wordt gezien")
+    (pci / "0000:00:17.0" / "vendor").write_text("0x1022\n", encoding="utf-8")
+    klopt(not live.intel_raid(str(pci)), "31: RAID van een andere maker: niet de Intel-uitleg")
+    import bugos_ui
+    os.environ["BUGOS_INSTELLINGEN_VOORBEELD"] = "1"
+    w = live.GeenSchijf(True)
+    tekst = " ".join(x.text() for x in w.findChildren(live.QLabel))
+    klopt("AHCI" in tekst and "RAID" in tekst and "safe mode" in tekst, "31: het venster legt RAID -> AHCI uit")
+    w.bios.click()
+    klopt(not w.bios.isEnabled(), "31: 'Naar de BIOS' (in de voorbeeldstand gebeurt er niets echt)")
+    w.close()
+    os.environ.pop("BUGOS_INSTELLINGEN_VOORBEELD", None)
+    _ = bugos_ui
+
+
 def test_install() -> None:
     bin_ = TMP / "bugos-install"
     bin_.write_text(bron("bugos-install").replace("\r\n", "\n").replace("/usr/share/bugos", str(ROOT / "system_files/usr/share/bugos")),
@@ -739,7 +778,8 @@ def test_install() -> None:
     # bugos-live: 'start' (de melding) blijft staan tot iemand hem stopt, zoals het echte venster; het schrijft zijn
     # nummer op, zodat de test kan zien dat hij er was en daarna weg is. Wachten gebeurt in bash zelf (read op een
     # fifo, geen sleep): dan blijft het één proces dat bugos-live heet, en houdt niets de uitvoer van de test open.
-    nep("bugos-live", f'if [ "$1" = start ]; then echo "$$" > \'{TMP}/start-pid\'; exec >/dev/null 2>&1; '
+    nep("bugos-live", f'if [ "$1" = geenschijf ]; then exit "$(cat \'{TMP}/geenschijf-code\' 2>/dev/null || echo 0)"; fi\n'
+                      f'if [ "$1" = start ]; then echo "$$" > \'{TMP}/start-pid\'; exec >/dev/null 2>&1; '
                       f'rm -f \'{TMP}/start-fifo\'; mkfifo \'{TMP}/start-fifo\'; read -r -t 20 _ <> \'{TMP}/start-fifo\'; '
                       f'exit 0; fi\n'
                       f'echo "LANGUAGE=${{LANGUAGE-<leeg>}}" >> \'{LOG}\'; exit "$(cat \'{TMP}/live-code\' 2>/dev/null || echo 0)"')
@@ -782,7 +822,8 @@ def test_install() -> None:
         meldingen.append((pid_tekst.isdigit(), weg))
         # 'bugos-live start' draait tegelijk met liveinst: in welke volgorde ze in het logboek komen, ligt niet vast.
         # Die regel hier dus weglaten; meldingen houdt bij of hij er was.
-        return [r for r in log() if r.startswith(("bugos-live", "LANGUAGE=", "liveinst")) and r != "bugos-live start"]
+        return [r for r in log() if r.startswith(("bugos-live", "LANGUAGE=", "liveinst"))
+                and r not in ("bugos-live start", "bugos-live geenschijf")]
 
     draai_post = f"bash '{post}'\n"
     # 15. Gelukt, Nederlands gekozen. Anaconda schrijft LANG="nl_NL.UTF-8" (met aanhalingstekens, review I1).
@@ -836,7 +877,8 @@ def test_install() -> None:
         r = ronde(None)
         # 'bugos-live start' (de melding) staat hier niet in: die loopt tegelijk met liveinst (zie meldingen).
         return [x.split()[0] + (" " + x.split()[1] if x.startswith("bugos-live") and len(x.split()) > 1 else "")
-                for x in log() if x.startswith(("bugos-live", "liveinst", "zenity", "kdialog")) and x != "bugos-live start"]
+                for x in log() if x.startswith(("bugos-live", "liveinst", "zenity", "kdialog"))
+                and x not in ("bugos-live start", "bugos-live geenschijf")]
 
     r = bitlocker(10)
     klopt(r == ["bugos-live bitlocker"], f"19: BitLocker, 'Stop' (of het venster dicht): het installatieprogramma start niet ({r})")
@@ -857,6 +899,16 @@ def test_install() -> None:
     (TMP / "live-code").unlink()
     r = bitlocker(0)
     klopt(r == ["liveinst"], f"19: geen BitLocker: geen vraag, meteen het installatieprogramma ({r})")
+    # 31. Geen schijf (Dell OptiPlex in 'RAID On', 2026-11-24): bugos-live geenschijf legt het uit. 10 (venster dicht):
+    # het installatieprogramma start niet; iets anders (geen scherm, een fout): gewoon door.
+    (TMP / "geenschijf-code").write_text("10", encoding="utf-8")
+    r = bitlocker(0)
+    klopt(r == [], f"31: geen schijf, venster dicht: het installatieprogramma start niet ({r})")
+    klopt("bugos-live geenschijf" in log(), "31: bugos-install vraagt bugos-live geenschijf")
+    (TMP / "geenschijf-code").write_text("1", encoding="utf-8")
+    r = bitlocker(0)
+    klopt(r == ["liveinst"], f"31: kon het niet nakijken (een fout): gewoon door ({r})")
+    (TMP / "geenschijf-code").unlink()
 
     # 20. Statisch: niet meer exec liveinst; het merkteken is de laatste stap in de kickstart; geen nieuw yad-venster.
     tekst = bron("bugos-install")
@@ -1660,6 +1712,7 @@ def main() -> int:
     test_install()
     test_klok()
     test_live()
+    test_geenschijf()
     shutil.rmtree(TMP, ignore_errors=True)
     print()
     print("Alles goed." if not fouten else f"{fouten} fout(en).")

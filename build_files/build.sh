@@ -188,7 +188,9 @@ fi
 WINKEL_PAKKETTEN=(
     # kinoite-main brengt Firefox mee, met firefox-langpacks erbij. Die heeft Firefox nodig: dus samen weg
     # (anders weigert rpm -e --test, en had je twee Firefoxen: het pakket en de Flatpak). Komma = samen.
-    "firefox,firefox-langpacks org.mozilla.firefox ja"
+    # 'nee': je kiest je browser zelf in Welkom (bugos-browser); bugos-first-boot zet Firefox alleen terug voor wie
+    # BugOS al had (toen zat Firefox erin).
+    "firefox,firefox-langpacks org.mozilla.firefox nee"
     "steam com.valvesoftware.Steam ja"
     # Filelight zit in de basis (Kinoite 44), maar is verborgen: Bestanden laat zelf zien wat de meeste ruimte
     # inneemt. Wie hem toch wil, haalt hem uit de Winkel (en kan hem dan ook weer verwijderen).

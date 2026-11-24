@@ -5,6 +5,9 @@
     bugos-live start    terwijl het installatieprogramma opstart (bugos-install): "Het installatieprogramma start"
     bugos-live klaar    na het installeren (bugos-install): "BugOS staat op je computer" met "Nu opnieuw opstarten"
     bugos-live bitlocker  vóór het installeren (bugos-install), bij een BitLocker-schijf: doorgaan (0) of stoppen (10)
+    bugos-live geenschijf vóór het installeren (bugos-install): ziet BugOS geen schijf om op te installeren, dan zegt
+                          een venster waarom (vaak: de BIOS staat op RAID/Intel RST) en hoe het op te lossen is.
+                          0 = er is een schijf (geen venster), 10 = stoppen
 """
 
 import os
@@ -466,6 +469,152 @@ def vraag_bitlocker() -> bool:
                     t("Ja, doorgaan", "Yes, continue"), t("Stoppen", "Stop"), enter_is_nee=True)
 
 
+# ================================================================================== bugos-live geenschijf ===
+# Gemeten op een Dell OptiPlex (2026-11-24): het installatieprogramma liet een lege lijst schijven zien, zonder uitleg.
+# Dell (en HP, Lenovo) zetten de schijf vaak in de stand 'RAID On' (Intel Rapid Storage / RST). Linux ziet de schijf
+# dan niet: in de BIOS moet 'SATA/NVMe Operation' op AHCI. We kijken dat vóór het installatieprogramma na.
+SYS_BLOCK = "/sys/block"
+SYS_PCI = "/sys/bus/pci/devices"
+LIVE_MAP = "/run/initramfs/live"
+
+
+def _lees(pad: str) -> str:
+    try:
+        with open(pad, encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def live_schijf() -> str:
+    """De naam van de USB-stick waar BugOS nu vanaf draait (bijv. 'sdb'), of ''. Daar installeer je niet op."""
+    code, uit = draai("findmnt", "-n", "-o", "SOURCE", LIVE_MAP, timeout=5)
+    bron = uit.strip().splitlines()[0].strip() if code == 0 and uit.strip() else ""
+    if not bron.startswith("/dev/"):
+        return ""
+    code, ouder = draai("lsblk", "-n", "-o", "PKNAME", bron, timeout=5)
+    ouder = ouder.strip().splitlines()[0].strip() if code == 0 and ouder.strip() else ""
+    return ouder or os.path.basename(bron)
+
+
+def doel_schijven(sys_block: str | None = None, stick: str | None = None) -> list[str]:
+    """De schijven waarop je BugOS kunt zetten: echte schijven met ruimte (uit /sys/block), zonder de stick zelf,
+    zonder geheugen-schijven (zram, loop, ram), cd-spelers en lege kaartlezers (grootte 0)."""
+    sys_block = sys_block or SYS_BLOCK
+    stick = live_schijf() if stick is None else stick
+    try:
+        namen = sorted(os.listdir(sys_block))
+    except OSError:
+        return []
+    uit = []
+    for naam in namen:
+        if naam.startswith(("loop", "zram", "ram", "sr", "fd", "dm-", "md", "nbd")) or naam == stick:
+            continue
+        grootte = _lees(os.path.join(sys_block, naam, "size"))   # in blokjes van 512 bytes
+        if not grootte.isdigit() or int(grootte) * 512 < 8 * 1000 ** 3:   # kleiner dan 8 GB: geen plek voor BugOS
+            continue
+        uit.append(naam)
+    return uit
+
+
+def intel_raid(sys_pci: str | None = None) -> bool:
+    """Staat er een Intel-schijfregelaar in de stand RAID (Intel RST of VMD)? PCI-klasse 0x0104 = RAID, 0x8086 = Intel.
+    Leest /sys (geen lspci nodig)."""
+    sys_pci = sys_pci or SYS_PCI
+    try:
+        namen = os.listdir(sys_pci)
+    except OSError:
+        return False
+    for naam in namen:
+        klasse = _lees(os.path.join(sys_pci, naam, "class")).lower()
+        if klasse.startswith("0x0104") and _lees(os.path.join(sys_pci, naam, "vendor")).lower() == "0x8086":
+            return True
+    return False
+
+
+class GeenSchijf(Achtergrond):
+    """'BugOS ziet geen schijf': vóór het installatieprogramma, met de reden en wat je kunt doen. 'Naar de BIOS'
+    start de computer opnieuw op in de BIOS-instellingen (systemctl reboot --firmware-setup, alleen op UEFI)."""
+
+    def __init__(self, raid: bool):
+        super().__init__()
+        self.resize(760, 560 if raid else 420)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(48, 40, 48, 32)
+        lay.setSpacing(14)
+        logo = QLabel()
+        logo.setPixmap(QIcon("/usr/share/bugos/logo-dark.svg").pixmap(56, 56))
+        lay.addWidget(logo)
+        kop = label(t("BugOS ziet geen schijf om op te installeren", "BugOS cannot see a disk to install on"), "titel")
+        kop.setStyleSheet("color:#FFFFFF;")
+        kop.setWordWrap(True)
+        lay.addWidget(kop)
+        if raid:
+            tekst = t("De schijf van deze computer staat in de stand RAID (Intel Rapid Storage). Daarin kan BugOS hem "
+                      "niet zien. Zet hem in de BIOS op AHCI:\n\n"
+                      "1. Druk hieronder op 'Naar de BIOS' (of start opnieuw en druk bij het logo op F2; bij HP F10, "
+                      "bij Lenovo F1).\n"
+                      "2. Zoek 'SATA Operation' of 'Storage' (bij Dell onder System Configuration of Storage).\n"
+                      "3. Kies 'AHCI' (of 'AHCI/NVMe') in plaats van 'RAID On', en sla op.\n"
+                      "4. Start weer vanaf deze USB-stick en installeer BugOS.\n\n"
+                      "Wil je Windows op deze schijf houden? Start Windows dan eerst één keer in de veilige modus "
+                      "nadat je dit veranderd hebt, anders start Windows misschien niet meer. Ga je de hele schijf "
+                      "wissen, dan maakt dat niet uit.",
+                      "This computer's disk is set to RAID mode (Intel Rapid Storage). In that mode BugOS cannot see "
+                      "it. Set it to AHCI in the BIOS:\n\n"
+                      "1. Press 'Go to the BIOS' below (or restart and press F2 at the logo; F10 on HP, F1 on "
+                      "Lenovo).\n"
+                      "2. Find 'SATA Operation' or 'Storage' (on Dell under System Configuration or Storage).\n"
+                      "3. Choose 'AHCI' (or 'AHCI/NVMe') instead of 'RAID On', and save.\n"
+                      "4. Start from this USB stick again and install BugOS.\n\n"
+                      "Want to keep Windows on this disk? Then start Windows once in safe mode after changing this, "
+                      "otherwise Windows may not start any more. If you erase the whole disk, it does not matter.")
+        else:
+            tekst = t("Er zit geen schijf in deze computer die BugOS kan gebruiken (of hij is kleiner dan 8 GB). "
+                      "Zit de schijf er goed in? Kijk anders in de BIOS of de schijf aan staat, en of 'SATA "
+                      "Operation' op AHCI staat.",
+                      "There is no disk in this computer that BugOS can use (or it is smaller than 8 GB). Is the disk "
+                      "connected properly? Otherwise check in the BIOS that the disk is turned on, and that 'SATA "
+                      "Operation' is set to AHCI.")
+        uitleg = label(tekst, "sub")
+        uitleg.setStyleSheet("color:rgba(255,255,255,0.82);font-size:15px;")
+        uitleg.setWordWrap(True)
+        lay.addWidget(uitleg)
+        self.fout = Chip(t("!  Naar de BIOS lukte niet. Start opnieuw en druk bij het logo op F2.",
+                           "!  Going to the BIOS did not work. Restart and press F2 at the logo."), "let_op")
+        self.fout.setWordWrap(True)
+        self.fout.hide()
+        lay.addWidget(self.fout)
+        lay.addStretch(1)
+        rij = QHBoxLayout()
+        rij.setSpacing(12)
+        sluiten = Knop(t("Sluiten", "Close"), "rand", groot=True)
+        sluiten.setStyleSheet(WIT_RAND)
+        sluiten.clicked.connect(self.close)
+        self.bios = Knop(t("Naar de BIOS", "Go to the BIOS"), "hoofd", groot=True)
+        self.bios.setMinimumWidth(200)
+        self.bios.setStyleSheet(ROOD_UIT)
+        self.bios.clicked.connect(self.naar_bios)
+        rij.addWidget(sluiten)
+        rij.addWidget(self.bios)
+        rij.addStretch(1)
+        lay.addLayout(rij)
+        self.proces: QProcess | None = None
+
+    def naar_bios(self) -> None:
+        self.bios.setEnabled(False)
+        if os.environ.get("BUGOS_INSTELLINGEN_VOORBEELD"):   # voorbeeldstand (foto's, tests): niets echt doen
+            return
+        self.proces = QProcess(self)
+        self.proces.errorOccurred.connect(lambda _f: self._mislukt())
+        self.proces.finished.connect(lambda code, _s: self._mislukt() if code != 0 else None)
+        self.proces.start("systemctl", ["reboot", "--firmware-setup"])
+
+    def _mislukt(self) -> None:
+        self.fout.show()
+        self.bios.setEnabled(True)
+
+
 def venster(args: list[str]) -> QWidget:
     """Welk venster: 'start' terwijl het installatieprogramma opstart, 'klaar' na het installeren, anders het
     welkomstscherm."""
@@ -480,6 +629,11 @@ def main() -> int:
     app = maak_app("bugos-live", "bugos-live", sys.argv)
     if sys.argv[1:2] == ["bitlocker"]:
         return 0 if vraag_bitlocker() else STOPPEN
+    if sys.argv[1:2] == ["geenschijf"]:
+        if doel_schijven():
+            return 0
+        uitvoeren(app, GeenSchijf(intel_raid()))
+        return STOPPEN
     return uitvoeren(app, venster(sys.argv[1:]))
 
 

@@ -574,7 +574,7 @@ w.pagina.installeer_knop.click()
 klopt(w.pagina.installeer_knop.text() == "Bezig…", "F4: tijdens het installeren: 'Bezig…'")
 wacht(lambda: w.bezig_met is None and w.proces.state() == w.proces.ProcessState.NotRunning)
 _log = LOG.read_text()
-klopt("install -y flathub org.voorbeeld.Radio" in _log and "--noninteractive" not in _log,
+klopt("install --system -y flathub org.voorbeeld.Radio" in _log and "--noninteractive" not in _log,
       f"F4/U059: installeren met flatpak, zonder --noninteractive ({_log.strip().splitlines()[-1:]})")
 klopt(w.pagina.open_knop.isVisibleTo(w.pagina) and w.pagina.weg_knop.isVisibleTo(w.pagina)
       and not w.pagina.installeer_knop.isVisibleTo(w.pagina)
@@ -861,7 +861,7 @@ _wacht13 = w.proces.state() == w.proces.ProcessState.NotRunning and w._wachtend 
 wacht(lambda: w.bezig_met is None and not w.lijst_bezig() and w.proces.state() == w.proces.ProcessState.NotRunning)
 _regels = [r for r in LOG.read_text().splitlines() if r.startswith(("update", "install"))]
 klopt(_tijdens and _wacht13 and _regels[:2] == ["update --appstream --noninteractive flathub",
-                                                "install -y flathub org.voorbeeld.Radio"],
+                                                "install --system -y flathub org.voorbeeld.Radio"],
       f"9/I13: installeren start pas als het verversen klaar is ({_regels})")
 _klaar13 = w.start_lijst(handmatig=False)   # er loopt niets meer: dat mag weer
 wacht(lambda: not w.lijst_bezig(), 3000)

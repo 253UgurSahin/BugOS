@@ -24,13 +24,8 @@ image/bmp=org.kde.gwenview.desktop
 image/tiff=org.kde.gwenview.desktop
 image/avif=org.kde.gwenview.desktop
 application/pdf=org.kde.okular.desktop
-# Internet: Firefox, de Flatpak van Flathub (die bugos-first-boot klaarzet). Vroeger koos de Fedora-instelling de
-# Firefox die als pakket in BugOS zat (firefox.desktop); die is er niet meer. Is Firefox (nog) niet geïnstalleerd of
-# heb je hem verwijderd, dan slaat KDE deze regel over en kiest het een andere browser.
-x-scheme-handler/http=org.mozilla.firefox.desktop
-x-scheme-handler/https=org.mozilla.firefox.desktop
-text/html=org.mozilla.firefox.desktop
-application/xhtml+xml=org.mozilla.firefox.desktop
+# Internet: geen vaste browser. bugos-browser zet de browser die je in Welkom kiest als standaard (in je eigen
+# ~/.config/mimeapps.list). Kies je niets, dan neemt KDE de browser die je later installeert.
 # Een .txt opent in de eenvoudige Teksteditor (KWrite), niet in Kate voor programmeurs (A-14).
 text/plain=org.kde.kwrite.desktop
 
