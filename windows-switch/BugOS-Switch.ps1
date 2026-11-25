@@ -14,8 +14,8 @@
                         je wifi-netwerken, je netwerkprinters en een lijstje van
                         je programma's (formaat 2, zie FORMAT.md). Nooit
                         wachtwoorden.
-      4. Windows houden? - (alleen als je BugOS naast Windows wilt) Windows een
-                        beetje kleiner maken zodat BugOS ernaast past.
+      4. Waar komt BugOS? - in plaats van Windows, ernaast (dan maakt deze stap
+                        Windows wat kleiner) of op een andere schijf.
     In de code heten de pagina's nog naar hun oude plek (2 meenemen, 3 ruimte, 4 stick); de volgorde staat
     bij Toon-Pagina.
 
@@ -49,7 +49,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # Welke versie dit is: staat in de titelbalk en onderin de zijbalk, zodat je ziet of je de nieuwste hebt.
-$script:Versie = '2026.11.25-8'
+$script:Versie = '2026.11.25-9'
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -2135,7 +2135,7 @@ function Teken-Zijbalk($zij, $e) {
     $g.DrawImage($script:ZijBeeld, 0, 0, $zij.Width, $zij.Height)
     $g.DrawImage($script:LogoBeeld, (Fx 28), (Fx 32), (Fx 118), (Fx 32))
 
-    $namen = @((T 'Welkom' 'Welcome'), (T 'Controleren' 'Check'), (T 'USB-stick maken' 'Make USB stick'), (T 'Bestanden meenemen' 'Take your files'), (T 'Windows houden?' 'Keep Windows?'))
+    $namen = @((T 'Welkom' 'Welcome'), (T 'Controleren' 'Check'), (T 'USB-stick maken' 'Make USB stick'), (T 'Bestanden meenemen' 'Take your files'), (T 'Waar komt BugOS?' 'Where does BugOS go?'))
     $vlag = [System.Windows.Forms.TextFormatFlags]'VerticalCenter, SingleLine, EndEllipsis, NoPadding'
     for ($i = 0; $i -lt $namen.Count; $i++) {
         $y = 116 + $i * 50
@@ -2289,7 +2289,7 @@ $Paginas += {
     $y += (Nieuw-Rij 'nummer' (T 'Controleren' 'Check') (T 'Kan je computer BugOS aan? Dat zie je meteen.' 'Can your computer run BugOS? You see it right away.') $y '1') + 10
     $y += (Nieuw-Rij 'nummer' (T 'USB-stick maken' 'Make the USB stick') (T 'BugOS op een USB-stick van minstens 8 GB. Daarvan start je straks je computer om BugOS te installeren.' 'BugOS on a USB stick of at least 8 GB. You start your computer from it later to install BugOS.') $y '2') + 10
     $y += (Nieuw-Rij 'nummer' (T 'Bestanden meenemen' 'Take your files') (T "Een kopie van je foto's, documenten en meer, op die stick of een andere USB-schijf." 'A copy of your photos, documents and more, on that stick or another USB drive.') $y '3') + 10
-    [void](Nieuw-Rij 'nummer' (T 'Windows houden?' 'Keep Windows?') (T 'Alleen als je Windows en BugOS allebei wilt houden. Anders sla je dit over.' 'Only if you want to keep both Windows and BugOS. Otherwise you skip this.') $y '4')
+    [void](Nieuw-Rij 'nummer' (T 'Waar komt BugOS?' 'Where does BugOS go?') (T 'In plaats van Windows, ernaast, of op een andere schijf. Hier lees je wat je bij het installeren kiest.' 'Instead of Windows, next to it, or on another disk. Here you read what to choose when installing.') $y '4')
 }
 
 # --- Pagina 1: controle -----------------------------------------------------
@@ -2494,36 +2494,45 @@ $Paginas += {
 }
 
 # --- Pagina 3: ruimte maken ------------------------------------------------
-# Eerst kiezen: Windows houden of niet. Pas als je Windows wilt houden, rekenen we uit hoeveel ruimte er is (dat
-# duurt even en is anders voor niks). De keuze blijft onthouden als je terug en weer verder gaat.
-$script:NaastWindows = $null
+# Waar komt BugOS? De USB-stick is alleen het installatieprogramma: BugOS komt op een schijf. Drie keuzes:
+#   - vervang: op de schijf van Windows, die wordt helemaal gewist;
+#   - naast:   op dezelfde schijf naast Windows (deze stap maakt Windows kleiner; pas dan rekenen we de ruimte uit);
+#   - ander:   op een andere schijf (tweede SSD of externe USB-schijf), Windows blijft onaangeroerd.
+# Bij 'vervang' en 'ander' verandert deze stap niets: hij zegt wat je straks bij het installeren kiest.
+$script:Plek = ''
 $Paginas += {
-    $kop.Text = (T 'Windows houden?' 'Keep Windows?')
-    $y = Nieuw-Tekst (T 'Wil je bij het opstarten kunnen kiezen tussen Windows en BugOS? Dan maakt deze stap Windows wat kleiner, zodat BugOS ernaast past. Je bestanden in Windows blijven staan.' 'Do you want to choose between Windows and BugOS when the computer starts? Then this step makes Windows a bit smaller so BugOS fits next to it. Your files in Windows stay where they are.') 0
-    $script:W.naastKnop = Nieuw-Knop (T 'Ja, Windows houden' 'Yes, keep Windows') 0 ($y + 12) 220 'hoofd'
-    $script:W.alleenKnop = Nieuw-Knop (T 'Nee, alleen BugOS' 'No, only BugOS') 232 ($y + 12) 220
-    $script:W.y3 = $y + 62
-    $script:W.alleenKnop.Add_Click({
-        if (Test-Bezig) { return }
-        $script:NaastWindows = $false
-        Toon-PaginaOpnieuw
-    })
-    $script:W.naastKnop.Add_Click({
-        $script:NaastWindows = $true
-        Toon-PaginaOpnieuw
-    })
-    if ($script:NaastWindows -eq $true) {
-        $script:W.naastKnop.Enabled = $false
-        Start-Ruimte
-    } elseif ($script:NaastWindows -eq $false) {
-        $script:W.alleenKnop.Enabled = $false
-        [void](Nieuw-Rij 'goed' (T 'Zo installeer je BugOS' 'This is how you install BugOS') (T "1. Laat de BugOS-stick in de computer en start hem opnieuw op.`n2. Druk tijdens het opstarten op F12, F11, F9 of Esc (verschilt per computer) en kies de USB-stick.`n3. Kies bij het installeren 'De hele schijf gebruiken'. Windows gaat dan weg, met alles erop: zorg dus dat je bestanden mee zijn (stap 3)." "1. Leave the BugOS stick in the computer and restart it.`n2. While starting, press F12, F11, F9 or Esc (differs per computer) and choose the USB stick.`n3. When installing, choose 'Use entire disk'. Windows then goes away, with everything on it: so make sure your files came along (step 3).") $script:W.y3)
+    $kop.Text = (T 'Waar komt BugOS?' 'Where does BugOS go?')
+    $y = Nieuw-Tekst (T 'De USB-stick is alleen het installatieprogramma. Bij het installeren komt BugOS op een schijf. Kies waar:' 'The USB stick is only the installer. When you install, BugOS goes on a disk. Choose where:') 0
+    $keuzes = @(
+        @('vervang', (T 'In plaats van Windows' 'Instead of Windows'), (T 'Windows gaat weg, met alles erop.' 'Windows goes away, with everything on it.')),
+        @('naast', (T 'Naast Windows' 'Next to Windows'), (T 'Allebei op deze computer. Bij het aanzetten kies je.' 'Both on this computer. You choose when it starts.')),
+        @('ander', (T 'Op een andere schijf' 'On another disk'), (T 'Een tweede schijf of een externe USB-schijf. Windows blijft.' 'A second disk or an external USB drive. Windows stays.'))
+    )
+    $y += 10
+    foreach ($k in $keuzes) {
+        $soort = if ($script:Plek -eq $k[0]) { 'hoofd' } else { 'gewoon' }
+        $knop = Nieuw-Knop $k[1] 0 $y 220 $soort
+        $knop.Tag.Plek = $k[0]
+        $knop.Add_Click({
+            if (Test-Bezig) { return }
+            $script:Plek = $this.Tag.Plek
+            Toon-Pagina
+        })
+        $uitleg = Nieuw-Label $k[2] ($y + 2) 40 $Grijs -Klein
+        $uitleg.Left = Px 232; $uitleg.Width = Px ($script:Breedte - 232)
+        $y += 50
     }
-}
-
-function Toon-PaginaOpnieuw {
-    # Dezelfde pagina opnieuw tekenen (na een keuze), zonder het werk van de pagina zelf af te breken.
-    Toon-Pagina
+    $script:W.y3 = $y + 4
+    $opstarten = T 'Start je computer opnieuw op vanaf de BugOS-stick: druk tijdens het opstarten op F12, F11, F9 of Esc (verschilt per computer) en kies de USB-stick.' 'Restart your computer from the BugOS stick: while it starts, press F12, F11, F9 or Esc (differs per computer) and choose the USB stick.'
+    switch ($script:Plek) {
+        'vervang' {
+            [void](Nieuw-Rij 'let_op' (T 'Zo installeer je BugOS in plaats van Windows' 'This is how you install BugOS instead of Windows') (T "1. $opstarten`n2. Kies bij 'Installeren op' de schijf van deze computer en 'De hele schijf gebruiken'.`nAlles op die schijf wordt gewist: Windows en je bestanden. Neem ze dus eerst mee (stap 3). Deze stap zelf verandert niets." "1. $opstarten`n2. At 'Install on', choose the disk of this computer and 'Use the whole disk'.`nEverything on that disk is erased: Windows and your files. So take them along first (step 3). This step itself changes nothing.") $script:W.y3)
+        }
+        'naast' { Start-Ruimte }
+        'ander' {
+            [void](Nieuw-Rij 'goed' (T 'Zo installeer je BugOS op een andere schijf' 'This is how you install BugOS on another disk') (T "1. Zet de andere schijf in de computer of sluit hem aan.`n2. $opstarten`n3. Kies bij 'Installeren op' via 'Een andere schijf kiezen' die schijf (kijk naar de naam en de grootte), en 'De hele schijf gebruiken'. Alles op die schijf wordt gewist; Windows blijft zoals het is.`nDaarna start je computer meestal BugOS. Windows kies je met dezelfde toets bij het opstarten. Een externe USB-schijf moet er dan wel in zitten, en niet elke computer start van USB." "1. Put the other disk in the computer or connect it.`n2. $opstarten`n3. At 'Install on', use 'Choose another disk' to pick that disk (check the name and size), and 'Use the whole disk'. Everything on that disk is erased; Windows stays as it is.`nAfter that your computer usually starts BugOS. You choose Windows with the same key while starting. An external USB drive must be plugged in then, and not every computer starts from USB.") $script:W.y3)
+        }
+    }
 }
 
 function Start-Ruimte {
@@ -2754,7 +2763,7 @@ $Paginas += {
 }
 
 # De volgorde van de stappen: eerst de stick (die blijft bruikbaar), dan je bestanden (die kunnen op diezelfde stick),
-# en als laatste Windows houden of niet (vlak voor het installeren).
+# en als laatste waar BugOS komt (vlak voor het installeren).
 $Paginas = @($Paginas[0], $Paginas[1], $Paginas[4], $Paginas[2], $Paginas[3])
 
 function Toon-Pagina {
