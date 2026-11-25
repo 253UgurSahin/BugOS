@@ -1932,14 +1932,18 @@ $script:NL = $BugOSNL
 if ($Mee.ContainsKey('ExtraMappen')) { $script:ExtraMappen.Clear(); foreach ($e in $Mee.ExtraMappen) { [void]$script:ExtraMappen.Add($e) } }
 if ($Mee.ContainsKey('CloudMee')) { $script:CloudMee = $Mee.CloudMee }
 if ($Mee.ContainsKey('Cloud')) { $script:Cloud = $Mee.Cloud }
-$Voortgang = { param($p, $t) $Staat.Procent = $p; if ($t) { $Staat.Tekst = $t } }
+# (Altijd $Staat['...'] en nooit $Staat.Naam: een gedeelde hashtable met een punt geeft in Windows PowerShell 5.1
+# 'Argument types do not match'.)
+$Voortgang = { param($p, $t) $Staat['Procent'] = $p; if ($t) { $Staat['Tekst'] = $t } }
 try {
-    $Staat.Uitkomst = & ([scriptblock]::Create($Staat.Werk))
+    $Staat['Uitkomst'] = & ([scriptblock]::Create($Staat['Werk']))
 } catch {
-    $Staat.Fout = $_.Exception.Message
+    $Staat['Fout'] = $_.Exception.Message
 }
-foreach ($naam in $Staat.TerugNamen) { $Staat.Terug[$naam] = Get-Variable -Name $naam -Scope Global -ValueOnly -ErrorAction SilentlyContinue }
-$Staat.Klaar = $true
+$terugNaar = @{}
+foreach ($naam in $Staat['TerugNamen']) { $terugNaar[$naam] = Get-Variable -Name $naam -Scope Global -ValueOnly -ErrorAction SilentlyContinue }
+$Staat['Terug'] = $terugNaar
+$Staat['Klaar'] = $true
 '@
     [void]$ps.AddScript((Get-FunctieTekst) + "`n" + $start)
     $handle = $ps.BeginInvoke()
@@ -1991,8 +1995,11 @@ function Verwerk-Werken {
         foreach ($w in @($script:Werken)) {
             $p = -1.0; $t = ''; $af = $false
             if ($w.Soort -eq 'runspace') {
-                $p = [double]$w.Staat.Procent; $t = [string]$w.Staat.Tekst
-                $af = $w.Staat.Klaar -or $w.Handle.IsCompleted
+                # Met ['...']: een gedeelde (Synchronized) hashtable met een punt lezen geeft in Windows PowerShell 5.1
+                # 'Argument types do not match' (zo liep de eerste zelftest vast).
+                $gedeeld = $w.Staat
+                $p = [double]$gedeeld['Procent']; $t = [string]$gedeeld['Tekst']
+                $af = [bool]$gedeeld['Klaar'] -or $w.Handle.IsCompleted
             } else {
                 $v = Lees-Voortgang $w.Bestand
                 if ($v) {
@@ -2012,6 +2019,13 @@ function Verwerk-Werken {
                 Rond-Af $w
             }
         }
+    } catch {
+        # Een fout hier mag het venster niet laten hangen. In de zelftest: precies zeggen waar (en dan echt fout).
+        if ((Test-Path variable:Taak) -and $Taak -eq 'Zelftest') {
+            [Console]::WriteLine("FOUT in het klokje: $($_.Exception.Message)`n$($_.InvocationInfo.PositionMessage)")
+            throw
+        }
+        Write-Verbose "Klokje: $($_.Exception.Message)"
     } finally {
         $script:InTik = $false
         if ($script:Werken.Count -eq 0) { $script:WerkKlok.Stop() }
@@ -2022,9 +2036,13 @@ function Verwerk-Werken {
 function Rond-Af($w) {
     if ($w.Balk) { $w.Balk.Tag.Bezig = $false; $w.Balk.Invalidate() }
     if ($w.Soort -eq 'runspace') {
-        $staat = $w.Staat
-        try { [void]$w.PS.EndInvoke($w.Handle) } catch { if (-not $staat.Fout) { $staat.Fout = $_.Exception.Message } }
-        if (-not $staat.Klaar -and -not $staat.Fout -and $w.PS.Streams.Error.Count -gt 0) { $staat.Fout = "$($w.PS.Streams.Error[0])" }
+        # Een gewone kopie voor Klaar (daar mag dan gewoon $staat.Fout).
+        $gedeeld = $w.Staat
+        $staat = @{}
+        foreach ($k in @('Procent', 'Tekst', 'Klaar', 'Fout', 'Uitkomst', 'Terug', 'TerugNamen', 'Werk')) { $staat[$k] = $gedeeld[$k] }
+        try { [void]$w.PS.EndInvoke($w.Handle) } catch { if (-not $staat['Fout']) { $staat['Fout'] = $_.Exception.Message } }
+        if (-not $staat['Klaar'] -and -not $staat['Fout'] -and $w.PS.Streams.Error.Count -gt 0) { $staat['Fout'] = "$($w.PS.Streams.Error[0])" }
+        if ($null -eq $staat['Terug']) { $staat['Terug'] = @{} }
         $w.PS.Dispose(); $w.RS.Dispose()
     } else {
         $v = Lees-Voortgang $w.Bestand
