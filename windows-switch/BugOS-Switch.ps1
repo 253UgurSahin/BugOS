@@ -45,7 +45,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # Welke versie dit is: staat in de titelbalk en onderin de zijbalk, zodat je ziet of je de nieuwste hebt.
-$script:Versie = '2026.11.25-6'
+$script:Versie = '2026.11.25-7'
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -857,7 +857,7 @@ function Get-KrimpMogelijk {
     $part = Get-Partition -DriveLetter C
     $grens = Get-PartitionSupportedSize -DriveLetter C
     $kanWeg = [math]::Floor(($part.Size - $grens.SizeMin) / 1GB) - 10   # 10 GB marge voor Windows
-    return [math]::Max(0, $kanWeg)
+    return [math]::Max(0.0, [double]$kanWeg)
 }
 
 function Invoke-Krimp([int] $gb) {
@@ -1054,6 +1054,8 @@ function Read-IsoBytes($kaart, [string] $naam) {
 }
 
 function Copy-UitIso($kaart, [string] $naam, [string] $doel, [hashtable] $teller, [scriptblock] $Voortgang) {
+    # Let op: BugOS is groter dan 2 GB. Max met een klein getal (1) eerst kiest in PowerShell de Int32-versie en gaat dan stuk
+    # ('Value was either too large or too small for an Int32'): rekenen met [int64] (gevonden op een echte stick).
     # Eén bestand uit de ISO naar de stick, met voortgang over het geheel ($teller.Klaar van $teller.Totaal).
     if (-not $kaart.Bestanden.ContainsKey($naam)) { throw ((T 'Er ontbreekt iets in het BugOS-bestand: ' 'Something is missing in the BugOS file: ') + $naam) }
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $doel) | Out-Null
@@ -1072,7 +1074,7 @@ function Copy-UitIso($kaart, [string] $naam, [string] $doel, [hashtable] $teller
                 $teller.Klaar += $n
                 if ($Voortgang -and ([DateTime]::Now - $teller.Laatste).TotalMilliseconds -gt 250) {
                     $teller.Laatste = [DateTime]::Now
-                    & $Voortgang ([int](100 * $teller.Klaar / [math]::Max(1, $teller.Totaal))) (T "BugOS op de stick zetten: $([math]::Round($teller.Klaar / 1GB, 1)) van $([math]::Round($teller.Totaal / 1GB, 1)) GB" "Putting BugOS on the stick: $([math]::Round($teller.Klaar / 1GB, 1)) of $([math]::Round($teller.Totaal / 1GB, 1)) GB")
+                    & $Voortgang ([int](100 * $teller.Klaar / [math]::Max([int64]1, [int64]$teller.Totaal))) (T "BugOS op de stick zetten: $([math]::Round($teller.Klaar / 1GB, 1)) van $([math]::Round($teller.Totaal / 1GB, 1)) GB" "Putting BugOS on the stick: $([math]::Round($teller.Klaar / 1GB, 1)) of $([math]::Round($teller.Totaal / 1GB, 1)) GB")
                 }
             }
         }
@@ -1163,7 +1165,7 @@ function Write-BugOSStick([string] $iso, [int] $nummer, [scriptblock] $Voortgang
     $opEfi = @($kaart.Bestanden.Keys | Where-Object { $_ -like 'EFI/*' }) + @('images/pxeboot/vmlinuz', 'images/pxeboot/initrd.img')
     $efiBytes = 0L
     foreach ($n in $opEfi) { $efiBytes += Get-IsoGrootte $kaart $n }
-    $efiMB = [int64][math]::Max(256, [math]::Ceiling(($efiBytes * 1.15 + 32MB) / 64MB) * 64)
+    $efiMB = [int64][math]::Max(256.0, [math]::Ceiling(($efiBytes * 1.15 + 32MB) / 64MB) * 64)
     $squash = Get-IsoGrootte $kaart 'LiveOS/squashfs.img'
     if ($squash + $efiMB * 1MB + 256MB -gt $schijf.Size) { throw (T 'De USB-stick is te klein.' 'The USB stick is too small.') }
 

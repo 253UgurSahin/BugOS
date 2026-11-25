@@ -76,5 +76,8 @@ controle 'grep -A20 "function Clear-Stick" <<<"$PS" | grep -B1 "Initialize-Disk"
 # Windows 11 opent een .bat in Terminal; daar verbergt -WindowStyle Hidden niets. Via conhost --headless en start.
 controle 'tr -d "\r" <"$ROOT/windows-switch/Start BugOS Switch.bat" | grep -q "^ *start \"\" \"%SystemRoot%.System32.conhost.exe\" --headless powershell.exe"' \
     "Switch: het startbestand laat geen zwart venster openstaan (conhost --headless)"
+# [math]::Max(1, $groot) kiest in PowerShell de Int32-versie: met BugOS (meer dan 2 GB) ging de stick stuk.
+controle '! grep -nE "\[math\]::M(in|ax)\([0-9]+, *\\\$(teller|groot|grootte|totaal|kanWeg|squash|efiBytes)" <<<"$PS" && grep -q "\[math\]::Max(\[int64\]1, \[int64\]\$teller.Totaal)" <<<"$PS"' \
+    "Switch: rekenen met de grootte van BugOS (meer dan 2 GB) gaat niet in een Int32"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
