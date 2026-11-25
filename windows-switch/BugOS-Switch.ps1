@@ -1883,7 +1883,7 @@ $form.AcceptButton = $verder
 # Een klokje kijkt elke 0,12 seconde hoe ver het is: de balk beweegt (ook als we niet weten hoeveel procent), de tekst
 # zegt wat er gebeurt, en Terug/Volgende staan uit zolang er iets loopt dat je niet mag onderbreken.
 
-$script:Werken = New-Object 'System.Collections.Generic.List[object]'
+$script:Werken = New-Object System.Collections.ArrayList
 $script:InTik = $false
 $script:PaginaTeller = 0
 $script:FunctieTekst = ''
@@ -1903,7 +1903,11 @@ function Get-FunctieTekst {
     return $script:FunctieTekst
 }
 
-function Test-Bezig { return @($script:Werken | Where-Object { $_.Blokkeer }).Count -gt 0 }
+function Test-Bezig {
+    $lijst = $script:Werken.ToArray()
+    for ($i = 0; $i -lt $lijst.Length; $i++) { if ($lijst[$i].Blokkeer) { return $true } }
+    return $false
+}
 
 function Zet-Navigatie {
     $bezig = Test-Bezig
@@ -1947,7 +1951,7 @@ $Staat['Klaar'] = $true
 '@
     [void]$ps.AddScript((Get-FunctieTekst) + "`n" + $start)
     $handle = $ps.BeginInvoke()
-    $script:Werken.Add(@{ Soort = 'runspace'; Staat = $staat; PS = $ps; RS = $rs; Handle = $handle; Klaar = $Klaar
+    [void]$script:Werken.Add(@{ Soort = 'runspace'; Staat = $staat; PS = $ps; RS = $rs; Handle = $handle; Klaar = $Klaar
                          Balk = $Balk; Label = $Label; Blokkeer = [bool]$Blokkeer; Pagina = $script:PaginaTeller })
     if ($Balk) { $Balk.Visible = $true; $Balk.Tag.Bezig = $true }
     if ($Label -and $Tekst) { $Label.Text = $Tekst }
@@ -1972,7 +1976,7 @@ function Start-BeheerderTaak([string[]] $Argumenten, [scriptblock] $Klaar, $Balk
     } catch {
         return $false
     }
-    $script:Werken.Add(@{ Soort = 'proces'; Proces = $p; Bestand = $bestand; Klaar = $Klaar; Balk = $Balk; Label = $Label
+    [void]$script:Werken.Add(@{ Soort = 'proces'; Proces = $p; Bestand = $bestand; Klaar = $Klaar; Balk = $Balk; Label = $Label
                          Blokkeer = $true; Pagina = $script:PaginaTeller; Laatst = $null })
     if ($Balk) { $Balk.Visible = $true; $Balk.Tag.Bezig = $true }
     if ($Label -and $Tekst) { $Label.Text = $Tekst }
@@ -1989,47 +1993,55 @@ function Lees-Voortgang([string] $bestand) {
 function Verwerk-Werken {
     # Elke 0,12 seconde: de balk en de tekst bijwerken, en wat klaar is afronden. Niet twee keer tegelijk (een vraag of
     # melding van een Klaar laat het klokje doortikken).
+    # (Een 'for' over een kopie, en de foreach/try/finally uit elkaar: Windows PowerShell 5.1 gaf 'Argument types do
+    # not match' op 'foreach ($w in @($script:Werken))' binnen try/finally in het klokje.)
     if ($script:InTik) { return }
     $script:InTik = $true
-    try {
-        foreach ($w in @($script:Werken)) {
-            $p = -1.0; $t = ''; $af = $false
-            if ($w.Soort -eq 'runspace') {
-                # Met ['...']: een gedeelde (Synchronized) hashtable met een punt lezen geeft in Windows PowerShell 5.1
-                # 'Argument types do not match' (zo liep de eerste zelftest vast).
-                $gedeeld = $w.Staat
-                $p = [double]$gedeeld['Procent']; $t = [string]$gedeeld['Tekst']
-                $af = [bool]$gedeeld['Klaar'] -or $w.Handle.IsCompleted
-            } else {
-                $v = Lees-Voortgang $w.Bestand
-                if ($v) {
-                    $w.Laatst = $v
-                    $vp = Get-Waarde $v 'p'; if ($null -ne $vp) { $p = [double]$vp }
-                    $t = [string](Get-Waarde $v 't')
-                }
-                $af = $w.Proces.HasExited
+    $lijst = $script:Werken.ToArray()
+    for ($i = 0; $i -lt $lijst.Length; $i++) {
+        try {
+            Verwerk-Een $lijst[$i]
+        } catch {
+            # Een fout hier mag het venster niet laten hangen. In de zelftest: precies zeggen waar (en dan echt fout).
+            if ((Test-Path variable:Taak) -and $Taak -eq 'Zelftest') {
+                [Console]::WriteLine("FOUT in het klokje: $($_.Exception.Message)`n$($_.InvocationInfo.PositionMessage)")
+                $script:InTik = $false
+                throw
             }
-            if ($w.Balk) {
-                if ($p -ge 0) { $w.Balk.Tag.Bezig = $false; Zet-Balk $w.Balk $p }
-                else { $w.Balk.Tag.Bezig = $true; $w.Balk.Tag.Fase = ($w.Balk.Tag.Fase + 0.022) % 1.0; $w.Balk.Invalidate() }
-            }
-            if ($w.Label -and $t) { $w.Label.Text = $t }
-            if ($af) {
-                [void]$script:Werken.Remove($w)
-                Rond-Af $w
-            }
+            Write-Verbose "Klokje: $($_.Exception.Message)"
         }
-    } catch {
-        # Een fout hier mag het venster niet laten hangen. In de zelftest: precies zeggen waar (en dan echt fout).
-        if ((Test-Path variable:Taak) -and $Taak -eq 'Zelftest') {
-            [Console]::WriteLine("FOUT in het klokje: $($_.Exception.Message)`n$($_.InvocationInfo.PositionMessage)")
-            throw
+    }
+    $script:InTik = $false
+    if ($script:Werken.Count -eq 0) { $script:WerkKlok.Stop() }
+    Zet-Navigatie
+}
+
+function Verwerk-Een($w) {
+    $p = -1.0; $t = ''; $af = $false
+    if ($w.Soort -eq 'runspace') {
+        # Met ['...']: een gedeelde (Synchronized) hashtable niet met een punt lezen (Windows PowerShell 5.1).
+        $gedeeld = $w.Staat
+        $p = [double]$gedeeld['Procent']; $t = [string]$gedeeld['Tekst']
+        $af = [bool]$gedeeld['Klaar']
+        if (-not $af) { $af = [bool]$w.Handle.IsCompleted }
+    } else {
+        $v = Lees-Voortgang $w.Bestand
+        if ($v) {
+            $w.Laatst = $v
+            $vp = Get-Waarde $v 'p'
+            if ($null -ne $vp) { $p = [double]$vp }
+            $t = [string](Get-Waarde $v 't')
         }
-        Write-Verbose "Klokje: $($_.Exception.Message)"
-    } finally {
-        $script:InTik = $false
-        if ($script:Werken.Count -eq 0) { $script:WerkKlok.Stop() }
-        Zet-Navigatie
+        $af = [bool]$w.Proces.HasExited
+    }
+    if ($w.Balk) {
+        if ($p -ge 0) { $w.Balk.Tag.Bezig = $false; Zet-Balk $w.Balk $p }
+        else { $w.Balk.Tag.Bezig = $true; $w.Balk.Tag.Fase = ([double]$w.Balk.Tag.Fase + 0.022) % 1.0; $w.Balk.Invalidate() }
+    }
+    if ($w.Label -and $t) { $w.Label.Text = $t }
+    if ($af) {
+        [void]$script:Werken.Remove($w)
+        Rond-Af $w
     }
 }
 
@@ -2065,14 +2077,17 @@ function Rond-Af($w) {
 $form.Add_FormClosing({
     param($s, $e)
     if (-not (Test-Bezig)) { return }
-    if (@($script:Werken | Where-Object { $_.Soort -eq 'proces' }).Count -gt 0) {
+    $lijst = $script:Werken.ToArray()
+    $proces = $false
+    for ($i = 0; $i -lt $lijst.Length; $i++) { if ($lijst[$i].Soort -eq 'proces') { $proces = $true } }
+    if ($proces) {
         # De stick wordt gemaakt (of Windows kleiner): halverwege stoppen kan de stick of de schijf beschadigen.
         Toon (T 'Even wachten: dit is nog bezig. Halverwege stoppen kan je USB-stick of schijf beschadigen.' 'Please wait: this is still running. Stopping halfway can damage your USB stick or disk.') 'Warning'
         $e.Cancel = $true
         return
     }
     if (-not (Vraag (T 'Er loopt nog iets (kopiëren of downloaden). Toch stoppen? Wat er al staat, blijft staan.' 'Something is still running (copying or downloading). Stop anyway? What is already there stays.'))) { $e.Cancel = $true; return }
-    foreach ($w in @($script:Werken)) { if ($w.Soort -eq 'runspace') { try { $w.PS.Stop() } catch { Write-Verbose 'Stoppen lukte niet.' } } }
+    for ($i = 0; $i -lt $lijst.Length; $i++) { if ($lijst[$i].Soort -eq 'runspace') { try { $lijst[$i].PS.Stop() } catch { Write-Verbose 'Stoppen lukte niet.' } } }
 })
 
 function Teken-Zijbalk($zij, $e) {
