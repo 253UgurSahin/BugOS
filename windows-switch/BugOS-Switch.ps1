@@ -49,7 +49,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # Welke versie dit is: staat in de titelbalk en onderin de zijbalk, zodat je ziet of je de nieuwste hebt.
-$script:Versie = '2026.11.25-12'
+$script:Versie = '2026.11.25-13'
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -2288,7 +2288,7 @@ $Paginas += {
     $y += 14
     $y += (Nieuw-Rij 'nummer' (T 'Controleren' 'Check') (T 'Kan je computer BugOS aan? Dat zie je meteen.' 'Can your computer run BugOS? You see it right away.') $y '1') + 10
     $y += (Nieuw-Rij 'nummer' (T 'USB-stick maken' 'Make the USB stick') (T 'BugOS op een USB-stick van minstens 8 GB. Daarvan start je straks je computer om BugOS te installeren.' 'BugOS on a USB stick of at least 8 GB. You start your computer from it later to install BugOS.') $y '2') + 10
-    $y += (Nieuw-Rij 'nummer' (T 'Bestanden meenemen' 'Take your files') (T "Een kopie van je foto's, documenten en meer. Na het installeren zet BugOS ze terug." 'A copy of your photos, documents and more. After installing, BugOS puts them back.') $y '3') + 10
+    $y += (Nieuw-Rij 'nummer' (T 'Bestanden meenemen' 'Take your files') (T "Een kopie van je foto's, documenten en meer, die BugOS straks terugzet." 'A copy of your photos, documents and more, which BugOS puts back later.') $y '3') + 10
     [void](Nieuw-Rij 'nummer' (T 'Waar komt BugOS?' 'Where does BugOS go?') (T 'In plaats van Windows, ernaast, of op een andere schijf. Hier lees je wat je bij het installeren kiest.' 'Instead of Windows, next to it, or on another disk. Here you read what to choose when installing.') $y '4')
 }
 
@@ -2328,9 +2328,9 @@ $Paginas += {
     # Geen woorden met een koppelteken aan het eind van de zin: Windows brak 'wifi-namen' af als 'wifi' + '-namen' (en
     # een koppelteken dat niet afbreekt, U+2011, tekent Windows Forms als 'wifi- namen').
     # De grootte staat in een eigen label: die verandert als je een extra map toevoegt.
-    $y = Nieuw-Tekst (T 'Zet een kopie van je persoonlijke spullen op een USB-schijf. Op deze computer blijft alles staan.' 'Put a copy of your personal things on a USB drive. Everything stays on this computer.') 0
+    $y = Nieuw-Tekst (T 'Een kopie van je spullen op een USB-schijf. Op deze computer blijft alles staan.' 'A copy of your things on a USB drive. Everything stays on this computer.') 0
     $script:W.groot = Nieuw-Label (T 'Wat gaat er mee (even rekenen…)' 'What goes along (working it out…)') ($y + 8) 24 $null -Vet
-    $y = Nieuw-Tekst (T "Documenten, foto's, muziek, video's, bureaublad, downloads, bladwijzers, e-mail, achtergrond, lettertypen, printers, de namen van je wifi en een lijstje van je programma's. Wachtwoorden gaan nooit mee." "Documents, photos, music, videos, desktop, downloads, bookmarks, e-mail, wallpaper, fonts, printers, your Wi-Fi names and a list of your programs. Passwords never go along.") ($y + 32) $Grijs -Klein
+    $y = Nieuw-Tekst (T "Documenten, foto's, muziek, video's, bureaublad, downloads, bladwijzers, e-mail, achtergrond, printers en de namen van je wifi. Nooit wachtwoorden." "Documents, photos, music, videos, desktop, downloads, bookmarks, e-mail, wallpaper, printers and your Wi-Fi names. Never passwords.") ($y + 32) $Grijs -Klein
     $y = Nieuw-Stap '1' (T 'Kies waar de kopie heen gaat' 'Choose where the copy goes') ($y + 12)
     $script:W.schijf = Nieuw-Lijst $y 300
     $lijst = $script:W.schijf
@@ -2405,9 +2405,10 @@ $Paginas += {
         # schijf die Windows kan openen (net leeggemaakt, of een stick op de oude manier)? Dat zeggen we erbij. De uitleg
         # staat naast het lijstje, waar je kijkt (niet onderaan, buiten beeld).
         $kaal = @(Get-UsbSchijven | Where-Object { @(Get-Partition -DiskNumber $_.Number -ErrorAction SilentlyContinue | Where-Object { "$($_.DriveLetter)" -match '^[A-Za-z]$' }).Count -eq 0 })
-        $script:W.schijf.Enabled = $false
+        $script:W.schijf.Visible = $false
         $script:W.schijfNoot.ForeColor = $LetOp
-        $script:W.schijfNoot.Top = Px ($script:W.schijfY + 2); $script:W.schijfNoot.Height = Px 44
+        $script:W.schijfNoot.Left = 0; $script:W.schijfNoot.Width = Px $script:Breedte
+        $script:W.schijfNoot.Top = Px ($script:W.schijfY + 4); $script:W.schijfNoot.Height = Px 40
         $script:W.schijfNoot.Text = if ($kaal.Count -gt 0) {
             T "'$($kaal[0].FriendlyName)' is leeg. Zet er eerst BugOS op in stap 2." "'$($kaal[0].FriendlyName)' is empty. Put BugOS on it first in step 2."
         } else {
@@ -2531,14 +2532,14 @@ $Paginas += {
         $y += 50
     }
     $script:W.y3 = $y + 4
-    $opstarten = T 'Start op vanaf de BugOS-stick (druk tijdens het opstarten op F12, F11, F9 of Esc).' 'Start from the BugOS stick (press F12, F11, F9 or Esc while starting).'
+    $opstarten = T 'Start op vanaf de BugOS-stick (toets F12, F11, F9 of Esc bij het aanzetten).' 'Start from the BugOS stick (key F12, F11, F9 or Esc when switching on).'
     switch ($script:Plek) {
         'vervang' {
             [void](Nieuw-Rij 'let_op' (T 'Zo installeer je BugOS in plaats van Windows' 'This is how you install BugOS instead of Windows') (T "1. $opstarten`n2. Kies bij 'Installeren op' de schijf van deze computer en 'De hele schijf gebruiken'.`nAlles op die schijf wordt gewist, ook je bestanden: neem ze eerst mee (stap 3)." "1. $opstarten`n2. At 'Install on', choose the disk of this computer and 'Use the whole disk'.`nEverything on that disk is erased, your files too: take them along first (step 3).") $script:W.y3)
         }
         'naast' { Start-Ruimte }
         'ander' {
-            [void](Nieuw-Rij 'goed' (T 'Zo installeer je BugOS op een andere schijf' 'This is how you install BugOS on another disk') (T "1. Sluit de andere schijf aan.`n2. $opstarten`n3. Kies bij 'Installeren op' die schijf (let op naam en grootte) en 'De hele schijf gebruiken'.`nWindows blijft zoals het is. Kies Windows voortaan met dezelfde toets bij het opstarten." "1. Connect the other disk.`n2. $opstarten`n3. At 'Install on', choose that disk (check name and size) and 'Use the whole disk'.`nWindows stays as it is. From then on, choose Windows with the same key while starting.") $script:W.y3)
+            [void](Nieuw-Rij 'goed' (T 'Zo installeer je BugOS op een andere schijf' 'This is how you install BugOS on another disk') (T "1. Sluit de andere schijf aan.`n2. $opstarten`n3. Kies bij 'Installeren op' die schijf en 'De hele schijf gebruiken'.`nWindows blijft zoals het is." "1. Connect the other disk.`n2. $opstarten`n3. At 'Install on', choose that disk and 'Use the whole disk'.`nWindows stays as it is.") $script:W.y3)
         }
     }
 }
@@ -2701,10 +2702,10 @@ $Paginas += {
     foreach ($s in $sticks) { [void]$lijst.Items.Add("#$($s.Number)  $($s.FriendlyName)  ($([math]::Round($s.Size / 1GB)) GB)") }
     if ($lijst.Items.Count -gt 0) { $lijst.SelectedIndex = 0 } else {
         # Geen stick: de uitleg naast het lege lijstje (in het lijstje zelf viel hij er half af).
-        $lijst.Enabled = $false
+        $lijst.Visible = $false
         $noot.Text = (T 'Geen USB-stick gevonden. Steek er een in en klik op Terug en weer op Volgende.' 'No USB stick found. Plug one in, then click Back and Next again.')
         $noot.ForeColor = $LetOp
-        $noot.Top = Px ($y + 2); $noot.Height = Px 44
+        $noot.Left = 0; $noot.Width = Px $script:Breedte; $noot.Top = Px ($y + 4); $noot.Height = Px 40
     }
     $y = Nieuw-Stap '3' (T 'Zet BugOS op de stick' 'Put BugOS on the stick') ($y + 48)
     $maak = Nieuw-Knop (T 'BugOS op de stick zetten' 'Put BugOS on the stick') 0 $y 260 'hoofd'
