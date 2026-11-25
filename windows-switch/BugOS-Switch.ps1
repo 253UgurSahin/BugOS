@@ -6,14 +6,18 @@
 .DESCRIPTION
     Jip-en-Janneke:
       1. Controleren  - kan deze computer BugOS draaien?
-      2. Meenemen     - je documenten, foto's, muziek, video's, bureaublad,
-                        downloads, bladwijzers en achtergrond naar een USB-schijf,
-                        plus je instellingen, de NAMEN van je wifi-netwerken, je
-                        netwerkprinters en een lijstje van je programma's
-                        (formaat 2, zie FORMAT.md). Nooit wachtwoorden.
-      3. Ruimte maken - (alleen als je BugOS naast Windows wilt) Windows een
+      2. USB-stick    - BugOS op een USB-stick zetten (die blijft bruikbaar in
+                        Windows: een exFAT-schijf BUGOS, zie 4b hieronder).
+      3. Meenemen     - je documenten, foto's, muziek, video's, bureaublad,
+                        downloads, bladwijzers en achtergrond naar een USB-schijf
+                        (ook de BugOS-stick), plus je instellingen, de NAMEN van
+                        je wifi-netwerken, je netwerkprinters en een lijstje van
+                        je programma's (formaat 2, zie FORMAT.md). Nooit
+                        wachtwoorden.
+      4. Windows houden? - (alleen als je BugOS naast Windows wilt) Windows een
                         beetje kleiner maken zodat BugOS ernaast past.
-      4. USB-stick    - de BugOS-installatie op een USB-stick zetten.
+    In de code heten de pagina's nog naar hun oude plek (2 meenemen, 3 ruimte, 4 stick); de volgorde staat
+    bij Toon-Pagina.
 
     Starten: dubbelklik op "Start BugOS Switch.bat".
 
@@ -45,7 +49,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # Welke versie dit is: staat in de titelbalk en onderin de zijbalk, zodat je ziet of je de nieuwste hebt.
-$script:Versie = '2026.11.25-7'
+$script:Versie = '2026.11.25-8'
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -2131,7 +2135,7 @@ function Teken-Zijbalk($zij, $e) {
     $g.DrawImage($script:ZijBeeld, 0, 0, $zij.Width, $zij.Height)
     $g.DrawImage($script:LogoBeeld, (Fx 28), (Fx 32), (Fx 118), (Fx 32))
 
-    $namen = @((T 'Welkom' 'Welcome'), (T 'Controleren' 'Check'), (T 'Bestanden meenemen' 'Take your files'), (T 'Ruimte maken' 'Make space'), (T 'USB-stick maken' 'Make USB stick'))
+    $namen = @((T 'Welkom' 'Welcome'), (T 'Controleren' 'Check'), (T 'USB-stick maken' 'Make USB stick'), (T 'Bestanden meenemen' 'Take your files'), (T 'Windows houden?' 'Keep Windows?'))
     $vlag = [System.Windows.Forms.TextFormatFlags]'VerticalCenter, SingleLine, EndEllipsis, NoPadding'
     for ($i = 0; $i -lt $namen.Count; $i++) {
         $y = 116 + $i * 50
@@ -2172,8 +2176,8 @@ function Teken-Zijbalk($zij, $e) {
         $vak = New-Object System.Drawing.Rectangle((Px 64), (Px ($y - 4)), (Px 154), (Px 34))
         [System.Windows.Forms.TextRenderer]::DrawText($g, $namen[$i], $letter, $vak, $kleur, $vlag)
     }
-    $vak = New-Object System.Drawing.Rectangle((Px 28), (Px 478), (Px 190), (Px 64))
-    [System.Windows.Forms.TextRenderer]::DrawText($g, (T "Er gebeurt niks zonder dat jij op een knop drukt.`nVersie $($script:Versie)" "Nothing happens until you press a button.`nVersion $($script:Versie)"), $script:LetterNoot, $vak, (Kleur '#A6ABB6'), [System.Windows.Forms.TextFormatFlags]'WordBreak, NoPadding')
+    $vak = New-Object System.Drawing.Rectangle((Px 28), (Px 518), (Px 190), (Px 24))
+    [System.Windows.Forms.TextRenderer]::DrawText($g, (T "Versie $($script:Versie)" "Version $($script:Versie)"), $script:LetterNoot, $vak, (Kleur '#A6ABB6'), [System.Windows.Forms.TextFormatFlags]'WordBreak, NoPadding')
 }
 
 function Meet-Hoogte([string] $tekst, $letter, [double] $breedte) {
@@ -2181,9 +2185,9 @@ function Meet-Hoogte([string] $tekst, $letter, [double] $breedte) {
     [math]::Ceiling($maat.Height / $script:Schaal)
 }
 
-function Nieuw-Label([string] $tekst, [double] $y, [double] $h = 0, $kleur = $null, [switch] $Vet) {
+function Nieuw-Label([string] $tekst, [double] $y, [double] $h = 0, $kleur = $null, [switch] $Vet, [switch] $Klein) {
     $l = New-Object System.Windows.Forms.Label
-    $l.Font = if ($Vet) { $script:LetterVet } else { $script:LetterGewoon }
+    $l.Font = if ($Vet) { $script:LetterVet } elseif ($Klein) { $script:LetterKlein } else { $script:LetterGewoon }
     $l.ForeColor = if ($kleur) { $kleur } else { $Inkt }
     if ($h -le 0) { $h = (Meet-Hoogte $tekst $l.Font $script:Breedte) + 4 }
     Plaats $l 0 $y $script:Breedte $h
@@ -2193,9 +2197,27 @@ function Nieuw-Label([string] $tekst, [double] $y, [double] $h = 0, $kleur = $nu
 }
 
 # Een stuk tekst; geeft terug waar het ophoudt.
-function Nieuw-Tekst([string] $tekst, [double] $y, $kleur = $null, [switch] $Vet) {
-    $l = Nieuw-Label $tekst $y 0 $kleur -Vet:$Vet
+function Nieuw-Tekst([string] $tekst, [double] $y, $kleur = $null, [switch] $Vet, [switch] $Klein) {
+    $l = Nieuw-Label $tekst $y 0 $kleur -Vet:$Vet -Klein:$Klein
     return $y + [math]::Ceiling($l.Height / $script:Schaal)
+}
+
+# Een genummerd kopje binnen een pagina ('1  Haal BugOS binnen'): zo zie je in welke volgorde je de knoppen gebruikt.
+function Nieuw-Stap([string] $nummer, [string] $tekst, [double] $y) {
+    $n = New-Object System.Windows.Forms.Label
+    $n.Font = $script:LetterVet; $n.ForeColor = $RoodTekst; $n.Text = $nummer
+    Plaats $n 0 $y 22 24
+    $vlak.Controls.Add($n)
+    $l = New-Object System.Windows.Forms.Label
+    $l.Font = $script:LetterVet; $l.ForeColor = $Inkt; $l.Text = $tekst
+    Plaats $l 22 $y ($script:Breedte - 22) 24
+    $vlak.Controls.Add($l)
+    return $y + 28
+}
+
+# Werk gestart onderaan een lange pagina: even naar beneden schuiven, zodat je de balk en de uitleg ziet.
+function Toon-Onderaan($ctl) {
+    try { $vlak.ScrollControlIntoView($ctl) } catch { Write-Verbose 'Schuiven lukte niet.' }
 }
 
 # Een rij met een rond icoontje (goed / let op / fout / nummer), een kopje en uitleg.
@@ -2262,12 +2284,12 @@ $Paginas = @()
 # --- Pagina 0: welkom -------------------------------------------------------
 $Paginas += {
     $kop.Text = (T 'Welkom bij de BugOS Overstap' 'Welcome to BugOS Switch')
-    $y = Nieuw-Tekst (T 'Dit programma helpt je om over te stappen van Windows naar BugOS. Het gaat in vier stappen:' 'This program helps you move from Windows to BugOS. It takes four steps:') 0
+    $y = Nieuw-Tekst (T 'Dit programma helpt je in vier stappen van Windows over te stappen op BugOS:' 'This program helps you move from Windows to BugOS in four steps:') 0
     $y += 14
-    $y += (Nieuw-Rij 'nummer' (T 'Controleren' 'Check') (T 'Kijken of je computer BugOS aankan.' 'See whether your computer can run BugOS.') $y '1') + 10
-    $y += (Nieuw-Rij 'nummer' (T 'Bestanden meenemen' 'Take your files') (T "Je foto's, documenten en meer naar een USB-schijf zetten." 'Put your photos, documents and more on a USB drive.') $y '2') + 10
-    $y += (Nieuw-Rij 'nummer' (T 'Ruimte maken' 'Make space') (T 'BugOS naast Windows zetten. Deze stap mag je overslaan.' 'Put BugOS next to Windows. You may skip this step.') $y '3') + 10
-    [void](Nieuw-Rij 'nummer' (T 'USB-stick maken' 'Make the USB stick') (T 'De BugOS-installatie op een USB-stick zetten.' 'Put the BugOS installer on a USB stick.') $y '4')
+    $y += (Nieuw-Rij 'nummer' (T 'Controleren' 'Check') (T 'Kan je computer BugOS aan? Dat zie je meteen.' 'Can your computer run BugOS? You see it right away.') $y '1') + 10
+    $y += (Nieuw-Rij 'nummer' (T 'USB-stick maken' 'Make the USB stick') (T 'BugOS op een USB-stick van minstens 8 GB. Daarvan start je straks je computer om BugOS te installeren.' 'BugOS on a USB stick of at least 8 GB. You start your computer from it later to install BugOS.') $y '2') + 10
+    $y += (Nieuw-Rij 'nummer' (T 'Bestanden meenemen' 'Take your files') (T "Een kopie van je foto's, documenten en meer, op die stick of een andere USB-schijf." 'A copy of your photos, documents and more, on that stick or another USB drive.') $y '3') + 10
+    [void](Nieuw-Rij 'nummer' (T 'Windows houden?' 'Keep Windows?') (T 'Alleen als je Windows en BugOS allebei wilt houden. Anders sla je dit over.' 'Only if you want to keep both Windows and BugOS. Otherwise you skip this.') $y '4')
 }
 
 # --- Pagina 1: controle -----------------------------------------------------
@@ -2306,13 +2328,11 @@ $Paginas += {
     # Geen woorden met een koppelteken aan het eind van de zin: Windows brak 'wifi-namen' af als 'wifi' + '-namen' (en
     # een koppelteken dat niet afbreekt, U+2011, tekent Windows Forms als 'wifi- namen').
     # De grootte staat in een eigen label: die verandert als je een extra map toevoegt.
-    $script:W.groot = Nieuw-Label (T 'Dit gaat mee naar een USB-schijf (even rekenen…):' 'This goes to a USB drive (working it out…):') 0 0 $null -Vet
-    $y = Nieuw-Tekst (T "je bestanden, bladwijzers, achtergrond, e-mail, eigen lettertypen, instellingen, netwerkprinters, de namen van je wifi en een lijstje van je programma's." "your files, bookmarks, wallpaper, e-mail, own fonts, settings, Wi-Fi names, network printers and a list of your programs.") ([math]::Ceiling($script:W.groot.Height / $script:Schaal))
-    $y = Nieuw-Tekst (T 'Wachtwoorden gaan nooit mee, ook niet van je wifi of je browser. Maar één stick? Maak dan eerst de BugOS-stick (stap 4) en kom terug: je bestanden passen er gewoon bij.' 'Passwords never go along, not even for your Wi-Fi or browser. Only one stick? Make the BugOS stick first (step 4) and come back: your files fit on it too.') ($y + 8) $Grijs
-    $y = Nieuw-Tekst (T 'Kies de USB-schijf:' 'Choose the USB drive:') ($y + 12) -Vet
-    # De keuzelijst en de knop naast elkaar (niet onder elkaar): zo past de langere uitleg hierboven zonder
-    # schuifbalk, ook op 150%. De lijst staat 5 punten lager, zodat hij in het midden naast de hogere knop staat.
-    $script:W.schijf = Nieuw-Lijst ($y + 9) 300
+    $y = Nieuw-Tekst (T 'Zet een kopie van je persoonlijke spullen op een USB-schijf. Op deze computer blijft alles staan. In BugOS zet je ze daarna terug met "Haal alles van je oude pc".' 'Put a copy of your personal things on a USB drive. Everything stays on this computer. In BugOS you put them back with "Bring everything from your old PC".') 0
+    $script:W.groot = Nieuw-Label (T 'Wat gaat er mee (even rekenen…)' 'What goes along (working it out…)') ($y + 8) 24 $null -Vet
+    $y = Nieuw-Tekst (T "Documenten, foto's, muziek, video's, bureaublad, downloads, bladwijzers, e-mail, achtergrond, lettertypen, printers, de namen van je wifi en een lijstje van je programma's. Wachtwoorden gaan nooit mee." "Documents, photos, music, videos, desktop, downloads, bookmarks, e-mail, wallpaper, fonts, printers, your Wi-Fi names and a list of your programs. Passwords never go along.") ($y + 32) $Grijs -Klein
+    $y = Nieuw-Stap '1' (T 'Kies waar de kopie heen gaat' 'Choose where the copy goes') ($y + 12)
+    $script:W.schijf = Nieuw-Lijst $y 300
     $lijst = $script:W.schijf
     # Alleen schijven die je eruit haalt: een D:-schijf in de laptop gaat mee de prullenbak in als je straks
     # bij het installeren de hele schijf kiest (U284). Een vaste (type 3) schijf telt alleen als hij via USB hangt.
@@ -2320,7 +2340,9 @@ $Paginas += {
         [void]$lijst.Items.Add("$($_.DeviceID)  $($_.VolumeName)  ($([math]::Round($_.FreeSpace / 1GB)) GB $(T 'vrij' 'free'))")
     }
     if ($lijst.Items.Count -gt 0) { $lijst.SelectedIndex = 0 }
-    $script:W.knop = Nieuw-Knop (T 'Bestanden kopiëren' 'Copy files') 316 ($y + 4) 220 'hoofd'
+    $noot = Nieuw-Label (T 'Je BugOS-stick (BUGOS) mag ook.' 'Your BugOS stick (BUGOS) is fine too.') ($y + 6) 24 $Grijs -Klein
+    $noot.Left = Px 312; $noot.Width = Px ($script:Breedte - 312)
+    $y = Nieuw-Stap '2' (T 'Nog een andere map mee? Dat hoeft niet.' 'Another folder too? You do not have to.') ($y + 44)
     # Extra mappen (E): ook iets anders dan de vaste zes, bijvoorbeeld een map op een tweede schijf (D:). Links staat
     # wat je koos, rechts de knop om er een toe te voegen. Kiezen gaat met het gewone mapvenster van Windows.
     # Een LinkLabel: als er extra mappen zijn, staat er een klikbaar '(weghalen)' achter, om de keuze ongedaan te maken.
@@ -2329,18 +2351,20 @@ $Paginas += {
     $script:W.extra.ForeColor = $Grijs
     $script:W.extra.LinkColor = $Inkt
     $script:W.extra.AutoEllipsis = $true
-    Plaats $script:W.extra 0 ($y + 58) 300 42
+    Plaats $script:W.extra 0 ($y + 2) 300 42
     $vlak.Controls.Add($script:W.extra)
     $script:W.extra.Add_LinkClicked({
         $script:ExtraMappen.Clear()
         Zet-ExtraTekst
     })
-    $script:W.extraKnop = Nieuw-Knop (T 'Andere map toevoegen…' 'Add another folder…') 316 ($y + 56) 220
+    $script:W.extraKnop = Nieuw-Knop (T 'Map toevoegen…' 'Add folder…') 312 $y 220
+    $y = Nieuw-Stap '3' (T 'Kopiëren' 'Copy') ($y + 54)
+    $script:W.knop = Nieuw-Knop (T 'Bestanden kopiëren' 'Copy files') 0 $y 220 'hoofd'
     # script: zodat de knoppen (die later draaien, buiten deze pagina) de functie ook vinden.
     function script:Zet-ExtraTekst {
         # Wat er in de regel 'andere mappen' staat, en de nieuwe totale grootte bovenaan.
         if ($script:ExtraMappen.Count -eq 0) {
-            $script:W.extra.Text = (T 'Ook een andere map of een tweede schijf (D:)?' 'Also another folder or a second drive (D:)?')
+            $script:W.extra.Text = (T 'Bijvoorbeeld een map op schijf D:.' 'For example a folder on drive D:.')
             $script:W.extra.LinkArea = New-Object System.Windows.Forms.LinkArea(0, 0)
         } else {
             $namen = ($script:ExtraMappen | ForEach-Object { Split-Path $_ -Leaf }) -join ', '
@@ -2350,12 +2374,12 @@ $Paginas += {
             $script:W.extra.LinkArea = New-Object System.Windows.Forms.LinkArea(($tekst.Length - $weg.Length), $weg.Length)
         }
         # De grootte uitrekenen kan bij veel foto's een halve minuut duren: ernaast (het venster blijft bewegen).
-        $script:W.groot.Text = (T 'Dit gaat mee naar een USB-schijf (even rekenen…):' 'This goes to a USB drive (working it out…):')
+        $script:W.groot.Text = (T 'Wat gaat er mee (even rekenen…)' 'What goes along (working it out…)')
         Start-Werk -Werk { Get-MeeneemGrootte } -Mee @{ ExtraMappen = @($script:ExtraMappen); CloudMee = $script:CloudMee } -Klaar {
             param($staat)
-            if ($staat.Fout) { $script:W.groot.Text = (T 'Dit gaat mee naar een USB-schijf:' 'This goes to a USB drive:'); return }
+            if ($staat.Fout) { $script:W.groot.Text = (T 'Wat gaat er mee' 'What goes along'); return }
             $gb = [math]::Round(([int64](@($staat.Uitkomst)[-1])) / 1GB, 1)
-            $script:W.groot.Text = (T "Dit gaat mee naar een USB-schijf ($gb GB):" "This goes to a USB drive ($gb GB):")
+            $script:W.groot.Text = (T "Wat gaat er mee ($gb GB)" "What goes along ($gb GB)")
         }
     }
     Zet-ExtraTekst
@@ -2371,17 +2395,18 @@ $Paginas += {
         $script:ExtraMappen.Add([System.IO.Path]::GetFullPath($kies.SelectedPath).TrimEnd('\'))
         Zet-ExtraTekst
     })
-    $script:W.balk = Nieuw-Balk 0 ($y + 108) ($script:Breedte - 4) $vlak
-    $script:W.status = Nieuw-Label '' ($y + 122) 48 $Grijs
+    $script:W.balk = Nieuw-Balk 0 ($y + 54) ($script:Breedte - 4) $vlak
+    $script:W.balk.Visible = $false
+    $script:W.status = Nieuw-Label '' ($y + 70) 66 $Grijs
     if ($script:W.schijf.Items.Count -eq 0) {
         # Een lege lijst zonder uitleg: dan weet je niet wat je moet doen. Zit er wel een USB-stick in, maar zonder
         # schijf die Windows kan openen (net leeggemaakt, of een stick op de oude manier)? Dat zeggen we erbij.
         $kaal = @(Get-UsbSchijven | Where-Object { @(Get-Partition -DiskNumber $_.Number -ErrorAction SilentlyContinue | Where-Object { "$($_.DriveLetter)" -match '^[A-Za-z]$' }).Count -eq 0 })
         $script:W.status.ForeColor = $LetOp
         $script:W.status.Text = if ($kaal.Count -gt 0) {
-            T "Je USB-stick '$($kaal[0].FriendlyName)' heeft nu geen schijf die Windows kan openen. Ga naar stap 4 en kies 'USB-stick maken' (of 'Stick weer gewoon maken'), en kom dan terug." "Your USB stick '$($kaal[0].FriendlyName)' has no drive Windows can open right now. Go to step 4 and choose 'Make USB stick' (or 'Make stick normal again'), then come back."
+            T "Je USB-stick '$($kaal[0].FriendlyName)' is nu leeg: Windows kan er niets op zetten. Ga terug naar stap 2 en zet BugOS erop (of maak hem leeg), en kom dan hier terug." "Your USB stick '$($kaal[0].FriendlyName)' is empty right now: Windows cannot put anything on it. Go back to step 2 and put BugOS on it (or empty it), then come back here."
         } else {
-            T 'Geen USB-schijf gevonden. Steek er een in en ga even terug en weer verder.' 'No USB drive found. Plug one in, then go back and forward again.'
+            T 'Geen USB-schijf gevonden. Steek er een in en klik op Terug en dan weer op Volgende.' 'No USB drive found. Plug one in, then click Back and Next again.'
         }
     }
     $script:W.knop.Add_Click({
@@ -2389,6 +2414,7 @@ $Paginas += {
         if ($lijst.SelectedIndex -lt 0) { Toon (T 'Steek eerst een USB-schijf in en ga even terug en weer verder.' 'Plug in a USB drive first, then go back and forward again.'); return }
         $letter = ($lijst.SelectedItem -split '\s+')[0] + '\'
         $status.ForeColor = $Grijs
+        Toon-Onderaan $status
         # Stap 1 (ernaast): kijken wat er mee gaat. OneDrive-bestanden tellen, FAT32 en de vrije ruimte.
         Start-Werk -Blokkeer -Balk $script:W.balk -Label $status -Tekst (T 'Even kijken wat er mee gaat…' 'Checking what goes along…') -Mee @{ ExtraMappen = @($script:ExtraMappen); Letter = $letter } -Werk {
             $letter = $Mee.Letter
@@ -2454,7 +2480,7 @@ $Paginas += {
                     $status.Text = (T "Klaar, maar een paar bestanden uit $welke konden niet mee (bijv. open in een programma, groter dan 4 GB, of alleen in OneDrive). Sluit je programma's en klik nog een keer: wat er al staat, gaat sneller." "Done, but a few files from $welke could not be copied (e.g. open in a program, larger than 4 GB, or only in OneDrive). Close your programs and click again: what is already there goes faster.")
                     $status.ForeColor = $Grijs
                 } else {
-                    $status.Text = (T 'Klaar! Je bestanden staan in de map BugOS-Switch op de schijf.' 'Done! Your files are in the BugOS-Switch folder on the drive.')
+                    $status.Text = (T 'Klaar! Je bestanden staan in de map BugOS-Switch op de schijf. Haal de schijf pas uit de computer als je BugOS gaat installeren.' 'Done! Your files are in the BugOS-Switch folder on the drive. Keep the drive until you install BugOS.')
                     $status.ForeColor = $Goed
                 }
                 if ($firefox.Count -gt 0) {
@@ -2472,23 +2498,32 @@ $Paginas += {
 # duurt even en is anders voor niks). De keuze blijft onthouden als je terug en weer verder gaat.
 $script:NaastWindows = $null
 $Paginas += {
-    $kop.Text = (T 'BugOS naast Windows?' 'BugOS next to Windows?')
-    $y = Nieuw-Tekst (T "Wil je Windows houden? Dan maken we Windows een stukje kleiner, zodat BugOS ernaast past. Bij het opstarten kies je dan welke je wilt.`nWil je alleen BugOS (Windows gaat weg)? Dan is deze stap niet nodig." "Want to keep Windows? Then we make Windows a bit smaller so BugOS fits next to it. When starting the computer you choose which one.`nOnly want BugOS (Windows goes away)? Then you do not need this step.") 0
-    $script:W.naastKnop = Nieuw-Knop (T 'Windows houden' 'Keep Windows') 0 ($y + 12) 220 'hoofd'
-    $alleen = Nieuw-Knop (T 'Alleen BugOS: overslaan' 'Only BugOS: skip') 232 ($y + 12) 250
+    $kop.Text = (T 'Windows houden?' 'Keep Windows?')
+    $y = Nieuw-Tekst (T 'Wil je bij het opstarten kunnen kiezen tussen Windows en BugOS? Dan maakt deze stap Windows wat kleiner, zodat BugOS ernaast past. Je bestanden in Windows blijven staan.' 'Do you want to choose between Windows and BugOS when the computer starts? Then this step makes Windows a bit smaller so BugOS fits next to it. Your files in Windows stay where they are.') 0
+    $script:W.naastKnop = Nieuw-Knop (T 'Ja, Windows houden' 'Yes, keep Windows') 0 ($y + 12) 220 'hoofd'
+    $script:W.alleenKnop = Nieuw-Knop (T 'Nee, alleen BugOS' 'No, only BugOS') 232 ($y + 12) 220
     $script:W.y3 = $y + 62
-    $alleen.Add_Click({
+    $script:W.alleenKnop.Add_Click({
         if (Test-Bezig) { return }
         $script:NaastWindows = $false
-        $script:Pagina++
-        Toon-Pagina
+        Toon-PaginaOpnieuw
     })
     $script:W.naastKnop.Add_Click({
         $script:NaastWindows = $true
+        Toon-PaginaOpnieuw
+    })
+    if ($script:NaastWindows -eq $true) {
         $script:W.naastKnop.Enabled = $false
         Start-Ruimte
-    })
-    if ($script:NaastWindows -eq $true) { $script:W.naastKnop.Enabled = $false; Start-Ruimte }
+    } elseif ($script:NaastWindows -eq $false) {
+        $script:W.alleenKnop.Enabled = $false
+        [void](Nieuw-Rij 'goed' (T 'Zo installeer je BugOS' 'This is how you install BugOS') (T "1. Laat de BugOS-stick in de computer en start hem opnieuw op.`n2. Druk tijdens het opstarten op F12, F11, F9 of Esc (verschilt per computer) en kies de USB-stick.`n3. Kies bij het installeren 'De hele schijf gebruiken'. Windows gaat dan weg, met alles erop: zorg dus dat je bestanden mee zijn (stap 3)." "1. Leave the BugOS stick in the computer and restart it.`n2. While starting, press F12, F11, F9 or Esc (differs per computer) and choose the USB stick.`n3. When installing, choose 'Use entire disk'. Windows then goes away, with everything on it: so make sure your files came along (step 3).") $script:W.y3)
+    }
+}
+
+function Toon-PaginaOpnieuw {
+    # Dezelfde pagina opnieuw tekenen (na een keuze), zonder het werk van de pagina zelf af te breken.
+    Toon-Pagina
 }
 
 function Start-Ruimte {
@@ -2521,7 +2556,7 @@ function Start-Ruimte {
         $script:W.krimpKnop = Nieuw-Knop (T 'Ruimte maken' 'Make space') 0 ($y + 58) 220 'hoofd'
         $script:W.krimpBalk = Nieuw-Balk 0 ($y + 112) ($script:Breedte - 4) $vlak
         $script:W.krimpBalk.Visible = $false
-        $script:W.krimpStatus = Nieuw-Label '' ($y + 128) 26 $Grijs
+        $script:W.krimpStatus = Nieuw-Label '' ($y + 128) 110 $Grijs
         $script:W.krimpKnop.Add_Click({
             $getal = $script:W.getal
             if (-not (Vraag (T "Windows wordt $($getal.Value) GB kleiner. Je bestanden blijven gewoon staan.`n`nHeb je een back-up gemaakt (stap 2)? Doorgaan?" "Windows will shrink by $($getal.Value) GB. Your files stay where they are.`n`nDid you make a backup (step 2)? Continue?"))) { return }
@@ -2531,9 +2566,8 @@ function Start-Ruimte {
                 $script:W.krimpKnop.Enabled = $true
                 $script:W.krimpBalk.Visible = $false
                 if ($r.Code -eq 0) {
-                    $script:W.krimpStatus.Text = (T 'Gelukt: er is ruimte voor BugOS.' 'Done: there is space for BugOS.')
+                    $script:W.krimpStatus.Text = (T "Gelukt! Er is ruimte voor BugOS.`nStart je computer opnieuw op vanaf de BugOS-stick (F12, F11, F9 of Esc tijdens het opstarten). Kies bij het installeren `"De schijf delen met Windows of een ander systeem`" (niet `"De hele schijf gebruiken`": dan gaat Windows weg)." "Done! There is space for BugOS.`nRestart your computer from the BugOS stick (F12, F11, F9 or Esc while starting). When installing, choose `"Share disk with other operating systems`" (not `"Use entire disk`": that removes Windows).")
                     $script:W.krimpStatus.ForeColor = $Goed
-                    Toon (T 'Gelukt! Er is ruimte voor BugOS. Kies straks bij het installeren "De schijf delen met Windows of een ander systeem" (niet "De hele schijf gebruiken": dan gaat Windows weg).' 'Done! There is space for BugOS. When installing, choose "Share disk with other operating systems" (not "Use entire disk": that removes Windows).')
                 } else {
                     $script:W.krimpStatus.Text = ''
                     Toon ((T 'Ruimte maken lukte niet: ' 'Making space failed: ') + $r.Fout) 'Error'
@@ -2548,13 +2582,14 @@ function Start-Ruimte {
 $script:IsoGekozen = ''
 $script:IsoManier = 'bruikbaar'
 $Paginas += {
-    $kop.Text = (T 'De BugOS USB-stick maken' 'Make the BugOS USB stick')
-    $y = Nieuw-Tekst (T "Druk op 'BugOS downloaden' of kies zelf een .iso-bestand. Kies daarna je USB-stick (minstens 8 GB). Wat erop staat, wordt gewist. Daarna blijft de stick gewoon bruikbaar in Windows." "Press 'Download BugOS' or choose an .iso file yourself. Then choose your USB stick (at least 8 GB). What is on it gets erased. After that the stick stays usable in Windows.") 0
-    $download = Nieuw-Knop (T 'BugOS downloaden' 'Download BugOS') 0 ($y + 12) 200 'hoofd'
-    $kies = Nieuw-Knop (T 'Kies .iso-bestand...' 'Choose .iso file...') 212 ($y + 12) 200
-    # Ruimte voor drie regels: de naam van het bestand en wat dat betekent voor de stick.
-    $script:W.isoLabel = Nieuw-Label (T 'Nog geen bestand gekozen.' 'No file chosen yet.') ($y + 62) 66 $Grijs
-    $script:W.downloadBalk = Nieuw-Balk 0 ($y + 134) ($script:Breedte - 4) $vlak
+    $kop.Text = (T 'BugOS op een USB-stick zetten' 'Put BugOS on a USB stick')
+    $y = Nieuw-Tekst (T 'Van deze stick start je straks je computer om BugOS te installeren. Je hebt een stick van minstens 8 GB nodig. Daarna kun je hem in Windows gewoon blijven gebruiken.' 'You start your computer from this stick later to install BugOS. You need a stick of at least 8 GB. After that you can keep using it in Windows.') 0
+    $y = Nieuw-Stap '1' (T 'Haal BugOS binnen' 'Get BugOS') ($y + 10)
+    $download = Nieuw-Knop (T 'BugOS downloaden' 'Download BugOS') 0 $y 200 'hoofd'
+    $kies = Nieuw-Knop (T 'Ik heb al een .iso-bestand…' 'I already have an .iso file…') 212 $y 270
+    # Twee regels: de naam van het bestand en wat dat betekent voor de stick.
+    $script:W.isoLabel = Nieuw-Label (T 'Nog geen BugOS gekozen.' 'No BugOS chosen yet.') ($y + 48) 44 $Grijs -Klein
+    $script:W.downloadBalk = Nieuw-Balk 0 ($y + 94) ($script:Breedte - 4) $vlak
     $script:W.downloadBalk.Visible = $false
     $script:W.downloadKnop = $download
 
@@ -2571,7 +2606,7 @@ $Paginas += {
             param($staat)
             $script:W.downloadBalk.Visible = $false
             if ($staat.Fout) {
-                $script:W.isoLabel.Text = (T 'Nog geen bestand gekozen.' 'No file chosen yet.')
+                $script:W.isoLabel.Text = (T 'Nog geen BugOS gekozen.' 'No BugOS chosen yet.')
                 $script:W.isoLabel.ForeColor = $Grijs
                 Toon ((T 'Dit bestand kan ik niet gebruiken: ' 'I cannot use this file: ') + $staat.Fout) 'Warning'
                 return
@@ -2622,7 +2657,7 @@ $Paginas += {
                 param($staat)
                 $script:W.downloadBalk.Visible = $false
                 if ($staat.Fout) {
-                    $script:W.isoLabel.Text = (T 'Nog geen bestand gekozen.' 'No file chosen yet.')
+                    $script:W.isoLabel.Text = (T 'Nog geen BugOS gekozen.' 'No BugOS chosen yet.')
                     $script:W.isoLabel.ForeColor = $Grijs
                     Toon $staat.Fout 'Error'
                     return
@@ -2638,38 +2673,45 @@ $Paginas += {
         if ($d.ShowDialog() -eq 'OK') { Kijk-Iso $d.FileName }
     })
 
-    $y = Nieuw-Tekst (T 'Kies je USB-stick:' 'Choose your USB stick:') ($y + 150) -Vet
-    $script:W.stick = Nieuw-Lijst ($y + 4) 520
+    $y = Nieuw-Stap '2' (T 'Kies je USB-stick' 'Choose your USB stick') ($y + 112)
+    $script:W.stick = Nieuw-Lijst $y 300
+    $noot = Nieuw-Label (T 'Alles wat er nu op staat, wordt gewist.' 'Everything on it now gets erased.') ($y + 6) 24 $Grijs -Klein
+    $noot.Left = Px 312; $noot.Width = Px ($script:Breedte - 312)
+    $y -= 4
     $lijst = $script:W.stick
     $script:W.sticks = @(Get-UsbSchijven)
     $sticks = $script:W.sticks
     foreach ($s in $sticks) { [void]$lijst.Items.Add("#$($s.Number)  $($s.FriendlyName)  ($([math]::Round($s.Size / 1GB)) GB)") }
     if ($lijst.Items.Count -gt 0) { $lijst.SelectedIndex = 0 } else { [void]$lijst.Items.Add((T 'Geen USB-stick gevonden. Steek er een in en ga terug en weer verder.' 'No USB stick found. Plug one in, then go back and forward again.')); $lijst.SelectedIndex = 0 }
-    $maak = Nieuw-Knop (T 'USB-stick maken' 'Make USB stick') 0 ($y + 52) 220 'hoofd'
-    $gewoon = Nieuw-Knop (T 'Stick weer gewoon maken…' 'Make stick normal again…') 232 ($y + 52) 250
-    $script:W.stickBalk = Nieuw-Balk 0 ($y + 106) ($script:Breedte - 4) $vlak
+    $y = Nieuw-Stap '3' (T 'Zet BugOS op de stick' 'Put BugOS on the stick') ($y + 48)
+    $maak = Nieuw-Knop (T 'BugOS op de stick zetten' 'Put BugOS on the stick') 0 $y 260 'hoofd'
+    $script:W.stickBalk = Nieuw-Balk 0 ($y + 54) ($script:Breedte - 4) $vlak
     $script:W.stickBalk.Visible = $false
-    $script:W.stickStatus = Nieuw-Label (T "USB-stick maken: zet BugOS op de stick. Daarvan start je je computer om BugOS te proberen of te installeren.`nStick weer gewoon maken: haalt BugOS er weer af. Daarna is het een gewone, lege USB-stick." "Make USB stick: puts BugOS on the stick. You start your computer from it to try or install BugOS.`nMake stick normal again: takes BugOS off again. After that it is a normal, empty USB stick.") ($y + 122) 150 $Grijs
+    $script:W.stickStatus = Nieuw-Label (T 'Dit duurt een paar minuten.' 'This takes a few minutes.') ($y + 70) 110 $Grijs
+    # Apart en onderaan, zodat je hem niet verwart met de rode knop: BugOS er weer af halen.
+    $y = Nieuw-Tekst (T 'Klaar met BugOS installeren en wil je de stick weer helemaal leeg? Of is hij door een oudere versie in stukken verdeeld?' 'Done installing BugOS and want the stick completely empty again? Or did an older version split it into pieces?') ($y + 186) $Grijs -Klein
+    $gewoon = Nieuw-Knop (T 'Stick leeg maken…' 'Empty the stick…') 0 ($y + 6) 220
 
     function script:Get-GekozenStick {
         $sticks = $script:W.sticks
         if ($sticks.Count -eq 0) { Toon (T 'Steek eerst een USB-stick in, en ga dan terug en weer verder.' 'Plug in a USB stick first, then go back and forward again.'); return $null }
         $stick = $sticks[$script:W.stick.SelectedIndex]
-        # Staan je bestanden uit stap 2 op deze stick? Dan niet wissen: die ben je anders kwijt (U095).
+        # Staan je bestanden uit stap 3 op deze stick? Dan niet wissen: die ben je anders kwijt (U095).
         if (Test-SwitchBestanden $stick.Number) {
-            Toon (T "Op '$($stick.FriendlyName)' staan je bestanden uit stap 2 (de map BugOS-Switch). Die zou je kwijtraken. Zet ze eerst ergens anders neer, of gebruik een andere stick." "'$($stick.FriendlyName)' holds your files from step 2 (the BugOS-Switch folder). You would lose them. Put them somewhere else first, or use a different stick.") 'Warning'
+            Toon (T "Op '$($stick.FriendlyName)' staan je bestanden uit stap 3 (de map BugOS-Switch). Die zou je kwijtraken. Zet ze eerst ergens anders neer, of gebruik een andere stick." "'$($stick.FriendlyName)' holds your files from step 3 (the BugOS-Switch folder). You would lose them. Put them somewhere else first, or use a different stick.") 'Warning'
             return $null
         }
         return $stick
     }
 
     $maak.Add_Click({
-        if (-not $script:IsoGekozen) { Toon (T 'Kies eerst het BugOS .iso-bestand (of download het).' 'Choose the BugOS .iso file first (or download it).'); return }
+        if (-not $script:IsoGekozen) { Toon (T "Haal eerst BugOS binnen (bij 1): druk op 'BugOS downloaden', of kies je .iso-bestand." "Get BugOS first (at 1): press 'Download BugOS', or choose your .iso file."); return }
         $stick = Get-GekozenStick
         if (-not $stick) { return }
         $hoe = if ($script:IsoManier -eq 'bruikbaar') { T 'Daarna is het een BugOS-stick die je in Windows gewoon kunt blijven gebruiken.' 'After that it is a BugOS stick you can keep using in Windows.' } else { T "Let op: dit .iso-bestand is een oudere BugOS. Dan gebruikt BugOS de hele stick, en Windows ziet daarna twee vreemde schijven en vraagt of je ze wilt formatteren (klik dan op Annuleren). Met een nieuwere BugOS blijft de stick gewoon één schijf." "Note: this .iso file is an older BugOS. Then BugOS uses the whole stick, and afterwards Windows sees two odd drives and asks whether to format them (click Cancel). With a newer BugOS the stick stays one normal drive." }
         if (-not (Vraag (T "ALLES op '$($stick.FriendlyName)' ($([math]::Round($stick.Size / 1GB)) GB) wordt gewist. $hoe Doorgaan?" "EVERYTHING on '$($stick.FriendlyName)' ($([math]::Round($stick.Size / 1GB)) GB) will be erased. $hoe Continue?"))) { return }
         $script:W.stickStatus.ForeColor = $Grijs
+        Toon-Onderaan $script:W.stickStatus
         $gestart = Start-BeheerderTaak @('-Taak', 'Usb', '-IsoPad', "`"$($script:IsoGekozen)`"", '-SchijfNummer', [string]$stick.Number, '-SchijfId', "`"$($stick.UniqueId)`"", '-Manier', $script:IsoManier) -Balk $script:W.stickBalk -Label $script:W.stickStatus -Tekst (T 'De USB-stick wordt gemaakt…' 'Making the USB stick…') -Klaar {
             param($r)
             $script:W.stickBalk.Visible = $false
@@ -2679,8 +2721,11 @@ $Paginas += {
                 return
             }
             # Gewoon hier in het venster, geen los meldingsvenster erbovenop.
-            $extra = if ($script:IsoManier -eq 'bruikbaar') { T "`nIn Windows heet de stick nu BUGOS: je kunt er ook je eigen bestanden op zetten. Laat alleen de map LiveOS staan." "`nIn Windows the stick is now called BUGOS: you can put your own files on it too. Just leave the LiveOS folder alone." } else { '' }
-            $script:W.stickStatus.Text = (T "De USB-stick is klaar!`n1. Laat de stick erin zitten en start de computer opnieuw op.`n2. Druk tijdens het opstarten op F12, F11, F9 of Esc (verschilt per computer) en kies de USB-stick.`n3. Volg de stappen op het scherm." "The USB stick is ready!`n1. Leave the stick in and restart the computer.`n2. While starting, press F12, F11, F9 or Esc (differs per computer) and choose the USB stick.`n3. Follow the steps on screen.") + $extra
+            $script:W.stickStatus.Text = if ($script:IsoManier -eq 'bruikbaar') {
+                T "Klaar! In Windows heet de stick nu BUGOS. Laat de map LiveOS erop staan.`nVolgende stap: zet je bestanden erbij (klik op Volgende). Daarna start je je computer van deze stick." "Done! In Windows the stick is now called BUGOS. Leave the LiveOS folder on it.`nNext step: add your files (click Next). After that you start your computer from this stick."
+            } else {
+                T "Klaar! Deze stick is nu helemaal voor BugOS. Zet je bestanden dus op een andere USB-schijf (klik op Volgende)." "Done! This stick is now completely for BugOS. So put your files on another USB drive (click Next)."
+            }
             $script:W.stickStatus.ForeColor = $Goed
         }
         if (-not $gestart) { $script:W.stickStatus.Text = '' }
@@ -2692,6 +2737,7 @@ $Paginas += {
         if (-not $stick) { return }
         if (-not (Vraag (T "ALLES op '$($stick.FriendlyName)' ($([math]::Round($stick.Size / 1GB)) GB) wordt gewist, ook BugOS als dat erop staat. Daarna is het weer een gewone, lege USB-stick. Doorgaan?" "EVERYTHING on '$($stick.FriendlyName)' ($([math]::Round($stick.Size / 1GB)) GB) will be erased, including BugOS if it is on it. After that it is a normal, empty USB stick again. Continue?"))) { return }
         $script:W.stickStatus.ForeColor = $Grijs
+        Toon-Onderaan $script:W.stickStatus
         $gestart = Start-BeheerderTaak @('-Taak', 'Herstel', '-SchijfNummer', [string]$stick.Number, '-SchijfId', "`"$($stick.UniqueId)`"") -Balk $script:W.stickBalk -Label $script:W.stickStatus -Tekst (T 'De stick wordt weer gewoon gemaakt…' 'Making the stick normal again…') -Klaar {
             param($r)
             $script:W.stickBalk.Visible = $false
@@ -2700,12 +2746,16 @@ $Paginas += {
                 Toon ((T 'Dat lukte niet: ' 'That did not work: ') + $r.Fout) 'Error'
                 return
             }
-            $script:W.stickStatus.Text = (T 'Klaar: het is weer een gewone, lege USB-stick.' 'Done: it is a normal, empty USB stick again.')
+            $script:W.stickStatus.Text = (T 'Klaar: het is weer een gewone, lege USB-stick (BugOS staat er niet meer op).' 'Done: it is a normal, empty USB stick again (BugOS is no longer on it).')
             $script:W.stickStatus.ForeColor = $Goed
         }
         if (-not $gestart) { $script:W.stickStatus.Text = '' }
     })
 }
+
+# De volgorde van de stappen: eerst de stick (die blijft bruikbaar), dan je bestanden (die kunnen op diezelfde stick),
+# en als laatste Windows houden of niet (vlak voor het installeren).
+$Paginas = @($Paginas[0], $Paginas[1], $Paginas[4], $Paginas[2], $Paginas[3])
 
 function Toon-Pagina {
     $script:PaginaTeller++   # werk van de vorige pagina (dat je mocht onderbreken) vult deze pagina niet meer
