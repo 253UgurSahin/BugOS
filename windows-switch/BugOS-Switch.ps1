@@ -44,6 +44,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# Welke versie dit is: staat in de titelbalk en onderin de zijbalk, zodat je ziet of je de nieuwste hebt.
+$script:Versie = '2026.11.25-2'
+
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
@@ -1792,6 +1795,16 @@ if ($Taak -in 'Krimp', 'Usb', 'Herstel') {
             Schrijf-Voortgang $VoortgangBestand @{ p = $p; t = $t }
         }
     }
+    # Terwijl de stick wordt leeggemaakt en ingedeeld, ziet Windows heel even een deel zonder bestandssysteem en vraagt
+    # dan 'Je moet de schijf formatteren. Wil je dat?'. Die vraag komt van de dienst ShellHWDetection (automatisch
+    # afspelen): die zetten we zolang even stil, en daarna weer aan.
+    $hwStil = $false
+    if ($Taak -in 'Usb', 'Herstel') {
+        try {
+            $hw = Get-Service -Name 'ShellHWDetection' -ErrorAction Stop
+            if ($hw.Status -eq 'Running') { Stop-Service -Name 'ShellHWDetection' -Force -ErrorAction Stop; $hwStil = $true }
+        } catch { Write-Verbose 'Automatisch afspelen niet stilgezet.' }
+    }
     try {
         switch ($Taak) {
             'Krimp' {
@@ -1813,6 +1826,8 @@ if ($Taak -in 'Krimp', 'Usb', 'Herstel') {
         if ($VoortgangBestand) { Schrijf-Voortgang $VoortgangBestand @{ p = 0; t = ''; fout = $fout; klaar = $true } }
         else { Toon $fout 'Error' }
         exit 1
+    } finally {
+        if ($hwStil) { try { Start-Service -Name 'ShellHWDetection' -ErrorAction Stop } catch { Write-Verbose 'Automatisch afspelen niet weer aangezet.' } }
     }
 }
 
@@ -1831,7 +1846,7 @@ Maak-Letters
 $script:Breedte = 548   # breedte van de inhoud (zonder schaal)
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = 'BugOS Switch'
+$form.Text = "BugOS Switch $($script:Versie)"
 $form.AutoScaleMode = 'None'
 $form.Font = $script:LetterGewoon
 $form.ClientSize = New-Object System.Drawing.Size((Px 880), (Px 560))
@@ -2138,8 +2153,8 @@ function Teken-Zijbalk($zij, $e) {
         $vak = New-Object System.Drawing.Rectangle((Px 64), (Px ($y - 4)), (Px 154), (Px 34))
         [System.Windows.Forms.TextRenderer]::DrawText($g, $namen[$i], $letter, $vak, $kleur, $vlag)
     }
-    $vak = New-Object System.Drawing.Rectangle((Px 28), (Px 486), (Px 190), (Px 50))
-    [System.Windows.Forms.TextRenderer]::DrawText($g, (T 'Er gebeurt niks zonder dat jij op een knop drukt.' 'Nothing happens until you press a button.'), $script:LetterNoot, $vak, (Kleur '#A6ABB6'), [System.Windows.Forms.TextFormatFlags]'WordBreak, NoPadding')
+    $vak = New-Object System.Drawing.Rectangle((Px 28), (Px 478), (Px 190), (Px 64))
+    [System.Windows.Forms.TextRenderer]::DrawText($g, (T "Er gebeurt niks zonder dat jij op een knop drukt.`nVersie $($script:Versie)" "Nothing happens until you press a button.`nVersion $($script:Versie)"), $script:LetterNoot, $vak, (Kleur '#A6ABB6'), [System.Windows.Forms.TextFormatFlags]'WordBreak, NoPadding')
 }
 
 function Meet-Hoogte([string] $tekst, $letter, [double] $breedte) {
@@ -2495,6 +2510,7 @@ $Paginas += {
         # Welke manier past bij deze ISO? Een nieuwe BugOS: een stick die bruikbaar blijft. Een oudere: de oude manier.
         $script:IsoGekozen = ''
         $script:W.isoPad = $pad
+        $script:W.isoLabel.ForeColor = $Grijs
         $script:W.isoLabel.Text = (T 'Het bestand nakijken…' 'Checking the file…')
         Start-Werk -Blokkeer -Mee @{ Pad = $pad } -Balk $script:W.downloadBalk -Werk {
             $i = Get-IsoStickInfo $Mee.Pad
@@ -2504,6 +2520,7 @@ $Paginas += {
             $script:W.downloadBalk.Visible = $false
             if ($staat.Fout) {
                 $script:W.isoLabel.Text = (T 'Nog geen bestand gekozen.' 'No file chosen yet.')
+                $script:W.isoLabel.ForeColor = $Grijs
                 Toon ((T 'Dit bestand kan ik niet gebruiken: ' 'I cannot use this file: ') + $staat.Fout) 'Warning'
                 return
             }
@@ -2513,9 +2530,11 @@ $Paginas += {
             if ($u.Bruikbaar) {
                 $script:IsoManier = 'bruikbaar'
                 $script:W.isoLabel.Text = $pad + "`n" + (T 'Goed: de stick blijft bruikbaar in Windows (één schijf BUGOS, met ruimte over).' 'Good: the stick stays usable in Windows (one drive BUGOS, with space left).')
+                $script:W.isoLabel.ForeColor = $Goed
             } else {
                 $script:IsoManier = 'heel'
                 $script:W.isoLabel.Text = $pad + "`n" + (T 'Een oudere BugOS: de hele stick wordt voor BugOS gebruikt. Na het installeren maak je hem weer gewoon met de knop hieronder.' 'An older BugOS: the whole stick is used for BugOS. After installing, make it normal again with the button below.')
+                $script:W.isoLabel.ForeColor = $LetOp
             }
         }
     }
@@ -2552,6 +2571,7 @@ $Paginas += {
                 $script:W.downloadBalk.Visible = $false
                 if ($staat.Fout) {
                     $script:W.isoLabel.Text = (T 'Nog geen bestand gekozen.' 'No file chosen yet.')
+                    $script:W.isoLabel.ForeColor = $Grijs
                     Toon $staat.Fout 'Error'
                     return
                 }
@@ -2577,7 +2597,7 @@ $Paginas += {
     $gewoon = Nieuw-Knop (T 'Stick weer gewoon maken…' 'Make stick normal again…') 232 ($y + 52) 250
     $script:W.stickBalk = Nieuw-Balk 0 ($y + 106) ($script:Breedte - 4) $vlak
     $script:W.stickBalk.Visible = $false
-    $script:W.stickStatus = Nieuw-Label '' ($y + 122) 48 $Grijs
+    $script:W.stickStatus = Nieuw-Label '' ($y + 122) 150 $Grijs
 
     function script:Get-GekozenStick {
         $sticks = $script:W.sticks
@@ -2595,7 +2615,7 @@ $Paginas += {
         if (-not $script:IsoGekozen) { Toon (T 'Kies eerst het BugOS .iso-bestand (of download het).' 'Choose the BugOS .iso file first (or download it).'); return }
         $stick = Get-GekozenStick
         if (-not $stick) { return }
-        $hoe = if ($script:IsoManier -eq 'bruikbaar') { T 'Daarna is het een BugOS-stick die je in Windows gewoon kunt blijven gebruiken.' 'After that it is a BugOS stick you can keep using in Windows.' } else { T 'Daarna gebruikt BugOS de hele stick (een oudere BugOS).' 'After that BugOS uses the whole stick (an older BugOS).' }
+        $hoe = if ($script:IsoManier -eq 'bruikbaar') { T 'Daarna is het een BugOS-stick die je in Windows gewoon kunt blijven gebruiken.' 'After that it is a BugOS stick you can keep using in Windows.' } else { T "Let op: dit .iso-bestand is een oudere BugOS. Dan gebruikt BugOS de hele stick, en Windows ziet daarna twee vreemde schijven en vraagt of je ze wilt formatteren (klik dan op Annuleren). Met een nieuwere BugOS blijft de stick gewoon één schijf." "Note: this .iso file is an older BugOS. Then BugOS uses the whole stick, and afterwards Windows sees two odd drives and asks whether to format them (click Cancel). With a newer BugOS the stick stays one normal drive." }
         if (-not (Vraag (T "ALLES op '$($stick.FriendlyName)' ($([math]::Round($stick.Size / 1GB)) GB) wordt gewist. $hoe Doorgaan?" "EVERYTHING on '$($stick.FriendlyName)' ($([math]::Round($stick.Size / 1GB)) GB) will be erased. $hoe Continue?"))) { return }
         $script:W.stickStatus.ForeColor = $Grijs
         $gestart = Start-BeheerderTaak @('-Taak', 'Usb', '-IsoPad', "`"$($script:IsoGekozen)`"", '-SchijfNummer', [string]$stick.Number, '-SchijfId', "`"$($stick.UniqueId)`"", '-Manier', $script:IsoManier) -Balk $script:W.stickBalk -Label $script:W.stickStatus -Tekst (T 'De USB-stick wordt gemaakt…' 'Making the USB stick…') -Klaar {
@@ -2606,10 +2626,10 @@ $Paginas += {
                 Toon ((T 'De USB-stick maken lukte niet: ' 'Making the USB stick failed: ') + $r.Fout) 'Error'
                 return
             }
-            $script:W.stickStatus.Text = (T 'De USB-stick is klaar.' 'The USB stick is ready.')
+            # Gewoon hier in het venster, geen los meldingsvenster erbovenop.
+            $extra = if ($script:IsoManier -eq 'bruikbaar') { T "`nIn Windows heet de stick nu BUGOS: je kunt er ook je eigen bestanden op zetten. Laat alleen de map LiveOS staan." "`nIn Windows the stick is now called BUGOS: you can put your own files on it too. Just leave the LiveOS folder alone." } else { '' }
+            $script:W.stickStatus.Text = (T "De USB-stick is klaar!`n1. Laat de stick erin zitten en start de computer opnieuw op.`n2. Druk tijdens het opstarten op F12, F11, F9 of Esc (verschilt per computer) en kies de USB-stick.`n3. Volg de stappen op het scherm." "The USB stick is ready!`n1. Leave the stick in and restart the computer.`n2. While starting, press F12, F11, F9 or Esc (differs per computer) and choose the USB stick.`n3. Follow the steps on screen.") + $extra
             $script:W.stickStatus.ForeColor = $Goed
-            $extra = if ($script:IsoManier -eq 'bruikbaar') { T "`n`nIn Windows heet de stick nu BUGOS. Je kunt er gewoon ook je eigen bestanden op zetten (ook die van stap 2); laat alleen de map LiveOS staan." "`n`nIn Windows the stick is now called BUGOS. You can also put your own files on it (including those from step 2); just leave the LiveOS folder alone." } else { '' }
-            Toon ((T "De USB-stick is klaar!`n`nZo ga je verder:`n1. Laat de stick erin zitten en start de computer opnieuw op.`n2. Druk tijdens het opstarten op F12, F11, F9 of Esc (verschilt per computer) en kies de USB-stick.`n3. Volg de stappen op het scherm." "The USB stick is ready!`n`nNext:`n1. Leave the stick in and restart the computer.`n2. While starting, press F12, F11, F9 or Esc (differs per computer) and choose the USB stick.`n3. Follow the steps on screen.") + $extra)
         }
         if (-not $gestart) { $script:W.stickStatus.Text = '' }
     })
