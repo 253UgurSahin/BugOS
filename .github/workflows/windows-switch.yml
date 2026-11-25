@@ -83,8 +83,12 @@ jobs:
           $schijf = Get-Disk | Where-Object { "$($_.Location)" -like '*nepstick.vhdx*' } | Select-Object -First 1
           if (-not $schijf) { Get-Disk | Format-Table Number, FriendlyName, BusType, Location -AutoSize; exit 1 }
           "Nep-stick: schijf $($schijf.Number), $($schijf.BusType)"
-          powershell.exe -NoProfile -ExecutionPolicy Bypass -File windows-switch\BugOS-Switch.ps1 -Taak Zelftest -Taal nl -IsoPad "$env:RUNNER_TEMP\bugos-test.iso" -SchijfNummer $schijf.Number
-          $code = $LASTEXITCODE
+          # Met een eigen tijdslimiet (10 minuten): blijft er iets hangen, dan zie je toch hoe ver het kwam.
+          $uit = "$env:RUNNER_TEMP\zelftest-uit.txt"; $fout = "$env:RUNNER_TEMP\zelftest-fout.txt"
+          $p = Start-Process powershell.exe -NoNewWindow -PassThru -RedirectStandardOutput $uit -RedirectStandardError $fout -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'windows-switch\BugOS-Switch.ps1', '-Taak', 'Zelftest', '-Taal', 'nl', '-IsoPad', "`"$env:RUNNER_TEMP\bugos-test.iso`"", '-SchijfNummer', "$($schijf.Number)")
+          $null = $p.Handle
+          if (-not $p.WaitForExit(600000)) { Stop-Process -Id $p.Id -Force; "TIJD OM: de zelftest liep langer dan 10 minuten." ; $code = 1 } else { $code = $p.ExitCode }
+          Get-Content $uit; Get-Content $fout
           "select vdisk file=`"$vhd`"`r`ndetach vdisk`r`n" | Set-Content -Encoding ASCII "$env:RUNNER_TEMP\vhd-uit.txt"
           diskpart /s "$env:RUNNER_TEMP\vhd-uit.txt" | Out-Null
           exit $code

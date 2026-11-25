@@ -47,6 +47,9 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
+# In de zelftest (GitHub): een fout in het venster (bijv. in het klokje) moet een echte fout zijn, geen foutvenster
+# waar niemand op klikt (dan bleef de zelftest een kwartier hangen).
+try { if ((Test-Path variable:Taak) -and $Taak -eq 'Zelftest') { [System.Windows.Forms.Application]::SetUnhandledExceptionMode('ThrowException') } } catch { Write-Verbose 'Kan niet meer (er is al een venster).' }
 
 # ------------------------------------------------------------------ taal --
 $script:NL = (Get-Culture).TwoLetterISOLanguageName -eq 'nl'
@@ -1955,7 +1958,13 @@ function Start-BeheerderTaak([string[]] $Argumenten, [scriptblock] $Klaar, $Balk
     $alles = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$PSCommandPath`"") + $Argumenten + @('-VoortgangBestand', "`"$bestand`"")
     if ((Test-Path variable:Taal) -and $Taal) { $alles += @('-Taal', $Taal) }
     try {
-        $p = Start-Process -FilePath 'powershell.exe' -ArgumentList $alles -Verb RunAs -WindowStyle Hidden -PassThru
+        if (Test-Beheerder) {
+            # Al beheerder (bijv. 'Als administrator uitvoeren'): dan niet nog eens om toestemming vragen.
+            $p = Start-Process -FilePath 'powershell.exe' -ArgumentList $alles -WindowStyle Hidden -PassThru
+        } else {
+            $p = Start-Process -FilePath 'powershell.exe' -ArgumentList $alles -Verb RunAs -WindowStyle Hidden -PassThru
+        }
+        $null = $p.Handle   # anders kent Windows PowerShell de afsluitcode straks soms niet
     } catch {
         return $false
     }
@@ -2660,14 +2669,17 @@ if ($Taak -eq 'Zelftest') {
     # -SchijfNummer van een nep-stick uit een bestand) de stick wordt goed gemaakt en weer gewoon gemaakt.
     $script:ZtFouten = 0
     function Klopt([bool] $ok, [string] $wat) {
-        if ($ok) { Write-Output "OK    $wat" } else { Write-Output "FOUT  $wat"; $script:ZtFouten++ }
+        # Meteen naar buiten (Console schrijft direct door): zo zie je ook bij een vastloper hoe ver het kwam.
+        if ($ok) { [Console]::WriteLine("OK    $wat") } else { [Console]::WriteLine("FOUT  $wat"); $script:ZtFouten++ }
     }
+    function Stap([string] $wat) { [Console]::WriteLine("--- $wat") }
     function Wacht-Werk([int] $ms = 120000) {
         $klok = [System.Diagnostics.Stopwatch]::StartNew()
         while ($script:Werken.Count -gt 0 -and $klok.ElapsedMilliseconds -lt $ms) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 15 }
     }
     $script:Zt = @{}
 
+    Stap 'werk naast het venster'
     # 1. Het werk loopt op een andere draad dan het venster, en het venster ziet de voortgang onderweg.
     $label = New-Object System.Windows.Forms.Label
     $balk = Nieuw-Balk 0 0 200 $vlak
@@ -2683,11 +2695,13 @@ if ($Taak -eq 'Zelftest') {
     Klopt ($script:Zt.Draad -and $script:Zt.Draad -ne [System.Threading.Thread]::CurrentThread.ManagedThreadId -and -not $script:Zt.Fout1) "het werk loopt naast het venster (draad $($script:Zt.Draad))"
     Klopt ($gezien.Count -ge 4) "het venster ziet de voortgang onderweg ($($gezien.Count) verschillende teksten)"
 
+    Stap 'een fout in het werk'
     # 2. Een fout in het werk komt terug als gewone tekst (geen vastgelopen venster).
     Start-Werk -Werk { throw 'kapot met opzet' } -Klaar { param($staat) $script:Zt.Fout2 = $staat.Fout }
     Wacht-Werk
     Klopt ($script:Zt.Fout2 -eq 'kapot met opzet') "een fout komt netjes terug ($($script:Zt.Fout2))"
 
+    Stap 'functies in de runspace'
     # 3. De functies van het programma werken in de runspace, met wat je meegeeft (een extra map).
     $map = Join-Path $env:TEMP ('bugos-zelftest-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path (Join-Path $map 'Extra') | Out-Null
@@ -2706,6 +2720,7 @@ if ($Taak -eq 'Zelftest') {
     Klopt ($script:Zt.Json -eq $true -and $script:Zt.Deels -and -not $script:Zt.Fout4) "Invoke-Meenemen in de runspace: bugos-switch.json staat er, Deels komt terug ($($script:Zt.Fout4))"
     Klopt (Test-Path -LiteralPath (Join-Path $map 'BugOS-Switch\Extra')) 'de extra map is meegekopieerd'
 
+    Stap 'de ISO lezen'
     # 4. De ISO zelf lezen (gemaakt met pycdlib zoals xorriso -R: alleen Rock Ridge-namen, geen Joliet).
     if ($IsoPad) {
         $info = Get-IsoStickInfo $IsoPad
@@ -2729,6 +2744,7 @@ if ($Taak -eq 'Zelftest') {
         Klopt ($fout -ne '') "geen ISO: een gewone foutmelding ($fout)"
     }
 
+    Stap 'de stick op een nep-stick'
     # 5. De stick op een nep-stick (VHD): bruikbaar maken, nakijken, en weer gewoon maken (als beheerder-taak).
     if ($IsoPad -and $SchijfNummer -ge 0) {
         $teksten = New-Object 'System.Collections.Generic.List[string]'
@@ -2752,6 +2768,7 @@ if ($Taak -eq 'Zelftest') {
         Klopt ($cfg -match 'root=live:LABEL=BUGOS ' -and $cfg -match "'BUGOS-EFI'" -and [int][char]$cfg[0] -ne 0xFEFF) 'opstartdeel: grub.cfg voor de stick, zonder BOM'
         Klopt ((Get-Volume -DriveLetter $efi.Substring(0, 1)).FileSystemLabel -eq 'BUGOS-EFI') 'opstartdeel heet BUGOS-EFI'
         Remove-PartitionAccessPath -DiskNumber $SchijfNummer -PartitionNumber 2 -AccessPath $efi
+        Stap 'weer gewoon maken (beheerder-taak)'
         # Weer gewoon maken, als beheerder-taak zoals in het venster (voortgang via het bestand, het venster blijft bewegen).
         $disk = Get-Disk -Number $SchijfNummer
         $gestart = Start-BeheerderTaak @('-Taak', 'Herstel', '-SchijfNummer', [string]$SchijfNummer, '-SchijfId', "`"$($disk.UniqueId)`"", '-TestSchijf') -Klaar { param($r) $script:Zt.Herstel = $r }
@@ -2768,8 +2785,8 @@ if ($Taak -eq 'Zelftest') {
         Klopt ($fout -ne '') 'nooit de schijf van Windows, ook niet in de zelftest'
     }
     Remove-Item -LiteralPath $map -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Output ''
-    Write-Output "$($script:ZtFouten) fout(en)."
+    [Console]::WriteLine('')
+    [Console]::WriteLine("$($script:ZtFouten) fout(en).")
     exit ([int]($script:ZtFouten -gt 0))
 }
 
