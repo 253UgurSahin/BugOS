@@ -72,10 +72,13 @@ function Start-AlsBeheerder([string[]] $Argumenten) {
 }
 
 function Toon([string] $tekst, [string] $soort = 'Information') {
+    # In de zelftest (GitHub) klikt niemand: dan alleen opschrijven, nooit een venster dat blijft wachten.
+    if ((Test-Path variable:Taak) -and $Taak -eq 'Zelftest') { Write-Host "MELDING ($soort): $tekst"; return }
     [void][System.Windows.Forms.MessageBox]::Show($tekst, 'BugOS Switch', 'OK', $soort)
 }
 
 function Vraag([string] $tekst) {
+    if ((Test-Path variable:Taak) -and $Taak -eq 'Zelftest') { Write-Host "VRAAG (nee): $tekst"; return $false }
     [System.Windows.Forms.MessageBox]::Show($tekst, 'BugOS Switch', 'YesNo', 'Warning') -eq 'Yes'
 }
 
