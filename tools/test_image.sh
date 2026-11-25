@@ -256,10 +256,17 @@ if [ -d "$REPO/tools" ]; then
     T="$(mktemp -d)"
     cp -a "$REPO/." "$T/"
     for t in qml-test test_files test_task_manager test_settings test_start_data test_help test_backup test_logout test_edges test_os_settings test_os_apps test_menus; do
-        if (cd "$T" && timeout 300 python3 "tools/$t.py" >"$T/$t.log" 2>&1); then ok "repo-test: $t"; else fout "repo-test: $t ($(grep -E '^FOUT|Error' "$T/$t.log" | head -3 | tr '\n' ' '))"; fi
+        if (cd "$T" && timeout 300 python3 "tools/$t.py" >"$T/$t.log" 2>&1); then ok "repo-test: $t"; else
+            fout "repo-test: $t ($(grep -E '^FOUT|Error' "$T/$t.log" | head -3 | tr '\n' ' '))"
+            grep -qE '^FOUT|Error' "$T/$t.log" || tail -n 15 "$T/$t.log" | sed 's/^/      | /'
+        fi
     done
     for t in test_package test_game_mode test_light_mode test_panel test_exe test_signed test_windows_start test_os_system; do
-        if (cd "$T" && timeout 300 bash "tools/$t.sh" >"$T/$t.log" 2>&1); then ok "repo-test: $t"; else fout "repo-test: $t ($(grep -E '^FOUT' "$T/$t.log" | head -3 | tr '\n' ' '))"; fi
+        if (cd "$T" && timeout 300 bash "tools/$t.sh" >"$T/$t.log" 2>&1); then ok "repo-test: $t"; else
+            fout "repo-test: $t ($(grep -E '^FOUT' "$T/$t.log" | head -3 | tr '\n' ' '))"
+            # Geen FOUT-regel (afgebroken, tijd om)? Dan de laatste regels, anders weet je niet wat er was.
+            grep -q '^FOUT' "$T/$t.log" || tail -n 15 "$T/$t.log" | sed 's/^/      | /'
+        fi
     done
 fi
 
