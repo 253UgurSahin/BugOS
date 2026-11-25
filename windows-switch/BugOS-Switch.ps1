@@ -49,7 +49,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # Welke versie dit is: staat in de titelbalk en onderin de zijbalk, zodat je ziet of je de nieuwste hebt.
-$script:Versie = '2026.11.25-13'
+$script:Versie = '2026.11.25-14'
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -2827,12 +2827,16 @@ function Toon-Klaar([string] $titel, [string] $tekst, [string] $verderTekst = ''
     $kopje.Font = $script:LetterTitel; $kopje.ForeColor = $Inkt; $kopje.Text = $titel
     Plaats $kopje 84 8 ($script:Breedte - 84) 30
     $vlak.Controls.Add($kopje)
-    $h = (Meet-Hoogte $tekst $script:LetterGewoon ($script:Breedte - 84)) + 6
+    # De tekst bepaalt zelf zijn hoogte (AutoSize met een maximale breedte): uitrekenen met MeasureText viel op 150%
+    # net te klein uit, dan viel de laatste regel weg.
     $uitleg = New-Object System.Windows.Forms.Label
-    $uitleg.Font = $script:LetterGewoon; $uitleg.ForeColor = $Grijs; $uitleg.Text = $tekst
-    Plaats $uitleg 84 44 ($script:Breedte - 84) $h
+    $uitleg.Font = $script:LetterGewoon; $uitleg.ForeColor = $Grijs
+    $uitleg.Location = New-Object System.Drawing.Point((Px 84), (Px 44))
+    $uitleg.MaximumSize = New-Object System.Drawing.Size((Px ($script:Breedte - 84)), 0)
+    $uitleg.AutoSize = $true
+    $uitleg.Text = $tekst
     $vlak.Controls.Add($uitleg)
-    $y = 44 + [math]::Ceiling([double]$h) + 14
+    $y = 44 + [math]::Ceiling([double]$uitleg.PreferredSize.Height / $script:Schaal) + 16
     if ($verderTekst) {
         $verder2 = Nieuw-Knop $verderTekst 84 $y 260 'hoofd'
         $verder2.Add_Click({
