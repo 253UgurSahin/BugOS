@@ -45,7 +45,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # Welke versie dit is: staat in de titelbalk en onderin de zijbalk, zodat je ziet of je de nieuwste hebt.
-$script:Versie = '2026.11.25-4'
+$script:Versie = '2026.11.25-5'
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -2366,6 +2366,17 @@ $Paginas += {
     })
     $script:W.balk = Nieuw-Balk 0 ($y + 108) ($script:Breedte - 4) $vlak
     $script:W.status = Nieuw-Label '' ($y + 122) 48 $Grijs
+    if ($script:W.schijf.Items.Count -eq 0) {
+        # Een lege lijst zonder uitleg: dan weet je niet wat je moet doen. Zit er wel een USB-stick in, maar zonder
+        # schijf die Windows kan openen (net leeggemaakt, of een stick op de oude manier)? Dat zeggen we erbij.
+        $kaal = @(Get-UsbSchijven | Where-Object { @(Get-Partition -DiskNumber $_.Number -ErrorAction SilentlyContinue | Where-Object { "$($_.DriveLetter)" -match '^[A-Za-z]$' }).Count -eq 0 })
+        $script:W.status.ForeColor = $LetOp
+        $script:W.status.Text = if ($kaal.Count -gt 0) {
+            T "Je USB-stick '$($kaal[0].FriendlyName)' heeft nu geen schijf die Windows kan openen. Ga naar stap 4 en kies 'USB-stick maken' (of 'Stick weer gewoon maken'), en kom dan terug." "Your USB stick '$($kaal[0].FriendlyName)' has no drive Windows can open right now. Go to step 4 and choose 'Make USB stick' (or 'Make stick normal again'), then come back."
+        } else {
+            T 'Geen USB-schijf gevonden. Steek er een in en ga even terug en weer verder.' 'No USB drive found. Plug one in, then go back and forward again.'
+        }
+    }
     $script:W.knop.Add_Click({
         $lijst = $script:W.schijf; $status = $script:W.status
         if ($lijst.SelectedIndex -lt 0) { Toon (T 'Steek eerst een USB-schijf in en ga even terug en weer verder.' 'Plug in a USB drive first, then go back and forward again.'); return }
@@ -2450,9 +2461,30 @@ $Paginas += {
 }
 
 # --- Pagina 3: ruimte maken ------------------------------------------------
+# Eerst kiezen: Windows houden of niet. Pas als je Windows wilt houden, rekenen we uit hoeveel ruimte er is (dat
+# duurt even en is anders voor niks). De keuze blijft onthouden als je terug en weer verder gaat.
+$script:NaastWindows = $null
 $Paginas += {
     $kop.Text = (T 'BugOS naast Windows?' 'BugOS next to Windows?')
-    $script:W.y3 = Nieuw-Tekst (T "Wil je Windows houden? Dan maken we Windows een stukje kleiner, zodat BugOS ernaast past. Bij het opstarten kies je dan welke je wilt. Wil je alleen BugOS? Sla deze stap dan over." "Want to keep Windows? Then we make Windows a bit smaller so BugOS fits next to it. When starting the computer you choose which one. Only want BugOS? Skip this step.") 0
+    $y = Nieuw-Tekst (T "Wil je Windows houden? Dan maken we Windows een stukje kleiner, zodat BugOS ernaast past. Bij het opstarten kies je dan welke je wilt.`nWil je alleen BugOS (Windows gaat weg)? Dan is deze stap niet nodig." "Want to keep Windows? Then we make Windows a bit smaller so BugOS fits next to it. When starting the computer you choose which one.`nOnly want BugOS (Windows goes away)? Then you do not need this step.") 0
+    $script:W.naastKnop = Nieuw-Knop (T 'Windows houden' 'Keep Windows') 0 ($y + 12) 220 'hoofd'
+    $alleen = Nieuw-Knop (T 'Alleen BugOS: overslaan' 'Only BugOS: skip') 232 ($y + 12) 250
+    $script:W.y3 = $y + 62
+    $alleen.Add_Click({
+        if (Test-Bezig) { return }
+        $script:NaastWindows = $false
+        $script:Pagina++
+        Toon-Pagina
+    })
+    $script:W.naastKnop.Add_Click({
+        $script:NaastWindows = $true
+        $script:W.naastKnop.Enabled = $false
+        Start-Ruimte
+    })
+    if ($script:NaastWindows -eq $true) { $script:W.naastKnop.Enabled = $false; Start-Ruimte }
+}
+
+function Start-Ruimte {
     $y = $script:W.y3
     $script:W.ruimteLabel = Nieuw-Label (T 'Even uitrekenen hoeveel ruimte er is…' 'Working out how much space there is…') ($y + 18) 26 $Grijs
     $script:W.ruimteBalk = Nieuw-Balk 0 ($y + 52) ($script:Breedte - 4) $vlak
