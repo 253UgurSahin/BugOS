@@ -33,7 +33,8 @@ controle() { if eval "$1"; then echo "OK    $2"; else echo "FOUT  $2"; fouten=$(
 controle 'grep -q "DriveType -eq 3 -and (Test-UsbLetter" <<<"$PS" && ! grep -q "DriveType -in 2, 3" <<<"$PS"' \
     "U284: stap 2 biedt geen schijf in de computer (D:) aan als back-upplek"
 # Sinds 'bestanden slimmer' staat de grootte eerst in $nodig (die noemt de melding ook), daarna de vergelijking.
-controle 'grep -q "\$nodig = Get-MeeneemGrootte" <<<"$PS" && grep -q "\$vrij + \$al -lt \$nodig" <<<"$PS"' "U286: nog een keer klikken telt wat er al op de schijf staat"
+# Sinds het werk naast het venster loopt (runspace), komen vrij en al via $Mee mee.
+controle 'grep -q "\$nodig = Get-MeeneemGrootte" <<<"$PS" && grep -q "\$Mee.Vrij + \$Mee.Al -lt \$nodig" <<<"$PS"' "U286: nog een keer klikken telt wat er al op de schijf staat"
 controle '! grep -q "choose \"Automatic\"" <<<"$PS" && grep -q "Share disk with other operating systems" <<<"$PS"' \
     "U285: na 'Ruimte maken' noemt hij de keuze die het installatieprogramma echt heeft"
 controle 'grep -q "if (-not \$gelukt) { Remove-Item -LiteralPath \$doel" <<<"$PS"' "U287: een halve download wordt opgeruimd"
