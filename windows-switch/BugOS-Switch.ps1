@@ -49,7 +49,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # Welke versie dit is: staat in de titelbalk en onderin de zijbalk, zodat je ziet of je de nieuwste hebt.
-$script:Versie = '2026.11.25-10'
+$script:Versie = '2026.11.25-11'
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -2283,7 +2283,7 @@ $Paginas = @()
 
 # --- Pagina 0: welkom -------------------------------------------------------
 $Paginas += {
-    $kop.Text = (T 'Welkom bij de BugOS Overstap' 'Welcome to BugOS Switch')
+    $kop.Text = (T 'Welkom bij BugOS Switch' 'Welcome to BugOS Switch')
     $y = Nieuw-Tekst (T 'Dit programma helpt je in vier stappen van Windows over te stappen op BugOS:' 'This program helps you move from Windows to BugOS in four steps:') 0
     $y += 14
     $y += (Nieuw-Rij 'nummer' (T 'Controleren' 'Check') (T 'Kan je computer BugOS aan? Dat zie je meteen.' 'Can your computer run BugOS? You see it right away.') $y '1') + 10
@@ -2571,7 +2571,7 @@ function Start-Ruimte {
         $script:W.krimpStatus = Nieuw-Label '' ($y + 128) 110 $Grijs
         $script:W.krimpKnop.Add_Click({
             $getal = $script:W.getal
-            if (-not (Vraag (T "Windows wordt $($getal.Value) GB kleiner. Je bestanden blijven gewoon staan.`n`nHeb je een back-up gemaakt (stap 2)? Doorgaan?" "Windows will shrink by $($getal.Value) GB. Your files stay where they are.`n`nDid you make a backup (step 2)? Continue?"))) { return }
+            if (-not (Vraag (T "Windows wordt $($getal.Value) GB kleiner. Je bestanden blijven gewoon staan.`n`nHeb je je bestanden meegenomen (stap 3)? Doorgaan?" "Windows will shrink by $($getal.Value) GB. Your files stay where they are.`n`nDid you take your files along (step 3)? Continue?"))) { return }
             $script:W.krimpKnop.Enabled = $false
             $gestart = Start-BeheerderTaak @('-Taak', 'Krimp', '-KrimpGB', [string][int]$getal.Value) -Balk $script:W.krimpBalk -Label $script:W.krimpStatus -Tekst (T 'Windows kleiner maken… Dit kan een paar minuten duren.' 'Shrinking Windows… This can take a few minutes.') -Klaar {
                 param($r)
@@ -2581,7 +2581,7 @@ function Start-Ruimte {
                     Toon-Klaar (T 'Er is ruimte voor BugOS' 'There is space for BugOS') (T "Windows is kleiner gemaakt; je bestanden in Windows staan er nog.`n`nZo installeer je BugOS:`n1. Start je computer opnieuw op vanaf de BugOS-stick: druk tijdens het opstarten op F12, F11, F9 of Esc en kies de USB-stick.`n2. Kies bij het installeren `"De schijf delen met Windows of een ander systeem`" (niet `"De hele schijf gebruiken`": dan gaat Windows weg)." "Windows was made smaller; your files in Windows are still there.`n`nThis is how you install BugOS:`n1. Restart your computer from the BugOS stick: while it starts, press F12, F11, F9 or Esc and choose the USB stick.`n2. When installing, choose `"Share disk with other operating systems`" (not `"Use entire disk`": that removes Windows).") (T 'Sluiten' 'Close')
                 } else {
                     $script:W.krimpStatus.Text = ''
-                    Toon ((T 'Ruimte maken lukte niet: ' 'Making space failed: ') + $r.Fout) 'Error'
+                    Toon-Fout (T 'Ruimte maken lukte niet' 'Making space did not work') (T 'Windows is niet kleiner gemaakt; er is niets veranderd. Herstart je computer en probeer het nog een keer. Lukt het dan nog niet, kies dan "Op een andere schijf" of "In plaats van Windows".' 'Windows was not made smaller; nothing changed. Restart your computer and try again. If it still does not work, choose "On another disk" or "Instead of Windows".') $r.Fout
                 }
             }
             if (-not $gestart) { $script:W.krimpKnop.Enabled = $true }
@@ -2728,7 +2728,7 @@ $Paginas += {
             $script:W.stickBalk.Visible = $false
             if ($r.Code -ne 0) {
                 $script:W.stickStatus.Text = ''
-                Toon ((T 'De USB-stick maken lukte niet: ' 'Making the USB stick failed: ') + $r.Fout) 'Error'
+                Toon-Fout (T 'De USB-stick maken lukte niet' 'Making the USB stick did not work') (T 'Haal de stick eruit, steek hem er weer in en probeer het opnieuw. Lukt het dan nog niet, probeer een andere USB-poort of een andere stick.' 'Unplug the stick, plug it in again and try again. If it still does not work, try another USB port or another stick.') $r.Fout
                 return
             }
             # Een klaar-scherm in het venster, geen los meldingsvenster erbovenop.
@@ -2754,7 +2754,7 @@ $Paginas += {
             $script:W.stickBalk.Visible = $false
             if ($r.Code -ne 0) {
                 $script:W.stickStatus.Text = ''
-                Toon ((T 'Dat lukte niet: ' 'That did not work: ') + $r.Fout) 'Error'
+                Toon-Fout (T 'De stick leeg maken lukte niet' 'Emptying the stick did not work') (T 'Haal de stick eruit, steek hem er weer in en probeer het opnieuw.' 'Unplug the stick, plug it in again and try again.') $r.Fout
                 return
             }
             Toon-Klaar (T 'De stick is weer leeg' 'The stick is empty again') (T 'Het is weer een gewone USB-stick, zonder BugOS erop. Je kunt hem in Windows gebruiken zoals je wilt.' 'It is a normal USB stick again, without BugOS on it. You can use it in Windows however you like.')
@@ -2785,22 +2785,28 @@ function Toon-Pagina {
 
 # Het klaar-scherm: als iets af is (de stick, je bestanden, ruimte maken), maakt de pagina plaats voor een groot vinkje,
 # wat er nu is en wat je daarna doet, met een knop naar de volgende stap. 'Nog een keer' tekent de pagina opnieuw.
-function Toon-Klaar([string] $titel, [string] $tekst, [string] $verderTekst = '') {
+# Let op: de schakelaar heet niet -Fout: dan zou hij de kleur $Fout verbergen (PowerShell kent geen hoofdletters).
+function Toon-Klaar([string] $titel, [string] $tekst, [string] $verderTekst = '', [switch] $Mislukt) {
     $vlak.SuspendLayout()
     $vlak.Controls.Clear()
     $vlak.AutoScrollPosition = New-Object System.Drawing.Point(0, 0)
     $icoon = New-Object System.Windows.Forms.Panel
     Plaats $icoon 0 6 64 64
     Zet-Dubbel $icoon
+    $icoon.Tag = [bool]$Mislukt
     $icoon.Add_Paint({
         param($s, $e)
         $g = $e.Graphics
         $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-        $kwast = New-Object System.Drawing.SolidBrush($Goed)
+        $kwast = New-Object System.Drawing.SolidBrush($(if ($s.Tag) { $Fout } else { $Goed }))
         $g.FillEllipse($kwast, (Fx 2), (Fx 2), (Fx 58), (Fx 58))
         $kwast.Dispose()
         $pen = Nieuwe-Pen $Wit 4.2
-        $g.DrawLines($pen, [System.Drawing.PointF[]]@((Punt 18 32), (Punt 27 41), (Punt 44 22)))
+        if ($s.Tag) {
+            $g.DrawLine($pen, (Punt 21 21), (Punt 41 41)); $g.DrawLine($pen, (Punt 41 21), (Punt 21 41))
+        } else {
+            $g.DrawLines($pen, [System.Drawing.PointF[]]@((Punt 18 32), (Punt 27 41), (Punt 44 22)))
+        }
         $pen.Dispose()
     })
     $vlak.Controls.Add($icoon)
@@ -2820,9 +2826,17 @@ function Toon-Klaar([string] $titel, [string] $tekst, [string] $verderTekst = ''
             if ($script:Pagina -ge $Paginas.Count - 1) { $form.Close() } else { $script:Pagina++; Toon-Pagina }
         })
     }
-    $opnieuw = Nieuw-Knop (T 'Nog een keer' 'Again') $(if ($verderTekst) { 356 } else { 84 }) $y 160
+    $opnieuwTekst = if ($Mislukt) { T 'Opnieuw proberen' 'Try again' } else { T 'Nog een keer' 'Again' }
+    $opnieuw = Nieuw-Knop $opnieuwTekst $(if ($verderTekst) { 356 } else { 84 }) $y $(if ($Mislukt) { 220 } else { 160 }) $(if ($Mislukt -and -not $verderTekst) { 'hoofd' } else { 'gewoon' })
     $opnieuw.Add_Click({ Toon-Pagina })
     $vlak.ResumeLayout()
+}
+
+function Toon-Fout([string] $titel, [string] $watNu, [string] $reden) {
+    # Wat er misging in gewone woorden, wat je kunt doen, en de reden van Windows (voor als je hulp vraagt) eronder.
+    $tekst = $watNu
+    if ($reden) { $tekst += "`n`n" + (T 'Wat Windows zei (handig als je om hulp vraagt): ' 'What Windows said (useful if you ask for help): ') + ($reden -replace '\s*Activity ID:\s*\{[^}]*\}', '').Trim() }
+    Toon-Klaar $titel $tekst -Mislukt
 }
 
 $terug.Add_Click({ if ($script:Pagina -gt 0 -and -not (Test-Bezig)) { $script:Pagina--; Toon-Pagina } })
@@ -2839,9 +2853,20 @@ if ($Taak -eq 'Foto') {
     $form.StartPosition = 'Manual'
     $form.Location = New-Object System.Drawing.Point(0, 0)
     $form.Show()
-    for ($i = 0; $i -lt $Paginas.Count; $i++) {
-        $script:Pagina = $i
-        Toon-Pagina
+    # Ook het klaar-scherm en het foutscherm (die zie je anders alleen na echt werk): als extra plaatjes.
+    $extra = @(
+        { $script:Pagina = 2; Toon-Pagina; Toon-Klaar (T 'De USB-stick is klaar' 'The USB stick is ready') (T "In Windows heet de stick nu BUGOS. Je kunt er ook je eigen bestanden op zetten; laat alleen de map LiveOS staan.`n`nVolgende stap: zet je bestanden erbij. Haal de stick er dus nog niet uit." "In Windows the stick is now called BUGOS. You can put your own files on it too; just leave the LiveOS folder alone.`n`nNext step: add your files. So do not unplug the stick yet.") (T 'Verder: bestanden meenemen' 'Next: take your files') },
+        { $script:Pagina = 2; Toon-Pagina; Toon-Fout (T 'De USB-stick maken lukte niet' 'Making the USB stick did not work') (T 'Haal de stick eruit, steek hem er weer in en probeer het opnieuw. Lukt het dan nog niet, probeer een andere USB-poort of een andere stick.' 'Unplug the stick, plug it in again and try again. If it still does not work, try another USB port or another stick.') 'The disk has already been initialized. Activity ID: {1ba05f16-7cf6-0008-ac5f-b31bf67cdd01}' },
+        { $script:Plek = 'vervang'; $script:Pagina = 4; Toon-Pagina },
+        { $script:Plek = 'ander'; $script:Pagina = 4; Toon-Pagina }
+    )
+    for ($i = 0; $i -lt $Paginas.Count + $extra.Count; $i++) {
+        if ($i -lt $Paginas.Count) {
+            $script:Pagina = $i
+            Toon-Pagina
+        } else {
+            & $extra[$i - $Paginas.Count]
+        }
         # Werk ernaast (de controle, de grootte) eerst laten afmaken: anders staat er op het plaatje 'even kijken'.
         $klok = [System.Diagnostics.Stopwatch]::StartNew()
         while ($script:Werken.Count -gt 0 -and $klok.ElapsedMilliseconds -lt 60000) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 20 }
