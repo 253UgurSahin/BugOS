@@ -21,6 +21,9 @@ nep wine 'exit 1'                                   # het programma stopt meteen
 nep wineboot 'mkdir -p "$WINEPREFIX/half"; exit 1'  # klaarzetten mislukt halverwege
 nep winepath 'echo "$2"'
 nep wineserver 'exit 0'                             # de Wine-achtergronddienst: niets om op te wachten
+# 'Windows-programma's' (bugos-exe biedt dat aan als een programma meteen stopt): nep, anders opent in het image het
+# echte venster en wacht de test tot de tijd om is.
+nep bugos-windows 'echo "$*" >>"'"$TMP"'/bugos-windows"'
 draai() { HOME="$TMP/thuis" PATH="$TMP/bin:$PATH" LANG=nl_NL.UTF-8 bash "$TMP/exe" "$1" >/dev/null 2>&1; echo $?; }
 
 RAAR="$TMP/spel\\nieuw.exe"   # een echte backslash in de naam
