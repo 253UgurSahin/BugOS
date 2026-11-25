@@ -45,7 +45,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # Welke versie dit is: staat in de titelbalk en onderin de zijbalk, zodat je ziet of je de nieuwste hebt.
-$script:Versie = '2026.11.25-5'
+$script:Versie = '2026.11.25-6'
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -1800,8 +1800,10 @@ function Schrijf-Voortgang([string] $pad, [hashtable] $staat) {
 if ($Taak -in 'Krimp', 'Usb', 'Herstel') {
     # Een beheerder-taak draait onzichtbaar; het hoofdvenster laat de voortgang zien (uit $VoortgangBestand).
     $script:LaatsteMelding = [DateTime]::MinValue
+    $script:LaatsteStap = ''
     $melden = {
         param($p, $t)
+        if ($t) { $script:LaatsteStap = $t }
         if (([DateTime]::Now - $script:LaatsteMelding).TotalMilliseconds -ge 200 -or $p -ge 100) {
             $script:LaatsteMelding = [DateTime]::Now
             Schrijf-Voortgang $VoortgangBestand @{ p = $p; t = $t }
@@ -1834,7 +1836,10 @@ if ($Taak -in 'Krimp', 'Usb', 'Herstel') {
         Schrijf-Voortgang $VoortgangBestand @{ p = 100; t = ''; klaar = $true }
         exit 0
     } catch {
+        # Waar het misging (de stap en de regel), zodat we het kunnen vinden als het op een echte stick misgaat.
         $fout = $_.Exception.Message
+        if ($script:LaatsteStap) { $fout += "`n" + (T 'Bij: ' 'During: ') + $script:LaatsteStap }
+        $fout += " (r. $($_.InvocationInfo.ScriptLineNumber))"
         if ($VoortgangBestand) { Schrijf-Voortgang $VoortgangBestand @{ p = 0; t = ''; fout = $fout; klaar = $true } }
         else { Toon $fout 'Error' }
         exit 1
