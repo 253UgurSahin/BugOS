@@ -115,10 +115,14 @@ DRACUT_NO_XATTR=1 dracut -v --force --zstd --reproducible --no-hostonly \
     --add "dmsquash-live dmsquash-live-autooverlay" "${EXFAT[@]}" \
     "/usr/lib/modules/${kernel}/initramfs.img" "${kernel}"
 # Zit exfat er echt in? Dan mag de Switch de bruikbare stick maken (het merkteken bugos.stick=2 in grub.cfg, stap 5).
+# (Eerst de hele lijst, dan zoeken: 'lsinitrd | grep -q' faalt met pipefail, want grep stopt bij de eerste vondst en
+# lsinitrd krijgt dan SIGPIPE. Zo kreeg de ISO van 2026-11-25 ten onrechte geen merkteken.)
 BUGOS_STICK_EXFAT=0
-if lsinitrd "/usr/lib/modules/${kernel}/initramfs.img" 2>/dev/null | grep -q '/exfat\.ko'; then
+INHOUD="$(lsinitrd "/usr/lib/modules/${kernel}/initramfs.img" 2>/dev/null || true)"
+if grep -q '/exfat\.ko' <<<"$INHOUD"; then
     BUGOS_STICK_EXFAT=1
 fi
+unset INHOUD
 echo "exFAT in het opstartbestand: $BUGOS_STICK_EXFAT"
 
 # Live-gebruiker die vanzelf inlogt, in het KDE-bureaublad.
