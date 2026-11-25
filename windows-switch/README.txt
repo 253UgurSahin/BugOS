@@ -11,6 +11,10 @@ Nothing happens unless you press a button.
 For "Make space" and "Make USB stick", Windows asks for permission
 (administrator). That is normal.
 
+The USB stick stays usable in Windows: it is called BUGOS, and you can
+put your own files on it (leave the LiveOS folder alone). Done with it?
+"Make stick normal again" makes it an empty stick again.
+
 Questions or problems? https://github.com/253UgurSahin/BugOS/issues
 
 ----- Nederlands -----
@@ -27,5 +31,9 @@ Dit programmaatje helpt je om van Windows over te stappen naar BugOS.
 Er gebeurt niks zonder dat jij op een knop drukt.
 Voor "Ruimte maken" en "USB-stick maken" vraagt Windows om toestemming
 (beheerder). Dat is normaal.
+
+De USB-stick blijft bruikbaar in Windows: hij heet BUGOS, en je kunt er
+gewoon je eigen bestanden op zetten (laat de map LiveOS staan). Klaar?
+"Stick weer gewoon maken" maakt er weer een lege stick van.
 
 Vragen of problemen? https://github.com/253UgurSahin/BugOS/issues

@@ -66,6 +66,29 @@ jobs:
           # code 1 achter, ook al ging alles goed (de lijst is dan gewoon leeg). Fouten hierboven stoppen de stap zelf al.
           $global:LASTEXITCODE = 0
 
+      # Wat je niet op een plaatje ziet: het werk loopt naast het venster (het venster blijft bewegen), fouten komen netjes
+      # terug, de ISO wordt zelf gelezen (zonder Joliet, zoals de echte), en de stick wordt op een nep-stick (een VHD)
+      # bruikbaar gemaakt (exFAT BUGOS + verborgen opstartdeel) en weer gewoon gemaakt, als beheerder-taak.
+      - name: Zelftest (werk naast het venster, ISO lezen, stick maken en weer gewoon maken op een nep-stick)
+        shell: powershell
+        timeout-minutes: 20
+        run: |
+          python -m pip install --quiet pycdlib
+          python tools\switch_test_iso.py "$env:RUNNER_TEMP\bugos-test.iso"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $vhd = "$env:RUNNER_TEMP\nepstick.vhdx"
+          "create vdisk file=`"$vhd`" maximum=1024 type=expandable`r`nattach vdisk`r`n" | Set-Content -Encoding ASCII "$env:RUNNER_TEMP\vhd-aan.txt"
+          diskpart /s "$env:RUNNER_TEMP\vhd-aan.txt"
+          Start-Sleep -Seconds 3
+          $schijf = Get-Disk | Where-Object { "$($_.Location)" -like '*nepstick.vhdx*' } | Select-Object -First 1
+          if (-not $schijf) { Get-Disk | Format-Table Number, FriendlyName, BusType, Location -AutoSize; exit 1 }
+          "Nep-stick: schijf $($schijf.Number), $($schijf.BusType)"
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File windows-switch\BugOS-Switch.ps1 -Taak Zelftest -Taal nl -IsoPad "$env:RUNNER_TEMP\bugos-test.iso" -SchijfNummer $schijf.Number
+          $code = $LASTEXITCODE
+          "select vdisk file=`"$vhd`"`r`ndetach vdisk`r`n" | Set-Content -Encoding ASCII "$env:RUNNER_TEMP\vhd-uit.txt"
+          diskpart /s "$env:RUNNER_TEMP\vhd-uit.txt" | Out-Null
+          exit $code
+
       - name: Venster nakijken (plaatjes van elke pagina, 100% en 150%)
         shell: powershell
         timeout-minutes: 5

@@ -104,9 +104,22 @@ dnf install -yq nvidia-gpu-firmware || true
 # Live-opstartbestand (initramfs) maken.
 dnf install -y dracut-live
 kernel=$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d -printf '%P\n' | head -1)
+# exfat: BugOS Switch (Windows) zet BugOS op een gewone exFAT-stick die in Windows bruikbaar blijft (label BUGOS,
+# root=live:LABEL=BUGOS), in plaats van de ISO er rauw op te schrijven. Daarvoor moet dit opstartbestand exFAT kunnen
+# lezen. --no-hostonly neemt alle bestandssystemen al mee; hier staat het er voor de zekerheid nog eens bij.
+EXFAT=()
+if modinfo -k "$kernel" exfat >/dev/null 2>&1; then
+    EXFAT=(--add-drivers exfat)
+fi
 DRACUT_NO_XATTR=1 dracut -v --force --zstd --reproducible --no-hostonly \
-    --add "dmsquash-live dmsquash-live-autooverlay" \
+    --add "dmsquash-live dmsquash-live-autooverlay" "${EXFAT[@]}" \
     "/usr/lib/modules/${kernel}/initramfs.img" "${kernel}"
+# Zit exfat er echt in? Dan mag de Switch de bruikbare stick maken (het merkteken bugos.stick=2 in grub.cfg, stap 5).
+BUGOS_STICK_EXFAT=0
+if lsinitrd "/usr/lib/modules/${kernel}/initramfs.img" 2>/dev/null | grep -q '/exfat\.ko'; then
+    BUGOS_STICK_EXFAT=1
+fi
+echo "exFAT in het opstartbestand: $BUGOS_STICK_EXFAT"
 
 # Live-gebruiker die vanzelf inlogt, in het KDE-bureaublad.
 dnf install -y livesys-scripts
@@ -582,3 +595,10 @@ rm -f /etc/localtime
 systemd-firstboot --timezone UTC
 mkdir -p /usr/lib/bootc-image-builder
 cp "$SRC/iso.yaml" /usr/lib/bootc-image-builder/iso.yaml
+# Het merkteken voor BugOS Switch (Windows): 'deze ISO start ook van een exFAT-stick met label BUGOS'. De Switch
+# leest het in grub.cfg; zonder merkteken schrijft hij de ISO op de oude manier (de hele stick voor BugOS).
+# De kernel geeft een onbekende optie als deze gewoon door; niets in BugOS doet er iets mee.
+if [ "$BUGOS_STICK_EXFAT" = 1 ]; then
+    sed -i 's/ rd\.live\.image/ rd.live.image bugos.stick=2/' /usr/lib/bootc-image-builder/iso.yaml
+fi
+grep -n 'linux:' /usr/lib/bootc-image-builder/iso.yaml
