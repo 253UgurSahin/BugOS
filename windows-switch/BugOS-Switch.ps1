@@ -49,7 +49,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # Welke versie dit is: staat in de titelbalk en onderin de zijbalk, zodat je ziet of je de nieuwste hebt.
-$script:Versie = '2026.11.25-9'
+$script:Versie = '2026.11.25-10'
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -2471,6 +2471,16 @@ $Paginas += {
                 }
                 $deels = @($staat.Terug['Deels'] | Where-Object { $_ })
                 $firefox = @($staat.Terug['FirefoxOverslagen'] | Where-Object { $_ })
+                # Een paar heel grote mappen van Firefox (meestal opslag van websites) bleven thuis: even zeggen.
+                $ffTekst = ''
+                if ($firefox.Count -gt 0) { $ffTekst = T "Uit Firefox bleven een paar heel grote mappen thuis ($($firefox -join ', ')); websites maken die vanzelf opnieuw." "A few very large Firefox folders stayed behind ($($firefox -join ', ')); websites make them again by themselves." }
+                if ($deels.Count -eq 0) {
+                    $letter = ($script:W.schijf.SelectedItem -split '\s+')[0]
+                    $tekst = T "Ze staan in de map BugOS-Switch op $letter. Op deze computer is niets veranderd.`n`nHaal de schijf er pas uit als je BugOS gaat installeren. In BugOS zet je alles terug met 'Haal alles van je oude pc'." "They are in the BugOS-Switch folder on $letter. Nothing changed on this computer.`n`nKeep the drive until you install BugOS. In BugOS you put everything back with 'Bring everything from your old PC'."
+                    if ($ffTekst) { $tekst += "`n`n" + $ffTekst }
+                    Toon-Klaar (T 'Je bestanden staan klaar' 'Your files are ready') $tekst (T 'Verder: waar komt BugOS?' 'Next: where does BugOS go?')
+                    return
+                }
                 if ($deels.Count -gt 0 -and $u.NogVrij -lt 64MB) {
                     # Vol geraakt (kleine bestanden nemen op een grote stick meer ruimte in dan ze groot zijn) (U288).
                     $status.Text = (T 'De schijf is vol geraakt: niet alles kon mee. Gebruik een grotere schijf, of maak ruimte op deze en klik nog een keer.' 'The drive got full: not everything could be copied. Use a bigger drive, or make room on this one and click again.')
@@ -2479,15 +2489,8 @@ $Paginas += {
                     $welke = $deels -join ', '
                     $status.Text = (T "Klaar, maar een paar bestanden uit $welke konden niet mee (bijv. open in een programma, groter dan 4 GB, of alleen in OneDrive). Sluit je programma's en klik nog een keer: wat er al staat, gaat sneller." "Done, but a few files from $welke could not be copied (e.g. open in a program, larger than 4 GB, or only in OneDrive). Close your programs and click again: what is already there goes faster.")
                     $status.ForeColor = $Grijs
-                } else {
-                    $status.Text = (T 'Klaar! Je bestanden staan in de map BugOS-Switch op de schijf. Haal de schijf pas uit de computer als je BugOS gaat installeren.' 'Done! Your files are in the BugOS-Switch folder on the drive. Keep the drive until you install BugOS.')
-                    $status.ForeColor = $Goed
                 }
-                if ($firefox.Count -gt 0) {
-                    # Een paar heel grote mappen van Firefox (meestal opslag van websites) bleven thuis: even zeggen.
-                    $welke = $firefox -join ', '
-                    $status.Text += ' ' + (T "Uit Firefox bleven een paar heel grote mappen thuis ($welke); websites maken die vanzelf opnieuw." "A few very large Firefox folders stayed behind ($welke); websites make them again by themselves.")
-                }
+                if ($ffTekst) { $status.Text += ' ' + $ffTekst }
             }
         }
     })
@@ -2575,8 +2578,7 @@ function Start-Ruimte {
                 $script:W.krimpKnop.Enabled = $true
                 $script:W.krimpBalk.Visible = $false
                 if ($r.Code -eq 0) {
-                    $script:W.krimpStatus.Text = (T "Gelukt! Er is ruimte voor BugOS.`nStart je computer opnieuw op vanaf de BugOS-stick (F12, F11, F9 of Esc tijdens het opstarten). Kies bij het installeren `"De schijf delen met Windows of een ander systeem`" (niet `"De hele schijf gebruiken`": dan gaat Windows weg)." "Done! There is space for BugOS.`nRestart your computer from the BugOS stick (F12, F11, F9 or Esc while starting). When installing, choose `"Share disk with other operating systems`" (not `"Use entire disk`": that removes Windows).")
-                    $script:W.krimpStatus.ForeColor = $Goed
+                    Toon-Klaar (T 'Er is ruimte voor BugOS' 'There is space for BugOS') (T "Windows is kleiner gemaakt; je bestanden in Windows staan er nog.`n`nZo installeer je BugOS:`n1. Start je computer opnieuw op vanaf de BugOS-stick: druk tijdens het opstarten op F12, F11, F9 of Esc en kies de USB-stick.`n2. Kies bij het installeren `"De schijf delen met Windows of een ander systeem`" (niet `"De hele schijf gebruiken`": dan gaat Windows weg)." "Windows was made smaller; your files in Windows are still there.`n`nThis is how you install BugOS:`n1. Restart your computer from the BugOS stick: while it starts, press F12, F11, F9 or Esc and choose the USB stick.`n2. When installing, choose `"Share disk with other operating systems`" (not `"Use entire disk`": that removes Windows).") (T 'Sluiten' 'Close')
                 } else {
                     $script:W.krimpStatus.Text = ''
                     Toon ((T 'Ruimte maken lukte niet: ' 'Making space failed: ') + $r.Fout) 'Error'
@@ -2729,13 +2731,13 @@ $Paginas += {
                 Toon ((T 'De USB-stick maken lukte niet: ' 'Making the USB stick failed: ') + $r.Fout) 'Error'
                 return
             }
-            # Gewoon hier in het venster, geen los meldingsvenster erbovenop.
-            $script:W.stickStatus.Text = if ($script:IsoManier -eq 'bruikbaar') {
-                T "Klaar! In Windows heet de stick nu BUGOS. Laat de map LiveOS erop staan.`nVolgende stap: zet je bestanden erbij (klik op Volgende). Daarna start je je computer van deze stick." "Done! In Windows the stick is now called BUGOS. Leave the LiveOS folder on it.`nNext step: add your files (click Next). After that you start your computer from this stick."
+            # Een klaar-scherm in het venster, geen los meldingsvenster erbovenop.
+            $tekst = if ($script:IsoManier -eq 'bruikbaar') {
+                T "In Windows heet de stick nu BUGOS. Je kunt er ook je eigen bestanden op zetten; laat alleen de map LiveOS staan.`n`nVolgende stap: zet je bestanden erbij. Haal de stick er dus nog niet uit." "In Windows the stick is now called BUGOS. You can put your own files on it too; just leave the LiveOS folder alone.`n`nNext step: add your files. So do not unplug the stick yet."
             } else {
-                T "Klaar! Deze stick is nu helemaal voor BugOS. Zet je bestanden dus op een andere USB-schijf (klik op Volgende)." "Done! This stick is now completely for BugOS. So put your files on another USB drive (click Next)."
+                T "Deze stick is nu helemaal voor BugOS (een oudere BugOS). Zet je bestanden in de volgende stap dus op een andere USB-schijf." "This stick is now completely for BugOS (an older BugOS). So put your files on another USB drive in the next step."
             }
-            $script:W.stickStatus.ForeColor = $Goed
+            Toon-Klaar (T 'De USB-stick is klaar' 'The USB stick is ready') $tekst (T 'Verder: bestanden meenemen' 'Next: take your files')
         }
         if (-not $gestart) { $script:W.stickStatus.Text = '' }
     })
@@ -2755,8 +2757,7 @@ $Paginas += {
                 Toon ((T 'Dat lukte niet: ' 'That did not work: ') + $r.Fout) 'Error'
                 return
             }
-            $script:W.stickStatus.Text = (T 'Klaar: het is weer een gewone, lege USB-stick (BugOS staat er niet meer op).' 'Done: it is a normal, empty USB stick again (BugOS is no longer on it).')
-            $script:W.stickStatus.ForeColor = $Goed
+            Toon-Klaar (T 'De stick is weer leeg' 'The stick is empty again') (T 'Het is weer een gewone USB-stick, zonder BugOS erop. Je kunt hem in Windows gebruiken zoals je wilt.' 'It is a normal USB stick again, without BugOS on it. You can use it in Windows however you like.')
         }
         if (-not $gestart) { $script:W.stickStatus.Text = '' }
     })
@@ -2780,6 +2781,48 @@ function Toon-Pagina {
     # Heeft de pagina zelf een rode knop? Dan is 'Volgende' rustig grijs.
     $verder.Tag.Soort = if ($script:Pagina -ge 2) { 'gewoon' } else { 'hoofd' }
     $terug.Invalidate(); $verder.Invalidate(); $zij.Invalidate()
+}
+
+# Het klaar-scherm: als iets af is (de stick, je bestanden, ruimte maken), maakt de pagina plaats voor een groot vinkje,
+# wat er nu is en wat je daarna doet, met een knop naar de volgende stap. 'Nog een keer' tekent de pagina opnieuw.
+function Toon-Klaar([string] $titel, [string] $tekst, [string] $verderTekst = '') {
+    $vlak.SuspendLayout()
+    $vlak.Controls.Clear()
+    $vlak.AutoScrollPosition = New-Object System.Drawing.Point(0, 0)
+    $icoon = New-Object System.Windows.Forms.Panel
+    Plaats $icoon 0 6 64 64
+    Zet-Dubbel $icoon
+    $icoon.Add_Paint({
+        param($s, $e)
+        $g = $e.Graphics
+        $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+        $kwast = New-Object System.Drawing.SolidBrush($Goed)
+        $g.FillEllipse($kwast, (Fx 2), (Fx 2), (Fx 58), (Fx 58))
+        $kwast.Dispose()
+        $pen = Nieuwe-Pen $Wit 4.2
+        $g.DrawLines($pen, [System.Drawing.PointF[]]@((Punt 18 32), (Punt 27 41), (Punt 44 22)))
+        $pen.Dispose()
+    })
+    $vlak.Controls.Add($icoon)
+    $kopje = New-Object System.Windows.Forms.Label
+    $kopje.Font = $script:LetterTitel; $kopje.ForeColor = $Inkt; $kopje.Text = $titel
+    Plaats $kopje 84 8 ($script:Breedte - 84) 30
+    $vlak.Controls.Add($kopje)
+    $h = (Meet-Hoogte $tekst $script:LetterGewoon ($script:Breedte - 84)) + 6
+    $uitleg = New-Object System.Windows.Forms.Label
+    $uitleg.Font = $script:LetterGewoon; $uitleg.ForeColor = $Grijs; $uitleg.Text = $tekst
+    Plaats $uitleg 84 44 ($script:Breedte - 84) $h
+    $vlak.Controls.Add($uitleg)
+    $y = 44 + [math]::Ceiling([double]$h) + 14
+    if ($verderTekst) {
+        $verder2 = Nieuw-Knop $verderTekst 84 $y 260 'hoofd'
+        $verder2.Add_Click({
+            if ($script:Pagina -ge $Paginas.Count - 1) { $form.Close() } else { $script:Pagina++; Toon-Pagina }
+        })
+    }
+    $opnieuw = Nieuw-Knop (T 'Nog een keer' 'Again') $(if ($verderTekst) { 356 } else { 84 }) $y 160
+    $opnieuw.Add_Click({ Toon-Pagina })
+    $vlak.ResumeLayout()
 }
 
 $terug.Add_Click({ if ($script:Pagina -gt 0 -and -not (Test-Bezig)) { $script:Pagina--; Toon-Pagina } })
