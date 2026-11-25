@@ -1222,7 +1222,10 @@ klopt("$LASTEXITCODE -ge 16) { throw" in _ps and "$LASTEXITCODE -ge 8) { $script
       and "deels      = @($script:Deels)" in _ps,
       "U094: robocopy 8 (een paar bestanden niet) stopt het meenemen niet; bugos-switch.json wordt toch geschreven")
 _maak = _ps[_ps.index("$maak.Add_Click"):]
-klopt("Test-SwitchBestanden $stick.Number" in _maak and _maak.index("Test-SwitchBestanden") < _maak.index("Vraag ("),
+# Het kijken staat in Get-GekozenStick (ook 'Stick weer gewoon maken' gebruikt het); die komt vóór de vraag.
+_kies = _ps[_ps.index("function script:Get-GekozenStick"):_ps.index("$maak.Add_Click")]
+klopt("Test-SwitchBestanden $stick.Number" in _kies and _maak.index("Get-GekozenStick") < _maak.index("Vraag (")
+      and "Get-GekozenStick" in _ps[_ps.index("$gewoon.Add_Click"):],
       "U095: stap 4 wist geen stick waar je bestanden uit stap 2 op staan (eerst kijken, dan pas vragen)")
 klopt("/XF desktop.ini Thumbs.db" in _ps, "U096: desktop.ini en Thumbs.db gaan niet mee naar BugOS")
 
