@@ -69,5 +69,12 @@ controle 'grep -A6 "function Set-KlokUtc" <<<"$PS" | grep -q "HiberbootEnabled.*
 # U536: publiceren kan alleen met de bouw 'latest' (geen ISO die pc's voor altijd op een testbranch zet).
 controle 'grep -q "\[ \"\$PUBLICEREN\" = true \] && \[ \"\$TAG\" != latest \]" "$ROOT/.github/workflows/iso.yml"' \
     "U536: een ISO publiceren kan alleen van 'latest'"
+# Een echte USB-stick blijft na Clear-Disk MBR: Initialize-Disk alleen als hij echt leeg (RAW) is, anders
+# 'The disk has already been initialized' (gevonden op een echte stick; de nep-schijf in de zelftest wordt wel RAW).
+controle 'grep -A20 "function Clear-Stick" <<<"$PS" | grep -B1 "Initialize-Disk" | grep -q "if (\$stijl -eq .RAW.)"' \
+    "Switch: een USB-stick die na het wissen MBR blijft, wordt niet opnieuw geinitialiseerd"
+# Windows 11 opent een .bat in Terminal; daar verbergt -WindowStyle Hidden niets. Via conhost --headless en start.
+controle 'tr -d "\r" <"$ROOT/windows-switch/Start BugOS Switch.bat" | grep -q "^ *start \"\" \"%SystemRoot%.System32.conhost.exe\" --headless powershell.exe"' \
+    "Switch: het startbestand laat geen zwart venster openstaan (conhost --headless)"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

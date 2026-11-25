@@ -45,7 +45,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # Welke versie dit is: staat in de titelbalk en onderin de zijbalk, zodat je ziet of je de nieuwste hebt.
-$script:Versie = '2026.11.25-2'
+$script:Versie = '2026.11.25-4'
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -1122,7 +1122,19 @@ function Clear-Stick([int] $nummer) {
     if ($schijf.IsReadOnly) { Set-Disk -Number $nummer -IsReadOnly $false }
     if ("$($schijf.PartitionStyle)" -ne 'RAW') { Clear-Disk -Number $nummer -RemoveData -RemoveOEM -Confirm:$false }
     Start-Sleep -Milliseconds 800
-    Initialize-Disk -Number $nummer -PartitionStyle MBR
+    # Een echte USB-stick (verwisselbaar) wordt na Clear-Disk niet 'leeg' (RAW): Windows houdt hem als MBR. Dan is
+    # Initialize-Disk fout ('The disk has already been initialized'). Alleen initialiseren als hij echt leeg is.
+    $schijf = Get-Disk -Number $nummer
+    $stijl = "$($schijf.PartitionStyle)"
+    if ($stijl -eq 'RAW') {
+        Initialize-Disk -Number $nummer -PartitionStyle MBR
+    } elseif ($stijl -ne 'MBR') {
+        Set-Disk -Number $nummer -PartitionStyle MBR
+    }
+    # Wat er nog aan delen staat (dat zou niet moeten), ook weg.
+    foreach ($deel in @(Get-Partition -DiskNumber $nummer -ErrorAction SilentlyContinue)) {
+        Remove-Partition -DiskNumber $nummer -PartitionNumber $deel.PartitionNumber -Confirm:$false -ErrorAction SilentlyContinue
+    }
 }
 
 function Get-Letter([int] $nummer, [int] $deel) {
@@ -2501,8 +2513,9 @@ $Paginas += {
     $y = Nieuw-Tekst (T "Druk op 'BugOS downloaden' of kies zelf een .iso-bestand. Kies daarna je USB-stick (minstens 8 GB). Wat erop staat, wordt gewist. Daarna blijft de stick gewoon bruikbaar in Windows." "Press 'Download BugOS' or choose an .iso file yourself. Then choose your USB stick (at least 8 GB). What is on it gets erased. After that the stick stays usable in Windows.") 0
     $download = Nieuw-Knop (T 'BugOS downloaden' 'Download BugOS') 0 ($y + 12) 200 'hoofd'
     $kies = Nieuw-Knop (T 'Kies .iso-bestand...' 'Choose .iso file...') 212 ($y + 12) 200
-    $script:W.isoLabel = Nieuw-Label (T 'Nog geen bestand gekozen.' 'No file chosen yet.') ($y + 62) 46 $Grijs
-    $script:W.downloadBalk = Nieuw-Balk 0 ($y + 112) ($script:Breedte - 4) $vlak
+    # Ruimte voor drie regels: de naam van het bestand en wat dat betekent voor de stick.
+    $script:W.isoLabel = Nieuw-Label (T 'Nog geen bestand gekozen.' 'No file chosen yet.') ($y + 62) 66 $Grijs
+    $script:W.downloadBalk = Nieuw-Balk 0 ($y + 134) ($script:Breedte - 4) $vlak
     $script:W.downloadBalk.Visible = $false
     $script:W.downloadKnop = $download
 
@@ -2529,11 +2542,11 @@ $Paginas += {
             $script:IsoGekozen = $pad
             if ($u.Bruikbaar) {
                 $script:IsoManier = 'bruikbaar'
-                $script:W.isoLabel.Text = $pad + "`n" + (T 'Goed: de stick blijft bruikbaar in Windows (één schijf BUGOS, met ruimte over).' 'Good: the stick stays usable in Windows (one drive BUGOS, with space left).')
+                $script:W.isoLabel.Text = (Split-Path -Leaf $pad) + "`n" + (T 'Goed: de stick blijft bruikbaar in Windows (één schijf BUGOS, met ruimte over).' 'Good: the stick stays usable in Windows (one drive BUGOS, with space left).')
                 $script:W.isoLabel.ForeColor = $Goed
             } else {
                 $script:IsoManier = 'heel'
-                $script:W.isoLabel.Text = $pad + "`n" + (T 'Een oudere BugOS: de hele stick wordt voor BugOS gebruikt. Na het installeren maak je hem weer gewoon met de knop hieronder.' 'An older BugOS: the whole stick is used for BugOS. After installing, make it normal again with the button below.')
+                $script:W.isoLabel.Text = (Split-Path -Leaf $pad) + "`n" + (T 'Een oudere BugOS: de hele stick wordt voor BugOS gebruikt. Na het installeren maak je hem weer gewoon met de knop hieronder.' 'An older BugOS: the whole stick is used for BugOS. After installing, make it normal again with the button below.')
                 $script:W.isoLabel.ForeColor = $LetOp
             }
         }
@@ -2586,7 +2599,7 @@ $Paginas += {
         if ($d.ShowDialog() -eq 'OK') { Kijk-Iso $d.FileName }
     })
 
-    $y = Nieuw-Tekst (T 'Kies je USB-stick:' 'Choose your USB stick:') ($y + 128) -Vet
+    $y = Nieuw-Tekst (T 'Kies je USB-stick:' 'Choose your USB stick:') ($y + 150) -Vet
     $script:W.stick = Nieuw-Lijst ($y + 4) 520
     $lijst = $script:W.stick
     $script:W.sticks = @(Get-UsbSchijven)
@@ -2597,7 +2610,7 @@ $Paginas += {
     $gewoon = Nieuw-Knop (T 'Stick weer gewoon maken…' 'Make stick normal again…') 232 ($y + 52) 250
     $script:W.stickBalk = Nieuw-Balk 0 ($y + 106) ($script:Breedte - 4) $vlak
     $script:W.stickBalk.Visible = $false
-    $script:W.stickStatus = Nieuw-Label '' ($y + 122) 150 $Grijs
+    $script:W.stickStatus = Nieuw-Label (T "USB-stick maken: zet BugOS op de stick. Daarvan start je je computer om BugOS te proberen of te installeren.`nStick weer gewoon maken: haalt BugOS er weer af. Daarna is het een gewone, lege USB-stick." "Make USB stick: puts BugOS on the stick. You start your computer from it to try or install BugOS.`nMake stick normal again: takes BugOS off again. After that it is a normal, empty USB stick.") ($y + 122) 150 $Grijs
 
     function script:Get-GekozenStick {
         $sticks = $script:W.sticks
