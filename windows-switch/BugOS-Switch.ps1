@@ -2766,8 +2766,12 @@ if ($Taak -eq 'Zelftest') {
         $oud = Join-Path $env:TEMP 'bugos-zelftest-oud.iso'
         $b = [System.IO.File]::ReadAllBytes($IsoPad)
         $tekst = [System.Text.Encoding]::ASCII.GetString($b)
+        # Het merkteken uit élke grub.cfg halen (er zijn er twee: EFI/BOOT en EFI/fedora).
         $plek = $tekst.IndexOf('bugos.stick=2')
-        if ($plek -ge 0) { foreach ($k in 0..12) { $b[$plek + $k] = [byte][char]'x' } }
+        while ($plek -ge 0) {
+            foreach ($k in 0..12) { $b[$plek + $k] = [byte][char]'x' }
+            $plek = $tekst.IndexOf('bugos.stick=2', $plek + 13)
+        }
         [System.IO.File]::WriteAllBytes($oud, $b)
         Klopt (-not (Get-IsoStickInfo $oud).Bruikbaar) 'een ISO zonder merkteken: de oude manier'
         $nep = Join-Path $env:TEMP 'bugos-zelftest-nep.iso'
