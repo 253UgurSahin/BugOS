@@ -2531,14 +2531,14 @@ $Paginas += {
         $y += 50
     }
     $script:W.y3 = $y + 4
-    $opstarten = T 'Start je computer opnieuw op vanaf de BugOS-stick: druk tijdens het opstarten op F12, F11, F9 of Esc (verschilt per computer) en kies de USB-stick.' 'Restart your computer from the BugOS stick: while it starts, press F12, F11, F9 or Esc (differs per computer) and choose the USB stick.'
+    $opstarten = T 'Start op vanaf de BugOS-stick (druk tijdens het opstarten op F12, F11, F9 of Esc).' 'Start from the BugOS stick (press F12, F11, F9 or Esc while starting).'
     switch ($script:Plek) {
         'vervang' {
-            [void](Nieuw-Rij 'let_op' (T 'Zo installeer je BugOS in plaats van Windows' 'This is how you install BugOS instead of Windows') (T "1. $opstarten`n2. Kies bij 'Installeren op' de schijf van deze computer en 'De hele schijf gebruiken'.`nAlles op die schijf wordt gewist: Windows en je bestanden. Neem ze dus eerst mee (stap 3). Deze stap zelf verandert niets." "1. $opstarten`n2. At 'Install on', choose the disk of this computer and 'Use the whole disk'.`nEverything on that disk is erased: Windows and your files. So take them along first (step 3). This step itself changes nothing.") $script:W.y3)
+            [void](Nieuw-Rij 'let_op' (T 'Zo installeer je BugOS in plaats van Windows' 'This is how you install BugOS instead of Windows') (T "1. $opstarten`n2. Kies bij 'Installeren op' de schijf van deze computer en 'De hele schijf gebruiken'.`nAlles op die schijf wordt gewist, ook je bestanden: neem ze eerst mee (stap 3)." "1. $opstarten`n2. At 'Install on', choose the disk of this computer and 'Use the whole disk'.`nEverything on that disk is erased, your files too: take them along first (step 3).") $script:W.y3)
         }
         'naast' { Start-Ruimte }
         'ander' {
-            [void](Nieuw-Rij 'goed' (T 'Zo installeer je BugOS op een andere schijf' 'This is how you install BugOS on another disk') (T "1. Zet de andere schijf in de computer of sluit hem aan.`n2. $opstarten`n3. Kies bij 'Installeren op' via 'Een andere schijf kiezen' die schijf (kijk naar de naam en de grootte), en 'De hele schijf gebruiken'. Alles op die schijf wordt gewist; Windows blijft zoals het is.`nDaarna start je computer meestal BugOS. Windows kies je met dezelfde toets bij het opstarten. Een externe USB-schijf moet er dan wel in zitten, en niet elke computer start van USB." "1. Put the other disk in the computer or connect it.`n2. $opstarten`n3. At 'Install on', use 'Choose another disk' to pick that disk (check the name and size), and 'Use the whole disk'. Everything on that disk is erased; Windows stays as it is.`nAfter that your computer usually starts BugOS. You choose Windows with the same key while starting. An external USB drive must be plugged in then, and not every computer starts from USB.") $script:W.y3)
+            [void](Nieuw-Rij 'goed' (T 'Zo installeer je BugOS op een andere schijf' 'This is how you install BugOS on another disk') (T "1. Sluit de andere schijf aan.`n2. $opstarten`n3. Kies bij 'Installeren op' die schijf (let op naam en grootte) en 'De hele schijf gebruiken'.`nWindows blijft zoals het is. Kies Windows voortaan met dezelfde toets bij het opstarten." "1. Connect the other disk.`n2. $opstarten`n3. At 'Install on', choose that disk (check name and size) and 'Use the whole disk'.`nWindows stays as it is. From then on, choose Windows with the same key while starting.") $script:W.y3)
         }
     }
 }
