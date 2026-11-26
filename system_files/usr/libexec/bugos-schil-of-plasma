@@ -29,6 +29,9 @@ if [ "${BUGOS_SCHIL:-}" = 1 ] && [ -x "$SHELL_BIN" ] && [ ! -e "$NOOD" ]; then
     fi
     if [ "$recent" -lt "$GRENS" ]; then
         printf '%s%s\n' "$nieuw" "$nu" >"$STARTS" 2>/dev/null || true
+        # Een Plasma-bureaublad dat hier toch draait (van een vorige sessie, of per ongeluk gestart) heeft de naam
+        # org.kde.plasmashell: dan doet de Windows-toets niets en staan er twee taakbalken. Die eerst stoppen.
+        pkill -u "$(id -u)" -x plasmashell >/dev/null 2>&1 || true
         exec "$SHELL_BIN"
     fi
     # Steeds vastgelopen: noodstand voor deze sessie.

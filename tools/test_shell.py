@@ -614,6 +614,20 @@ klopt("BUGOS_SCHIL" in keuze and 'exec "$SHELL_BIN"' in keuze and 'exec "$PLASMA
 dropin = (ROOT / "system_files/usr/lib/systemd/user/plasma-plasmashell.service.d/50-bugos-schil.conf").read_text()
 klopt("ExecStart=\n" in dropin and "ExecStart=/usr/libexec/bugos-schil-of-plasma" in dropin,
       "plasma-plasmashell.service start de keuze in plaats van plasmashell")
+# Drie taakbalken op elkaar en een Windows-toets die niets deed (2026-11): één schil tegelijk, een taakbalk per
+# (ongespiegeld) scherm en vast aan dat scherm, geen Plasma ernaast, en de naam org.kde.plasmashell opnieuw proberen.
+hoofd_cpp = (ROOT / "shell/src/main.cpp").read_text()
+schil_cpp = (ROOT / "shell/src/schil.cpp").read_text()
+shell_qml = (ROOT / "system_files/usr/share/bugos/shell/Shell.qml").read_text()
+klopt("QLockFile" in hoofd_cpp and "setStaleLockTime(0)" in hoofd_cpp and "tryLock(0)" in hoofd_cpp,
+      "één schil tegelijk (een slot in XDG_RUNTIME_DIR; een tweede start stopt meteen)")
+klopt(shell_qml.count("model: root.schermen") == 2 and "u.virtualX === s.virtualX" in shell_qml,
+      "een taakbalk en bureaublad per scherm; gespiegelde schermen (zelfde plek) maar één keer")
+klopt("l->setScreen(venster->screen())" in schil_cpp and "BUGOS_LAYERSHELL_SCHERM" in schil_cpp,
+      "de taakbalk zit vast aan zijn eigen scherm (layer-shell 6.6+)")
+klopt("pkill -u" in keuze and "plasmashell" in keuze, "in de nieuwe schil draait er geen Plasma ernaast")
+klopt("registerService" in schil_cpp and "QTimer" in schil_cpp and "activateLauncherMenu" in schil_cpp,
+      "Windows-toets: de naam org.kde.plasmashell wordt opnieuw geprobeerd als hij nog bezet is")
 
 print()
 print("Alles goed." if not fouten else f"{fouten} fout(en).")

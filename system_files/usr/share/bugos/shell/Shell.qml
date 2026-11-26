@@ -11,7 +11,7 @@
 //   systeemvak    een lijst (titel, icoon, status, uitleg, heeftMenu) met activeer/menu/menuKlik/contextMenu/...
 //   osd           icoon, tekst, waarde (-1: alleen tekst), maximum en het sein getoond(): volume, helderheid, ...
 //
-// Per scherm een taakbalk en een bureaublad (Instantiator over Qt.application.screens). De menu's gaan open op het
+// Per scherm een taakbalk en een bureaublad (Instantiator over root.schermen: de schermen, gespiegelde maar één keer). De menu's gaan open op het
 // scherm waar je klikte (menuScherm); de Meta-toets opent het startmenu op het hoofdscherm.
 import QtQuick
 import QtQuick.Window
@@ -34,6 +34,17 @@ Houder {
         ? Math.min(1.5, Math.max(1, Qt.application.font.pointSize / 10)) : 1
     readonly property int paneelHoogte: Math.round(48 * schaal)
     readonly property var hoofdScherm: Qt.application.screens.length > 0 ? Qt.application.screens[0] : null
+    // De schermen voor een taakbalk en een bureaublad: twee schermen op precies dezelfde plek (spiegelen: de laptop en
+    // de beamer tonen hetzelfde) krijgen er samen één, anders stonden er taakbalken op elkaar (2026-11).
+    readonly property var schermen: {
+        const uit = []
+        for (const s of Qt.application.screens) {
+            if (!uit.some(u => u.virtualX === s.virtualX && u.virtualY === s.virtualY
+                              && u.width === s.width && u.height === s.height))
+                uit.push(s)
+        }
+        return uit
+    }
     property var hoofdPaneel: null       // de taakbalk van het hoofdscherm (voor de test)
     readonly property int aantalPanelen: panelen.count
     readonly property int aantalBureaubladen: bureaubladen.count
@@ -243,7 +254,7 @@ Houder {
 
     // ------------------------------------------------------------------------------------- per scherm
     property Instantiator bureaubladen: Instantiator {
-        model: Qt.application.screens
+        model: root.schermen
         delegate: Bureaublad {
             required property var modelData
             r: root
@@ -265,7 +276,7 @@ Houder {
     }
 
     property Instantiator panelen: Instantiator {
-        model: Qt.application.screens
+        model: root.schermen
         delegate: Paneel {
             required property var modelData
             r: root

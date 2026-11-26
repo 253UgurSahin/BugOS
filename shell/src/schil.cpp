@@ -3,7 +3,10 @@
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QMargins>
+#include <QTimer>
 #include <QWindow>
+
+#include <memory>
 
 #ifdef BUGOS_LAYERSHELL
 #include <LayerShellQt/Window>
@@ -20,7 +23,20 @@ bool Schil::aanmelden()
     if (!bus.isConnected())
         return false;
     bus.registerObject(QStringLiteral("/PlasmaShell"), this, QDBusConnection::ExportScriptableSlots);
-    return bus.registerService(QStringLiteral("org.kde.plasmashell"));
+    if (bus.registerService(QStringLiteral("org.kde.plasmashell")))
+        return true;
+    // De naam is (nog) van een ander: een Plasma die net stopt, of die er per ongeluk ook is. Zonder die naam doet de
+    // Windows-toets niets (KWin roept activateLauncherMenu aan op org.kde.plasmashell). Elke twee seconden opnieuw
+    // proberen, een minuut lang.
+    auto *klok = new QTimer(this);
+    klok->setInterval(2000);
+    auto pogingen = std::make_shared<int>(0);
+    connect(klok, &QTimer::timeout, this, [klok, pogingen]() {
+        if (QDBusConnection::sessionBus().registerService(QStringLiteral("org.kde.plasmashell")) || ++*pogingen >= 30)
+            klok->deleteLater();
+    });
+    klok->start();
+    return false;
 }
 
 void Schil::activateLauncherMenu()
@@ -58,6 +74,12 @@ bool Schil::laag(QWindow *venster, const QString &soort, int marge)
     if (!l)
         return false;
     l->setScope(QStringLiteral("bugos-") + soort);
+#ifdef BUGOS_LAYERSHELL_SCHERM
+    // De taakbalk en de achtergrond horen bij één scherm: vast aan dat scherm, niet 'waar de compositor wil'. Zonder
+    // dit kwamen de taakbalken van alle schermen soms op één scherm terecht, op elkaar gestapeld (2026-11).
+    if (soort == QLatin1String("paneel") || soort == QLatin1String("achtergrond"))
+        l->setScreen(venster->screen());
+#endif
     if (soort == QLatin1String("paneel")) {
         l->setLayer(W::LayerTop);
         l->setAnchors(W::Anchors(W::AnchorBottom | W::AnchorLeft | W::AnchorRight));

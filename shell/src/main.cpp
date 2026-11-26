@@ -14,6 +14,9 @@
 #include "systeemvak.h"
 
 #include <QCommandLineParser>
+#include <QDir>
+#include <QLockFile>
+#include <QStandardPaths>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QDBusConnection>
@@ -90,6 +93,16 @@ int main(int argc, char *argv[])
     QCommandLineOption stopNa(QStringLiteral("stop-na"), QStringLiteral("Stoppen na ms"), QStringLiteral("ms"));
     opties.addOptions({qmlOptie, geenDbus, stopNa});
     opties.process(app);
+
+    // Er mag maar één schil tegelijk zijn (per gebruiker). Twee of drie tegelijk gaven twee of drie taakbalken op elkaar
+    // (2026-11). Een tweede start stopt meteen; de eerste houdt het slot tot hij stopt (ook na een crash komt het vrij).
+    QLockFile slot(QDir(QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation))
+                       .filePath(QStringLiteral("bugos-shell.lock")));
+    slot.setStaleLockTime(0);   // alleen 'vrij' als de schil die het heeft niet meer draait, nooit na een tijdje
+    if (!opties.isSet(geenDbus) && !slot.tryLock(0)) {
+        std::fprintf(stderr, "bugos-shell: er draait al een schil; deze stopt\n");
+        return 0;
+    }
 
     Opdracht opdracht;
     Meldingen meldingen;
