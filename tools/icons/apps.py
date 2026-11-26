@@ -207,6 +207,9 @@ APPS: dict[str, tuple[str, dict]] = {
     # Pakket installeren: een doos met rode tape (eerst de tape, zodat de rand van de doos heel blijft).
     "bugos-package": ('<path d="m8 5.5 8 4" stroke="{r}"/>'
                      '<path d="M12 3.5 20 7.5v9l-8 4-8-4v-9z"/><path d="M4 7.5l8 4 8-4M12 11.5v9"/>', {}),
+    # Quarantaine (een app veilig proberen): een schild met een rood vinkje.
+    "bugos-quarantaine": ('<path d="M12 3.5 19 6.2v5.3c0 4.2-2.9 7.5-7 9-4.1-1.5-7-4.8-7-9V6.2z"/>'
+                          '<path d="m9 12.2 2.2 2.2 3.9-4.2" stroke="{r}"/>', {}),
     # BugOS installeren: laptop met een rode pijl naar beneden.
     "bugos-install": ('<rect x="4.5" y="5" width="15" height="10.5" rx="1.5"/><path d="M2.5 19h19"/>'
                           '<path d="M12 7.5v5M9.6 10.4 12 12.8l2.4-2.4" stroke="{r}"/>', {}),
