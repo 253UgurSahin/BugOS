@@ -1,5 +1,5 @@
-// Een knop op de taakbalk (Start, snelmenu, klok): een afgeronde vlak dat oplicht bij aanwijzen en als zijn menu open is.
-// Met Enter, spatie of een klik.
+// Een knop op de taakbalk (Start, snelmenu, klok, ...): een afgerond vlakje dat zacht oplicht bij aanwijzen, iets
+// sterker als je erop drukt of als zijn menu open is (zoals Windows 11). Met Enter, spatie of een klik.
 import QtQuick
 
 Item {
@@ -7,6 +7,8 @@ Item {
     property string naam: ""
     property bool actief: false
     property var o
+    property color zweef: Qt.rgba(0, 0, 0, 0.05)    // aanwijzen
+    property color vol: Qt.rgba(0, 0, 0, 0.08)      // ingedrukt of open
     property real maat: 40
     property real breedte: maat
     signal geklikt()
@@ -27,10 +29,11 @@ Item {
     Rectangle {
         id: vlak
         anchors.fill: parent
-        radius: 8
-        color: knop.actief ? knop.o.knopHover : (muis.containsMouse ? knop.o.knopHover : "transparent")
+        radius: 6
+        color: knop.actief || muis.pressed ? knop.vol : (muis.containsMouse ? knop.zweef : "transparent")
         border.width: knop.activeFocus ? 2 : 0
-        border.color: knop.o.accent
+        border.color: knop.o ? knop.o.accent : "red"
+        Behavior on color { ColorAnimation { duration: 90 } }
     }
     MouseArea {
         id: muis

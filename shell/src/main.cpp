@@ -25,6 +25,7 @@
 #include <QSettings>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QPainter>
 #include <QQuickImageProvider>
 #include <QTimer>
 
@@ -58,10 +59,16 @@ public:
     {
     }
 
-    QPixmap requestPixmap(const QString &id, QSize *maat, const QSize &gevraagd) override
+    QPixmap requestPixmap(const QString &idMetOpties, QSize *maat, const QSize &gevraagd) override
     {
         const int b = gevraagd.width() > 0 ? gevraagd.width() : 48;
         const int h = gevraagd.height() > 0 ? gevraagd.height() : b;
+        // 'naam?wit': hetzelfde pictogram in wit (op een rode knop die aan staat, in het snelmenu). Met QPainter en
+        // niet met een shader-effect: dat tekent niets als Qt Quick zonder GPU draait.
+        QString id = idMetOpties;
+        const bool wit = id.endsWith(QLatin1String("?wit"));
+        if (wit)
+            id.chop(4);
         QIcon ic;
         if (id.startsWith(QLatin1String("bestand:")))
             ic = bestandIcoon(id.mid(8));
@@ -69,7 +76,12 @@ public:
             ic = QIcon(id);
         else
             ic = QIcon::fromTheme(id, QIcon::fromTheme(QStringLiteral("application-x-executable")));
-        const QPixmap pm = ic.pixmap(QSize(b, h));
+        QPixmap pm = ic.pixmap(QSize(b, h));
+        if (wit && !pm.isNull()) {
+            QPainter verf(&pm);
+            verf.setCompositionMode(QPainter::CompositionMode_SourceIn);
+            verf.fillRect(pm.rect(), Qt::white);
+        }
         if (maat)
             *maat = pm.size();
         return pm;

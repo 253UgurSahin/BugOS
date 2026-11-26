@@ -32,7 +32,10 @@ Houder {
     readonly property SM.Design o: SM.Design { donker: root.donker }
     readonly property real schaal: Qt.application.font.pointSize > 0
         ? Math.min(1.5, Math.max(1, Qt.application.font.pointSize / 10)) : 1
-    readonly property int paneelHoogte: Math.round(48 * schaal)
+    // De taakbalk: klein, normaal (48, zoals Windows 11) of groot; de knoppen links of in het midden.
+    // Instellingen > Uiterlijk > Taakbalk bewaart dat in ~/.config/bugos/taakbalkstijl (JSON).
+    property var taakbalkStijl: ({ grootte: "normaal", uitlijning: "links" })
+    readonly property int paneelHoogte: Math.round(({ klein: 40, normaal: 48, groot: 56 }[taakbalkStijl.grootte] || 48) * schaal)
     readonly property var hoofdScherm: Qt.application.screens.length > 0 ? Qt.application.screens[0] : null
     // De schermen voor een taakbalk en een bureaublad: twee schermen op precies dezelfde plek (spiegelen: de laptop en
     // de beamer tonen hetzelfde) krijgen er samen één, anders stonden er taakbalken op elkaar (2026-11).
@@ -80,12 +83,28 @@ Houder {
         }
         vastgezet = lijst
         achtergrondBeeld = instellingen.achtergrondBeeld(donker)
+        leesTaakbalkStijl()
+    }
+    function leesTaakbalkStijl() {
+        let stijl = {}
+        try {
+            const tekst = instellingen.lees("taakbalkstijl")
+            stijl = tekst !== "" ? JSON.parse(tekst) : {}
+        } catch (e) {
+            console.warn("BugOS-schil: taakbalkstijl onleesbaar", e)
+        }
+        taakbalkStijl = {
+            grootte: ["klein", "normaal", "groot"].indexOf(stijl && stijl.grootte) >= 0 ? stijl.grootte : "normaal",
+            uitlijning: stijl && stijl.uitlijning === "midden" ? "midden" : "links"
+        }
     }
     Connections {
         target: instellingen
         function onVeranderd(naam) {
             if (naam === "browser" || naam === "taakbalk" || naam === "achtergrond")
                 root.leesInstellingen()
+            else if (naam === "taakbalkstijl")
+                root.leesTaakbalkStijl()
         }
     }
 
@@ -116,6 +135,8 @@ Houder {
     // ------------------------------------------------------------------------------------- gegevens
     property var gegevens: ({ apps: [], favorieten: [], recent: [], gebruiker: { naam: "" }, taakbalk_kan: false })
     property var snelStatus: ({})
+    // Voor de icoontjes rechts op de taakbalk (internet, volume, batterij): bugos-start-data --tray, af en toe.
+    property var trayStatus: ({})
 
     Connections {
         target: opdracht
@@ -125,8 +146,15 @@ Houder {
             try {
                 if (sleutel === "gegevens")
                     root.gegevens = root.metTaakbalk(JSON.parse(uitvoer))
-                else if (sleutel === "snel")
+                else if (sleutel === "snel") {
                     root.snelStatus = JSON.parse(uitvoer)
+                    // Wat het snelmenu weet, weten de icoontjes op de taakbalk dan ook meteen.
+                    const t = Object.assign({}, root.trayStatus)
+                    for (const k of ["internet", "wifi", "volume", "stil", "batterij", "laadt"])
+                        if (k in root.snelStatus) t[k] = root.snelStatus[k]
+                    root.trayStatus = t
+                } else if (sleutel === "tray")
+                    root.trayStatus = JSON.parse(uitvoer)
             } catch (e) {
                 console.warn("BugOS-schil:", sleutel, e)
             }
@@ -251,6 +279,17 @@ Houder {
         interval: 5000; repeat: true; running: root.open === "snel"
         onTriggered: root.startData(["--snel"], "snel")
     }
+    Timer {   // de icoontjes op de taakbalk (internet, volume, batterij): af en toe, en meteen bij het begin
+        id: trayKlok
+        interval: 20000; repeat: true; running: root.open !== "snel"; triggeredOnStart: true
+        onTriggered: root.startData(["--tray"], "tray")
+    }
+    // Volume of helderheid met een toets veranderd (het venstertje in beeld): het luidsprekertje meteen bijwerken.
+    Connections {
+        target: osd
+        function onGetoond() { trayNa.restart() }
+    }
+    Timer { id: trayNa; interval: 400; onTriggered: root.startData(["--tray"], "tray") }
 
     // ------------------------------------------------------------------------------------- per scherm
     property Instantiator bureaubladen: Instantiator {

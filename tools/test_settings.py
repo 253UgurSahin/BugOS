@@ -582,6 +582,32 @@ finally:
     os.environ["PATH"], bi.VOORBEELD = _oud01[0], _oud01[1]
     _klaar_werk()
     shutil.rmtree(_nep01, ignore_errors=True)
+# 2026-11: de taakbalk van het nieuwe bureaublad: grootte en plek van de knoppen (Uiterlijk > Taakbalk).
+os.environ["BUGOS_SCHIL"] = "1"
+try:
+    _vtb = mod.Instellingen("uiterlijk")
+    _ui_tb = _vtb.paginas["uiterlijk"]
+    _ui_tb.zorg_gebouwd()
+    _tbpad = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "bugos" / "taakbalkstijl"
+    _tbpad.unlink(missing_ok=True)
+    _g = getattr(_ui_tb, "tb_grootte", None)
+    _m = getattr(_ui_tb, "tb_plek", None)
+    klopt(_g is not None and _m is not None and _g.knoppen["normaal"].isChecked() and _m.knoppen["links"].isChecked(),
+          "taakbalk: Uiterlijk heeft Grootte en 'Start en je apps', standaard Normaal en Links")
+    if _g is not None and _m is not None:
+        _g.knoppen["groot"].click()
+        _m.knoppen["midden"].click()
+        _tb = json.loads(_tbpad.read_text(encoding="utf-8")) if _tbpad.exists() else {}
+        klopt(_tb == {"grootte": "groot", "uitlijning": "midden"} and bi.taakbalkstijl() == _tb,
+              f"taakbalk: Groot en In het midden worden bewaard voor de schil ({_tb})")
+    _tbpad.write_text('{"grootte": "reus", "uitlijning": 5}')
+    klopt(bi.taakbalkstijl() == {"grootte": "normaal", "uitlijning": "links"} and not bi.zet_taakbalkstijl(grootte="reus"),
+          "taakbalk: een onzinwaarde telt als de standaard, en wordt niet bewaard")
+    _tbpad.unlink(missing_ok=True)
+    _vtb.close()
+finally:
+    os.environ.pop("BUGOS_SCHIL", None)
+
 from bugos_settings_onderdelen import tegelijk as _tegelijk  # noqa: E402
 
 _begin01 = _tijd.perf_counter()

@@ -614,6 +614,41 @@ klopt("BUGOS_SCHIL" in keuze and 'exec "$SHELL_BIN"' in keuze and 'exec "$PLASMA
 dropin = (ROOT / "system_files/usr/lib/systemd/user/plasma-plasmashell.service.d/50-bugos-schil.conf").read_text()
 klopt("ExecStart=\n" in dropin and "ExecStart=/usr/libexec/bugos-schil-of-plasma" in dropin,
       "plasma-plasmashell.service start de keuze in plaats van plasmashell")
+# 2026-11 (gebruiker: "taakbalk cleaner, professioneler, instelbaar"): rechts één knop met de icoontjes van internet,
+# geluid en batterij (het snelmenu); de grootte en de plek van Start en je apps zijn in te stellen.
+klopt(any(a[:2] == ["bugos-start-data", "--tray"] and k == "tray" for a, k in opdracht.uitgevoerd),
+      "de taakbalk vraagt bij het begin de status voor de icoontjes rechts (bugos-start-data --tray)")
+root.setProperty("trayStatus", {"internet": "wifi", "wifi": True, "volume": 60, "stil": False, "batterij": 76, "laadt": True})
+wacht(100)
+snelk = paneel.findChild(QObject, "snelKnop")
+klopt(snelk.property("internetIcoon") == "network-wireless" and snelk.property("geluidIcoon") == "audio-volume-medium"
+      and snelk.property("batterijIcoon") == "battery-080-charging"
+      and any(w in snelk.property("naam") for w in ("internet via wifi", "internet over Wi-Fi"))
+      and any(w in snelk.property("naam") for w in ("batterij 76%", "battery 76%")),
+      f"snelmenu-knop: wifi, geluid en batterij als icoontjes, en voor een schermlezer in woorden ({snelk.property('naam')})")
+root.setProperty("trayStatus", {"internet": "geen", "wifi": False, "volume": 30, "stil": True, "batterij": None})
+wacht(50)
+klopt(snelk.property("internetIcoon") == "network-offline" and snelk.property("geluidIcoon") == "audio-volume-muted"
+      and snelk.property("batterijIcoon") == "", "snelmenu-knop: geen internet, geluid uit, geen batterij (een pc)")
+stijl = TMP / "config" / "bugos" / "taakbalkstijl"
+stijl.write_text(json.dumps({"grootte": "klein", "uitlijning": "midden"}))
+instellingen.veranderd.emit("taakbalkstijl")
+wacht(400)
+links = paneel.findChild(QObject, "links")
+midden_x = (paneel.width() - links.property("width")) / 2
+klopt(paneel.height() == 40 and abs(links.property("x") - midden_x) <= 1,
+      f"taakbalk: klein (40 px) en Start met je apps in het midden ({paneel.height()}, x {links.property('x')} ~ {midden_x:.0f})")
+stijl.write_text(json.dumps({"grootte": "groot", "uitlijning": "links"}))
+instellingen.veranderd.emit("taakbalkstijl")
+wacht(400)
+klopt(paneel.height() == 56 and links.property("x") == 8, f"taakbalk: groot (56 px) en weer links ({paneel.height()})")
+stijl.write_text("kapot{")
+instellingen.veranderd.emit("taakbalkstijl")
+wacht(400)
+klopt(paneel.height() == 48 and links.property("x") == 8, "taakbalk: een kapotte instelling = gewoon (48 px, links)")
+klopt("setExclusiveZone(h)" in (ROOT / "shell/src/schil.cpp").read_text(),
+      "taakbalk: een andere grootte laat vensters ook meteen zoveel ruimte vrij (layer-shell)")
+
 # Drie taakbalken op elkaar en een Windows-toets die niets deed (2026-11): één schil tegelijk, een taakbalk per
 # (ongespiegeld) scherm en vast aan dat scherm, geen Plasma ernaast, en de naam org.kde.plasmashell opnieuw proberen.
 hoofd_cpp = (ROOT / "shell/src/main.cpp").read_text()

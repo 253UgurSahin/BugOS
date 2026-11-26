@@ -1256,6 +1256,48 @@ def bewaar_schil_achtergrond(pad: str) -> bool:
         return False
 
 
+# De taakbalk van de eigen BugOS-schil (Shell.qml leest ~/.config/bugos/taakbalkstijl en ziet het meteen veranderen).
+TAAKBALK_GROOTTES = ("klein", "normaal", "groot")
+TAAKBALK_UITLIJNINGEN = ("links", "midden")
+
+
+def _taakbalkstijl_pad() -> Path:
+    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "bugos" / "taakbalkstijl"
+
+
+def taakbalkstijl() -> dict[str, str]:
+    """{'grootte': klein|normaal|groot, 'uitlijning': links|midden}; wat ontbreekt of niet klopt: de standaard."""
+    try:
+        import json
+        gegevens = json.loads(_taakbalkstijl_pad().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        gegevens = {}
+    if not isinstance(gegevens, dict):
+        gegevens = {}
+    return {"grootte": gegevens.get("grootte") if gegevens.get("grootte") in TAAKBALK_GROOTTES else "normaal",
+            "uitlijning": gegevens.get("uitlijning") if gegevens.get("uitlijning") in TAAKBALK_UITLIJNINGEN else "links"}
+
+
+def zet_taakbalkstijl(**wat: str) -> bool:
+    """Eén of beide instellingen veranderen (grootte=..., uitlijning=...). Veilig: eerst een tijdelijk bestand."""
+    import json
+    stijl = taakbalkstijl()
+    for sleutel, waarde in wat.items():
+        geldig = {"grootte": TAAKBALK_GROOTTES, "uitlijning": TAAKBALK_UITLIJNINGEN}.get(sleutel, ())
+        if waarde not in geldig:
+            return False
+        stijl[sleutel] = waarde
+    try:
+        pad = _taakbalkstijl_pad()
+        pad.parent.mkdir(parents=True, exist_ok=True)
+        tijdelijk = pad.with_name(".taakbalkstijl.nieuw")
+        tijdelijk.write_text(json.dumps(stijl) + "\n", encoding="utf-8")
+        os.replace(tijdelijk, pad)
+        return True
+    except OSError:
+        return False
+
+
 def zet_achtergrond(pad: str) -> bool:
     if _c.VOORBEELD:
         return True

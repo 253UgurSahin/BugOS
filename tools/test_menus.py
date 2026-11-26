@@ -84,7 +84,7 @@ for stijl in ("Basic", "Fusion"):
     gestuurd.clear()
     klopt(schuif.property("wheelEnabled") is True, f"[{stijl}] U348: het scrollwieltje werkt op de schuiven van het snelmenu")
     # U084: de lettergrootte volgt 'schaal' meteen (main.qml koppelt hem aan Kirigami.Theme, dat meteen meeverandert).
-    _kop = next((c for c in root.findChildren(QQuickItem) if c.property("text") in ("Snelmenu", "Quick menu")), None)
+    _kop = next((c for c in root.findChildren(QQuickItem) if c.property("text") == "Bluetooth"), None)
     _voor = _kop.property("font").pixelSize() if _kop else 0
     root.setProperty("schaal", 1.5)
     wacht(50)
@@ -328,6 +328,49 @@ wacht(50)
 klik(_v2, _s2.findChild(QQuickItem, "ikKnop"))
 klopt(_gestart == ["instelling:inloggen"] and _dicht, f"A-17: klikken op jezelf in het startmenu opent Account ({_gestart})")
 _v2.close()
+# 2026-11 (gebruiker: "het snelmenu ziet er beun uit, maak het cleaner en meer instelbaar"): knoppen zoals Windows 11,
+# met het potlood kies je welke je ziet; het luidsprekertje zet het geluid uit; nieuw: Nachtlampje.
+for stijl in ("Basic", "Fusion"):
+    os.environ["QT_QUICK_CONTROLS_STYLE"] = stijl
+    _av = QQuickView()
+    _av.setResizeMode(QQuickView.ResizeMode.SizeViewToRootObject)
+    _av.setSource(QUrl.fromLocalFile(str(QML)))
+    _a = _av.rootObject()
+    _a.setProperty("status", {"wifi": True, "bluetooth": False, "spel": False, "donker": False, "nachtlicht": False,
+                              "volume": 40, "stil": False, "niet_storen": False, "verborgen": ["spel"]})
+    _av.show()
+    _zet2: list = []
+    _a.zet.connect(lambda wat, waarde, g=_zet2: g.append((wat, waarde)))
+    wacht(150)
+    klopt(_a.property("implicitWidth") <= 380 and _a.property("implicitHeight") <= 300,
+          f"[{stijl}] het snelmenu is compact ({_a.property('implicitWidth'):.0f} x {_a.property('implicitHeight'):.0f})")
+    klopt(not _a.findChild(QQuickItem, "tegel-spel").isVisible() and _a.findChild(QQuickItem, "tegel-nachtlicht").isVisible(),
+          f"[{stijl}] een verborgen knop (Game-modus) staat er niet; Nachtlampje wel")
+    klik(_av, _a.findChild(QQuickItem, "knop-nachtlicht"))
+    klopt(_zet2 == [("nachtlicht", "aan")], f"[{stijl}] Nachtlampje aanzetten ({_zet2})")
+    _zet2.clear()
+    _volume_icoon = next(c for c in _a.findChild(QQuickItem, "volume").childItems()
+                         if c.property("knopNaam") is None and c.property("checkable") is not None)
+    klik(_av, _volume_icoon)
+    klopt(_zet2 == [("stil", "aan")], f"[{stijl}] op het luidsprekertje klikken zet het geluid uit ({_zet2})")
+    _zet2.clear()
+    # Het potlood: alle knoppen staan er, een klik verbergt of zet terug (en bewaart via --zet verborgen).
+    klik(_av, _a.findChild(QQuickItem, "aanpassen"))
+    wacht(50)
+    klopt(_a.property("bewerken") is True and _a.findChild(QQuickItem, "tegel-spel").isVisible()
+          and not _a.findChild(QQuickItem, "volume").isVisible(),
+          f"[{stijl}] aanpassen: ook de verborgen knoppen staan er, de schuiven niet")
+    klik(_av, _a.findChild(QQuickItem, "knop-spel"))
+    klik(_av, _a.findChild(QQuickItem, "knop-wifi"))
+    klopt(_zet2 == [("verborgen", ""), ("verborgen", "wifi")],
+          f"[{stijl}] aanpassen: Game-modus terugzetten en Wifi verbergen (en niets aan- of uitzetten) ({_zet2})")
+    klik(_av, _a.findChild(QQuickItem, "aanpassen"))   # Klaar
+    wacht(50)
+    klopt(_a.property("bewerken") is False and not _a.findChild(QQuickItem, "tegel-wifi").isVisible()
+          and _a.findChild(QQuickItem, "tegel-spel").isVisible(),
+          f"[{stijl}] na 'Klaar': Wifi verborgen, Game-modus weer terug")
+    _av.close()
+
 # B-23: het tandwiel en 'Instellingen openen' van het snelmenu sturen 'start' mee (dan gaat een open Instellingen
 # naar de startpagina; zonder pagina bleef het staan waar het was).
 _qmain = (QML.parent / "main.qml").read_text(encoding="utf-8")

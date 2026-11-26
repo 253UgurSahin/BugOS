@@ -1084,6 +1084,28 @@ class UiterlijkPagina(Schakelaars, Blad):
                        t("Uit: het klassieke bureaublad (Plasma). Werkt na opnieuw inloggen.",
                          "Off: the classic desktop (Plasma). Takes effect after signing in again."),
                        self.schakel("bugos-schil", "bureaublad")))
+        # De taakbalk van het nieuwe bureaublad: grootte en waar de knoppen staan (Shell.qml ziet het meteen).
+        # Het klassieke bureaublad heeft daarvoor de taakbalk van Plasma (rechtermuisknop > Bewerken).
+        if os.environ.get("BUGOS_SCHIL") == "1" or bi.VOORBEELD:
+            alleen_schil = os.environ.get("BUGOS_SCHIL") == "1" and not bi.VOORBEELD
+            tb = self.kaart(t("Taakbalk", "Taskbar") if alleen_schil
+                            else t("Taakbalk van het nieuwe bureaublad", "Taskbar of the new desktop"))
+            self.tb_grootte = Keuzes([("klein", t("Klein", "Small")), ("normaal", t("Normaal", "Normal")),
+                                      ("groot", t("Groot", "Large"))])
+            self.tb_grootte.setObjectName("taakbalkGrootte")
+            self.tb_grootte.gekozen.connect(lambda w: self.zet_taakbalk(grootte=w))
+            tb.voeg(Rij("laptop", t("Grootte", "Size"),
+                        t("Klein past meer op je scherm; groot is makkelijker te raken.",
+                          "Small leaves more room; large is easier to hit."), self.tb_grootte))
+            self.tb_plek = Keuzes([("links", t("Links", "Left")), ("midden", t("In het midden", "Centred"))])
+            self.tb_plek.setObjectName("taakbalkPlek")
+            self.tb_plek.gekozen.connect(lambda w: self.zet_taakbalk(uitlijning=w))
+            tb.voeg(Rij("apps", t("Start en je apps", "Start and your apps"),
+                        t("Links zoals Windows 10, in het midden zoals Windows 11.",
+                          "Left like Windows 10, centred like Windows 11."), self.tb_plek))
+            stijl = bi.taakbalkstijl()
+            self.tb_grootte.zet(stijl["grootte"])
+            self.tb_plek.zet(stijl["uitlijning"])
         # De taakbalk van het klassieke bureaublad (bugos-panel stelt Plasma in). Het nieuwe bureaublad heeft die
         # altijd: daar zou 'BugOS-startmenu: uit' alleen verwarren.
         if os.environ.get("BUGOS_SCHIL") == "1" and not bi.VOORBEELD:
@@ -1094,8 +1116,8 @@ class UiterlijkPagina(Schakelaars, Blad):
                  ("De Windows-toets of Alt+F1 opent het. Uit: het eenvoudige menu van KDE.",
                   "The Windows key or Alt+F1 opens it. Off: KDE's plain menu.")),
                 ("snelmenu", "schakelaar", ("Snelmenu op de taakbalk", "Quick menu on the taskbar"),
-                 ("Grote knoppen voor wifi, bluetooth, game-modus, donker, niet storen en geluid.",
-                  "Big buttons for Wi-Fi, Bluetooth, game mode, dark, do not disturb and sound."))):   # (U476)
+                 ("Knoppen voor wifi, bluetooth, niet storen, nachtlampje, donker en game-modus, en het volume.",
+                  "Buttons for Wi-Fi, Bluetooth, do not disturb, night light, dark and game mode, and the volume."))):   # (U476)
             g.voeg(Rij(ic, t(nl, en), t(unl, uen), self.schakel("bugos-panel", onderdeel)))
 
     def ververs(self) -> None:
@@ -1119,6 +1141,13 @@ class UiterlijkPagina(Schakelaars, Blad):
                 self.melding.toon(t("Dat lukte niet. Probeer het nog eens.", "That did not work. Try again."), "fout")
                 self.ververs()
         op_achtergrond(self, lambda: bi.zet_donker(donker), klaar)
+
+    def zet_taakbalk(self, **wat: str) -> None:
+        if not bi.zet_taakbalkstijl(**wat):
+            self.melding.toon(t("Dat lukte niet.", "That did not work."), "fout")
+            stijl = bi.taakbalkstijl()
+            self.tb_grootte.zet(stijl["grootte"])
+            self.tb_plek.zet(stijl["uitlijning"])
 
     def zet_achtergrond(self, pad: str) -> None:
         op_achtergrond(self, lambda: bi.zet_achtergrond(pad), lambda ok: self.melding.toon(

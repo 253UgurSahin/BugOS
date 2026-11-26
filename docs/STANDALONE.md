@@ -43,6 +43,8 @@ bestaande motor. Weg B blijft later mogelijk, omdat de schil met gewone Wayland-
 | Meerdere schermen | Taakbalk en bureaublad per scherm; menu's op het scherm waar je klikte | 2 |
 | Rechtermuisknopmenu's van de taakbalk | Start (Win+X), een app (Nieuw venster, Vastmaken, Sluiten), een lege plek, het bureaublad | 2 |
 | Vastgezette apps op de taakbalk | `~/.config/bugos/taakbalk`, vanuit het startmenu en de takenlijst | 2 |
+| Taakbalk instellen (Plasma: paneel bewerken) | Grootte (klein/normaal/groot) en Start met je apps links of in het midden: `~/.config/bugos/taakbalkstijl` (Instellingen > Uiterlijk > Taakbalk); rechts één knop met internet, geluid en batterij (`bugos-start-data --tray`) | 2 |
+| Snelmenu-knoppen kiezen | Het potlood in het snelmenu: `~/.config/bugos/snelmenu.json` (`bugos-start-data --zet verborgen ...`) | 2 |
 | Achtergrond (plasma-apply-wallpaperimage) | `~/.config/bugos/achtergrond` (Instellingen schrijft het), licht/donker uit een pakket | 2 |
 | Vergrendelscherm (wat je ziet) | Eigen scherm in het shell-pakket `org.bugos.schil`; het wachtwoord controleert kscreenlocker (PAM) | 3 |
 | Schermmelding bij volume- en helderheidstoetsen (OSD, in plasmashell) | `org.kde.osdService` in `bugos-shell` | 3 |

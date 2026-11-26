@@ -809,15 +809,23 @@ def batterij() -> tuple[int | None, bool]:
 def snel_status() -> dict:
     if os.environ.get("BUGOS_SNEL_VOORBEELD"):  # voor foto's en tests: niets aan de computer vragen
         return {"wifi": True, "bluetooth": False, "spel": False,
-                "donker": is_donker(),
+                "donker": is_donker(), "nachtlicht": False, "internet": "wifi",
                 "volume": 60, "stil": False, "niet_storen": False,
-                "helderheid": 70, "batterij": 76, "laadt": False}
+                "helderheid": 70, "batterij": 76, "laadt": False, "verborgen": snel_verborgen()}
     s: dict = {}
     # Geen wifi in deze computer (een pc aan een kabel)? Dan geen tegel, ook al zegt nmcli 'enabled' (U111).
     # Lukt nmcli (nog) niet, net na het inloggen: dan zoals Instellingen gewoon aannemen dat er wifi is (U123).
-    apparaten = draai("nmcli", "-t", "-f", "TYPE", "device").split() if shutil.which("nmcli") else []
+    # Met de STATE erbij weet de taakbalk ook of je internet hebt (het icoontje rechtsonder, zoals Windows).
+    regels = [r.strip() for r in draai("nmcli", "-t", "-f", "TYPE,STATE", "device").splitlines() if r.strip()] \
+        if shutil.which("nmcli") else []
+    apparaten = [r.split(":")[0] for r in regels]
+    # 'connected', of 'connected (externally)' (een verbinding die NetworkManager niet zelf maakte): allebei internet.
+    verbonden = {r.split(":")[0] for r in regels if r.partition(":")[2].startswith("connected")}
     heeft_wifi = bool(shutil.which("nmcli")) and (not apparaten or "wifi" in apparaten)
     s["wifi"] = draai("nmcli", "-t", "-f", "WIFI", "radio").strip() == "enabled" if heeft_wifi else None
+    # None: (nog) onbekend, dan toont de taakbalk geen 'geen internet'.
+    s["internet"] = ("kabel" if "ethernet" in verbonden else "wifi" if "wifi" in verbonden
+                     else "geen" if apparaten else None)
     # Zonder bluetooth-hardware wacht 'bluetoothctl' tot zijn tijd op is: dan niet vragen (geen tegel).
     bt_map = Path(os.environ.get("BUGOS_SYS", "/sys")) / "class" / "bluetooth"
     heeft_bt = bt_map.is_dir() and any(bt_map.iterdir())
@@ -836,11 +844,44 @@ def snel_status() -> dict:
             pass
     s["spel"] = draai("bugos-game-mode", "status").strip() == "aan" if shutil.which("bugos-game-mode") else None
     s["donker"] = is_donker()
+    # Nachtlampje (warmer licht 's avonds): KWin, net als Instellingen > Scherm.
+    s["nachtlicht"] = kde_lees("kwinrc", "NightColor", "Active") == "true" if shutil.which("kreadconfig6") else None
     s["volume"], s["stil"] = volume_status()
     s["niet_storen"] = niet_storen_tot_in_toekomst(kde_lees("plasmanotifyrc", "DoNotDisturb", "Until"))
     s["helderheid"] = helderheid()
     s["batterij"], s["laadt"] = batterij()
+    s["verborgen"] = snel_verborgen()
     return s
+
+
+# De tegels van het snelmenu die je kunt verbergen (potloodje in het snelmenu). Dezelfde namen als in QuickMenu.qml.
+SNEL_TEGELS = ("wifi", "bluetooth", "niet_storen", "nachtlicht", "donker", "spel")
+
+
+def snel_bestand() -> Path:
+    return config_map() / "bugos" / "snelmenu.json"
+
+
+def snel_verborgen() -> list[str]:
+    """De tegels die je verborg (~/.config/bugos/snelmenu.json); alleen bekende namen, in de vaste volgorde."""
+    try:
+        gegevens = json.loads(snel_bestand().read_text(encoding="utf-8"))
+        lijst = gegevens.get("verborgen") if isinstance(gegevens, dict) else None
+    except (OSError, ValueError):
+        return []
+    return [t for t in SNEL_TEGELS if isinstance(lijst, list) and t in lijst]
+
+
+def snel_verbergen(waarde: str) -> None:
+    lijst = [t for t in SNEL_TEGELS if t in waarde.split(",")]
+    pad = snel_bestand()
+    try:
+        pad.parent.mkdir(parents=True, exist_ok=True)
+        tijdelijk = pad.with_suffix(".tmp")
+        tijdelijk.write_text(json.dumps({"verborgen": lijst}) + "\n", encoding="utf-8")
+        tijdelijk.replace(pad)
+    except OSError:
+        pass
 
 
 def tray_status() -> dict:
@@ -851,7 +892,7 @@ def tray_status() -> dict:
         soorten = set()
         for regel in draai("nmcli", "-t", "-f", "TYPE,STATE", "device").splitlines():
             delen = regel.split(":")
-            if len(delen) >= 2 and delen[1] == "connected":
+            if len(delen) >= 2 and delen[1].startswith("connected"):
                 soorten.add(delen[0])
         s["internet"] = "kabel" if "ethernet" in soorten else "wifi" if "wifi" in soorten else "geen"
     s["volume"], s["stil"] = volume_status()
@@ -928,6 +969,14 @@ def snel_zet(wat: str, waarde: str) -> None:
                   "backlight", pad.name, str(max(1, round(maximum * procent / 100))))
     elif wat == "stil":
         draai("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "1" if aan else "0")
+    elif wat == "nachtlicht":
+        # Zoals Instellingen > Scherm (bugos_config_scherm.zet_nachtlicht): met --notify en KWin opnieuw laten lezen.
+        draai("kwriteconfig6", "--file", "kwinrc", "--group", "NightColor", "--key", "Active", "--notify",
+              "true" if aan else "false")
+        draai("gdbus", "call", "--session", "--dest", "org.kde.KWin", "--object-path", "/KWin", "--method",
+              "org.kde.KWin.reconfigure")
+    elif wat == "verborgen":
+        snel_verbergen(waarde)
     elif wat == "niet_storen":
         if aan:
             draai("kwriteconfig6", "--file", "plasmanotifyrc", "--group", "DoNotDisturb", "--key", "Until", "--notify",

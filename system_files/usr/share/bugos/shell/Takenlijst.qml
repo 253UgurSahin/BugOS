@@ -14,7 +14,8 @@ Row {
     id: lijst
     property var launchers: []
     property real knopMaat: 40
-    property color zweefKleur: "#22000000"
+    property color zweefKleur: "#0D000000"
+    property color actiefVlak: "#14000000"   // de knop van het venster dat nu voor is
     property color actiefKleur: "#DE2F3E"
     readonly property bool nederlands: Qt.locale().name.indexOf("nl") === 0
     function tr(nl, en) { return nederlands ? nl : en }
@@ -68,12 +69,14 @@ Row {
 
             Rectangle {
                 anchors.fill: parent
-                radius: 8
-                color: knop.containsMouse ? lijst.zweefKleur : "transparent"
+                radius: 6
+                color: knop.pressed || (knop.model.IsActive && !knop.model.IsLauncher) ? lijst.actiefVlak
+                     : knop.containsMouse ? lijst.zweefKleur : "transparent"
+                Behavior on color { ColorAnimation { duration: 90 } }
             }
             Kirigami.Icon {
                 anchors.centerIn: parent
-                width: Math.round(lijst.knopMaat * 0.7)
+                width: Math.round(lijst.knopMaat * 0.6)   // 24 px op een gewone taakbalk, zoals Windows 11
                 height: width
                 source: knop.model.decoration
                 roundToIconSize: false

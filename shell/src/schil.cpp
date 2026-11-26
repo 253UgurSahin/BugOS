@@ -84,6 +84,10 @@ bool Schil::laag(QWindow *venster, const QString &soort, int marge)
         l->setLayer(W::LayerTop);
         l->setAnchors(W::Anchors(W::AnchorBottom | W::AnchorLeft | W::AnchorRight));
         l->setExclusiveZone(venster->height());
+        // De taakbalk kan van grootte veranderen (Instellingen > Uiterlijk > Taakbalk): vensters laten dan ook
+        // precies zoveel ruimte vrij, anders vielen ze achter een grotere taakbalk.
+        // (Zonder Qt::UniqueConnection: die werkt niet met een lambda, en laag() komt één keer per venster.)
+        QObject::connect(venster, &QWindow::heightChanged, l, [l](int h) { l->setExclusiveZone(h); });
         l->setKeyboardInteractivity(W::KeyboardInteractivityOnDemand);
     } else if (soort == QLatin1String("links") || soort == QLatin1String("rechts")) {
         l->setLayer(W::LayerTop);
