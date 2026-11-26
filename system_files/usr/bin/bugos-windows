@@ -6,6 +6,7 @@
                                     in je startmenu, de C:-schijf, opnieuw beginnen
     bugos-windows onderdeel <naam>  een onderdeel installeren (winetricks), zonder venster
     bugos-windows office aan|uit    Microsoft 365 (web-apps) in of uit je startmenu
+    bugos-windows office bijwerken  (bij het inloggen) de starters van Microsoft 365 bijwerken, als ze er zijn
     bugos-windows lijst             de geïnstalleerde Windows-programma's
 
 De logica staat in /usr/lib/bugos/python/bugos_windows.py.
@@ -29,6 +30,11 @@ def cli(args: list[str]) -> int:
         return 0 if gelukt else 1
     if args[0] == "office" and args[1:] in (["aan"], ["uit"]):
         w.office_aan() if args[1] == "aan" else w.office_uit()
+        return 0
+    if args == ["office", "bijwerken"]:
+        # Bij het inloggen: staat Microsoft 365 aan, dan de starters opnieuw schrijven (nieuwe pictogrammen, adressen).
+        if w.office_bijwerken():
+            print("bijgewerkt")
         return 0
     if args == ["lijst"]:
         for p in w.programmas():

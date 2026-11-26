@@ -49,11 +49,13 @@ ONDERDEEL_NAMEN = {o[0] for o in ONDERDELEN}
 
 # Microsoft 365 als web-apps: (sleutel, naam, adres, pictogram). Alleen deze adressen gaan naar bugos-webapp.
 OFFICE = [
-    ("word", "Word", "https://www.office.com/launch/word", "x-office-document"),
-    ("excel", "Excel", "https://www.office.com/launch/excel", "x-office-spreadsheet"),
-    ("powerpoint", "PowerPoint", "https://www.office.com/launch/powerpoint", "x-office-presentation"),
-    ("outlook", "Outlook", "https://outlook.office.com/mail/", "internet-mail"),
-    ("onedrive", "OneDrive", "https://onedrive.live.com/", "folder-cloud"),
+    # Eigen, duidelijke tegels (bugos-m365-*.svg in het BugOS-pictogramthema); de algemene pictogrammen van KDE
+    # (een documentje, een map) waren slecht te zien en niet te herkennen (2026-11).
+    ("word", "Word", "https://www.office.com/launch/word", "bugos-m365-word"),
+    ("excel", "Excel", "https://www.office.com/launch/excel", "bugos-m365-excel"),
+    ("powerpoint", "PowerPoint", "https://www.office.com/launch/powerpoint", "bugos-m365-powerpoint"),
+    ("outlook", "Outlook", "https://outlook.office.com/mail/", "bugos-m365-outlook"),
+    ("onedrive", "OneDrive", "https://onedrive.live.com/", "bugos-m365-onedrive"),
 ]
 OFFICE_VOORVOEGSEL = "bugos-m365-"
 # Een sleutel uit 'wine uninstaller --list': meestal {GUID}, soms een naam ('Notepad++'). Nooit met - beginnen.
@@ -170,6 +172,18 @@ def office_aan() -> list[Path]:
                      f"Keywords=microsoft;office;365;{sleutel};\n")
         gemaakt.append(p)
     return gemaakt
+
+
+def office_bijwerken() -> bool:
+    """Staat (een deel van) Microsoft 365 in het startmenu, en wijkt een starter af van wat office_aan nu schrijft
+    (bijv. de oude pictogrammen), dan alles opnieuw schrijven. Geeft True als er iets veranderde."""
+    map_ = data_map() / "applications"
+    bestaand = [map_ / f"{OFFICE_VOORVOEGSEL}{k}.desktop" for k, *_ in OFFICE]
+    if not any(p.is_file() for p in bestaand):
+        return False
+    voor = [p.read_text(encoding="utf-8", errors="replace") if p.is_file() else "" for p in bestaand]
+    office_aan()
+    return voor != [p.read_text(encoding="utf-8", errors="replace") for p in bestaand]
 
 
 def office_uit() -> None:

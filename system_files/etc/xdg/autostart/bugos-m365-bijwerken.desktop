@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=BugOS Microsoft 365 shortcuts
+Name[nl]=BugOS Microsoft 365-snelkoppelingen
+Comment=Keeps the Microsoft 365 shortcuts in the start menu up to date (only if you turned them on)
+Comment[nl]=Houdt de Microsoft 365-snelkoppelingen in het startmenu bij (alleen als je ze aanzette)
+Exec=bugos-windows office bijwerken
+Icon=bugos-m365
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=2
+NoDisplay=true

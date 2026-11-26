@@ -291,9 +291,19 @@ word.optionxform = str
 word.read(THUIS / ".local/share/applications/bugos-m365-word.desktop")
 klopt(word["Desktop Entry"]["Exec"] == "bugos-webapp https://www.office.com/launch/word"
       and word["Desktop Entry"]["Categories"] == "Office;", "Word: een web-app via bugos-webapp, bij Kantoor")
+klopt(word["Desktop Entry"]["Icon"] == "bugos-m365-word"
+      and all((ROOT / f"system_files/usr/share/icons/BugOS/apps/scalable/bugos-m365-{k}.svg").is_file()
+              for k, *_ in w.OFFICE), "Microsoft 365: eigen, duidelijke pictogrammen (in het BugOS-thema)")
+# Een oude starter (met het oude pictogram) wordt bij het inloggen bijgewerkt; zonder Microsoft 365 gebeurt er niets.
+_oud = THUIS / ".local/share/applications/bugos-m365-word.desktop"
+_oud.write_text(_oud.read_text().replace("Icon=bugos-m365-word", "Icon=x-office-document"))
+klopt(w.office_bijwerken() and "Icon=bugos-m365-word" in _oud.read_text() and not w.office_bijwerken(),
+      "Microsoft 365: oude starters krijgen bij het inloggen de nieuwe pictogrammen (één keer)")
 w.office_uit()
 klopt(not w.office_staat() and not list((THUIS / ".local/share/applications").glob("bugos-m365-*")),
       "Microsoft 365 uit het startmenu")
+klopt(not w.office_bijwerken() and not list((THUIS / ".local/share/applications").glob("bugos-m365-*")),
+      "bijwerken zet Microsoft 365 niet aan als het uit staat")
 klopt(w.is_office_installatie("OfficeSetup.exe") and w.is_office_installatie("Setup.X64.nl-nl_O365ProPlusRetail.exe")
       and not w.is_office_installatie("LibreOffice_25.2.0_Win_x86-64.msi") and not w.is_office_installatie("spel.exe"),
       "het installatieprogramma van Office herkennen (niet LibreOffice)")
