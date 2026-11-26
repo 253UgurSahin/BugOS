@@ -237,9 +237,17 @@ def venster(apk: str) -> int:
                                 "Android is ready. Now install F-Droid to find apps."), "goed")
                     if self.apk:
                         QTimer.singleShot(0, self.vraag_apk)
-                elif code in (126, 127):
-                    self.toon(t("Er was geen toestemming (wachtwoord). Probeer het nog eens.",
-                                "Permission was not given (password). Please try again."), "let_op")
+                elif code == 126:
+                    self.toon(t("Er was geen toestemming: het venster werd gesloten of het wachtwoord was niet goed. "
+                                "Probeer het nog eens.",
+                                "Permission was not given: the window was closed or the password was not right. "
+                                "Please try again."), "let_op")
+                elif code == 127:
+                    # pkexec zelf kon niet: geen toestemmingsvenster (agent), of het hulpje ontbreekt. Zeg wat hij zei.
+                    reden = next((r for r in reversed(uit) if r.strip()), "")
+                    self.toon(t("Het toestemmingsvenster kon niet openen. Log uit en weer in, en probeer het nog eens.",
+                                "The permission window could not open. Sign out and in again, and try again.")
+                              + (f" ({reden})" if reden else ""), "let_op")
                 else:
                     self.toon(t("Klaarzetten lukte niet. Heb je internet? Probeer het nog eens.",
                                 "Setting up did not work. Are you online? Please try again."), "fout")
