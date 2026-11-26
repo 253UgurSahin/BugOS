@@ -91,6 +91,48 @@ def start(*cmd: str) -> bool:
         return False
 
 
+def kwin_script(code: str, naam: str = "bugos") -> bool:
+    """Een klein KWin-script draaien (KWin beheert de vensters). Voor wat een app op Wayland zelf niet mag, zoals een
+    eigen venster dat al open was naar voren halen. Geeft False als het niet kon (geen KWin, geen gdbus)."""
+    import tempfile
+    import time
+    if not bestaat("gdbus"):
+        return False
+    map_ = Path(os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir())
+    naam = f"{naam}-{os.getpid()}-{int(time.time() * 1000)}"
+    script = map_ / f"{naam}.js"
+    bus = ["gdbus", "call", "--session", "--dest", "org.kde.KWin"]
+    try:
+        script.write_text(code, encoding="utf-8")
+        uit = subprocess.run(bus + ["--object-path", "/Scripting", "--method", "org.kde.kwin.Scripting.loadScript",
+                                    str(script), naam], capture_output=True, text=True, timeout=5).stdout
+        nummer = uit.strip("()\n ,").split(",")[0].strip()
+        if not nummer.lstrip("-").isdigit() or int(nummer) < 0:
+            return False
+        subprocess.run(bus + ["--object-path", f"/Scripting/Script{nummer}", "--method", "org.kde.kwin.Script.run"],
+                       capture_output=True, timeout=5)
+        subprocess.run(bus + ["--object-path", "/Scripting", "--method", "org.kde.kwin.Scripting.unloadScript", naam],
+                       capture_output=True, timeout=5)
+        return True
+    except (OSError, subprocess.SubprocessError):
+        return False
+    finally:
+        try:
+            script.unlink()
+        except OSError:
+            pass
+
+
+def naar_voren_script(pid: int) -> str:
+    """KWin-script: de vensters van dit programma terug uit de taakbalk halen en het bovenste actief maken."""
+    return ("for (const w of workspace.windowList()) {\n"
+            "    if (w.pid === %d && w.normalWindow) {\n"
+            "        if (w.minimized) { w.minimized = false; }\n"
+            "        workspace.activeWindow = w;\n"
+            "    }\n"
+            "}\n") % int(pid)
+
+
 def draai(*cmd: str, timeout: int = 20) -> tuple[int, str]:
     """Draai een programma en wacht op het antwoord. Geeft (code, tekst)."""
     try:

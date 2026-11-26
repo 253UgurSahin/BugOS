@@ -1086,6 +1086,13 @@ _ak = next(k for k in venster.computer.widget().findChildren(Knop) if k.text() =
 _ak.click()
 _bfc.start = _oud_start
 klopt(_gestart == [("bugos-store", "--mijn-apps")], f"C-09e: 'Apps verwijderen' opent de Winkel bij Mijn apps ({_gestart})")
+# Stond de Winkel al open, dan bleef hij op Wayland achter Bestanden staan (de knop 'deed niets'): zonder startbewijs
+# haalt een KWin-scriptje het open venster naar voren.
+import bugos_base as _bb  # noqa: E402
+_ui = (ROOT / "system_files/usr/lib/bugos/python/bugos_ui.py").read_text(encoding="utf-8")
+_vs = _bb.naar_voren_script(4321)
+klopt("naar_voren_script(os.getpid())" in _ui and "w.pid === 4321" in _vs and "workspace.activeWindow = w" in _vs,
+      "C-09e: een open Winkel komt naar voren, ook zonder startbewijs (KWin-script)")
 _oud_tel = venster.tel_grootste
 venster.tel_grootste = lambda opnieuw=False: None
 venster.toon_grootste()

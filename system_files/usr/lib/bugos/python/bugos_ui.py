@@ -384,6 +384,14 @@ def _naar_voren(venster: QWidget, token: str) -> None:
     venster.show()
     venster.raise_()
     venster.activateWindow()
+    if not token and QGuiApplication.platformName().startswith("wayland"):
+        # Zonder startbewijs (gestart vanuit een BugOS-app, zoals 'Apps verwijderen' in Bestanden) mag een venster op
+        # Wayland zichzelf niet naar voren halen: het bleef achter het andere venster staan en het leek alsof er niets
+        # gebeurde. KWin zelf mag het wel: een scriptje dat dit venster actief maakt. Op de achtergrond (niet wachten).
+        import threading
+        from bugos_base import kwin_script, naar_voren_script
+        threading.Thread(target=kwin_script, args=(naar_voren_script(os.getpid()), "bugos-naar-voren"),
+                         daemon=True).start()
 
 
 _VROEG: dict = {}   # naam -> QLocalServer die al luistert terwijl het venster nog gebouwd wordt (U388)
