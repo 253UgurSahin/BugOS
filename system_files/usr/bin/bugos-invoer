@@ -1,0 +1,62 @@
+#!/usr/bin/python3
+"""bugos-invoer - muis en touchpad zoals de gebruiker het van Windows kent.
+
+  bugos-invoer standaard   (bij elk inloggen) elk touchpad dat BugOS nog niet eerder zag: scrollen zoals in Windows
+                           (vingers omlaag = pagina omlaag). KDE zet sinds Plasma 6 'natuurlijk scrollen' (de manier
+                           van een Mac of telefoon) standaard aan op touchpads.
+
+Eén keer per touchpad: daarna is het jouw keuze. Wil je de Mac-manier? Instellingen > Muis en touchpad > 'Scrollen
+zoals op een Mac'. Dat onthoudt KWin zelf (kcminputrc), en dit programma laat dat touchpad daarna met rust.
+De touchpads die al gedaan zijn, staan in ~/.config/bugos/invoer-gezien (één naam per regel).
+"""
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, os.environ.get("BUGOS_PYTHON", "/usr/lib/bugos/python"))
+
+import bugos_config  # noqa: E402,F401  (eerst: bugos_config_zien en bugos_config gebruiken elkaar)
+import bugos_config_zien as zien  # noqa: E402
+
+
+def gezien_bestand() -> Path:
+    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "bugos" / "invoer-gezien"
+
+
+def standaard() -> int:
+    pad = gezien_bestand()
+    try:
+        gezien = set(pad.read_text(encoding="utf-8").splitlines())
+    except OSError:
+        gezien = set()
+    nieuw = []
+    for a in zien.aanwijzers():
+        if not a.touchpad or "natuurlijk" not in a.kan:
+            continue
+        sleutel = a.naam.strip() or a.sysnaam
+        if sleutel in gezien:
+            continue
+        if a.natuurlijk and not zien.zet_aanwijzer(a.sysnaam, "natuurlijk", False):
+            continue   # lukte niet (KWin nog niet klaar?): de volgende keer inloggen opnieuw proberen
+        nieuw.append(sleutel)
+    if nieuw:
+        try:
+            pad.parent.mkdir(parents=True, exist_ok=True)
+            with pad.open("a", encoding="utf-8") as f:
+                f.write("".join(n + "\n" for n in nieuw))
+        except OSError:
+            pass
+    return 0
+
+
+def main(args: list[str]) -> int:
+    if args[:1] == ["standaard"]:
+        return standaard()
+    print("Gebruik: bugos-invoer standaard", file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

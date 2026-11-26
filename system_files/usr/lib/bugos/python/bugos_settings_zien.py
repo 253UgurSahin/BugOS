@@ -138,10 +138,13 @@ class MuisPagina(Blad):
                            t("Een tikje op het touchpad is een klik", "A tap on the touchpad is a click"),
                            schuifje(a.tikken, lambda aan, x=a: self.zet(x, "tikken", aan))))
             if "natuurlijk" in a.kan:
-                g.voeg(Rij("onder", t("Scrollen zoals op een telefoon", "Scroll like on a phone"),
-                           # Zoals op een telefoon: omhoog vegen schuift de pagina omhoog, je gaat verder naar beneden (U160).
-                           t("Veeg omhoog om verder naar beneden te gaan", "Swipe up to go further down") if a.touchpad else
-                           t("Wieltje naar je toe gaat omhoog", "Wheel towards you goes up"),
+                # Uit = zoals in Windows (de BugOS-standaard, bugos-invoer). Aan = zoals op een Mac of telefoon: omhoog
+                # vegen schuift de pagina omhoog, je gaat verder naar beneden (U160).
+                g.voeg(Rij("onder", t("Scrollen zoals op een Mac", "Scroll like on a Mac"),
+                           t("Veeg omhoog om verder naar beneden te gaan. Uit: zoals in Windows.",
+                             "Swipe up to go further down. Off: like on Windows.") if a.touchpad else
+                           t("Wieltje naar je toe gaat omhoog. Uit: zoals in Windows.",
+                             "Wheel towards you goes up. Off: like on Windows."),
                            schuifje(a.natuurlijk, lambda aan, x=a: self.zet(x, "natuurlijk", aan))))
             if "linkshandig" in a.kan:
                 g.voeg(Rij("links", t("Linkshandig", "Left-handed"),

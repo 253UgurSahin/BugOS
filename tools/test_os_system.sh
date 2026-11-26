@@ -709,8 +709,8 @@ nep busctl 'exit 0'
 draai bugos-first-boot
 klopt '[ "$code" -eq 0 ] && grep -q "org.kde.gwenview" "$TMP/flatpak-log" && grep -q "org.kde.okular" "$TMP/flatpak-log"' \
     "U224: na de installatie is er een programma voor foto's (Gwenview) en PDF's (Okular)"
-klopt '! grep -q "org.mozilla.firefox" "$TMP/flatpak-log" && grep -qx "install --system --noninteractive --or-update flathub com.valvesoftware.Steam" "$TMP/flatpak-log"' \
-    "Winkel: Steam komt als Flatpak van Flathub; Firefox niet meer vanzelf (je kiest je browser in Welkom)"
+klopt '! grep -q "org.mozilla.firefox" "$TMP/flatpak-log" && ! grep -qE "LibreOffice|VLC|Steam" "$TMP/flatpak-log"' \
+    "Zo weinig mogelijk vooraf: geen Firefox (je kiest je browser in Welkom), geen LibreOffice, VLC of Steam (die haal je uit de Winkel)"
 klopt 'grep -qx org.mozilla.firefox "$TMP/var-bugos/standaard-apps-klaargezet"' \
     "Browser: op een nieuwe computer telt Firefox als klaargezet (komt later ook nooit vanzelf)"
 klopt '[ "$(grep -c "^install" "$TMP/flatpak-log")" -eq "$AANTAL" ] && [ -e "$TMP/var-bugos/eerste-start-klaar" ] && [ "$(sort -u "$TMP/var-bugos/standaard-apps-klaargezet" | wc -l)" -eq "$((AANTAL + 1))" ]' \
@@ -723,7 +723,7 @@ draai bugos-first-boot
 klopt '[ "$code" -eq 0 ] && ! grep -qE "^(install|remote)" "$TMP/flatpak-log" && [ ! -s "$TMP/nm-log" ]' \
     "Winkel: alles al klaargezet: de dienst stopt meteen (geen wachten op internet bij elke start)"
 # Je verwijdert een standaard-app zelf (Winkel of Instellingen > Apps): BugOS zet hem nooit meer vanzelf terug.
-sed -i '/^org.videolan.VLC$/d' "$TMP/fp-geinstalleerd"
+sed -i '/^org.kde.okular$/d' "$TMP/fp-geinstalleerd"
 : >"$TMP/flatpak-log"
 draai bugos-first-boot
 klopt '[ "$code" -eq 0 ] && ! grep -q "^install" "$TMP/flatpak-log"' \
@@ -731,15 +731,15 @@ klopt '[ "$code" -eq 0 ] && ! grep -q "^install" "$TMP/flatpak-log"' \
 # Eén app lukt niet (de server hapert): de andere komen toch, en alleen die ene wordt later opnieuw geprobeerd.
 rm -f "$TMP/var-bugos/standaard-apps-klaargezet" "$TMP/var-bugos/eerste-start-klaar"
 : >"$TMP/fp-geinstalleerd"
-echo org.videolan.VLC >"$TMP/fp-faal"
+echo org.kde.okular >"$TMP/fp-faal"
 : >"$TMP/flatpak-log"
 draai bugos-first-boot
-klopt '[ "$code" -ne 0 ] && grep -qx org.libreoffice.LibreOffice "$TMP/var-bugos/standaard-apps-klaargezet" && ! grep -qx org.videolan.VLC "$TMP/var-bugos/standaard-apps-klaargezet" && [ ! -e "$TMP/var-bugos/eerste-start-klaar" ]' \
+klopt '[ "$code" -ne 0 ] && grep -qx org.kde.gwenview "$TMP/var-bugos/standaard-apps-klaargezet" && ! grep -qx org.kde.okular "$TMP/var-bugos/standaard-apps-klaargezet" && [ ! -e "$TMP/var-bugos/eerste-start-klaar" ]' \
     "Winkel: lukt één app niet, dan komen de andere toch, en de dienst probeert het later opnieuw (Restart=on-failure)"
 : >"$TMP/fp-faal"
 : >"$TMP/flatpak-log"
 draai bugos-first-boot
-klopt '[ "$code" -eq 0 ] && [ "$(grep -c "^install" "$TMP/flatpak-log")" -eq 1 ] && grep -q "flathub org.videolan.VLC$" "$TMP/flatpak-log"' \
+klopt '[ "$code" -eq 0 ] && [ "$(grep -c "^install" "$TMP/flatpak-log")" -eq 1 ] && grep -q "flathub org.kde.okular$" "$TMP/flatpak-log"' \
     "Winkel: de volgende keer alleen de app die nog niet lukte"
 # Een computer van vóór deze versie (de oude vaste lijst: eerste-start-klaar en standaard-apps-2). LibreOffice, VLC,
 # Gwenview en Okular zette die al klaar (en wie ze verwijderde, krijgt ze niet terug); Firefox en Steam waren pakketten
@@ -750,8 +750,8 @@ touch "$TMP/var-bugos/eerste-start-klaar" "$TMP/var-bugos/standaard-apps-2"
 : >"$TMP/flatpak-log"
 nep bugos-updates 'exit 1'   # zelf updaten
 draai bugos-first-boot
-klopt '[ "$code" -eq 0 ] && grep -q "flathub org.mozilla.firefox$" "$TMP/flatpak-log" && grep -q "flathub com.valvesoftware.Steam$" "$TMP/flatpak-log" && [ "$(grep -c "^install" "$TMP/flatpak-log")" -eq 2 ]' \
-    "Winkel: na de update van de oude versie: Firefox en Steam als Flatpak erbij, de al klaargezette apps niet opnieuw"
+klopt '[ "$code" -eq 0 ] && grep -q "flathub org.mozilla.firefox$" "$TMP/flatpak-log" && [ "$(grep -c "^install" "$TMP/flatpak-log")" -eq 1 ]' \
+    "Winkel: na de update van de oude versie: Firefox als Flatpak erbij, de al klaargezette apps niet opnieuw (Steam niet meer vanzelf)"
 # U239/U308: een nieuwe standaard-app in een latere BugOS-versie. Met 'zelf updaten' niet vanzelf (U308), wel
 # onthouden dat hij is overgeslagen (U320); met 'vanzelf' wel, één keer (U239).
 cp "$LIJST_ECHT" "$TMP/lijst-nieuw"

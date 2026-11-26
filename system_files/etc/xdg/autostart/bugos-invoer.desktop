@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=BugOS mouse and touchpad
+Name[nl]=BugOS muis en touchpad
+Comment=Scrolls on a new touchpad like on Windows (once per touchpad; your own choice in Settings stays)
+Comment[nl]=Scrollt op een nieuw touchpad zoals in Windows (één keer per touchpad; je eigen keuze in Instellingen blijft)
+Exec=bugos-invoer standaard
+Icon=input-touchpad
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=2
+NoDisplay=true

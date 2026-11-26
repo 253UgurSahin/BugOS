@@ -139,10 +139,10 @@ class AppsPagina(Blad):
         if not apps:
             # Geen enkele app (de eerste start is nog bezig, of je haalde alles weg): zeg waar je ze vindt.
             self.lijst.voeg(Rij("apps", t("Nog geen apps", "No apps yet"),
-                                t("Apps haal je uit de BugOS Winkel. Na de eerste start komen Firefox, LibreOffice "
-                                  "en VLC vanzelf, zodra je internet hebt.",
-                                  "Get apps from the BugOS Store. After the first start, Firefox, LibreOffice and "
-                                  "VLC arrive by themselves once you are online.")))
+                                t("Apps haal je uit de BugOS Winkel, als je ze nodig hebt. BugOS zet er zelf zo "
+                                  "weinig mogelijk op: alleen iets om foto's en PDF's te openen.",
+                                  "Get apps from the BugOS Store when you need them. BugOS itself adds as little as "
+                                  "possible: only something to open photos and PDFs.")))
             return
         for app in apps:
             weg = Knop(t("Verwijderen", "Remove"), "stil")
