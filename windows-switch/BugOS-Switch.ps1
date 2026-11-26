@@ -51,7 +51,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # Welke versie dit is: staat in de titelbalk en onderin de zijbalk, zodat je ziet of je de nieuwste hebt.
-$script:Versie = '2026.11.26-1'
+$script:Versie = '2026.11.26-2'
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -2835,8 +2835,9 @@ $Paginas += {
 
 # De pagina's op naam, en de volgorde: eerst waar BugOS komt (dat bepaalt de rest), dan de stick (die blijft bruikbaar),
 # dan je bestanden (die kunnen op diezelfde stick), 'Ruimte maken' alleen naast Windows, en tot slot hoe je installeert.
-$script:Bladen = @{ welkom = $Paginas[0]; controle = $Paginas[1]; bestanden = $Paginas[2]; stick = $Paginas[3]
-                    keuze = $Paginas[4]; ruimte = $Paginas[5]; einde = $Paginas[6] }
+# Let op: de nummers volgen de volgorde van de '$Paginas += {' hierboven in dit bestand (de test kijkt dat na).
+$script:Bladen = @{ welkom = $Paginas[0]; controle = $Paginas[1]; bestanden = $Paginas[2]; keuze = $Paginas[3]
+                    ruimte = $Paginas[4]; einde = $Paginas[5]; stick = $Paginas[6] }
 function Get-Volgorde {
     $v = @('welkom', 'controle', 'keuze', 'stick', 'bestanden')
     if ($script:Plek -eq 'naast') { $v += 'ruimte' }
