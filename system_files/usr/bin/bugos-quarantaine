@@ -324,10 +324,101 @@ def venster_app(opties: dict, doel: q.Doel) -> int:
     return uitvoeren(app, Quarantaine())
 
 
+def kiezer() -> int:
+    """Quarantaine vanuit het startmenu (zonder iets erbij): uitleg, en kiezen welke app je veilig wilt proberen, of een
+    programma (.exe, .msi, AppImage) uit je bestanden. Het gekozen ding start in het gewone quarantainevenster."""
+    from bugos_ui import Kaart, Knop, label, maak_app, start, t, uitvoeren
+    from PySide6.QtCore import QSize, Qt
+    from PySide6.QtGui import QIcon
+    from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QLineEdit, QListWidget, QListWidgetItem, QVBoxLayout,
+                                   QWidget)
+
+    class Kiezer(QWidget):
+        def __init__(self):
+            super().__init__()
+            self.setWindowTitle(t("Quarantaine", "Quarantine"))
+            self.resize(560, 620)
+            lay = QVBoxLayout(self)
+            lay.setContentsMargins(32, 28, 32, 24)
+            lay.setSpacing(12)
+            lay.addWidget(label(t("Een app veilig proberen", "Try an app safely"), "titel"))
+            lay.addWidget(label(t("In quarantaine krijgt een app een eigen, lege map en kan hij niet bij jouw "
+                                  "bestanden. Handig voor een programma dat je nog niet vertrouwt. Na afloop kies je: "
+                                  "weggooien of bewaren.",
+                                  "In quarantine an app gets its own, empty folder and cannot reach your files. Handy "
+                                  "for a program you do not trust yet. Afterwards you choose: throw it away or keep it."),
+                                "sub"))
+            lay.addWidget(label(t("Tip: je kunt ook met de rechtermuisknop op een app in het startmenu, of op een .exe "
+                                  "of AppImage in Bestanden, 'Openen in quarantaine' kiezen.",
+                                  "Tip: you can also right-click an app in the start menu, or an .exe or AppImage in "
+                                  "Files, and choose 'Open in quarantine'."), "klein"))
+            kaart = Kaart(marge=12, ruimte=8)
+            self.zoek = QLineEdit()
+            self.zoek.setPlaceholderText(t("Zoek een app", "Search for an app"))
+            self.zoek.setClearButtonEnabled(True)
+            self.zoek.textChanged.connect(self.filter)
+            kaart.lay.addWidget(self.zoek)
+            self.lijst = QListWidget()
+            self.lijst.setIconSize(QSize(28, 28))
+            self.lijst.itemDoubleClicked.connect(lambda _i: self.proberen())
+            self.lijst.currentItemChanged.connect(lambda *_: self.knop.setEnabled(self.lijst.currentItem() is not None))
+            for naam, icoon, pad in q.apps_om_te_proberen():
+                item = QListWidgetItem(QIcon.fromTheme(icoon, QIcon.fromTheme("application-x-executable"))
+                                       if icoon and not icoon.startswith("/") else QIcon(icoon) if icoon
+                                       else QIcon.fromTheme("application-x-executable"), naam)
+                item.setData(Qt.ItemDataRole.UserRole, pad)
+                self.lijst.addItem(item)
+            kaart.lay.addWidget(self.lijst, 1)
+            lay.addWidget(kaart, 1)
+            rij = QHBoxLayout()
+            self.bestand = Knop(t("Een programma uit je bestanden…", "A program from your files…"), "gewoon")
+            self.bestand.clicked.connect(self.kies_bestand)
+            rij.addWidget(self.bestand)
+            rij.addStretch(1)
+            self.knop = Knop(t("In quarantaine openen", "Open in quarantine"), "hoofd")
+            self.knop.setEnabled(False)
+            self.knop.clicked.connect(self.proberen)
+            rij.addWidget(self.knop)
+            lay.addLayout(rij)
+
+        def filter(self, tekst: str) -> None:
+            woorden = tekst.lower().split()
+            for i in range(self.lijst.count()):
+                item = self.lijst.item(i)
+                item.setHidden(not all(w in item.text().lower() for w in woorden))
+
+        def open_in_quarantaine(self, pad: str) -> None:
+            start("bugos-quarantaine", "--venster", pad)
+            self.close()
+
+        def proberen(self) -> None:
+            item = self.lijst.currentItem()
+            if item is not None:
+                self.open_in_quarantaine(str(item.data(Qt.ItemDataRole.UserRole)))
+
+        def kies_bestand(self) -> None:
+            pad, _ = QFileDialog.getOpenFileName(self, t("Een programma kiezen", "Choose a program"), str(Path.home()),
+                                                 t("Programma's (*.exe *.msi *.AppImage *.appimage)",
+                                                   "Programs (*.exe *.msi *.AppImage *.appimage)"))
+            if pad:
+                self.open_in_quarantaine(pad)
+
+    from PySide6.QtWidgets import QApplication
+    app = QApplication.instance() or maak_app("bugos-quarantaine", "bugos-quarantaine", sys.argv)
+    return uitvoeren(app, Kiezer())
+
+
 def main(args: list[str]) -> int:
     if args[:1] in (["-h"], ["--help"]):
         print(GEBRUIK)
         return 0
+    if args in ([], ["--venster"]):
+        # Vanuit het startmenu, zonder app erbij: eerst kiezen welke app (de starter heeft %f; zonder bestand blijft
+        # alleen --venster over). In een terminal zonder iets: de uitleg.
+        if not args and sys.stdin.isatty() and sys.stdout.isatty():
+            print(GEBRUIK, file=sys.stderr)
+            return 2
+        return kiezer()
     if args == ["--lijst"]:
         for p in q.bewaarde():
             n, grootte = q.omvang(p / "home")

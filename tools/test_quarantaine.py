@@ -260,6 +260,43 @@ uitkomst["stap"] = stap_weg
 venster_mod.venster_app({"internet": False, "bewaar": "", "modus": "venster"},
                         q.Doel("programma", "Venster app", opdracht=["sh"]))
 
+# ------------------------------------------------------------------------------------------- vanuit het startmenu
+# Quarantaine staat nu als gewone app in het startmenu: zonder iets erbij eerst kiezen welke app (2026-11: de
+# gebruiker wist niet hoe je een app in quarantaine opent; het zat alleen achter de rechtermuisknop).
+_apps = THUIS / ".local/share/applications"
+_apps.mkdir(parents=True, exist_ok=True)
+(_apps / "org.voorbeeld.Teken.desktop").write_text("[Desktop Entry]\nType=Application\nName=Teken\nName[nl]=Tekenen\n"
+                                                    "Exec=teken %f\nIcon=applications-graphics\n")
+(_apps / "verborgen.desktop").write_text("[Desktop Entry]\nType=Application\nName=Verborgen\nExec=x\nNoDisplay=true\n")
+(_apps / "bugos-files.desktop").write_text("[Desktop Entry]\nType=Application\nName=Bestanden\nExec=bugos-files\n")
+os.environ["XDG_DATA_DIRS"] = str(TMP / "leeg")
+_lijst = q.apps_om_te_proberen()
+klopt([n for n, _i, _p in _lijst] in (["Tekenen"], ["Teken"]) and _lijst[0][2].endswith("org.voorbeeld.Teken.desktop"),
+      f"startmenu: Quarantaine laat de apps kiezen (geen verborgen starters, niet BugOS zelf) ({_lijst})")
+_starter = (ROOT / "system_files/usr/share/applications/bugos-quarantaine.desktop").read_text()
+klopt("NoDisplay=true" not in _starter and "Name[nl]=Quarantaine" in _starter and "%f" in _starter,
+      "startmenu: Quarantaine staat als gewone app in het startmenu")
+_gestart = []
+venster_mod.__dict__["start"] = None
+
+
+def stap_kiezer(w):
+    import bugos_ui as _ui
+    klopt(w.lijst.count() == 1 and not w.knop.isEnabled(), "kiezer: één app in de lijst; eerst kiezen, dan de knop")
+    w.zoek.setText("xyz")
+    klopt(w.lijst.item(0).isHidden(), "kiezer: zoeken verbergt wat niet past")
+    w.zoek.setText("")
+    w.lijst.setCurrentRow(0)
+    w.knop.click()
+    klopt(_gestart and _gestart[-1][:2] == ("bugos-quarantaine", "--venster")
+          and _gestart[-1][2].endswith("org.voorbeeld.Teken.desktop"),
+          f"kiezer: de gekozen app gaat open in het quarantainevenster ({_gestart})")
+
+
+uitkomst["stap"] = stap_kiezer
+bugos_ui.start = lambda *a: _gestart.append(a) or True
+venster_mod.kiezer()
+
 # ------------------------------------------------------------------------------------------- Bestanden, startmenu
 import bugos_files_bewerken as fb  # noqa: E402
 

@@ -142,6 +142,33 @@ def bepaal_doel(wat: str, args: list[str], taal: str = "") -> Doel | None:
     return None
 
 
+def apps_om_te_proberen() -> list[tuple[str, str, str]]:
+    """De apps uit het startmenu die je in quarantaine kunt proberen: [(naam, pictogram, pad naar .desktop)], op naam.
+    Niet: verborgen starters (NoDisplay, Hidden), geen Type=Application, en de onderdelen van BugOS zelf. Een app die
+    in meer mappen staat (eigen map gaat voor), telt één keer."""
+    from bugos_desktop import app_mappen, lees_bureaublad, vertaald
+    gezien: dict[str, tuple[str, str, str]] = {}
+    for map_ in app_mappen():
+        try:
+            bestanden = sorted(map_.glob("*.desktop"))
+        except OSError:
+            continue
+        for pad in bestanden:
+            if pad.name in gezien or pad.name.startswith("bugos-"):
+                continue
+            c = lees_bureaublad(pad)
+            if c is None:
+                gezien[pad.name] = ("", "", "")
+                continue
+            sec = c["Desktop Entry"]
+            if (sec.get("Type", "Application") != "Application" or sec.get("NoDisplay", "").lower() == "true"
+                    or sec.get("Hidden", "").lower() == "true" or not sec.get("Exec", "").strip()):
+                gezien[pad.name] = ("", "", "")
+                continue
+            gezien[pad.name] = (vertaald(sec, "Name") or pad.stem, sec.get("Icon", ""), str(pad))
+    return sorted((a for a in gezien.values() if a[2]), key=lambda a: a[0].lower())
+
+
 def nieuwe_map(doel: Doel, bewaard: str = "") -> Path:
     """De quarantainemap (met home/ erin). bewaard: de naam van een bewaarde quarantaine om mee verder te gaan."""
     if bewaard:

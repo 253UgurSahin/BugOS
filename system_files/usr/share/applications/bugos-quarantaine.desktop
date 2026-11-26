@@ -1,10 +1,13 @@
 [Desktop Entry]
 Type=Application
-Name=Quarantine (BugOS)
-Name[nl]=Quarantaine (BugOS)
-Comment=Try an app without it reaching your files
-Comment[nl]=Een app proberen zonder dat hij bij je bestanden kan
+Name=Quarantine
+Name[nl]=Quarantaine
+GenericName=Try an app safely
+GenericName[nl]=Een app veilig proberen
+Comment=Try an app or program without it reaching your files
+Comment[nl]=Een app of programma proberen zonder dat hij bij je bestanden kan
 Exec=bugos-quarantaine --venster %f
-Icon=bugos-logo
-NoDisplay=true
+Icon=security-medium
+Categories=System;Security;
+Keywords=sandbox;quarantine;safe;try;veilig;proberen;zandbak;
 Terminal=false
