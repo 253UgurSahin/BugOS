@@ -298,6 +298,19 @@ SYMBOLISCH = ["kate", "kdeconnect", "krfb", "utilities-terminal", "wine", "debug
               "preferences-desktop-emoticons"]
 
 
+# Microsoft 365 (web-apps in het startmenu, bugos_windows.OFFICE): geen grijze tegel maar de kleur die mensen bij
+# die app kennen, met een witte letter (Word blauw W, Excel groen X, ...). Geen logo's van Microsoft: die zijn
+# beschermd. De algemene KDE-pictogrammen (een documentje, een map) waren slecht te zien en niet te herkennen.
+EIGEN = {
+    'bugos-m365': '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">\n<rect x="4" y="4" width="19" height="19" rx="5" fill="#185ABD"/><rect x="25" y="4" width="19" height="19" rx="5" fill="#107C41"/>\n<rect x="4" y="25" width="19" height="19" rx="5" fill="#C43E1C"/><rect x="25" y="25" width="19" height="19" rx="5" fill="#0F6CBD"/>\n<g font-family="Inter, \'Segoe UI\', \'Noto Sans\', sans-serif" font-weight="700" font-size="13" fill="#fff" text-anchor="middle">\n<text x="13.5" y="18.5">W</text><text x="34.5" y="18.5">X</text><text x="13.5" y="39.5">P</text><text x="34.5" y="39.5">O</text></g>\n</svg>\n',
+    'bugos-m365-word': '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">\n<defs><linearGradient id="t" x1="0" y1="3" x2="0" y2="45" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2B7CD3"/><stop offset="1" stop-color="#185ABD"/></linearGradient></defs>\n<rect x="3" y="3" width="42" height="42" rx="10" fill="url(#t)"/>\n<rect x="3.5" y="3.5" width="41" height="41" rx="9.5" fill="none" stroke="#000" stroke-opacity=".12"/>\n<text x="24" y="33.5" text-anchor="middle" font-family="Inter, \'Segoe UI\', \'Noto Sans\', sans-serif" font-weight="700" font-size="26" fill="#fff">W</text>\n</svg>\n',
+    'bugos-m365-excel': '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">\n<defs><linearGradient id="t" x1="0" y1="3" x2="0" y2="45" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#21A366"/><stop offset="1" stop-color="#107C41"/></linearGradient></defs>\n<rect x="3" y="3" width="42" height="42" rx="10" fill="url(#t)"/>\n<rect x="3.5" y="3.5" width="41" height="41" rx="9.5" fill="none" stroke="#000" stroke-opacity=".12"/>\n<text x="24" y="33.5" text-anchor="middle" font-family="Inter, \'Segoe UI\', \'Noto Sans\', sans-serif" font-weight="700" font-size="26" fill="#fff">X</text>\n</svg>\n',
+    'bugos-m365-powerpoint': '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">\n<defs><linearGradient id="t" x1="0" y1="3" x2="0" y2="45" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ED6C47"/><stop offset="1" stop-color="#C43E1C"/></linearGradient></defs>\n<rect x="3" y="3" width="42" height="42" rx="10" fill="url(#t)"/>\n<rect x="3.5" y="3.5" width="41" height="41" rx="9.5" fill="none" stroke="#000" stroke-opacity=".12"/>\n<text x="24" y="33.5" text-anchor="middle" font-family="Inter, \'Segoe UI\', \'Noto Sans\', sans-serif" font-weight="700" font-size="26" fill="#fff">P</text>\n</svg>\n',
+    'bugos-m365-outlook': '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">\n<defs><linearGradient id="t" x1="0" y1="3" x2="0" y2="45" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#28A8EA"/><stop offset="1" stop-color="#0F6CBD"/></linearGradient></defs>\n<rect x="3" y="3" width="42" height="42" rx="10" fill="url(#t)"/>\n<rect x="3.5" y="3.5" width="41" height="41" rx="9.5" fill="none" stroke="#000" stroke-opacity=".12"/>\n<text x="24" y="33.5" text-anchor="middle" font-family="Inter, \'Segoe UI\', \'Noto Sans\', sans-serif" font-weight="700" font-size="26" fill="#fff">O</text>\n</svg>\n',
+    'bugos-m365-onedrive': '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">\n<defs><linearGradient id="t" x1="0" y1="3" x2="0" y2="45" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#1490DF"/><stop offset="1" stop-color="#0364B8"/></linearGradient></defs>\n<rect x="3" y="3" width="42" height="42" rx="10" fill="url(#t)"/>\n<rect x="3.5" y="3.5" width="41" height="41" rx="9.5" fill="none" stroke="#000" stroke-opacity=".12"/>\n<path d="M16 33h18.5a6.5 6.5 0 0 0 .9-12.94A9 9 0 0 0 18.2 18.2 7.4 7.4 0 0 0 16 33z" fill="#fff"/>\n</svg>\n',
+}
+
+
 def maak(b: basis.Bouwer) -> None:
     for naam, (glyph, opties) in APPS.items():
         b.schrijf(MAP, naam, tegel(glyph, **opties))
@@ -306,3 +319,5 @@ def maak(b: basis.Bouwer) -> None:
     for naam in SYMBOLISCH:
         glyph, opties = APPS[naam]
         b.schrijf(MAP, naam + "-symbolic", symbool(glyph, **opties))
+    for naam, svg in EIGEN.items():
+        b.schrijf(MAP, naam, svg)

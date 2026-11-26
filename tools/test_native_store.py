@@ -644,7 +644,8 @@ even(50)
 klopt("com.valvesoftware.Steam" in w.systeem and w.kaarten
       and all(k.weg.isVisibleTo(w) for k in w.kaarten)
       and not any(k.app["id"] == "com.valvesoftware.Steam" for k in w.kaarten),
-      f"Winkel: elke app in 'Mijn apps' heeft Verwijderen; een programma van BugOS zelf staat er niet "
+      f"Winkel: elke Winkel-app in 'Mijn apps' heeft Verwijderen; een programma van BugOS zelf staat er niet tussen "
+      f"(wel eronder bij 'Hoort bij BugOS', zonder Verwijderen) "
       f"({[k.app['id'] for k in w.kaarten]})")
 _rij_gamen = next(i for i in range(w.lijst.count()) if w.lijst.sleutel(i) == "gamen")
 w.lijst.setCurrentRow(_rij_gamen)
@@ -655,6 +656,73 @@ klopt(_steam is not None and _steam.knop.text() == "Openen" and not _steam.weg.i
 (APPS / "steam.desktop").unlink()
 w.systeem = winkel.systeem_apps(w.cat["apps"])
 w.installed = w.flatpaks | set(w.systeem)
+
+# 2026-11 (wens van de eigenaar): 'Mijn apps' laat ALLE apps zien. Onder de Flatpaks: wat je verder installeerde
+# (Microsoft 365, AppImage, Windows, Android) met Verwijderen, en wat bij BugOS hoort, zonder Verwijderen. En eigen
+# onderwerpen voor Microsoft 365, Windows-programma's en Android-apps.
+import bugos_alle_apps as alle  # noqa: E402
+import bugos_windows  # noqa: E402
+_sys = TMP / "sys-share"
+(_sys / "applications").mkdir(parents=True)
+(_sys / "applications/org.kde.konsole.desktop").write_text("[Desktop Entry]\nType=Application\nName=Konsole\nExec=konsole\nIcon=utilities-terminal\n")
+(_sys / "applications/verborgen.desktop").write_text("[Desktop Entry]\nType=Application\nName=X\nExec=x\nNoDisplay=true\n")
+_oude_dirs = os.environ.get("XDG_DATA_DIRS")
+os.environ["XDG_DATA_DIRS"] = str(_sys)
+_eigen = Path(os.environ.get("XDG_DATA_HOME", THUIS / ".local/share")) / "applications"
+_eigen.mkdir(parents=True, exist_ok=True)
+(_eigen / "waydroid.org.fdroid.fdroid.desktop").write_text("[Desktop Entry]\nType=Application\nName=F-Droid\nExec=waydroid app launch org.fdroid.fdroid\n")
+bugos_windows.office_aan()
+_lok = alle.lokale_apps(met_windows=False)
+_soorten = {a["soort"] for a in _lok}
+klopt([a["naam"] for a in _lok if a["soort"] == "systeem"] == ["Konsole"] and {"m365", "android"} <= _soorten
+      and all(a["verwijderbaar"] == (a["soort"] != "systeem") for a in _lok),
+      f"Mijn apps: ook Microsoft 365, Android en de apps van BugOS zelf (die niet te verwijderen) ({[(a['soort'], a['naam']) for a in _lok]})")
+w.lokaal = _lok
+w.lijst.setCurrentRow(_rij_mijn)
+w.toon()
+even(50)
+_lk = [k for k in w.lokaal_kaarten if isinstance(k, winkel.LokaleKaart)]
+_konsole = next((k for k in _lk if k.app["naam"] == "Konsole"), None)
+_word = next((k for k in _lk if k.app["naam"] == "Word"), None)
+klopt(_konsole is not None and not _konsole.weg.isVisibleTo(w) and _word is not None and _word.weg.isVisibleTo(w),
+      "Mijn apps: een app van BugOS zelf zonder Verwijderen, Word (Microsoft 365) met")
+_rijen = {w.lijst.sleutel(i): i for i in range(w.lijst.count())}
+klopt({"_m365", "_windows", "_android"} <= set(_rijen), "Winkel: onderwerpen Microsoft 365, Windows-programma's, Android-apps")
+w.lijst.setCurrentRow(_rijen["_m365"])
+even(50)
+_knoppen = [b.text() for k in w.lokaal_kaarten for b in k.findChildren(winkel.Knop)]
+klopt(w.kop.text() == "Microsoft 365" and "Uit het startmenu halen" in _knoppen and "Word" in _knoppen,
+      f"Microsoft 365: uitleg, uit/in het startmenu, en elke app los te openen ({_knoppen[:8]})")
+w.lijst.setCurrentRow(_rijen["_windows"])
+even(50)
+_knoppen = [b.text() for k in w.lokaal_kaarten for b in k.findChildren(winkel.Knop)]
+klopt("Een Windows-programma installeren…" in _knoppen and "Onderdelen en instellingen" in _knoppen,
+      f"Windows-programma's: installeren en de onderdelen ({_knoppen})")
+w.lijst.setCurrentRow(_rijen["_android"])
+even(50)
+_knoppen = [b.text() for k in w.lokaal_kaarten for b in k.findChildren(winkel.Knop)]
+_fd = [k for k in w.lokaal_kaarten if isinstance(k, winkel.LokaleKaart)]
+klopt(("Android klaarzetten" in _knoppen or "Android-apps openen" in _knoppen) and [k.app["naam"] for k in _fd] == ["F-Droid"],
+      f"Android-apps: klaarzetten of openen, en de Android-apps die je hebt ({_knoppen})")
+# Word verwijderen (uit het startmenu), na de BugOS-vraag.
+winkel.vraag_ja = lambda *a, **k: True
+w.lijst.setCurrentRow(_rij_mijn)
+even(50)
+_word = next(k for k in w.lokaal_kaarten if isinstance(k, winkel.LokaleKaart) and k.app["naam"] == "Word")
+_word.weg.click()
+import time  # noqa: E402
+_eind = time.monotonic() + 5
+while w.lokaal_bezig is not None and time.monotonic() < _eind:
+    even(20)
+klopt(not (_eigen / "bugos-m365-word.desktop").exists() and not any(a["naam"] == "Word" for a in w.lokaal),
+      "Mijn apps: Word verwijderen haalt hem uit het startmenu")
+bugos_windows.office_uit()
+(_eigen / "waydroid.org.fdroid.fdroid.desktop").unlink()
+if _oude_dirs is None:
+    os.environ.pop("XDG_DATA_DIRS", None)
+else:
+    os.environ["XDG_DATA_DIRS"] = _oude_dirs
+w.lokaal = []
 # De gedeelde regels (bugos_apps): dezelfde voor de Winkel en Instellingen > Apps.
 import bugos_apps  # noqa: E402
 

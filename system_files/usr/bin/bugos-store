@@ -28,9 +28,10 @@ sys.path.insert(0, "/usr/lib/bugos/python")
 
 from bugos_ui import (  # noqa: E402
     TAAL, ZIJBALK_BREEDTE, Banner, Chip, IcoonChip, Kaart, Knop, Venster, Zoekveld, bestaat, draai, label,
-    lijn_icoon, maak_app, raster, start, t, uitvoeren, zoeksleutel,
+    lijn_icoon, maak_app, raster, start, t, uitvoeren, vraag_ja, zoeksleutel,
 )
 from bugos_settings_onderdelen import op_achtergrond  # noqa: E402
+import bugos_alle_apps as alle  # noqa: E402
 from bugos_ui import px  # noqa: E402
 from PySide6.QtCore import QEvent, QProcess, QProcessEnvironment, QSize, Qt, QTimer  # noqa: E402
 from PySide6.QtGui import QIcon, QKeySequence, QPixmap, QShortcut  # noqa: E402
@@ -900,6 +901,55 @@ class FlathubKaart(AppKaart):
         super().mouseReleaseEvent(e)
 
 
+class LokaleKaart(Kaart):
+    """Een app die geen Flatpak is (bugos_alle_apps): een AppImage, Windows-programma, Android-app, Microsoft 365 of
+    een app van BugOS zelf. Openen, en Verwijderen als dat kan; wat bij BugOS hoort, zegt dat in een chip."""
+
+    def __init__(self, app: dict, winkel: "Winkel"):
+        super().__init__(marge=16, ruimte=12, richting="h")
+        self.app = app
+        self.winkel = winkel
+        self.setMinimumHeight(88)
+        plaatje = QLabel()
+        icoon = app.get("icoon") or ""
+        if icoon.startswith("/") and Path(icoon).is_file():
+            ic = QIcon(icoon)
+        else:
+            ic = QIcon.fromTheme(icoon, QIcon.fromTheme("application-x-executable"))
+        plaatje.setPixmap(ic.pixmap(QSize(44, 44)))
+        plaatje.setFixedSize(48, 48)
+        self.lay.addWidget(plaatje, 0, Qt.AlignmentFlag.AlignTop)
+        blok = QVBoxLayout()
+        blok.setSpacing(4)
+        kop_rij = QHBoxLayout()
+        kop_rij.setSpacing(8)
+        kop_rij.addWidget(label(app["naam"], "kop3", wrap=False))
+        kop_rij.addStretch(1)
+        blok.addLayout(kop_rij)
+        blok.addWidget(label(app.get("uitleg", ""), "klein"))
+        blok.addStretch(1)
+        rij = QHBoxLayout()
+        rij.addStretch(1)
+        self.weg = Knop(t("Verwijderen", "Remove"), "stil")
+        self.weg.setAccessibleDescription(app["naam"])
+        self.weg.clicked.connect(lambda: self.winkel.verwijder_lokaal(self.app))
+        self.weg.setVisible(bool(app.get("verwijderbaar")))
+        rij.addWidget(self.weg)
+        self.knop = Knop(t("Openen", "Open"), "rand")
+        self.knop.setMinimumWidth(110)
+        self.knop.setAccessibleDescription(app["naam"])
+        self.knop.clicked.connect(lambda: alle.open_app(self.app))
+        rij.addWidget(self.knop)
+        blok.addLayout(rij)
+        self.lay.addLayout(blok, 1)
+        self.ververs()
+
+    def ververs(self) -> None:
+        bezig = self.winkel.lokaal_bezig == self.app["id"]
+        self.weg.setText(t("Bezig…", "Working…") if bezig else t("Verwijderen", "Remove"))
+        self.weg.setEnabled(self.winkel.lokaal_bezig is None)
+
+
 class AppPagina(QWidget):
     """De pagina van één app die niet in de BugOS-selectie staat. Bovenaan altijd 'Terug', dan de kop (pictogram,
     naam, één regel, de maker) met rechts de knoppen, een melding, en bij een Flathub-app de feiten.
@@ -1230,9 +1280,19 @@ class Winkel(Venster):
         self.lijst = self.nav
         for c in self.cat["categorieen"]:
             self.lijst.voeg_toe(c["icoon"], c["nl" if TAAL == "nl" else "en"], c["id"])
-        # 'Mijn apps' alleen als er iets te verwijderen is: daar staan alleen Flatpak-apps (zie toon()).
-        if self.flatpaks:
-            self.mijn_apps_erbij()
+        # 'Mijn apps' altijd: alle apps op de computer (2026-11, wens van de eigenaar): de Flatpaks, wat je verder
+        # installeerde (AppImage, Windows, Android, Microsoft 365) en wat bij BugOS hoort (zonder Verwijderen).
+        self.mijn_apps_erbij()
+        # Eigen onderwerpen voor wat geen gewone app uit de Winkel is.
+        self.lijst.voeg_toe("lijn:document", "Microsoft 365", "_m365")
+        self.lijst.voeg_toe("lijn:computer", t("Windows-programma's", "Windows programs"), "_windows")
+        self.lijst.voeg_toe("lijn:telefoon", t("Android-apps", "Android apps"), "_android")
+        # De apps die geen Flatpak zijn (bugos_alle_apps). Eerst zonder de Windows-programma's (snel), daarna op de
+        # achtergrond met (wine uninstaller --list duurt een paar seconden).
+        self.lokaal: list[dict] = alle.lokale_apps(met_windows=False)
+        self.lokaal_bezig: str | None = None
+        self.lokaal_kaarten: list[QWidget] = []
+        self.lokaal_laden()
         self.melding_weg = False   # zie toon(): mag een melding 'gelukt' nu weg (C-12)
         self._toon_zoek = ""       # de zoektekst bij de vorige toon()
         self.lijst.currentRowChanged.connect(lambda _: self.onderwerp_gekozen())
@@ -1920,10 +1980,14 @@ class Winkel(Venster):
 
     # ------------------------------------------------------------------
     def toon(self) -> None:
-        for k in self.kaarten:
+        for k in self.kaarten + self.lokaal_kaarten:
             self.raster.removeWidget(k)
+            k.hide()   # meteen weg (deleteLater ruimt pas later op; anders stonden oude kaarten even onder de nieuwe)
             k.deleteLater()
         self.kaarten = []
+        self.lokaal_kaarten = []
+        lokaal: list[dict] = []        # apps die geen Flatpak zijn, onder de Flatpaks
+        extra_kop = ""                 # een kopje erboven ('Ook op deze computer', 'Hoort bij BugOS')
         zoek = self.zoek.text().strip()
         if zoek and zoek != self._toon_zoek:
             self.melding_weg = True   # een nieuwe zoekopdracht: 'X is geïnstalleerd' van daarnet gaat weg (C-12)
@@ -1954,6 +2018,16 @@ class Winkel(Venster):
             ids = mijn_apps_ids(self.cat["apps"], self.flatpaks,
                                 sleutel=lambda i: zoeksleutel(naam_in_taal(self.entry_van(i))))
             apps = [picks[i] if i in picks else self.entry_van(i) for i in ids]
+            lokaal = self.lokaal
+        elif cat_id in ("_m365", "_windows", "_android"):
+            apps = []
+            self.kop.setText({"_m365": "Microsoft 365", "_windows": t("Windows-programma's", "Windows programs"),
+                              "_android": t("Android-apps", "Android apps")}[cat_id])
+            self.extra_pagina(cat_id)
+            lokaal = [a for a in self.lokaal if a["soort"] == cat_id[1:]]
+            extra_kop = {"_m365": t("In je startmenu", "In your start menu"),
+                         "_windows": t("Geïnstalleerd", "Installed"),
+                         "_android": t("Geïnstalleerd", "Installed")}[cat_id] if lokaal else ""
         else:
             apps = [a for a in self.cat["apps"] if cat_id in a["cat"]]
             item = self.lijst.item(rij)
@@ -1963,6 +2037,30 @@ class Winkel(Venster):
             kaart = FlathubKaart(app, self) if "cat" not in app else AppKaart(app, self)
             self.kaarten.append(kaart)
             self.raster.addWidget(kaart, i // self.kolommen, i % self.kolommen)
+        # Onder de Flatpaks: de rest (eerst wat je zelf installeerde, dan wat bij BugOS hoort, elk met een kopje).
+        rij_nu = (len(apps) + self.kolommen - 1) // self.kolommen + len(self.lokaal_kaarten)
+        vorige_groep = None
+        kolom = 0
+        for app in lokaal:
+            groep = "systeem" if app["soort"] == "systeem" else "eigen"
+            if groep != vorige_groep:
+                if kolom:
+                    rij_nu += 1
+                    kolom = 0
+                tekst_kop = extra_kop or (t("Hoort bij BugOS", "Part of BugOS") if groep == "systeem" else
+                                          t("Ook op deze computer", "Also on this computer"))
+                kop_w = label(tekst_kop, "kop3")
+                self.lokaal_kaarten.append(kop_w)
+                self.raster.addWidget(kop_w, rij_nu, 0, 1, max(1, self.kolommen))
+                rij_nu += 1
+                vorige_groep = groep
+            kaart = LokaleKaart(app, self)
+            self.lokaal_kaarten.append(kaart)
+            self.raster.addWidget(kaart, rij_nu, kolom)
+            kolom += 1
+            if kolom >= self.kolommen:
+                kolom = 0
+                rij_nu += 1
         for k in range(3):
             self.raster.setColumnStretch(k, 1 if k < self.kolommen else 0)
         self.onder.setVisible(not zoek)
@@ -2101,6 +2199,126 @@ class Winkel(Venster):
         # --system: zoals bugos-first-boot. Staat flathub ook bij de gebruiker (ontwikkelaarsmodus zet die neer voor wie
         # geen beheerder is), dan vroeg flatpak anders 'welke installatie?', en dat kan zonder terminal niemand zeggen.
         self.start_flatpak(["install", "--system", "-y", "flathub", app["id"]])
+
+    def extra_pagina(self, cat_id: str) -> None:
+        """Bovenaan de onderwerpen Microsoft 365, Windows-programma's en Android-apps: wat het is en wat je kunt doen."""
+        kaart = Kaart(marge=18, ruimte=10)
+        knoppen = QHBoxLayout()
+        knoppen.setSpacing(10)
+        if cat_id == "_m365":
+            import bugos_windows
+            kaart.lay.addWidget(label(t("Word, Excel, PowerPoint, Outlook en OneDrive van Microsoft, in je browser. Je "
+                                        "logt in met je Microsoft-account; je bestanden staan in OneDrive. (Office "
+                                        "zelf installeren met een .exe kan niet op BugOS.)",
+                                        "Word, Excel, PowerPoint, Outlook and OneDrive from Microsoft, in your browser. "
+                                        "You sign in with your Microsoft account; your files are in OneDrive. "
+                                        "(Installing Office itself with an .exe does not work on BugOS.)"), "sub"))
+            aan = bugos_windows.office_staat()
+            zet = Knop(t("Uit het startmenu halen", "Remove from start menu") if aan else
+                       t("In het startmenu zetten", "Add to start menu"), "rand" if aan else "hoofd")
+
+            def wissel(_c=False, aan=aan) -> None:
+                bugos_windows.office_uit() if aan else bugos_windows.office_aan()
+                self.lokaal = [a for a in self.lokaal if a["soort"] != "m365"] + ([] if aan else alle.m365_apps())
+                self.toon()
+            zet.clicked.connect(wissel)
+            knoppen.addWidget(zet)
+            for _sleutel, naam, adres, _icoon in bugos_windows.OFFICE:
+                k = Knop(naam, "stil")
+                k.clicked.connect(lambda _c=False, a=adres: start("bugos-webapp", a))
+                knoppen.addWidget(k)
+        elif cat_id == "_windows":
+            kaart.lay.addWidget(label(t("Programma's voor Windows (.exe of .msi) werken op BugOS via Wine. Niet alles "
+                                        "werkt even goed: kijk eerst of er een app voor in de Winkel staat.",
+                                        "Programs for Windows (.exe or .msi) work on BugOS through Wine. Not everything "
+                                        "works equally well: first check whether the Store has an app for it."), "sub"))
+            installeer = Knop(t("Een Windows-programma installeren…", "Install a Windows program…"), "hoofd")
+
+            def kies(_c=False) -> None:
+                from PySide6.QtWidgets import QFileDialog
+                pad, _ = QFileDialog.getOpenFileName(self, t("Een Windows-programma kiezen", "Choose a Windows program"),
+                                                     str(Path.home() / "Downloads"),
+                                                     t("Windows-programma's (*.exe *.msi)", "Windows programs (*.exe *.msi)"))
+                if pad:
+                    start("bugos-exe", pad)
+            installeer.clicked.connect(kies)
+            knoppen.addWidget(installeer)
+            meer = Knop(t("Onderdelen en instellingen", "Components and settings"), "rand")
+            meer.clicked.connect(lambda _c=False: start("bugos-windows"))
+            knoppen.addWidget(meer)
+        else:
+            try:
+                import bugos_android
+                klaar_ = bugos_android.is_klaar()
+            except (ImportError, OSError):
+                klaar_ = False
+            kaart.lay.addWidget(label(t("Android-apps en -spellen, elk in een eigen venster. Apps haal je uit F-Droid "
+                                        "(een winkel met vrije Android-apps) of installeer je met een .apk-bestand.",
+                                        "Android apps and games, each in its own window. Get apps from F-Droid (a store "
+                                        "with free Android apps) or install them with an .apk file."), "sub"))
+            if not klaar_:
+                kaart.lay.addWidget(label(t("Android staat nog niet klaar: dat is één keer ongeveer 1 GB downloaden.",
+                                            "Android is not set up yet: that is a one-time download of about 1 GB."),
+                                          "klein"))
+            hoofd = Knop(t("Android-apps openen", "Open Android apps") if klaar_ else
+                         t("Android klaarzetten", "Set up Android"), "hoofd")
+            hoofd.clicked.connect(lambda _c=False: start("bugos-android"))
+            knoppen.addWidget(hoofd)
+            if klaar_:
+                apk = Knop(t("Een .apk installeren…", "Install an .apk…"), "rand")
+
+                def kies_apk(_c=False) -> None:
+                    from PySide6.QtWidgets import QFileDialog
+                    pad, _ = QFileDialog.getOpenFileName(self, t("Een Android-app kiezen", "Choose an Android app"),
+                                                         str(Path.home() / "Downloads"), "Android (*.apk)")
+                    if pad:
+                        start("bugos-android", pad)
+                apk.clicked.connect(kies_apk)
+                knoppen.addWidget(apk)
+        knoppen.addStretch(1)
+        kaart.lay.addLayout(knoppen)
+        self.lokaal_kaarten.append(kaart)
+        self.raster.addWidget(kaart, 0, 0, 1, max(1, self.kolommen))
+
+    def lokaal_laden(self) -> None:
+        """De lijst met apps die geen Flatpak zijn opnieuw ophalen (op de achtergrond), en daarna tonen als je kijkt."""
+        def klaar(lijst) -> None:
+            if isinstance(lijst, list):
+                self.lokaal = lijst
+                rij = self.lijst.currentRow()
+                if not self.zoek.text().strip() and rij >= 0 and self.lijst.sleutel(rij) in ("_mijn", "_windows",
+                                                                                              "_android", "_m365"):
+                    self.toon()
+        op_achtergrond(self, alle.lokale_apps, klaar)
+
+    def verwijder_lokaal(self, app: dict) -> None:
+        """Een app die geen Flatpak is verwijderen. Een Windows-programma: zijn eigen verwijderprogramma (dat zelf
+        vraagt); de rest: eerst de BugOS-vraag."""
+        if self.lokaal_bezig is not None or not app.get("verwijderbaar"):
+            return
+        if app["soort"] != "windows" and not vraag_ja(
+                self, t(f"{app['naam']} verwijderen?", f"Remove {app['naam']}?"),
+                t("Microsoft 365-app: hij gaat uit je startmenu (je kunt hem in Microsoft 365 weer aanzetten)."
+                  if app["soort"] == "m365" else "De app gaat van de computer en uit je startmenu.",
+                  "Microsoft 365 app: it is removed from your start menu (turn it on again in Microsoft 365)."
+                  if app["soort"] == "m365" else "The app is removed from the computer and your start menu."),
+                t("Verwijderen", "Remove"), enter_is_nee=True):
+            return
+        self.lokaal_bezig = app["id"]
+        for k in self.lokaal_kaarten:
+            if isinstance(k, LokaleKaart):
+                k.ververs()
+        self.meld(t(f"{app['naam']} wordt verwijderd…", f"Removing {app['naam']}…"), "bezig", None)
+
+        def klaar(gelukt) -> None:
+            self.lokaal_bezig = None
+            self.meld(t(f"{app['naam']} is verwijderd.", f"{app['naam']} has been removed.") if gelukt else
+                      t(f"{app['naam']} verwijderen lukte niet.", f"Removing {app['naam']} did not work."),
+                      "goed" if gelukt else "fout", None)
+            self.lokaal = [a for a in self.lokaal if a["id"] != app["id"]] if gelukt else self.lokaal
+            self.toon()
+            self.lokaal_laden()
+        op_achtergrond(self, lambda: alle.verwijder(app), klaar)
 
     def mijn_apps_erbij(self) -> None:
         """'Mijn apps' in de zijbalk, één keer (ook na je eerste app, zonder de Winkel opnieuw te openen) (U081)."""
