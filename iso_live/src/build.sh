@@ -110,6 +110,15 @@ ls -1 /usr/lib/modules
 kernel=$(find /usr/lib/modules -mindepth 2 -maxdepth 2 -name vmlinuz -printf '%h\n' | xargs -rn1 basename | sort -V | tail -1)
 [ -n "$kernel" ] || { echo "Geen kernel (vmlinuz) gevonden in /usr/lib/modules" >&2; exit 1; }
 echo "Kernel voor de live-stick: $kernel"
+# Mappen zonder kernel (losse modules voor een kernel die er niet is) weg: ze laden op de stick toch nooit, en Titanoboa
+# (build_iso.sh) pakt /usr/lib/modules/*/initramfs.img en */vmlinuz in één keer. Met twee mappen ging het kopiëren mis
+# ('cp: target .../initrd.img: No such file or directory', ISO-bouw 2026-11-27).
+for m in /usr/lib/modules/*/; do
+    if [ "$(basename "$m")" != "$kernel" ]; then
+        echo "Weg van de stick (geen kernel): $m"
+        rm -rf -- "$m"
+    fi
+done
 # exfat: BugOS Switch (Windows) zet BugOS op een gewone exFAT-stick die in Windows bruikbaar blijft (label BUGOS,
 # root=live:LABEL=BUGOS), in plaats van de ISO er rauw op te schrijven. Daarvoor moet dit opstartbestand exFAT kunnen
 # lezen. --no-hostonly neemt alle bestandssystemen al mee; hier staat het er voor de zekerheid nog eens bij.
