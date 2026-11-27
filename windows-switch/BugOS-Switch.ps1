@@ -500,6 +500,16 @@ function Get-Uitgesloten {
         $p.Bytes += $g.Bytes
         if ($p.Plekken.Count -lt 200) { $p.Plekken.Add($g) }
     }
+    # Voor het info-scherm: elke plek ook kort, vanaf de map die meegaat (Projecten\website\node_modules).
+    foreach ($g in $gevonden) {
+        $kort = $g.Pad
+        foreach ($bron in $bronnen) {
+            if (-not $bron) { continue }
+            $b = [System.IO.Path]::GetFullPath($bron).TrimEnd('\')
+            if ($g.Pad.StartsWith($b + '\', [StringComparison]::OrdinalIgnoreCase)) { $kort = (Split-Path $b -Leaf) + $g.Pad.Substring($b.Length); break }
+        }
+        $g | Add-Member -NotePropertyName Kort -NotePropertyValue $kort -Force
+    }
     return @($perRegel.Values)
 }
 
@@ -2710,8 +2720,16 @@ function Nieuw-Lijst([double] $y, [double] $b) {
 function Nieuw-Etiket($ouder, [string] $tekst, [double] $x, [double] $y, [double] $b, [double] $h, $letter, $kleur, [switch] $Afkappen) {
     $l = New-Object System.Windows.Forms.Label
     $l.Font = $letter; $l.ForeColor = $kleur; $l.Text = $tekst
-    if ($h -le 0) { $h = (Meet-Hoogte $tekst $letter $b) + 4 }
-    Plaats $l $x $y $b $h
+    if ($h -le 0) {
+        # Hoogte 0: de tekst bepaalt zelf hoe hoog hij is (AutoSize met een vaste breedte, zoals Toon-Klaar): uitrekenen
+        # met MeasureText viel op 150% te klein uit, dan schoof de volgende regel eroverheen.
+        $l.Location = New-Object System.Drawing.Point((Px $x), (Px $y))
+        $l.MaximumSize = New-Object System.Drawing.Size((Px $b), 0)
+        $l.MinimumSize = New-Object System.Drawing.Size((Px $b), 0)
+        $l.AutoSize = $true
+    } else {
+        Plaats $l $x $y $b $h
+    }
     $l.AutoEllipsis = [bool]$Afkappen
     $ouder.Controls.Add($l)
     return $l
@@ -2891,12 +2909,15 @@ function Nieuw-InfoVenster {
     $boom.HideSelection = $true
     $boom.ItemHeight = Px 26
     $boom.Indent = Px 20
+    $boom.ShowNodeToolTips = $true
     $rand.Controls.Add($boom)
     $balk = Nieuw-Balk 32 438 300 $v
     $balk.Visible = $false
     $dicht = Nieuw-Knop (T 'Sluiten' 'Close') 488 436 120 'hoofd' $v
     $dicht.Add_Click({ $this.FindForm().Close() })
     $v.AcceptButton = $dicht; $v.CancelButton = $dicht
+    # De knop heeft de focus, niet de boom: dan staat er geen blauwe regel bovenaan.
+    $v.ActiveControl = $dicht
     $v.Tag = @{ Boom = $boom; Balk = $balk }
     $script:InfoVenster = $v
 
@@ -2924,11 +2945,17 @@ function Nieuw-InfoVenster {
                 if ($r.Mappen -gt 0) { $delen += $(if ($r.Mappen -eq 1) { T '1 map' '1 folder' } else { T "$($r.Mappen) mappen" "$($r.Mappen) folders" }) }
                 if ($r.Bestanden -gt 0) { $delen += $(if ($r.Bestanden -eq 1) { T '1 bestand' '1 file' } else { T "$($r.Bestanden) bestanden" "$($r.Bestanden) files" }) }
                 $wat = if ($delen.Count -gt 0) { ($delen -join (T ' en ' ' and ')) + ', ' + (Tekst-Grootte $r.Bytes) } else { T 'niets gevonden' 'nothing found' }
-                $tak = Takje $knoop "$($r.Regel)   —   $wat"
+                # Een hele plek kort (…\Projecten\Oud); de hele plek staat in de tooltip.
+                $naam = $r.Regel
+                if ($r.Soort -eq 'plek') { $naam = '…\' + (Split-Path (Split-Path $r.Regel -Parent) -Leaf) + '\' + (Split-Path $r.Regel -Leaf) }
+                $tak = Takje $knoop "$naam   —   $wat"
                 $tak.NodeFont = $script:LetterVet
+                $tak.ToolTipText = $r.Regel
                 foreach ($plek in $r.Plekken) {
                     $extra = if ($plek.Map) { T "  (map, $(Tekst-Grootte $plek.Bytes))" "  (folder, $(Tekst-Grootte $plek.Bytes))" } else { "  ($(Tekst-Grootte $plek.Bytes))" }
-                    [void](Takje $tak ($plek.Pad + $extra))
+                    $kort = if ($plek.PSObject.Properties['Kort']) { $plek.Kort } else { $plek.Pad }
+                    $blad = Takje $tak ($kort + $extra)
+                    $blad.ToolTipText = $plek.Pad
                 }
                 $rest = $r.Mappen + $r.Bestanden - $r.Plekken.Count
                 if ($rest -gt 0) { [void](Takje $tak (T "… en nog $rest" "… and $rest more") $Grijs) }
@@ -2952,14 +2979,14 @@ function Nieuw-InfoVenster {
     $nooit = New-Object System.Windows.Forms.TreeNode((T 'Gaat nooit mee' 'Never goes along'))
     [void]$boom.Nodes.Add($nooit)
     foreach ($regel in @(
-        (T 'Wachtwoorden: van je wifi, je browsers en Windows. BugOS vraagt ze één keer.' 'Passwords: of your Wi-Fi, your browsers and Windows. BugOS asks for them once.'),
+        (T 'Wachtwoorden van je wifi, browsers en Windows (BugOS vraagt ze één keer).' 'Passwords of your Wi-Fi, browsers and Windows (BugOS asks once).'),
         (T 'Cookies, open tabbladen en inlog-sessies van je browsers.' 'Cookies, open tabs and sign-in sessions of your browsers.'),
-        (T 'De cache van je browsers, en mappen van Firefox boven 300 MB (websites maken ze zelf opnieuw).' 'Your browser cache, and Firefox folders over 300 MB (websites make them again).'),
+        (T 'Browsercache, en Firefox-mappen boven 300 MB (websites maken ze opnieuw).' 'Browser cache, and Firefox folders over 300 MB (websites remake them).'),
         (T 'ImapMail van Thunderbird: Thunderbird haalt je mail opnieuw op.' 'Thunderbird ImapMail: Thunderbird fetches your mail again.'),
-        (T "De programma's zelf: alleen een lijstje, BugOS stelt passende apps voor." 'The programs themselves: only a list, BugOS suggests matching apps.'),
+        (T "De programma's zelf: alleen een lijstje; BugOS stelt apps voor." 'The programs themselves: only a list; BugOS suggests apps.'),
         (T 'Lettertypen van Windows zelf (die zijn van Microsoft).' 'Fonts of Windows itself (they belong to Microsoft).'),
         (T 'desktop.ini en Thumbs.db: hulpbestanden van Windows.' 'desktop.ini and Thumbs.db: helper files of Windows.'),
-        (T 'Koppelingen naar andere mappen (zoals Mijn muziek in een oude Windows).' 'Links to other folders (like My Music in an old Windows).'))) {
+        (T 'Koppelingen naar andere mappen (zoals Mijn muziek).' 'Links to other folders (like My Music).'))) {
         [void](Takje $nooit $regel)
     }
     $boom.ExpandAll()
@@ -3045,8 +3072,8 @@ $Paginas += {
     $noot.Left = Px 312; $noot.Width = Px ($script:Breedte - 312)
     $script:W.schijfNoot = $noot; $script:W.schijfY = $y
     # Past het op de gekozen schijf? (Een hint; vlak voor het kopiëren rekenen we het nog precies na.)
-    $script:W.past = Nieuw-Label '' ($y + 38) 40 $Grijs -Klein
-    $y = Nieuw-Stap '2' (T 'Kopiëren' 'Copy') ($y + 84)
+    $script:W.past = Nieuw-Label '' ($y + 38) 36 $Grijs -Klein
+    $y = Nieuw-Stap '2' (T 'Kopiëren' 'Copy') ($y + 78)
     $script:W.knop = Nieuw-Knop (T 'Bestanden kopiëren' 'Copy files') 0 $y 220 'hoofd'
     $script:W.totaal = $null
     # script: zodat de knoppen en het werk (die later draaien, buiten deze pagina) de functies ook vinden.
@@ -3088,9 +3115,9 @@ $Paginas += {
             Zet-Grootte
         }
     }
-    $script:W.balk = Nieuw-Balk 0 ($y + 54) ($script:Breedte - 4) $vlak
+    $script:W.balk = Nieuw-Balk 0 ($y + 52) ($script:Breedte - 4) $vlak
     $script:W.balk.Visible = $false
-    $script:W.status = Nieuw-Label '' ($y + 70) 66 $Grijs
+    $script:W.status = Nieuw-Label '' ($y + 66) 60 $Grijs
     if ($script:W.schijf.Items.Count -eq 0) {
         # Een lege lijst zonder uitleg: dan weet je niet wat je moet doen. Zit er wel een USB-stick in, maar zonder
         # schijf die Windows kan openen (net leeggemaakt, of een stick op de oude manier)? Dat zeggen we erbij. De uitleg
@@ -3750,7 +3777,8 @@ function Vul-Meer($p) {
 function Vul-Uit($p) {
     # Regels voor wat thuisblijft. Typen (een naam, een naam met *, of een hele plek) of een plek kiezen; 'Vaak' zet er
     # met één klik een bekende bij. Daarnaast de knop naar het info-scherm. Onder de regels, elk met 'weghalen'.
-    $y = 4 + [math]::Ceiling((Nieuw-Etiket $p (T 'Wat hier staat, blijft thuis, in alle mappen die meegaan. Typ een naam (node_modules), een naam met * als joker (*node* = alles met node erin), of kies een plek.' 'What is listed here stays home, in every folder that goes along. Type a name (node_modules), a name with * as a wildcard (*node* = everything with node in it), or choose a place.') 0 0 528 0 $script:LetterKlein $Grijs).Height / $script:Schaal)
+    $uitleg = Nieuw-Etiket $p (T 'Dit blijft thuis. Typ een naam (node_modules), een naam met * (*node* = alles met node erin), of kies een plek.' 'This stays home. Type a name (node_modules), a name with * (*node* = everything with node in it), or choose a place.') 0 0 528 0 $script:LetterKlein $Grijs
+    $y = 2 + [math]::Ceiling($uitleg.PreferredSize.Height / $script:Schaal)
     $script:W.regelVak = New-Object System.Windows.Forms.TextBox
     $vak = $script:W.regelVak
     $vak.Font = $script:LetterGewoon
@@ -3789,7 +3817,7 @@ function Vul-Uit($p) {
         })
         $menu.Show($this, (New-Object System.Drawing.Point(0, $this.Height)))
     })
-    $y += 52
+    $y += 48
     # 'Vaak': bekende dingen die meestal niet mee hoeven (een klik zet ze erbij).
     $vaak = New-Object System.Windows.Forms.LinkLabel
     $vaak.Font = $script:LetterKlein; $vaak.ForeColor = $Grijs; $vaak.LinkColor = $Inkt; $vaak.ActiveLinkColor = $RoodTekst
@@ -3804,7 +3832,7 @@ function Vul-Uit($p) {
     $p.Controls.Add($vaak)
     $info = Nieuw-Knop (T 'Wat gaat er niet mee?' 'What does not go along?') 298 $y 230 'gewoon' $p
     $info.Add_Click({ Toon-NietMeeInfo })
-    $y += 52
+    $y += 48
     if ($script:Uitsluiten.Count -eq 0) {
         [void](Nieuw-Etiket $p (T 'Nog geen regels: alles in de mappen met een vinkje gaat mee.' 'No rules yet: everything in the ticked folders goes along.') 0 ($y + 4) 528 24 $script:LetterKlein $Grijs)
         return
@@ -3992,6 +4020,7 @@ if ($Taak -eq 'Foto') {
         New-Item -ItemType Directory -Force -Path (Split-Path $pad) | Out-Null
         [System.IO.File]::WriteAllBytes($pad, (New-Object byte[] $b[1]))
     }
+    $voorbeeld = [System.IO.Path]::GetFullPath($voorbeeld)
     $script:ExtraMappen.Add($voorbeeld)
     Set-Uitsluiten @('*node*', (Join-Path $voorbeeld 'Oud'))
     [void]$script:NietMee.Add('map:Videos')
