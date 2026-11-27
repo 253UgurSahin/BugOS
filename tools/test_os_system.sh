@@ -903,7 +903,9 @@ klopt '[ "$(grep -cxF "SRC=composefs TARGET=/ ROOT=/ OPTS=x-gvfs-hide" "$BUGOS_U
     "B-06: de composefs-wortel krijgt x-gvfs-hide (één keer), wat er al in utab stond blijft"
 klopt 'grep -q "trigger --action=change --subsystem-match=block --property-match=ID_FS_UUID=boot-uuid" "$TMP/udevadm"' \
     "B-06: udev bekijkt de systeemvolumes opnieuw, zodat udisks (en KDE) het meteen weten"
-klopt 'grep -qx "systemctl enable bugos-hide-system-drives.service" "$ROOT/build_files/build.sh" && grep -q "/usr/libexec/bugos-hide-system-drives" "$ROOT/build_files/build.sh"' \
+# Uitvoerbaar: build.sh doet "chmod 0755 /usr/libexec/bugos-*" (één patroon voor alle hulpjes, sinds
+# bugos-android-root daar eens vergeten werd); de naam zelf in de chmod-regel mag ook.
+klopt 'grep -qx "systemctl enable bugos-hide-system-drives.service" "$ROOT/build_files/build.sh" && grep -qE "^chmod 0755 .*/usr/libexec/bugos-(\*|hide-system-drives)" "$ROOT/build_files/build.sh"' \
     "B-06: de dienst staat aan en het script is uitvoerbaar in het beeld"
 unset BUGOS_UDEV_REGELS BUGOS_UTAB
 
@@ -977,7 +979,7 @@ klopt 'grep -qx "LC_TIME=en_IE.UTF-8" "$f"' "Taal: geen taal en geen tijdzone: i
 e="$TMP/etc-al"; rm -rf "$e"; mkdir -p "$e/xdg"; echo "LANG=en_US.UTF-8" >"$e/locale.conf"; echo eigen >"$e/xdg/plasma-localerc"
 BUGOS_ETC="$e" BUGOS_ZONEINFO="$ZI" bash "$TS" >/dev/null 2>&1
 klopt '[ "$(cat "$e/xdg/plasma-localerc")" = eigen ]' "Taal: een bestaande /etc/xdg/plasma-localerc wordt nooit overschreven"
-klopt 'grep -qx "systemctl enable bugos-taal-standaard.service" "$ROOT/build_files/build.sh" && grep -q "/usr/libexec/bugos-taal-standaard" "$ROOT/build_files/build.sh" && sd_goed "$SD/system/bugos-taal-standaard.service" && grep -q "^Before=display-manager.service" "$SD/system/bugos-taal-standaard.service"'     "Taal: de dienst staat aan, is uitvoerbaar en draait vóór het inlogscherm"
+klopt 'grep -qx "systemctl enable bugos-taal-standaard.service" "$ROOT/build_files/build.sh" && grep -qE "^chmod 0755 .*/usr/libexec/bugos-(\*|taal-standaard)" "$ROOT/build_files/build.sh" && sd_goed "$SD/system/bugos-taal-standaard.service" && grep -q "^Before=display-manager.service" "$SD/system/bugos-taal-standaard.service"'     "Taal: de dienst staat aan, is uitvoerbaar en draait vóór het inlogscherm"
 if command -v shellcheck >/dev/null 2>&1; then
     klopt 'shellcheck "$TS"' "Taal: shellcheck vindt niets in bugos-taal-standaard"
 fi
