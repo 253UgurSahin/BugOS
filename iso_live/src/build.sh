@@ -97,13 +97,19 @@ if [ "$(rpm -q --qf '%{VENDOR}' kernel-core)" != "Fedora Project" ]; then
     dnf --setopt=protect_running_kernel=False -y remove "${kernel_pkgs[@]}" || true
     (cd /usr/lib/modules && rm -rf -- ./*)
     dnf -y --repo fedora,updates --setopt=tsflags=noscripts install kernel kernel-core
-    depmod "$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d -printf '%P\n' | head -1)"
+    depmod "$(find /usr/lib/modules -mindepth 2 -maxdepth 2 -name vmlinuz -printf '%h\n' | xargs -rn1 basename | sort -V | tail -1)"
 fi
 dnf install -yq nvidia-gpu-firmware || true
 
 # Live-opstartbestand (initramfs) maken.
 dnf install -y dracut-live
-kernel=$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d -printf '%P\n' | head -1)
+# De kernel van dit beeld: de map in /usr/lib/modules met een vmlinuz. Niet zomaar de eerste map: een pakket met losse
+# modules voor een nieuwere kernel (een kmod) maakt er ook een, zonder de kernel zelf. Die werd gekozen, en dan
+# 'kernel module overlay is not available' en geen exfat (ISO-bouw 2026-11-27). Bij meer kernels: de nieuwste.
+ls -1 /usr/lib/modules
+kernel=$(find /usr/lib/modules -mindepth 2 -maxdepth 2 -name vmlinuz -printf '%h\n' | xargs -rn1 basename | sort -V | tail -1)
+[ -n "$kernel" ] || { echo "Geen kernel (vmlinuz) gevonden in /usr/lib/modules" >&2; exit 1; }
+echo "Kernel voor de live-stick: $kernel"
 # exfat: BugOS Switch (Windows) zet BugOS op een gewone exFAT-stick die in Windows bruikbaar blijft (label BUGOS,
 # root=live:LABEL=BUGOS), in plaats van de ISO er rauw op te schrijven. Daarvoor moet dit opstartbestand exFAT kunnen
 # lezen. --no-hostonly neemt alle bestandssystemen al mee; hier staat het er voor de zekerheid nog eens bij.

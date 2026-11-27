@@ -290,7 +290,9 @@ install -m0644 "${UITZET%/*}/bugos-aftellen.js" /usr/share/plasma/look-and-feel/
 # Opstartlogo (Plymouth): het BugOS-logo onderaan het opstartscherm.
 if [ -d /usr/share/plymouth/themes/spinner ]; then
     install -m0644 /usr/share/bugos/plymouth-watermark.png /usr/share/plymouth/themes/spinner/watermark.png
-    KERNEL="$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d -printf '%P\n' | head -1)"
+    # De map met de echte kernel (vmlinuz), niet zomaar de eerste: een kmod-pakket kan een map voor een andere kernel
+    # maken zonder de kernel zelf (zie iso_live/src/build.sh).
+    KERNEL="$(find /usr/lib/modules -mindepth 2 -maxdepth 2 -name vmlinuz -printf '%h\n' | xargs -rn1 basename | sort -V | tail -1)"
     # Eerst naar een tijdelijk bestand: lukt het niet, dan blijft het oude gewoon staan.
     if dracut --no-hostonly --kver "$KERNEL" --reproducible --zstd --add ostree -f /tmp/initramfs-bugos.img; then
         install -m0600 /tmp/initramfs-bugos.img "/usr/lib/modules/$KERNEL/initramfs.img"

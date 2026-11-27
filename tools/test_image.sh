@@ -72,6 +72,18 @@ klopt '[ -z "$slecht" ]' "rechten: elk /usr/bin/bugos-* is 0755 ${slecht}"
 slecht="$(find /usr/lib/bugos /usr/share/bugos /usr/lib/systemd/system/bugos-* /usr/lib/systemd/user/bugos-* -perm -o+w 2>/dev/null | head -5)"
 klopt '[ -z "$slecht" ]' "rechten: niets van BugOS is door iedereen te veranderen ${slecht}"
 
+# Kernel: een map in /usr/lib/modules met de echte kernel (vmlinuz). Een map zonder vmlinuz bevat modules van een
+# pakket voor een andere kernel: die laden nooit, en de ISO-bouw koos zo'n map eens als 'de kernel' (2026-11-27).
+# Voorlopig een waarschuwing met het pakket erbij, zodat duidelijk is waar het vandaan komt.
+kernels="$(find /usr/lib/modules -mindepth 2 -maxdepth 2 -name vmlinuz -printf '%h\n' | xargs -rn1 basename | tr '\n' ' ')"
+klopt '[ -n "$kernels" ]' "kernel: er staat een kernel in het beeld ($kernels)"
+for m in /usr/lib/modules/*/; do
+    [ -e "${m}vmlinuz" ] && continue
+    ko="$(find "$m" -name '*.ko*' 2>/dev/null | head -5)"
+    van="$( { [ -n "$ko" ] && xargs -r rpm -qf <<<"$ko"; } 2>/dev/null | sort -u | tr '\n' ' ')"
+    echo "LET OP kernel: $(basename "$m") heeft geen vmlinuz; $(find "$m" -name '*.ko*' | wc -l) modules, van: ${van:-?}"
+done
+
 # 3. App-starters en hun pictogrammen
 for d in /usr/share/applications/bugos-*.desktop; do
     uit="$(desktop-file-validate "$d" 2>&1 | grep -v -i 'hint:' || true)"
