@@ -65,7 +65,7 @@ void Schil::sneltoetsenAanmelden()
     auto aanmelden = [bus]() mutable {
         // Alleen de Meta-toets (Qt::Key_Meta, zoals kglobalaccel hem bij 'alleen Meta' meldt), en Alt+F1.
         const QList<Sneltoets> toetsen{Sneltoets{{int(Qt::Key_Meta), 0, 0, 0}},
-                                       Sneltoets{{int(Qt::ALT | Qt::Key_F1), 0, 0, 0}}};
+                                       Sneltoets{{(Qt::ALT | Qt::Key_F1).toCombined(), 0, 0, 0}}};
         auto bericht = [](const QString &methode) {
             return QDBusMessage::createMethodCall(KGLOBALACCEL, QStringLiteral("/kglobalaccel"),
                                                   QStringLiteral("org.kde.KGlobalAccel"), methode);
