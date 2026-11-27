@@ -105,7 +105,9 @@ The most important idea: **BugOS can't break.**
 1. Check: can this PC run BugOS? It looks at 64-bit, memory, UEFI, space, BitLocker and Nvidia.
 2. Take along: documents, photos, music, videos, desktop, downloads, bookmarks and background go to a USB drive, plus other folders you pick (also on D:), your own fonts, Thunderbird (without passwords) and Outlook files. Before copying it says how much goes along and whether it fits, asks about files that are only in OneDrive (download first, or leave them), and warns about files of 4 GB or more on a FAT32 drive.
 3. Make room: Windows is made smaller, so BugOS fits next to it.
-4. Make the USB stick: BugOS is downloaded automatically (the right version for your graphics card), checked and put on the USB stick.
+4. Make the USB stick: BugOS is downloaded automatically (the right version for your graphics card), checked and put on the USB stick. The stick stays usable in Windows (like Ventoy): one normal exFAT drive called BUGOS with BugOS on it and the rest free for your own files, plus a small hidden boot part (FAT32, type EF). The Switch reads the ISO itself (it has no Joliet names and a file over 4 GB) and changes grub.cfg to `root=live:LABEL=BUGOS`. Only an ISO with the mark `bugos.stick=2` (its initrd reads exFAT, `iso_live/src/build.sh`) goes this way; an older ISO is written raw, the old way. **Make stick normal again** turns any stick (also one from the old way) back into one empty drive.
+
+All heavy work runs next to the window (a runspace, or a hidden administrator task that writes its progress to a file), so the window never says "Not responding": the bar moves, the text says what happens, and Back/Next wait. `-Taak Zelftest` (in `windows-switch.yml`) checks this on a real Windows computer, with a test ISO (`tools/switch_test_iso.py`) and a fake USB stick (a VHD).
 
 ### The bakery (`.github/workflows/`)
 

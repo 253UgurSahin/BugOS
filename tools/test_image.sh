@@ -72,6 +72,18 @@ klopt '[ -z "$slecht" ]' "rechten: elk /usr/bin/bugos-* is 0755 ${slecht}"
 slecht="$(find /usr/lib/bugos /usr/share/bugos /usr/lib/systemd/system/bugos-* /usr/lib/systemd/user/bugos-* -perm -o+w 2>/dev/null | head -5)"
 klopt '[ -z "$slecht" ]' "rechten: niets van BugOS is door iedereen te veranderen ${slecht}"
 
+# Kernel: een map in /usr/lib/modules met de echte kernel (vmlinuz). Een map zonder vmlinuz bevat modules van een
+# pakket voor een andere kernel: die laden nooit, en de ISO-bouw koos zo'n map eens als 'de kernel' (2026-11-27).
+# Voorlopig een waarschuwing met het pakket erbij, zodat duidelijk is waar het vandaan komt.
+kernels="$(find /usr/lib/modules -mindepth 2 -maxdepth 2 -name vmlinuz -printf '%h\n' | xargs -rn1 basename | tr '\n' ' ')"
+klopt '[ -n "$kernels" ]' "kernel: er staat een kernel in het beeld ($kernels)"
+for m in /usr/lib/modules/*/; do
+    [ -e "${m}vmlinuz" ] && continue
+    ko="$(find "$m" -name '*.ko*' 2>/dev/null | head -5)"
+    van="$( { [ -n "$ko" ] && xargs -r rpm -qf <<<"$ko"; } 2>/dev/null | sort -u | tr '\n' ' ')"
+    echo "LET OP kernel: $(basename "$m") heeft geen vmlinuz; $(find "$m" -name '*.ko*' | wc -l) modules, van: ${van:-?}"
+done
+
 # 3. App-starters en hun pictogrammen
 for d in /usr/share/applications/bugos-*.desktop; do
     uit="$(desktop-file-validate "$d" 2>&1 | grep -v -i 'hint:' || true)"
@@ -93,6 +105,23 @@ for u in flatpak-system-update.timer uupd.timer rpm-ostree-countme.timer; do
     klopt '[ "$(systemctl is-enabled "$u" 2>/dev/null)" = masked ]' "dienst: $u van de basis staat uit (masked)"
 done
 klopt '[ "$(systemctl --global is-enabled bugos-updatecheck.timer 2>/dev/null)" = enabled ]' "dienst: bugos-updatecheck.timer staat aan voor elke gebruiker"
+# Het inlogscherm: Plasma Login blijft de standaard; SDDM met het BugOS-thema staat klaar voor de proef
+# (bugos-inlogscherm, docs/STANDALONE.md).
+if [ -f /usr/lib/systemd/system/plasmalogin.service ]; then
+    klopt '[ "$(readlink /etc/systemd/system/display-manager.service)" = /usr/lib/systemd/system/plasmalogin.service ]' \
+        "inlogscherm: Plasma Login is de standaard (ook nu SDDM erbij staat)"
+fi
+if [ -x /usr/bin/sddm ]; then
+    klopt '[ -f /usr/share/sddm/themes/bugos/Main.qml ] && [ -f /usr/lib/sddm/sddm.conf.d/50-bugos.conf ] && command -v sddm-greeter-qt6 >/dev/null' \
+        "inlogscherm: SDDM met het BugOS-thema en de Qt 6-versie van het inlogscherm staan klaar"
+fi
+klopt '[ -f /usr/share/plasma/shells/org.bugos.schil/contents/lockscreen/LockScreen.qml ]' "vergrendelscherm: het BugOS-pakket staat erin"
+# Fase 4: de gewone sessie heet 'BugOS' (het nieuwe bureaublad), met 'BugOS klassiek (Plasma)' ernaast.
+if [ -f /usr/share/wayland-sessions/plasma.desktop ]; then
+    klopt 'grep -qx "Name=BugOS" /usr/share/wayland-sessions/plasma.desktop && [ -f /usr/share/wayland-sessions/bugos-klassiek.desktop ]' \
+        "inlogscherm: de sessies 'BugOS' en 'BugOS klassiek (Plasma)'"
+fi
+klopt '[ -x /usr/bin/bugos-shell ] && [ "$(/usr/bin/bugos-schil kies)" = nieuw ]' "het nieuwe bureaublad is de standaard (bugos-shell is gebouwd)"
 klopt 'grep -qx "UPDATES=auto" /etc/bugos/updates.conf' "updates: standaard automatisch"
 klopt 'grep -q "^AutomaticUpdatePolicy=stage" /etc/rpm-ostreed.conf' "updates: rpm-ostree zet updates klaar (stage)"
 # IPv6, connect, not running: meldingen van de bouwcontainer zelf, geen fouten in de diensten.
@@ -239,10 +268,17 @@ if [ -d "$REPO/tools" ]; then
     T="$(mktemp -d)"
     cp -a "$REPO/." "$T/"
     for t in qml-test test_files test_task_manager test_settings test_start_data test_help test_backup test_logout test_edges test_os_settings test_os_apps test_menus; do
-        if (cd "$T" && timeout 300 python3 "tools/$t.py" >"$T/$t.log" 2>&1); then ok "repo-test: $t"; else fout "repo-test: $t ($(grep -E '^FOUT|Error' "$T/$t.log" | head -3 | tr '\n' ' '))"; fi
+        if (cd "$T" && timeout 300 python3 "tools/$t.py" >"$T/$t.log" 2>&1); then ok "repo-test: $t"; else
+            fout "repo-test: $t ($(grep -E '^FOUT|Error' "$T/$t.log" | head -3 | tr '\n' ' '))"
+            grep -qE '^FOUT|Error' "$T/$t.log" || tail -n 15 "$T/$t.log" | sed 's/^/      | /'
+        fi
     done
     for t in test_package test_game_mode test_light_mode test_panel test_exe test_signed test_windows_start test_os_system; do
-        if (cd "$T" && timeout 300 bash "tools/$t.sh" >"$T/$t.log" 2>&1); then ok "repo-test: $t"; else fout "repo-test: $t ($(grep -E '^FOUT' "$T/$t.log" | head -3 | tr '\n' ' '))"; fi
+        if (cd "$T" && timeout 300 bash "tools/$t.sh" >"$T/$t.log" 2>&1); then ok "repo-test: $t"; else
+            fout "repo-test: $t ($(grep -E '^FOUT' "$T/$t.log" | head -3 | tr '\n' ' '))"
+            # Geen FOUT-regel (afgebroken, tijd om)? Dan de laatste regels, anders weet je niet wat er was.
+            grep -q '^FOUT' "$T/$t.log" || tail -n 15 "$T/$t.log" | sed 's/^/      | /'
+        fi
     done
 fi
 

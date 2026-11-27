@@ -531,10 +531,19 @@ def beeldschermen() -> list[Beeldscherm] | None:
     de grootte, zoals vroeger)."""
     if _c.VOORBEELD:
         return lees_beeldschermen(json.dumps(_c._VB["kscreen"])) or None
-    code, uit = _c.draai("kscreen-doctor", "-j", timeout=8)
-    if code != 0:
-        return None
-    return lees_beeldschermen(uit) or None
+    # Ruim de tijd (het gebeurt op de achtergrond) en één keer opnieuw: net na het inloggen of op een trage computer
+    # duurde kscreen-doctor langer dan de 8 s van vroeger, en dan verdwenen spiegelen en uitbreiden zonder uitleg
+    # (VM-test 2026-11-27: 12 s).
+    for poging in range(2):
+        code, uit = _c.draai("kscreen-doctor", "-j", timeout=20)
+        if code == 127:
+            return None   # kscreen-doctor is er niet
+        lijst = lees_beeldschermen(uit) if code == 0 else []
+        if lijst:
+            return lijst
+        if not poging:
+            time.sleep(1.5)
+    return None
 
 
 def grootste_schaal(s: Beeldscherm) -> float:
@@ -1242,6 +1251,62 @@ def eigen_achtergrond_map() -> Path:
     return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "wallpapers" / "bugos-eigen"
 
 
+def bewaar_schil_achtergrond(pad: str) -> bool:
+    """Bewaar de gekozen achtergrond voor de eigen BugOS-schil: ~/.config/bugos/achtergrond (één regel, het pad).
+    Veilig: eerst een tijdelijk bestand, dan in één keer op zijn plek."""
+    try:
+        map_ = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "bugos"
+        map_.mkdir(parents=True, exist_ok=True)
+        tijdelijk = map_ / ".achtergrond.nieuw"
+        tijdelijk.write_text(pad + "\n", encoding="utf-8")
+        os.replace(tijdelijk, map_ / "achtergrond")
+        return True
+    except OSError:
+        return False
+
+
+# De taakbalk van de eigen BugOS-schil (Shell.qml leest ~/.config/bugos/taakbalkstijl en ziet het meteen veranderen).
+TAAKBALK_GROOTTES = ("klein", "normaal", "groot")
+TAAKBALK_UITLIJNINGEN = ("links", "midden")
+
+
+def _taakbalkstijl_pad() -> Path:
+    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "bugos" / "taakbalkstijl"
+
+
+def taakbalkstijl() -> dict[str, str]:
+    """{'grootte': klein|normaal|groot, 'uitlijning': links|midden}; wat ontbreekt of niet klopt: de standaard."""
+    try:
+        import json
+        gegevens = json.loads(_taakbalkstijl_pad().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        gegevens = {}
+    if not isinstance(gegevens, dict):
+        gegevens = {}
+    return {"grootte": gegevens.get("grootte") if gegevens.get("grootte") in TAAKBALK_GROOTTES else "normaal",
+            "uitlijning": gegevens.get("uitlijning") if gegevens.get("uitlijning") in TAAKBALK_UITLIJNINGEN else "links"}
+
+
+def zet_taakbalkstijl(**wat: str) -> bool:
+    """Eén of beide instellingen veranderen (grootte=..., uitlijning=...). Veilig: eerst een tijdelijk bestand."""
+    import json
+    stijl = taakbalkstijl()
+    for sleutel, waarde in wat.items():
+        geldig = {"grootte": TAAKBALK_GROOTTES, "uitlijning": TAAKBALK_UITLIJNINGEN}.get(sleutel, ())
+        if waarde not in geldig:
+            return False
+        stijl[sleutel] = waarde
+    try:
+        pad = _taakbalkstijl_pad()
+        pad.parent.mkdir(parents=True, exist_ok=True)
+        tijdelijk = pad.with_name(".taakbalkstijl.nieuw")
+        tijdelijk.write_text(json.dumps(stijl) + "\n", encoding="utf-8")
+        os.replace(tijdelijk, pad)
+        return True
+    except OSError:
+        return False
+
+
 def zet_achtergrond(pad: str) -> bool:
     if _c.VOORBEELD:
         return True
@@ -1261,7 +1326,13 @@ def zet_achtergrond(pad: str) -> bool:
                 pad = str(doel)
         except OSError:
             pass   # kopiëren lukt niet (vol?): dan het origineel gebruiken
-    gelukt = _c.draai("plasma-apply-wallpaperimage", pad, timeout=15)[0] == 0
+    # De eigen BugOS-schil (bugos-shell, docs/STANDALONE.md) leest de achtergrond uit ~/.config/bugos/achtergrond.
+    # Altijd bewaren, ook in de gewone sessie: dan klopt hij ook in de proefsessie met de nieuwe schil.
+    bewaard = bewaar_schil_achtergrond(pad)
+    if os.environ.get("BUGOS_SCHIL") == "1":
+        gelukt = bewaard   # geen Plasma in deze sessie: de schil ziet het bestand veranderen
+    else:
+        gelukt = _c.draai("plasma-apply-wallpaperimage", pad, timeout=15)[0] == 0
     if gelukt:
         # Pas na het instellen de oude eigen foto's weg (lukte het niet, dan blijft de vorige gewoon staan) (U343).
         try:

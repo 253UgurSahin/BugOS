@@ -113,7 +113,11 @@ def zet_wifi(aan: bool) -> bool:
     return _c.draai("nmcli", "radio", "wifi", "on" if aan else "off")[0] == 0
 
 
-def netwerken(opnieuw_zoeken: bool = False) -> list[Netwerk]:
+def netwerken(opnieuw_zoeken: bool = False, zoeken: bool = True) -> list[Netwerk]:
+    """De wifi-netwerken in de buurt. Gewoon (de pagina Wifi) zoekt nmcli opnieuw als zijn lijst ouder is dan een halve
+    minuut; dat duurt een paar seconden. opnieuw_zoeken: altijd opnieuw zoeken. zoeken=False: niet zoeken, alleen wat
+    NetworkManager al weet; dat is meteen klaar, en het netwerk waarmee je verbonden bent staat er altijd bij (genoeg
+    voor 'Verbonden met ...' op Start)."""
     if _c.VOORBEELD:
         if not _c._VB["wifi"]:
             return []
@@ -126,7 +130,7 @@ def netwerken(opnieuw_zoeken: bool = False) -> list[Netwerk]:
             n.verbonden = n.naam == _c._VB["verbonden"]
         return sorted(lijst, key=lambda x: (not x.verbonden, -x.sterkte))
     _, uit = _c.draai("nmcli", "-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY", "device", "wifi", "list", "--rescan",
-                   "yes" if opnieuw_zoeken else "auto", timeout=25)
+                   "yes" if opnieuw_zoeken else "auto" if zoeken else "no", timeout=25)
     return lees_netwerken(uit)
 
 

@@ -1,7 +1,8 @@
 #!/usr/bin/bash
 # bugos-first-boot - zet de standaard-apps klaar als gewone Flatpak-apps van Flathub (als systeemdienst).
 #
-# Welke apps: /usr/share/bugos/standaard-apps.txt (Firefox, LibreOffice, VLC, Gwenview, Okular en Steam).
+# Welke apps: /usr/share/bugos/standaard-apps.txt (LibreOffice, VLC, Gwenview, Okular en Steam). De browser kies je zelf
+# in Welkom (bugos-browser); alleen wie BugOS al had toen Firefox er vanzelf bij zat, houdt Firefox (zie BLIJVERS).
 # Waarom Flatpaks: die kun je verwijderen in de Winkel ('Mijn apps') en in Instellingen > Apps, en later weer
 # installeren. Firefox en Steam zaten vroeger als pakket in BugOS zelf; die kon je niet verwijderen.
 #
@@ -81,6 +82,24 @@ while IFS= read -r regel; do
     fi
     TE_DOEN+=("$id")
 done <"$LIJST"
+
+# Firefox staat niet meer in de lijst: bij een nieuwe installatie kies je je browser zelf in Welkom (bugos-browser,
+# 2026-11-24). Maar een computer die BugOS al had, kreeg Firefox vroeger vanzelf (eerst als pakket in BugOS, later als
+# Flatpak). Daar mag de browser niet ineens wegvallen.
+#  - Een nieuwe computer (nog nooit een eerste start gedaan): Firefox telt meteen als 'klaargezet', dus nooit vanzelf.
+#  - Een computer die de eerste start al deed, maar Firefox nooit kreeg (hij zat toen als pakket in BugOS): nu alsnog,
+#    één keer. Wie Firefox zelf verwijderde, staat al in KLAARGEZET en krijgt hem niet terug.
+BLIJVERS=(org.mozilla.firefox)
+for id in "${BLIJVERS[@]}"; do
+    grep -qxF "$id" "$KLAARGEZET" && continue
+    if [ ! -f "$KLAAR" ] && [ ! -f "$OUD_KLAAR2" ]; then
+        echo "$id" >>"$KLAARGEZET"
+    elif flatpak info --system "$id" >/dev/null 2>&1; then
+        echo "$id" >>"$KLAARGEZET"
+    else
+        TE_DOEN+=("$id")
+    fi
+done
 
 # Al eens helemaal klaar en je doet je updates zelf: dan alleen de vervangers (regel 5).
 if [ -f "$KLAAR" ] && [ "${#TE_DOEN[@]}" -gt 0 ] && ! /usr/bin/bugos-updates mag-vanzelf 2>/dev/null; then

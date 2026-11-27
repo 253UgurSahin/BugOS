@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Install Linux program (BugOS)
+Name[nl]=Linux-programma installeren (BugOS)
+Comment=Install programs from websites (AppImage) in your start menu
+Comment[nl]=Programma's van websites (AppImage) in je startmenu zetten
+Exec=bugos-appimage %f
+Icon=bugos-package
+MimeType=application/vnd.appimage;application/x-iso9660-appimage;application/x-appimage;application/x-makeself;
+NoDisplay=true
+Terminal=false

@@ -1,0 +1,222 @@
+#!/usr/bin/python3
+"""BugOS: een Linux-programma van een website openen of installeren (AppImage, of een .run-installatiescript).
+
+    bugos-appimage <bestand>             het venster: 'Installeren' (in je startmenu), 'Alleen openen', quarantaine
+    bugos-appimage installeer <bestand>  zonder venster; schrijft de naam
+    bugos-appimage start <pad> [args]    een AppImage starten (de starters in het startmenu doen dit; zonder FUSE 2
+                                         pakt het hem eerst uit)
+    bugos-appimage lijst                 de geïnstalleerde AppImages (id, naam)
+    bugos-appimage verwijder <id>        een geïnstalleerde AppImage weg (ook in Instellingen > Geïnstalleerde apps)
+
+De logica staat in /usr/lib/bugos/python/bugos_appimage.py.
+"""
+
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/bugos/python")
+
+import bugos_appimage as ai  # noqa: E402
+
+GEBRUIK = __doc__.split("De logica")[0]
+
+
+def cli(args: list[str]) -> int:
+    wat = args[0]
+    if wat == "start" and len(args) >= 2:
+        return 0 if ai.start(args[1], args[2:]) else 1
+    if wat == "installeer" and len(args) == 2:
+        gelukt, uit = ai.installeer(args[1])
+        print(uit["naam"] if gelukt else uit)
+        return 0 if gelukt else 1
+    if wat == "lijst" and len(args) == 1:
+        for a in ai.lijst():
+            print(f"{a['id']}\t{a['naam']}")
+        return 0
+    if wat == "verwijder" and len(args) == 2:
+        return 0 if ai.verwijder(args[1]) else 1
+    print(GEBRUIK, file=sys.stderr)
+    return 2
+
+
+def venster(pad: Path) -> int:
+    from bugos_ui import Banner, Kaart, Knop, icoon, label, maak_app, start, t, uitvoeren, zet_label_icoon
+    from PySide6.QtCore import Qt, QTimer
+    from PySide6.QtGui import QIcon, QPixmap
+    from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+
+    class Venster(QWidget):
+        def __init__(self):
+            super().__init__()
+            self.pad = pad
+            self.soort = "appimage" if ai.is_appimage(pad) else "script" if ai.is_installatiescript(pad) else "onbekend"
+            self.setWindowTitle(t("Programma installeren", "Install program"))
+            self.resize(560, 360)
+            lay = QVBoxLayout(self)
+            lay.setContentsMargins(28, 24, 28, 20)
+            lay.setSpacing(14)
+            kop = QHBoxLayout()
+            kop.setSpacing(14)
+            self.icoon = QLabel()
+            self.icoon.setFixedSize(56, 56)
+            kop.addWidget(self.icoon, 0, Qt.AlignmentFlag.AlignTop)
+            teksten = QVBoxLayout()
+            self.titel = label("", "titel")
+            self.sub = label(pad.name, "sub")
+            teksten.addWidget(self.titel)
+            teksten.addWidget(self.sub)
+            kop.addLayout(teksten, 1)
+            lay.addLayout(kop)
+            self.uitleg = Kaart(marge=16, ruimte=6)
+            self.uitleg_tekst = label("", "klein")
+            self.uitleg.lay.addWidget(self.uitleg_tekst)
+            lay.addWidget(self.uitleg)
+            self.melding = Banner("", "info")
+            lay.addWidget(self.melding)
+            lay.addStretch(1)
+            knoppen = QHBoxLayout()
+            knoppen.setSpacing(8)
+            self.hoofd = Knop("", "hoofd")
+            self.tweede = Knop("", "gewoon")
+            self.derde = Knop(t("In quarantaine proberen", "Try in quarantine"), "stil", "lijn:slot")
+            self.sluit = Knop(t("Annuleren", "Cancel"), "gewoon")
+            self.sluit.clicked.connect(self.close)
+            self.derde.clicked.connect(self.quarantaine)
+            knoppen.addWidget(self.derde)
+            knoppen.addStretch(1)
+            knoppen.addWidget(self.tweede)
+            knoppen.addWidget(self.sluit)
+            knoppen.addWidget(self.hoofd)
+            lay.addLayout(knoppen)
+            self.geinstalleerd: dict | None = None
+            self.vul()
+
+        def vul(self) -> None:
+            self.derde.setVisible(self.soort == "appimage" and bool(shutil.which("bugos-quarantaine")))
+            if self.soort == "appimage":
+                # Naam en pictogram uit het programma zelf, als dat kan zonder het te veranderen (uitvoerbaar).
+                # (Uitvoerbaar maken mag: dat doet installeren ook. Op een USB-stick kan het soms niet; dan de naam
+                # uit de bestandsnaam.)
+                if not os.access(self.pad, os.X_OK):
+                    ai.maak_uitvoerbaar(self.pad)
+                info = ai.lees_info(self.pad)
+                naam = info["naam"]
+                if info.get("icoon"):
+                    zet_label_icoon(self.icoon, QIcon(QPixmap(str(info["icoon"]))), 56)   # nu laden: de map gaat zo weg
+                else:
+                    zet_label_icoon(self.icoon, icoon("lijn:doos"), 56)
+                if info.get("tijdelijk"):
+                    shutil.rmtree(info["tijdelijk"], ignore_errors=True)
+                self.naam = naam
+                self.titel.setText(t(f"{naam} installeren?", f"Install {naam}?"))
+                self.uitleg_tekst.setText(t(
+                    "Dit is een Linux-programma van een website (AppImage). Met Installeren komt het in je startmenu, "
+                    "met zijn eigen naam en pictogram. Weghalen kan later in Instellingen > Geïnstalleerde apps.\n\n"
+                    "Installeer alleen programma's die je vertrouwt. Kijk ook even in de Winkel: daar krijgt een app "
+                    "vanzelf updates.",
+                    "This is a Linux program from a website (AppImage). Install puts it in your start menu, with its "
+                    "own name and icon. You can remove it later in Settings > Installed apps.\n\n"
+                    "Only install programs you trust. Also have a look in the Store: apps from there get updates by "
+                    "themselves."))
+                self.hoofd.setText(t("Installeren", "Install"))
+                self.tweede.setText(t("Alleen openen", "Just open"))
+                self.hoofd.clicked.connect(self.installeren)
+                self.tweede.clicked.connect(self.openen)
+            elif self.soort == "script":
+                zet_label_icoon(self.icoon, icoon("lijn:code"), 56)
+                self.titel.setText(t("Installatieprogramma openen?", "Open installer?"))
+                self.uitleg_tekst.setText(t(
+                    "Dit is een installatieprogramma voor Linux (een script). Het opent in een venster met tekst, "
+                    "waar je ziet wat het doet en vragen kunt beantwoorden. Sommige vragen om je wachtwoord.\n\n"
+                    "Installeer alleen programma's die je vertrouwt. Staat het programma in de Winkel, haal het dan "
+                    "liever daar: dan krijgt het vanzelf updates.",
+                    "This is an installer for Linux (a script). It opens in a text window, where you can see what it "
+                    "does and answer questions. Some ask for your password.\n\n"
+                    "Only install programs you trust. If the program is in the Store, get it there instead: then it "
+                    "gets updates by itself."))
+                self.hoofd.setText(t("Openen", "Open"))
+                self.tweede.setText(t("Kijk in de Winkel", "Look in the Store"))
+                self.hoofd.clicked.connect(self.script)
+                self.tweede.clicked.connect(lambda: (start("bugos-store"), self.close()))
+            else:
+                zet_label_icoon(self.icoon, icoon("lijn:uitroep"), 56)
+                self.titel.setText(t("Dit programma kent BugOS niet", "BugOS does not know this program"))
+                self.uitleg_tekst.setText(t(
+                    "Dit is geen AppImage en geen installatieprogramma. Is de download misschien niet helemaal "
+                    "gelukt? Kijk anders in de Winkel of er een versie voor BugOS is.",
+                    "This is not an AppImage and not an installer. Maybe the download did not finish? Otherwise, "
+                    "check the Store for a BugOS version."))
+                self.hoofd.setText(t("Kijk in de Winkel", "Look in the Store"))
+                self.hoofd.clicked.connect(lambda: (start("bugos-store"), self.close()))
+                self.tweede.hide()
+                self.sluit.setText(t("Sluiten", "Close"))
+
+        def installeren(self) -> None:
+            if self.geinstalleerd is not None:   # na het installeren is de hoofdknop 'Openen'
+                ai.start(self.geinstalleerd["pad"])
+                self.close()
+                return
+            for k in (self.hoofd, self.tweede, self.derde):
+                k.setEnabled(False)
+            self.melding.zet(t("Bezig met installeren…", "Installing…"), "bezig")
+            QApplication.processEvents()
+            gelukt, uit = ai.installeer(self.pad)
+            for k in (self.hoofd, self.tweede, self.derde):
+                k.setEnabled(True)
+            if not gelukt:
+                self.melding.zet(t("Je computer is vol. Maak eerst ruimte en probeer het dan nog eens.",
+                                   "Your computer is full. Make room first and then try again.") if uit == "geen-ruimte"
+                                 else t("Installeren lukte niet. Is de download helemaal gelukt?",
+                                        "Installing did not work. Did the download finish?"), "fout")
+                return
+            self.geinstalleerd = uit
+            self.titel.setText(t(f"{uit['naam']} is geïnstalleerd", f"{uit['naam']} is installed"))
+            extra = t(" Het gedownloade bestand is meeverhuisd; je hoeft het niet te bewaren.",
+                      " The downloaded file has moved along; you do not need to keep it.") if uit["verplaatst"] else ""
+            self.melding.zet(t(f"Je vindt {uit['naam']} in het startmenu.", f"You can find {uit['naam']} in the "
+                               "start menu.") + extra, "goed")
+            self.hoofd.setText(t("Openen", "Open"))
+            self.tweede.hide()
+            self.derde.hide()
+            self.sluit.setText(t("Sluiten", "Close"))
+
+        def openen(self) -> None:
+            if ai.start(self.pad):
+                self.close()
+            else:
+                self.melding.zet(t("Openen lukte niet.", "Could not open it."), "fout")
+
+        def script(self) -> None:
+            try:
+                subprocess.Popen(ai.script_opdracht(self.pad), start_new_session=True)
+                self.close()
+            except OSError:
+                self.melding.zet(t("Openen lukte niet.", "Could not open it."), "fout")
+
+        def quarantaine(self) -> None:
+            start("bugos-quarantaine", "--venster", str(self.pad))
+            self.close()
+
+    app = QApplication.instance() or maak_app("bugos-appimage", "bugos-appimage", sys.argv)
+    w = Venster()
+    QTimer.singleShot(0, w.hoofd.setFocus)
+    return uitvoeren(app, w)
+
+
+def main(args: list[str]) -> int:
+    if args[:1] in (["-h"], ["--help"]):
+        print(GEBRUIK)
+        return 0
+    if args and args[0] in ("start", "installeer", "lijst", "verwijder"):
+        return cli(args)
+    if len(args) == 1 and Path(args[0]).is_file():
+        return venster(Path(args[0]).resolve())
+    print(GEBRUIK, file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

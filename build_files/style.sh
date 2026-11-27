@@ -254,6 +254,13 @@ Image=file:///usr/share/wallpapers/bugos/contents/images_dark/3840x2160.jpg
 PreviewImage=file:///usr/share/wallpapers/bugos/contents/screenshot.jpg
 EOF
 fi
+# Fase 4 (docs/STANDALONE.md): de gewone sessie is het nieuwe BugOS-bureaublad (bugos-schil), dus op het inlogscherm
+# heet hij 'BugOS', niet 'Plasma (Wayland)'. Het klassieke bureaublad is de sessie 'BugOS klassiek (Plasma)'.
+if [ -f /usr/share/wayland-sessions/plasma.desktop ]; then
+    sed -i -e '/^Name\[/d' -e '/^Comment\[/d' -e 's/^Name=.*/Name=BugOS/' \
+        -e 's/^Comment=.*/Comment=The BugOS desktop/' /usr/share/wayland-sessions/plasma.desktop
+    grep -qx 'Name=BugOS' /usr/share/wayland-sessions/plasma.desktop
+fi
 # Oudere systemen met SDDM: daar ook de BugOS-achtergrond.
 if [ -d /usr/share/sddm/themes/breeze ]; then
     printf '[General]\nbackground=/usr/share/wallpapers/bugos/contents/images_dark/3840x2160.jpg\ntype=image\n' \
@@ -283,7 +290,9 @@ install -m0644 "${UITZET%/*}/bugos-aftellen.js" /usr/share/plasma/look-and-feel/
 # Opstartlogo (Plymouth): het BugOS-logo onderaan het opstartscherm.
 if [ -d /usr/share/plymouth/themes/spinner ]; then
     install -m0644 /usr/share/bugos/plymouth-watermark.png /usr/share/plymouth/themes/spinner/watermark.png
-    KERNEL="$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d -printf '%P\n' | head -1)"
+    # De map met de echte kernel (vmlinuz), niet zomaar de eerste: een kmod-pakket kan een map voor een andere kernel
+    # maken zonder de kernel zelf (zie iso_live/src/build.sh).
+    KERNEL="$(find /usr/lib/modules -mindepth 2 -maxdepth 2 -name vmlinuz -printf '%h\n' | xargs -rn1 basename | sort -V | tail -1)"
     # Eerst naar een tijdelijk bestand: lukt het niet, dan blijft het oude gewoon staan.
     if dracut --no-hostonly --kver "$KERNEL" --reproducible --zstd --add ostree -f /tmp/initramfs-bugos.img; then
         install -m0600 /tmp/initramfs-bugos.img "/usr/lib/modules/$KERNEL/initramfs.img"
@@ -311,10 +320,14 @@ hernoem org.kde.konsole.desktop "Terminal" "Terminal"
 # KDE-instellingen: hun eigen sneltoetsen eraf (U322).
 sed -i 's/^X-KDE-Shortcuts=Meta+E$//' /usr/share/applications/org.kde.dolphin.desktop
 sed -i 's/^X-KDE-Shortcuts=Tools,Meta+I$/X-KDE-Shortcuts=Tools/; s/^X-KDE-Shortcuts=Meta+I$//' /usr/share/applications/systemsettings.desktop
+# Print Screen en Windows+Shift+S openen het BugOS-Knipprogramma (bugos-knip), zoals in Windows. Spectacle blijft er
+# als de motor die de foto maakt (stil, op de achtergrond), maar zonder die sneltoetsen en niet in het startmenu.
+sed -i 's/^X-KDE-Shortcuts=Print,Meta+Shift+S$//; s/^X-KDE-Shortcuts=Meta+Shift+Print$//' \
+    /usr/share/applications/org.kde.spectacle.desktop
 # KDE leest de standaard-sneltoets (X-KDE-Shortcuts) van een app alleen uit /usr/share/kglobalaccel/. Zonder die
 # koppeling deden Ctrl+Shift+Esc (Taakbeheer), Windows+E (Bestanden) en Windows+I (Instellingen) niets.
 mkdir -p /usr/share/kglobalaccel
-for app in bugos-task-manager bugos-files bugos-settings; do
+for app in bugos-task-manager bugos-files bugos-settings bugos-knip; do
     ln -sf "../applications/$app.desktop" "/usr/share/kglobalaccel/$app.desktop"
 done
 
@@ -363,7 +376,8 @@ done
 for app in org.dosbox-staging.dosbox-staging.desktop firewall-config.desktop org.kde.kfind.desktop     org.kde.krfb.desktop org.kde.krfb.virtualmonitor.desktop kvantummanager.desktop; do
     verberg "$app"
 done
-hernoem org.kde.spectacle.desktop "Schermafbeelding" "Screenshot"
+# Spectacle: vervangen door het Knipprogramma (bugos-knip), dat Spectacle zelf als motor gebruikt.
+verberg org.kde.spectacle.desktop
 # 'Teksteditor' is de eenvoudige KWrite (zoals Kladblok), niet Kate: Kate is een editor voor programmeurs, met
 # LSP, projecten, git en sessies, en dat schrikt af (A-14). Kate blijft er, onder zijn eigen naam. Is KWrite er
 # (onverwacht) niet, dan blijft Kate de Teksteditor, anders is er helemaal geen.

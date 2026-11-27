@@ -1,0 +1,321 @@
+#!/usr/bin/python3
+"""BugOS Android-apps (Waydroid): Android-apps op je computer, elke app in een eigen venster.
+
+    bugos-android                 het venster (klaarzetten, F-Droid, een .apk installeren, starten/stoppen, verwijderen)
+    bugos-android <bestand.apk>   het venster, en die app installeren (dubbelklik op een .apk)
+    bugos-android status          geen | niet-klaar | uit | aan
+    bugos-android klaarzetten     Android klaarzetten (ongeveer 1 GB; vraagt één keer je wachtwoord)
+    bugos-android installeer <bestand.apk>
+    bugos-android fdroid          F-Droid (de vrije Android-appwinkel) installeren
+    bugos-android start | stop
+    bugos-android verwijderen     Android met alle Android-apps en hun gegevens van de computer
+
+De logica staat in /usr/lib/bugos/python/bugos_android.py.
+"""
+
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/bugos/python")
+
+import bugos_android as a  # noqa: E402
+
+GEBRUIK = __doc__.split("De logica")[0]
+
+
+def tt(nl: str, en: str) -> str:
+    from bugos_base import t
+    return t(nl, en)
+
+
+def cache() -> Path:
+    return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "bugos" / "android"
+
+
+def root(opdracht: str) -> int:
+    """Het beheerdersdeel via pkexec (één keer je wachtwoord); wat het zegt, gaat door naar stdout."""
+    try:
+        return subprocess.call(["pkexec", a.ROOT_HULP, opdracht])
+    except OSError:
+        return 127
+
+
+def cli(args: list[str]) -> int:
+    wat = args[0]
+    if wat == "status":
+        print(a.status())
+        return 0
+    if wat == "klaarzetten":
+        return root("klaarzetten")
+    if wat == "installeer" and len(args) == 2:
+        gelukt, naam = a.installeer(args[1])
+        print(naam)
+        return 0 if gelukt else 1
+    if wat == "fdroid":
+        apk = a.fdroid_halen(cache())
+        if apk is None:
+            print("download-mislukt")
+            return 1
+        gelukt, naam = a.installeer(str(apk))
+        print(naam)
+        return 0 if gelukt else 1
+    if wat == "start":
+        return 0 if a.start() else 1
+    if wat == "stop":
+        return 0 if a.stop() else 1
+    if wat == "verwijderen":
+        a.stop()
+        code = root("verwijderen")
+        if code == 0:
+            a.eigen_gegevens_weg()
+        return code
+    print(GEBRUIK, file=sys.stderr)
+    return 2
+
+
+# ================================================================================================ venster ===
+
+def venster(apk: str) -> int:
+    from bugos_ui import Banner, Chip, Kaart, Knop, label, maak_app, t, uitvoeren, vraag_ja
+    from PySide6.QtCore import QProcess, QTimer
+    from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QProgressBar, QVBoxLayout, QWidget
+
+    class Android(QWidget):
+        def __init__(self):
+            super().__init__()
+            self.setWindowTitle(t("Android-apps", "Android apps"))
+            self.resize(640, 520)
+            self.apk = apk
+            self.proces: QProcess | None = None
+            self.klus = ""
+            lay = QVBoxLayout(self)
+            lay.setContentsMargins(32, 28, 32, 24)
+            lay.setSpacing(14)
+            kop = QHBoxLayout()
+            kop.addWidget(label(t("Android-apps", "Android apps"), "titel"), 1)
+            self.chip = Chip("", "grijs")
+            kop.addWidget(self.chip)
+            lay.addLayout(kop)
+            self.uitleg = label("", "sub")
+            lay.addWidget(self.uitleg)
+            self.grens = Kaart(marge=16, ruimte=6)
+            self.grens.lay.addWidget(label(t(
+                "Goed om te weten: Google Play zit er niet in (dat mag BugOS niet meeleveren). Apps haal je uit "
+                "F-Droid of als .apk-bestand. Apps die Google nodig hebben (zoals sommige bank-apps) en apps die "
+                "alleen voor telefoons gemaakt zijn, werken niet.",
+                "Good to know: Google Play is not included (BugOS may not ship it). Get apps from F-Droid or as an "
+                ".apk file. Apps that need Google (like some banking apps) and apps made only for phones do not "
+                "work."), "klein"))
+            lay.addWidget(self.grens)
+            self.melding = Banner("", "info")
+            self.melding.hide()
+            lay.addWidget(self.melding)
+            self.balk = QProgressBar()
+            self.balk.setRange(0, 0)
+            self.balk.setTextVisible(False)
+            self.balk.setFixedHeight(6)
+            self.balk.hide()
+            lay.addWidget(self.balk)
+            self.voortgang = label("", "klein")
+            self.voortgang.hide()
+            lay.addWidget(self.voortgang)
+            lay.addStretch(1)
+
+            self.knoppen = QVBoxLayout()
+            self.knoppen.setSpacing(10)
+            self.klaarzetten = Knop(t("Android klaarzetten", "Set up Android"), "hoofd", groot=True)
+            self.klaarzetten.clicked.connect(lambda: self.doe("klaarzetten"))
+            self.fdroid = Knop(t("Appwinkel F-Droid installeren", "Install the F-Droid app store"), "hoofd", "lijn:ster")
+            self.fdroid.clicked.connect(lambda: self.doe("fdroid"))
+            self.apk_knop = Knop(t("Een .apk-bestand installeren…", "Install an .apk file…"), "gewoon", "lijn:download")
+            self.apk_knop.clicked.connect(self.kies_apk)
+            rij = QHBoxLayout()
+            self.aanuit = Knop("", "gewoon")
+            self.aanuit.clicked.connect(lambda: self.doe("stop" if self.stand == "aan" else "start"))
+            self.weg = Knop(t("Android verwijderen…", "Remove Android…"), "stil")
+            self.weg.clicked.connect(self.verwijderen)
+            rij.addWidget(self.aanuit)
+            rij.addStretch(1)
+            rij.addWidget(self.weg)
+            for k in (self.klaarzetten, self.fdroid, self.apk_knop):
+                self.knoppen.addWidget(k)
+            self.knoppen.addLayout(rij)
+            lay.addLayout(self.knoppen)
+            self.stand = ""
+            self.ververs()
+            if self.apk:
+                QTimer.singleShot(0, self.vraag_apk)
+
+        # ------------------------------------------------------------------ stand
+        def ververs(self) -> None:
+            self.stand = a.status()
+            bezig = self.proces is not None
+            teksten = {
+                "geen": (t("Niet beschikbaar", "Not available"), "let_op",
+                         t("Android-apps zijn er nog niet op deze BugOS. Werk BugOS bij in Instellingen.",
+                           "Android apps are not available on this BugOS yet. Update BugOS in Settings.")),
+                "niet-klaar": (t("Nog niet klaar", "Not set up yet"), "grijs",
+                               t("Speel Android-spellen en gebruik Android-apps, elke app in een eigen venster. Eerst "
+                                 "zet BugOS Android klaar: dat is ongeveer 1 GB downloaden en vraagt één keer je "
+                                 "wachtwoord.",
+                                 "Play Android games and use Android apps, each app in its own window. First BugOS "
+                                 "sets up Android: about 1 GB to download, and it asks for your password once.")),
+                "uit": (t("Klaar", "Ready"), "goed",
+                        t("Android-apps staan in het startmenu. Dubbelklik op een .apk-bestand om een app te "
+                          "installeren, of haal apps uit F-Droid.",
+                          "Android apps are in the start menu. Double-click an .apk file to install an app, or get "
+                          "apps from F-Droid.")),
+                "aan": (t("Android draait", "Android is running"), "goed",
+                        t("Android-apps staan in het startmenu. Dubbelklik op een .apk-bestand om een app te "
+                          "installeren, of haal apps uit F-Droid.",
+                          "Android apps are in the start menu. Double-click an .apk file to install an app, or get "
+                          "apps from F-Droid.")),
+            }
+            chip, soort, uitleg = teksten[self.stand]
+            self.chip.setText(chip)
+            self.chip.soort = soort
+            self.chip.thema_veranderd()
+            self.uitleg.setText(uitleg)
+            klaar = self.stand in ("uit", "aan")
+            self.klaarzetten.setVisible(self.stand == "niet-klaar")
+            for k in (self.fdroid, self.apk_knop, self.aanuit, self.weg):
+                k.setVisible(klaar)
+            self.aanuit.setText(t("Android stoppen", "Stop Android") if self.stand == "aan"
+                                else t("Android starten", "Start Android"))
+            for k in (self.klaarzetten, self.fdroid, self.apk_knop, self.aanuit, self.weg):
+                k.setEnabled(not bezig)
+
+        def toon(self, tekst: str, soort: str = "info") -> None:
+            self.melding.zet(tekst, soort)
+            self.melding.show()
+
+        # ------------------------------------------------------------------ klussen (in bugos-android zelf, los)
+        def doe(self, klus: str, *extra: str) -> None:
+            if self.proces is not None:
+                return
+            self.klus = klus
+            self.proces = QProcess(self)
+            self.proces.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+            self.proces.readyReadStandardOutput.connect(self.lees)
+            self.proces.finished.connect(self.klaar)
+            self.uitvoer = ""
+            self.balk.show()
+            self.voortgang.setText({
+                "klaarzetten": t("Android wordt klaargezet. Dit kan een kwartier duren…", "Setting up Android. This can take 15 minutes…"),
+                "fdroid": t("F-Droid wordt gedownload en geïnstalleerd…", "Downloading and installing F-Droid…"),
+                "installeer": t("De app wordt geïnstalleerd…", "Installing the app…"),
+                "start": t("Android start…", "Starting Android…"),
+                "stop": t("Android stopt…", "Stopping Android…"),
+                "verwijderen": t("Android wordt verwijderd…", "Removing Android…"),
+            }.get(klus, ""))
+            self.voortgang.show()
+            self.melding.hide()
+            self.ververs()
+            self.proces.start(sys.executable, [os.path.abspath(__file__), klus, *extra])
+
+        def lees(self) -> None:
+            nieuw = bytes(self.proces.readAllStandardOutput()).decode(errors="ignore")
+            self.uitvoer = (self.uitvoer + nieuw)[-20000:]
+            regels = [r.strip() for r in self.uitvoer.replace("\r", "\n").splitlines() if r.strip()]
+            if regels and self.klus == "klaarzetten":
+                self.voortgang.setText(t("Android wordt klaargezet: ", "Setting up Android: ") + regels[-1][-90:])
+
+        def klaar(self, code: int, _status) -> None:
+            self.lees()   # wat er op het laatst nog kwam
+            klus, uit = self.klus, self.uitvoer.strip().splitlines()
+            laatste = uit[-1].strip() if uit else ""
+            self.proces.deleteLater()
+            self.proces = None
+            self.balk.hide()
+            self.voortgang.hide()
+            self.ververs()
+            if klus == "klaarzetten":
+                if code == 0:
+                    self.toon(t("Android staat klaar. Installeer nu F-Droid om apps te vinden.",
+                                "Android is ready. Now install F-Droid to find apps."), "goed")
+                    if self.apk:
+                        QTimer.singleShot(0, self.vraag_apk)
+                elif code == 126:
+                    self.toon(t("Er was geen toestemming: het venster werd gesloten of het wachtwoord was niet goed. "
+                                "Probeer het nog eens.",
+                                "Permission was not given: the window was closed or the password was not right. "
+                                "Please try again."), "let_op")
+                elif code == 127:
+                    # pkexec zelf kon niet: geen toestemmingsvenster (agent), of het hulpje ontbreekt. Zeg wat hij zei.
+                    reden = next((r for r in reversed(uit) if r.strip()), "")
+                    self.toon(t("Het toestemmingsvenster kon niet openen. Log uit en weer in, en probeer het nog eens.",
+                                "The permission window could not open. Sign out and in again, and try again.")
+                              + (f" ({reden})" if reden else ""), "let_op")
+                else:
+                    self.toon(t("Klaarzetten lukte niet. Heb je internet? Probeer het nog eens.",
+                                "Setting up did not work. Are you online? Please try again."), "fout")
+            elif klus in ("installeer", "fdroid"):
+                if code == 0:
+                    self.toon(t(f"{laatste} is geïnstalleerd. Je vindt hem in het startmenu.",
+                                f"{laatste} is installed. You can find it in the start menu."), "goed")
+                elif laatste == "download-mislukt":
+                    self.toon(t("F-Droid downloaden lukte niet. Heb je internet?",
+                                "Downloading F-Droid did not work. Are you online?"), "fout")
+                elif laatste == "start-niet":
+                    self.toon(t("Android startte niet. Start de computer opnieuw op en probeer het nog eens.",
+                                "Android did not start. Restart the computer and try again."), "fout")
+                else:
+                    self.toon(t("Installeren lukte niet. Misschien is deze app alleen voor telefoons gemaakt.",
+                                "Installing did not work. Maybe this app is made only for phones."), "fout")
+            elif klus == "verwijderen" and code == 0:
+                self.toon(t("Android is van de computer.", "Android has been removed."), "goed")
+            elif code != 0:
+                self.toon(t("Dat lukte niet.", "That did not work."), "fout")
+
+        # ------------------------------------------------------------------ keuzes
+        def vraag_apk(self) -> None:
+            pad, self.apk = self.apk, ""
+            if not a.is_apk(pad):
+                self.toon(t("Dit is geen Android-app (.apk).", "This is not an Android app (.apk)."), "fout")
+                return
+            if a.status() == "niet-klaar":
+                self.apk = pad   # na het klaarzetten verder
+                self.toon(t(f"Zet eerst Android klaar; daarna installeert BugOS {Path(pad).name}.",
+                            f"Set up Android first; then BugOS installs {Path(pad).name}."), "info")
+                return
+            if vraag_ja(self, t("Deze Android-app installeren?", "Install this Android app?"),
+                        t(f"{Path(pad).name}\n\nInstalleer alleen apps die je vertrouwt.",
+                          f"{Path(pad).name}\n\nOnly install apps you trust."),
+                        t("Installeren", "Install")):
+                self.doe("installeer", pad)
+
+        def kies_apk(self) -> None:
+            pad, _ = QFileDialog.getOpenFileName(self, t("Een Android-app kiezen", "Choose an Android app"),
+                                                 str(Path.home() / "Downloads"), "Android-app (*.apk)")
+            if pad:
+                self.apk = pad
+                self.vraag_apk()
+
+        def verwijderen(self) -> None:
+            if vraag_ja(self, t("Android verwijderen?", "Remove Android?"),
+                        t("Alle Android-apps en hun gegevens gaan weg. Je kunt Android later opnieuw klaarzetten.",
+                          "All Android apps and their data are removed. You can set up Android again later."),
+                        t("Verwijderen", "Remove"), enter_is_nee=True):
+                self.doe("verwijderen")
+
+    app = QApplication.instance() or maak_app("bugos-android", "bugos-android", sys.argv)
+    return uitvoeren(app, Android())
+
+
+def main(args: list[str]) -> int:
+    if args[:1] in (["-h"], ["--help"]):
+        print(GEBRUIK)
+        return 0
+    if args and args[0] in ("status", "klaarzetten", "installeer", "fdroid", "start", "stop", "verwijderen"):
+        return cli(args)
+    # Geen opdracht, of een bestand (dubbelklik op een .apk): het venster. Iets anders: de uitleg.
+    if args and not Path(args[0]).is_file():
+        print(GEBRUIK, file=sys.stderr)
+        return 2
+    return venster(args[0] if args else "")
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 
@@ -10,7 +11,7 @@ import bugos_ui
 from bugos_ui import (Chip, Groep, KeuzeKaart, Knop, Rij, Voortgang, label, leeg_groep, lijn_icoon, schermmaat, sectie,
                       t)
 from bugos_settings_onderdelen import (Blad, Doorloop, Keuzes, KiesDialoog, Kolommen, Regelaar, dichtstbij,
-                                       op_achtergrond, schuifje)
+                                       op_achtergrond, schuifje, tegelijk)
 from bugos_settings_systeem import Schakelaars
 from PySide6.QtCore import QProcess, QSize, Qt, QTimer
 from PySide6.QtGui import QPixmap
@@ -95,7 +96,10 @@ class GeluidPagina(Blad):
         self.mic_lijst = kaart_zonder_kop(self.lay)
 
     def ververs(self) -> None:
-        op_achtergrond(self, lambda: (*bi.geluid(), bi.microfoon()), self.toon)
+        def lees():
+            geluid, mic = tegelijk(bi.geluid, bi.microfoon)   # tegelijk, niet na elkaar (zie tegelijk)
+            return (*geluid, mic)
+        op_achtergrond(self, lees, self.toon)
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:
@@ -477,6 +481,15 @@ class SchermPagina(Blad):
         self.kies = Wissel(keuzes_voor([], titel_kies, self.kies_scherm))
         self.kies_rij = Rij("computer", titel_kies, "", self.kies)
         self.schermen_kaart.voeg(self.kies_rij)
+        # Er zijn twee schermen, maar kscreen-doctor gaf niets: zeg dat, in plaats van spiegelen en uitbreiden stil weg
+        # te laten (VM-test 2026-11-27).
+        opnieuw = Knop(t("Opnieuw proberen", "Try again"), "gewoon", "lijn:verversen")
+        opnieuw.clicked.connect(lambda _c=False: self.ververs())
+        self.fout_rij = Rij("uitroep", t("Je schermen konden niet gelezen worden", "Your screens could not be read"),
+                            t("Uitbreiden en hetzelfde beeld komen hier zodra dat lukt.",
+                              "Extend and duplicate appear here once that works."), opnieuw)
+        self.schermen_kaart.voeg(self.fout_rij)
+        self.fout_rij.hide()
         self.schermen_kop.hide()
         self.schermen_kaart.hide()
         # Het beeld van (het gekozen) scherm. Zonder gegevens van kscreen-doctor alleen de grootte, zoals vroeger.
@@ -541,9 +554,10 @@ class SchermPagina(Blad):
 
     def ververs(self) -> None:
         def lees():
-            schermen = bi.beeldschermen()   # één keer kscreen-doctor (de grootte staat erin)
+            # één keer kscreen-doctor (de grootte staat erin); de rest tegelijk (zie tegelijk)
+            schermen, helder, nacht = tegelijk(bi.beeldschermen, bi.helderheid, bi.nachtlicht)
             hoofd = next((s for s in schermen or [] if s.hoofd), None)
-            return bi.helderheid(), bi.nachtlicht(), hoofd.schaal if hoofd else bi.schaal(), schermen
+            return helder, nacht, hoofd.schaal if hoofd else bi.schaal(), schermen
         op_achtergrond(self, lees, self.toon)
 
     def toon(self, uitkomst) -> None:
@@ -573,8 +587,13 @@ class SchermPagina(Blad):
         """De kaart 'Je schermen': uitbreiden, hetzelfde beeld, of maar één aan; en welk scherm je instelt."""
         lijst = self._schermen or []
         meer = self.meer_schermen()
-        self.schermen_kop.setVisible(meer)
-        self.schermen_kaart.setVisible(meer)
+        from PySide6.QtGui import QGuiApplication
+        niet_gelezen = self._schermen is None and len(QGuiApplication.screens()) >= 2 and not bi.VOORBEELD
+        self.fout_rij.setVisible(niet_gelezen)
+        self.stand_rij.setVisible(not niet_gelezen)
+        self.kies_rij.setVisible(not niet_gelezen)
+        self.schermen_kop.setVisible(meer or niet_gelezen)
+        self.schermen_kaart.setVisible(meer or niet_gelezen)
         if not meer:
             self._gekozen = None
             return
@@ -935,8 +954,9 @@ class EnergiePagina(Blad):
         g.voeg(self.deksel_rij)
 
     def ververs(self) -> None:
-        op_achtergrond(self, lambda: (bi.batterij(), bi.energieprofiel(), bi.scherm_uit_na(), bi.slaap_na(),
-                                      bi.aanuit_knop(), bi.deksel(), bi.tijden_profiel(), bi.batterij_tijd()), self.toon)
+        op_achtergrond(self, lambda: tegelijk(bi.batterij, bi.energieprofiel, bi.scherm_uit_na, bi.slaap_na,
+                                              bi.aanuit_knop, bi.deksel, bi.tijden_profiel, bi.batterij_tijd),
+                       self.toon)
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:
@@ -1070,14 +1090,48 @@ class UiterlijkPagina(Schakelaars, Blad):
         self.eigen = Knop(t("Eigen foto kiezen…", "Choose your own photo…"), "gewoon", "lijn:foto")
         self.eigen.clicked.connect(self.kies_foto)
         self.lay.addWidget(self.eigen, 0, Qt.AlignmentFlag.AlignLeft)
+        # Fase 4 (docs/STANDALONE.md): het nieuwe BugOS-bureaublad is de standaard; uit = het klassieke (Plasma). Werkt
+        # bij de volgende keer inloggen (bugos-schil). Op het inlogscherm staat ook altijd 'BugOS klassiek'.
+        if bugos_ui.bestaat("bugos-schil") or bi.VOORBEELD:
+            b = self.kaart(t("Bureaublad", "Desktop"))
+            b.voeg(Rij("huis", t("Het nieuwe BugOS-bureaublad", "The new BugOS desktop"),
+                       t("Uit: het klassieke bureaublad (Plasma). Werkt na opnieuw inloggen.",
+                         "Off: the classic desktop (Plasma). Takes effect after signing in again."),
+                       self.schakel("bugos-schil", "bureaublad")))
+        # De taakbalk van het nieuwe bureaublad: grootte en waar de knoppen staan (Shell.qml ziet het meteen).
+        # Het klassieke bureaublad heeft daarvoor de taakbalk van Plasma (rechtermuisknop > Bewerken).
+        if os.environ.get("BUGOS_SCHIL") == "1" or bi.VOORBEELD:
+            alleen_schil = os.environ.get("BUGOS_SCHIL") == "1" and not bi.VOORBEELD
+            tb = self.kaart(t("Taakbalk", "Taskbar") if alleen_schil
+                            else t("Taakbalk van het nieuwe bureaublad", "Taskbar of the new desktop"))
+            self.tb_grootte = Keuzes([("klein", t("Klein", "Small")), ("normaal", t("Normaal", "Normal")),
+                                      ("groot", t("Groot", "Large"))])
+            self.tb_grootte.setObjectName("taakbalkGrootte")
+            self.tb_grootte.gekozen.connect(lambda w: self.zet_taakbalk(grootte=w))
+            tb.voeg(Rij("laptop", t("Grootte", "Size"),
+                        t("Klein past meer op je scherm; groot is makkelijker te raken.",
+                          "Small leaves more room; large is easier to hit."), self.tb_grootte))
+            self.tb_plek = Keuzes([("links", t("Links", "Left")), ("midden", t("In het midden", "Centred"))])
+            self.tb_plek.setObjectName("taakbalkPlek")
+            self.tb_plek.gekozen.connect(lambda w: self.zet_taakbalk(uitlijning=w))
+            tb.voeg(Rij("apps", t("Start en je apps", "Start and your apps"),
+                        t("Links zoals Windows 10, in het midden zoals Windows 11.",
+                          "Left like Windows 10, centred like Windows 11."), self.tb_plek))
+            stijl = bi.taakbalkstijl()
+            self.tb_grootte.zet(stijl["grootte"])
+            self.tb_plek.zet(stijl["uitlijning"])
+        # De taakbalk van het klassieke bureaublad (bugos-panel stelt Plasma in). Het nieuwe bureaublad heeft die
+        # altijd: daar zou 'BugOS-startmenu: uit' alleen verwarren.
+        if os.environ.get("BUGOS_SCHIL") == "1" and not bi.VOORBEELD:
+            return
         g = self.kaart(t("Taakbalk", "Taskbar"))
         for onderdeel, ic, (nl, en), (unl, uen) in (
                 ("startmenu", "apps", ("BugOS-startmenu", "BugOS start menu"),
                  ("De Windows-toets of Alt+F1 opent het. Uit: het eenvoudige menu van KDE.",
                   "The Windows key or Alt+F1 opens it. Off: KDE's plain menu.")),
                 ("snelmenu", "schakelaar", ("Snelmenu op de taakbalk", "Quick menu on the taskbar"),
-                 ("Grote knoppen voor wifi, bluetooth, game-modus, donker, niet storen en geluid.",
-                  "Big buttons for Wi-Fi, Bluetooth, game mode, dark, do not disturb and sound."))):   # (U476)
+                 ("Knoppen voor wifi, bluetooth, niet storen, nachtlampje, donker en game-modus, en het volume.",
+                  "Buttons for Wi-Fi, Bluetooth, do not disturb, night light, dark and game mode, and the volume."))):   # (U476)
             g.voeg(Rij(ic, t(nl, en), t(unl, uen), self.schakel("bugos-panel", onderdeel)))
 
     def ververs(self) -> None:
@@ -1101,6 +1155,13 @@ class UiterlijkPagina(Schakelaars, Blad):
                 self.melding.toon(t("Dat lukte niet. Probeer het nog eens.", "That did not work. Try again."), "fout")
                 self.ververs()
         op_achtergrond(self, lambda: bi.zet_donker(donker), klaar)
+
+    def zet_taakbalk(self, **wat: str) -> None:
+        if not bi.zet_taakbalkstijl(**wat):
+            self.melding.toon(t("Dat lukte niet.", "That did not work."), "fout")
+            stijl = bi.taakbalkstijl()
+            self.tb_grootte.zet(stijl["grootte"])
+            self.tb_plek.zet(stijl["uitlijning"])
 
     def zet_achtergrond(self, pad: str) -> None:
         op_achtergrond(self, lambda: bi.zet_achtergrond(pad), lambda ok: self.melding.toon(

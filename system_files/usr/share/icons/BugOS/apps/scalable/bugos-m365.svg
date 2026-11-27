@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+<rect x="4" y="4" width="19" height="19" rx="5" fill="#185ABD"/><rect x="25" y="4" width="19" height="19" rx="5" fill="#107C41"/>
+<rect x="4" y="25" width="19" height="19" rx="5" fill="#C43E1C"/><rect x="25" y="25" width="19" height="19" rx="5" fill="#0F6CBD"/>
+<g font-family="Inter, 'Segoe UI', 'Noto Sans', sans-serif" font-weight="700" font-size="13" fill="#fff" text-anchor="middle">
+<text x="13.5" y="18.5">W</text><text x="34.5" y="18.5">X</text><text x="13.5" y="39.5">P</text><text x="34.5" y="39.5">O</text></g>
+</svg>

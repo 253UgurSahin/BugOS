@@ -56,6 +56,12 @@ aan)
         echo "Kon het bestand niet schrijven." >&2
         exit 1
     fi
+    # Staat SDDM er ook (de proef met het BugOS-inlogscherm, bugos-inlogscherm), dan daar hetzelfde: zo blijft het
+    # werken als je van inlogscherm wisselt.
+    if [ "$MAP" != /etc/sddm.conf.d ] && [ -x /usr/bin/sddm ]; then
+        mkdir -p /etc/sddm.conf.d
+        cp -f "$BESTAND" /etc/sddm.conf.d/50-bugos-login.conf 2>/dev/null || true
+    fi
     echo aan
     ;;
 uit)

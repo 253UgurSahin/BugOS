@@ -100,6 +100,8 @@ def test_app_menu(app: QGuiApplication, start: QQuickView) -> None:
     _eigen = teksten(roep(wortel, "appMenuVoor", eigen))
     klopt(_eigen == ["Openen", "Losmaken van Start", "Vastmaken aan taakbalk"],
           f"app-menu: een app van BugOS zelf: geen 'Verwijderen'; vastgezet: 'Losmaken van Start' ({_eigen})")
+    _q = teksten(roep(wortel, "appMenuVoor", dict(APP, quarantaine=True)))
+    klopt(_q[:2] == ["Openen", "Openen in quarantaine"], f"app-menu: 'Openen in quarantaine' direct onder Openen ({_q})")
     klopt(teksten(roep(wortel, "appMenuVoor", INSTELLING)) == ["Openen"],
           "app-menu: een pagina van Instellingen (zoeken): alleen 'Openen'")
     wortel.setProperty("gegevens", dict(GEGEVENS, taakbalk_kan=False))
@@ -235,7 +237,8 @@ def main() -> int:
     # main.qml van het startmenu: de nieuwe opdrachten met aanhalingstekens, en welke antwoorden nieuwe gegevens zijn.
     smain = (ROOT / "org.bugos.startmenu/contents/ui/main.qml").read_text(encoding="utf-8")
     klopt(all(x in smain for x in ('--actie " + root.aanhalen(pad) + " " + root.aanhalen(actie)',
-                                   "root.aanhalen(id)", '--verwijder " + root.aanhalen(flatpak)')),
+                                   "root.aanhalen(id)", '--verwijder " + root.aanhalen(flatpak)',
+                                   '--quarantaine " + root.aanhalen(pad)')),
           "app-menu: main.qml geeft pad, actie, id en Flatpak-id tussen aanhalingstekens door")
     m = re.search(r"function geeftGegevens\(bron\) \{.*?\n    \}", smain, re.S)
     klopt(m is not None, "app-menu: main.qml weet welke antwoorden nieuwe gegevens zijn")

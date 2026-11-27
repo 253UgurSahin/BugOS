@@ -1,0 +1,73 @@
+#!/usr/bin/bash
+# bugos-schil - welk bureaublad je krijgt: het nieuwe BugOS-bureaublad (bugos-shell, de standaard sinds fase 4 van
+# docs/STANDALONE.md) of het klassieke (Plasma).
+#
+#   bugos-schil status       nieuw of klassiek (wat je bij de volgende keer inloggen krijgt)
+#   bugos-schil nieuw        het nieuwe BugOS-bureaublad (voor jou)
+#   bugos-schil klassiek     het klassieke bureaublad (Plasma) (voor jou)
+#   bugos-schil kies         voor de sessie zelf (bugos-schil.sh): nieuw of klassiek, alles meegerekend
+#   bugos-schil bureaublad status|aan|uit   voor de schakelaar in Instellingen > Uiterlijk: aan = het nieuwe
+#                            (status is jouw voorkeur, ook als je nu in de sessie 'BugOS klassiek' zit)
+#
+# Wat telt, in deze volgorde:
+#   1. de sessie 'BugOS klassiek' op het inlogscherm (BUGOS_KLASSIEK=1, gezet door bugos-sessie klassiek);
+#   2. jouw keuze (~/.config/bugos/schil, met 'bugos-schil nieuw|klassiek' of in Instellingen);
+#   3. de keuze voor de hele computer (/etc/bugos/schil, door een beheerder);
+#   4. de standaard: nieuw, als bugos-shell er is.
+# Het vangnet (bugos-schil-of-plasma): start de nieuwe schil een paar keer achter elkaar niet, dan krijg je in die sessie
+# het klassieke bureaublad, met een melding.
+set -u
+EIGEN="${XDG_CONFIG_HOME:-$HOME/.config}/bugos/schil"
+SYSTEEM="${BUGOS_SCHIL_SYSTEEM:-/etc/bugos/schil}"
+SHELL_BIN="${BUGOS_SHELL_BIN:-/usr/bin/bugos-shell}"
+
+keuze_uit() {
+    local w
+    w="$(head -n 1 "$1" 2>/dev/null | tr -d '[:space:]')"
+    case "$w" in nieuw | klassiek) echo "$w" ;; esac
+}
+
+# Jouw voorkeur (of die van de computer, of de standaard), los van de sessie waarin je nu zit.
+voorkeur() {
+    local w
+    if [ ! -x "$SHELL_BIN" ]; then
+        echo klassiek
+        return
+    fi
+    w="$(keuze_uit "$EIGEN")"
+    [ -z "$w" ] && w="$(keuze_uit "$SYSTEEM")"
+    echo "${w:-nieuw}"
+}
+
+kies() {
+    if [ "${BUGOS_KLASSIEK:-}" = 1 ]; then
+        echo klassiek
+    else
+        voorkeur
+    fi
+}
+
+zet() {
+    mkdir -p "${EIGEN%/*}"
+    printf '%s\n' "$1" >"$EIGEN.nieuw" && mv -f "$EIGEN.nieuw" "$EIGEN"
+}
+
+case "${1:-status}" in
+status | kies) kies ;;
+bureaublad)
+    case "${2:-status}" in
+    status) if [ "$(voorkeur)" = nieuw ]; then echo aan; else echo uit; fi ;;
+    aan) zet nieuw || exit 1 ;;
+    uit) zet klassiek || exit 1 ;;
+    *) exit 2 ;;
+    esac
+    ;;
+nieuw | klassiek)
+    zet "$1" || { echo "Bewaren lukte niet." >&2; exit 1; }
+    echo "$1 (vanaf de volgende keer inloggen)"
+    ;;
+*)
+    echo "Gebruik: bugos-schil status | nieuw | klassiek" >&2
+    exit 2
+    ;;
+esac

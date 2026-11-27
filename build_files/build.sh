@@ -22,7 +22,8 @@ cp -av --remove-destination /ctx/system_files/. /
 # alleen de programma's in /usr/bin uitvoerbaar.
 (cd /ctx/system_files && find . -type f -print0) | while IFS= read -r -d '' f; do chmod 0644 "/${f#./}"; done
 (cd /ctx/system_files && find . -mindepth 1 -type d -print0) | while IFS= read -r -d '' d; do chmod 0755 "/${d#./}"; done
-chmod 0755 /usr/bin/bugos-* /usr/libexec/bugos-user-check /usr/libexec/bugos-hide-system-drives /usr/libexec/bugos-taal-standaard
+chmod 0755 /usr/bin/bugos-* /usr/libexec/bugos-user-check /usr/libexec/bugos-hide-system-drives /usr/libexec/bugos-taal-standaard \
+    /usr/libexec/bugos-schil-of-plasma
 # De Python-onderdelen van BugOS vooraf vertalen: /usr is straks alleen-lezen, dus anders doet elke app dat bij
 # elke start opnieuw. Met een controlegetal (checked-hash): ostree zet de tijden van bestanden gelijk, en een
 # veranderd bestand (usr-overlay bij het zoeken naar een fout) wordt dan toch opnieuw gelezen (U313, U319).
@@ -70,6 +71,21 @@ for pakket in "${ALLE_PAKKETTEN[@]}"; do
 done
 if [ "${#PAKKETTEN[@]}" -gt 0 ]; then
     dnf5 install -y --skip-unavailable "${PAKKETTEN[@]}"
+fi
+
+# Het inlogscherm: Plasma Login blijft de standaard. SDDM (packages.txt) staat erbij voor de proef met het BugOS-
+# inlogscherm (bugos-inlogscherm sddm). Het installeren van SDDM kan hem via de presets van Fedora aanzetten
+# (display-manager.service): hier dus expliciet terug naar Plasma Login. Is er geen Plasma Login, dan blijft alles zoals
+# de basis het had.
+if [ -f /usr/lib/systemd/system/plasmalogin.service ]; then
+    systemctl disable sddm.service >/dev/null 2>&1 || true
+    systemctl enable --force plasmalogin.service
+fi
+
+# Android-apps (Waydroid, packages.txt): de dienst blijft uit tot je Android klaarzet in 'Android-apps'
+# (bugos-android-root zet hem dan aan). Zonder klaargezet Android start hij toch niet, en kost hij alleen opstarttijd.
+if [ -f /usr/lib/systemd/system/waydroid-container.service ]; then
+    systemctl disable waydroid-container.service >/dev/null 2>&1 || true
 fi
 
 # D-09: de teksteditor moet echt starten. De basis van Universal Blue (kinoite-main:44 van 2026-11-16) zet zelf Kate
@@ -188,7 +204,9 @@ fi
 WINKEL_PAKKETTEN=(
     # kinoite-main brengt Firefox mee, met firefox-langpacks erbij. Die heeft Firefox nodig: dus samen weg
     # (anders weigert rpm -e --test, en had je twee Firefoxen: het pakket en de Flatpak). Komma = samen.
-    "firefox,firefox-langpacks org.mozilla.firefox ja"
+    # 'nee': je kiest je browser zelf in Welkom (bugos-browser); bugos-first-boot zet Firefox alleen terug voor wie
+    # BugOS al had (toen zat Firefox erin).
+    "firefox,firefox-langpacks org.mozilla.firefox nee"
     "steam com.valvesoftware.Steam ja"
     # Filelight zit in de basis (Kinoite 44), maar is verborgen: Bestanden laat zelf zien wat de meeste ruimte
     # inneemt. Wie hem toch wil, haalt hem uit de Winkel (en kan hem dan ook weer verwijderen).

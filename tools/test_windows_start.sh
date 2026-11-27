@@ -33,7 +33,8 @@ controle() { if eval "$1"; then echo "OK    $2"; else echo "FOUT  $2"; fouten=$(
 controle 'grep -q "DriveType -eq 3 -and (Test-UsbLetter" <<<"$PS" && ! grep -q "DriveType -in 2, 3" <<<"$PS"' \
     "U284: stap 2 biedt geen schijf in de computer (D:) aan als back-upplek"
 # Sinds 'bestanden slimmer' staat de grootte eerst in $nodig (die noemt de melding ook), daarna de vergelijking.
-controle 'grep -q "\$nodig = Get-MeeneemGrootte" <<<"$PS" && grep -q "\$vrij + \$al -lt \$nodig" <<<"$PS"' "U286: nog een keer klikken telt wat er al op de schijf staat"
+# Sinds het werk naast het venster loopt (runspace), komen vrij en al via $Mee mee.
+controle 'grep -q "\$nodig = Get-MeeneemGrootte" <<<"$PS" && grep -q "\$Mee.Vrij + \$Mee.Al -lt \$nodig" <<<"$PS"' "U286: nog een keer klikken telt wat er al op de schijf staat"
 controle '! grep -q "choose \"Automatic\"" <<<"$PS" && grep -q "Share disk with other operating systems" <<<"$PS"' \
     "U285: na 'Ruimte maken' noemt hij de keuze die het installatieprogramma echt heeft"
 controle 'grep -q "if (-not \$gelukt) { Remove-Item -LiteralPath \$doel" <<<"$PS"' "U287: een halve download wordt opgeruimd"
@@ -68,5 +69,28 @@ controle 'grep -A6 "function Set-KlokUtc" <<<"$PS" | grep -q "HiberbootEnabled.*
 # U536: publiceren kan alleen met de bouw 'latest' (geen ISO die pc's voor altijd op een testbranch zet).
 controle 'grep -q "\[ \"\$PUBLICEREN\" = true \] && \[ \"\$TAG\" != latest \]" "$ROOT/.github/workflows/iso.yml"' \
     "U536: een ISO publiceren kan alleen van 'latest'"
+# Een echte USB-stick blijft na Clear-Disk MBR: Initialize-Disk alleen als hij echt leeg (RAW) is, anders
+# 'The disk has already been initialized' (gevonden op een echte stick; de nep-schijf in de zelftest wordt wel RAW).
+controle 'grep -A20 "function Clear-Stick" <<<"$PS" | grep -B1 "Initialize-Disk" | grep -q "if (\$stijl -eq .RAW.)"' \
+    "Switch: een USB-stick die na het wissen MBR blijft, wordt niet opnieuw geinitialiseerd"
+# Windows 11 opent een .bat in Terminal; daar verbergt -WindowStyle Hidden niets. Via conhost --headless en start.
+controle 'tr -d "\r" <"$ROOT/windows-switch/Start BugOS Switch.bat" | grep -q "^ *start \"\" \"%SystemRoot%.System32.conhost.exe\" --headless powershell.exe"' \
+    "Switch: het startbestand laat geen zwart venster openstaan (conhost --headless)"
+# [math]::Max(1, $groot) kiest in PowerShell de Int32-versie: met BugOS (meer dan 2 GB) ging de stick stuk.
+controle '! grep -nE "\[math\]::M(in|ax)\([0-9]+, *\\\$(teller|groot|grootte|totaal|kanWeg|squash|efiBytes)" <<<"$PS" && grep -q "\[math\]::Max(\[int64\]1, \[int64\]\$teller.Totaal)" <<<"$PS"' \
+    "Switch: rekenen met de grootte van BugOS (meer dan 2 GB) gaat niet in een Int32"
+# De pagina's op naam: elk nummer in $script:Bladen moet de pagina met de goede kop zijn (eerst stonden ze door elkaar).
+BLADEN="$(python3 - "$ROOT/windows-switch/BugOS-Switch.ps1" <<'PY'
+import re, sys
+s = open(sys.argv[1], encoding="utf-8-sig").read()
+koppen = re.findall(r"\$Paginas \+= \{\s*\n\s*\$kop\.Text = \(T '([^']+)'", s)
+kaart = dict(re.findall(r"(\w+) = \$Paginas\[(\d)\]", s[s.index("$script:Bladen = @{"):s.index("function Get-Volgorde")]))
+verwacht = {"welkom": "Welkom", "controle": "Kan mijn computer", "bestanden": "Je bestanden", "keuze": "Waar komt BugOS",
+            "ruimte": "Ruimte maken", "einde": "Zo installeer", "stick": "BugOS op een USB-stick"}
+fout = [n for n, begin in verwacht.items() if not koppen[int(kaart[n])].startswith(begin)]
+print("ok" if not fout and len(kaart) == 7 else f"fout: {fout} {kaart} {koppen}")
+PY
+)"
+controle '[ "$BLADEN" = ok ]' "Switch: elke stap toont zijn eigen pagina ($BLADEN)"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

@@ -1,0 +1,93 @@
+#!/usr/bin/bash
+# bugos-inlogscherm - welk inlogscherm BugOS gebruikt (docs/STANDALONE.md, fase 3).
+#
+#   bugos-inlogscherm status        plasma (Plasma Login, de standaard), sddm (het BugOS-inlogscherm) of anders
+#   sudo bugos-inlogscherm sddm     het BugOS-inlogscherm proberen (SDDM met het thema 'bugos'); werkt na opnieuw
+#                                   opstarten
+#   sudo bugos-inlogscherm plasma   terug naar het gewone inlogscherm
+#   bugos-inlogscherm plasma --nu   ook meteen starten (het vangnet: bugos-inlogscherm-terug.service, als SDDM niet start)
+#
+# Waarom een proef: er is maar één inlogscherm per computer. Start SDDM niet, dan zet het vangnet vanzelf Plasma Login
+# terug (sddm.service.d/50-bugos-vangnet.conf). Kun je niet inloggen terwijl SDDM wel draait: Ctrl+Alt+F3, log in met
+# je naam en wachtwoord, en typ 'sudo bugos-inlogscherm plasma'. Let op: terug naar een vorige BugOS bij het opstarten
+# helpt hier niet, want deze keuze staat in /etc (die gaat mee naar elke versie).
+# Automatisch inloggen (bugos-login) gaat mee: het bestand wordt naar de map van het gekozen inlogscherm gekopieerd.
+set -u
+
+SYSTEEM="${BUGOS_SYSTEMD_MAP:-/etc/systemd/system}"
+THEMA="${BUGOS_SDDM_THEMA:-/usr/share/sddm/themes/bugos}"
+PLASMA_LOGIN=/etc/plasmalogin.conf.d/50-bugos-login.conf
+SDDM_LOGIN=/etc/sddm.conf.d/50-bugos-login.conf
+PROEF="${BUGOS_INLOG_PROEF:-/var/lib/bugos/inlogscherm-sddm}"
+
+huidig() {
+    local doel
+    doel="$(readlink "$SYSTEEM/display-manager.service" 2>/dev/null || true)"
+    case "$doel" in
+    *sddm.service) echo sddm ;;
+    *plasmalogin.service) echo plasma ;;
+    *) echo anders ;;
+    esac
+}
+
+beheerder() {
+    if [ "$(id -u)" -ne 0 ]; then
+        echo "Alleen als beheerder: sudo bugos-inlogscherm $1" >&2
+        exit 1
+    fi
+}
+
+naar_sddm() {
+    beheerder sddm
+    if ! systemctl cat sddm.service >/dev/null 2>&1; then
+        echo "SDDM staat niet op deze computer (een BugOS van voor deze proef). Werk BugOS eerst bij." >&2
+        exit 3
+    fi
+    if [ ! -f "$THEMA/Main.qml" ]; then
+        echo "Het BugOS-inlogscherm ($THEMA) ontbreekt." >&2
+        exit 3
+    fi
+    # Automatisch inloggen gaat mee.
+    if [ -f "$PLASMA_LOGIN" ]; then
+        mkdir -p "${SDDM_LOGIN%/*}"
+        cp -f "$PLASMA_LOGIN" "$SDDM_LOGIN"
+        chmod 0644 "$SDDM_LOGIN"
+    fi
+    systemctl disable plasmalogin.service >/dev/null 2>&1 || true
+    if ! systemctl enable sddm.service >/dev/null 2>&1; then
+        systemctl enable --force plasmalogin.service >/dev/null 2>&1 || true
+        echo "SDDM aanzetten lukte niet; het gewone inlogscherm blijft." >&2
+        exit 1
+    fi
+    mkdir -p "${PROEF%/*}"
+    touch "$PROEF"
+    echo "Het BugOS-inlogscherm staat klaar. Start de computer opnieuw op om het te zien."
+    echo "Terug naar het gewone inlogscherm: sudo bugos-inlogscherm plasma"
+}
+
+naar_plasma() {
+    beheerder plasma
+    systemctl disable sddm.service >/dev/null 2>&1 || true
+    if ! systemctl enable --force plasmalogin.service >/dev/null 2>&1; then
+        echo "Plasma Login aanzetten lukte niet." >&2
+        exit 1
+    fi
+    rm -f "$PROEF"
+    if [ "${1:-}" = --nu ]; then
+        # Het vangnet: SDDM is gestopt (failed). Meteen het gewone inlogscherm, zodat je kunt inloggen.
+        systemctl reset-failed sddm.service >/dev/null 2>&1 || true
+        systemctl start plasmalogin.service
+        return
+    fi
+    echo "Het gewone inlogscherm (Plasma Login) staat weer aan. Start de computer opnieuw op."
+}
+
+case "${1:-status}" in
+status) huidig ;;
+sddm) naar_sddm ;;
+plasma) naar_plasma "${2:-}" ;;
+*)
+    echo "Gebruik: bugos-inlogscherm status | sddm | plasma" >&2
+    exit 2
+    ;;
+esac

@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Snipping Tool
+Name[nl]=Knipprogramma
+GenericName=Take a screenshot
+GenericName[nl]=Een schermafbeelding maken
+Comment=Snip part of your screen, draw on it, and paste it anywhere
+Comment[nl]=Een stuk van je scherm knippen, erop tekenen en het overal plakken
+Exec=bugos-knip
+Icon=bugos-knip
+Categories=Utility;Qt;KDE;
+Keywords=screenshot;snipping tool;snip;print screen;capture;picture of screen;
+Keywords[nl]=schermafbeelding;knipprogramma;knippen;screenshot;print screen;schermopname;foto van scherm;
+StartupWMClass=bugos-knip
+X-KDE-Shortcuts=Print,Meta+Shift+S

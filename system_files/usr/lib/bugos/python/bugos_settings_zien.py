@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import bugos_config as bi
 from bugos_ui import Groep, Knop, Rij, sectie, t
-from bugos_settings_onderdelen import Blad, Doorloop, Regelaar, op_achtergrond, schuifje
+from bugos_settings_onderdelen import Blad, Doorloop, Regelaar, op_achtergrond, schuifje, tegelijk
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 
@@ -63,9 +63,10 @@ class ZienPagina(Blad):
         g3.voeg(self.lezer_rij)
 
     def ververs(self) -> None:
-        op_achtergrond(self, lambda: (bi.grote_tekst(), bi.grote_aanwijzer(), bi.schud_aanwijzer(),
-                                      bi.toetshulp("plaktoetsen"), bi.toetshulp("langzame_toetsen"),
-                                      bi.toetshulp("schermlezer"), bi.kan_schermlezer()), self.toon)
+        op_achtergrond(self, lambda: tegelijk(bi.grote_tekst, bi.grote_aanwijzer, bi.schud_aanwijzer,
+                                              lambda: bi.toetshulp("plaktoetsen"),
+                                              lambda: bi.toetshulp("langzame_toetsen"),
+                                              lambda: bi.toetshulp("schermlezer"), bi.kan_schermlezer), self.toon)
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:
@@ -109,7 +110,7 @@ class MuisPagina(Blad):
                      "Like in Windows. Off: one click opens a file or folder."), self.dubbel))
 
     def ververs(self) -> None:
-        op_achtergrond(self, lambda: (bi.aanwijzers(), bi.dubbelklik()), self.toon)
+        op_achtergrond(self, lambda: tegelijk(bi.aanwijzers, bi.dubbelklik), self.toon)
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:
@@ -137,10 +138,13 @@ class MuisPagina(Blad):
                            t("Een tikje op het touchpad is een klik", "A tap on the touchpad is a click"),
                            schuifje(a.tikken, lambda aan, x=a: self.zet(x, "tikken", aan))))
             if "natuurlijk" in a.kan:
-                g.voeg(Rij("onder", t("Scrollen zoals op een telefoon", "Scroll like on a phone"),
-                           # Zoals op een telefoon: omhoog vegen schuift de pagina omhoog, je gaat verder naar beneden (U160).
-                           t("Veeg omhoog om verder naar beneden te gaan", "Swipe up to go further down") if a.touchpad else
-                           t("Wieltje naar je toe gaat omhoog", "Wheel towards you goes up"),
+                # Uit = zoals in Windows (de BugOS-standaard, bugos-invoer). Aan = zoals op een Mac of telefoon: omhoog
+                # vegen schuift de pagina omhoog, je gaat verder naar beneden (U160).
+                g.voeg(Rij("onder", t("Scrollen zoals op een Mac", "Scroll like on a Mac"),
+                           t("Veeg omhoog om verder naar beneden te gaan. Uit: zoals in Windows.",
+                             "Swipe up to go further down. Off: like on Windows.") if a.touchpad else
+                           t("Wieltje naar je toe gaat omhoog. Uit: zoals in Windows.",
+                             "Wheel towards you goes up. Off: like on Windows."),
                            schuifje(a.natuurlijk, lambda aan, x=a: self.zet(x, "natuurlijk", aan))))
             if "linkshandig" in a.kan:
                 g.voeg(Rij("links", t("Linkshandig", "Left-handed"),

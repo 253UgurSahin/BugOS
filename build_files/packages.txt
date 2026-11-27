@@ -55,3 +55,16 @@ dosfstools
 
 # --- Eén ontwerptaal: de BugOS-stijl voor alle KDE-programma's (zie tools/design/README.md) ---
 kvantum
+
+# --- Inlogscherm (proef): SDDM met het BugOS-inlogscherm (thema 'bugos', docs/STANDALONE.md). ---
+# Staat uit: de standaard blijft Plasma Login (build.sh zet dat expliciet terug). Proberen: sudo bugos-inlogscherm sddm.
+sddm
+sddm-wayland-plasma
+
+# --- Android-apps: Waydroid (Android in een container, elke app in een eigen venster; docs/STANDALONE.md). ---
+# Staat klaar maar is nog leeg: Android zelf (ongeveer 1 GB) haalt bugos-android pas als je erom vraagt.
+waydroid
+
+# AppImage-programma's van websites (bugos-appimage): de meeste hebben FUSE 2 nodig (libfuse.so.2). Zonder pakt
+# bugos-appimage ze eerst uit (trager). Brengt de basis het al mee, dan doet deze regel niets.
+fuse-libs

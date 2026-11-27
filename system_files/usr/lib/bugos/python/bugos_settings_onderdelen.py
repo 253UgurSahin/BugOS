@@ -42,6 +42,36 @@ def op_achtergrond(ouder: QObject, werk, klaar) -> None:
     QThreadPool.globalInstance().start(Klusje(werk, sein))
 
 
+def tegelijk(*werk) -> tuple:
+    """Doe een paar dingen die niet op elkaar wachten tegelijk (op de achtergrond), en geef hun uitkomsten in dezelfde
+    volgorde: tegelijk(bi.batterij, bi.energieprofiel) -> (batterij, profiel).
+
+    Waarom: een pagina vraagt vaak vijf tot tien dingen aan de computer (nmcli, kreadconfig6, xdg-mime, pactl), en
+    elk programma kost op een oudere laptop 50 tot 300 ms. Na elkaar duurde het dan seconden voor een pagina of de
+    regels op Start ingevuld waren; tegelijk duurt het zo lang als het traagste. Gaat er één mis, dan gaat het geheel
+    mis (net als eerst, toen alles na elkaar in één klusje stond: dan geeft op_achtergrond None)."""
+    import threading
+    uit: list = [None] * len(werk)
+    fout: list[BaseException] = []
+
+    def doe(i: int) -> None:
+        try:
+            uit[i] = werk[i]()
+        except BaseException as e:  # noqa: BLE001  (doorgeven aan wie wacht)
+            fout.append(e)
+
+    draden = [threading.Thread(target=doe, args=(i,), daemon=True) for i in range(1, len(werk))]
+    for d in draden:
+        d.start()
+    if werk:
+        doe(0)   # het eerste in deze draad zelf: één draad minder
+    for d in draden:
+        d.join()
+    if fout:
+        raise fout[0]
+    return tuple(uit)
+
+
 # ============================================================ onderdelen ===
 
 def stijl() -> str:
@@ -367,9 +397,29 @@ class Blad(Pagina):
     zoekwoorden = ""
     kde = ""  # het KDE-onderdeel achter 'Meer instellingen (voor gevorderden)'
 
-    def __init__(self, venster: Venster):
+    # ------------------------------------------------- pas bouwen bij het eerste bezoek ---
+    # Instellingen heeft 18 pagina's. Eerst bouwde het venster ze allemaal bij het openen (honderden onderdelen, en
+    # een paar pagina's vroegen daarbij ook nog iets aan de computer), en zag je pas daarna een venster: op een oudere
+    # laptop duurde dat seconden. Nu maakt Instellingen elke pagina 'uitgesteld': alleen de titel, de uitleg en de
+    # melding staan er; de rest (bouw) komt als je de pagina voor het eerst opent. Wie een pagina zelf maakt
+    # (Blad(venster), zoals de tests), krijgt hem meteen helemaal, zoals altijd.
+    _bouw_stand = "klaar"   # 'wacht' (nog niet gebouwd), 'bezig' (bouw() loopt) of 'klaar'
+
+    def __init__(self, venster: Venster, uitgesteld: bool = False):
         super().__init__(self.naam(), t(self.uitleg_nl, self.uitleg_en) if self.uitleg_nl else "")
         self.venster = venster
+        if uitgesteld:
+            self.melding_zwevend()   # de melding kan er al zijn (tweede_start zegt bijv. 'De update is nog bezig')
+            self._bouw_stand = "wacht"
+            return
+        self._bouw_stand = "bezig"
+        try:
+            self._bouw_inhoud()
+        finally:
+            self._bouw_stand = "klaar"
+        self.melding_zwevend()
+
+    def _bouw_inhoud(self) -> None:
         self.bouw()
         # Geen 'Meer instellingen' meer onder elke pagina: dat bracht je steeds naar KDE. Alles van KDE staat nu op
         # één plek: Over deze computer > Geavanceerde instellingen. (self.kde blijft: wie het nodig heeft, weet welk
@@ -379,7 +429,72 @@ class Blad(Pagina):
             meer.clicked.connect(lambda _c=False: kde_instelling(self.kde))
             self.lay.addWidget(meer, 0, Qt.AlignmentFlag.AlignLeft)
         self.klaar()
-        self.melding_zwevend()
+
+    @property
+    def gebouwd(self) -> bool:
+        return self._bouw_stand == "klaar"
+
+    def zorg_gebouwd(self) -> None:
+        """Bouw de pagina als dat nog niet gebeurd is (bij het eerste bezoek)."""
+        if self._bouw_stand != "wacht":
+            return
+        self._bouw_stand = "bezig"
+        try:
+            self._bouw_inhoud()
+        finally:
+            self._bouw_stand = "klaar"
+        self.plaats_melding()
+
+    def __getattr__(self, naam: str):
+        """Vraagt iemand iets van een pagina die nog niet gebouwd is (self.schakel, self.rijen, ...), dan eerst bouwen.
+        (Python komt hier alleen als het gevraagde niet bestaat.) Niet voor _namen en de vraag van bugos_ui of er een
+        thema_veranderd is: die stelt hij aan elk onderdeel, en dan werden alle pagina's alsnog meteen gebouwd."""
+        if naam.startswith("_") or naam == "thema_veranderd" or self._bouw_stand != "wacht":
+            raise AttributeError(naam)
+        self.zorg_gebouwd()
+        return getattr(self, naam)
+
+    def __init_subclass__(cls, **kw) -> None:
+        """ververs() van elke pagina bouwt eerst de pagina; thema_veranderd() doet niets zolang hij niet gebouwd is
+        (bouw() gebruikt dan straks vanzelf de nieuwe kleuren)."""
+        super().__init_subclass__(**kw)
+        ververs = getattr(cls, "ververs", None)
+        if callable(ververs) and not getattr(ververs, "_bouwt_eerst", False):
+            def ververs_gebouwd(self, *args, _ververs=ververs, **kwargs):
+                self.zorg_gebouwd()
+                return _ververs(self, *args, **kwargs)
+            ververs_gebouwd._bouwt_eerst = True
+            ververs_gebouwd.__doc__ = ververs.__doc__
+            cls.ververs = ververs_gebouwd
+        thema = cls.__dict__.get("thema_veranderd")
+        if callable(thema):
+            def thema_gebouwd(self, *args, _thema=thema, **kwargs):
+                if self._bouw_stand == "klaar":
+                    return _thema(self, *args, **kwargs)
+                return None
+            cls.thema_veranderd = thema_gebouwd
+        # hideEvent() van een pagina stopt wat er loopt (de microfoontest op Geluid, de klok van Wifi). Een pagina die
+        # nooit gebouwd is, heeft niets om te stoppen; Qt verbergt hem wel (een ander tabje in de groep).
+        verberg = cls.__dict__.get("hideEvent")
+        if callable(verberg):
+            def verberg_gebouwd(self, e, _verberg=verberg):
+                if self._bouw_stand == "klaar":
+                    return _verberg(self, e)
+                return super(Blad, self).hideEvent(e)
+            cls.hideEvent = verberg_gebouwd
+
+    def showEvent(self, e) -> None:  # noqa: N802
+        self.zorg_gebouwd()   # (Instellingen bouwt al vóór het tonen; dit is voor de zekerheid)
+        super().showEvent(e)
+
+    def findChildren(self, *args, **kwargs):  # noqa: N802
+        """Wie in een pagina zoekt (de tests: welke teksten, welke knoppen), vindt wat er straks ook echt staat."""
+        self.zorg_gebouwd()
+        return super().findChildren(*args, **kwargs)
+
+    def findChild(self, *args, **kwargs):  # noqa: N802
+        self.zorg_gebouwd()
+        return super().findChild(*args, **kwargs)
 
     # ------------------------------------------------------------- de melding zweeft (B-15) ---
     MELDING_BOVEN = 12   # px tussen de bovenkant van de pagina en de melding

@@ -40,6 +40,7 @@ Rectangle {
     signal vastzetten(string id, bool aan)       // Vastmaken aan Start (aan) of Losmaken van Start
     signal taakbalk(string id, bool aan)         // Vastmaken aan taakbalk (aan) of Losmaken van taakbalk
     signal verwijderApp(string flatpak)          // de Winkel openen op die app (daar staat 'Verwijderen')
+    signal quarantaine(string pad)               // de app openen in quarantaine (bugos-quarantaine)
 
     // Huisstijl
     readonly property bool donker: palette.window.hslLightness < 0.5
@@ -145,6 +146,10 @@ Rectangle {
         // en kan niet op Start of de taakbalk.
         if (app.soort === "instelling")
             return regels
+        // Eerst veilig proberen: in quarantaine kan de app niet bij je bestanden (niet voor BugOS zelf).
+        if (app.quarantaine)
+            regels.push({ soort: "quarantaine", tekst: tr("Openen in quarantaine", "Open in quarantine"),
+                          icoon: "security-medium" })
         // De eigen acties van de app (uit zijn .desktop-bestand, in je eigen taal): 'Nieuw venster',
         // 'Nieuw privévenster', ... Zonder eigen pictogram: dat van de app.
         const acties = app.acties || []
@@ -193,6 +198,8 @@ Rectangle {
         appMenu.close()
         if (r.soort === "open") {
             start(app.pad); sluiten()
+        } else if (r.soort === "quarantaine") {
+            quarantaine(app.pad); sluiten()
         } else if (r.soort === "actie") {
             appActie(app.pad, r.id); sluiten()
         } else if (r.soort === "start") {

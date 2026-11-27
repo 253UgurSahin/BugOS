@@ -1,0 +1,15 @@
+#!/usr/bin/bash
+# bugos-sessie - de sessie 'BugOS klassiek' op het inlogscherm (docs/STANDALONE.md, fase 4).
+#
+# Sinds fase 4 is het nieuwe BugOS-bureaublad de standaard in de gewone sessie (zie bugos-schil). Deze sessie geeft
+# het klassieke bureaublad (Plasma), voor als het nieuwe niet goed werkt: BUGOS_KLASSIEK=1, en
+# /etc/xdg/plasma-workspace/env/bugos-schil.sh kiest dan klassiek.
+#   bugos-sessie klassiek   het klassieke bureaublad
+#   bugos-sessie            het gewone (nieuwe) bureaublad, zoals de standaardsessie
+if [ "${1:-}" = klassiek ]; then
+    export BUGOS_KLASSIEK=1
+fi
+if [ -x /usr/libexec/plasma-dbus-run-session-if-needed ]; then
+    exec /usr/libexec/plasma-dbus-run-session-if-needed /usr/bin/startplasma-wayland
+fi
+exec /usr/bin/startplasma-wayland

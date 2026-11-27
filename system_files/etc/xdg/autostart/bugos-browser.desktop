@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Install your chosen browser
+Name[nl]=Je gekozen browser installeren
+Comment=Installs the browser you chose in BugOS Welcome, if that did not work yet (no internet)
+Comment[nl]=Installeert de browser die je in BugOS Welkom koos, als dat nog niet lukte (geen internet)
+Exec=/usr/bin/bugos-browser later
+NoDisplay=true
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=2

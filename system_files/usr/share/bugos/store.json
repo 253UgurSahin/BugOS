@@ -89,6 +89,22 @@
     {"id": "com.vscodium.codium", "naam": "VSCodium", "cat": ["programmeren"], "nl": "VS Code zonder meekijken van Microsoft.", "en": "VS Code without Microsoft's tracking."},
     {"id": "com.jetbrains.PyCharm-Community", "naam": "PyCharm", "cat": ["programmeren"], "nl": "Voor Python.", "en": "For Python."},
     {"id": "io.dbeaver.DBeaverCommunity", "naam": "DBeaver", "cat": ["programmeren"], "nl": "Databases bekijken en bewerken.", "en": "View and edit databases."},
-    {"id": "io.github.shiftey.Desktop", "naam": "GitHub Desktop", "cat": ["programmeren"], "nl": "Git met muisklikken (niet van GitHub zelf).", "en": "Git with clicks (not made by GitHub)."}
+    {"id": "io.github.shiftey.Desktop", "naam": "GitHub Desktop", "cat": ["programmeren"], "nl": "Git met muisklikken (niet van GitHub zelf).", "en": "Git with clicks (not made by GitHub)."},
+    {"id": "io.gitlab.librewolf-community", "naam": "LibreWolf", "cat": ["internet"], "nl": "Een browser die op Firefox lijkt, met extra privacy.", "en": "A browser like Firefox, with extra privacy."},
+    {"id": "com.vivaldi.Vivaldi", "naam": "Vivaldi", "cat": ["internet"], "nl": "Een browser die je helemaal naar je hand zet.", "en": "A browser you can shape to your liking."},
+    {"id": "com.opera.Opera", "naam": "Opera", "cat": ["internet"], "nl": "Een browser met een ingebouwde VPN en zijbalk.", "en": "A browser with a built-in VPN and sidebar."},
+    {"id": "com.anydesk.Anydesk", "naam": "AnyDesk", "cat": ["internet", "handig"], "nl": "Iemand op afstand helpen, of zelf geholpen worden.", "en": "Help someone remotely, or get help yourself."},
+    {"id": "net.cozic.joplin_desktop", "naam": "Joplin", "cat": ["kantoor"], "nl": "Notities en lijstjes, ook op je telefoon.", "en": "Notes and lists, also on your phone."},
+    {"id": "org.zotero.Zotero", "naam": "Zotero", "cat": ["kantoor", "leren"], "nl": "Bronnen en literatuur verzamelen voor school of studie.", "en": "Collect sources and references for school or study."},
+    {"id": "com.github.johnfactotum.Foliate", "naam": "Foliate", "cat": ["leren"], "nl": "E-books lezen (EPUB), rustig en mooi.", "en": "Read e-books (EPUB), calm and pretty."},
+    {"id": "io.mpv.Mpv", "naam": "mpv", "cat": ["muziek"], "nl": "Een kleine, snelle videospeler die alles afspeelt.", "en": "A small, fast video player that plays everything."},
+    {"id": "io.freetubeapp.FreeTube", "naam": "FreeTube", "cat": ["muziek"], "nl": "YouTube kijken zonder reclame en volgen.", "en": "Watch YouTube without ads and tracking."},
+    {"id": "com.stremio.Stremio", "naam": "Stremio", "cat": ["muziek"], "nl": "Films en series op één plek.", "en": "Movies and series in one place."},
+    {"id": "org.freecad.FreeCAD", "naam": "FreeCAD", "cat": ["handig"], "nl": "3D-ontwerpen en tekenen voor 3D-printen en techniek.", "en": "3D design and drawing for 3D printing and engineering."},
+    {"id": "net.supertuxkart.SuperTuxKart", "naam": "SuperTuxKart", "cat": ["gamen"], "nl": "Racen met karts, alleen of samen.", "en": "Kart racing, alone or together."},
+    {"id": "com.moonlight_stream.Moonlight", "naam": "Moonlight", "cat": ["gamen"], "nl": "Spellen van je gamecomputer streamen.", "en": "Stream games from your gaming PC."},
+    {"id": "org.DolphinEmu.dolphin-emu", "naam": "Dolphin", "cat": ["gamen"], "nl": "GameCube- en Wii-spellen spelen.", "en": "Play GameCube and Wii games."},
+    {"id": "org.ppsspp.PPSSPP", "naam": "PPSSPP", "cat": ["gamen"], "nl": "PSP-spellen spelen.", "en": "Play PSP games."},
+    {"id": "org.godotengine.Godot", "naam": "Godot", "cat": ["programmeren"], "nl": "Zelf spellen maken.", "en": "Make your own games."}
   ]
 }

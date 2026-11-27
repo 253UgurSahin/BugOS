@@ -60,7 +60,20 @@ geinstalleerde_app() {
     return 1
 }
 
-if ALT="$(zoek_alternatief)"; then
+# Microsoft Office (365, 2019 en nieuwer) werkt niet goed met Wine: installeren, activeren en inloggen lopen vast.
+# Dan de echte Office van Microsoft aanbieden, in de browser, als apps in het startmenu (bugos-windows). Zelfde
+# herkenning als bugos_windows.is_office_installatie.
+if [[ "${NAAM,,}" =~ officesetup|o365|microsoft\ ?365|office\ ?(19|20|21|24)|setup\.x(64|86)\. ]]; then
+    if vraag "$(t \
+        "Dit lijkt het installatieprogramma van Microsoft Office. Office werkt helaas niet goed op BugOS.\n\nWil je Word, Excel, PowerPoint, Outlook en OneDrive in je startmenu? Het is de echte Office van Microsoft, in je browser, gratis met een Microsoft-account.\n(Kies Nee om het installatieprogramma toch te proberen.)" \
+        "This looks like the installer of Microsoft Office. Sadly, Office does not work well on BugOS.\n\nDo you want Word, Excel, PowerPoint, Outlook and OneDrive in your start menu? It is the real Office from Microsoft, in your browser, free with a Microsoft account.\n(Choose No to try the installer anyway.)")"; then
+        bugos-windows office aan
+        melding "$(t "Microsoft 365 staat in je startmenu" "Microsoft 365 is in your start menu")" \
+            "$(t "Word, Excel, PowerPoint, Outlook en OneDrive. Log in met je Microsoft-account." \
+                "Word, Excel, PowerPoint, Outlook and OneDrive. Sign in with your Microsoft account.")"
+        exit 0
+    fi
+elif ALT="$(zoek_alternatief)"; then
     # Naam, Flathub-ID en (soms) een Engelse naam. In het Engels stond er eerst "KWrite (Teksteditor)": de naam uit
     # alternatives.txt is Nederlands als er een beschrijving bij staat (VM-test 2026-11-23). Andere talen krijgen
     # de Engelse naam, net als de rest van de tekst (t() valt terug op het Engels).
@@ -217,9 +230,20 @@ if [ -f "$KLEUREN" ]; then
     fi
 fi
 
+# Een Windows-script (.bat, .cmd) kan net zo veel als een programma, ook bij je eigen bestanden: eerst vragen.
+case "${NAAM,,}" in
+*.bat | *.cmd)
+    vraag "$(t \
+        "\"$TOON\" is een Windows-script. Het kan bestanden veranderen, net als een programma.\n\nOpen het alleen als je het vertrouwt. Openen?" \
+        "\"$TOON\" is a Windows script. It can change files, just like a program.\n\nOnly open it if you trust it. Open it?")" || exit 0
+    ;;
+esac
+
 START=$(date +%s)
-case "$NAAM" in
-*.msi | *.MSI) WINEDEBUG=-all wine msiexec /i "$BESTAND" ;;
+case "${NAAM,,}" in
+*.msi) WINEDEBUG=-all wine msiexec /i "$BESTAND" ;;
+*.bat | *.cmd) WINEDEBUG=-all wine cmd /c "$(WINEDEBUG=-all winepath -w "$BESTAND")" ;;
+# .exe, en een Windows-snelkoppeling (.lnk): start opent wat erachter zit.
 *) WINEDEBUG=-all wine start /wait /unix "$BESTAND" ;;
 esac
 CODE=$?
@@ -239,10 +263,13 @@ if [ "$CODE" -ne 0 ] && [ "$DUUR" -lt 10 ] && [ "$installatie" = 1 ] && { [ "$CO
         "\"$TOON\" stopped right away.\n\nDid you click Cancel? Then nothing is wrong.\nOtherwise it may not work on BugOS: check the BugOS Store for a BugOS version.")"
     exit 1
 fi
-# Stopte het programma meteen met een fout? Dan vriendelijk uitleggen.
+# Stopte het programma meteen met een fout? Dan vriendelijk uitleggen. Vaak ontbreekt een onderdeel van Microsoft
+# (Visual C++, .NET, een .dll): dat kun je toevoegen in Windows-programma's (bugos-windows), en dan opnieuw proberen.
 if [ "$CODE" -ne 0 ] && [ "$DUUR" -lt 10 ]; then
-    fout "$(t \
-        "Helaas, \"$TOON\" werkt niet op BugOS.\n\nTips:\n• Kijk in de BugOS Winkel of er een versie voor BugOS is.\n• Zoek op internet naar \"$TOON alternatief Linux\".\n\nJe computer is niet kapot, er is niks veranderd." \
-        "Sorry, \"$TOON\" does not work on BugOS.\n\nTips:\n• Check the BugOS Store for a BugOS version.\n• Search the internet for \"$TOON alternative Linux\".\n\nYour computer is fine, nothing has changed.")"
+    if vraag "$(t \
+        "Helaas, \"$TOON\" werkt niet op BugOS (nog niet).\n\nVaak mist er een onderdeel van Microsoft, zoals Visual C++ of .NET. Wil je dat toevoegen in Windows-programma's en het daarna opnieuw proberen?\n\nTip: kijk ook in de BugOS Winkel of er een versie voor BugOS is. Je computer is niet kapot, er is niks veranderd." \
+        "Sorry, \"$TOON\" does not work on BugOS (yet).\n\nOften a component from Microsoft is missing, like Visual C++ or .NET. Do you want to add it in Windows programs and then try again?\n\nTip: also check the BugOS Store for a BugOS version. Your computer is fine, nothing has changed.")"; then
+        exec bugos-windows
+    fi
     exit 1
 fi

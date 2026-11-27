@@ -4,10 +4,11 @@
 Jip-en-Janneke: een paar grote, simpele stappen.
   1. Hallo + taal
   2. Internet (wifi)
-  3. Licht of donker
-  4. Updates: vanzelf of zelf
-  5. Wat ga je doen? (gamen / programmeren / oudere computer)
-  6. Klaar!
+  3. Welke browser? (Firefox, Chrome, Edge, Brave of Chromium; niets kiezen mag ook)
+  4. Licht of donker
+  5. Updates: vanzelf of zelf
+  6. Wat ga je doen? (gamen / programmeren / oudere computer)
+  7. Klaar!
 
 Gestart met --eerste-keer opent hij alleen als hij nog nooit is afgemaakt.
 """
@@ -51,9 +52,65 @@ from PySide6.QtWidgets import (  # noqa: E402
 KLAAR = CONFIG / "welkom-klaar"
 
 
+# Wat NetworkManager over internet kan zeggen (nmcli -t, niet vertaald).
+STANDEN = ("full", "portal", "limited", "none", "unknown")
+
+
+def internet_stand(nu_kijken: bool = False) -> str:
+    """'full' (internet), 'portal' (eerst inloggen op een webpagina, bijv. gastwifi of hotel), 'limited' (netwerk maar
+    geen internet), 'none' of 'unknown'.
+
+    nu_kijken: laat NetworkManager NU opnieuw kijken ('nmcli networking connectivity check'). Zonder dat geeft nmcli
+    wat hij de laatste keer zag, en dat kan oud zijn: wie net verbonden had en op 'Opnieuw kijken' drukte, zag dan
+    niets veranderen. Per regel lezen: draai() geeft ook stderr mee (bijv. 'Warning: nmcli (1.52) and NetworkManager
+    (1.50) versions don't match'), en dan was 'full' + die waarschuwing nooit gelijk aan 'full'."""
+    if nu_kijken:
+        code, uit = draai("nmcli", "-t", "networking", "connectivity", "check", timeout=20)
+    else:
+        code, uit = draai("nmcli", "-t", "-f", "CONNECTIVITY", "general", timeout=5)
+    if code != 0:
+        return "unknown"
+    for regel in reversed(uit.splitlines()):
+        if regel.strip() in STANDEN:
+            return regel.strip()
+    return "unknown"
+
+
 def heeft_internet() -> bool:
-    code, uit = draai("nmcli", "-t", "-f", "CONNECTIVITY", "general", timeout=5)
-    return code == 0 and uit.strip() == "full"
+    return internet_stand() == "full"
+
+
+def verbinding() -> tuple[bool, str]:
+    """(is er een verbonden netwerk (wifi of kabel)?, de naam van de wifi, of '')."""
+    code, uit = draai("nmcli", "-t", "-f", "TYPE,STATE,CONNECTION", "device", timeout=5)
+    if code != 0:
+        return False, ""
+    verbonden, naam = False, ""
+    for regel in uit.splitlines():
+        soort, _, rest = regel.strip().partition(":")
+        staat, _, verbinding_naam = rest.partition(":")
+        if soort in ("wifi", "ethernet") and staat.startswith("connected"):
+            verbonden = True
+            if soort == "wifi" and not naam:
+                naam = verbinding_naam.replace("\\:", ":").strip()   # nmcli -t schrijft een : in een naam als \:
+    return verbonden, naam
+
+
+def net_toestand(nu_kijken: bool = False) -> tuple[str, bool, bool, str]:
+    """(stand, heeft wifi?, via de kabel?, naam van de wifi). Draait op de achtergrond (Kijker).
+
+    Is er een verbinding maar zegt NetworkManager (nog) geen 'full', dan laten we hem meteen opnieuw kijken: net na het
+    verbinden met wifi staat er vaak nog de oude stand. 'unknown' met een verbinding (de controle van NetworkManager
+    staat uit of kan zijn server niet bereiken) telt als online, zoals in Hulp (U090): dan niet 'geen internet' zeggen
+    terwijl je wifi gewoon werkt."""
+    heeft_wifi, kabel = netwerk_soort()
+    verbonden, naam = verbinding()
+    stand = internet_stand(nu_kijken)
+    if stand != "full" and verbonden and not nu_kijken:
+        stand = internet_stand(True)
+    if stand == "unknown" and verbonden:
+        stand = "full"
+    return stand, heeft_wifi, kabel, naam
 
 
 def netwerk_soort() -> tuple[bool, bool]:
@@ -148,15 +205,18 @@ class Hallo(Pagina):
 class Kijker(QThread):
     """Kijkt op de achtergrond of er internet is (nmcli kan even duren), zodat het venster niet hapert."""
 
-    # (online?, heeft de pc wifi?, loopt de verbinding via de kabel?)  (A-09)
-    klaar = Signal(bool, bool, bool)
+    # (stand, heeft de pc wifi?, loopt de verbinding via de kabel?, naam van de wifi)  (A-09)
+    klaar = Signal(str, bool, bool, str)
+
+    def __init__(self, ouder, nu_kijken: bool = False):
+        super().__init__(ouder)
+        self.nu_kijken = nu_kijken
 
     def run(self) -> None:
         try:
-            heeft_wifi, kabel = netwerk_soort()
-            self.klaar.emit(bool(heeft_internet()), heeft_wifi, kabel)
+            self.klaar.emit(*net_toestand(self.nu_kijken))
         except Exception:  # noqa: BLE001
-            self.klaar.emit(False, True, False)   # niets bekend: zoals vroeger (met de wifi-knop)
+            self.klaar.emit("none", True, False, "")   # niets bekend: zoals vroeger (met de wifi-knop)
 
 
 class Internet(Pagina):
@@ -181,10 +241,15 @@ class Internet(Pagina):
         # self.kies: verborgen op een pc zonder wifi; dan is 'Volgende' (onderaan) de enige grote knop (A-09).
         self.kies = Knop(t("Wifi kiezen", "Choose Wi-Fi"), "hoofd", "lijn:wifi", groot=True)
         self.kies.clicked.connect(lambda: start("bugos-settings", "wifi"))   # de eenvoudige wifi-pagina van BugOS (U334)
-        opnieuw = Knop(t("Opnieuw kijken", "Check again"), "stil", "lijn:verversen")
-        opnieuw.clicked.connect(self.ververs)
+        # Gastwifi, hotel, trein: eerst inloggen op een webpagina (NetworkManager zegt dan 'portal').
+        self.inloggen = Knop(t("Inlogpagina openen", "Open sign-in page"), "hoofd", "lijn:wereld", groot=True)
+        self.inloggen.clicked.connect(lambda: start("xdg-open", "http://neverssl.com"))
+        self.inloggen.hide()
+        self.opnieuw = Knop(t("Opnieuw kijken", "Check again"), "stil", "lijn:verversen")
+        self.opnieuw.clicked.connect(lambda: self.ververs(nu_kijken=True))
+        rij.addWidget(self.inloggen)
         rij.addWidget(self.kies)
-        rij.addWidget(opnieuw)
+        rij.addWidget(self.opnieuw)
         rij.addStretch(1)
         self.lay.addLayout(rij)
         self.klaar_met_vullen()
@@ -205,20 +270,48 @@ class Internet(Pagina):
             self.kijker.wait(8000)  # het venster gaat dicht: laat het kijken eerst afmaken
         super().hideEvent(e)
 
-    def ververs(self) -> None:
+    def ververs(self, nu_kijken: bool = False) -> None:
+        """Kijken of er internet is. Met nu_kijken (de knop 'Opnieuw kijken') laat NetworkManager echt opnieuw kijken,
+        en zie je dat er gekeken wordt: eerst gebeurde er zichtbaar niets, ook als het kijken wel liep."""
+        if nu_kijken:
+            self.opnieuw.setEnabled(False)
+            self.opnieuw.setText(t("Bezig met kijken…", "Checking…"))
+            self.status.setText(t("Kijken…", "Checking…"))
+            self.status.soort = "grijs"
+            self.status.thema_veranderd()
         if self.kijker is not None and self.kijker.isRunning():
+            if nu_kijken:   # er loopt al een gewone kijkbeurt: daarna meteen nog een echte
+                self.kijker.finished.connect(lambda: self.ververs(nu_kijken=True),
+                                             Qt.ConnectionType.SingleShotConnection)
             return
-        self.kijker = Kijker(self)
-        self.kijker.klaar.connect(self.toon)
+        self.kijker = Kijker(self, nu_kijken)
+        self.kijker.klaar.connect(self._bekend)
         self.kijker.start()
 
-    def toon(self, online: bool, heeft_wifi: bool = True, kabel: bool = False) -> None:
+    def _bekend(self, stand: str, heeft_wifi: bool, kabel: bool, naam: str) -> None:
+        if self.kijker is not None and self.kijker.nu_kijken:
+            self.opnieuw.setEnabled(True)
+            self.opnieuw.setText(t("Opnieuw kijken", "Check again"))
+        self.toon(stand == "full", heeft_wifi, kabel, stand, naam)
+
+    def _chip(self, tekst: str, soort: str) -> None:
+        self.status.setText(tekst)
+        # De soort onthouden (niet alleen de kleuren): dan kleurt hij mee bij een wissel van licht/donker.
+        self.status.soort = soort
+        self.status.thema_veranderd()
+
+    def toon(self, online: bool, heeft_wifi: bool = True, kabel: bool = False, stand: str = "", naam: str = "") -> None:
         """Laat zien of je online bent, en hoe. heeft_wifi/kabel komen van netwerk_soort() (A-09):
         - via de kabel: een kabel-teken en 'Verbonden via de kabel', geen wifi-teken;
         - geen wifi-kaart: de knop 'Wifi kiezen' weg (die pagina zou alleen 'deze computer heeft geen wifi' zeggen),
           zodat 'Volgende' de enige grote knop is;
-        - wel wifi: de knop blijft, ook als je al via de kabel online bent (misschien wil je straks zonder kabel)."""
-        self.kies.setVisible(heeft_wifi)
+        - wel wifi: de knop blijft, ook als je al via de kabel online bent (misschien wil je straks zonder kabel).
+        stand 'portal' (eerst inloggen, bijv. gastwifi) en 'limited' (verbonden, geen internet) krijgen een eigen
+        uitleg: eerst stond daar 'Nog geen internet', ook als je net met de wifi verbonden was."""
+        portal = not online and stand == "portal"
+        beperkt = not online and stand == "limited"
+        self.inloggen.setVisible(portal)
+        self.kies.setVisible(heeft_wifi and not portal)
         # Het teken: een kabel als die de verbinding geeft, of als er geen wifi is om te kiezen; anders wifi.
         self.chip_icoon.lijn = "kabel" if (kabel and online) or not heeft_wifi else "wifi"
         self.chip_icoon.update()
@@ -227,12 +320,27 @@ class Internet(Pagina):
                 self.kop.setText(t("Verbonden via de kabel", "Connected by cable"))
                 self.sub.setText(t("Mooi zo. Druk op Volgende om verder te gaan.", "Great. Press Next to continue."))
             else:
-                self.kop.setText(t("Je bent verbonden", "You are connected"))
+                self.kop.setText(t("Verbonden met {n}", "Connected to {n}").format(n=naam) if naam
+                                 else t("Je bent verbonden", "You are connected"))
                 self.sub.setText(t("Mooi zo. Je kunt verder.", "Great. You can continue."))
-            self.status.setText(t("Online", "Online"))
-            # De soort onthouden (niet alleen de kleuren): dan kleurt hij mee bij een wissel van licht/donker.
-            self.status.soort = "goed"
-            self.status.thema_veranderd()
+            self._chip(t("Online", "Online"), "goed")
+        elif portal:
+            self.kop.setText(t("Log nog in op {n}", "Sign in to {n} first").format(n=naam) if naam
+                             else t("Log nog in op het netwerk", "Sign in to the network first"))
+            self.sub.setText(t("Dit netwerk (bijv. gastwifi, hotel of trein) wil dat je eerst inlogt op een webpagina. "
+                               "Open de inlogpagina, log in en druk daarna op Opnieuw kijken. Overslaan mag ook.",
+                               "This network (for example guest Wi-Fi, a hotel or a train) wants you to sign in on a "
+                               "web page first. Open the sign-in page, sign in and then press Check again. Skipping "
+                               "is fine too."))
+            self._chip(t("Inloggen", "Sign in"), "let_op")
+        elif beperkt:
+            self.kop.setText(t("Verbonden met {n}, maar zonder internet", "Connected to {n}, but no internet").format(n=naam)
+                             if naam else t("Verbonden, maar zonder internet", "Connected, but no internet"))
+            self.sub.setText(t("Het netwerk werkt, maar geeft (nog) geen internet. Wacht even en druk op Opnieuw "
+                               "kijken, of kies een ander netwerk. Overslaan mag ook.",
+                               "The network works, but does not give internet (yet). Wait a moment and press Check "
+                               "again, or choose another network. Skipping is fine too."))
+            self._chip(t("Geen internet", "No internet"), "let_op")
         else:
             self.kop.setText(t("Nog geen internet", "No internet yet"))
             if heeft_wifi:
@@ -241,9 +349,83 @@ class Internet(Pagina):
             else:
                 self.sub.setText(t("Deze computer heeft geen wifi. Steek een netwerkkabel in. Overslaan mag ook.",
                                    "This computer has no Wi-Fi. Plug in a network cable. Skipping is fine too."))
-            self.status.setText(t("Offline", "Offline"))
-            self.status.soort = "let_op"
-            self.status.thema_veranderd()
+            self._chip(t("Offline", "Offline"), "let_op")
+
+
+# De browsers in Welkom (zelfde lijst als BROWSERS in bugos-browser): (Flathub-id, naam, uitleg NL, uitleg EN).
+BROWSERS = (
+    ("org.mozilla.firefox", "Firefox", "Snel en veilig, gemaakt door een stichting zonder winstoogmerk.",
+     "Fast and safe, made by a non-profit foundation."),
+    ("com.google.Chrome", "Google Chrome", "De browser van Google. Handig als je een Google-account gebruikt.",
+     "Google's browser. Handy if you use a Google account."),
+    ("com.microsoft.Edge", "Microsoft Edge", "De browser van Microsoft, zoals op Windows.",
+     "Microsoft's browser, like on Windows."),
+    ("com.brave.Browser", "Brave", "Blokkeert reclame en volgers vanzelf.", "Blocks ads and trackers by itself."),
+    ("org.chromium.Chromium", "Chromium", "De open browser waar Chrome op gebouwd is.",
+     "The open browser Chrome is built on."),
+)
+
+
+class Browser(Pagina):
+    """Welke browser? BugOS zette vroeger altijd Firefox neer en maakte die de standaard; nu kies je zelf (2026-11-24).
+    Bij Volgende installeert bugos-browser hem op de achtergrond en maakt hem de standaard. Niets kiezen mag ook."""
+
+    def __init__(self):
+        super().__init__(t("Welke browser wil je?", "Which browser do you want?"),
+                         t("Daarmee ga je op internet. Kies er een; hij wordt je standaardbrowser. Niets kiezen mag "
+                           "ook: dan haal je later een browser uit de Winkel.",
+                           "That's what you use to go on the internet. Pick one; it becomes your default browser. "
+                           "You can also pick nothing and get a browser from the Store later."))
+        from PySide6.QtWidgets import QGridLayout
+        try:
+            from bugos_apps import app_icoon
+        except Exception:  # noqa: BLE001  zonder pictogram gaat het ook
+            app_icoon = None
+        self.groep = QButtonGroup(self)
+        self.knoppen: dict[str, QPushButton] = {}
+        rooster = QGridLayout()
+        rooster.setSpacing(12)
+        for i, (app_id, naam, nl, en) in enumerate(BROWSERS):
+            binnen = QWidget()
+            r = QHBoxLayout(binnen)
+            r.setContentsMargins(4, 2, 4, 2)
+            r.setSpacing(14)
+            plaatje = QLabel()
+            if app_icoon is not None:
+                plaatje.setPixmap(app_icoon(app_id).pixmap(40, 40))
+            plaatje.setFixedSize(40, 40)
+            r.addWidget(plaatje)
+            b = QVBoxLayout()
+            b.setSpacing(2)
+            b.addWidget(label(naam, "kop3", wrap=False))
+            b.addWidget(label(t(nl, en), "klein"))
+            r.addLayout(b, 1)
+            k = KeuzeKaart(binnen)
+            k.setProperty("app_id", app_id)
+            self.groep.addButton(k)
+            self.knoppen[app_id] = k
+            rooster.addWidget(k, i // 2, i % 2)
+        self.lay.addLayout(rooster)
+        self.lay.addWidget(label(t("Tip: in de Winkel kun je later altijd een andere browser halen.",
+                                   "Tip: you can always get another browser from the Store later."), "klein"))
+        self.klaar_met_vullen()
+        self.begin = ""
+        if bestaat("bugos-browser"):
+            self.begin = draai("bugos-browser", "status", timeout=5)[1].strip()
+        if self.begin in self.knoppen:
+            self.knoppen[self.begin].setChecked(True)
+
+    def gekozen(self) -> str:
+        k = self.groep.checkedButton()
+        return k.property("app_id") if k is not None else ""
+
+    def bij_volgende(self) -> None:
+        gekozen = self.gekozen()
+        if gekozen and gekozen != self.begin:
+            # Op de achtergrond: installeren duurt een paar minuten, Welkom gaat gewoon door. bugos-browser zegt met
+            # een melding wanneer hij klaar is (of dat hij komt zodra je internet hebt).
+            start("bugos-browser", "kies", gekozen)
+            self.begin = gekozen
 
 
 def voorbeeld(donker: bool, b: int = 300, h: int = 176) -> QPixmap:
@@ -441,7 +623,17 @@ class Jij(Pagina):
         self.oud = SchakelRij(t("Mijn computer is wat ouder", "My computer is a bit older"),
                               t("Zware effecten uit, zodat alles vlot blijft.", "Heavy effects off, so everything stays fast."),
                               False, "lijn:ster", "neutraal")
-        for w in (self.gamer, self.dev, self.oud):
+        # Microsoft 365: Word, Excel, PowerPoint, Outlook en OneDrive als apps in het startmenu (de echte Office, in de
+        # browser; bugos-windows office). Office zelf installeren met een .exe werkt niet goed op BugOS.
+        self.office = SchakelRij(t("Ik gebruik Microsoft Office", "I use Microsoft Office"),
+                                 t("Word, Excel, PowerPoint, Outlook en OneDrive in je startmenu, elk in een eigen "
+                                   "venster. Het is de echte Office van Microsoft, in je browser; gratis met een "
+                                   "Microsoft-account.",
+                                   "Word, Excel, PowerPoint, Outlook and OneDrive in your start menu, each in its own "
+                                   "window. It is the real Office from Microsoft, in your browser; free with a "
+                                   "Microsoft account."), office_staat(), "lijn:document", "neutraal")
+        self.office_begin = self.office.schuif.isChecked()
+        for w in (self.gamer, self.dev, self.office, self.oud):
             g.voeg(w)
         self.lay.addWidget(g)
         # Wat al gestart is, gaat door (ook als je via Terug hier weer komt): elk maar één keer starten (U074).
@@ -490,6 +682,11 @@ class Jij(Pagina):
             self.gestart.add(naam)
             rij.schuif.setEnabled(False)   # niet meer uit te zetten hier: het loopt al
             self.al_bezig.show()
+        # Microsoft 365: alleen starters in het startmenu, dus aan en weer uit kan gewoon (ook via Terug).
+        office = self.office.schuif.isChecked()
+        if office != self.office_begin and bestaat("bugos-windows"):
+            start("bugos-windows", "office", "aan" if office else "uit")
+            self.office_begin = office
         # Gamen: Steam starten we hier niet meer (A-10), dat gebeurt pas bij 'Aan de slag' (Welkom.steam_klaarzetten),
         # stil. Er loopt dus nog niets: het schuifje blijft vrij, en via Terug kun je het weer uitzetten.
         if self.gamer.schuif.isChecked():
@@ -506,6 +703,15 @@ class Jij(Pagina):
             self.steam_straks = ()
             self.steam_uitleg.hide()
             self.steam_nog.hide()
+
+
+def office_staat() -> bool:
+    """Staat Microsoft 365 al in het startmenu (bugos_windows.office_staat)?"""
+    try:
+        import bugos_windows
+        return bugos_windows.office_staat()
+    except (ImportError, OSError):
+        return False
 
 
 def steam_opdracht() -> tuple:
@@ -617,8 +823,8 @@ class Welkom(QWidget):
         self.setObjectName("venster")
         self.setWindowTitle(t("BugOS Welkom", "BugOS Welcome"))
         self.resize(1000, 680)
-        self.paginas = [Hallo(), Internet(), Uiterlijk(), Updates(), Jij(), Klaar()]
-        namen = [t("Welkom", "Welcome"), t("Internet", "Internet"), t("Uiterlijk", "Appearance"),
+        self.paginas = [Hallo(), Internet(), Browser(), Uiterlijk(), Updates(), Jij(), Klaar()]
+        namen = [t("Welkom", "Welcome"), t("Internet", "Internet"), t("Browser", "Browser"), t("Uiterlijk", "Appearance"),
                  t("Updates", "Updates"), t("Jouw computer", "Your computer"), t("Klaar", "Done")]
         self.zij = Zijpaneel(namen)
 

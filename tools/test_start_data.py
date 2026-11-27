@@ -180,6 +180,26 @@ klopt(s["donker"] is False and s["niet_storen"] is False and s["spel"] is True,
 s = json.loads(draai("--snel", env_extra={"BUGOS_SNEL_VOORBEELD": "1"}))
 klopt(s["wifi"] is True and s["volume"] == 60 and s["donker"] is False, "snel: voorbeeldstatus voor foto's")
 
+# 2026-11: het nieuwe snelmenu en de taakbalk: of je internet hebt (het icoontje rechtsonder), Nachtlampje, en welke
+# knoppen je verborg (het potlood).
+(NEP / "nmcli").write_text("#!/usr/bin/bash\ncase \"$*\" in *TYPE*device*) printf 'wifi:connected\\nethernet:unavailable\\n' ;; *) echo enabled ;; esac\n")
+(NEP / "nmcli").chmod(0o755)
+s = json.loads(draai("--snel"))
+klopt(s["internet"] == "wifi" and s["wifi"] is True and s["nachtlicht"] is False and s["verborgen"] == [],
+      f"snel: internet via wifi, nachtlampje uit, niets verborgen ({s['internet']}, {s['nachtlicht']}, {s['verborgen']})")
+(NEP / "nmcli").write_text("#!/usr/bin/bash\ncase \"$*\" in *TYPE*device*) printf 'wifi:disconnected\\nethernet:connected (externally)\\n' ;; *) echo enabled ;; esac\n")
+(NEP / "nmcli").chmod(0o755)
+s = json.loads(draai("--zet", "verborgen", "spel,wifi,rm -rf,../x"))
+klopt(s["internet"] == "kabel" and s["verborgen"] == ["wifi", "spel"],
+      f"snel: internet via de kabel; verbergen bewaart alleen bekende knoppen, in vaste volgorde ({s['internet']}, {s['verborgen']})")
+s = json.loads(draai("--zet", "verborgen", ""))
+klopt(s["verborgen"] == [], "snel: alles weer tonen")
+LOG.write_text("")
+nep("kwriteconfig6")
+draai("--zet", "nachtlicht", "aan")
+klopt("kwriteconfig6 --file kwinrc --group NightColor --key Active --notify true" in LOG.read_text(),
+      "snel: Nachtlampje aanzetten gaat via kwriteconfig6 (zoals Instellingen > Scherm)")
+
 # 3. tray-status
 nep("nmcli", "wifi:connected\nethernet:unavailable\nloopback:unmanaged")
 (TMP / "sys" / "class" / "power_supply" / "BAT0").mkdir(parents=True)
@@ -323,6 +343,21 @@ klopt(sd.niet_storen_tot_in_toekomst(_kde(datetime.now() + timedelta(hours=1)))
       and not sd.niet_storen_tot_in_toekomst(_kde(_u - timedelta(hours=2)) + ",UTC"),
       "U072: snelmenu leest 'niet storen tot' met komma-seconden en tijdzone goed")
 
+# Browser kiezen in Welkom (2026-11-24): de gekozen browser staat in het startmenu op de plek van Firefox.
+_oud_home = sd.HOME
+sd.HOME = TMP / "browser-thuis"
+(sd.HOME / ".config" / "bugos").mkdir(parents=True)
+try:
+    _zonder = sd.favoriet_ids()
+    (sd.HOME / ".config" / "bugos" / "browser").write_text("com.google.Chrome\n")
+    _met = sd.favoriet_ids()
+    (sd.HOME / ".config" / "bugos" / "browser").write_text("rm -rf ~\n")
+    _kapot = sd.favoriet_ids()
+finally:
+    sd.HOME = _oud_home
+klopt("org.mozilla.firefox.desktop" in _zonder and _met[0] == "com.google.Chrome.desktop"
+      and "org.mozilla.firefox.desktop" not in _met and _kapot == _zonder,
+      f"Browser: Chrome gekozen staat in het startmenu op de plek van Firefox ({_met[:2]})")
 # A-07 (VM-test): op Kinoite is /home een koppeling naar /var/home. HOME zegt '/home/test', recently-used.xbel
 # '/var/home/test/Documenten/...'. Het startmenu moet dan gewoon 'Documenten' tonen, niet het technische pad.
 _echt = TMP / "a07" / "var" / "home" / "test"

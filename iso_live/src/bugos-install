@@ -39,6 +39,14 @@ if lsblk --list --noheadings -o FSTYPE 2>/dev/null | grep -qx BitLocker; then
     fi
 fi
 
+# Geen schijf om op te installeren? Dan liet het installatieprogramma een lege lijst zien, zonder uitleg (Dell OptiPlex,
+# 2026-11-24: de BIOS stond op 'RAID On'). bugos-live geenschijf kijkt het na en legt het uit: 0 = er is een schijf,
+# 10 = gestopt (het venster is dicht). Iets anders (een fout, geen scherm): gewoon door, zoals vroeger.
+bugos-live geenschijf
+if [ "$?" = 10 ]; then
+    exit 0
+fi
+
 # Het echte installatieprogramma (Anaconda). Niet met exec: daarna kijken we of het gelukt is. (Wat liveinst
 # teruggeeft zegt daar niets over: het laatste wat het doet is setenforce.)
 # Merkteken van de kickstart (build.sh, %post --nochroot, als laatste stap): regel 1 = seconden sinds het

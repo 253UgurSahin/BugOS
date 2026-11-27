@@ -1,10 +1,12 @@
 # Wat de bouw van BugOS (Containerfile) te zien krijgt: alleen wat erin hoort.
-# Een witte lijst: alles eruit, dan alleen deze drie erbij. Zo komen .git, forge-work/,
+# Een witte lijst: alles eruit, dan alleen deze erbij. Zo komen .git, forge-work/,
 # e2e/, de website en eventuele bestanden met geheimen nooit in de bouw (of in BugOS zelf).
 # podman leest dit bestand ook (zonder .containerignore).
 *
 !Containerfile
 !build_files/
 !system_files/
+# De eigen schil (bugos-shell, C++): wordt in een eigen bouwstap van het Containerfile gecompileerd.
+!shell/
 # Geen oude, lokaal gemaakte Python-bestanden mee de bouw in (U314).
 **/__pycache__

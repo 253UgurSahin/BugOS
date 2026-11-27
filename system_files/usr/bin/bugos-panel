@@ -27,6 +27,13 @@
 WAT="${1:-}"
 ACTIE="${2:-status}"
 
+# In de proefsessie met de eigen BugOS-schil (bugos-sessie, docs/STANDALONE.md) is er geen Plasma om in te stellen:
+# dan niets doen (en niet steeds 'niet bereikbaar' melden bij het inloggen). 'status' zegt 'uit'.
+if [ "${BUGOS_SCHIL:-}" = 1 ]; then
+    [ "$ACTIE" = status ] && echo uit
+    exit 0
+fi
+
 # Is het bureaublad (plasmashell) er? Anders heeft praten geen zin.
 bureaublad_er() {
     [ "$(gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus \

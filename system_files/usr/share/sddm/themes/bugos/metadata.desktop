@@ -1,0 +1,11 @@
+[SddmGreeterTheme]
+Name=BugOS
+Description=The BugOS login screen
+Description[nl]=Het BugOS-inlogscherm
+Author=BugOS
+Type=sddm-theme
+Version=1
+MainScript=Main.qml
+ConfigFile=theme.conf
+# Qt 6: dan start SDDM de Qt 6-versie van zijn inlogscherm (sddm-greeter-qt6).
+QtVersion=6

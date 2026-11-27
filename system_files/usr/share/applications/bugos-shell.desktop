@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=BugOS shell
+Name[nl]=BugOS-schil
+Comment=Taskbar, start menu, quick menu and notifications of BugOS
+Comment[nl]=Taakbalk, startmenu, snelmenu en meldingen van BugOS
+Exec=/usr/bin/bugos-shell
+Icon=bugos-logo
+NoDisplay=true
+OnlyShowIn=KDE;
+# KWin geeft deze Wayland-onderdelen alleen aan een programma dat erom vraagt in zijn eigen .desktop-bestand: de
+# vensterlijst (takenlijst), de toetsenbordstand en de startfeedback. Zie docs/STANDALONE.md.
+X-KDE-Wayland-Interfaces=org_kde_plasma_window_management,org_kde_kwin_keystate,org_kde_plasma_activation_feedback

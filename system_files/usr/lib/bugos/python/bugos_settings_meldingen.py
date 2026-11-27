@@ -8,7 +8,8 @@ from pathlib import Path
 import bugos_config as bi
 from bugos_ui import (TAAL, Banner, Chip, Groep, Knop, Rij, label, leeg_groep, px, schermmaat, sectie, sectie_met_knop,
                       start, t, vraag_ja, vraag_tekst)
-from bugos_settings_onderdelen import Blad, KiesDialoog, Keuzes, Sein, meer_knop, menu_bij, op_achtergrond, schuifje
+from bugos_settings_onderdelen import (Blad, KiesDialoog, Keuzes, Sein, meer_knop, menu_bij, op_achtergrond, schuifje,
+                                       tegelijk)
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QDialog, QFileDialog, QFrame, QHBoxLayout, QLineEdit, QScrollArea, QVBoxLayout, QWidget
 
@@ -104,8 +105,8 @@ class MeldingenPagina(Blad):
         venster.activateWindow()
 
     def ververs(self) -> None:
-        op_achtergrond(self, lambda: (bi.niet_storen(), bi.stil_bij_games(), bi.meldingsgeluid(),
-                                      bi.app_meldingen(TAAL)), self.toon)
+        op_achtergrond(self, lambda: tegelijk(bi.niet_storen, bi.stil_bij_games, bi.meldingsgeluid,
+                                              lambda: bi.app_meldingen(TAAL)), self.toon)
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:
@@ -158,13 +159,15 @@ class ProgrammasPagina(Blad):
         self.lay.addWidget(self.ander, 0, Qt.AlignmentFlag.AlignLeft)
 
     def ververs(self) -> None:
+        def naam_voor(sleutel: str) -> str:
+            app = bi.standaard_app(sleutel)
+            naam = next((n for i, n in bi.apps_voor(sleutel, TAAL) if i == app), None) if app else None
+            return naam or (bi.app_naam(app, TAAL, ook_verborgen=True) if app and not bi.VOORBEELD else "")
+
         def lees() -> dict[str, str]:
-            uit = {}
-            for sleutel, _ic, _namen, _soorten in bi.SOORTEN:
-                app = bi.standaard_app(sleutel)
-                naam = next((n for i, n in bi.apps_voor(sleutel, TAAL) if i == app), None) if app else None
-                uit[sleutel] = naam or (bi.app_naam(app, TAAL, ook_verborgen=True) if app and not bi.VOORBEELD else "")
-            return uit
+            # Elke soort tegelijk: xdg-mime is een script, dat kost per soort een paar honderd ms (zie tegelijk).
+            sleutels = [s[0] for s in bi.SOORTEN]
+            return dict(zip(sleutels, tegelijk(*[lambda s=s: naam_voor(s) for s in sleutels])))
         op_achtergrond(self, lees, self.toon)
 
     def toon(self, uitkomst) -> None:
@@ -727,8 +730,8 @@ class PrintersPagina(Blad):
         self.beheerder = True
 
     def ververs(self) -> None:
-        op_achtergrond(self, lambda: (bi.printers(), bi.wachtrij(), bi.scanprogramma(), bi.taken(),
-                                      bi.ben_beheerder()), self.toon)
+        op_achtergrond(self, lambda: tegelijk(bi.printers, bi.wachtrij, bi.scanprogramma, bi.taken,
+                                              bi.ben_beheerder), self.toon)
 
     def toon(self, uitkomst) -> None:
         if not uitkomst:

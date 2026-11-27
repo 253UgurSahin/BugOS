@@ -7,13 +7,14 @@ from __future__ import annotations
 import json
 import os
 import platform
+import socket
 import subprocess
 import threading
 from pathlib import Path
 
 import bugos_config as bi
 from bugos_ui import Kaart, Knop, Rij, bestaat, draai, label, start, t, vraag_ja
-from bugos_settings_onderdelen import Blad, Doorloop, Sein, op_achtergrond, schuifje
+from bugos_settings_onderdelen import Blad, Doorloop, Sein, op_achtergrond, schuifje, tegelijk
 from PySide6.QtCore import QProcess, Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QVBoxLayout, QWidget
@@ -24,7 +25,7 @@ from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QVBoxLayout, QW
 def status_van(script: str, *voor: str) -> bool:
     """Vraag een bugos-script of iets aan staat."""
     if bi.VOORBEELD:
-        return script in ("bugos-updates", "bugos-panel")
+        return script in ("bugos-updates", "bugos-panel", "bugos-schil")
     if not bestaat(script):
         return False
     # draai() vangt de uitvoer op (geen terminal): bugos-updates geeft dan het ene woord, geen zin voor mensen (A-15).
@@ -86,9 +87,10 @@ def systeem_info() -> list[tuple[str, str]]:
                      t(f"{vrij:.0f} GB vrij van {totaal:.0f} GB", f"{vrij:.0f} GB free of {totaal:.0f} GB")))
     except OSError:
         pass
-    code, uit = draai("hostname", timeout=3)
-    if code == 0 and uit.strip():
-        info.append((t("Naam van deze computer", "Computer name"), uit.strip()))
+    # Wat 'hostname' zegt, maar zonder een programma te starten (dit gebeurt terwijl de pagina gebouwd wordt).
+    naam = socket.gethostname().strip()
+    if naam:
+        info.append((t("Naam van deze computer", "Computer name"), naam))
     info.append((t("Linux-kern", "Linux kernel"), platform.release()))
     return info
 
@@ -163,8 +165,18 @@ class Schakelaars:
         en snel aan-uit loopt niet door elkaar (U126)."""
         if not hasattr(self, "schakels"):
             self.schakels = {}
-        schuif = schuifje(status_van(script, *voor), lambda aan: self.zet_schakel(script, voor, aan))
+            self.onbekend: set = set()
+        # Hoe hij staat, vraagt ververs_schakels() op de achtergrond (bij het openen van de pagina). Eerst vroeg dit
+        # het script hier, terwijl het venster gebouwd werd: zeven scripts (bugos-panel praat ook nog met Plasma)
+        # voor je een venster zag. Tot het antwoord er is, staat de schakelaar op slot: niet omzetten voor we weten
+        # hoe hij staat. (Voorbeeldstand: meteen, er draait niets.)
+        bekend = bi.VOORBEELD
+        schuif = schuifje(status_van(script, *voor) if bekend else False,
+                          lambda aan: self.zet_schakel(script, voor, aan))
         self.schakels[(script, voor)] = schuif
+        if not bekend:
+            schuif.setEnabled(False)
+            self.onbekend.add((script, voor))
         return schuif
 
     def zet_schakel(self, script: str, voor: tuple, aan: bool) -> None:
@@ -172,6 +184,7 @@ class Schakelaars:
             return
         schuif = self.schakels[(script, voor)]
         schuif.setEnabled(False)
+        self.onbekend.discard((script, voor))   # wat er na het omzetten staat, leest het omzetten zelf
         # Los gestart (in een eigen draad die wacht), zodat sluiten van Instellingen bijvoorbeeld het klaarzetten
         # van de ontwikkelaarsmodus (5-10 minuten) niet afbreekt.
         sein = Sein(self)
@@ -196,9 +209,19 @@ class Schakelaars:
         schakels = dict(getattr(self, "schakels", {}))
         if not schakels or bi.VOORBEELD:
             return
-        op_achtergrond(self, lambda: {k: status_van(k[0], *k[1]) for k in schakels},
-                       lambda standen: [schakels[k].zet_stil(v is True) for k, v in (standen or {}).items()
-                                        if schakels[k].isEnabled()])
+        sleutels = list(schakels)
+
+        def klaar(standen) -> None:
+            for k in sleutels:
+                eerste = k in self.onbekend
+                if k in (standen or {}) and (eerste or schakels[k].isEnabled()):   # (niet midden in het omzetten)
+                    schakels[k].zet_stil(standen[k] is True)
+                if eerste:   # nu weten we hoe hij staat; ging het lezen mis, dan toch niet voor altijd op slot
+                    self.onbekend.discard(k)
+                    schakels[k].setEnabled(True)
+        # Tegelijk: elk script kost een paar honderd ms (bash, en bugos-panel vraagt het ook nog aan Plasma).
+        op_achtergrond(self, lambda: dict(zip(sleutels, tegelijk(*[lambda k=k: status_van(k[0], *k[1])
+                                                                     for k in sleutels]))), klaar)
 
     def ververs(self) -> None:
         self.ververs_schakels()
@@ -223,8 +246,12 @@ class UpdatesPagina(Schakelaars, Blad):
             self.auto = self.nu = self.terug = None
             self.bouw_rest()
             return
-        auto = status_van("bugos-updates") or not bestaat("bugos-updates")
+        # Hoe 'Updates vanzelf' staat, leest ververs() op de achtergrond (eerst gebeurde dat hier, tijdens het bouwen
+        # van het venster). Tot dan op slot. (Voorbeeldstand: meteen.)
+        self.auto_onbekend = not bi.VOORBEELD
+        auto = (status_van("bugos-updates") or not bestaat("bugos-updates")) if bi.VOORBEELD else False
         self.auto = schuifje(auto, lambda aan: None if bi.VOORBEELD else self.updates("auto" if aan else "hand"))
+        self.auto.setEnabled(not self.auto_onbekend)
         g.voeg(Rij("verversen", t("Updates vanzelf", "Automatic updates"),
                    t("Aan: BugOS houdt zichzelf stil bij. Uit: jij kiest wanneer.",
                      "On: BugOS quietly keeps itself up to date. Off: you choose when."), self.auto))
@@ -242,6 +269,21 @@ class UpdatesPagina(Schakelaars, Blad):
         kr.addWidget(self.terug)
         g.lay.addWidget(knoppen)
         self.bouw_rest()
+
+    auto_onbekend = False   # 'Updates vanzelf' nog niet gelezen
+
+    def ververs(self) -> None:
+        super().ververs()
+        if self.auto is None or not self.auto_onbekend:
+            return
+
+        def klaar(aan) -> None:
+            if self.auto_onbekend and aan is not None and not getattr(self, "bezig_keuze", False):
+                self.auto.zet_stil(aan is True)
+            self.auto_onbekend = False
+            if not getattr(self, "bezig_keuze", False):
+                self.auto.setEnabled(True)
+        op_achtergrond(self, lambda: status_van("bugos-updates") or not bestaat("bugos-updates"), klaar)
 
     def vraag_terug(self) -> None:
         """Eerst kijken of er wel een vorige versie is: zo niet, dan meteen dat zeggen, zonder eerst de ernstige

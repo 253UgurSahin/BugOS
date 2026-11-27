@@ -65,7 +65,7 @@ def chrome_naar_html(bestanden: dict[str, Path]) -> str:
     mappen = []
     for browser, pad in bestanden.items():
         try:
-            knopen = ff.chrome_bladwijzers(json.loads(pad.read_text(encoding="utf-8-sig")))
+            knopen = ff.chrome_bladwijzers(json.loads(ot.lees_tekst(pad)))
         except (OSError, ValueError):
             continue
         mappen.append({"titel": browser, "kinderen": knopen})
@@ -568,13 +568,30 @@ def venster() -> int:
             if self.bezig() or not self.kiezer.isEnabled():
                 return
             items = []
-            for m in zoek_overstap():
+            gevonden = zoek_overstap()
+            for m in gevonden:
                 i = info(m)
                 items.append((str(m), m.parent.name,
                               t(f"Van {ot._tekst(i.get('gebruiker'), 60) or '?'} op {ot._tekst(i.get('computer'), 60) or '?'}",
                                 f"From {ot._tekst(i.get('gebruiker'), 60) or '?'} on {ot._tekst(i.get('computer'), 60) or '?'}")))
             self.kiezer.zet(items)
             self.gekozen_veranderd()
+            self.stick_melding(gevonden)
+            # Zet BugOS een schijf nog open (of komt er nog een poging), dan vaker kijken: dan staat hij er binnen een
+            # seconde nadat hij open is, niet pas na de volgende 3 seconden.
+            self.timer.setInterval(700 if ot.openen_bezig() else 3000)
+
+        def stick_melding(self, gevonden: list) -> None:
+            """Zit er een schijf in die (nog) niet te lezen is, of zonder map BugOS-Switch? Dan zeggen we dat in de
+            meldingsbalk, in plaats van stil 'Steek de USB-schijf in…'. Alleen onze eigen melding vervangen of weghalen:
+            een melding van het overzetten ('Klaar', 'Gestopt') blijft staan."""
+            tekst, soort = ot.stick_melding(gevonden)
+            eigen = getattr(self, "_stick_tekst", "")
+            if self.melding.tekst.text() not in ("", eigen):
+                return
+            if tekst != eigen:
+                self.melding.zet(tekst, soort or "info")
+            self._stick_tekst = tekst
 
         def gekozen_veranderd(self) -> None:
             gekozen = self.kiezer.gekozen()
@@ -584,9 +601,8 @@ def venster() -> int:
             sleutel = None
             if gekozen:
                 try:
-                    sleutel = (gekozen, max((Path(gekozen) / b).stat().st_mtime for _n, b in MAPPEN
-                                            if (Path(gekozen) / b).exists()))
-                except (OSError, ValueError):
+                    sleutel = (gekozen, ot.infobestand(Path(gekozen)).stat().st_mtime)
+                except (OSError, AttributeError):   # geen infobestand (meer): AttributeError op None
                     sleutel = (gekozen, 0)
             if sleutel != self._overzicht_van:
                 self._overzicht_van = sleutel

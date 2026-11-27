@@ -1,0 +1,265 @@
+#!/usr/bin/python3
+"""BugOS: Windows-programma's, zoals 'Programma's en onderdelen' in Windows.
+
+    bugos-windows                   het venster: je Windows-programma's (verwijderen), een .exe installeren,
+                                    onderdelen van Microsoft (Visual C++, .NET, lettertypen, DirectX), Microsoft 365
+                                    in je startmenu, de C:-schijf, opnieuw beginnen
+    bugos-windows onderdeel <naam>  een onderdeel installeren (winetricks), zonder venster
+    bugos-windows office aan|uit    Microsoft 365 (web-apps) in of uit je startmenu
+    bugos-windows office bijwerken  (bij het inloggen) de starters van Microsoft 365 bijwerken, als ze er zijn
+    bugos-windows lijst             de geïnstalleerde Windows-programma's
+
+De logica staat in /usr/lib/bugos/python/bugos_windows.py.
+"""
+
+import subprocess
+import sys
+
+sys.path.insert(0, "/usr/lib/bugos/python")
+
+import bugos_windows as w  # noqa: E402
+
+GEBRUIK = __doc__.split("De logica")[0]
+
+
+def cli(args: list[str]) -> int:
+    if args[0] == "onderdeel" and len(args) == 2:
+        gelukt, reden = w.installeer_onderdeel(args[1])
+        if not gelukt:
+            print(reden or "mislukt")
+        return 0 if gelukt else 1
+    if args[0] == "office" and args[1:] in (["aan"], ["uit"]):
+        w.office_aan() if args[1] == "aan" else w.office_uit()
+        return 0
+    if args == ["office", "bijwerken"]:
+        # Bij het inloggen: staat Microsoft 365 aan, dan de starters opnieuw schrijven (nieuwe pictogrammen, adressen).
+        if w.office_bijwerken():
+            print("bijgewerkt")
+        return 0
+    if args == ["lijst"]:
+        for p in w.programmas():
+            print(f"{p['sleutel']}\t{p['naam']}")
+        return 0
+    print(GEBRUIK, file=sys.stderr)
+    return 2
+
+
+def venster() -> int:
+    from bugos_ui import (Banner, Chip, Groep, Knop, Rij, SchakelRij, label, leeg_groep, maak_app, schuifbaar, sectie,
+                          start, t, uitvoeren, vraag_ja)
+    from PySide6.QtCore import QProcess
+    from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QVBoxLayout, QWidget
+
+    class Venster(QWidget):
+        def __init__(self):
+            super().__init__()
+            self.setWindowTitle(t("Windows-programma's", "Windows programs"))
+            self.resize(720, 640)
+            buiten = QVBoxLayout(self)
+            buiten.setContentsMargins(0, 0, 0, 0)
+            binnen = QWidget()
+            buiten.addWidget(schuifbaar(binnen))
+            lay = QVBoxLayout(binnen)
+            lay.setContentsMargins(32, 28, 32, 24)
+            lay.setSpacing(12)
+            lay.addWidget(label(t("Windows-programma's", "Windows programs"), "titel"))
+            lay.addWidget(label(t(
+                "BugOS opent veel Windows-programma's (.exe en .msi) met Wine. Niet alles werkt: kijk voor de "
+                "zekerheid eerst in de Winkel of er een versie voor BugOS is.",
+                "BugOS opens many Windows programs (.exe and .msi) with Wine. Not everything works: to be safe, "
+                "check the Store first for a BugOS version."), "sub"))
+            self.melding = Banner("", "info")
+            lay.addWidget(self.melding)
+
+            # Je programma's
+            lay.addWidget(sectie(t("Je Windows-programma's", "Your Windows programs")))
+            self.programmas = Groep()
+            lay.addWidget(self.programmas)
+            rij = QHBoxLayout()
+            self.installeer = Knop(t("Een Windows-programma installeren…", "Install a Windows program…"), "hoofd",
+                                   "lijn:download")
+            self.installeer.clicked.connect(self.kies_exe)
+            self.c_knop = Knop(t("C:-schijf openen", "Open drive C:"), "rand", "lijn:schijf")
+            self.c_knop.clicked.connect(lambda: start("bugos-files", str(w.prefix() / "drive_c")))
+            rij.addWidget(self.installeer)
+            rij.addWidget(self.c_knop)
+            rij.addStretch(1)
+            lay.addLayout(rij)
+
+            # Onderdelen van Microsoft
+            lay.addWidget(sectie(t("Onderdelen van Microsoft", "Components from Microsoft"), wrap=True))
+            lay.addWidget(label(t(
+                "Zegt een programma dat er iets ontbreekt (een .dll, .NET of Visual C++)? Voeg het onderdeel toe en "
+                "probeer het programma opnieuw. BugOS haalt het bij Microsoft zelf; daarvoor heb je internet nodig.",
+                "Does a program say something is missing (a .dll, .NET or Visual C++)? Add the component and try "
+                "the program again. BugOS gets it from Microsoft itself; you need internet for this."), "klein"))
+            self.onderdelen = Groep()
+            lay.addWidget(self.onderdelen)
+
+            # Microsoft 365
+            lay.addWidget(sectie(t("Microsoft Office", "Microsoft Office")))
+            self.office = SchakelRij(
+                t("Microsoft 365 in je startmenu", "Microsoft 365 in your start menu"),
+                t("Word, Excel, PowerPoint, Outlook en OneDrive als apps, elk in een eigen venster. Het is de echte "
+                  "Office van Microsoft, in je browser; gratis met een Microsoft-account. (Office zelf installeren "
+                  "met een .exe werkt op BugOS niet goed.)",
+                  "Word, Excel, PowerPoint, Outlook and OneDrive as apps, each in its own window. It is the real "
+                  "Office from Microsoft, in your browser; free with a Microsoft account. (Installing Office itself "
+                  "with an .exe does not work well on BugOS.)"),
+                w.office_staat(), "lijn:document")
+            self.office.setProperty("kaart", "true")
+            self.office.omgezet.connect(self.zet_office)
+            lay.addWidget(self.office)
+
+            # Opnieuw beginnen
+            lay.addWidget(sectie(t("Werkt het niet meer?", "Not working anymore?")))
+            opnieuw = Groep()
+            self.opnieuw = Knop(t("Opnieuw beginnen…", "Start over…"), "rand")
+            self.opnieuw.clicked.connect(self.opnieuw_beginnen)
+            opnieuw.voeg(Rij("verversen", t("Opnieuw beginnen met Windows-programma's",
+                                            "Start over with Windows programs"),
+                             t("Een lege Windows-map. De oude wordt bewaard, niet weggegooid.",
+                               "An empty Windows folder. The old one is kept, not thrown away."), self.opnieuw))
+            lay.addWidget(opnieuw)
+            lay.addStretch(1)
+
+            self.proces: QProcess | None = None
+            self.bezig_met = ""
+            self.ververs()
+
+        # ------------------------------------------------------------------ vullen
+        def ververs(self) -> None:
+            klaar = w.is_klaar()
+            bezig = self.proces is not None
+            leeg_groep(self.programmas)
+            lijst = w.programmas() if klaar else []
+            if not lijst:
+                self.programmas.voeg(Rij("apps", t("Nog geen Windows-programma's", "No Windows programs yet"),
+                                         t("Dubbelklik op een .exe of .msi, of gebruik de knop hieronder.",
+                                           "Double-click an .exe or .msi, or use the button below.")))
+            for p in lijst:
+                weg = Knop(t("Verwijderen", "Remove"), "stil")
+                weg.setAccessibleDescription(p["naam"])
+                weg.setEnabled(not bezig)
+                weg.clicked.connect(lambda _c=False, p=p: self.verwijder(p))
+                self.programmas.voeg(Rij("computer", p["naam"], "", weg))
+            self.c_knop.setEnabled(klaar)
+            leeg_groep(self.onderdelen)
+            erop = w.onderdelen_erop() if klaar else set()
+            for naam, nl, en, uitleg_nl, uitleg_en in w.ONDERDELEN:
+                if naam in erop:
+                    rechts = Chip(t("Staat erop", "Installed"), "goed")
+                else:
+                    rechts = Knop(t("Bezig…", "Working…") if self.bezig_met == naam else t("Toevoegen", "Add"), "rand")
+                    rechts.setAccessibleDescription(t(nl, en))
+                    rechts.setEnabled(not bezig)
+                    rechts.clicked.connect(lambda _c=False, n=naam, x=t(nl, en): self.onderdeel(n, x))
+                self.onderdelen.voeg(Rij("doos", t(nl, en), t(uitleg_nl, uitleg_en), rechts))
+            self.opnieuw.setEnabled(klaar and not bezig)
+
+        # ------------------------------------------------------------------ doen
+        def kies_exe(self) -> None:
+            from pathlib import Path
+            pad, _ = QFileDialog.getOpenFileName(self, t("Een Windows-programma kiezen", "Choose a Windows program"),
+                                                 str(Path.home() / "Downloads"),
+                                                 t("Windows-programma", "Windows program") + " (*.exe *.msi *.EXE *.MSI)")
+            if pad:
+                start("bugos-exe", pad)
+
+        def onderdeel(self, naam: str, mooi: str) -> None:
+            if self.proces is not None:
+                return
+            if not w.is_klaar():
+                self.melding.zet(t("Open eerst één Windows-programma: dan zet BugOS alles klaar.",
+                                   "Open one Windows program first: then BugOS prepares everything."), "let_op")
+                return
+            self.bezig_met = naam
+            self.mooi = mooi
+            self.melding.zet(t(f"{mooi} wordt toegevoegd. Dit kan even duren…", f"Adding {mooi}. This can take a "
+                               "while…"), "bezig")
+            self.proces = QProcess(self)
+            self.proces.finished.connect(self.onderdeel_klaar)
+            self.ververs()
+            self.proces.start(sys.executable, [__file__, "onderdeel", naam])
+
+        def onderdeel_klaar(self, code: int, _status) -> None:
+            self.proces.deleteLater()
+            self.proces = None
+            self.bezig_met = ""
+            if code == 0:
+                self.melding.zet(t(f"{self.mooi} is toegevoegd. Probeer je programma opnieuw.",
+                                   f"{self.mooi} has been added. Try your program again."), "goed")
+            else:
+                self.melding.zet(t(f"{self.mooi} toevoegen lukte niet. Heb je internet? Probeer het nog eens.",
+                                   f"Adding {self.mooi} did not work. Are you online? Please try again."), "fout")
+            self.ververs()
+
+        def verwijder(self, p: dict) -> None:
+            opdracht = w.verwijder_opdracht(p["sleutel"])
+            if opdracht is None or self.proces is not None:
+                return
+            # Het eigen verwijderprogramma van het programma (zoals in Windows); daarna de lijst opnieuw.
+            self.melding.zet(t(f"Het verwijderprogramma van {p['naam']} start…", f"Starting the uninstaller of "
+                               f"{p['naam']}…"), "bezig")
+            self.proces = QProcess(self)
+            self.proces.setProcessEnvironment(self._omgeving())
+            self.proces.finished.connect(self.verwijderd)
+            self.ververs()
+            self.proces.start(opdracht[0], opdracht[1:])
+
+        def verwijderd(self, _code: int, _status) -> None:
+            self.proces.deleteLater()
+            self.proces = None
+            self.melding.zet("", "info")
+            self.ververs()
+
+        def _omgeving(self):
+            from PySide6.QtCore import QProcessEnvironment
+            omg = QProcessEnvironment.systemEnvironment()
+            for k, v in w.omgeving().items():
+                if k in ("WINEPREFIX", "WINEDEBUG"):
+                    omg.insert(k, v)
+            return omg
+
+        def zet_office(self, aan: bool) -> None:
+            if aan:
+                w.office_aan()
+                self.melding.zet(t("Word, Excel, PowerPoint, Outlook en OneDrive staan in je startmenu. Log in met je "
+                                   "Microsoft-account.", "Word, Excel, PowerPoint, Outlook and OneDrive are in your "
+                                   "start menu. Sign in with your Microsoft account."), "goed")
+            else:
+                w.office_uit()
+                self.melding.zet(t("Microsoft 365 is uit je startmenu.", "Microsoft 365 is out of your start menu."),
+                                 "info")
+
+        def opnieuw_beginnen(self) -> None:
+            if not vraag_ja(self, t("Opnieuw beginnen?", "Start over?"),
+                            t("Je Windows-programma's verdwijnen uit je startmenu. De oude Windows-map blijft bewaard "
+                              "(in ~/.local/share/bugos), dus bestanden die erin staan raak je niet kwijt.",
+                              "Your Windows programs disappear from your start menu. The old Windows folder is kept "
+                              "(in ~/.local/share/bugos), so you do not lose files in it."),
+                            t("Opnieuw beginnen", "Start over"), enter_is_nee=True):
+                return
+            oud = w.opnieuw_beginnen()
+            self.melding.zet(t(f"Klaar. De oude map heet nu {oud.name}." if oud else "Klaar.",
+                               f"Done. The old folder is now called {oud.name}." if oud else "Done."), "goed")
+            self.ververs()
+
+    app = QApplication.instance() or maak_app("bugos-windows", "bugos-windows", sys.argv)
+    return uitvoeren(app, Venster())
+
+
+def main(args: list[str]) -> int:
+    if args[:1] in (["-h"], ["--help"]):
+        print(GEBRUIK)
+        return 0
+    if args and args[0] in ("onderdeel", "office", "lijst"):
+        return cli(args)
+    if args:
+        print(GEBRUIK, file=sys.stderr)
+        return 2
+    return venster()
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

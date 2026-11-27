@@ -8,15 +8,11 @@
 # Komt er later een regel bij (een nieuwe BugOS-versie), dan krijgen computers die de eerste start al deden die app
 # ook, één keer.
 
-# Internet: de browser. Zat tot 2026-11 als pakket in BugOS (niet te verwijderen); nu een Flatpak.
-org.mozilla.firefox
-# Kantoor: brieven, rekenbladen en presentaties (opent ook Word- en Excel-bestanden).
-org.libreoffice.LibreOffice
-# Films en muziek.
-org.videolan.VLC
+# Zo weinig mogelijk vooraf (2026-11): alleen wat nodig is om een foto of PDF met dubbelklik te openen. Al het andere
+# (LibreOffice, VLC, Steam, ...) haal je zelf uit de Winkel als je het nodig hebt. Wie BugOS al had, houdt wat er al
+# stond (en kan het in de Winkel bij 'Mijn apps' verwijderen).
+# Internet: geen vaste browser. Je kiest hem zelf in Welkom (bugos-browser): Firefox, Chrome, Edge, Brave of Chromium.
+# Wie BugOS al had (toen zat Firefox erin), houdt Firefox: zie bugos-first-boot.
 # Foto's en PDF's openen met dubbelklik: de basis (Kinoite) heeft er geen programma voor (U224).
 org.kde.gwenview
 org.kde.okular
-# Gamen. Zat tot 2026-11 als pakket in BugOS (als dat lukte); nu altijd de Flatpak, die je kunt verwijderen.
-# Controllers werken via steam-devices (packages.txt), game-modus via de GameMode-portal.
-com.valvesoftware.Steam
