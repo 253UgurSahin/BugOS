@@ -8,7 +8,10 @@
       1. Controleren  - kan deze computer BugOS draaien?
       2. USB-stick    - BugOS op een USB-stick zetten (die blijft bruikbaar in
                         Windows: een exFAT-schijf BUGOS, zie 4b hieronder).
-      3. Meenemen     - je documenten, foto's, muziek, video's, bureaublad,
+      3. Meenemen     - eerst kiezen wat meegaat (Kies wat meegaat: vinkjes per map,
+                        per browserprofiel en per soort instelling, regels voor wat
+                        thuisblijft zoals *node*, en hoe groot de USB-schijf moet
+                        zijn), dan je documenten, foto's, muziek, video's, bureaublad,
                         downloads, bladwijzers en achtergrond naar een USB-schijf
                         (ook de BugOS-stick), plus je instellingen, de NAMEN van
                         je wifi-netwerken, je netwerkprinters en een lijstje van
@@ -16,8 +19,8 @@
                         wachtwoorden.
       4. Waar komt BugOS? - in plaats van Windows, ernaast (dan maakt deze stap
                         Windows wat kleiner) of op een andere schijf.
-    In de code heten de pagina's nog naar hun oude plek (2 meenemen, 3 ruimte, 4 stick); de volgorde staat
-    bij Toon-Pagina.
+    In de code heten de pagina's nog naar hun oude plek (2 meenemen, 3 ruimte, 4 stick, 7 kiezen); de volgorde
+    staat bij Get-Volgorde.
 
     Starten: dubbelklik op "Start BugOS Switch.bat".
 
@@ -51,7 +54,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # Welke versie dit is: staat in de titelbalk en onderin de zijbalk, zodat je ziet of je de nieuwste hebt.
-$script:Versie = '2026.11.26-2'
+$script:Versie = '2026.11.27-1'
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -157,35 +160,414 @@ $script:Mappen = @(
     @{ Sleutel = 'Downloads'; Naam = 'Downloads' }
 )
 
-function Get-MapGrootte([string] $pad, [string[]] $ZonderMappen = @()) {
-    # Hoeveel bytes er in een map staan (alle submappen). Mappen met een naam uit -ZonderMappen tellen niet mee
-    # (bijvoorbeeld 'ImapMail' van Thunderbird: die gaat niet mee). Bestanden die alleen in OneDrive staan, tellen
-    # niet mee als je die niet mee wilt ($script:CloudMee uit): die worden dan ook niet gekopieerd.
-    if (-not $pad -or -not (Test-Path -LiteralPath $pad)) { return 0L }
-    $bestanden = Get-ChildItem -LiteralPath $pad -Recurse -File -Force -ErrorAction SilentlyContinue
-    if ($ZonderMappen.Count -gt 0) {
-        $bestanden = $bestanden | Where-Object {
-            $rel = $_.FullName.Substring($pad.Length).TrimStart('\')
-            -not ($ZonderMappen | Where-Object { $rel -like "$_\*" })
+function Get-MapNaam([string] $naam) {
+    # De naam van een vaste map zoals Windows hem in je eigen taal laat zien (op de schijf heet hij Engels, zie FORMAT.md).
+    switch ($naam) {
+        'Documents' { T 'Documenten' 'Documents' }
+        'Pictures' { T 'Afbeeldingen' 'Pictures' }
+        'Music' { T 'Muziek' 'Music' }
+        'Videos' { T "Video's" 'Videos' }
+        'Desktop' { T 'Bureaublad' 'Desktop' }
+        default { $naam }
+    }
+}
+
+# ------------------------------------------- meenemen: kiezen wat meegaat --
+# Op de pagina 'Kies wat meegaat' zet je vinkjes uit (een map, een browserprofiel, je wifi-namen...) en schrijf je
+# regels voor wat thuisblijft ('Niet mee'). Alles hieronder leest die keuze; het werk naast het venster krijgt hem mee
+# via Start-Werk (NietMee en Uitsluiten in $Mee).
+
+# Wat je NIET mee wilt (een vinkje uit): 'map:Music', 'extra:D:\Foto''s', 'bw:Chrome:Default', 'firefox', 'thunderbird',
+# 'outlook', 'lettertypen', 'achtergrond', 'instellingen', 'wifi', 'printers', 'programmas'. Leeg = alles mee (zoals
+# vroeger). Zo staat iets nieuws (een extra map, een tweede Chrome-profiel) vanzelf aan.
+$script:NietMee = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+# Wat er nooit mee moet, als regels (wens van de eigenaar, 2026-11): een naam (node_modules), een naam met * en ? als
+# joker (*node* = alles met 'node' in de naam), of een hele plek (C:\Users\jij\Documents\Oud). Ze gelden voor de mappen
+# die meegaan (de vaste zes en je extra mappen), op elke diepte, voor mappen en bestanden: net als robocopy /XD en /XF.
+$script:Uitsluiten = New-Object System.Collections.Generic.List[string]
+$script:UitRegels = @()
+# Wat robocopy in elke map overslaat (/XF in Invoke-Meenemen): hulpbestanden van Windows (U096).
+$script:WindowsHulp = @('desktop.ini', 'Thumbs.db')
+
+function Test-Mee([string] $sleutel) { -not $script:NietMee.Contains($sleutel) }
+
+function Set-NietMee([object[]] $sleutels) {
+    $invoer = @($sleutels)   # eerst een kopie: de invoer kan dezelfde lijst zijn
+    $script:NietMee.Clear()
+    foreach ($s in $invoer) { if ($s) { [void]$script:NietMee.Add([string]$s) } }
+}
+
+function ConvertTo-UitRegel([string] $tekst) {
+    # Eén regel voor 'Niet mee' nakijken en klaarmaken. Geeft Tekst, Soort ('naam' of 'plek'), en Patroon (een naam) of
+    # Pad (een plek). Klopt hij niet, dan een fout met de reden in gewone woorden (die zie je als melding).
+    $t = "$tekst".Trim().Trim('"').Trim()
+    if (-not $t) { throw (T 'Typ eerst een naam of kies een plek.' 'Type a name or choose a place first.') }
+    if ($t -match '[<>"|\x00-\x1f]') { throw (T 'Daar staan tekens in die niet in een naam kunnen (< > " |).' 'That contains characters that cannot be in a name (< > " |).') }
+    $t = $t -replace '/', '\'
+    if ($t.Contains('\') -or $t.Contains(':')) {
+        # Een hele plek: precies die map of dat bestand. Met de schijfletter (C:\...) of een netwerkplek (\\pc\map).
+        if ($t -match '[*?]') { throw (T 'Een joker (* of ?) kan alleen in een naam, niet in een hele plek. Typ bijvoorbeeld *node*, of kies de plek met de knop.' 'A wildcard (* or ?) only works in a name, not in a whole place. Type for example *node*, or choose the place with the button.') }
+        if ($t -notmatch '^[A-Za-z]:\\' -and $t -notmatch '^\\\\[^\\]+\\') { throw (T 'Typ de hele plek, met de schijfletter (zoals C:\Users\jij\Documents\Oud), of alleen een naam zonder \.' 'Type the whole place, with the drive letter (like C:\Users\you\Documents\Old), or just a name without \.') }
+        try { $vol = [System.IO.Path]::GetFullPath($t).TrimEnd('\') } catch { throw (T 'Dat is geen plek op deze computer.' 'That is not a place on this computer.') }
+        if ($vol -match '^[A-Za-z]:$') { throw (T 'Een hele schijf kan niet; kies een map erop.' 'A whole drive is not possible; choose a folder on it.') }
+        return [pscustomobject]@{ Tekst = $vol; Soort = 'plek'; Pad = $vol; Patroon = $null }
+    }
+    if (($t -replace '[*?.\s]', '') -eq '') { throw (T 'Dan gaat er niets meer mee. Maak de regel preciezer, zoals *node* of *.iso.' 'Then nothing would go along. Make the rule more precise, like *node* or *.iso.') }
+    # Een naam met * (alles) en ? (één teken), zoals robocopy: hoofdletters tellen niet, [ en ] zijn gewone tekens.
+    $regex = '^' + (([regex]::Escape($t)) -replace '\\\*', '.*' -replace '\\\?', '.') + '$'
+    $patroon = New-Object System.Text.RegularExpressions.Regex($regex, ([System.Text.RegularExpressions.RegexOptions]'IgnoreCase, CultureInvariant'))
+    return [pscustomobject]@{ Tekst = $t; Soort = 'naam'; Pad = $null; Patroon = $patroon }
+}
+
+function Set-Uitsluiten([object[]] $regels) {
+    # De regels van 'Niet mee' klaarzetten (een regel die niet klopt, valt weg; dubbele maar één keer).
+    $invoer = @($regels)   # eerst een kopie: de invoer kan dezelfde lijst zijn
+    $script:Uitsluiten.Clear()
+    $lijst = New-Object System.Collections.Generic.List[object]
+    foreach ($r in $invoer) {
+        if (-not $r) { continue }
+        try { $regel = ConvertTo-UitRegel ([string]$r) } catch { continue }
+        if ($script:Uitsluiten -contains $regel.Tekst) { continue }
+        [void]$script:Uitsluiten.Add($regel.Tekst)
+        $lijst.Add($regel)
+    }
+    $script:UitRegels = $lijst.ToArray()
+}
+
+function Get-UitRegel([string] $vol, [string] $naam) {
+    # Welke regel van 'Niet mee' past op dit bestand of deze map? '' = geen: het gaat mee.
+    foreach ($r in $script:UitRegels) {
+        if ($r.Soort -eq 'naam') { if ($r.Patroon.IsMatch($naam)) { return $r.Tekst } }
+        elseif ([string]::Equals($vol.TrimEnd('\'), $r.Pad, [StringComparison]::OrdinalIgnoreCase)) { return $r.Tekst }
+    }
+    return ''
+}
+
+function Get-UitRegelVoorMap([string] $pad) {
+    # Valt een hele map die mee zou gaan (Documenten, een extra map) zelf onder een regel? Dan gaat hij helemaal niet
+    # mee. Ook als hij IN een plek ligt die je uitsloot (D:\Oud\Foto's bij de regel D:\Oud).
+    if (-not $pad) { return '' }
+    try { $vol = [System.IO.Path]::GetFullPath($pad).TrimEnd('\') } catch { return '' }
+    $regel = Get-UitRegel $vol (Split-Path $vol -Leaf)
+    if ($regel) { return $regel }
+    foreach ($r in $script:UitRegels) {
+        if ($r.Soort -eq 'plek' -and ($vol + '\').StartsWith($r.Pad + '\', [StringComparison]::OrdinalIgnoreCase)) { return $r.Tekst }
+    }
+    return ''
+}
+
+function Get-RobocopyUit {
+    # De regels van 'Niet mee' voor robocopy, om direct achter '/XF desktop.ini Thumbs.db' te zetten: eerst nog meer
+    # namen voor /XF (bestanden), dan /XD met dezelfde regels (mappen). Een naam (met * en ?) past robocopy op elke diepte
+    # toe, een hele plek alleen op precies die plek: net als Get-Bestanden. Geen regels: niets (een kale /XD mag niet).
+    $namen = @($script:UitRegels | ForEach-Object { $_.Tekst })
+    if ($namen.Count -eq 0) { return ,@() }
+    return ,(@($namen) + @('/XD') + @($namen))
+}
+
+function Test-Lus($map) {
+    # Een koppeling naar een andere map (junction of symbolische koppeling, zoals 'Mijn muziek' in een oude Windows):
+    # robocopy /XJ volgt die niet, wij dus ook niet (anders tel je dingen dubbel, of eindeloos). Een map van OneDrive is
+    # ook een 'reparse point', maar geen koppeling: die gaat wel mee. PowerShell weet het soort (LinkType); weet het dat
+    # niet, dan kijken we naar de kenmerken die OneDrive zet.
+    if (($map.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -eq 0) { return $false }
+    try { return ("$($map.LinkType)" -in @('Junction', 'SymbolicLink')) } catch {
+        return (([int64]$map.Attributes -band (0x1000 -bor 0x40000 -bor 0x80000 -bor 0x100000 -bor 0x400000)) -eq 0)
+    }
+}
+
+function Get-Bestanden([string] $pad, [string[]] $ZonderMappen = @(), $Uit = $null, [switch] $ZonderRegels) {
+    # Alle bestanden in een map en zijn submappen, zoals robocopy ze kopieert (Invoke-Meenemen): zonder koppelingen naar
+    # andere mappen (/XJ), zonder desktop.ini en Thumbs.db, zonder mappen met een naam uit -ZonderMappen (op elke diepte,
+    # zoals /XD), en zonder wat je bij 'Niet mee' uitsloot (behalve met -ZonderRegels). Een map die je uitsloot, wordt
+    # niet eens doorzocht: een node_modules met 100.000 bestanden kost dan geen tijd. Met -Uit (een lijst) komt daar bij
+    # wat NIET meegaat, voor het info-scherm: de regel, de plek en hoe groot (dan tellen we die mappen wel).
+    $lijst = New-Object 'System.Collections.Generic.List[System.IO.FileInfo]'
+    if (-not $pad) { return ,$lijst }
+    try { $wortel = New-Object System.IO.DirectoryInfo($pad) } catch { return ,$lijst }
+    if (-not $wortel.Exists) { return ,$lijst }
+    $stapel = New-Object 'System.Collections.Generic.Stack[System.IO.DirectoryInfo]'
+    $stapel.Push($wortel)
+    while ($stapel.Count -gt 0) {
+        $map = $stapel.Pop()
+        $inhoud = @()
+        # Geen toegang (een map van een ander account, of van Windows zelf): robocopy slaat die ook over.
+        try { $inhoud = $map.GetFileSystemInfos() } catch { continue }
+        foreach ($i in $inhoud) {
+            $isMap = $i -is [System.IO.DirectoryInfo]
+            if ($isMap) {
+                if (Test-Lus $i) { continue }
+                if ($ZonderMappen -contains $i.Name) { continue }
+            } elseif ($script:WindowsHulp -contains $i.Name) { continue }
+            if (-not $ZonderRegels) {
+                $regel = Get-UitRegel $i.FullName $i.Name
+                if ($regel) {
+                    if ($null -ne $Uit) {
+                        if ($isMap) {
+                            $binnen = Get-Bestanden $i.FullName -ZonderRegels
+                            $bytes = 0L; foreach ($f in $binnen) { $bytes += $f.Length }
+                            $Uit.Add([pscustomobject]@{ Regel = $regel; Pad = $i.FullName; Map = $true; Bytes = $bytes; Bestanden = $binnen.Count })
+                        } else {
+                            $Uit.Add([pscustomobject]@{ Regel = $regel; Pad = $i.FullName; Map = $false; Bytes = [int64]$i.Length; Bestanden = 1 })
+                        }
+                    }
+                    continue
+                }
+            }
+            if ($isMap) { $stapel.Push($i) } else { $lijst.Add($i) }
         }
     }
-    if (-not $script:CloudMee) { $bestanden = $bestanden | Where-Object { -not (Test-AlleenInCloud $_) } }
-    $som = ($bestanden | Measure-Object Length -Sum).Sum
-    if ($som) { return [int64]$som } else { return 0L }
+    return ,$lijst
+}
+
+function Get-MapGrootte([string] $pad, [string[]] $ZonderMappen = @(), [switch] $ZonderRegels) {
+    # Hoeveel bytes er van een map meegaan (alle submappen, zie Get-Bestanden). Mappen met een naam uit -ZonderMappen
+    # tellen niet mee (bijvoorbeeld 'ImapMail' van Thunderbird: die gaat niet mee), en wat je bij 'Niet mee' uitsloot
+    # ook niet (behalve met -ZonderRegels, voor profielen van Firefox en Thunderbird). Bestanden die alleen in OneDrive
+    # staan, tellen niet mee als je die niet mee wilt ($script:CloudMee uit): die worden dan ook niet gekopieerd.
+    $som = 0L
+    foreach ($f in (Get-Bestanden $pad -ZonderMappen $ZonderMappen -ZonderRegels:$ZonderRegels)) {
+        if (-not $script:CloudMee -and (Test-AlleenInCloud $f)) { continue }
+        $som += $f.Length
+    }
+    return $som
+}
+
+function Get-MeeMappen {
+    # De mappen die meegaan: de vaste zes en je extra mappen, alleen met een vinkje, en niet als de map zelf onder 'Niet
+    # mee' valt. Naam: hoe hij op de schijf heet (de vaste zes; leeg voor een extra map, die krijgt Get-ExtraNaam).
+    $uit = New-Object System.Collections.Generic.List[object]
+    foreach ($m in $script:Mappen) {
+        if (-not (Test-Mee "map:$($m.Naam)")) { continue }
+        $pad = Get-BekendeMap $m.Sleutel
+        if (-not $pad -or (Get-UitRegelVoorMap $pad)) { continue }
+        $uit.Add([pscustomobject]@{ Naam = $m.Naam; Pad = $pad; Extra = $false })
+    }
+    foreach ($e in $script:ExtraMappen) {
+        if (-not (Test-Mee "extra:$e") -or (Get-UitRegelVoorMap $e)) { continue }
+        $uit.Add([pscustomobject]@{ Naam = ''; Pad = $e; Extra = $true })
+    }
+    return $uit.ToArray()
+}
+
+# Mappen in het Firefox-profiel die BugOS niet nodig heeft: de cache, sessies (inlog!), crashrapporten en telemetrie.
+$script:FirefoxRommel = @('cache2', 'startupCache', 'shader-cache', 'sessionstore-backups', 'crashes', 'minidumps', 'saved-telemetry-pings', 'datareporting')
+
+function Get-FirefoxGrootte([string] $pad) {
+    # Hoe groot het Firefox-profiel op de schijf wordt, zoals Copy-FirefoxProfiel het kopieert: zonder de rommel
+    # hierboven en zonder mappen groter dan $script:FirefoxGrens (die blijven thuis).
+    $som = 0L
+    foreach ($f in @(Get-ChildItem -LiteralPath $pad -File -Force -ErrorAction SilentlyContinue)) { $som += $f.Length }
+    foreach ($map in @(Get-ChildItem -LiteralPath $pad -Directory -Force -ErrorAction SilentlyContinue)) {
+        if ($script:FirefoxRommel -contains $map.Name) { continue }
+        $deel = Get-MapGrootte $map.FullName -ZonderRegels
+        if ($deel -le $script:FirefoxGrens) { $som += $deel }
+    }
+    return $som
+}
+
+function Get-Overzicht([switch] $AlleenGekozen) {
+    # Alles wat mee KAN, met hoe groot het is (zonder wat je bij 'Niet mee' uitsloot), voor de pagina 'Kies wat meegaat'.
+    # Per ding: Sleutel (zie $script:NietMee), Groep (mappen, bladwijzers, meer, instellingen), Naam, Uitleg, Bytes, Aantal (voor
+    # wat geen grootte heeft: 4 wifi-netwerken; -1 = geen aantal) en Regel (de regel van 'Niet mee' als de hele map
+    # thuisblijft). -AlleenGekozen: alleen wat een vinkje heeft, en zonder de aantallen (sneller; voor Get-MeeneemGrootte).
+    # Leest alleen; verandert niets.
+    $uit = New-Object System.Collections.Generic.List[object]
+    function Voeg([string] $sleutel, [string] $groep, [string] $naam, [string] $uitleg, [int64] $bytes, [int] $aantal = -1, [string] $regel = '') {
+        $uit.Add([pscustomobject]@{ Sleutel = $sleutel; Groep = $groep; Naam = $naam; Uitleg = $uitleg; Bytes = $bytes; Aantal = $aantal; Regel = $regel })
+    }
+    function Mag([string] $sleutel) { (-not $AlleenGekozen) -or (Test-Mee $sleutel) }
+
+    foreach ($m in $script:Mappen) {
+        $sleutel = "map:$($m.Naam)"
+        if (-not (Mag $sleutel)) { continue }
+        $pad = Get-BekendeMap $m.Sleutel
+        if (-not $pad) { continue }
+        $regel = Get-UitRegelVoorMap $pad
+        Voeg $sleutel 'mappen' (Get-MapNaam $m.Naam) $pad $(if ($regel) { 0L } else { Get-MapGrootte $pad }) -1 $regel
+    }
+    foreach ($e in $script:ExtraMappen) {
+        $sleutel = "extra:$e"
+        if (-not (Mag $sleutel)) { continue }
+        $regel = Get-UitRegelVoorMap $e
+        Voeg $sleutel 'mappen' (Split-Path $e -Leaf) $e $(if ($regel) { 0L } else { Get-MapGrootte $e }) -1 $regel
+    }
+
+    # Bladwijzers per browserprofiel (Chrome, Edge, Brave en Firefox), het Firefox-profiel zelf, en je e-mail.
+    $chromium = @(); $firefox = @()
+    try { $chromium = @(Get-ChromiumProfielen) } catch { Write-Verbose 'Chromium-profielen niet te lezen.' }
+    try { $firefox = @(Get-FirefoxProfielen) } catch { Write-Verbose 'Firefox-profielen niet te lezen.' }
+    foreach ($p in $chromium) {
+        $sleutel = "bw:$($p.Browser):$($p.Profiel)"
+        if (-not (Mag $sleutel)) { continue }
+        $bytes = 0L; try { $bytes = (Get-Item -LiteralPath $p.Bestand -Force).Length } catch { $bytes = 0L }
+        Voeg $sleutel 'bladwijzers' "$($p.Browser) · $($p.Naam)" (T "De bladwijzers van $($p.Browser), profiel $($p.Naam). In BugOS komen ze vanzelf in Firefox." "The bookmarks of $($p.Browser), profile $($p.Naam). In BugOS they go into Firefox by themselves.") $bytes
+    }
+    foreach ($p in @($firefox | Where-Object { $_.Backup })) {
+        $sleutel = "bw:Firefox:$($p.Profiel)"
+        if (-not (Mag $sleutel)) { continue }
+        $bytes = 0L; try { $bytes = (Get-Item -LiteralPath $p.Backup -Force).Length } catch { $bytes = 0L }
+        Voeg $sleutel 'bladwijzers' "Firefox · $($p.Naam)" (T "De bladwijzers van Firefox, profiel $($p.Naam)." "The bookmarks of Firefox, profile $($p.Naam).") $bytes
+    }
+    $standaard = @($firefox | Where-Object { $_.Standaard }) | Select-Object -First 1
+    if ($standaard -and (Mag 'firefox')) {
+        Voeg 'firefox' 'meer' (T 'Firefox: geschiedenis en uitbreidingen' 'Firefox: history and extensions') (T 'Je Firefox-profiel, zonder wachtwoorden, cookies en open tabbladen.' 'Your Firefox profile, without passwords, cookies and open tabs.') (Get-FirefoxGrootte $standaard.Pad)
+    }
+    $tb = Get-ThunderbirdProfiel
+    if ($tb -and (Mag 'thunderbird')) {
+        Voeg 'thunderbird' 'meer' 'Thunderbird' (T 'Accounts, mappen, adresboek en filters, zonder wachtwoorden.' 'Accounts, folders, address book and filters, without passwords.') (Get-MapGrootte $tb.Pad -ZonderMappen $script:ThunderbirdNietMee -ZonderRegels)
+    }
+    $pst = @(Get-OutlookBestanden)
+    if ($pst.Count -gt 0 -and (Mag 'outlook')) {
+        $bytes = 0L; foreach ($p in $pst) { $bytes += $p.Length }
+        Voeg 'outlook' 'meer' (T 'Outlook-mailbestanden' 'Outlook mail files') (($pst | ForEach-Object { $_.Name }) -join ', ') $bytes $pst.Count
+    }
+    $letters = @(Get-Lettertypen)
+    if ($letters.Count -gt 0 -and (Mag 'lettertypen')) {
+        $bytes = 0L; foreach ($f in $letters) { $bytes += $f.Length }
+        Voeg 'lettertypen' 'meer' (T 'Je eigen lettertypen' 'Your own fonts') (T 'Alleen die jij installeerde, niet die van Windows.' 'Only the ones you installed, not those of Windows.') $bytes $letters.Count
+    }
+    if (Test-Path -LiteralPath $script:AchtergrondBestand) {
+        if (Mag 'achtergrond') { Voeg 'achtergrond' 'meer' (T 'Je achtergrond' 'Your wallpaper') (T 'Het plaatje op je bureaublad.' 'The picture on your desktop.') ((Get-Item -LiteralPath $script:AchtergrondBestand -Force).Length) }
+    }
+
+    # Instellingen, wifi-namen, printers en het lijstje programma's: klein, maar je kunt ze wel uitzetten.
+    if (Mag 'instellingen') { Voeg 'instellingen' 'instellingen' (T 'Instellingen' 'Settings') (T 'Taal, toetsenbord, tijdzone, muis, licht of donker en de grootte van je scherm.' 'Language, keyboard, time zone, mouse, light or dark and the size of your screen.') 0L }
+    if (Mag 'wifi') {
+        $n = -1; if (-not $AlleenGekozen) { try { $n = @(Get-WifiNetwerken).Count } catch { $n = -1 } }
+        Voeg 'wifi' 'instellingen' (T 'Namen van je wifi' 'Your Wi-Fi names') (T 'Alleen de namen, nooit de wachtwoorden: die vraagt BugOS één keer.' 'Only the names, never the passwords: BugOS asks for them once.') 0L $n
+    }
+    if (Mag 'printers') {
+        $n = -1; if (-not $AlleenGekozen) { try { $n = @(Get-NetwerkPrinters).Count } catch { $n = -1 } }
+        Voeg 'printers' 'instellingen' (T 'Netwerkprinters' 'Network printers') (T 'Printers met een kabel komen vanzelf.' 'Printers with a cable come by themselves.') 0L $n
+    }
+    if (Mag 'programmas') {
+        $n = -1; if (-not $AlleenGekozen) { try { $n = @(Get-Programmas).Count } catch { $n = -1 } }
+        Voeg 'programmas' 'instellingen' (T "Lijst van je programma's" 'List of your programs') (T 'BugOS stelt er passende apps bij voor; het installeert niets zelf.' 'BugOS suggests matching apps; it installs nothing by itself.') 0L $n
+    }
+    return $uit.ToArray()
 }
 
 function Get-MeeneemGrootte {
-    # Alles wat naar de schijf gaat, opgeteld: de zes vaste mappen, de extra mappen die je koos, je lettertypen,
-    # je Thunderbird (zonder ImapMail, die haalt Thunderbird opnieuw op) en Outlook-mailbestanden buiten Documenten.
-    # Zo kunnen we VOORAF zeggen of het past (E: 'vooraf zeggen hoeveel er meegaat').
+    # Alles wat naar de schijf gaat, opgeteld: alleen wat een vinkje heeft op 'Kies wat meegaat', zonder wat je bij
+    # 'Niet mee' uitsloot. De mappen, bladwijzers en Firefox, je lettertypen, je Thunderbird (zonder ImapMail, die haalt
+    # Thunderbird opnieuw op), Outlook-mailbestanden buiten Documenten en de achtergrond. Zo kunnen we VOORAF zeggen of
+    # het past (E: 'vooraf zeggen hoeveel er meegaat').
     $totaal = 0L
-    foreach ($m in $script:Mappen) { $totaal += Get-MapGrootte (Get-BekendeMap $m.Sleutel) }
-    foreach ($e in $script:ExtraMappen) { $totaal += Get-MapGrootte $e }
-    foreach ($f in @(Get-Lettertypen)) { $totaal += $f.Length }
-    $tb = Get-ThunderbirdProfiel
-    if ($tb) { $totaal += Get-MapGrootte $tb.Pad -ZonderMappen $script:ThunderbirdNietMee }
-    foreach ($p in @(Get-OutlookBestanden)) { $totaal += $p.Length }
+    foreach ($d in @(Get-Overzicht -AlleenGekozen)) { $totaal += [int64]$d.Bytes }
     return $totaal
+}
+
+function Get-UsbAdvies([int64] $bytes, [double] $vast = 0) {
+    # Hoe groot een USB-schijf minstens moet zijn, in de maten van de winkel (GB zoals op de doos: 1000 MB). Een schijf
+    # van '32 GB' heeft na het formatteren zo'n 29 GB echt vrij, en elk klein bestand neemt op de schijf iets meer plek
+    # dan het groot is. Daarom rekenen we 7 procent van de doos af en tellen we 10 procent en 256 MB marge op.
+    # $vast: wat er ook nog op moet, zonder marge (BugOS zelf, als alles op de BugOS-stick komt).
+    $nodig = [double]$bytes * 1.10 + 256MB + $vast
+    foreach ($maat in @(8, 16, 32, 64, 128, 256, 512, 1000, 2000, 4000, 8000)) {
+        if ($maat * 1e9 * 0.93 -ge $nodig) { return $maat }
+    }
+    return [int]([math]::Ceiling($nodig / (1e12 * 0.93)) * 1000)
+}
+
+function Get-Uitgesloten {
+    # Wat er door 'Niet mee' thuisblijft, per regel: hoeveel mappen en bestanden, hoe groot, en de eerste 200 plekken.
+    # Voor het info-scherm. Alleen in de mappen met een vinkje (een map zonder vinkje gaat toch al niet mee). Leest alleen.
+    $perRegel = [ordered]@{}
+    foreach ($r in $script:UitRegels) {
+        $perRegel[$r.Tekst] = [pscustomobject]@{ Regel = $r.Tekst; Soort = $r.Soort; Mappen = 0; Bestanden = 0; Bytes = 0L
+                                                 Plekken = (New-Object System.Collections.Generic.List[object]) }
+    }
+    $gevonden = New-Object System.Collections.Generic.List[object]
+    $bronnen = @($script:Mappen | Where-Object { Test-Mee "map:$($_.Naam)" } | ForEach-Object { Get-BekendeMap $_.Sleutel }) +
+               @($script:ExtraMappen | Where-Object { Test-Mee "extra:$_" })
+    foreach ($pad in $bronnen) {
+        if (-not $pad -or -not (Test-Path -LiteralPath $pad)) { continue }
+        $regel = Get-UitRegelVoorMap $pad
+        if ($regel) {
+            # De hele map blijft thuis.
+            $binnen = Get-Bestanden $pad -ZonderRegels
+            $bytes = 0L; foreach ($f in $binnen) { $bytes += $f.Length }
+            $gevonden.Add([pscustomobject]@{ Regel = $regel; Pad = $pad; Map = $true; Bytes = $bytes; Bestanden = $binnen.Count })
+            continue
+        }
+        [void](Get-Bestanden $pad -Uit $gevonden)
+    }
+    foreach ($g in $gevonden) {
+        if (-not $perRegel.Contains($g.Regel)) { continue }
+        $p = $perRegel[$g.Regel]
+        if ($g.Map) { $p.Mappen++ } else { $p.Bestanden++ }
+        $p.Bytes += $g.Bytes
+        if ($p.Plekken.Count -lt 200) { $p.Plekken.Add($g) }
+    }
+    return @($perRegel.Values)
+}
+
+function Get-OudeResten([string] $doel) {
+    # Wat er van een eerdere keer in BugOS-Switch op de schijf staat en nu NIET meer mee moet: een vaste map zonder vinkje
+    # (of die onder 'Niet mee' valt), de achtergrond zonder vinkje, en in de mappen die wel meegaan alles wat onder een
+    # regel van 'Niet mee' valt (een oude node_modules). Anders zet BugOS dat straks toch terug. Alleen binnen $doel (de
+    # map BugOS-Switch op de USB-schijf). Geeft de plekken op de schijf.
+    $uit = New-Object System.Collections.Generic.List[string]
+    if (-not $doel -or $doel -notmatch '\\BugOS-Switch\\?$' -or -not (Test-Path -LiteralPath $doel)) { return $uit.ToArray() }
+    $mee = @(Get-MeeMappen)
+    foreach ($m in $script:Mappen) {
+        $daar = Join-Path $doel $m.Naam
+        if (-not (Test-Path -LiteralPath $daar)) { continue }
+        $bronPad = Get-BekendeMap $m.Sleutel
+        # Alleen weg als JIJ hem uitzette (of hem uitsloot), niet als Windows de map nu even niet kan vinden.
+        if (-not (Test-Mee "map:$($m.Naam)") -or ($bronPad -and (Get-UitRegelVoorMap $bronPad))) { $uit.Add($daar); continue }
+        if ($bronPad) { foreach ($r in @(Get-RestenIn $daar $bronPad)) { $uit.Add($r) } }
+    }
+    $gebruikt = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    foreach ($e in $script:ExtraMappen) {
+        $naam = Get-ExtraNaam $e $gebruikt
+        if (-not @($mee | Where-Object { $_.Extra -and $_.Pad -eq $e })) { continue }
+        $daar = Join-Path (Join-Path $doel 'Extra') $naam
+        if (Test-Path -LiteralPath $daar) { foreach ($r in @(Get-RestenIn $daar $e)) { $uit.Add($r) } }
+    }
+    $foto = Join-Path $doel 'achtergrond.jpg'
+    if (-not (Test-Mee 'achtergrond') -and (Test-Path -LiteralPath $foto)) { $uit.Add($foto) }
+    return $uit.ToArray()
+}
+
+function Get-RestenIn([string] $kopie, [string] $bron) {
+    # In een kopie op de schijf: wat onder een regel van 'Niet mee' valt. Een hele plek: dezelfde plek in de kopie; een
+    # naam: overal in de kopie (een map die past, doorzoeken we niet verder: die gaat in zijn geheel weg).
+    $uit = New-Object System.Collections.Generic.List[string]
+    if ($bron) {
+        $b = [System.IO.Path]::GetFullPath($bron).TrimEnd('\') + '\'
+        foreach ($r in @($script:UitRegels | Where-Object { $_.Soort -eq 'plek' })) {
+            # (De hele map zelf valt erbuiten: die regelt Get-OudeResten.)
+            if ($r.Pad.Length -lt $b.Length -or -not ($r.Pad + '\').StartsWith($b, [StringComparison]::OrdinalIgnoreCase)) { continue }
+            $daar = Join-Path $kopie $r.Pad.Substring($b.Length)
+            if (Test-Path -LiteralPath $daar) { $uit.Add($daar) }
+        }
+    }
+    if (@($script:UitRegels | Where-Object { $_.Soort -eq 'naam' }).Count -eq 0) { return $uit.ToArray() }
+    $stapel = New-Object 'System.Collections.Generic.Stack[System.IO.DirectoryInfo]'
+    $stapel.Push((New-Object System.IO.DirectoryInfo($kopie)))
+    while ($stapel.Count -gt 0) {
+        $inhoud = @()
+        try { $inhoud = $stapel.Pop().GetFileSystemInfos() } catch { continue }
+        foreach ($i in $inhoud) {
+            $past = $false
+            foreach ($r in $script:UitRegels) { if ($r.Soort -eq 'naam' -and $r.Patroon.IsMatch($i.Name)) { $past = $true; break } }
+            if ($past) { if (-not $uit.Contains($i.FullName)) { $uit.Add($i.FullName) } }
+            elseif ($i -is [System.IO.DirectoryInfo] -and -not (Test-Lus $i)) { $stapel.Push($i) }
+        }
+    }
+    return $uit.ToArray()
+}
+
+function Remove-OudeResten([string] $doel) {
+    # Weg met wat Get-OudeResten vond: alleen in de map BugOS-Switch op de USB-schijf, nooit op deze computer.
+    $weg = 0
+    foreach ($p in @(Get-OudeResten $doel)) {
+        if (-not ([System.IO.Path]::GetFullPath($p)).StartsWith($doel.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { continue }
+        try { Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction Stop; $weg++ } catch { Write-Verbose "Niet weg: $p" }
+    }
+    return $weg
 }
 
 # ------------------------------------------- meenemen: bestanden slimmer (E) --
@@ -204,12 +586,11 @@ function Get-CloudBestanden {
     # Hoeveel bestanden in de mappen die meegaan alleen in OneDrive staan, hoe groot samen, en een paar namen als
     # voorbeeld. Die moeten eerst gedownload worden (dat doet Windows vanzelf als we ze kopiëren, maar dat kan lang
     # duren en vraagt internet), of ze blijven in OneDrive: dan kun je ze in BugOS via onedrive.live.com openen.
+    # Alleen in de mappen die meegaan, en zonder wat je bij 'Niet mee' uitsloot (dat hoeft dus ook niet gedownload).
     $aantal = 0; $bytes = 0L
     $voorbeelden = New-Object System.Collections.Generic.List[string]
-    $bronnen = @($script:Mappen | ForEach-Object { Get-BekendeMap $_.Sleutel }) + @($script:ExtraMappen)
-    foreach ($pad in $bronnen) {
-        if (-not $pad -or -not (Test-Path -LiteralPath $pad)) { continue }
-        foreach ($f in @(Get-ChildItem -LiteralPath $pad -Recurse -File -Force -ErrorAction SilentlyContinue)) {
+    foreach ($m in @(Get-MeeMappen)) {
+        foreach ($f in (Get-Bestanden $m.Pad)) {
             if (-not (Test-AlleenInCloud $f)) { continue }
             $aantal++; $bytes += $f.Length
             if ($voorbeelden.Count -lt 8) { $voorbeelden.Add($f.Name) }
@@ -292,16 +673,15 @@ function Get-ExtraNaam([string] $pad, [System.Collections.Generic.HashSet[string
 function Get-TeGrootVoorFat32 {
     # FAT32 (veel USB-sticks) kan geen bestanden van 4 GB of groter bewaren. Welke van de bestanden die meegaan zijn
     # dat? Dan kunnen we het VOORAF zeggen in plaats van halverwege.
+    # Alleen wat echt meegaat: mappen met een vinkje, zonder wat je bij 'Niet mee' uitsloot.
     $grens = 4GB - 1
     $uit = New-Object System.Collections.Generic.List[object]
-    $bronnen = @($script:Mappen | ForEach-Object { Get-BekendeMap $_.Sleutel }) + @($script:ExtraMappen)
-    foreach ($pad in $bronnen) {
-        if (-not $pad -or -not (Test-Path -LiteralPath $pad)) { continue }
-        foreach ($f in @(Get-ChildItem -LiteralPath $pad -Recurse -File -Force -ErrorAction SilentlyContinue)) {
+    foreach ($m in @(Get-MeeMappen)) {
+        foreach ($f in (Get-Bestanden $m.Pad)) {
             if ($f.Length -gt $grens -and -not ((-not $script:CloudMee) -and (Test-AlleenInCloud $f))) { $uit.Add($f) }
         }
     }
-    foreach ($p in @(Get-OutlookBestanden)) { if ($p.Length -gt $grens) { $uit.Add($p) } }
+    if (Test-Mee 'outlook') { foreach ($p in @(Get-OutlookBestanden)) { if ($p.Length -gt $grens) { $uit.Add($p) } } }
     return $uit.ToArray()
 }
 
@@ -332,6 +712,8 @@ $script:LettertypeMap = "$env:LOCALAPPDATA\Microsoft\Windows\Fonts"
 $script:OutlookMap = "$env:LOCALAPPDATA\Microsoft\Outlook"
 # Extra mappen die je zelf kiest (bijvoorbeeld op D:), bovenop de vaste zes. Volle paden.
 $script:ExtraMappen = New-Object System.Collections.Generic.List[string]
+# Je bureaubladachtergrond, zoals Windows hem zelf bewaart.
+$script:AchtergrondBestand = "$env:APPDATA\Microsoft\Windows\Themes\TranscodedWallpaper"
 # Bestanden die alleen in OneDrive (de cloud) staan, en of je die mee wilt (eerst downloaden) of niet.
 $script:Cloud = $null
 $script:CloudMee = $true
@@ -663,7 +1045,7 @@ function Copy-FirefoxProfiel([string] $bron, [string] $doel) {
     $grootTeVeel = New-Object System.Collections.Generic.List[string]
     $xd = New-Object System.Collections.Generic.List[string]
     # Rommel en privé-dingen die BugOS niet nodig heeft: de cache, sessies (inlog!), crashrapporten en telemetrie.
-    foreach ($n in @('cache2', 'startupCache', 'shader-cache', 'sessionstore-backups', 'crashes', 'minidumps', 'saved-telemetry-pings', 'datareporting')) { $xd.Add($n) }
+    foreach ($n in $script:FirefoxRommel) { $xd.Add($n) }
     foreach ($map in @(Get-ChildItem -LiteralPath $bron -Directory -Force -ErrorAction SilentlyContinue)) {
         if ($xd.Contains($map.Name)) { continue }
         $som = (Get-ChildItem -LiteralPath $map.FullName -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
@@ -679,12 +1061,21 @@ function Copy-FirefoxProfiel([string] $bron, [string] $doel) {
 }
 
 function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
+    # Alleen wat een vinkje heeft op 'Kies wat meegaat', zonder wat je bij 'Niet mee' uitsloot ($script:NietMee en
+    # $script:UitRegels; in het werk naast het venster gezet door Start-Werk).
     $doel = Join-Path $doelSchijf 'BugOS-Switch'
     New-Item -ItemType Directory -Force -Path $doel | Out-Null
     $stap = 0
-    # De mappen, en daarna: extra mappen, lettertypen, e-mail, bladwijzers, het Firefox-profiel, de achtergrond, en
+    # Eerst opruimen wat er van een eerdere keer staat en nu niet meer mee moet (het venster vroeg dat al), dan de
+    # mappen, en daarna: extra mappen, lettertypen, e-mail, bladwijzers, het Firefox-profiel, de achtergrond, en
     # instellingen/wifi/printers/programma's.
-    $aantal = $script:Mappen.Count + 7
+    $aantal = $script:Mappen.Count + 8
+    $stap++
+    & $Voortgang ([int](100 * $stap / $aantal)) (T 'Opruimen wat niet meer mee moet...' 'Cleaning up what no longer goes along...')
+    $null = Remove-OudeResten $doel
+    $uitArg = Get-RobocopyUit
+    $mee = @(Get-MeeMappen)
+    $mappenMee = New-Object System.Collections.Generic.List[string]
     # Mappen waar een paar bestanden niet mee konden (open in een programma, groter dan 4 GB op FAT32, alleen in
     # OneDrive): de rest gaat gewoon door (U094).
     $script:Deels = @()
@@ -695,12 +1086,15 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
     if (-not $script:CloudMee) { $cloudArg = @('/XA:O') }
     foreach ($m in $script:Mappen) {
         $stap++
+        if (-not @($mee | Where-Object { $_.Naam -eq $m.Naam })) { continue }
         $bron = Get-BekendeMap $m.Sleutel
-        & $Voortgang ([int](100 * $stap / $aantal)) (T "Kopiëren: $($m.Naam)..." "Copying: $($m.Naam)...")
+        & $Voortgang ([int](100 * $stap / $aantal)) (T "Kopiëren: $(Get-MapNaam $m.Naam)..." "Copying: $(Get-MapNaam $m.Naam)...")
         if ($bron -and (Test-Path $bron)) {
+            $mappenMee.Add($m.Naam)
             # /E alle submappen, /R:1 /W:1 niet eindeloos wachten, /XJ geen snelkoppel-lussen,
-            # /XF geen Windows-hulpbestanden (die zie je anders in elke map in BugOS) (U096).
-            $null = robocopy $bron (Join-Path $doel $m.Naam) /E /R:1 /W:1 /XJ /NFL /NDL /NJH /NJS /NP @cloudArg /XF desktop.ini Thumbs.db
+            # /XF geen Windows-hulpbestanden (die zie je anders in elke map in BugOS) (U096), en daarachter (@uitArg)
+            # wat je bij 'Niet mee' uitsloot: als bestand (/XF) en als map (/XD).
+            $null = robocopy $bron (Join-Path $doel $m.Naam) /E /R:1 /W:1 /XJ /NFL /NDL /NJH /NJS /NP @cloudArg /XF desktop.ini Thumbs.db @uitArg
             # robocopy: 8 = een paar bestanden niet, 16 = helemaal mislukt (bijv. de schijf is weg).
             if ($LASTEXITCODE -ge 16) { throw (T "Kopiëren van $($m.Naam) lukte niet." "Copying $($m.Naam) failed.") }
             if ($LASTEXITCODE -ge 8) { $script:Deels += $m.Naam }
@@ -709,14 +1103,15 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
 
     # Extra mappen die je zelf koos (bijvoorbeeld D:\Foto's), elk in Extra\<naam>. Een vorige keer kan andere
     # extra mappen hebben gehad: die blijven op de schijf staan, maar BugOS kijkt alleen naar wat in de JSON staat.
+    # De namen tellen over ALLE extra mappen (ook zonder vinkje), zodat een map steeds dezelfde naam houdt.
     $stap++
     & $Voortgang ([int](100 * $stap / $aantal)) (T 'Kopiëren: je andere mappen...' 'Copying: your other folders...')
     $extra = New-Object System.Collections.Generic.List[object]
     $gebruikt = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
     foreach ($e in $script:ExtraMappen) {
-        if (-not (Test-Path -LiteralPath $e)) { continue }
         $naam = Get-ExtraNaam $e $gebruikt
-        $null = robocopy $e (Join-Path (Join-Path $doel 'Extra') $naam) /E /R:1 /W:1 /XJ /NFL /NDL /NJH /NJS /NP @cloudArg /XF desktop.ini Thumbs.db
+        if (-not (Test-Path -LiteralPath $e) -or -not @($mee | Where-Object { $_.Extra -and $_.Pad -eq $e })) { continue }
+        $null = robocopy $e (Join-Path (Join-Path $doel 'Extra') $naam) /E /R:1 /W:1 /XJ /NFL /NDL /NJH /NJS /NP @cloudArg /XF desktop.ini Thumbs.db @uitArg
         if ($LASTEXITCODE -ge 16) { throw (T "Kopiëren van $naam lukte niet." "Copying $naam failed.") }
         if ($LASTEXITCODE -ge 8) { $script:Deels += $naam }
         $extra.Add([ordered]@{ naam = $naam; map = "Extra/$naam"; van = $e })
@@ -725,7 +1120,8 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
     # Je eigen lettertypen (alleen die jij installeerde, niet die van Windows).
     $stap++
     & $Voortgang ([int](100 * $stap / $aantal)) (T 'Lettertypen meenemen...' 'Taking fonts...')
-    $letters = @(Get-Lettertypen)
+    $letters = @()
+    if (Test-Mee 'lettertypen') { $letters = @(Get-Lettertypen) }
     if ($letters.Count -gt 0) {
         $lmap = Join-Path $doel 'Lettertypen'
         New-Item -ItemType Directory -Force -Path $lmap | Out-Null
@@ -736,7 +1132,8 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
     $stap++
     & $Voortgang ([int](100 * $stap / $aantal)) (T 'E-mail meenemen...' 'Taking e-mail...')
     $tbProfiel = $null
-    $tb = Get-ThunderbirdProfiel
+    $tb = $null
+    if (Test-Mee 'thunderbird') { $tb = Get-ThunderbirdProfiel }
     if ($tb) {
         try {
             Copy-ThunderbirdProfiel $tb.Pad (Join-Path (Join-Path $doel 'Thunderbird') $tb.Profiel)
@@ -744,7 +1141,8 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
         } catch { Write-Verbose 'Thunderbird niet gekopieerd.' }
     }
     $pst = New-Object System.Collections.Generic.List[string]
-    $outlook = @(Get-OutlookBestanden)
+    $outlook = @()
+    if (Test-Mee 'outlook') { $outlook = @(Get-OutlookBestanden) }
     if ($outlook.Count -gt 0) {
         $omap = Join-Path $doel 'Outlook'
         New-Item -ItemType Directory -Force -Path $omap | Out-Null
@@ -754,10 +1152,11 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
             catch { $script:Deels += 'Outlook' }
         }
     }
-    # De .pst-bestanden die al met Documenten meegingen, ook noemen: BugOS legt dan uit hoe je ze opent.
+    # De .pst-bestanden die al met Documenten meegingen, ook noemen: BugOS legt dan uit hoe je ze opent. (Alleen als
+    # Documenten meeging, en niet wat je bij 'Niet mee' uitsloot.)
     $docs = Get-BekendeMap 'MyDocuments'
-    if ($docs -and (Test-Path -LiteralPath $docs)) {
-        foreach ($p in @(Get-ChildItem -LiteralPath $docs -Filter '*.pst' -Recurse -File -Force -ErrorAction SilentlyContinue)) {
+    if ($docs -and $mappenMee.Contains('Documents') -and (Test-Path -LiteralPath $docs)) {
+        foreach ($p in @((Get-Bestanden $docs) | Where-Object { $_.Extension -eq '.pst' })) {
             $pst.Add('Documents/' + ($p.FullName.Substring($docs.TrimEnd('\').Length + 1) -replace '\\', '/'))
         }
     }
@@ -768,14 +1167,15 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
     & $Voortgang ([int](100 * $stap / $aantal)) (T 'Bladwijzers meenemen...' 'Taking bookmarks...')
     $bw = Join-Path $doel 'Bladwijzers'
     New-Item -ItemType Directory -Force -Path $bw | Out-Null
-    # Namen van versie 1 (één bestand per browser) van een eerdere keer weghalen: anders zou BugOS die bladwijzers
-    # twee keer binnenhalen (oud en nieuw naast elkaar).
-    foreach ($oud in @('Chrome.json', 'Edge.json', 'Brave.json', 'Firefox.jsonlz4')) {
-        Remove-Item -LiteralPath (Join-Path $bw $oud) -Force -ErrorAction SilentlyContinue
+    # Wat er van een eerdere keer in de map Bladwijzers staat, eerst weg: de namen van versie 1 (één bestand per
+    # browser; anders zou BugOS die bladwijzers twee keer binnenhalen) en profielen die nu geen vinkje hebben (BugOS
+    # neemt elk bestand in die map mee). Alleen bladwijzerbestanden, en alleen in deze map op de USB-schijf.
+    foreach ($oud in @(Get-ChildItem -LiteralPath $bw -File -Force -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in @('.json', '.jsonlz4') })) {
+        Remove-Item -LiteralPath $oud.FullName -Force -ErrorAction SilentlyContinue
     }
     $browsers = New-Object System.Collections.Generic.List[object]
     try {
-        foreach ($p in @(Get-ChromiumProfielen)) {
+        foreach ($p in @(Get-ChromiumProfielen | Where-Object { Test-Mee "bw:$($_.Browser):$($_.Profiel)" })) {
             $bestand = "$($p.Browser)-$($p.Profiel).json"
             Copy-Item -LiteralPath $p.Bestand -Destination (Join-Path $bw $bestand) -Force
             $browsers.Add([ordered]@{ browser = $p.Browser; profiel = $p.Profiel; naam = $p.Naam; bladwijzers = "Bladwijzers/$bestand" })
@@ -784,7 +1184,7 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
     $firefox = @()
     try { $firefox = @(Get-FirefoxProfielen) } catch { Write-Verbose 'Firefox-profielen niet te lezen.' }
     foreach ($p in $firefox) {
-        if (-not $p.Backup) { continue }
+        if (-not $p.Backup -or -not (Test-Mee "bw:Firefox:$($p.Profiel)")) { continue }
         try {
             $bestand = "Firefox-$($p.Profiel).jsonlz4"
             Copy-Item -LiteralPath $p.Backup -Destination (Join-Path $bw $bestand) -Force
@@ -798,7 +1198,7 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
     $script:FirefoxOverslagen = @()
     $firefoxProfiel = $null
     $standaard = @($firefox | Where-Object { $_.Standaard }) | Select-Object -First 1
-    if ($standaard) {
+    if ($standaard -and (Test-Mee 'firefox')) {
         try {
             $script:FirefoxOverslagen = @(Copy-FirefoxProfiel $standaard.Pad (Join-Path (Join-Path $doel 'Firefox') $standaard.Profiel))
             $firefoxProfiel = "Firefox/$($standaard.Profiel)"
@@ -808,18 +1208,18 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
     # De bureaubladachtergrond, zodat BugOS meteen vertrouwd voelt.
     $stap++
     & $Voortgang ([int](100 * $stap / $aantal)) (T 'Achtergrond meenemen...' 'Taking wallpaper...')
-    $achtergrond = "$env:APPDATA\Microsoft\Windows\Themes\TranscodedWallpaper"
-    if (Test-Path $achtergrond) { Copy-Item -LiteralPath $achtergrond -Destination (Join-Path $doel 'achtergrond.jpg') -Force }
+    if ((Test-Mee 'achtergrond') -and (Test-Path -LiteralPath $script:AchtergrondBestand)) { Copy-Item -LiteralPath $script:AchtergrondBestand -Destination (Join-Path $doel 'achtergrond.jpg') -Force }
 
     # Instellingen, wifi-namen, netwerkprinters en het lijstje programma's. Elk onderdeel apart: lukt er één niet
     # (bijv. geen wifi-kaart, of de printerdienst staat uit), dan laten we alleen dat veld weg.
     $stap++
     & $Voortgang ([int](100 * $stap / $aantal)) (T 'Instellingen, wifi-namen, printers en programma''s...' 'Settings, Wi-Fi names, printers and programs...')
     $instellingen = $null; $wifi = $null; $printers = $null; $programmas = $null
-    try { $instellingen = Get-Instellingen } catch { Write-Verbose 'Instellingen niet te lezen.' }
-    try { $wifi = @(Get-WifiNetwerken) } catch { Write-Verbose 'Wifi niet te lezen.' }
-    try { $printers = @(Get-NetwerkPrinters) } catch { Write-Verbose 'Printers niet te lezen.' }
-    try { $programmas = @(Get-Programmas) } catch { Write-Verbose 'Programma''s niet te lezen.' }
+    # Zonder vinkje: het veld blijft weg (dan slaat BugOS dat deel over), net als wanneer het niet te lezen was.
+    if (Test-Mee 'instellingen') { try { $instellingen = Get-Instellingen } catch { Write-Verbose 'Instellingen niet te lezen.' } }
+    if (Test-Mee 'wifi') { try { $wifi = @(Get-WifiNetwerken) } catch { Write-Verbose 'Wifi niet te lezen.' } }
+    if (Test-Mee 'printers') { try { $printers = @(Get-NetwerkPrinters) } catch { Write-Verbose 'Printers niet te lezen.' } }
+    if (Test-Mee 'programmas') { try { $programmas = @(Get-Programmas) } catch { Write-Verbose 'Programma''s niet te lezen.' } }
 
     # Versie 2. De velden van versie 1 blijven precies zo, zodat een oude BugOS de schijf nog kan lezen.
     $info = [ordered]@{
@@ -828,7 +1228,7 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
         gebruiker  = $env:USERNAME
         computer   = $env:COMPUTERNAME
         taal       = (Get-Culture).Name
-        mappen     = @($script:Mappen | ForEach-Object { $_.Naam })
+        mappen     = @($mappenMee.ToArray())
         deels      = @($script:Deels)
     }
     # De nieuwe velden alleen als ze gelezen konden worden: een ontbrekend veld betekent voor BugOS "sla over en zeg
@@ -844,6 +1244,9 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
     if ($letters.Count -gt 0) { $info.lettertypen = [ordered]@{ map = 'Lettertypen'; aantal = $letters.Count } }
     if ($tbProfiel) { $info.thunderbird_profiel = $tbProfiel }
     if ($pst.Count -gt 0) { $info.outlook = [ordered]@{ pst = @($pst.ToArray()) } }
+    # Wat je uitzette en uitsloot (alleen ter info: BugOS doet al niets met wat er niet op staat; FORMAT.md).
+    if ($script:NietMee.Count -gt 0) { $info.niet_mee = @($script:NietMee | Sort-Object) }
+    if ($script:Uitsluiten.Count -gt 0) { $info.uitgesloten = @($script:Uitsluiten.ToArray()) }
     if ($script:Cloud -and $script:Cloud.Aantal -gt 0) {
         $info.cloud = [ordered]@{
             aantal      = $script:Cloud.Aantal
@@ -1369,6 +1772,7 @@ $Grijs3 = Kleur '#8A8F9A'
 $Lijn = Kleur '#E6E2E2'
 $KnopVlak = Kleur '#F1EEEE'
 $KnopBoven = Kleur '#E8E4E4'
+$KaartVlak = Kleur '#F7F4F4'
 $Goed = Kleur '#14965A'
 $LetOp = Kleur '#B86E00'
 $Fout = Kleur '#D3263A'
@@ -1886,6 +2290,8 @@ $form.MaximizeBox = $false
 $form.BackColor = $Wit
 $form.ForeColor = $Inkt
 try { $form.Icon = [System.Drawing.Icon]::FromHandle(([System.Drawing.Bitmap]$script:IcoonBeeld).GetHicon()) } catch { Write-Verbose 'Geen icoon.' }
+# Uitleg als je met de muis op een vinkje blijft staan (de hele plek van een map, wat er precies meegaat).
+$script:Tip = New-Object System.Windows.Forms.ToolTip
 
 $zij = New-Object System.Windows.Forms.Panel
 Plaats $zij 0 0 240 560
@@ -1966,6 +2372,10 @@ function Start-Werk([scriptblock] $Werk, [hashtable] $Mee = @{}, [scriptblock] $
                     [string] $Tekst = '', [switch] $Blokkeer, [string[]] $TerugVars = @()) {
     # $Werk draait in de runspace; daar heet wat je meegeeft $Mee. Klaar krijgt de staat: .Uitkomst, .Fout, .Terug.
     # Zonder -Blokkeer mag je weg van de pagina: dan wordt Klaar niet meer aangeroepen (de pagina is er niet meer).
+    # Wat je koos op 'Kies wat meegaat' (vinkjes en 'Niet mee') gaat altijd mee: de runspace heeft eigen variabelen.
+    $Mee = $Mee.Clone()
+    if (-not $Mee.ContainsKey('NietMee')) { $Mee['NietMee'] = @($script:NietMee) }
+    if (-not $Mee.ContainsKey('Uitsluiten')) { $Mee['Uitsluiten'] = @($script:Uitsluiten) }
     $staat = [hashtable]::Synchronized(@{ Procent = -1; Tekst = $Tekst; Klaar = $false; Fout = $null; Uitkomst = $null
                                           Terug = @{}; TerugNamen = $TerugVars; Werk = $Werk.ToString() })
     $rs = [runspacefactory]::CreateRunspace()
@@ -1982,6 +2392,8 @@ $script:NL = $BugOSNL
 if ($Mee.ContainsKey('ExtraMappen')) { $script:ExtraMappen.Clear(); foreach ($e in $Mee.ExtraMappen) { [void]$script:ExtraMappen.Add($e) } }
 if ($Mee.ContainsKey('CloudMee')) { $script:CloudMee = $Mee.CloudMee }
 if ($Mee.ContainsKey('Cloud')) { $script:Cloud = $Mee.Cloud }
+if ($Mee.ContainsKey('NietMee')) { Set-NietMee $Mee.NietMee }
+if ($Mee.ContainsKey('Uitsluiten')) { Set-Uitsluiten $Mee.Uitsluiten }
 # (Altijd $Staat['...'] en nooit $Staat.Naam: een gedeelde hashtable met een punt geeft in Windows PowerShell 5.1
 # 'Argument types do not match'.)
 $Voortgang = { param($p, $t) $Staat['Procent'] = $p; if ($t) { $Staat['Tekst'] = $t } }
@@ -2144,7 +2556,8 @@ function Teken-Zijbalk($zij, $e) {
     $g.DrawImage($script:LogoBeeld, (Fx 28), (Fx 32), (Fx 118), (Fx 32))
 
     $naam = @{ welkom = (T 'Welkom' 'Welcome'); controle = (T 'Controleren' 'Check'); keuze = (T 'Waar komt BugOS?' 'Where does BugOS go?')
-               stick = (T 'USB-stick maken' 'Make USB stick'); bestanden = (T 'Bestanden meenemen' 'Take your files')
+               stick = (T 'USB-stick maken' 'Make USB stick'); kiezen = (T 'Kies wat meegaat' 'Choose what to take')
+               bestanden = (T 'Bestanden meenemen' 'Take your files')
                ruimte = (T 'Ruimte maken' 'Make space'); einde = (T 'Zo installeer je' 'How to install') }
     $namen = @(Get-Volgorde | ForEach-Object { $naam[$_] })
     $vlag = [System.Windows.Forms.TextFormatFlags]'VerticalCenter, SingleLine, EndEllipsis, NoPadding'
@@ -2288,6 +2701,272 @@ function Nieuw-Lijst([double] $y, [double] $b) {
     return $l
 }
 
+# --- bouwstenen voor 'Kies wat meegaat' ------------------------------------------
+# Een los stukje tekst op een plek naar keuze (ook in een ander vlak dan $vlak, zoals de inhoud van een tabblad).
+function Nieuw-Etiket($ouder, [string] $tekst, [double] $x, [double] $y, [double] $b, [double] $h, $letter, $kleur, [switch] $Afkappen) {
+    $l = New-Object System.Windows.Forms.Label
+    $l.Font = $letter; $l.ForeColor = $kleur; $l.Text = $tekst
+    if ($h -le 0) { $h = (Meet-Hoogte $tekst $letter $b) + 4 }
+    Plaats $l $x $y $b $h
+    $l.AutoEllipsis = [bool]$Afkappen
+    $ouder.Controls.Add($l)
+    return $l
+}
+
+function Tekst-Grootte([int64] $b) {
+    # 340 MB, 23,4 GB (met de komma of punt van Windows zelf), 12 kB; een lege map: 'leeg'.
+    if ($b -le 0) { return (T 'leeg' 'empty') }
+    if ($b -lt 1MB) { return ('{0:0} kB' -f [math]::Max(1.0, [math]::Ceiling($b / 1KB))) }
+    if ($b -lt 1GB) { return ('{0:0} MB' -f ($b / 1MB)) }
+    return ('{0:0.#} GB' -f ($b / 1GB))
+}
+
+# Een vinkje: een rond hokje (rood met een wit vinkje als het meegaat), de naam, en rechts de grootte. Het is een echte
+# CheckBox (spatiebalk en Tab werken), die we zelf tekenen zoals de knoppen. Aan of uit zet de sleutel in
+# $script:NietMee en telt het totaal bovenaan meteen opnieuw.
+function Nieuw-Vinkje($ouder, [double] $x, [double] $y, [double] $b, [string] $tekst, [string] $rechts, [string] $sleutel, [string] $uitleg = '') {
+    $c = New-Object System.Windows.Forms.CheckBox
+    Plaats $c $x $y $b 30
+    $c.Text = $tekst
+    $c.Font = $script:LetterGewoon
+    $c.Cursor = [System.Windows.Forms.Cursors]::Hand
+    $c.Checked = Test-Mee $sleutel
+    $c.Tag = @{ Sleutel = $sleutel; Rechts = $rechts; Boven = $false }
+    Zet-Dubbel $c
+    $c.Add_MouseEnter({ $this.Tag.Boven = $true; $this.Invalidate() })
+    $c.Add_MouseLeave({ $this.Tag.Boven = $false; $this.Invalidate() })
+    $c.Add_Paint({ param($s, $e) Teken-Vinkje $s $e })
+    $c.Add_CheckedChanged({
+        if ($this.Checked) { [void]$script:NietMee.Remove($this.Tag.Sleutel) } else { [void]$script:NietMee.Add($this.Tag.Sleutel) }
+        $this.Invalidate()
+        Zet-Samenvatting
+    })
+    if ($uitleg) { $script:Tip.SetToolTip($c, $uitleg) }
+    $ouder.Controls.Add($c)
+    return $c
+}
+
+function Teken-Vinkje($c, $e) {
+    $g = $e.Graphics
+    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g.Clear($c.Parent.BackColor)
+    if ($c.Tag.Boven) {
+        $rij = Rond-Pad 0.5 0.5 ($c.Width - 1) ($c.Height - 1) (Fx 8)
+        $kwast = New-Object System.Drawing.SolidBrush($KnopVlak)
+        $g.FillPath($kwast, $rij)
+        $kwast.Dispose(); $rij.Dispose()
+    }
+    $bx = Fx 6; $by = ($c.Height - (Fx 20)) / 2
+    $hok = Rond-Pad $bx $by (Fx 20) (Fx 20) (Fx 6)
+    if ($c.Checked) {
+        $kwast = New-Object System.Drawing.SolidBrush($Rood)
+        $g.FillPath($kwast, $hok)
+        $kwast.Dispose()
+        $pen = Nieuwe-Pen $Wit 2.2
+        $g.DrawLines($pen, [System.Drawing.PointF[]]@(
+            (New-Object System.Drawing.PointF(($bx + (Fx 5.2)), ($by + (Fx 10.4)))),
+            (New-Object System.Drawing.PointF(($bx + (Fx 8.6)), ($by + (Fx 13.8)))),
+            (New-Object System.Drawing.PointF(($bx + (Fx 14.8)), ($by + (Fx 6.6))))))
+        $pen.Dispose()
+    } else {
+        $kwast = New-Object System.Drawing.SolidBrush($Wit)
+        $g.FillPath($kwast, $hok)
+        $kwast.Dispose()
+        $pen = New-Object System.Drawing.Pen($(if ($c.Tag.Boven) { $Grijs } else { $Grijs3 }), (Fx 1.6))
+        $g.DrawPath($pen, $hok)
+        $pen.Dispose()
+    }
+    $hok.Dispose()
+    if ($c.Focused -and (Toont-Focus $c)) {
+        $pen = New-Object System.Drawing.Pen($Inkt, (Fx 1.5))
+        $ring = Rond-Pad (Fx 1) (Fx 1) ($c.Width - (Fx 2) - 1) ($c.Height - (Fx 2) - 1) (Fx 7)
+        $g.DrawPath($pen, $ring)
+        $pen.Dispose(); $ring.Dispose()
+    }
+    # Rechts de grootte (grijs), links de naam: die krijgt wat er overblijft (met ... als het niet past).
+    $rechtsB = 0
+    if ($c.Tag.Rechts) {
+        $rechtsB = [System.Windows.Forms.TextRenderer]::MeasureText($c.Tag.Rechts, $script:LetterKlein).Width
+        $vak = New-Object System.Drawing.Rectangle(($c.Width - (Px 8) - $rechtsB), 0, $rechtsB, $c.Height)
+        [System.Windows.Forms.TextRenderer]::DrawText($g, $c.Tag.Rechts, $script:LetterKlein, $vak, $Grijs, [System.Windows.Forms.TextFormatFlags]'Right, VerticalCenter, SingleLine, NoPadding')
+    }
+    $links = Px 34
+    $vak = New-Object System.Drawing.Rectangle($links, 0, [math]::Max(10, $c.Width - $links - $rechtsB - (Px 16)), $c.Height)
+    $kleur = if ($c.Checked) { $Inkt } else { $Grijs }
+    [System.Windows.Forms.TextRenderer]::DrawText($g, $c.Text, $c.Font, $vak, $kleur, [System.Windows.Forms.TextFormatFlags]'Left, VerticalCenter, SingleLine, EndEllipsis, NoPadding')
+}
+
+# De kaart bovenaan 'Kies wat meegaat': links hoeveel er meegaat, rechts hoe groot je USB-schijf moet zijn.
+function Nieuw-Kaart([double] $y) {
+    $k = New-Object System.Windows.Forms.Panel
+    Plaats $k 0 $y $script:Breedte 76
+    $k.BackColor = $KaartVlak
+    $k.Tag = @{ Groot = ''; Advies = ''; Stick = ''; Bezig = $true }
+    Zet-Dubbel $k
+    $k.Add_Paint({ param($s, $e) Teken-Kaart $s $e })
+    $vlak.Controls.Add($k)
+    return $k
+}
+
+function Teken-Kaart($k, $e) {
+    $g = $e.Graphics
+    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g.Clear($Wit)
+    $pad = Rond-Pad 0.5 0.5 ($k.Width - 1) ($k.Height - 1) (Fx 14)
+    $kwast = New-Object System.Drawing.SolidBrush($KaartVlak)
+    $g.FillPath($kwast, $pad)
+    $kwast.Dispose(); $pad.Dispose()
+    $t = $k.Tag
+    $vlag = [System.Windows.Forms.TextFormatFlags]'Left, Top, SingleLine, EndEllipsis, NoPadding'
+    [System.Windows.Forms.TextRenderer]::DrawText($g, (T 'WAT GAAT ER MEE' 'WHAT GOES ALONG'), $script:LetterOog, (New-Object System.Drawing.Rectangle((Px 18), (Px 12), (Px 220), (Px 16))), $Grijs, $vlag)
+    if ($t.Bezig) {
+        [System.Windows.Forms.TextRenderer]::DrawText($g, (T 'Even rekenen…' 'Working it out…'), $script:LetterTitel, (New-Object System.Drawing.Rectangle((Px 18), (Px 30), (Px 220), (Px 26))), $Grijs, $vlag)
+    } else {
+        [System.Windows.Forms.TextRenderer]::DrawText($g, $t.Groot, $script:LetterKop, (New-Object System.Drawing.Rectangle((Px 18), (Px 27), (Px 226), (Px 38))), $Inkt, $vlag)
+    }
+    $pen = New-Object System.Drawing.Pen($Lijn, (Fx 1))
+    $g.DrawLine($pen, (Punt 252 14), (Punt 252 62))
+    $pen.Dispose()
+    # Een USB-stick: een rood lijf met een stekkertje erboven.
+    $lijf = Rond-Pad (Fx 270) (Fx 31) (Fx 18) (Fx 30) (Fx 4)
+    $kwast = New-Object System.Drawing.SolidBrush($Rood)
+    $g.FillPath($kwast, $lijf)
+    $kwast.Dispose(); $lijf.Dispose()
+    $pen = New-Object System.Drawing.Pen($Grijs3, (Fx 1.5))
+    $g.DrawRectangle($pen, (Fx 274), (Fx 22), (Fx 10), (Fx 9))
+    $pen.Dispose()
+    [System.Windows.Forms.TextRenderer]::DrawText($g, (T 'USB-SCHIJF NODIG' 'USB DRIVE NEEDED'), $script:LetterOog, (New-Object System.Drawing.Rectangle((Px 302), (Px 12), (Px 232), (Px 16))), $Grijs, $vlag)
+    $advies = if ($t.Bezig) { '…' } else { $t.Advies }
+    [System.Windows.Forms.TextRenderer]::DrawText($g, $advies, $script:LetterTitel, (New-Object System.Drawing.Rectangle((Px 302), (Px 29), (Px 232), (Px 26))), $RoodTekst, $vlag)
+    if (-not $t.Bezig -and $t.Stick) {
+        [System.Windows.Forms.TextRenderer]::DrawText($g, $t.Stick, $script:LetterNoot, (New-Object System.Drawing.Rectangle((Px 302), (Px 55), (Px 236), (Px 16))), $Grijs, $vlag)
+    }
+}
+
+# --- het info-scherm 'Wat gaat er niet mee?' --------------------------------------
+# Een eigen venster met een boom: wat jij uitsloot (per regel welke mappen en bestanden, hoeveel en hoe groot), wat je
+# uitvinkte, en wat BugOS Switch nooit meeneemt. Het zoeken loopt naast het venster (een groot project duurt even).
+$script:InfoVenster = $null
+
+function Takje($ouder, [string] $tekst, $kleur = $null) {
+    # Een takje in de boom van het info-scherm, in gewone letters (de boom zelf is vet).
+    $n = New-Object System.Windows.Forms.TreeNode($tekst)
+    $n.NodeFont = $script:LetterGewoon
+    if ($kleur) { $n.ForeColor = $kleur }
+    [void]$ouder.Nodes.Add($n)
+    return $n
+}
+
+function Nieuw-InfoVenster {
+    $v = New-Object System.Windows.Forms.Form
+    $v.Text = (T 'Wat gaat er niet mee?' 'What does not go along?')
+    $v.AutoScaleMode = 'None'
+    $v.Font = $script:LetterGewoon
+    $v.ClientSize = New-Object System.Drawing.Size((Px 640), (Px 500))
+    $v.StartPosition = 'CenterParent'
+    $v.FormBorderStyle = 'FixedDialog'
+    $v.MaximizeBox = $false; $v.MinimizeBox = $false; $v.ShowInTaskbar = $false
+    $v.BackColor = $Wit; $v.ForeColor = $Inkt
+    try { $v.Icon = $form.Icon } catch { Write-Verbose 'Geen icoon.' }
+    [void](Nieuw-Etiket $v (T 'Wat gaat er niet mee?' 'What does not go along?') 32 24 576 32 $script:LetterTitel $Inkt)
+    [void](Nieuw-Etiket $v (T 'Wat jij uitsloot, wat je uitvinkte en wat BugOS Switch nooit meeneemt. Op deze computer blijft alles gewoon staan.' 'What you excluded, what you unticked and what BugOS Switch never takes. Everything stays on this computer.') 32 58 576 0 $script:LetterKlein $Grijs)
+    # Een dunne lijn om de boom: een vlak in de kleur van de lijn, met de boom er 1 beeldpunt binnen.
+    $rand = New-Object System.Windows.Forms.Panel
+    Plaats $rand 32 104 576 318
+    $rand.BackColor = $Lijn
+    $rand.Padding = New-Object System.Windows.Forms.Padding(1)
+    $v.Controls.Add($rand)
+    $boom = New-Object System.Windows.Forms.TreeView
+    $boom.Dock = 'Fill'
+    $boom.BorderStyle = 'None'
+    $boom.BackColor = $Wit; $boom.ForeColor = $Inkt
+    # De boom in vet; elk takje gewoon (een vet takje in een gewone boom valt anders aan het eind weg).
+    $boom.Font = $script:LetterVet
+    $boom.ShowLines = $false
+    $boom.FullRowSelect = $true
+    $boom.HideSelection = $true
+    $boom.ItemHeight = Px 26
+    $boom.Indent = Px 20
+    $rand.Controls.Add($boom)
+    $balk = Nieuw-Balk 32 438 300 $v
+    $balk.Visible = $false
+    $dicht = Nieuw-Knop (T 'Sluiten' 'Close') 488 436 120 'hoofd' $v
+    $dicht.Add_Click({ $this.FindForm().Close() })
+    $v.AcceptButton = $dicht; $v.CancelButton = $dicht
+    $v.Tag = @{ Boom = $boom; Balk = $balk }
+    $script:InfoVenster = $v
+
+    # 1. Wat jij uitsloot: eerst 'even zoeken', het werk ernaast vult het in.
+    $regels = New-Object System.Windows.Forms.TreeNode((T "Wat jij uitsloot (Niet mee)" 'What you excluded (Not taken)'))
+    [void]$boom.Nodes.Add($regels)
+    if ($script:Uitsluiten.Count -eq 0) {
+        [void](Takje $regels (T 'Geen regels: alles in de mappen met een vinkje gaat mee.' 'No rules: everything in the ticked folders goes along.') $Grijs)
+    } else {
+        [void](Takje $regels (T 'Even zoeken…' 'Searching…') $Grijs)
+        $balk.Visible = $true
+        Start-Werk -Balk $balk -Mee @{ ExtraMappen = @($script:ExtraMappen); CloudMee = $true } -Werk {
+            [pscustomobject]@{ Regels = @(Get-Uitgesloten) }
+        } -Klaar {
+            param($staat)
+            $v = $script:InfoVenster
+            if (-not $v -or $v.IsDisposed) { return }
+            $v.Tag.Balk.Visible = $false
+            $knoop = $v.Tag.Boom.Nodes[0]
+            $knoop.Nodes.Clear()
+            if ($staat.Fout) { [void](Takje $knoop ((T 'Zoeken lukte niet: ' 'Searching did not work: ') + $staat.Fout) $Fout); return }
+            foreach ($r in @(@($staat.Uitkomst)[-1].Regels)) {
+                $delen = @()
+                if ($r.Mappen -gt 0) { $delen += $(if ($r.Mappen -eq 1) { T '1 map' '1 folder' } else { T "$($r.Mappen) mappen" "$($r.Mappen) folders" }) }
+                if ($r.Bestanden -gt 0) { $delen += $(if ($r.Bestanden -eq 1) { T '1 bestand' '1 file' } else { T "$($r.Bestanden) bestanden" "$($r.Bestanden) files" }) }
+                $wat = if ($delen.Count -gt 0) { ($delen -join (T ' en ' ' and ')) + ', ' + (Tekst-Grootte $r.Bytes) } else { T 'niets gevonden' 'nothing found' }
+                $tak = Takje $knoop "$($r.Regel)   —   $wat"
+                $tak.NodeFont = $script:LetterVet
+                foreach ($plek in $r.Plekken) {
+                    $extra = if ($plek.Map) { T "  (map, $(Tekst-Grootte $plek.Bytes))" "  (folder, $(Tekst-Grootte $plek.Bytes))" } else { "  ($(Tekst-Grootte $plek.Bytes))" }
+                    [void](Takje $tak ($plek.Pad + $extra))
+                }
+                $rest = $r.Mappen + $r.Bestanden - $r.Plekken.Count
+                if ($rest -gt 0) { [void](Takje $tak (T "… en nog $rest" "… and $rest more") $Grijs) }
+                # Een paar plekken: meteen open. Veel: dicht (klik op de regel om ze te zien).
+                if ($r.Plekken.Count -le 20) { $tak.Expand() }
+            }
+            $knoop.Expand()
+        }
+    }
+    # 2. Wat je uitvinkte (de namen zoals op de pagina).
+    $uitgevinkt = New-Object System.Windows.Forms.TreeNode((T 'Wat je uitvinkte' 'What you unticked'))
+    [void]$boom.Nodes.Add($uitgevinkt)
+    $namen = @()
+    foreach ($s in @($script:NietMee)) {
+        $d = @($script:Overzicht | Where-Object { $_ -and $_.Sleutel -eq $s }) | Select-Object -First 1
+        if ($d) { $namen += $d.Naam } elseif ($s -like 'map:*') { $namen += (Get-MapNaam $s.Substring(4)) } elseif ($s -like 'extra:*') { $namen += $s.Substring(6) }
+    }
+    if ($namen.Count -eq 0) { [void](Takje $uitgevinkt (T 'Niets: alles met een vinkje gaat mee.' 'Nothing: everything ticked goes along.') $Grijs) }
+    foreach ($n in ($namen | Sort-Object)) { [void](Takje $uitgevinkt $n) }
+    # 3. Wat nooit meegaat (zo werkt BugOS Switch; FORMAT.md).
+    $nooit = New-Object System.Windows.Forms.TreeNode((T 'Gaat nooit mee' 'Never goes along'))
+    [void]$boom.Nodes.Add($nooit)
+    foreach ($regel in @(
+        (T 'Wachtwoorden: van je wifi, je browsers en Windows. BugOS vraagt ze één keer.' 'Passwords: of your Wi-Fi, your browsers and Windows. BugOS asks for them once.'),
+        (T 'Cookies, open tabbladen en inlog-sessies van je browsers.' 'Cookies, open tabs and sign-in sessions of your browsers.'),
+        (T 'De cache van je browsers, en mappen van Firefox boven 300 MB (websites maken ze zelf opnieuw).' 'Your browser cache, and Firefox folders over 300 MB (websites make them again).'),
+        (T 'ImapMail van Thunderbird: Thunderbird haalt je mail opnieuw op.' 'Thunderbird ImapMail: Thunderbird fetches your mail again.'),
+        (T "De programma's zelf: alleen een lijstje, BugOS stelt passende apps voor." 'The programs themselves: only a list, BugOS suggests matching apps.'),
+        (T 'Lettertypen van Windows zelf (die zijn van Microsoft).' 'Fonts of Windows itself (they belong to Microsoft).'),
+        (T 'desktop.ini en Thumbs.db: hulpbestanden van Windows.' 'desktop.ini and Thumbs.db: helper files of Windows.'),
+        (T 'Koppelingen naar andere mappen (zoals Mijn muziek in een oude Windows).' 'Links to other folders (like My Music in an old Windows).'))) {
+        [void](Takje $nooit $regel)
+    }
+    $boom.ExpandAll()
+    if ($boom.Nodes.Count -gt 0) { $boom.Nodes[0].EnsureVisible() }
+    return $v
+}
+
+function Toon-NietMeeInfo {
+    $v = Nieuw-InfoVenster
+    try { [void]$v.ShowDialog($form) } finally { $script:InfoVenster = $null; $v.Dispose() }
+}
+
 $script:Pagina = 0
 $script:W = @{}   # knoppen en vakjes die een klik later nog nodig heeft
 $Paginas = @()
@@ -2300,7 +2979,7 @@ $Paginas += {
     $y += (Nieuw-Rij 'nummer' (T 'Controleren' 'Check') (T 'Kan je computer BugOS aan? Dat zie je meteen.' 'Can your computer run BugOS? You see it right away.') $y '1') + 10
     $y += (Nieuw-Rij 'nummer' (T 'Waar komt BugOS?' 'Where does BugOS go?') (T 'In plaats van Windows, ernaast, of op een andere schijf. De stappen hierna passen zich aan.' 'Instead of Windows, next to it, or on another disk. The next steps adapt to it.') $y '2') + 10
     $y += (Nieuw-Rij 'nummer' (T 'USB-stick maken' 'Make the USB stick') (T 'BugOS op een USB-stick van minstens 8 GB. Daarvan start je straks je computer.' 'BugOS on a USB stick of at least 8 GB. You start your computer from it later.') $y '3') + 10
-    [void](Nieuw-Rij 'nummer' (T 'Bestanden meenemen' 'Take your files') (T "Een kopie van je foto's, documenten en meer, die BugOS straks terugzet." 'A copy of your photos, documents and more, which BugOS puts back later.') $y '4')
+    [void](Nieuw-Rij 'nummer' (T 'Bestanden meenemen' 'Take your files') (T "Kies wat meegaat (mappen, bladwijzers, instellingen) en zie hoe groot je USB-schijf moet zijn. BugOS zet het straks terug." 'Choose what goes along (folders, bookmarks, settings) and see how big your USB drive must be. BugOS puts it back later.') $y '4')
 }
 
 # --- Pagina 1: controle -----------------------------------------------------
@@ -2338,80 +3017,72 @@ $Paginas += {
     # hebben. Kort gehouden (de rij 'andere mappen' kwam erbij), zodat de pagina ook op 150% zonder schuifbalk past.
     # Geen woorden met een koppelteken aan het eind van de zin: Windows brak 'wifi-namen' af als 'wifi' + '-namen' (en
     # een koppelteken dat niet afbreekt, U+2011, tekent Windows Forms als 'wifi- namen').
-    # De grootte staat in een eigen label: die verandert als je een extra map toevoegt.
+    # De grootte staat in een eigen label: die komt uit 'Kies wat meegaat' (of wordt hier even uitgerekend).
     if ($script:Plek -eq 'vervang') {
         $y = Nieuw-Tekst (T 'Een kopie van je spullen op een USB-schijf. Nodig: bij het installeren gaat Windows met alles erop weg.' 'A copy of your things on a USB drive. Needed: when installing, Windows goes away with everything on it.') 0 $LetOp
     } else {
         $y = Nieuw-Tekst (T 'Een kopie van je spullen op een USB-schijf. Windows blijft staan, dus dit mag je overslaan.' 'A copy of your things on a USB drive. Windows stays, so you may skip this.') 0
     }
     $script:W.groot = Nieuw-Label (T 'Wat gaat er mee (even rekenen…)' 'What goes along (working it out…)') ($y + 8) 24 $null -Vet
-    $y = Nieuw-Tekst (T "Documenten, foto's, muziek, video's, bureaublad, downloads, bladwijzers, e-mail, achtergrond, printers en de namen van je wifi. Nooit wachtwoorden." "Documents, photos, music, videos, desktop, downloads, bookmarks, e-mail, wallpaper, printers and your Wi-Fi names. Never passwords.") ($y + 32) $Grijs -Klein
+    $y = Nieuw-Tekst (T 'Wat je in de vorige stap koos (Terug om het te veranderen). Nooit wachtwoorden.' 'What you chose in the previous step (Back to change it). Never passwords.') ($y + 32) $Grijs -Klein
     $y = Nieuw-Stap '1' (T 'Kies waar de kopie heen gaat' 'Choose where the copy goes') ($y + 12)
     $script:W.schijf = Nieuw-Lijst $y 300
     $lijst = $script:W.schijf
+    $script:W.schijven = @()
     # Alleen schijven die je eruit haalt: een D:-schijf in de laptop gaat mee de prullenbak in als je straks
     # bij het installeren de hele schijf kiest (U284). Een vaste (type 3) schijf telt alleen als hij via USB hangt.
     Get-CimInstance Win32_LogicalDisk | Where-Object { $_.DeviceID -ne 'C:' -and ($_.DriveType -eq 2 -or ($_.DriveType -eq 3 -and (Test-UsbLetter $_))) } | ForEach-Object {
         [void]$lijst.Items.Add("$($_.DeviceID)  $($_.VolumeName)  ($([math]::Round($_.FreeSpace / 1GB)) GB $(T 'vrij' 'free'))")
+        $script:W.schijven += [pscustomobject]@{ Letter = $_.DeviceID; Vrij = [int64]$_.FreeSpace; Al = (Test-Path -LiteralPath "$($_.DeviceID)\BugOS-Switch\bugos-switch.json") }
     }
     if ($lijst.Items.Count -gt 0) { $lijst.SelectedIndex = 0 }
     $noot = Nieuw-Label (T 'Je BugOS-stick (BUGOS) mag ook.' 'Your BugOS stick (BUGOS) is fine too.') ($y + 6) 24 $Grijs -Klein
     $noot.Left = Px 312; $noot.Width = Px ($script:Breedte - 312)
     $script:W.schijfNoot = $noot; $script:W.schijfY = $y
-    $y = Nieuw-Stap '2' (T 'Nog een andere map mee? Dat hoeft niet.' 'Another folder too? You do not have to.') ($y + 44)
-    # Extra mappen (E): ook iets anders dan de vaste zes, bijvoorbeeld een map op een tweede schijf (D:). Links staat
-    # wat je koos, rechts de knop om er een toe te voegen. Kiezen gaat met het gewone mapvenster van Windows.
-    # Een LinkLabel: als er extra mappen zijn, staat er een klikbaar '(weghalen)' achter, om de keuze ongedaan te maken.
-    $script:W.extra = New-Object System.Windows.Forms.LinkLabel
-    $script:W.extra.Font = $script:LetterGewoon
-    $script:W.extra.ForeColor = $Grijs
-    $script:W.extra.LinkColor = $Inkt
-    $script:W.extra.AutoEllipsis = $true
-    Plaats $script:W.extra 0 ($y + 10) 300 26
-    $vlak.Controls.Add($script:W.extra)
-    $script:W.extra.Add_LinkClicked({
-        $script:ExtraMappen.Clear()
-        Zet-ExtraTekst
-    })
-    $script:W.extraKnop = Nieuw-Knop (T 'Map toevoegen…' 'Add folder…') 312 $y 220
-    $y = Nieuw-Stap '3' (T 'Kopiëren' 'Copy') ($y + 54)
+    # Past het op de gekozen schijf? (Een hint; vlak voor het kopiëren rekenen we het nog precies na.)
+    $script:W.past = Nieuw-Label '' ($y + 38) 40 $Grijs -Klein
+    $y = Nieuw-Stap '2' (T 'Kopiëren' 'Copy') ($y + 84)
     $script:W.knop = Nieuw-Knop (T 'Bestanden kopiëren' 'Copy files') 0 $y 220 'hoofd'
-    # script: zodat de knoppen (die later draaien, buiten deze pagina) de functie ook vinden.
-    function script:Zet-ExtraTekst {
-        # Wat er in de regel 'andere mappen' staat, en de nieuwe totale grootte bovenaan.
-        if ($script:ExtraMappen.Count -eq 0) {
-            $script:W.extra.Text = (T 'Bijvoorbeeld een map op een tweede schijf' 'For example a folder on a second drive')
-            $script:W.extra.LinkArea = New-Object System.Windows.Forms.LinkArea(0, 0)
+    $script:W.totaal = $null
+    # script: zodat de knoppen en het werk (die later draaien, buiten deze pagina) de functies ook vinden.
+    function script:Zet-Past {
+        # Onder het lijstje: past wat meegaat op deze schijf? Met dezelfde marge als de kaart op 'Kies wat meegaat'.
+        $l = $script:W.past
+        $i = $script:W.schijf.SelectedIndex
+        if ($i -lt 0 -or $null -eq $script:W.totaal -or $i -ge @($script:W.schijven).Count) { $l.Text = ''; return }
+        $s = @($script:W.schijven)[$i]
+        $nodig = [int64]$script:W.totaal
+        if ($s.Vrij -ge ([double]$nodig * 1.10 + 256MB)) {
+            $l.ForeColor = $Goed
+            $l.Text = T "Past: er is $(Tekst-Grootte $s.Vrij) vrij, en er moet $(Tekst-Grootte $nodig) op." "Fits: $(Tekst-Grootte $s.Vrij) is free, and $(Tekst-Grootte $nodig) must go on it."
+        } elseif ($s.Al) {
+            $l.ForeColor = $Grijs
+            $l.Text = T 'Hier staat al een kopie van een eerdere keer; die wordt bijgewerkt. Of het past, rekenen we na als je op Kopiëren klikt.' 'There is already a copy from an earlier time here; it gets updated. Whether it fits, we check when you click Copy.'
+        } elseif ($s.Vrij -ge $nodig) {
+            $l.ForeColor = $LetOp
+            $l.Text = T "Krap: er is $(Tekst-Grootte $s.Vrij) vrij, en er moet $(Tekst-Grootte $nodig) op. Het past misschien net." "Tight: $(Tekst-Grootte $s.Vrij) is free, and $(Tekst-Grootte $nodig) must go on it. It may just fit."
         } else {
-            $namen = ($script:ExtraMappen | ForEach-Object { Split-Path $_ -Leaf }) -join ', '
-            $weg = (T '(weghalen)' '(remove)')
-            $tekst = (T "Ook mee: $namen " "Also: $namen ") + $weg
-            $script:W.extra.Text = $tekst
-            $script:W.extra.LinkArea = New-Object System.Windows.Forms.LinkArea(($tekst.Length - $weg.Length), $weg.Length)
-        }
-        # De grootte uitrekenen kan bij veel foto's een halve minuut duren: ernaast (het venster blijft bewegen).
-        $script:W.groot.Text = (T 'Wat gaat er mee (even rekenen…)' 'What goes along (working it out…)')
-        Start-Werk -Werk { Get-MeeneemGrootte } -Mee @{ ExtraMappen = @($script:ExtraMappen); CloudMee = $script:CloudMee } -Klaar {
-            param($staat)
-            if ($staat.Fout) { $script:W.groot.Text = (T 'Wat gaat er mee' 'What goes along'); return }
-            # Met de komma of punt van Windows zelf (0,3 GB in het Nederlands).
-            $gb = '{0:0.#}' -f ([int64](@($staat.Uitkomst)[-1]) / 1GB)
-            $script:W.groot.Text = (T "Wat gaat er mee ($gb GB)" "What goes along ($gb GB)")
+            $l.ForeColor = $LetOp
+            $l.Text = T "Te klein: er is $(Tekst-Grootte $s.Vrij) vrij, en er moet $(Tekst-Grootte $nodig) op. Kies een schijf van minstens $(Get-UsbAdvies $nodig) GB, of zet in de vorige stap iets uit." "Too small: $(Tekst-Grootte $s.Vrij) is free, and $(Tekst-Grootte $nodig) must go on it. Choose a drive of at least $(Get-UsbAdvies $nodig) GB, or untick something in the previous step."
         }
     }
-    Zet-ExtraTekst
-    $script:W.extraKnop.Add_Click({
-        $kies = New-Object System.Windows.Forms.FolderBrowserDialog
-        $kies.Description = (T 'Kies een map die ook mee moet naar BugOS' 'Choose a folder that should also go to BugOS')
-        $kies.ShowNewFolderButton = $false
-        if ($kies.ShowDialog() -ne 'OK') { return }
-        $letter = ''
-        if ($script:W.schijf.SelectedIndex -ge 0) { $letter = ($script:W.schijf.SelectedItem -split '\s+')[0] + '\' }
-        $reden = Test-ExtraMap $kies.SelectedPath $letter
-        if ($reden) { Toon $reden 'Warning'; return }
-        $script:ExtraMappen.Add([System.IO.Path]::GetFullPath($kies.SelectedPath).TrimEnd('\'))
-        Zet-ExtraTekst
-    })
+    function script:Zet-Grootte {
+        $script:W.groot.Text = if ($null -eq $script:W.totaal) { T 'Wat gaat er mee' 'What goes along' } else { T "Wat gaat er mee ($(Tekst-Grootte ([int64]$script:W.totaal)))" "What goes along ($(Tekst-Grootte ([int64]$script:W.totaal)))" }
+        Zet-Past
+    }
+    $script:W.schijf.Add_SelectedIndexChanged({ Zet-Past })
+    # De grootte: al uitgerekend op 'Kies wat meegaat' (voor deze extra mappen en regels)? Dan meteen. Anders hier, naast
+    # het venster (bij veel foto's kan dat een halve minuut duren).
+    if ($null -ne $script:Overzicht -and $script:OverzichtVoor -eq (Get-OverzichtSleutel)) {
+        $script:W.totaal = Get-GekozenTotaal
+        Zet-Grootte
+    } else {
+        Start-Werk -Werk { Get-MeeneemGrootte } -Mee @{ ExtraMappen = @($script:ExtraMappen); CloudMee = $script:CloudMee } -Klaar {
+            param($staat)
+            if (-not $staat.Fout) { $script:W.totaal = [int64](@($staat.Uitkomst)[-1]) }
+            Zet-Grootte
+        }
+    }
     $script:W.balk = Nieuw-Balk 0 ($y + 54) ($script:Breedte - 4) $vlak
     $script:W.balk.Visible = $false
     $script:W.status = Nieuw-Label '' ($y + 70) 66 $Grijs
@@ -2434,6 +3105,13 @@ $Paginas += {
         $lijst = $script:W.schijf; $status = $script:W.status
         if ($lijst.SelectedIndex -lt 0) { Toon (T 'Steek eerst een USB-schijf in en ga even terug en weer verder.' 'Plug in a USB drive first, then go back and forward again.'); return }
         $letter = ($lijst.SelectedItem -split '\s+')[0] + '\'
+        # Een extra map die op die schijf zelf staat, kan niet naar die schijf gekopieerd worden.
+        foreach ($e in @($script:ExtraMappen)) {
+            if ((Test-Mee "extra:$e") -and ($e + '\').StartsWith($letter, [StringComparison]::OrdinalIgnoreCase)) {
+                Toon (T "De map '$(Split-Path $e -Leaf)' staat op die schijf zelf. Kies een andere schijf, of zet die map uit in de vorige stap." "The folder '$(Split-Path $e -Leaf)' is on that drive itself. Choose another drive, or untick that folder in the previous step.") 'Warning'
+                return
+            }
+        }
         $status.ForeColor = $Grijs
         Toon-Onderaan $status
         # Stap 1 (ernaast): kijken wat er mee gaat. OneDrive-bestanden tellen, FAT32 en de vrije ruimte.
@@ -2446,13 +3124,26 @@ $Paginas += {
             if ($fs -eq 'FAT32') { $groot4 = @(Get-TeGrootVoorFat32 | ForEach-Object { $_.Name }) }
             $al = 0L
             if (Test-Path -LiteralPath "$($letter)BugOS-Switch") { $al = [int64](Get-ChildItem -LiteralPath "$($letter)BugOS-Switch" -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum }
-            [pscustomobject]@{ Cloud = $cloud; Fs = $fs; Groot4 = $groot4; Vrij = [int64](Get-PSDrive $letter.Substring(0, 1)).Free; Al = $al }
+            # Wat er van een eerdere keer op de schijf staat en nu niet meer mee moet (de vraag komt zo).
+            $resten = @(Get-OudeResten "$($letter)BugOS-Switch")
+            [pscustomobject]@{ Cloud = $cloud; Fs = $fs; Groot4 = $groot4; Vrij = [int64](Get-PSDrive $letter.Substring(0, 1)).Free; Al = $al; Resten = $resten }
         } -Klaar {
             param($staat)
             $status = $script:W.status
             if ($staat.Fout) { $script:W.balk.Visible = $false; $status.Text = ''; Toon $staat.Fout 'Error'; return }
             $u = @($staat.Uitkomst)[-1]
             $letter = ($script:W.schijf.SelectedItem -split '\s+')[0] + '\'
+            # Van een eerdere keer: wat nu niet meer mee moet, gaat van de schijf (anders zet BugOS het straks toch terug).
+            # Weghalen is iets anders dan kopiëren: eerst vragen, met een paar namen erbij.
+            $resten = @($u.Resten | Where-Object { $_ })
+            if ($resten.Count -gt 0) {
+                $basis = "$($letter)BugOS-Switch\"
+                $namen = (@($resten | Select-Object -First 3 | ForEach-Object { $_.Substring([math]::Min($_.Length, $basis.Length)) }) -join ', ')
+                if ($resten.Count -gt 3) { $namen += (T " en nog $($resten.Count - 3)" " and $($resten.Count - 3) more") }
+                if (-not (Vraag (T "Van een eerdere keer staat er op deze schijf nog iets dat nu niet meer meegaat: $namen.`n`nDat haal ik van de schijf (alleen uit de map BugOS-Switch), zodat BugOS het straks niet terugzet. Op deze computer blijft alles gewoon staan. Doorgaan?" "From an earlier time this drive still holds something that no longer goes along: $namen.`n`nI will remove that from the drive (only from the BugOS-Switch folder), so BugOS does not put it back later. Everything stays on this computer. Continue?"))) {
+                    $script:W.balk.Visible = $false; $status.Text = ''; return
+                }
+            }
             # OneDrive (E): staan er bestanden alleen in de cloud? Vraag het VOORAF: eerst downloaden (kan lang duren en
             # vraagt internet), of laten staan (dan zegt BugOS straks welke het waren).
             $script:Cloud = $u.Cloud
@@ -2469,7 +3160,7 @@ $Paginas += {
                     $script:W.balk.Visible = $false; $status.Text = ''; return
                 }
             }
-            $script:W.extraKnop.Enabled = $false; $script:W.knop.Enabled = $false
+            $script:W.knop.Enabled = $false
             # Stap 2 (ernaast): uitrekenen of het past, en dan kopiëren. Wat er al in BugOS-Switch staat (een eerdere
             # keer), hoeft er niet nog een keer bij (U286).
             Start-Werk -Blokkeer -Balk $script:W.balk -Label $status -Tekst (T 'Uitrekenen hoeveel ruimte er nodig is…' 'Working out how much space is needed…') -TerugVars @('Deels', 'FirefoxOverslagen') -Mee @{ ExtraMappen = @($script:ExtraMappen); CloudMee = $script:CloudMee; Cloud = $script:Cloud; Letter = $letter; Vrij = $u.Vrij; Al = $u.Al } -Werk {
@@ -2480,14 +3171,14 @@ $Paginas += {
             } -Klaar {
                 param($staat)
                 $status = $script:W.status
-                $script:W.extraKnop.Enabled = $true; $script:W.knop.Enabled = $true
+                $script:W.knop.Enabled = $true
                 $script:W.balk.Visible = $false
                 if ($staat.Fout) { $status.Text = ''; Toon $staat.Fout 'Error'; return }
                 $u = @($staat.Uitkomst)[-1]
                 if ($u.TeKlein) {
                     # Precies zeggen hoeveel er nodig is en hoeveel er is, dan weet je hoe groot je andere schijf moet zijn.
                     $status.Text = ''
-                    Toon (T "Er is niet genoeg ruimte op die schijf: er moet $([math]::Round($u.Nodig / 1GB, 1)) GB op, en er is $([math]::Round($u.Heb / 1GB, 1)) GB. Gebruik een grotere schijf, of haal een extra map weg." "Not enough space on that drive: $([math]::Round($u.Nodig / 1GB, 1)) GB must go on it, and there is $([math]::Round($u.Heb / 1GB, 1)) GB. Use a bigger drive, or remove an extra folder.") 'Warning'
+                    Toon (T "Er is niet genoeg ruimte op die schijf: er moet $([math]::Round($u.Nodig / 1GB, 1)) GB op, en er is $([math]::Round($u.Heb / 1GB, 1)) GB. Gebruik een grotere schijf (minstens $(Get-UsbAdvies $u.Nodig) GB), of zet in de vorige stap iets uit." "Not enough space on that drive: $([math]::Round($u.Nodig / 1GB, 1)) GB must go on it, and there is $([math]::Round($u.Heb / 1GB, 1)) GB. Use a bigger drive (at least $(Get-UsbAdvies $u.Nodig) GB), or untick something in the previous step.") 'Warning'
                     return
                 }
                 $deels = @($staat.Terug['Deels'] | Where-Object { $_ })
@@ -2551,10 +3242,10 @@ $Paginas += {
     $y += 4
     switch ($script:Plek) {
         'vervang' {
-            [void](Nieuw-Rij 'let_op' (T 'Windows gaat weg' 'Windows goes away') (T 'Bij het installeren wordt de schijf van deze computer gewist: Windows en al je bestanden. Neem je bestanden dus mee in stap 4; dat is dan echt nodig.' 'When installing, the disk of this computer is erased: Windows and all your files. So take your files along in step 4; then that is really needed.') $y)
+            [void](Nieuw-Rij 'let_op' (T 'Windows gaat weg' 'Windows goes away') (T "Bij het installeren wordt de schijf van deze computer gewist: Windows en al je bestanden. Neem je bestanden dus mee (stap $(Get-StapNr 'kiezen') en $(Get-StapNr 'bestanden')); dat is dan echt nodig." "When installing, the disk of this computer is erased: Windows and all your files. So take your files along (steps $(Get-StapNr 'kiezen') and $(Get-StapNr 'bestanden')); then that is really needed.") $y)
         }
         'naast' {
-            [void](Nieuw-Rij 'goed' (T 'Windows blijft' 'Windows stays') (T 'In stap 5 maken we Windows wat kleiner, zodat BugOS ernaast past. Je bestanden blijven staan. Bij het aanzetten kies je daarna Windows of BugOS.' 'In step 5 we make Windows a bit smaller so BugOS fits next to it. Your files stay. When the computer starts, you then choose Windows or BugOS.') $y)
+            [void](Nieuw-Rij 'goed' (T 'Windows blijft' 'Windows stays') (T "In stap $(Get-StapNr 'ruimte') maken we Windows wat kleiner, zodat BugOS ernaast past. Je bestanden blijven staan. Bij het aanzetten kies je daarna Windows of BugOS." "In step $(Get-StapNr 'ruimte') we make Windows a bit smaller so BugOS fits next to it. Your files stay. When the computer starts, you then choose Windows or BugOS.") $y)
         }
         'ander' {
             # Welke andere schijven er zijn, met naam en grootte: die herken je straks in het installatieprogramma.
@@ -2586,7 +3277,7 @@ $Paginas += {
     $kop.Text = (T 'Zo installeer je BugOS' 'This is how you install BugOS')
     $y = 0
     if ($script:Plek -eq 'vervang' -and -not $script:BestandenMee) {
-        $y += (Nieuw-Rij 'let_op' (T 'Je bestanden zijn nog niet meegenomen' 'Your files have not been taken along yet') (T 'Bij het installeren gaat alles op deze computer weg. Wil je ze bewaren? Ga dan terug naar stap 4.' 'When installing, everything on this computer goes away. Want to keep them? Then go back to step 4.') $y) + 12
+        $y += (Nieuw-Rij 'let_op' (T 'Je bestanden zijn nog niet meegenomen' 'Your files have not been taken along yet') (T "Bij het installeren gaat alles op deze computer weg. Wil je ze bewaren? Ga dan terug naar stap $(Get-StapNr 'kiezen')." "When installing, everything on this computer goes away. Want to keep them? Then go back to step $(Get-StapNr 'kiezen').") $y) + 12
     }
     $y += (Nieuw-Rij 'nummer' (T 'Start op vanaf de BugOS-stick' 'Start from the BugOS stick') (T 'Laat de stick erin en start de computer opnieuw. Druk tijdens het aanzetten op F12, F11, F9 of Esc (verschilt per computer) en kies de USB-stick.' 'Leave the stick in and restart the computer. While it starts, press F12, F11, F9 or Esc (differs per computer) and choose the USB stick.') $y '1') + 10
     $schijf = switch ($script:Plek) {
@@ -2631,7 +3322,7 @@ function Start-Ruimte {
         $script:W.krimpStatus = Nieuw-Label '' ($y + 128) 110 $Grijs
         $script:W.krimpKnop.Add_Click({
             $getal = $script:W.getal
-            if (-not (Vraag (T "Windows wordt $($getal.Value) GB kleiner. Je bestanden blijven gewoon staan.`n`nHeb je je bestanden meegenomen (stap 4)? Doorgaan?" "Windows will shrink by $($getal.Value) GB. Your files stay where they are.`n`nDid you take your files along (step 4)? Continue?"))) { return }
+            if (-not (Vraag (T "Windows wordt $($getal.Value) GB kleiner. Je bestanden blijven gewoon staan.`n`nHeb je je bestanden meegenomen (stap $(Get-StapNr 'bestanden'))? Doorgaan?" "Windows will shrink by $($getal.Value) GB. Your files stay where they are.`n`nDid you take your files along (step $(Get-StapNr 'bestanden'))? Continue?"))) { return }
             $script:W.krimpKnop.Enabled = $false
             $gestart = Start-BeheerderTaak @('-Taak', 'Krimp', '-KrimpGB', [string][int]$getal.Value) -Balk $script:W.krimpBalk -Label $script:W.krimpStatus -Tekst (T 'Windows kleiner maken… Dit kan een paar minuten duren.' 'Shrinking Windows… This can take a few minutes.') -Klaar {
                 param($r)
@@ -2774,9 +3465,10 @@ $Paginas += {
         $sticks = $script:W.sticks
         if ($sticks.Count -eq 0) { Toon (T 'Steek eerst een USB-stick in, en ga dan terug en weer verder.' 'Plug in a USB stick first, then go back and forward again.'); return $null }
         $stick = $sticks[$script:W.stick.SelectedIndex]
-        # Staan je bestanden uit stap 4 op deze stick? Dan niet wissen: die ben je anders kwijt (U095).
+        # Staan je bestanden uit 'Bestanden meenemen' op deze stick? Dan niet wissen: die ben je anders kwijt (U095).
         if (Test-SwitchBestanden $stick.Number) {
-            Toon (T "Op '$($stick.FriendlyName)' staan je bestanden uit stap 4 (de map BugOS-Switch). Die zou je kwijtraken. Zet ze eerst ergens anders neer, of gebruik een andere stick." "'$($stick.FriendlyName)' holds your files from step 4 (the BugOS-Switch folder). You would lose them. Put them somewhere else first, or use a different stick.") 'Warning'
+            $n = Get-StapNr 'bestanden'
+            Toon (T "Op '$($stick.FriendlyName)' staan je bestanden uit stap $n (de map BugOS-Switch). Die zou je kwijtraken. Zet ze eerst ergens anders neer, of gebruik een andere stick." "'$($stick.FriendlyName)' holds your files from step $n (the BugOS-Switch folder). You would lose them. Put them somewhere else first, or use a different stick.") 'Warning'
             return $null
         }
         return $stick
@@ -2807,7 +3499,7 @@ $Paginas += {
             } else {
                 T "Deze stick is nu helemaal voor BugOS (een oudere BugOS). Zet je bestanden in de volgende stap dus op een andere USB-schijf." "This stick is now completely for BugOS (an older BugOS). So put your files on another USB drive in the next step."
             }
-            Toon-Klaar (T 'De USB-stick is klaar' 'The USB stick is ready') $tekst (T 'Verder: bestanden meenemen' 'Next: take your files')
+            Toon-Klaar (T 'De USB-stick is klaar' 'The USB stick is ready') $tekst (T 'Verder: kies wat meegaat' 'Next: choose what to take')
         }
         if (-not $gestart) { $script:W.stickStatus.Text = '' }
     })
@@ -2833,18 +3525,358 @@ $Paginas += {
     })
 }
 
+# --- Pagina 7: kies wat meegaat ----------------------------------------------
+# Wens van de eigenaar (2026-11): vóór het kopiëren netjes kiezen wat meegaat (mappen, bladwijzers per browser, e-mail,
+# instellingen), zien hoe groot de USB-schijf moet zijn, en zelf regels maken voor wat thuisblijft: een plek, of een naam
+# als *node* (alles met node erin). Met een info-scherm dat laat zien wat dat precies is.
+# Bovenaan een kaart met het totaal en de maat van de USB-schijf; daaronder drie tabbladen. Het uitrekenen (alle mappen
+# langs) loopt naast het venster; een vinkje aan of uit telt meteen, zonder opnieuw te rekenen.
+$script:Overzicht = $null       # Get-Overzicht: alles wat mee kan, met de grootte
+$script:OverzichtVoor = ''      # voor welke extra mappen en regels dat uitgerekend is
+$script:OverzichtNr = 0         # het nummer van de laatste berekening (een oudere die later klaar is, telt niet)
+$script:Stick = $null           # een aangesloten BugOS-stick (BUGOS): letter, wat BugOS inneemt, hoeveel er vrij is
+$script:KiesTab = 'mappen'
+$script:IsoRegel = $false       # het BugOS-bestand zelf (stap 3) staat al één keer bij 'Niet mee'
+
+function Get-OverzichtSleutel { (@($script:ExtraMappen) -join '|') + '#' + (@($script:Uitsluiten) -join '|') }
+
+function Get-GekozenTotaal {
+    # Het totaal van wat een vinkje heeft (uit het overzicht: aan of uit zetten hoeft niet opnieuw te rekenen).
+    $som = 0L
+    if ($null -eq $script:Overzicht) { return $som }
+    foreach ($d in @($script:Overzicht)) { if ($d -and (Test-Mee $d.Sleutel)) { $som += [int64]$d.Bytes } }
+    return $som
+}
+
+function Get-OverzichtDing([string] $sleutel) {
+    if ($null -eq $script:Overzicht) { return $null }
+    return (@($script:Overzicht | Where-Object { $_ -and $_.Sleutel -eq $sleutel }) | Select-Object -First 1)
+}
+
+function Get-RechtsTekst($d) {
+    # Wat er rechts naast een vinkje staat: de grootte, 'niet mee' (de map valt onder een regel), of … (nog aan het rekenen).
+    if (-not $d) { return '…' }
+    if ($d.Regel) { return (T 'niet mee' 'not taken') }
+    return (Tekst-Grootte ([int64]$d.Bytes))
+}
+
+function Get-StapNr([string] $blad) { [array]::IndexOf((Get-Volgorde), $blad) }
+
+function Voeg-UitRegel([string] $tekst, [switch] $Stil) {
+    # Een regel bij 'Niet mee' zetten. Klopt hij niet, dan zeggen we waarom (behalve met -Stil). Geeft of het lukte.
+    try { $regel = ConvertTo-UitRegel $tekst } catch { if (-not $Stil) { Toon $_.Exception.Message 'Warning' }; return $false }
+    if ($script:Uitsluiten -contains $regel.Tekst) { return $true }
+    if ($regel.Soort -eq 'plek') {
+        if (-not (Test-Path -LiteralPath $regel.Pad)) { if (-not $Stil) { Toon (T 'Die plek bestaat niet op deze computer.' 'That place does not exist on this computer.') 'Warning' }; return $false }
+        # Alleen een plek IN een map die mee kan: daarbuiten ging hij toch al niet mee.
+        $binnen = $false
+        foreach ($m in @($script:Mappen | ForEach-Object { Get-BekendeMap $_.Sleutel }) + @($script:ExtraMappen)) {
+            if (-not $m) { continue }
+            $mv = [System.IO.Path]::GetFullPath($m).TrimEnd('\')
+            if (($regel.Pad + '\').StartsWith($mv + '\', [StringComparison]::OrdinalIgnoreCase)) { $binnen = $true; break }
+        }
+        if (-not $binnen) { if (-not $Stil) { Toon (T 'Die plek ligt niet in een map die meegaat, dus hij ging al niet mee.' 'That place is not in a folder that goes along, so it was not going along anyway.') }; return $false }
+    }
+    Set-Uitsluiten (@($script:Uitsluiten) + @($regel.Tekst))
+    return $true
+}
+
+function Start-Overzicht {
+    # Alles opnieuw uitrekenen (na een extra map of een regel): de kaart zegt 'even rekenen', de vinkjes houden hun stand.
+    $script:OverzichtNr++
+    $kaart = $script:W.kaart
+    $kaart.Tag.Bezig = $true; $kaart.Invalidate()
+    Zet-TabNamen
+    Start-Werk -Balk $script:W.kaartBalk -Mee @{ ExtraMappen = @($script:ExtraMappen); CloudMee = $true; Nr = $script:OverzichtNr; Voor = (Get-OverzichtSleutel) } -Werk {
+        # Een aangesloten BugOS-stick: hoeveel BugOS zelf inneemt (alles behalve de vrije ruimte en een eerdere kopie van
+        # je bestanden, plus het verborgen opstartdeel), en hoeveel er vrij is voor je bestanden.
+        $stick = $null
+        try {
+            foreach ($v in @(Get-Volume -ErrorAction Stop | Where-Object { $_.FileSystemLabel -eq 'BUGOS' -and "$($_.DriveLetter)" -match '^[A-Za-z]$' })) {
+                $kopie = Get-MapGrootte "$($v.DriveLetter):\BugOS-Switch" -ZonderRegels
+                $stick = [pscustomobject]@{ Letter = "$($v.DriveLetter):"; BugOS = [int64]($v.Size - $v.SizeRemaining - $kopie + 512MB); Vrij = [int64]($v.SizeRemaining + $kopie) }
+                break
+            }
+        } catch { $stick = $null }
+        [pscustomobject]@{ Nr = $Mee.Nr; Voor = $Mee.Voor; Lijst = @(Get-Overzicht); Stick = $stick }
+    } -Klaar {
+        param($staat)
+        $u = @($staat.Uitkomst)[-1]
+        if (-not $staat.Fout -and (-not $u -or $u.Nr -ne $script:OverzichtNr)) { return }   # een nieuwere berekening loopt al
+        $script:W.kaartBalk.Visible = $false
+        if ($staat.Fout) {
+            $script:W.kaart.Tag.Bezig = $false; $script:W.kaart.Tag.Groot = '?'
+            $script:W.kaart.Tag.Advies = '?'; $script:W.kaart.Tag.Stick = (T 'Uitrekenen lukte niet: ' 'Working it out failed: ') + $staat.Fout
+            $script:W.kaart.Invalidate()
+            return
+        }
+        $script:Overzicht = @($u.Lijst)
+        $script:OverzichtVoor = $u.Voor
+        $script:Stick = $u.Stick
+        Zet-Samenvatting
+        # Het tabblad 'Niet mee' niet opnieuw tekenen: daar typ je misschien net iets.
+        if ($script:KiesTab -ne 'uit') { Toon-KiesTab $script:KiesTab }
+    }
+}
+
+function Zet-Samenvatting {
+    # De kaart bovenaan: het totaal van wat een vinkje heeft, en de USB-schijf die daarvoor nodig is.
+    $kaart = $script:W.kaart
+    if (-not $kaart -or $kaart.IsDisposed -or $null -eq $script:Overzicht) { return }
+    $totaal = Get-GekozenTotaal
+    $kaart.Tag.Bezig = $false
+    $kaart.Tag.Groot = if ($totaal -le 0) { '0 MB' } else { Tekst-Grootte $totaal }
+    $kaart.Tag.Advies = T "$(Get-UsbAdvies $totaal) GB of groter" "$(Get-UsbAdvies $totaal) GB or larger"
+    $s = $script:Stick
+    if ($s) {
+        $kaart.Tag.Stick = if ($s.Vrij -ge ([double]$totaal * 1.10 + 256MB)) {
+            T "Past ook op je BugOS-stick ($($s.Letter))." "Also fits on your BugOS stick ($($s.Letter))."
+        } else {
+            T "Op je BugOS-stick ($($s.Letter)) past het niet: $(Tekst-Grootte $s.Vrij) vrij." "Does not fit on your BugOS stick ($($s.Letter)): $(Tekst-Grootte $s.Vrij) free."
+        }
+    } else {
+        $kaart.Tag.Stick = T "Alles op je BugOS-stick? Dan $(Get-UsbAdvies $totaal 6.5e9) GB." "All on your BugOS stick? Then $(Get-UsbAdvies $totaal 6.5e9) GB."
+    }
+    $script:Tip.SetToolTip($kaart, $kaart.Tag.Stick)
+    $kaart.Invalidate()
+    Zet-TabNamen
+}
+
+function Zet-TabNamen {
+    # Het tabblad 'Niet mee' noemt hoeveel regels er zijn.
+    foreach ($k in @($script:W.tabKnoppen | Where-Object { $_ })) {
+        if ($k.Tag.Tab -eq 'uit') { $k.Text = if ($script:Uitsluiten.Count -gt 0) { T "Niet mee ($($script:Uitsluiten.Count))" "Not taken ($($script:Uitsluiten.Count))" } else { T 'Niet mee' 'Not taken' }; $k.Invalidate() }
+    }
+}
+
+function Toon-KiesTab([string] $tab) {
+    $script:KiesTab = $tab
+    foreach ($k in @($script:W.tabKnoppen | Where-Object { $_ })) { $k.Tag.Soort = if ($k.Tag.Tab -eq $tab) { 'hoofd' } else { 'gewoon' }; $k.Invalidate() }
+    $p = $script:W.tabVlak
+    $p.SuspendLayout()
+    # (Niet Dispose: je klikte misschien net op een knop in dit tabblad, die is dan nog bezig.)
+    $p.Controls.Clear()
+    $form.AcceptButton = $verder
+    $p.AutoScrollPosition = New-Object System.Drawing.Point(0, 0)
+    switch ($tab) {
+        'mappen' { Vul-Mappen $p }
+        'meer' { Vul-Meer $p }
+        default { Vul-Uit $p }
+    }
+    $p.ResumeLayout()
+}
+
+function Vul-Mappen($p) {
+    # De vaste zes in twee kolommen, daaronder je extra mappen (met 'weghalen'), en de knop om er een toe te voegen.
+    $i = 0
+    foreach ($m in $script:Mappen) {
+        $sleutel = "map:$($m.Naam)"
+        $d = Get-OverzichtDing $sleutel
+        if ($null -ne $script:Overzicht -and -not $d) { continue }   # deze map heeft Windows hier niet
+        $uitleg = if ($d) { if ($d.Regel) { $d.Uitleg + "`n" + (T "Gaat niet mee door de regel $($d.Regel) (Niet mee)." "Not taken because of the rule $($d.Regel) (Not taken).") } else { $d.Uitleg } } else { '' }
+        [void](Nieuw-Vinkje $p (($i % 2) * 268) ([math]::Floor($i / 2) * 32) 260 (Get-MapNaam $m.Naam) (Get-RechtsTekst $d) $sleutel $uitleg)
+        $i++
+    }
+    $y = [math]::Ceiling($i / 2) * 32 + 4
+    foreach ($e in @($script:ExtraMappen)) {
+        $sleutel = "extra:$e"
+        [void](Nieuw-Vinkje $p 0 $y 440 "$(Split-Path $e -Leaf)   $e" (Get-RechtsTekst (Get-OverzichtDing $sleutel)) $sleutel $e)
+        $weg = New-Object System.Windows.Forms.LinkLabel
+        $weg.Font = $script:LetterKlein; $weg.LinkColor = $Grijs; $weg.ActiveLinkColor = $RoodTekst
+        $weg.Text = (T 'weghalen' 'remove'); $weg.Tag = $e
+        $weg.TextAlign = 'MiddleRight'
+        Plaats $weg 442 ($y + 4) 86 22
+        $weg.Add_LinkClicked({
+            if (Test-Bezig) { return }
+            [void]$script:ExtraMappen.Remove($this.Tag)
+            [void]$script:NietMee.Remove("extra:$($this.Tag)")
+            Start-Overzicht
+            Toon-KiesTab 'mappen'
+        })
+        $p.Controls.Add($weg)
+        $y += 32
+    }
+    $knop = Nieuw-Knop (T 'Map toevoegen…' 'Add folder…') 0 ($y + 6) 200 'gewoon' $p
+    [void](Nieuw-Etiket $p (T 'Ook een andere map mee, bijvoorbeeld op een tweede schijf (D:)? Kies de map, niet de hele schijf.' 'Another folder too, for example on a second drive (D:)? Choose the folder, not the whole drive.') 212 ($y + 6) 316 42 $script:LetterKlein $Grijs)
+    $knop.Add_Click({
+        if (Test-Bezig) { return }
+        $kies = New-Object System.Windows.Forms.FolderBrowserDialog
+        $kies.Description = (T 'Kies een map die ook mee moet naar BugOS' 'Choose a folder that should also go to BugOS')
+        $kies.ShowNewFolderButton = $false
+        if ($kies.ShowDialog() -ne 'OK') { return }
+        $reden = Test-ExtraMap $kies.SelectedPath
+        if ($reden) { Toon $reden 'Warning'; return }
+        $script:ExtraMappen.Add([System.IO.Path]::GetFullPath($kies.SelectedPath).TrimEnd('\'))
+        Start-Overzicht
+        Toon-KiesTab 'mappen'
+    })
+}
+
+function Vul-Meer($p) {
+    # Bladwijzers per browserprofiel, dan e-mail, Firefox en meer, dan je instellingen: elk met een vinkje, in twee kolommen.
+    if ($null -eq $script:Overzicht) {
+        [void](Nieuw-Etiket $p (T 'Even kijken welke browsers, e-mail en instellingen er zijn…' 'Checking which browsers, e-mail and settings there are…') 0 6 528 26 $script:LetterGewoon $Grijs)
+        return
+    }
+    $y = 0
+    foreach ($groep in @(
+            @('bladwijzers', (T 'BLADWIJZERS' 'BOOKMARKS'), (T 'Geen bladwijzers gevonden.' 'No bookmarks found.')),
+            @('meer', (T 'E-MAIL, FIREFOX EN MEER' 'E-MAIL, FIREFOX AND MORE'), (T 'Geen e-mail, Firefox, eigen lettertypen of achtergrond gevonden.' 'No e-mail, Firefox, own fonts or wallpaper found.')),
+            @('instellingen', (T 'INSTELLINGEN' 'SETTINGS'), ''))) {
+        $dingen = @($script:Overzicht | Where-Object { $_ -and $_.Groep -eq $groep[0] })
+        [void](Nieuw-Etiket $p $groep[1] 4 $y 524 18 $script:LetterOog $Grijs)
+        $y += 20
+        if ($dingen.Count -eq 0) {
+            [void](Nieuw-Etiket $p $groep[2] 4 $y 524 24 $script:LetterKlein $Grijs)
+            $y += 30
+            continue
+        }
+        for ($i = 0; $i -lt $dingen.Count; $i++) {
+            $d = $dingen[$i]
+            $naam = if ($d.Aantal -ge 0) { "$($d.Naam) ($($d.Aantal))" } else { $d.Naam }
+            $rechts = if ($d.Groep -eq 'instellingen') { '' } else { Get-RechtsTekst $d }
+            [void](Nieuw-Vinkje $p (($i % 2) * 268) ($y + [math]::Floor($i / 2) * 30) 260 $naam $rechts $d.Sleutel $d.Uitleg)
+        }
+        $y += [math]::Ceiling($dingen.Count / 2) * 30 + 10
+    }
+    [void](Nieuw-Etiket $p (T 'Nooit wachtwoorden: niet van je wifi en niet van je browser.' 'Never passwords: not for your Wi-Fi and not for your browser.') 4 $y 524 22 $script:LetterKlein $Grijs)
+}
+
+function Vul-Uit($p) {
+    # Regels voor wat thuisblijft. Typen (een naam, een naam met *, of een hele plek) of een plek kiezen; 'Vaak' zet er
+    # met één klik een bekende bij. Daarnaast de knop naar het info-scherm. Onder de regels, elk met 'weghalen'.
+    $y = 4 + [math]::Ceiling((Nieuw-Etiket $p (T 'Wat hier staat, blijft thuis, in alle mappen die meegaan. Typ een naam (node_modules), een naam met * als joker (*node* = alles met node erin), of kies een plek.' 'What is listed here stays home, in every folder that goes along. Type a name (node_modules), a name with * as a wildcard (*node* = everything with node in it), or choose a place.') 0 0 528 0 $script:LetterKlein $Grijs).Height / $script:Schaal)
+    $script:W.regelVak = New-Object System.Windows.Forms.TextBox
+    $vak = $script:W.regelVak
+    $vak.Font = $script:LetterGewoon
+    Plaats $vak 0 ($y + 7) 250 30
+    $p.Controls.Add($vak)
+    $toe = Nieuw-Knop (T 'Toevoegen' 'Add') 258 $y 116 'gewoon' $p
+    $plek = Nieuw-Knop (T 'Plek kiezen…' 'Choose place…') 382 $y 146 'gewoon' $p
+    # Enter in het vak = Toevoegen (niet 'Volgende'): zolang je typt, is Toevoegen de standaardknop van het venster.
+    $script:W.toeKnop = $toe
+    $vak.Add_Enter({ $form.AcceptButton = $script:W.toeKnop })
+    $vak.Add_Leave({ $form.AcceptButton = $verder })
+    $toe.Add_Click({
+        if (Voeg-UitRegel $script:W.regelVak.Text) {
+            $script:W.regelVak.Text = ''
+            Start-Overzicht; Toon-KiesTab 'uit'
+        }
+    })
+    $plek.Add_Click({
+        # Een map of een bestand: een klein menu onder de knop.
+        $menu = New-Object System.Windows.Forms.ContextMenuStrip
+        $menu.Font = $script:LetterGewoon
+        $map = $menu.Items.Add((T 'Een map…' 'A folder…'))
+        $bestand = $menu.Items.Add((T 'Een bestand…' 'A file…'))
+        $map.Add_Click({
+            $kies = New-Object System.Windows.Forms.FolderBrowserDialog
+            $kies.Description = (T 'Kies een map die NIET mee moet' 'Choose a folder that should NOT go along')
+            $kies.ShowNewFolderButton = $false
+            $kies.SelectedPath = Get-BekendeMap 'MyDocuments'
+            if ($kies.ShowDialog() -eq 'OK' -and (Voeg-UitRegel $kies.SelectedPath)) { Start-Overzicht; Toon-KiesTab 'uit' }
+        })
+        $bestand.Add_Click({
+            $kies = New-Object System.Windows.Forms.OpenFileDialog
+            $kies.Title = (T 'Kies een bestand dat NIET mee moet' 'Choose a file that should NOT go along')
+            $kies.InitialDirectory = Get-BekendeMap 'MyDocuments'
+            if ($kies.ShowDialog() -eq 'OK' -and (Voeg-UitRegel $kies.FileName)) { Start-Overzicht; Toon-KiesTab 'uit' }
+        })
+        $menu.Show($this, (New-Object System.Drawing.Point(0, $this.Height)))
+    })
+    $y += 52
+    # 'Vaak': bekende dingen die meestal niet mee hoeven (een klik zet ze erbij).
+    $vaak = New-Object System.Windows.Forms.LinkLabel
+    $vaak.Font = $script:LetterKlein; $vaak.ForeColor = $Grijs; $vaak.LinkColor = $Inkt; $vaak.ActiveLinkColor = $RoodTekst
+    $begin = T 'Vaak: ' 'Common: '
+    $voorbeelden = @('node_modules', '.git', '*.tmp', '*.iso')
+    $vaak.Text = $begin + ($voorbeelden -join '   ')
+    $vaak.Links.Clear()
+    $plekje = $begin.Length
+    foreach ($v in $voorbeelden) { [void]$vaak.Links.Add($plekje, $v.Length, $v); $plekje += $v.Length + 3 }
+    Plaats $vaak 0 ($y + 10) 290 24
+    $vaak.Add_LinkClicked({ param($s, $e) if (Voeg-UitRegel ([string]$e.Link.LinkData)) { Start-Overzicht; Toon-KiesTab 'uit' } })
+    $p.Controls.Add($vaak)
+    $info = Nieuw-Knop (T 'Wat gaat er niet mee?' 'What does not go along?') 298 $y 230 'gewoon' $p
+    $info.Add_Click({ Toon-NietMeeInfo })
+    $y += 52
+    if ($script:Uitsluiten.Count -eq 0) {
+        [void](Nieuw-Etiket $p (T 'Nog geen regels: alles in de mappen met een vinkje gaat mee.' 'No rules yet: everything in the ticked folders goes along.') 0 ($y + 4) 528 24 $script:LetterKlein $Grijs)
+        return
+    }
+    foreach ($r in @($script:Uitsluiten)) {
+        $isPlek = $r.Contains('\')
+        $soort = New-Object System.Windows.Forms.Label
+        $soort.Font = $script:LetterNoot; $soort.ForeColor = $Grijs; $soort.BackColor = $KnopVlak
+        $soort.TextAlign = 'MiddleCenter'
+        $soort.Text = if ($isPlek) { T 'plek' 'place' } else { T 'naam' 'name' }
+        Plaats $soort 0 ($y + 5) 50 22
+        $p.Controls.Add($soort)
+        $tekst = $r
+        if ($script:IsoGekozen -and $isPlek -and [string]::Equals($r, [System.IO.Path]::GetFullPath($script:IsoGekozen), [StringComparison]::OrdinalIgnoreCase)) { $tekst += (T '   (BugOS zelf, hoeft niet mee)' '   (BugOS itself, no need to take it)') }
+        $l = Nieuw-Etiket $p $tekst 60 ($y + 3) 376 26 $script:LetterGewoon $Inkt -Afkappen
+        $l.TextAlign = 'MiddleLeft'
+        $script:Tip.SetToolTip($l, $r)
+        $weg = New-Object System.Windows.Forms.LinkLabel
+        $weg.Font = $script:LetterKlein; $weg.LinkColor = $Grijs; $weg.ActiveLinkColor = $RoodTekst
+        $weg.Text = (T 'weghalen' 'remove'); $weg.Tag = $r; $weg.TextAlign = 'MiddleRight'
+        Plaats $weg 442 ($y + 4) 86 22
+        $weg.Add_LinkClicked({
+            if (Test-Bezig) { return }
+            $welke = [string]$this.Tag
+            Set-Uitsluiten @($script:Uitsluiten | Where-Object { $_ -ne $welke })
+            Start-Overzicht; Toon-KiesTab 'uit'
+        })
+        $p.Controls.Add($weg)
+        $y += 30
+    }
+}
+
+$Paginas += {
+    $kop.Text = (T 'Wat neem je mee naar BugOS?' 'What do you take to BugOS?')
+    # Het BugOS-bestand uit stap 3 (een paar GB in Downloads) hoeft niet mee: één keer vanzelf bij 'Niet mee'.
+    if (-not $script:IsoRegel -and $script:IsoGekozen) {
+        $script:IsoRegel = $true
+        [void](Voeg-UitRegel $script:IsoGekozen -Stil)
+    }
+    $script:W.kaart = Nieuw-Kaart 0
+    $script:W.kaartBalk = Nieuw-Balk 18 62 214 $script:W.kaart
+    $script:W.kaartBalk.Visible = $false
+    $script:W.tabKnoppen = @()
+    $tabs = @(@('mappen', (T 'Mappen' 'Folders')), @('meer', (T 'Bladwijzers en meer' 'Bookmarks and more')), @('uit', (T 'Niet mee' 'Not taken')))
+    for ($i = 0; $i -lt $tabs.Count; $i++) {
+        $knop = Nieuw-Knop $tabs[$i][1] ($i * 186) 86 176
+        $knop.Tag.Tab = $tabs[$i][0]
+        $knop.Add_Click({ Toon-KiesTab $this.Tag.Tab })
+        $script:W.tabKnoppen += $knop
+    }
+    $script:W.tabVlak = New-Object System.Windows.Forms.Panel
+    Plaats $script:W.tabVlak 0 138 $script:Breedte 214
+    $script:W.tabVlak.AutoScroll = $true
+    $vlak.Controls.Add($script:W.tabVlak)
+    Toon-KiesTab $script:KiesTab
+    # Al uitgerekend voor deze extra mappen en regels? Dan meteen; anders opnieuw (naast het venster).
+    if ($null -ne $script:Overzicht -and $script:OverzichtVoor -eq (Get-OverzichtSleutel)) { Zet-Samenvatting } else { Start-Overzicht }
+}
+
 # De pagina's op naam, en de volgorde: eerst waar BugOS komt (dat bepaalt de rest), dan de stick (die blijft bruikbaar),
 # dan je bestanden (die kunnen op diezelfde stick), 'Ruimte maken' alleen naast Windows, en tot slot hoe je installeert.
 # Let op: de nummers volgen de volgorde van de '$Paginas += {' hierboven in dit bestand (de test kijkt dat na).
 $script:Bladen = @{ welkom = $Paginas[0]; controle = $Paginas[1]; bestanden = $Paginas[2]; keuze = $Paginas[3]
-                    ruimte = $Paginas[4]; einde = $Paginas[5]; stick = $Paginas[6] }
+                    ruimte = $Paginas[4]; einde = $Paginas[5]; stick = $Paginas[6]; kiezen = $Paginas[7] }
 function Get-Volgorde {
-    $v = @('welkom', 'controle', 'keuze', 'stick', 'bestanden')
+    # 'kiezen' (Kies wat meegaat) vlak voor 'bestanden' (kopiëren): eerst kiezen en zien hoe groot de schijf moet zijn.
+    $v = @('welkom', 'controle', 'keuze', 'stick', 'kiezen', 'bestanden')
     if ($script:Plek -eq 'naast') { $v += 'ruimte' }
     $v += 'einde'
     return ,$v
 }
 function Get-Blad { return (Get-Volgorde)[$script:Pagina] }
+function Ga-Naar([string] $blad) {
+    # Naar een pagina op naam (voor de plaatjes en het klaar-scherm): de nummers verschuiven met de keuze.
+    $script:Pagina = [math]::Max(0, (Get-StapNr $blad))
+    Toon-Pagina
+}
 function Naar-Volgende {
     if ((Test-Bezig) -or ((Get-Blad) -eq 'keuze' -and -not $script:Plek)) { return }
     if ($script:Pagina -ge (Get-Volgorde).Count - 1) { $form.Close() } else { $script:Pagina++; Toon-Pagina }
@@ -2852,6 +3884,7 @@ function Naar-Volgende {
 
 function Toon-Pagina {
     $script:PaginaTeller++   # werk van de vorige pagina (dat je mocht onderbreken) vult deze pagina niet meer
+    $form.AcceptButton = $verder   # (op 'Niet mee' is dat even Toevoegen, zolang je typt)
     $vlak.SuspendLayout()
     $vlak.Controls.Clear()
     $vlak.AutoScrollPosition = New-Object System.Drawing.Point(0, 0)
@@ -2944,17 +3977,33 @@ if ($Taak -eq 'Foto') {
     $form.StartPosition = 'Manual'
     $form.Location = New-Object System.Drawing.Point(0, 0)
     $form.Show()
+    # Voor 'Kies wat meegaat': een voorbeeldproject als extra map (met node_modules en een oude map), en twee regels bij
+    # 'Niet mee', zodat de plaatjes laten zien hoe het eruitziet als er iets in staat. (Alleen hier; niet nagekeken
+    # door Test-ExtraMap, want de map staat in TEMP.)
+    $voorbeeld = Join-Path $env:TEMP 'bugos-foto\Projecten'
+    foreach ($b in @(@('website\node_modules\react\index.js', 400000), @('website\node_modules\vite\vite.js', 900000), @('website\src\app.js', 12000),
+                     @('website\notes-node.txt', 2000), @('Oud\archief.zip', 300000), @('rapport.docx', 80000))) {
+        $pad = Join-Path $voorbeeld $b[0]
+        New-Item -ItemType Directory -Force -Path (Split-Path $pad) | Out-Null
+        [System.IO.File]::WriteAllBytes($pad, (New-Object byte[] $b[1]))
+    }
+    $script:ExtraMappen.Add($voorbeeld)
+    Set-Uitsluiten @('*node*', (Join-Path $voorbeeld 'Oud'))
+    [void]$script:NietMee.Add('map:Videos')
     # Ook het klaar-scherm en het foutscherm (die zie je anders alleen na echt werk): als extra plaatjes.
     $extra = @(
-        { $script:Pagina = 3; Toon-Pagina; Toon-Klaar (T 'De USB-stick is klaar' 'The USB stick is ready') (T "In Windows heet de stick nu BUGOS. Je kunt er ook je eigen bestanden op zetten; laat alleen de map LiveOS staan.`n`nVolgende stap: zet je bestanden erbij. Haal de stick er dus nog niet uit." "In Windows the stick is now called BUGOS. You can put your own files on it too; just leave the LiveOS folder alone.`n`nNext step: add your files. So do not unplug the stick yet.") (T 'Verder: bestanden meenemen' 'Next: take your files') },
-        { $script:Pagina = 3; Toon-Pagina; Toon-Fout (T 'De USB-stick maken lukte niet' 'Making the USB stick did not work') (T 'Haal de stick eruit, steek hem er weer in en probeer het opnieuw. Lukt het dan nog niet, probeer een andere USB-poort of een andere stick.' 'Unplug the stick, plug it in again and try again. If it still does not work, try another USB port or another stick.') 'The disk has already been initialized. Activity ID: {1ba05f16-7cf6-0008-ac5f-b31bf67cdd01}' },
-        { $script:Plek = 'vervang'; $script:Pagina = 2; Toon-Pagina },
-        { $script:Plek = 'vervang'; $script:Pagina = 4; Toon-Pagina },
-        { $script:Plek = 'vervang'; $script:Pagina = 5; Toon-Pagina },
-        { $script:Plek = 'ander'; $script:Pagina = 2; Toon-Pagina },
-        { $script:Plek = 'naast'; $script:Pagina = 2; Toon-Pagina },
-        { $script:Plek = 'naast'; $script:Pagina = 5; Toon-Pagina },
-        { $script:Plek = 'naast'; $script:Pagina = 6; Toon-Pagina }
+        { Ga-Naar 'stick'; Toon-Klaar (T 'De USB-stick is klaar' 'The USB stick is ready') (T "In Windows heet de stick nu BUGOS. Je kunt er ook je eigen bestanden op zetten; laat alleen de map LiveOS staan.`n`nVolgende stap: zet je bestanden erbij. Haal de stick er dus nog niet uit." "In Windows the stick is now called BUGOS. You can put your own files on it too; just leave the LiveOS folder alone.`n`nNext step: add your files. So do not unplug the stick yet.") (T 'Verder: bestanden meenemen' 'Next: take your files') },
+        { Ga-Naar 'stick'; Toon-Fout (T 'De USB-stick maken lukte niet' 'Making the USB stick did not work') (T 'Haal de stick eruit, steek hem er weer in en probeer het opnieuw. Lukt het dan nog niet, probeer een andere USB-poort of een andere stick.' 'Unplug the stick, plug it in again and try again. If it still does not work, try another USB port or another stick.') 'The disk has already been initialized. Activity ID: {1ba05f16-7cf6-0008-ac5f-b31bf67cdd01}' },
+        { $script:Plek = 'vervang'; Ga-Naar 'keuze' },
+        { $script:Plek = 'vervang'; Ga-Naar 'bestanden' },
+        { $script:Plek = 'vervang'; Ga-Naar 'einde' },
+        { $script:Plek = 'ander'; Ga-Naar 'keuze' },
+        { $script:Plek = 'naast'; Ga-Naar 'keuze' },
+        { $script:Plek = 'naast'; Ga-Naar 'ruimte' },
+        { $script:Plek = 'naast'; Ga-Naar 'einde' },
+        # De twee andere tabbladen van 'Kies wat meegaat'.
+        { $script:Plek = ''; Ga-Naar 'kiezen'; Toon-KiesTab 'meer' },
+        { $script:Plek = ''; Ga-Naar 'kiezen'; Toon-KiesTab 'uit' }
     )
     $aantal = (Get-Volgorde).Count   # zonder keuze: zonder 'Ruimte maken' (die komt bij de extra plaatjes)
     for ($i = 0; $i -lt $aantal + $extra.Count; $i++) {
@@ -2977,6 +4026,7 @@ if ($Taak -eq 'Foto') {
         }
         $bmp.Save((Join-Path $FotoMap "overstap-$i.png"), [System.Drawing.Imaging.ImageFormat]::Png)
         $bmp.Dispose()
+        $script:KiesTab = 'mappen'
         try {
             $r = $form.Bounds
             $scherm = New-Object System.Drawing.Bitmap($r.Width, $r.Height)
@@ -2987,6 +4037,32 @@ if ($Taak -eq 'Foto') {
             $scherm.Dispose()
         } catch { Write-Output "Schermfoto lukte niet: $($_.Exception.Message)" }
     }
+    # Het info-scherm 'Wat gaat er niet mee?' (een eigen venster): wachten tot het zoeken klaar is, dan een plaatje.
+    $v = Nieuw-InfoVenster
+    $v.StartPosition = 'Manual'
+    $v.Location = New-Object System.Drawing.Point(0, 0)
+    $v.Show()
+    $klok = [System.Diagnostics.Stopwatch]::StartNew()
+    while ($script:Werken.Count -gt 0 -and $klok.ElapsedMilliseconds -lt 60000) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 20 }
+    [System.Windows.Forms.Application]::DoEvents()
+    $bmp = New-Object System.Drawing.Bitmap($v.ClientSize.Width, $v.ClientSize.Height)
+    for ($c = $v.Controls.Count - 1; $c -ge 0; $c--) {
+        $ctl = $v.Controls[$c]
+        if ($ctl.Visible) { $ctl.DrawToBitmap($bmp, $ctl.Bounds) }
+    }
+    $bmp.Save((Join-Path $FotoMap 'overstap-info.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+    $bmp.Dispose()
+    try {
+        $r = $v.Bounds
+        $scherm = New-Object System.Drawing.Bitmap($r.Width, $r.Height)
+        $gr = [System.Drawing.Graphics]::FromImage($scherm)
+        $gr.CopyFromScreen($r.Location, [System.Drawing.Point]::Empty, $r.Size)
+        $gr.Dispose()
+        $scherm.Save((Join-Path $FotoMap 'scherm-info.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+        $scherm.Dispose()
+    } catch { Write-Output "Schermfoto van het info-scherm lukte niet: $($_.Exception.Message)" }
+    $v.Close(); $v.Dispose()
+    Remove-Item -LiteralPath (Split-Path $voorbeeld) -Recurse -Force -ErrorAction SilentlyContinue
     $form.Close()
     exit 0
 }
@@ -3048,6 +4124,80 @@ if ($Taak -eq 'Zelftest') {
     Wacht-Werk 300000
     Klopt ($script:Zt.Json -eq $true -and $script:Zt.Deels -and -not $script:Zt.Fout4) "Invoke-Meenemen in de runspace: bugos-switch.json staat er, Deels komt terug ($($script:Zt.Fout4))"
     Klopt (Test-Path -LiteralPath (Join-Path $map 'BugOS-Switch\Extra')) 'de extra map is meegekopieerd'
+
+    Stap 'kies wat meegaat: Niet mee en vinkjes'
+    # 3b. Regels: een naam met * past op mappen en bestanden; een plek alleen daar; regels die niet kunnen, worden geweigerd.
+    $r = ConvertTo-UitRegel '*node*'
+    Klopt ($r.Soort -eq 'naam' -and $r.Patroon.IsMatch('node_modules') -and $r.Patroon.IsMatch('MyNode.txt') -and -not $r.Patroon.IsMatch('nod')) 'regel *node*: node_modules en MyNode.txt wel, nod niet'
+    Klopt ((ConvertTo-UitRegel 'a[1].txt').Patroon.IsMatch('A[1].TXT') -and -not (ConvertTo-UitRegel 'a[1].txt').Patroon.IsMatch('a1.txt')) 'regel: [ en ] zijn gewone tekens, hoofdletters tellen niet'
+    Klopt ((ConvertTo-UitRegel 'C:/Users/iemand/Oud/').Tekst -eq 'C:\Users\iemand\Oud') 'regel: een plek met / en een \ aan het eind wordt netjes'
+    # (Niet $fout als naam: zo heet ook de rode kleur.)
+    foreach ($slecht in @('*', '*.*', '', 'C:\Users\*', 'Documents\Oud', 'D:\', 'a|b')) {
+        $reden = ''
+        try { [void](ConvertTo-UitRegel $slecht) } catch { $reden = $_.Exception.Message }
+        Klopt ($reden -ne '') "regel '$slecht' wordt geweigerd ($reden)"
+    }
+    Klopt ((Get-UsbAdvies 0L) -eq 8 -and (Get-UsbAdvies 20GB) -eq 32 -and (Get-UsbAdvies 100GB) -eq 128 -and (Get-UsbAdvies 0L 6.5e9) -eq 8 -and (Get-UsbAdvies 20GB 6.5e9) -eq 64) "USB-maat: 0 -> 8 GB, 20 GB -> 32 GB, 100 GB -> 128 GB; met BugOS erbij 20 GB -> 64 GB"
+    # Een project met node_modules en een oude map, als extra map. De vaste zes zonder vinkje (van de bouwcomputer zelf).
+    $proj = Join-Path $map 'Projecten'
+    foreach ($b in @(@('app\node_modules\pakket\index.js', 50000), @('app\src\main.js', 7000), @('app\node-notities.txt', 3000), @('Oud\oud.bin', 11000))) {
+        $pad = Join-Path $proj $b[0]
+        New-Item -ItemType Directory -Force -Path (Split-Path $pad) | Out-Null
+        [System.IO.File]::WriteAllBytes($pad, (New-Object byte[] $b[1]))
+    }
+    $zesUit = @($script:Mappen | ForEach-Object { "map:$($_.Naam)" })
+    $regels = @('*node*', (Join-Path $proj 'Oud'))
+    Start-Werk -Mee @{ ExtraMappen = @($proj); CloudMee = $true; NietMee = $zesUit; Uitsluiten = $regels } -Werk {
+        [pscustomobject]@{ Namen = @((Get-Bestanden $Mee.ExtraMappen[0]) | ForEach-Object { $_.Name }); Grootte = (Get-MeeneemGrootte)
+                           Uit = @(Get-Uitgesloten); Lijst = @(Get-Overzicht) }
+    } -Klaar { param($staat) $script:Zt.Kies = @($staat.Uitkomst)[-1]; $script:Zt.Fout5 = $staat.Fout }
+    Wacht-Werk
+    $k = $script:Zt.Kies
+    Klopt ($k -and (@($k.Namen) -join ',') -eq 'main.js' -and -not $script:Zt.Fout5) "Niet mee in de runspace: van het project telt alleen main.js ($(@($k.Namen) -join ',') $($script:Zt.Fout5))"
+    $node = @($k.Uit | Where-Object { $_.Regel -eq '*node*' }) | Select-Object -First 1
+    $oud = @($k.Uit | Where-Object { $_.Regel -eq $regels[1] }) | Select-Object -First 1
+    Klopt ($node -and $node.Mappen -eq 1 -and $node.Bestanden -eq 1 -and $node.Bytes -eq 53000 -and $oud -and $oud.Mappen -eq 1 -and $oud.Bytes -eq 11000) "info-scherm: *node* = 1 map en 1 bestand (53000 bytes), de plek Oud = 1 map (11000) ($($node.Mappen) $($node.Bestanden) $($node.Bytes); $($oud.Bytes))"
+    $projDing = @($k.Lijst | Where-Object { $_.Sleutel -eq "extra:$proj" }) | Select-Object -First 1
+    Klopt ($projDing -and $projDing.Bytes -eq 7000 -and -not @($k.Lijst | Where-Object { $_.Sleutel -eq 'map:Documents' -and $_.Bytes -lt 0 })) "overzicht: het project telt 7000 bytes ($($projDing.Bytes))"
+
+    Stap 'kopiëren met Niet mee, en oude resten opruimen'
+    # Eerst zonder regels (alles van het project gaat mee), dan met: wat nu niet meer mee moet, gaat van de schijf.
+    $doel2 = Join-Path $env:TEMP ('bugos-zelftest-doel-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Force -Path $doel2 | Out-Null
+    Start-Werk -TerugVars @('Deels') -Mee @{ ExtraMappen = @($proj); CloudMee = $true; Doel = "$doel2\"; NietMee = $zesUit; Uitsluiten = @() } -Werk {
+        $null = Invoke-Meenemen $Mee.Doel $Voortgang
+        'klaar'
+    } -Klaar { param($staat) $script:Zt.Fout6 = $staat.Fout }
+    Wacht-Werk 300000
+    $kopie = Join-Path $doel2 'BugOS-Switch\Extra\Projecten'
+    Klopt ((Test-Path -LiteralPath (Join-Path $kopie 'app\node_modules\pakket\index.js')) -and -not $script:Zt.Fout6) "zonder regels gaat node_modules mee ($($script:Zt.Fout6))"
+    Start-Werk -TerugVars @('Deels') -Mee @{ ExtraMappen = @($proj); CloudMee = $true; Doel = "$doel2\"; NietMee = ($zesUit + @('wifi', 'printers', 'programmas')); Uitsluiten = $regels } -Werk {
+        $resten = @(Get-OudeResten (Join-Path $Mee.Doel 'BugOS-Switch'))
+        $null = Invoke-Meenemen $Mee.Doel $Voortgang
+        [pscustomobject]@{ Resten = $resten.Count }
+    } -Klaar { param($staat) $script:Zt.Resten = @($staat.Uitkomst)[-1]; $script:Zt.Fout7 = $staat.Fout }
+    Wacht-Werk 300000
+    Klopt ($script:Zt.Resten -and $script:Zt.Resten.Resten -eq 3 -and -not $script:Zt.Fout7) "oude resten: de oude node_modules, node-notities.txt en Oud ($($script:Zt.Resten.Resten) $($script:Zt.Fout7))"
+    Klopt (-not (Test-Path -LiteralPath (Join-Path $kopie 'app\node_modules')) -and -not (Test-Path -LiteralPath (Join-Path $kopie 'app\node-notities.txt')) -and -not (Test-Path -LiteralPath (Join-Path $kopie 'Oud')) -and (Test-Path -LiteralPath (Join-Path $kopie 'app\src\main.js'))) 'met *node* en de plek Oud: weg van de schijf, main.js blijft'
+    $json = [System.IO.File]::ReadAllText((Join-Path $doel2 'BugOS-Switch\bugos-switch.json'), [System.Text.Encoding]::UTF8) | ConvertFrom-Json
+    $velden = @($json.PSObject.Properties | ForEach-Object { $_.Name })
+    Klopt (($velden -notcontains 'wifi') -and ($velden -notcontains 'printers') -and (@($json.uitgesloten) -contains '*node*') -and (@($json.niet_mee) -contains 'wifi') -and @($json.mappen).Count -eq 0 -and @($json.extra).Count -eq 1) "bugos-switch.json: zonder wifi en printers, met uitgesloten en niet_mee, geen vaste mappen, 1 extra map ($($velden -join ','))"
+    Remove-Item -LiteralPath $doel2 -Recurse -Force -ErrorAction SilentlyContinue
+
+    Stap 'de pagina Kies wat meegaat'
+    # De pagina zelf: hij opent, rekent (naast het venster) en de kaart zegt daarna een maat. Een vinkje uit telt meteen.
+    Set-NietMee @(); Set-Uitsluiten @()
+    $script:ExtraMappen.Clear(); $script:ExtraMappen.Add($proj)
+    Ga-Naar 'kiezen'
+    Wacht-Werk
+    Klopt ($null -ne $script:Overzicht -and -not $script:W.kaart.Tag.Bezig -and $script:W.kaart.Tag.Advies -match '\d+ GB') "de kaart: $($script:W.kaart.Tag.Groot), $($script:W.kaart.Tag.Advies), $($script:W.kaart.Tag.Stick)"
+    $voor = Get-GekozenTotaal
+    $vinkje = @($script:W.tabVlak.Controls | Where-Object { $_ -is [System.Windows.Forms.CheckBox] -and $_.Tag.Sleutel -eq "extra:$proj" }) | Select-Object -First 1
+    if ($vinkje) { $vinkje.Checked = $false }
+    Klopt ($vinkje -and $script:NietMee.Contains("extra:$proj") -and ($voor - (Get-GekozenTotaal)) -eq 71000) "een vinkje uit: het project gaat niet mee, het totaal is meteen 71000 bytes kleiner ($voor -> $(Get-GekozenTotaal))"
+    foreach ($tab in @('meer', 'uit', 'mappen')) { Toon-KiesTab $tab }
+    Klopt ($script:KiesTab -eq 'mappen' -and $script:W.tabVlak.Controls.Count -gt 0) 'de drie tabbladen openen'
+    Set-NietMee @(); $script:ExtraMappen.Clear()
 
     Stap 'de ISO lezen'
     # 4. De ISO zelf lezen (gemaakt met pycdlib zoals xorriso -R: alleen Rock Ridge-namen, geen Joliet).

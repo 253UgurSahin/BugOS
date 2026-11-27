@@ -8,8 +8,10 @@ This little program helps you switch from Windows to BugOS.
 3. Follow the four steps on the screen:
    1. Check         - can your computer run BugOS?
    2. Make USB stick - put BugOS on a USB stick (at least 8 GB).
-   3. Take your files - a copy of your photos, documents and more, on that
-                       stick or another USB drive.
+   3. Take your files - choose what goes along (folders, bookmarks per
+                       browser, settings; rules like *node* for what stays
+                       home), see how big your USB drive must be, then copy it
+                       to that stick or another USB drive.
    4. Where does BugOS go? - instead of Windows, next to it, or on
                        another disk (a second disk or an external USB drive).
 
@@ -37,8 +39,11 @@ Dit programmaatje helpt je om van Windows over te stappen naar BugOS.
 3. Volg de vier stappen op het scherm:
    1. Controleren        - kan je computer BugOS aan?
    2. USB-stick maken    - BugOS op een USB-stick (minstens 8 GB).
-   3. Bestanden meenemen - een kopie van je foto's, documenten en meer, op
-                           die stick of een andere USB-schijf.
+   3. Bestanden meenemen - kies wat meegaat (mappen, bladwijzers per
+                           browser, instellingen; regels zoals *node* voor
+                           wat thuisblijft), zie hoe groot je USB-schijf moet
+                           zijn, en kopieer het naar die stick of een andere
+                           USB-schijf.
    4. Waar komt BugOS?   - in plaats van Windows, ernaast, of op een andere
                            schijf (een tweede schijf of een externe USB-schijf).
 

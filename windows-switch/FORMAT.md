@@ -49,11 +49,13 @@ Windows, a failed read): BugOS then skips that part and says so.
   "lettertypen": { "map": "Lettertypen", "aantal": 3 },
   "thunderbird_profiel": "Thunderbird/abcd.default-release",
   "outlook": { "pst": ["Outlook/thuis.pst", "Documents/Outlook Files/archief.pst"] },
-  "cloud": { "aantal": 12, "bytes": 3400000, "voorbeelden": ["foto.jpg"], "meegenomen": false }
+  "cloud": { "aantal": 12, "bytes": 3400000, "voorbeelden": ["foto.jpg"], "meegenomen": false },
+  "niet_mee": ["map:Videos", "bw:Edge:Default", "wifi"],
+  "uitgesloten": ["*node*", "C:\\Users\\jij\\Documents\\Oud"]
 }
 ```
 
-The last five fields came with "bestanden slimmer" (2026-11-16). `versie` stays 2: they are optional like every
+The last five fields before `niet_mee` came with "bestanden slimmer" (2026-11-16). `versie` stays 2: they are optional like every
 other version 2 field, so an older BugOS simply ignores them.
 
 Rules:
@@ -74,3 +76,26 @@ Rules:
 - `outlook.pst`: Outlook data files. BugOS cannot open them by itself; it says where they are and what to do.
 - `cloud`: files that were only in OneDrive (Files On-Demand). `meegenomen: true` means Windows downloaded them and
   they are on the drive; `false` means they stayed in OneDrive and BugOS says so (with a few example names).
+
+## Choosing what goes along (2026-11-27)
+
+Before copying, BugOS Switch has a step "Choose what goes along": a tick per folder (the six and the extra ones), per
+browser profile (bookmarks), for the Firefox profile, Thunderbird, Outlook, fonts and wallpaper, and for settings,
+Wi-Fi names, printers and the program list. It shows the total and the USB drive size that is needed. Under "Not taken"
+the user writes rules for what stays home: a name (`node_modules`), a name with `*` and `?` as wildcards (`*node*` =
+everything with "node" in its name), or a whole place (`C:\Users\you\Documents\Old`). Rules work like robocopy
+`/XF` and `/XD`: a name at any depth, for files and folders, case-insensitive; a place only at exactly that place. They
+apply to the folders that go along, not to the Firefox or Thunderbird profile. An info window shows, per rule, which
+folders and files stay home and how big they are.
+
+What this changes on the drive (`versie` stays 2; BugOS needs no change):
+- `mappen` lists only the six folders that really went along this time.
+- Something without a tick is simply not on the drive (its field is missing, like when Windows could not read it).
+  Left-overs of an earlier run that no longer go along are removed from `BugOS-Switch` (a folder without a tick, the
+  wallpaper, bookmark files of profiles without a tick, and what falls under a rule inside the copied folders), after
+  the user agreed. Only inside `BugOS-Switch` on the USB drive; nothing on the PC changes.
+- `niet_mee` (optional, information only): the keys of what had no tick (`map:<Name>`, `extra:<path>`,
+  `bw:<Browser>:<profile>`, `firefox`, `thunderbird`, `outlook`, `lettertypen`, `achtergrond`, `instellingen`, `wifi`,
+  `printers`, `programmas`).
+- `uitgesloten` (optional, information only): the rules of "Not taken", as typed (a place as a full Windows path).
+

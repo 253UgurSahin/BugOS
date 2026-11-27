@@ -86,11 +86,23 @@ s = open(sys.argv[1], encoding="utf-8-sig").read()
 koppen = re.findall(r"\$Paginas \+= \{\s*\n\s*\$kop\.Text = \(T '([^']+)'", s)
 kaart = dict(re.findall(r"(\w+) = \$Paginas\[(\d)\]", s[s.index("$script:Bladen = @{"):s.index("function Get-Volgorde")]))
 verwacht = {"welkom": "Welkom", "controle": "Kan mijn computer", "bestanden": "Je bestanden", "keuze": "Waar komt BugOS",
-            "ruimte": "Ruimte maken", "einde": "Zo installeer", "stick": "BugOS op een USB-stick"}
-fout = [n for n, begin in verwacht.items() if not koppen[int(kaart[n])].startswith(begin)]
-print("ok" if not fout and len(kaart) == 7 else f"fout: {fout} {kaart} {koppen}")
+            "ruimte": "Ruimte maken", "einde": "Zo installeer", "stick": "BugOS op een USB-stick",
+            "kiezen": "Wat neem je mee"}
+fout = [n for n, begin in verwacht.items() if n not in kaart or not koppen[int(kaart[n])].startswith(begin)]
+print("ok" if not fout and len(kaart) == 8 else f"fout: {fout} {kaart} {koppen}")
 PY
 )"
 controle '[ "$BLADEN" = ok ]' "Switch: elke stap toont zijn eigen pagina ($BLADEN)"
+# Kies wat meegaat (wens van de eigenaar, 2026-11): vlak voor het kopiëren; de regels van 'Niet mee' gaan naar robocopy
+# (als /XF en /XD, ook bij de extra mappen); de vinkjes en regels gaan mee naar het werk naast het venster.
+controle 'grep -q "\$v = @(.welkom., .controle., .keuze., .stick., .kiezen., .bestanden.)" <<<"$PS"' \
+    "Switch: 'Kies wat meegaat' komt vlak voor het kopiëren"
+controle '[ "$(grep -c "/XF desktop.ini Thumbs.db @uitArg" <<<"$PS")" -eq 2 ] && grep -q "(@(\$namen) + @(./XD.) + @(\$namen))" <<<"$PS"' \
+    "Switch: wat je bij 'Niet mee' uitsluit, slaat robocopy over (vaste en extra mappen, bestanden en mappen)"
+controle 'grep -q "Mee\[.NietMee.\] = @(\$script:NietMee)" <<<"$PS" && grep -q "Set-NietMee \$Mee.NietMee" <<<"$PS" && grep -q "Set-Uitsluiten \$Mee.Uitsluiten" <<<"$PS"' \
+    "Switch: de vinkjes en 'Niet mee' gaan mee naar het werk naast het venster"
+# Weghalen van oude resten: alleen binnen de map BugOS-Switch op de USB-schijf, en pas na een vraag.
+controle 'grep -A4 "function Get-OudeResten" <<<"$PS" | grep -q "BugOS-Switch" && grep -A6 "function Remove-OudeResten" <<<"$PS" | grep -q "StartsWith(\$doel.TrimEnd" && grep -q "\$resten.Count -gt 0" <<<"$PS"' \
+    "Switch: oude resten gaan alleen uit BugOS-Switch op de schijf weg, en pas na een vraag"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
