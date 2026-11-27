@@ -102,7 +102,7 @@ controle '[ "$(grep -c "/XF desktop.ini Thumbs.db @uitArg" <<<"$PS")" -eq 2 ] &&
 controle 'grep -q "Mee\[.NietMee.\] = @(\$script:NietMee)" <<<"$PS" && grep -q "Set-NietMee \$Mee.NietMee" <<<"$PS" && grep -q "Set-Uitsluiten \$Mee.Uitsluiten" <<<"$PS"' \
     "Switch: de vinkjes en 'Niet mee' gaan mee naar het werk naast het venster"
 # Weghalen van oude resten: alleen binnen de map BugOS-Switch op de USB-schijf, en pas na een vraag.
-controle 'grep -A4 "function Get-OudeResten" <<<"$PS" | grep -q "BugOS-Switch" && grep -A6 "function Remove-OudeResten" <<<"$PS" | grep -q "StartsWith(\$doel.TrimEnd" && grep -q "\$resten.Count -gt 0" <<<"$PS"' \
+controle 'grep -A4 "function Get-OudeResten" <<<"$PS" | grep -q "BugOS-Switch" && grep -A8 "function Remove-OudeResten" <<<"$PS" | grep -q "\$basis = \[System.IO.Path\]::GetFullPath(\$doel)" && grep -A8 "function Remove-OudeResten" <<<"$PS" | grep -q "StartsWith(\$basis" && grep -q "\$resten.Count -gt 0" <<<"$PS"' \
     "Switch: oude resten gaan alleen uit BugOS-Switch op de schijf weg, en pas na een vraag"
 echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]

@@ -562,9 +562,11 @@ function Get-RestenIn([string] $kopie, [string] $bron) {
 
 function Remove-OudeResten([string] $doel) {
     # Weg met wat Get-OudeResten vond: alleen in de map BugOS-Switch op de USB-schijf, nooit op deze computer.
+    # Beide kanten via GetFullPath: Windows schrijft daar een korte naam (RUNNER~1) voluit, anders klopt StartsWith niet.
     $weg = 0
+    $basis = [System.IO.Path]::GetFullPath($doel).TrimEnd('\') + '\'
     foreach ($p in @(Get-OudeResten $doel)) {
-        if (-not ([System.IO.Path]::GetFullPath($p)).StartsWith($doel.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { continue }
+        if (-not ([System.IO.Path]::GetFullPath($p)).StartsWith($basis, [StringComparison]::OrdinalIgnoreCase)) { continue }
         try { Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction Stop; $weg++ } catch { Write-Verbose "Niet weg: $p" }
     }
     return $weg
@@ -2913,8 +2915,9 @@ function Nieuw-InfoVenster {
             $v.Tag.Balk.Visible = $false
             $knoop = $v.Tag.Boom.Nodes[0]
             $knoop.Nodes.Clear()
-            if ($staat.Fout) { [void](Takje $knoop ((T 'Zoeken lukte niet: ' 'Searching did not work: ') + $staat.Fout) $Fout); return }
-            foreach ($r in @(@($staat.Uitkomst)[-1].Regels)) {
+            $u = @($staat.Uitkomst)[-1]
+            if ($staat.Fout -or -not $u) { [void](Takje $knoop ((T 'Zoeken lukte niet: ' 'Searching did not work: ') + $staat.Fout) $Fout); return }
+            foreach ($r in @($u.Regels | Where-Object { $_ })) {
                 $delen = @()
                 if ($r.Mappen -gt 0) { $delen += $(if ($r.Mappen -eq 1) { T '1 map' '1 folder' } else { T "$($r.Mappen) mappen" "$($r.Mappen) folders" }) }
                 if ($r.Bestanden -gt 0) { $delen += $(if ($r.Bestanden -eq 1) { T '1 bestand' '1 file' } else { T "$($r.Bestanden) bestanden" "$($r.Bestanden) files" }) }
@@ -4153,12 +4156,17 @@ if ($Taak -eq 'Zelftest') {
     } -Klaar { param($staat) $script:Zt.Kies = @($staat.Uitkomst)[-1]; $script:Zt.Fout5 = $staat.Fout }
     Wacht-Werk
     $k = $script:Zt.Kies
-    Klopt ($k -and (@($k.Namen) -join ',') -eq 'main.js' -and -not $script:Zt.Fout5) "Niet mee in de runspace: van het project telt alleen main.js ($(@($k.Namen) -join ',') $($script:Zt.Fout5))"
+    $namen = if ($k) { @($k.Namen) -join ',' } else { '(niets terug)' }
+    Klopt ($k -and $namen -eq 'main.js' -and -not $script:Zt.Fout5) "Niet mee in de runspace: van het project telt alleen main.js ($namen $($script:Zt.Fout5))"
+    # Een plek staat er voluit in (GetFullPath maakt van een korte naam als RUNNER~1 de lange).
+    $oudRegel = [System.IO.Path]::GetFullPath($regels[1]).TrimEnd('\')
     $node = @($k.Uit | Where-Object { $_.Regel -eq '*node*' }) | Select-Object -First 1
-    $oud = @($k.Uit | Where-Object { $_.Regel -eq $regels[1] }) | Select-Object -First 1
-    Klopt ($node -and $node.Mappen -eq 1 -and $node.Bestanden -eq 1 -and $node.Bytes -eq 53000 -and $oud -and $oud.Mappen -eq 1 -and $oud.Bytes -eq 11000) "info-scherm: *node* = 1 map en 1 bestand (53000 bytes), de plek Oud = 1 map (11000) ($($node.Mappen) $($node.Bestanden) $($node.Bytes); $($oud.Bytes))"
+    $oud = @($k.Uit | Where-Object { $_.Regel -eq $oudRegel }) | Select-Object -First 1
+    $wat = (@($k.Uit | Where-Object { $_ }) | ForEach-Object { "$($_.Regel): $($_.Mappen) $($_.Bestanden) $($_.Bytes)" }) -join '; '
+    Klopt ($node -and $node.Mappen -eq 1 -and $node.Bestanden -eq 1 -and $node.Bytes -eq 53000 -and $oud -and $oud.Mappen -eq 1 -and $oud.Bytes -eq 11000) "info-scherm: *node* = 1 map en 1 bestand (53000 bytes), de plek Oud = 1 map (11000) ($wat)"
     $projDing = @($k.Lijst | Where-Object { $_.Sleutel -eq "extra:$proj" }) | Select-Object -First 1
-    Klopt ($projDing -and $projDing.Bytes -eq 7000 -and -not @($k.Lijst | Where-Object { $_.Sleutel -eq 'map:Documents' -and $_.Bytes -lt 0 })) "overzicht: het project telt 7000 bytes ($($projDing.Bytes))"
+    $projBytes = if ($projDing) { $projDing.Bytes } else { '(niet in het overzicht)' }
+    Klopt ($projDing -and $projDing.Bytes -eq 7000) "overzicht: het project telt 7000 bytes ($projBytes)"
 
     Stap 'kopiëren met Niet mee, en oude resten opruimen'
     # Eerst zonder regels (alles van het project gaat mee), dan met: wat nu niet meer mee moet, gaat van de schijf.
@@ -4177,7 +4185,8 @@ if ($Taak -eq 'Zelftest') {
         [pscustomobject]@{ Resten = $resten.Count }
     } -Klaar { param($staat) $script:Zt.Resten = @($staat.Uitkomst)[-1]; $script:Zt.Fout7 = $staat.Fout }
     Wacht-Werk 300000
-    Klopt ($script:Zt.Resten -and $script:Zt.Resten.Resten -eq 3 -and -not $script:Zt.Fout7) "oude resten: de oude node_modules, node-notities.txt en Oud ($($script:Zt.Resten.Resten) $($script:Zt.Fout7))"
+    $resten = if ($script:Zt.Resten) { $script:Zt.Resten.Resten } else { '(niets terug)' }
+    Klopt ($script:Zt.Resten -and $script:Zt.Resten.Resten -eq 3 -and -not $script:Zt.Fout7) "oude resten: de oude node_modules, node-notities.txt en Oud ($resten $($script:Zt.Fout7))"
     Klopt (-not (Test-Path -LiteralPath (Join-Path $kopie 'app\node_modules')) -and -not (Test-Path -LiteralPath (Join-Path $kopie 'app\node-notities.txt')) -and -not (Test-Path -LiteralPath (Join-Path $kopie 'Oud')) -and (Test-Path -LiteralPath (Join-Path $kopie 'app\src\main.js'))) 'met *node* en de plek Oud: weg van de schijf, main.js blijft'
     $json = [System.IO.File]::ReadAllText((Join-Path $doel2 'BugOS-Switch\bugos-switch.json'), [System.Text.Encoding]::UTF8) | ConvertFrom-Json
     $velden = @($json.PSObject.Properties | ForEach-Object { $_.Name })
