@@ -36,6 +36,12 @@ def cache() -> Path:
 
 def root(opdracht: str) -> int:
     """Het beheerdersdeel via pkexec (één keer je wachtwoord); wat het zegt, gaat door naar stdout."""
+    # Eerst kijken of het hulpje er is en uitvoerbaar is. Zo niet, dan vraagt pkexec wel je wachtwoord maar kan
+    # het daarna niets starten: dat leek op 'wachtwoord niet goed' (het hulpje was eens 0644 in het image).
+    # Code 3 is dezelfde als 'Waydroid ontbreekt' in het hulpje zelf: werk BugOS bij.
+    if not os.access(a.ROOT_HULP, os.X_OK):
+        print("hulp-ontbreekt")
+        return 3
     try:
         return subprocess.call(["pkexec", a.ROOT_HULP, opdracht])
     except OSError:
@@ -248,6 +254,13 @@ def venster(apk: str) -> int:
                     self.toon(t("Het toestemmingsvenster kon niet openen. Log uit en weer in, en probeer het nog eens.",
                                 "The permission window could not open. Sign out and in again, and try again.")
                               + (f" ({reden})" if reden else ""), "let_op")
+                elif code == 3:
+                    # Het hulpje of Waydroid zelf ontbreekt (of is niet uitvoerbaar): niet jouw wachtwoord, maar
+                    # BugOS. Een nieuwere BugOS lost dat op.
+                    self.toon(t("Android-apps zijn op deze BugOS nog niet compleet. Werk BugOS bij in Instellingen "
+                                "en probeer het daarna nog eens.",
+                                "Android apps are not complete on this BugOS yet. Update BugOS in Settings, then "
+                                "try again."), "fout")
                 else:
                     self.toon(t("Klaarzetten lukte niet. Heb je internet? Probeer het nog eens.",
                                 "Setting up did not work. Are you online? Please try again."), "fout")

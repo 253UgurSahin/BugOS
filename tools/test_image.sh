@@ -69,6 +69,16 @@ klopt '[ -z "$kapot" ]' "bestanden: geen tekstbestand dat eindigt op nul-bytes (
 # 2. Rechten (build.sh): programma's uitvoerbaar, de rest niet, geen wereld-schrijfbare bestanden
 slecht="$(find /usr/bin -maxdepth 1 -name 'bugos-*' ! -perm 0755 | head -5)"
 klopt '[ -z "$slecht" ]' "rechten: elk /usr/bin/bugos-* is 0755 ${slecht}"
+# Ook de hulpjes in /usr/libexec: pkexec start die na je wachtwoord. Was er één 0644 (bugos-android-root), dan
+# leek 'Android klaarzetten' op een fout wachtwoord.
+slecht="$(find /usr/libexec -maxdepth 1 -name 'bugos-*' ! -perm 0755 | head -5)"
+klopt '[ -z "$slecht" ]' "rechten: elk /usr/libexec/bugos-* is 0755 ${slecht}"
+# Elk programma dat een BugOS-polkitregel aan pkexec belooft (exec.path), moet er zijn en uitvoerbaar zijn.
+slecht=""
+for pad in $(grep -ho 'policykit.exec.path">[^<]*' /usr/share/polkit-1/actions/org.bugos.*.policy 2>/dev/null | cut -d'>' -f2); do
+    [ -x "$pad" ] || slecht="$slecht $pad"
+done
+klopt '[ -z "$slecht" ]' "rechten: elk pkexec-programma uit org.bugos.*.policy is uitvoerbaar${slecht}"
 slecht="$(find /usr/lib/bugos /usr/share/bugos /usr/lib/systemd/system/bugos-* /usr/lib/systemd/user/bugos-* -perm -o+w 2>/dev/null | head -5)"
 klopt '[ -z "$slecht" ]' "rechten: niets van BugOS is door iedereen te veranderen ${slecht}"
 

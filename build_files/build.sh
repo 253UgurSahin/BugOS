@@ -19,11 +19,13 @@ BUGOS_VERSION="${BUGOS_VERSION:-dev}"
 cp -av --remove-destination /ctx/system_files/. /
 # Vaste rechten, wat de bouwmap ook zegt (vanaf Windows is alles 0777, en dan
 # klaagt systemd over "world-writable" diensten): bestanden 0644, mappen 0755,
-# alleen de programma's in /usr/bin uitvoerbaar.
+# alleen de programma's in /usr/bin en /usr/libexec uitvoerbaar.
 (cd /ctx/system_files && find . -type f -print0) | while IFS= read -r -d '' f; do chmod 0644 "/${f#./}"; done
 (cd /ctx/system_files && find . -mindepth 1 -type d -print0) | while IFS= read -r -d '' d; do chmod 0755 "/${d#./}"; done
-chmod 0755 /usr/bin/bugos-* /usr/libexec/bugos-user-check /usr/libexec/bugos-hide-system-drives /usr/libexec/bugos-taal-standaard \
-    /usr/libexec/bugos-schil-of-plasma
+# Alle BugOS-hulpjes in /usr/libexec met één patroon, niet met een lijst namen: met een lijst werd een nieuw hulpje
+# vergeten (bugos-android-root bleef 0644). pkexec vroeg dan wel je wachtwoord, maar kon het hulpje daarna niet
+# starten, en 'Android klaarzetten' leek op een fout wachtwoord. tools/test_image.sh controleert dit.
+chmod 0755 /usr/bin/bugos-* /usr/libexec/bugos-*
 # De Python-onderdelen van BugOS vooraf vertalen: /usr is straks alleen-lezen, dus anders doet elke app dat bij
 # elke start opnieuw. Met een controlegetal (checked-hash): ostree zet de tijden van bestanden gelijk, en een
 # veranderd bestand (usr-overlay bij het zoeken naar een fout) wordt dan toch opnieuw gelezen (U313, U319).

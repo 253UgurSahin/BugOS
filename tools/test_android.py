@@ -22,6 +22,7 @@ import configparser
 import importlib.machinery
 import importlib.util
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -339,6 +340,11 @@ klopt("/usr/libexec/bugos-android-root" in beleid and "auth_admin_keep" in belei
       "polkit: alleen het beheerdersdeel, met je wachtwoord")
 klopt(a.ROOT_HULP == "/usr/libexec/bugos-android-root" and os.access(ROOT_HULP, os.X_OK)
       and os.access(BIN / "bugos-android", os.X_OK), "de programma's zijn uitvoerbaar en de paden kloppen")
+# build.sh zet alles eerst op 0644 en daarna alleen bepaalde programma's weer op 0755. Het beheerdersdeel moet daar
+# bij zitten: anders vraagt pkexec wel je wachtwoord, maar start het hulpje daarna niet ('wachtwoord niet goed').
+bouw = (ROOT / "build_files" / "build.sh").read_text()
+klopt(re.search(r"^chmod 0755 .*/usr/libexec/bugos-(\*|android-root)", bouw, re.M) is not None,
+      "build.sh maakt het beheerdersdeel uitvoerbaar (anders 'wachtwoord niet goed' bij klaarzetten)")
 
 print()
 print("Alles goed." if not fouten else f"{fouten} fout(en).")
