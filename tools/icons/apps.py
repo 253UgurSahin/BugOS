@@ -207,6 +207,11 @@ APPS: dict[str, tuple[str, dict]] = {
     # Pakket installeren: een doos met rode tape (eerst de tape, zodat de rand van de doos heel blijft).
     "bugos-package": ('<path d="m8 5.5 8 4" stroke="{r}"/>'
                      '<path d="M12 3.5 20 7.5v9l-8 4-8-4v-9z"/><path d="M4 7.5l8 4 8-4M12 11.5v9"/>', {}),
+    # Knipprogramma: de hoekjes van een knipsel met een rode schaar erin.
+    "bugos-knip": ('<path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 '
+                   '1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/>'
+                   '<circle cx="9.2" cy="14.6" r="1.9" stroke="{r}"/><circle cx="14.8" cy="14.6" r="1.9" stroke="{r}"/>'
+                   '<path d="m10.6 13.3 4.4-5.3M13.4 13.3 9 8" stroke="{r}"/>', {}),
     # Quarantaine (een app veilig proberen): een schild met een rood vinkje.
     "bugos-quarantaine": ('<path d="M12 3.5 19 6.2v5.3c0 4.2-2.9 7.5-7 9-4.1-1.5-7-4.8-7-9V6.2z"/>'
                           '<path d="m9 12.2 2.2 2.2 3.9-4.2" stroke="{r}"/>', {}),

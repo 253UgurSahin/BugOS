@@ -789,6 +789,18 @@ LIJN = {
     # aangevinkt waren als je 'Zuinig' koos (B-14).
     "weegschaal": '<path d="M12 4v16M8.5 20h7M5 7h14"/><path d="M5 7l-2.5 6h5zM19 7l-2.5 6h5z"/>'
                   '<path d="M2.5 13a2.5 2.5 0 0 0 5 0M16.5 13a2.5 2.5 0 0 0 5 0"/>',
+    # Knipprogramma (bugos-knip): de gereedschappen en de manieren van knippen.
+    "markeer": '<path d="m14.5 4.5 5 5-8 8H7.5v-4z"/><path d="M4 20.5h16"/>',
+    "gum": '<path d="m9 19.5-4.5-4.5a1.8 1.8 0 0 1 0-2.5l8-8a1.8 1.8 0 0 1 2.5 0l4.5 4.5a1.8 1.8 0 0 1 0 2.5L12 19.5z"/>'
+           '<path d="M9 19.5h11M8 9.5l6.5 6.5"/>',
+    "ongedaan": '<path d="M9 7.5 4.5 12 9 16.5"/><path d="M4.5 12H15a4.5 4.5 0 0 1 0 9h-2"/>',
+    "opnieuw": '<path d="m15 7.5 4.5 4.5-4.5 4.5"/><path d="M19.5 12H9a4.5 4.5 0 0 0 0 9h2"/>',
+    "rechthoek": '<path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 '
+                 '1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/>',
+    "schermen": '<rect x="2.5" y="5" width="11" height="8" rx="1.5"/><rect x="10.5" y="10" width="11" height="8" rx="1.5"/>'
+                '<path d="M6 16.5h4M16 20.5"/>',
+    "opslaan": '<path d="M5.5 3.5h10l3 3v12a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2z"/>'
+               '<path d="M8 3.5v5h7v-5M8 20.5v-6h8v6"/>',
 }
 
 

@@ -154,6 +154,8 @@ jobs:
         run: QT_QPA_PLATFORM=offscreen python3 tools/test_programmas.py
       - name: Muis en touchpad testen (een nieuw touchpad scrollt zoals in Windows, één keer; je eigen keuze blijft)
         run: python3 tools/test_invoer.py
+      - name: Knipprogramma testen (knippen op 200 %, tekenen, ongedaan maken, gum, bewaren en klembord)
+        run: QT_QPA_PLATFORM=offscreen python3 tools/test_knip.py
       # The native packages (BugOS's own pages instead of KDE's). Each branch brought its own test file but none
       # added it here; tools/test_edges.py (F10-H1) wants every tools/test_* file to be run by this workflow.
       - name: Native account testen (klok met de hand, andere mensen, eigen foto, toetsenborden; met nagedane D-Bus)

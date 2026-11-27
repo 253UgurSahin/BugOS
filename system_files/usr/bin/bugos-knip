@@ -1,0 +1,825 @@
+#!/usr/bin/python3
+"""BugOS Knipprogramma - een foto van (een stuk van) je scherm, zoals het Knipprogramma van Windows 11.
+
+    bugos-knip            het scherm bevriest; sleep een stuk (of kies een heel scherm)
+    bugos-knip --over N   hetzelfde, maar pas over N seconden (om eerst een menu open te zetten)
+
+Print Screen en Windows+Shift+S starten het (bugos-knip.desktop, X-KDE-Shortcuts). Het knipsel staat meteen op het
+klembord en in Afbeeldingen > Schermafbeeldingen; daarna kun je erop tekenen (pen, markeerstift, gum) en het
+bijgewerkte knipsel staat vanzelf weer op het klembord en in die map. De logica staat in bugos_knip.py.
+"""
+from __future__ import annotations
+
+import math
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, os.environ.get("BUGOS_PYTHON", "/usr/lib/bugos/python"))
+
+import bugos_knip as kn  # noqa: E402
+import bugos_ui  # noqa: E402
+from bugos_ui import K, Knop, StreepKnop, kleur, lijn_icoon, maak_app, start, t  # noqa: E402
+from PySide6.QtCore import QPointF, QRect, QRectF, QSize, Qt, QTimer, QUrl  # noqa: E402
+from PySide6.QtGui import (QColor, QDesktopServices, QGuiApplication, QIcon, QImage, QKeySequence, QPainter,  # noqa: E402
+                           QPainterPath, QPen, QShortcut)
+from PySide6.QtWidgets import (QApplication, QFileDialog, QFrame, QGraphicsDropShadowEffect, QHBoxLayout,  # noqa: E402
+                               QLabel, QMenu, QPushButton, QSizePolicy, QVBoxLayout, QWidget)
+
+DIM = QColor(10, 10, 14, 120)          # het donkere waas over wat je niet kiest
+PEN_KLEUREN = ["#DE2F3E", "#16171C", "#1F6FEB", "#0E9F6E", "#F5B400"]
+
+
+def keus_stijl() -> str:
+    """De keuzeknoppen (zoals de tabjes in Instellingen): gekozen = zachtrood met rode letters en een rode streep."""
+    return f"""
+QPushButton#keus {{ background: transparent; border: none; border-radius: 9px; padding: 7px 12px; font-size: 14px;
+    font-weight: 600; color: {K['tekst2']}; }}
+QPushButton#keus:hover {{ color: {K['tekst']}; background: {K['knop']}; }}
+QPushButton#keus:checked {{ background: {K['accent_zacht']}; color: {K['accent_gekozen']}; }}
+QPushButton#keus:focus {{ border: 2px solid {K['accent']}; padding: 5px 10px; }}
+QPushButton#rond {{ border: none; border-radius: 10px; background: transparent; }}
+QPushButton#rond:hover {{ background: {K['knop_hover']}; }}
+"""
+
+
+# ===================================================================================================== de schermlaag
+
+class Balk(QFrame):
+    """De zwevende balk bovenaan: hoe je knipt, en sluiten. Met een korte uitleg eronder."""
+
+    def __init__(self, knipper: "Knipper", ouder: QWidget):
+        super().__init__(ouder)
+        self.setObjectName("knipbalk")
+        self.setStyleSheet(f"""
+            QFrame#knipbalk {{ background: {K['vlak']}; border: 1px solid {K['rand']}; border-radius: 14px; }}
+            QLabel#knipuitleg {{ color: #FFFFFF; background: rgba(16,17,22,0.78); border-radius: 10px;
+                                 padding: 6px 12px; font-size: 13px; }}
+        """ + keus_stijl())
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(8, 6, 8, 6)
+        lay.setSpacing(4)
+        self.knoppen: dict[str, StreepKnop] = {}
+        for modus, icoon, tekst in (("rechthoek", "rechthoek", t("Rechthoek", "Rectangle")),
+                                    ("scherm", "computer", t("Een scherm", "One screen")),
+                                    ("alles", "schermen", t("Alles", "Everything"))):
+            k = StreepKnop(tekst, "keus")
+            k.setIcon(lijn_icoon(icoon, "tekst", 18))
+            k.setIconSize(QSize(18, 18))
+            k.setProperty("modus", modus)
+            k.setToolTip({"rechthoek": t("Sleep een stuk van het scherm", "Drag a part of the screen"),
+                          "scherm": t("Klik op het scherm dat je wilt", "Click the screen you want"),
+                          "alles": t("Al je schermen in één keer", "All your screens at once")}[modus])
+            k.clicked.connect(lambda _c=False, m=modus: knipper.kies_modus(m))
+            self.knoppen[modus] = k
+            lay.addWidget(k)
+        streep = QFrame()
+        streep.setFixedSize(1, 24)
+        streep.setStyleSheet(f"background: {K['rand']};")
+        lay.addSpacing(4)
+        lay.addWidget(streep)
+        lay.addSpacing(4)
+        sluit = QPushButton()
+        sluit.setObjectName("rond")
+        sluit.setProperty("rol", "sluiten")
+        sluit.setIcon(lijn_icoon("kruis", "tekst", 18))
+        sluit.setIconSize(QSize(18, 18))
+        sluit.setFixedSize(36, 36)
+        sluit.setCursor(Qt.CursorShape.PointingHandCursor)
+        sluit.setToolTip(t("Stoppen (Esc)", "Stop (Esc)"))
+        sluit.setAccessibleName(t("Stoppen", "Stop"))
+        sluit.clicked.connect(knipper.stop)
+        lay.addWidget(sluit)
+        schaduw = QGraphicsDropShadowEffect(self)
+        schaduw.setBlurRadius(28)
+        schaduw.setOffset(0, 6)
+        schaduw.setColor(QColor(0, 0, 0, 90))
+        self.setGraphicsEffect(schaduw)
+        self.uitleg = QLabel(ouder)
+        self.uitleg.setObjectName("knipuitleg")
+        self.uitleg.setStyleSheet(self.styleSheet())
+        self.zet_modus("rechthoek")
+
+    def zet_modus(self, modus: str) -> None:
+        for m, k in self.knoppen.items():
+            k.setChecked(m == modus)
+        self.uitleg.setText({"rechthoek": t("Sleep om een stuk te kiezen  ·  Esc om te stoppen",
+                                            "Drag to choose a part  ·  Esc to stop"),
+                             "scherm": t("Klik op een scherm  ·  Esc om te stoppen",
+                                         "Click a screen  ·  Esc to stop")}.get(modus, ""))
+        self.uitleg.adjustSize()
+        self.plaats()
+
+    def plaats(self) -> None:
+        self.adjustSize()
+        o = self.parentWidget()
+        self.move((o.width() - self.width()) // 2, 16)
+        self.uitleg.adjustSize()
+        self.uitleg.move((o.width() - self.uitleg.width()) // 2, 16 + self.height() + 10)
+        self.raise_()
+        self.uitleg.raise_()
+
+
+class Laag(QWidget):
+    """Eén scherm, bevroren: de foto van dat scherm met een donker waas; wat je sleept wordt weer helder."""
+
+    def __init__(self, knipper: "Knipper", scherm, deel: QImage, met_balk: bool):
+        super().__init__(None, Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
+        self.knipper = knipper
+        self.scherm = scherm
+        self.deel = deel
+        self.begin: QPointF | None = None
+        self.eind: QPointF | None = None
+        self.zweeft = False
+        self.setObjectName("kniplaag")
+        self.setWindowTitle(t("Knipprogramma", "Snipping Tool"))
+        self.setCursor(Qt.CursorShape.CrossCursor)
+        self.setMouseTracking(True)
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
+        self.setScreen(scherm)
+        self.setGeometry(scherm.geometry())
+        self.balk = Balk(knipper, self) if met_balk else None
+
+    def resizeEvent(self, e) -> None:  # noqa: N802
+        super().resizeEvent(e)
+        if self.balk is not None:
+            self.balk.plaats()
+
+    # ---------------------------------------------------------------- tekenen
+    def keuze(self) -> QRectF | None:
+        if self.begin is None or self.eind is None:
+            return None
+        return QRectF(self.begin, self.eind).normalized()
+
+    def paintEvent(self, _e) -> None:  # noqa: N802
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        p.drawImage(QRectF(self.rect()), self.deel)
+        r = self.keuze()
+        modus = self.knipper.modus
+        if modus == "scherm":
+            # Het scherm onder de muis is helder, de andere donker.
+            if not self.zweeft:
+                p.fillRect(self.rect(), DIM)
+            else:
+                p.setPen(QPen(kleur("accent"), 6))
+                p.drawRect(self.rect().adjusted(3, 3, -3, -3))
+            p.end()
+            return
+        pad = QPainterPath()
+        pad.addRect(QRectF(self.rect()))
+        if r is not None and r.width() > 0 and r.height() > 0:
+            pad.addRect(r)
+        pad.setFillRule(Qt.FillRule.OddEvenFill)
+        p.fillPath(pad, DIM)
+        if r is not None and r.width() > 0 and r.height() > 0:
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
+            p.setPen(QPen(QColor("#FFFFFF"), 1))
+            p.drawRect(r.adjusted(-1, -1, 1, 1))
+            p.setPen(QPen(kleur("accent"), 2))
+            p.drawRect(r)
+            # Hoekjes, zoals in Windows: je ziet beter waar het knipsel eindigt.
+            p.setBrush(QColor("#FFFFFF"))
+            p.setPen(QPen(kleur("accent"), 2))
+            for punt in (r.topLeft(), r.topRight(), r.bottomLeft(), r.bottomRight()):
+                p.drawEllipse(punt, 4.5, 4.5)
+            # De maat in echte beeldpunten.
+            b, h = self.knipper.maat_in_beeld(self, r)
+            tekst = f"{b} × {h}"
+            f = p.font()
+            f.setPixelSize(13)
+            f.setBold(True)
+            p.setFont(f)
+            breed = p.fontMetrics().horizontalAdvance(tekst) + 18
+            vak = QRectF(r.left(), r.bottom() + 8, breed, 24)
+            if vak.bottom() > self.height() - 4:
+                vak.moveTop(r.top() - 32)
+            if vak.top() < 4:
+                vak.moveTop(r.top() + 8)
+                vak.moveLeft(r.left() + 8)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(16, 17, 22, 210))
+            p.drawRoundedRect(vak, 8, 8)
+            p.setPen(QColor("#FFFFFF"))
+            p.drawText(vak, Qt.AlignmentFlag.AlignCenter, tekst)
+        p.end()
+
+    # ---------------------------------------------------------------- muis en toetsen
+    def enterEvent(self, e) -> None:  # noqa: N802
+        self.zweeft = True
+        self.update()
+        super().enterEvent(e)
+
+    def leaveEvent(self, e) -> None:  # noqa: N802
+        self.zweeft = False
+        self.update()
+        super().leaveEvent(e)
+
+    def mousePressEvent(self, e) -> None:  # noqa: N802
+        if e.button() == Qt.MouseButton.RightButton:
+            self.knipper.stop()
+            return
+        if e.button() != Qt.MouseButton.LeftButton:
+            return
+        if self.knipper.modus == "scherm":
+            self.knipper.kies_scherm(self)
+            return
+        self.begin = self.eind = e.position()
+        self.update()
+
+    def mouseMoveEvent(self, e) -> None:  # noqa: N802
+        if not self.zweeft:
+            self.zweeft = True
+            self.update()
+        if self.begin is not None and e.buttons() & Qt.MouseButton.LeftButton:
+            self.eind = e.position()
+            self.update()
+
+    def mouseReleaseEvent(self, e) -> None:  # noqa: N802
+        if e.button() != Qt.MouseButton.LeftButton or self.begin is None:
+            return
+        self.eind = e.position()
+        r = self.keuze()
+        self.begin = self.eind = None
+        self.update()
+        if r is not None and kn.genoeg(r.width(), r.height()):
+            self.knipper.kies_stuk(self, r)
+
+    def keyPressEvent(self, e) -> None:  # noqa: N802
+        if e.key() == Qt.Key.Key_Escape:
+            self.knipper.stop()
+        else:
+            super().keyPressEvent(e)
+
+
+class Knipper:
+    """Het bevroren scherm: een Laag per scherm. klaar(beeld of None) krijgt het knipsel, of None als je stopte."""
+
+    def __init__(self, foto: QImage, klaar):
+        self.foto = foto
+        self.klaar = klaar
+        self.modus = "rechthoek"
+        schermen = QGuiApplication.screens()
+        virtueel = QRect()
+        for s in schermen:
+            virtueel = virtueel.united(s.geometry())
+        self.links, self.boven = virtueel.x(), virtueel.y()
+        self.fx, self.fy = kn.factor(foto.width(), foto.height(), virtueel.width(), virtueel.height())
+        hoofd = QGuiApplication.primaryScreen()
+        self.lagen: list[Laag] = []
+        for s in schermen:
+            g = s.geometry()
+            bx, by, bb, bh = kn.naar_beeld(g.x(), g.y(), g.width(), g.height(), self.links, self.boven, self.fx,
+                                           self.fy, foto.width(), foto.height())
+            self.lagen.append(Laag(self, s, foto.copy(bx, by, bb, bh), s is hoofd or len(schermen) == 1))
+        if not any(laag.balk for laag in self.lagen) and self.lagen:
+            self.lagen[0].balk = Balk(self, self.lagen[0])
+
+    def toon(self) -> None:
+        for laag in self.lagen:
+            laag.showFullScreen()
+        for laag in self.lagen:
+            if laag.balk is not None:
+                laag.activateWindow()
+                laag.raise_()
+                laag.setFocus()
+
+    def balk(self) -> Balk | None:
+        return next((laag.balk for laag in self.lagen if laag.balk is not None), None)
+
+    def kies_modus(self, modus: str) -> None:
+        if modus == "alles":
+            self.af(self.foto.copy())
+            return
+        self.modus = modus
+        b = self.balk()
+        if b is not None:
+            b.zet_modus(modus)
+        for laag in self.lagen:
+            laag.update()
+
+    def maat_in_beeld(self, laag: Laag, r: QRectF) -> tuple[int, int]:
+        g = laag.scherm.geometry()
+        _x, _y, b, h = kn.naar_beeld(g.x() + r.x(), g.y() + r.y(), r.width(), r.height(), self.links, self.boven,
+                                     self.fx, self.fy, self.foto.width(), self.foto.height())
+        return b, h
+
+    def kies_stuk(self, laag: Laag, r: QRectF) -> None:
+        g = laag.scherm.geometry()
+        x, y, b, h = kn.naar_beeld(g.x() + r.x(), g.y() + r.y(), r.width(), r.height(), self.links, self.boven,
+                                   self.fx, self.fy, self.foto.width(), self.foto.height())
+        if b > 0 and h > 0:
+            self.af(self.foto.copy(x, y, b, h))
+
+    def kies_scherm(self, laag: Laag) -> None:
+        self.af(laag.deel.copy())
+
+    def stop(self) -> None:
+        self.af(None)
+
+    def af(self, beeld: QImage | None) -> None:
+        for laag in self.lagen:
+            laag.hide()
+            laag.deleteLater()
+        self.lagen = []
+        klaar, self.klaar = self.klaar, None
+        if klaar is not None:
+            klaar(beeld)
+
+
+# ====================================================================================================== het tekenvel
+
+class Doek(QWidget):
+    """Het knipsel, met wat je erop tekent. Lijnen staan in beeldpunten van het knipsel, dus scherp bij opslaan."""
+
+    def __init__(self, bewerker: "Bewerker"):
+        super().__init__()
+        self.bewerker = bewerker
+        self.beeld = QImage()
+        self.lijnen: list[dict] = []
+        self.terug: list[tuple[str, dict]] = []     # ongedaan maken: ('erbij'|'weg', lijn)
+        self.vooruit: list[tuple[str, dict]] = []
+        self.bezig: dict | None = None
+        self.gereedschap = "pen"
+        self.kleuren = {"pen": PEN_KLEUREN[0], "markeer": PEN_KLEUREN[4]}
+        self.beeld_dpr = 1.0
+        self.setMouseTracking(True)
+        self.setMinimumSize(320, 220)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.setObjectName("knipdoek")
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAccessibleName(t("Je knipsel: teken erop met de muis", "Your snip: draw on it with the mouse"))
+
+    def zet_beeld(self, beeld: QImage, dpr: float) -> None:
+        self.beeld = beeld
+        self.beeld_dpr = max(1.0, dpr)
+        self.lijnen, self.terug, self.vooruit, self.bezig = [], [], [], None
+        self.update()
+
+    # ---------------------------------------------------------------- waar het beeld staat
+    def vak(self) -> QRectF:
+        if self.beeld.isNull():
+            return QRectF()
+        marge = 24
+        b, h = self.beeld.width() / self.beeld_dpr, self.beeld.height() / self.beeld_dpr
+        s = min(1.0, (self.width() - 2 * marge) / max(1, b), (self.height() - 2 * marge) / max(1, h))
+        s = max(0.05, s)
+        return QRectF((self.width() - b * s) / 2, (self.height() - h * s) / 2, b * s, h * s)
+
+    def naar_beeld(self, p: QPointF) -> QPointF:
+        v = self.vak()
+        if v.isEmpty():
+            return QPointF()
+        return QPointF((p.x() - v.x()) * self.beeld.width() / v.width(), (p.y() - v.y()) * self.beeld.height() / v.height())
+
+    def dikte(self, soort: str) -> float:
+        """Een pen die bij elk knipsel even dik oogt; de markeerstift is breed, zoals een echte."""
+        basis = max(self.beeld.width(), self.beeld.height())
+        return max(4.0, basis / 180) * (5 if soort == "markeer" else 1)
+
+    # ---------------------------------------------------------------- tekenen
+    @staticmethod
+    def teken_lijn(p: QPainter, lijn: dict) -> None:
+        punten = lijn["punten"]
+        if not punten:
+            return
+        kl = QColor(lijn["kleur"])
+        if lijn["soort"] == "markeer":
+            kl.setAlpha(110)
+        pen = QPen(kl, lijn["dikte"], Qt.PenStyle.SolidLine,
+                   Qt.PenCapStyle.FlatCap if lijn["soort"] == "markeer" else Qt.PenCapStyle.RoundCap,
+                   Qt.PenJoinStyle.RoundJoin)
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        if len(punten) == 1:
+            p.drawPoint(punten[0])
+            return
+        pad = QPainterPath(punten[0])
+        for pt in punten[1:]:
+            pad.lineTo(pt)
+        p.drawPath(pad)
+
+    def samengevoegd(self) -> QImage:
+        """Het knipsel met alles wat erop getekend is: wat op het klembord en in de map komt."""
+        uit = self.beeld.convertToFormat(QImage.Format.Format_ARGB32)
+        p = QPainter(uit)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        for lijn in self.lijnen:
+            self.teken_lijn(p, lijn)
+        p.end()
+        return uit
+
+    def paintEvent(self, _e) -> None:  # noqa: N802
+        p = QPainter(self)
+        p.fillRect(self.rect(), kleur("achter"))
+        v = self.vak()
+        if not v.isEmpty():
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
+            # Een zachte schaduw en een dunne rand, zodat een wit knipsel niet in het wit verdwijnt.
+            for i, a in enumerate((26, 16, 8)):
+                p.setPen(Qt.PenStyle.NoPen)
+                p.setBrush(QColor(0, 0, 0, a))
+                p.drawRoundedRect(v.adjusted(-2 - i * 2, -1 - i, 2 + i * 2, 3 + i * 3), 6, 6)
+            p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+            p.drawImage(v, self.beeld)
+            p.save()
+            p.translate(v.topLeft())
+            p.scale(v.width() / self.beeld.width(), v.height() / self.beeld.height())
+            p.setClipRect(QRectF(0, 0, self.beeld.width(), self.beeld.height()))
+            for lijn in self.lijnen + ([self.bezig] if self.bezig else []):
+                self.teken_lijn(p, lijn)
+            p.restore()
+            p.setPen(QPen(kleur("rand"), 1))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawRect(v.adjusted(-0.5, -0.5, 0.5, 0.5))
+        p.end()
+
+    # ---------------------------------------------------------------- muis
+    def mousePressEvent(self, e) -> None:  # noqa: N802
+        if e.button() != Qt.MouseButton.LeftButton or self.beeld.isNull():
+            return
+        pt = self.naar_beeld(e.position())
+        if self.gereedschap == "gum":
+            self.gum(pt)
+            return
+        self.bezig = {"soort": self.gereedschap, "kleur": self.kleuren[self.gereedschap],
+                      "dikte": self.dikte(self.gereedschap), "punten": [pt]}
+        self.update()
+
+    def mouseMoveEvent(self, e) -> None:  # noqa: N802
+        if not e.buttons() & Qt.MouseButton.LeftButton:
+            return
+        pt = self.naar_beeld(e.position())
+        if self.gereedschap == "gum":
+            self.gum(pt)
+        elif self.bezig is not None:
+            self.bezig["punten"].append(pt)
+            self.update()
+
+    def mouseReleaseEvent(self, e) -> None:  # noqa: N802
+        if e.button() != Qt.MouseButton.LeftButton or self.bezig is None:
+            return
+        lijn, self.bezig = self.bezig, None
+        self.lijnen.append(lijn)
+        self.terug.append(("erbij", lijn))
+        self.vooruit.clear()
+        self.update()
+        self.bewerker.veranderd()
+
+    def gum(self, pt: QPointF) -> None:
+        """De gum haalt een hele lijn weg (zoals in het Knipprogramma van Windows)."""
+        for lijn in reversed(self.lijnen):
+            marge = lijn["dikte"] / 2 + max(6.0, self.beeld.width() / 150)
+            if afstand_tot_lijn(pt, lijn["punten"]) <= marge:
+                self.lijnen.remove(lijn)
+                self.terug.append(("weg", lijn))
+                self.vooruit.clear()
+                self.update()
+                self.bewerker.veranderd()
+                return
+
+    def ongedaan(self) -> None:
+        if not self.terug:
+            return
+        wat, lijn = self.terug.pop()
+        if wat == "erbij":
+            self.lijnen.remove(lijn)
+        else:
+            self.lijnen.append(lijn)
+        self.vooruit.append((wat, lijn))
+        self.update()
+        self.bewerker.veranderd()
+
+    def opnieuw(self) -> None:
+        if not self.vooruit:
+            return
+        wat, lijn = self.vooruit.pop()
+        if wat == "erbij":
+            self.lijnen.append(lijn)
+        else:
+            self.lijnen.remove(lijn)
+        self.terug.append((wat, lijn))
+        self.update()
+        self.bewerker.veranderd()
+
+
+def afstand_tot_lijn(p: QPointF, punten: list[QPointF]) -> float:
+    if not punten:
+        return math.inf
+    if len(punten) == 1:
+        return math.hypot(p.x() - punten[0].x(), p.y() - punten[0].y())
+    beste = math.inf
+    for a, b in zip(punten, punten[1:]):
+        dx, dy = b.x() - a.x(), b.y() - a.y()
+        lengte = dx * dx + dy * dy
+        u = 0.0 if lengte == 0 else max(0.0, min(1.0, ((p.x() - a.x()) * dx + (p.y() - a.y()) * dy) / lengte))
+        beste = min(beste, math.hypot(p.x() - (a.x() + u * dx), p.y() - (a.y() + u * dy)))
+    return beste
+
+
+class Bewerker(QWidget):
+    """Het venster na het knippen: tekenen, kopiëren, opslaan. Wat je doet, staat meteen op het klembord en in de map."""
+
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle(t("Knipprogramma", "Snipping Tool"))
+        self.setWindowIcon(QIcon.fromTheme("bugos-knip"))
+        self.setObjectName("bewerker")
+        self.setStyleSheet(keus_stijl())
+        self.pad: Path | None = None
+        self.doek = Doek(self)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+
+        werk = QFrame()
+        werk.setObjectName("werkbalk")
+        werk.setStyleSheet(f"QFrame#werkbalk {{ background: {K['vlak']}; border-bottom: 1px solid {K['rand']}; }}")
+        wl = QHBoxLayout(werk)
+        wl.setContentsMargins(12, 8, 12, 8)
+        wl.setSpacing(6)
+        self.nieuw = Knop(t("Nieuw", "New"), "hoofd", "lijn:schaar")
+        self.nieuw.setProperty("rol", "nieuw")
+        self.nieuw.setToolTip(t("Een nieuw knipsel (Ctrl+N)", "A new snip (Ctrl+N)"))
+        self.nieuw.clicked.connect(lambda _c=False: self.nieuw_knipsel(0))
+        wl.addWidget(self.nieuw)
+        # Met vertraging: eerst een menu of een tooltip open zetten, dan knippen (zoals Windows).
+        self.later = ikoonknop("klok", t("Knippen met vertraging", "Snip with a delay"), lambda: None)
+        self.later.setProperty("rol", "later")
+        menu = QMenu(self.later)
+        menu.addAction(t("Over 3 seconden", "In 3 seconds"), lambda: self.nieuw_knipsel(3))
+        menu.addAction(t("Over 10 seconden", "In 10 seconds"), lambda: self.nieuw_knipsel(10))
+        self.later.clicked.disconnect()
+        self.later.clicked.connect(lambda _c=False: menu.exec(self.later.mapToGlobal(self.later.rect().bottomLeft())))
+        wl.addWidget(self.later)
+        wl.addWidget(streepje())
+        self.gereedschap: dict[str, QPushButton] = {}
+        for naam, icoon, tekst in (("pen", "potlood", t("Pen", "Pen")),
+                                   ("markeer", "markeer", t("Markeerstift", "Highlighter")),
+                                   ("gum", "gum", t("Gum", "Eraser"))):
+            k = StreepKnop(tekst, "keus")
+            k.setProperty("gereedschap", naam)
+            k.setIcon(lijn_icoon(icoon, "tekst", 18))
+            k.setIconSize(QSize(18, 18))
+            k.clicked.connect(lambda _c=False, n=naam: self.kies_gereedschap(n))
+            self.gereedschap[naam] = k
+            wl.addWidget(k)
+        self.kleur_knoppen: list[QPushButton] = []
+        for kl in PEN_KLEUREN:
+            k = QPushButton()
+            k.setObjectName("kleur")
+            k.setCheckable(True)
+            k.setFixedSize(26, 26)
+            k.setCursor(Qt.CursorShape.PointingHandCursor)
+            k.setAccessibleName(t("Kleur", "Colour") + " " + kl)
+            k.setProperty("kleur", kl)
+            k.setStyleSheet(f"QPushButton {{ background: {kl}; border: 2px solid {K['vlak']}; border-radius: 13px; }}"
+                            f"QPushButton:checked {{ border: 2px solid {K['tekst']}; }}")
+            k.clicked.connect(lambda _c=False, c=kl: self.kies_kleur(c))
+            self.kleur_knoppen.append(k)
+            wl.addWidget(k)
+        wl.addWidget(streepje())
+        self.knop_ongedaan = ikoonknop("ongedaan", t("Ongedaan maken (Ctrl+Z)", "Undo (Ctrl+Z)"), self.doek.ongedaan)
+        self.knop_opnieuw = ikoonknop("opnieuw", t("Opnieuw (Ctrl+Y)", "Redo (Ctrl+Y)"), self.doek.opnieuw)
+        wl.addWidget(self.knop_ongedaan)
+        wl.addWidget(self.knop_opnieuw)
+        wl.addStretch(1)
+        kopie = Knop(t("Kopiëren", "Copy"), "gewoon", "lijn:kopieer")
+        kopie.setProperty("rol", "kopieer")
+        kopie.clicked.connect(self.kopieer)
+        opslaan = Knop(t("Opslaan als…", "Save as…"), "gewoon", "lijn:opslaan")
+        opslaan.setProperty("rol", "opslaanals")
+        opslaan.clicked.connect(self.opslaan_als)
+        wl.addWidget(kopie)
+        wl.addWidget(opslaan)
+        lay.addWidget(werk)
+        lay.addWidget(self.doek, 1)
+
+        onder = QFrame()
+        onder.setObjectName("onderbalk")
+        onder.setStyleSheet(f"QFrame#onderbalk {{ background: {K['vlak']}; border-top: 1px solid {K['rand']}; }}")
+        ol = QHBoxLayout(onder)
+        ol.setContentsMargins(16, 8, 12, 8)
+        self.melding = QLabel("")
+        self.melding.setObjectName("melding")
+        self.melding.setStyleSheet(f"color: {K['tekst2']}; font-size: 13px; background: transparent;")
+        ol.addWidget(self.melding, 1)
+        self.map_knop = Knop(t("Map openen", "Open folder"), "stil", "lijn:openen")
+        self.map_knop.setProperty("rol", "mapopenen")
+        self.map_knop.clicked.connect(self.open_map)
+        ol.addWidget(self.map_knop)
+        lay.addWidget(onder)
+
+        self.bewaar_klok = QTimer(self)
+        self.bewaar_klok.setSingleShot(True)
+        self.bewaar_klok.setInterval(400)
+        self.bewaar_klok.timeout.connect(self.bewaar_en_kopieer)
+        for toets, doe in ((QKeySequence.StandardKey.Copy, self.kopieer), (QKeySequence.StandardKey.Undo, self.doek.ongedaan),
+                           (QKeySequence.StandardKey.Redo, self.doek.opnieuw), (QKeySequence.StandardKey.Save, self.opslaan_als),
+                           (QKeySequence.StandardKey.New, lambda: self.nieuw_knipsel(0))):
+            QShortcut(toets, self, doe)
+        # Ctrl+Y (opnieuw, zoals Windows) als het systeem dat niet al zo noemt: twee keer dezelfde toets doet niets.
+        if QKeySequence("Ctrl+Y") not in QKeySequence.keyBindings(QKeySequence.StandardKey.Redo):
+            QShortcut(QKeySequence("Ctrl+Y"), self, self.doek.opnieuw)
+        self.kies_gereedschap("pen")
+        self.knoppen_bijwerken()
+
+    # ---------------------------------------------------------------- het knipsel
+    def zet_knipsel(self, beeld: QImage, dpr: float) -> None:
+        self.doek.zet_beeld(beeld, dpr)
+        self.pad = None
+        self.bewaar_en_kopieer()
+        b, h = beeld.width() / max(1.0, dpr), beeld.height() / max(1.0, dpr)
+        scherm = self.screen() or QGuiApplication.primaryScreen()
+        ruimte = scherm.availableGeometry() if scherm else QRect(0, 0, 1280, 800)
+        self.resize(int(min(max(760, b + 80), ruimte.width() * 0.85)), int(min(max(480, h + 160), ruimte.height() * 0.85)))
+
+    def veranderd(self) -> None:
+        self.knoppen_bijwerken()
+        self.bewaar_klok.start()
+
+    def knoppen_bijwerken(self) -> None:
+        self.knop_ongedaan.setEnabled(bool(self.doek.terug))
+        self.knop_opnieuw.setEnabled(bool(self.doek.vooruit))
+
+    def bewaar_en_kopieer(self) -> None:
+        """Op het klembord en in Afbeeldingen > Schermafbeeldingen (de eerste keer een nieuwe naam, daarna dezelfde)."""
+        if self.doek.beeld.isNull():
+            return
+        beeld = self.doek.samengevoegd()
+        QApplication.clipboard().setImage(beeld)
+        map_ = kn.map_schermafbeeldingen()
+        try:
+            map_.mkdir(parents=True, exist_ok=True)
+            if self.pad is None:
+                self.pad = kn.nieuwe_naam(map_)
+            gelukt = beeld.save(str(self.pad), "PNG")
+        except OSError:
+            gelukt = False
+        if gelukt:
+            self.melding.setText(t("✓  Gekopieerd en bewaard in {m}", "✓  Copied and saved in {m}").format(
+                m=f"{map_.parent.name} › {map_.name}"))
+            self.melding.setToolTip(str(self.pad))
+        else:
+            self.melding.setText(t("✓  Gekopieerd (bewaren lukte niet; kies Opslaan als…)",
+                                   "✓  Copied (saving did not work; choose Save as…)"))
+        self.map_knop.setEnabled(gelukt)
+
+    def kopieer(self) -> None:
+        if not self.doek.beeld.isNull():
+            QApplication.clipboard().setImage(self.doek.samengevoegd())
+            self.melding.setText(t("✓  Gekopieerd. Plak het waar je wilt (Ctrl+V).", "✓  Copied. Paste it anywhere (Ctrl+V)."))
+
+    def opslaan_als(self) -> None:
+        if self.doek.beeld.isNull():
+            return
+        begin = str(self.pad) if self.pad else str(kn.map_schermafbeeldingen())
+        pad, _ = QFileDialog.getSaveFileName(self, t("Opslaan als", "Save as"), begin,
+                                             t("Afbeelding (*.png *.jpg)", "Image (*.png *.jpg)"))
+        if not pad:
+            return
+        if not pad.lower().endswith((".png", ".jpg", ".jpeg")):
+            pad += ".png"
+        if self.doek.samengevoegd().save(pad):
+            self.melding.setText(t("✓  Opgeslagen: {n}", "✓  Saved: {n}").format(n=Path(pad).name))
+        else:
+            self.melding.setText(t("Opslaan lukte niet.", "Saving did not work."))
+
+    def open_map(self) -> None:
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.pad.parent if self.pad else kn.map_schermafbeeldingen())))
+
+    # ---------------------------------------------------------------- gereedschap
+    def kies_gereedschap(self, naam: str) -> None:
+        self.doek.gereedschap = naam
+        for n, k in self.gereedschap.items():
+            k.setChecked(n == naam)
+        for k in self.kleur_knoppen:
+            k.setEnabled(naam != "gum")
+            k.setChecked(naam != "gum" and k.property("kleur") == self.doek.kleuren.get(naam))
+        self.doek.setCursor(Qt.CursorShape.PointingHandCursor if naam == "gum" else Qt.CursorShape.CrossCursor)
+
+    def kies_kleur(self, kl: str) -> None:
+        if self.doek.gereedschap in self.doek.kleuren:
+            self.doek.kleuren[self.doek.gereedschap] = kl
+        self.kies_gereedschap(self.doek.gereedschap)
+
+    def nieuw_knipsel(self, seconden: int) -> None:
+        self.hide()
+        # Even wachten tot dit venster echt weg is (anders staat het op de foto), of zo lang als je koos.
+        QTimer.singleShot(max(350, seconden * 1000), lambda: knippen(self))
+
+
+def streepje() -> QFrame:
+    s = QFrame()
+    s.setFixedSize(1, 24)
+    s.setStyleSheet(f"background: {K['rand']};")
+    return s
+
+
+def ikoonknop(icoon: str, uitleg: str, doe) -> QPushButton:
+    k = QPushButton()
+    k.setObjectName("rond")
+    k.setIcon(lijn_icoon(icoon, "tekst", 18))
+    k.setIconSize(QSize(18, 18))
+    k.setFixedSize(36, 36)
+    k.setToolTip(uitleg)
+    k.setAccessibleName(uitleg)
+    k.setCursor(Qt.CursorShape.PointingHandCursor)
+    k.clicked.connect(doe)
+    return k
+
+
+# ======================================================================================================= het geheel
+
+ACTIEF: dict[str, object] = {}   # het bevroren scherm dat nu open is (één tegelijk)
+
+
+def knippen(bewerker: Bewerker | None) -> None:
+    """Foto maken, het scherm bevriezen, en het knipsel naar de bewerker (een nieuwe, of de bestaande)."""
+    app = QApplication.instance()
+    werk = kn.werkmap()
+    foto_pad = werk / "scherm.png"
+    if not kn.vang_alles(foto_pad):
+        # Zonder foto: KDE's eigen schermafbeelding, zodat Print Screen nooit 'niets' doet.
+        start("spectacle", "--region")
+        if bewerker is None or not bewerker.isVisible():
+            app.quit()
+        return
+    foto = QImage(str(foto_pad))
+    try:
+        foto_pad.unlink()
+        werk.rmdir()
+    except OSError:
+        pass
+    if foto.isNull():
+        start("spectacle", "--region")
+        app.quit()
+        return
+
+    def klaar(beeld: QImage | None) -> None:
+        ACTIEF.pop("knipper", None)
+        doel = bewerker
+        if beeld is None or beeld.isNull():
+            if doel is not None and doel.pad is not None:
+                doel.show()      # gestopt bij 'Nieuw': het vorige knipsel blijft
+            elif doel is None or not doel.isVisible():
+                app.quit()
+            return
+        if doel is None:
+            doel = Bewerker()
+            ACTIEF["bewerker"] = doel
+        doel.zet_knipsel(beeld, knipper.fx)
+        bugos_ui.pas_in_scherm(doel)
+        doel.show()
+        doel.raise_()
+        doel.activateWindow()
+        doel.doek.setFocus()
+
+    knipper = Knipper(foto, klaar)
+    ACTIEF["knipper"] = knipper
+    knipper.toon()
+
+
+def klembord_vasthouden(app: QApplication) -> None:
+    """Op Wayland is het klembord van het programma dat kopieerde: stopt dat, dan is het knipsel weg (en in het nieuwe
+    bureaublad draait geen klembordbeheer dat het overneemt). Dus na het sluiten van het venster blijft dit programma
+    onzichtbaar draaien tot je iets anders kopieert, hooguit een uur."""
+    app.setQuitOnLastWindowClosed(False)
+    klembord = app.clipboard()
+
+    def niets_open() -> bool:
+        b = ACTIEF.get("bewerker")
+        return ACTIEF.get("knipper") is None and (b is None or not b.isVisible())
+
+    def venster_dicht() -> None:
+        if not niets_open():
+            return
+        if klembord.ownsClipboard():
+            QTimer.singleShot(60 * 60 * 1000, lambda: app.quit() if niets_open() else None)
+        else:
+            app.quit()
+
+    def klembord_anders() -> None:
+        # Iets anders gekopieerd terwijl er geen venster meer open is: nu mag dit programma stoppen.
+        if not klembord.ownsClipboard() and niets_open():
+            app.quit()
+
+    klembord.dataChanged.connect(klembord_anders)
+    app.lastWindowClosed.connect(venster_dicht)
+
+
+def main(args: list[str]) -> int:
+    seconden = 0
+    if len(args) >= 3 and args[1] == "--over" and args[2].isdigit():
+        seconden = min(60, int(args[2]))
+    app = maak_app("bugos-knip", "bugos-knip", args[:1])
+    app.setWindowIcon(QIcon.fromTheme("bugos-knip"))
+    klembord_vasthouden(app)
+    QTimer.singleShot(seconden * 1000, lambda: knippen(None))
+    code = app.exec()
+    ACTIEF.clear()
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

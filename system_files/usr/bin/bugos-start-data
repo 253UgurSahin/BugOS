@@ -125,7 +125,7 @@ EIGEN_NAMEN = {
     "org.kde.gwenview.desktop": ("Foto's", "Photos", "Je foto's bekijken", "Look at your photos"),
     "org.kde.okular.desktop": ("Documenten bekijken", "Document viewer", "PDF's en andere documenten lezen",
                                "Read PDFs and other documents"),
-    "org.kde.spectacle.desktop": ("Schermafbeelding", "Screenshot", "Een foto van je scherm maken",
+    "org.kde.spectacle.desktop": ("Schermafbeelding (KDE)", "Screenshot (KDE)", "Een foto van je scherm maken",
                                   "Take a picture of your screen"),
     "org.kde.konsole.desktop": ("Terminal", "Terminal", "Opdrachten typen (voor gevorderden)",
                                 "Type commands (for advanced users)"),

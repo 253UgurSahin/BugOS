@@ -6,6 +6,7 @@ apps/scalable/bugos-files.svg
 apps/scalable/bugos-game-mode.svg
 apps/scalable/bugos-help.svg
 apps/scalable/bugos-install.svg
+apps/scalable/bugos-knip.svg
 apps/scalable/bugos-m365-excel.svg
 apps/scalable/bugos-m365-onedrive.svg
 apps/scalable/bugos-m365-outlook.svg
