@@ -39,7 +39,9 @@ def root(opdracht: str) -> int:
     # Eerst kijken of het hulpje er is en uitvoerbaar is. Zo niet, dan vraagt pkexec wel je wachtwoord maar kan
     # het daarna niets starten: dat leek op 'wachtwoord niet goed' (het hulpje was eens 0644 in het image).
     # Code 3 is dezelfde als 'Waydroid ontbreekt' in het hulpje zelf: werk BugOS bij.
-    if not os.access(a.ROOT_HULP, os.X_OK):
+    # Alleen als het bestand er wél is maar niet uitvoerbaar: ontbreekt het helemaal, dan zegt pkexec dat zelf
+    # (code 127, met de reden), en in de tests bestaat het echte pad niet (daar draait een nep-pkexec).
+    if os.path.exists(a.ROOT_HULP) and not os.access(a.ROOT_HULP, os.X_OK):
         print("hulp-ontbreekt")
         return 3
     try:
