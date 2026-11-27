@@ -155,6 +155,36 @@ klopt(bi.geldige_herstel("output.eDP-1.scale.1.1") and bi.geldige_herstel("outpu
       and not bi.geldige_herstel("output.-x.enable") and not bi.geldige_herstel("output.x.mode.1;y"),
       "I2: herstel-stappen: 110 % en 225 % mogen, 10 %, 900 % en rare namen niet")
 
+# 24b: elke aanroep van kscreen-doctor (lezen, toepassen, controleren, grootte) krijgt KSCREEN_TIJD. In de VM duurde
+# 'kscreen-doctor -j' 12 s; met 8 s voor de controle zette BugOS gelukt spiegelen en uitbreiden weer terug.
+def _tijden(functie, *args):
+    """Roep functie aan met een nep-draai en geef de timeout van elke kscreen-doctor-aanroep."""
+    oud = (bi.VOORBEELD, bi.draai, shutil.which)
+    tijden: list = []
+    staat = copy.deepcopy(VM_KSCREEN)
+    nep = ks_fake(staat)
+
+    def draai(*cmd, **kw):
+        if cmd[0] == "kscreen-doctor":
+            tijden.append(kw.get("timeout"))
+        return nep(cmd)
+    bi.VOORBEELD, bi.draai = False, draai
+    shutil.which = lambda naam, *a, **k: "/usr/bin/" + naam
+    try:
+        functie(*args)
+    finally:
+        bi.VOORBEELD, bi.draai, shutil.which = oud
+    return tijden
+
+
+klopt(bcs.KSCREEN_TIJD >= 20, f"24b: kscreen-doctor krijgt ruim de tijd ({bcs.KSCREEN_TIJD} s, in de VM duurde het 12 s)")
+for _naam, _f, _a in (("beeldschermen", bi.beeldschermen, ()), ("schaal", bcs.schaal, ()),
+                      ("pas_toe", bi.pas_toe, (["output.Virtual-1.mode.21"],)),
+                      ("scherm_wijzigen", bi.scherm_wijzigen, (["output.Virtual-1.mirror.none"],))):
+    _t = _tijden(_f, *_a)
+    klopt(_t and all(x == bcs.KSCREEN_TIJD for x in _t),
+          f"24b: {_naam}: elke kscreen-doctor-aanroep krijgt {bcs.KSCREEN_TIJD} s ({_t})")
+
 # 24: kscreen-doctor zegt altijd 'gelukt'; pas_toe kijkt zelf
 _staat = copy.deepcopy(VM_KSCREEN)
 _opd, _ok = vang(bi.pas_toe, ["output.Virtual-1.mode.21"],
@@ -213,8 +243,13 @@ klopt("output.Virtual-1.scale.1.1" in _h110 and all(bi.geldige_herstel(x) for x 
 _opd, _e = vang(bi.vangnet_aan, _h)
 _c = _opd[0] if _opd else ()
 klopt(_e and _e.startswith("bugos-scherm-terug-") and _c[:4] == ("systemd-run", "--user", "--quiet", f"--unit={_e}")
-      and "--on-active=60" in _c and _c[_c.index("--") + 1].endswith("kscreen-doctor") and list(_c[_c.index("--") + 2:]) == _h,
-      f"25: vangnet: systemd-run --user … --on-active=60 -- kscreen-doctor <herstel> ({_c[:6]})")
+      and f"--on-active={bcs.EERSTE_VANGNET}" in _c and _c[_c.index("--") + 1].endswith("kscreen-doctor")
+      and list(_c[_c.index("--") + 2:]) == _h,
+      f"25: vangnet: systemd-run --user … --on-active={bcs.EERSTE_VANGNET} -- kscreen-doctor <herstel> ({_c[:6]})")
+# Het vangnet mag pas afgaan als toepassen en twee keer controleren (elk KSCREEN_TIJD) en de vraag (15 s) voorbij
+# zijn; anders zet de timer een gelukte verandering terug terwijl BugOS nog kijkt.
+klopt(bcs.EERSTE_VANGNET >= 3 * bcs.KSCREEN_TIJD + 15,
+      f"25: het vangnet ({bcs.EERSTE_VANGNET} s) wacht langer dan toepassen + controleren + de vraag")
 _opd, _e2 = vang(bi.vangnet_aan, _h)
 klopt(_e2 != _e, "25: elk vangnet heeft een eigen naam (ook binnen dezelfde seconde)")
 klopt(vang(bi.vangnet_aan, _h, antwoord=lambda c: (1, ""))[1] is None, "25: systemd-run lukt niet: geen vangnet (None)")

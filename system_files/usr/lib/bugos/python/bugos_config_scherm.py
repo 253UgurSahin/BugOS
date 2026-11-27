@@ -367,7 +367,7 @@ def lees_schalen(json_tekst: str) -> list[tuple[str, float]]:
 def schaal() -> float:
     if _c.VOORBEELD:
         return _c._VB["schaal"]
-    schermen = lees_schalen(_c.draai("kscreen-doctor", "-j", timeout=8)[1])
+    schermen = lees_schalen(_c.draai("kscreen-doctor", "-j", timeout=KSCREEN_TIJD)[1])
     return schermen[0][1] if schermen else 1.0
 
 
@@ -402,6 +402,11 @@ NAAM_DRAAI = {v: k for k, v in DRAAI_NAAM.items()}
 GEKANTELD = (2, 8, 32, 128)   # op zijn kant: breedte en hoogte wisselen
 RISICO = (".mode.", ".rotation.", ".enable", ".disable", ".mirror.")   # hiermee kan het scherm zwart worden
 HERLEES_WACHT = 0.7   # seconden tussen twee keer kijken of een verandering er echt is (tests: 0)
+# Hoe lang kscreen-doctor mag duren, voor elke aanroep hetzelfde (lezen, toepassen en daarna controleren). In de VM
+# duurde 'kscreen-doctor -j' 12 s (2026-11-27). Lezen kreeg toen al 20 s, maar het controleren na spiegelen of
+# uitbreiden nog 8 s: dan liep die controle af terwijl het beeld al goed stond, BugOS dacht dat het mislukt was en
+# zette alles terug. Zo leek 'hetzelfde beeld' en 'uitbreiden' niet meer te werken. Eén getal voorkomt dat weer.
+KSCREEN_TIJD = 25
 
 
 @dataclass
@@ -535,7 +540,7 @@ def beeldschermen() -> list[Beeldscherm] | None:
     # duurde kscreen-doctor langer dan de 8 s van vroeger, en dan verdwenen spiegelen en uitbreiden zonder uitleg
     # (VM-test 2026-11-27: 12 s).
     for poging in range(2):
-        code, uit = _c.draai("kscreen-doctor", "-j", timeout=20)
+        code, uit = _c.draai("kscreen-doctor", "-j", timeout=KSCREEN_TIJD)
         if code == 127:
             return None   # kscreen-doctor is er niet
         lijst = lees_beeldschermen(uit) if code == 0 else []
@@ -684,14 +689,16 @@ def pas_toe(stappen: list[str], herstel: bool = False) -> bool:
     if _c.VOORBEELD:
         _voorbeeld_toepassen(stappen)
         return True
-    code, uit = _c.draai("kscreen-doctor", *stappen, timeout=15)
+    # Toepassen en controleren met dezelfde ruime tijd (KSCREEN_TIJD): een te korte controle maakte van een
+    # gelukte verandering een mislukte, en dan zette BugOS je scherm terug.
+    code, uit = _c.draai("kscreen-doctor", *stappen, timeout=KSCREEN_TIJD)
     if code != 0 or "not found" in uit.lower() or "failed" in uit.lower():
         # 'Output mode 9999x9999@60 not found.', 'applying config failed! ...' (met code 0)
         return False
     for poging in range(2):
         if poging:
             time.sleep(HERLEES_WACHT)   # KWin kan net even later klaar zijn
-        code, uit = _c.draai("kscreen-doctor", "-j", timeout=8)
+        code, uit = _c.draai("kscreen-doctor", "-j", timeout=KSCREEN_TIJD)
         if code == 0 and klopt_na(stappen, lees_beeldschermen(uit)):
             return True
     return False
@@ -989,7 +996,9 @@ def stappen_herstel(lijst: list[Beeldscherm]) -> list[str]:
 # Wordt het scherm zwart (de tv op de verkeerde ingang), dan zet BugOS het na 15 s vanzelf terug. En als Instellingen
 # in die tijd vastloopt of dichtgaat, doet een timer van systemd het: die loopt los van Instellingen.
 
-EERSTE_VANGNET = 60   # s: ruim meer dan toepassen (15 s) + twee keer kijken (2 x 8 s) + de vraag (15 s)
+# s: ruim meer dan toepassen + twee keer kijken (3 x KSCREEN_TIJD) + de vraag (15 s). Was 60 bij de oude, kortere
+# tijden; met 25 s per aanroep kon de timer anders afgaan terwijl het toepassen nog bezig was.
+EERSTE_VANGNET = max(120, 3 * KSCREEN_TIJD + 30)
 _teller = 0
 
 
