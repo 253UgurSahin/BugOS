@@ -1092,6 +1092,8 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
         $bron = Get-BekendeMap $m.Sleutel
         & $Voortgang ([int](100 * $stap / $aantal)) (T "Kopiëren: $(Get-MapNaam $m.Naam)..." "Copying: $(Get-MapNaam $m.Naam)...")
         if ($bron -and (Test-Path $bron)) {
+            # Voluit (geen korte naam als RUNNER~1): robocopy vergelijkt een plek bij /XD met het pad zoals het hier staat.
+            $bron = [System.IO.Path]::GetFullPath($bron).TrimEnd('\')
             $mappenMee.Add($m.Naam)
             # /E alle submappen, /R:1 /W:1 niet eindeloos wachten, /XJ geen snelkoppel-lussen,
             # /XF geen Windows-hulpbestanden (die zie je anders in elke map in BugOS) (U096), en daarachter (@uitArg)
@@ -1113,7 +1115,7 @@ function Invoke-Meenemen([string] $doelSchijf, [scriptblock] $Voortgang) {
     foreach ($e in $script:ExtraMappen) {
         $naam = Get-ExtraNaam $e $gebruikt
         if (-not (Test-Path -LiteralPath $e) -or -not @($mee | Where-Object { $_.Extra -and $_.Pad -eq $e })) { continue }
-        $null = robocopy $e (Join-Path (Join-Path $doel 'Extra') $naam) /E /R:1 /W:1 /XJ /NFL /NDL /NJH /NJS /NP @cloudArg /XF desktop.ini Thumbs.db @uitArg
+        $null = robocopy ([System.IO.Path]::GetFullPath($e).TrimEnd('\')) (Join-Path (Join-Path $doel 'Extra') $naam) /E /R:1 /W:1 /XJ /NFL /NDL /NJH /NJS /NP @cloudArg /XF desktop.ini Thumbs.db @uitArg
         if ($LASTEXITCODE -ge 16) { throw (T "Kopiëren van $naam lukte niet." "Copying $naam failed.") }
         if ($LASTEXITCODE -ge 8) { $script:Deels += $naam }
         $extra.Add([ordered]@{ naam = $naam; map = "Extra/$naam"; van = $e })
@@ -4187,7 +4189,8 @@ if ($Taak -eq 'Zelftest') {
     Wacht-Werk 300000
     $resten = if ($script:Zt.Resten) { $script:Zt.Resten.Resten } else { '(niets terug)' }
     Klopt ($script:Zt.Resten -and $script:Zt.Resten.Resten -eq 3 -and -not $script:Zt.Fout7) "oude resten: de oude node_modules, node-notities.txt en Oud ($resten $($script:Zt.Fout7))"
-    Klopt (-not (Test-Path -LiteralPath (Join-Path $kopie 'app\node_modules')) -and -not (Test-Path -LiteralPath (Join-Path $kopie 'app\node-notities.txt')) -and -not (Test-Path -LiteralPath (Join-Path $kopie 'Oud')) -and (Test-Path -LiteralPath (Join-Path $kopie 'app\src\main.js'))) 'met *node* en de plek Oud: weg van de schijf, main.js blijft'
+    $nogDaar = @(@('app\node_modules', 'app\node-notities.txt', 'Oud') | Where-Object { Test-Path -LiteralPath (Join-Path $kopie $_) })
+    Klopt ($nogDaar.Count -eq 0 -and (Test-Path -LiteralPath (Join-Path $kopie 'app\src\main.js'))) "met *node* en de plek Oud: weg van de schijf, main.js blijft (nog daar: $($nogDaar -join ', '))"
     $json = [System.IO.File]::ReadAllText((Join-Path $doel2 'BugOS-Switch\bugos-switch.json'), [System.Text.Encoding]::UTF8) | ConvertFrom-Json
     $velden = @($json.PSObject.Properties | ForEach-Object { $_.Name })
     Klopt (($velden -notcontains 'wifi') -and ($velden -notcontains 'printers') -and (@($json.uitgesloten) -contains '*node*') -and (@($json.niet_mee) -contains 'wifi') -and @($json.mappen).Count -eq 0 -and @($json.extra).Count -eq 1) "bugos-switch.json: zonder wifi en printers, met uitgesloten en niet_mee, geen vaste mappen, 1 extra map ($($velden -join ','))"
