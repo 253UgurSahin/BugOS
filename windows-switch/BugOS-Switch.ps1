@@ -2979,9 +2979,9 @@ function Nieuw-InfoVenster {
     $nooit = New-Object System.Windows.Forms.TreeNode((T 'Gaat nooit mee' 'Never goes along'))
     [void]$boom.Nodes.Add($nooit)
     foreach ($regel in @(
-        (T 'Wachtwoorden van je wifi, browsers en Windows (BugOS vraagt ze één keer).' 'Passwords of your Wi-Fi, browsers and Windows (BugOS asks once).'),
+        (T 'Wachtwoorden van wifi, browsers en Windows (BugOS vraagt ze opnieuw).' 'Passwords of Wi-Fi, browsers and Windows (BugOS asks again).'),
         (T 'Cookies, open tabbladen en inlog-sessies van je browsers.' 'Cookies, open tabs and sign-in sessions of your browsers.'),
-        (T 'Browsercache, en Firefox-mappen boven 300 MB (websites maken ze opnieuw).' 'Browser cache, and Firefox folders over 300 MB (websites remake them).'),
+        (T 'Browsercache en Firefox-mappen boven 300 MB.' 'Browser cache and Firefox folders over 300 MB.'),
         (T 'ImapMail van Thunderbird: Thunderbird haalt je mail opnieuw op.' 'Thunderbird ImapMail: Thunderbird fetches your mail again.'),
         (T "De programma's zelf: alleen een lijstje; BugOS stelt apps voor." 'The programs themselves: only a list; BugOS suggests apps.'),
         (T 'Lettertypen van Windows zelf (die zijn van Microsoft).' 'Fonts of Windows itself (they belong to Microsoft).'),
