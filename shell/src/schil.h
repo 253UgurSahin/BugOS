@@ -14,6 +14,10 @@ class Schil : public QObject
 {
     Q_OBJECT
     Q_CLASSINFO("D-Bus Interface", "org.kde.PlasmaShell")
+    // Het hoofdscherm zoals KDE het kent (Instellingen > Scherm: 'hier komen de taakbalk en nieuwe vensters'): daar
+    // opent de Windows-toets het startmenu. Niet 'het eerste scherm in de lijst' van Qt: dat kon een ander scherm zijn
+    // (of een scherm dat uit staat), en dan ging het startmenu open waar je niet keek (2026-11).
+    Q_PROPERTY(QString hoofdSchermNaam READ hoofdSchermNaam NOTIFY hoofdSchermVeranderd)
 public:
     explicit Schil(QObject *ouder = nullptr);
     bool aanmelden();   // de naam org.kde.plasmashell en het object /PlasmaShell op de sessiebus
@@ -34,6 +38,16 @@ public:
     Q_INVOKABLE bool plaats(QWindow *venster, int x, int y);
     // Bureaublad tonen (Win+D): KWin zet alle vensters opzij, of terug.
     Q_INVOKABLE void bureaubladTonen(bool tonen);
+    QString hoofdSchermNaam() const;
+
+    // De Windows-toets (en Alt+F1): bij kglobalaccel (in KWin) aanmelden als de sneltoets van Plasma, 'plasmashell' /
+    // 'activate application launcher'. KWin 6.8 stuurt de Meta-toets niet meer zelf naar org.kde.plasmashell; Plasma
+    // meldt hem aan als gewone sneltoets, en zonder dat deed de Windows-toets in de schil niets (VM-test 2026-11-27).
+    // Komt kglobalaccel (opnieuw) op de bus, dan meldt de schil hem opnieuw aan.
+    void sneltoetsenAanmelden();
+
+private Q_SLOTS:
+    void sneltoetsIngedrukt(const QString &onderdeel, const QString &actie, qlonglong tijd);
 
 public Q_SLOTS:
     Q_SCRIPTABLE void activateLauncherMenu();
@@ -43,4 +57,5 @@ public Q_SLOTS:
 Q_SIGNALS:
     void startmenu();             // het startmenu openen of sluiten
     void bureaublad(bool tonen);  // 'Bureaublad tonen'
+    void hoofdSchermVeranderd();
 };

@@ -40,4 +40,7 @@ option(BUGOS_TESTS "Testprogramma's bouwen" OFF)
 if(BUGOS_TESTS)
     add_executable(systeemvak-test test/systeemvak_test.cpp src/systeemvak.cpp)
     target_link_libraries(systeemvak-test PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::DBus)
+    # Een nagemaakte kglobalaccel: meldt de schil de Windows-toets aan, en opent hij dan het startmenu?
+    add_executable(kglobalaccel-nep test/kglobalaccel_nep.cpp)
+    target_link_libraries(kglobalaccel-nep PRIVATE Qt6::Core Qt6::DBus)
 endif()

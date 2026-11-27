@@ -1,8 +1,14 @@
 #include "schil.h"
 
 #include <QDBusConnection>
+#include <QDBusArgument>
+#include <QDBusConnectionInterface>
 #include <QDBusMessage>
+#include <QDBusMetaType>
+#include <QDBusServiceWatcher>
+#include <QGuiApplication>
 #include <QMargins>
+#include <QScreen>
 #include <QTimer>
 #include <QWindow>
 
@@ -12,9 +18,89 @@
 #include <LayerShellQt/Window>
 #endif
 
+// Een sneltoets zoals kglobalaccel hem over D-Bus stuurt: (ai), een rijtje van vier toetscodes (Qt-codes, 0 = leeg).
+struct Sneltoets {
+    QList<int> codes;
+};
+Q_DECLARE_METATYPE(Sneltoets)
+static QDBusArgument &operator<<(QDBusArgument &arg, const Sneltoets &t)
+{
+    arg.beginStructure();
+    arg << t.codes;
+    arg.endStructure();
+    return arg;
+}
+static const QDBusArgument &operator>>(const QDBusArgument &arg, Sneltoets &t)
+{
+    arg.beginStructure();
+    arg >> t.codes;
+    arg.endStructure();
+    return arg;
+}
+
+namespace {
+const QString KGLOBALACCEL = QStringLiteral("org.kde.kglobalaccel");
+// Dezelfde namen als Plasma (shellcorona.cpp): een eigen keuze in Systeeminstellingen > Sneltoetsen geldt zo ook hier.
+const QStringList STARTMENU_ACTIE{QStringLiteral("plasmashell"), QStringLiteral("activate application launcher"),
+                                  QStringLiteral("plasmashell"), QStringLiteral("Activate Application Launcher")};
+// kglobalaccel: SetShortcutFlag (kglobalaccel_interface): IsDefault = 1, SetPresent = 2.
+constexpr uint IS_DEFAULT = 1;
+constexpr uint SET_PRESENT = 2;
+}
+
 Schil::Schil(QObject *ouder)
     : QObject(ouder)
 {
+    connect(qGuiApp, &QGuiApplication::primaryScreenChanged, this, &Schil::hoofdSchermVeranderd);
+}
+
+void Schil::sneltoetsenAanmelden()
+{
+    qDBusRegisterMetaType<Sneltoets>();
+    qDBusRegisterMetaType<QList<Sneltoets>>();
+    auto bus = QDBusConnection::sessionBus();
+    // Het signaal van kglobalaccel als de sneltoets wordt ingedrukt (ook als hij er nu nog niet is).
+    bus.connect(KGLOBALACCEL, QStringLiteral("/component/plasmashell"), QStringLiteral("org.kde.kglobalaccel.Component"),
+                QStringLiteral("globalShortcutPressed"), this, SLOT(sneltoetsIngedrukt(QString, QString, qlonglong)));
+    auto aanmelden = [bus]() mutable {
+        // Alleen de Meta-toets (Qt::Key_Meta, zoals kglobalaccel hem bij 'alleen Meta' meldt), en Alt+F1.
+        const QList<Sneltoets> toetsen{Sneltoets{{int(Qt::Key_Meta), 0, 0, 0}},
+                                       Sneltoets{{int(Qt::ALT | Qt::Key_F1), 0, 0, 0}}};
+        auto bericht = [](const QString &methode) {
+            return QDBusMessage::createMethodCall(KGLOBALACCEL, QStringLiteral("/kglobalaccel"),
+                                                  QStringLiteral("org.kde.KGlobalAccel"), methode);
+        };
+        QDBusMessage registreer = bericht(QStringLiteral("doRegister"));
+        registreer << STARTMENU_ACTIE;
+        // Zoals KGlobalAccel::setDefaultShortcut en daarna setShortcut (met 'autoloading'): eerst de standaard, dan
+        // actief maken. Had je zelf iets anders gekozen, dan houdt kglobalaccel dat (het antwoord is wat er nu geldt).
+        QDBusMessage standaard = bericht(QStringLiteral("setShortcutKeys"));
+        standaard << STARTMENU_ACTIE << QVariant::fromValue(toetsen) << IS_DEFAULT;
+        QDBusMessage actief = bericht(QStringLiteral("setShortcutKeys"));
+        actief << STARTMENU_ACTIE << QVariant::fromValue(toetsen) << SET_PRESENT;
+        // Op volgorde (D-Bus houdt die vast), zonder te wachten: kglobalaccel zit in KWin, en die mag de schil nooit
+        // laten hangen.
+        bus.asyncCall(registreer);
+        bus.asyncCall(standaard);
+        bus.asyncCall(actief);
+    };
+    auto *wachter = new QDBusServiceWatcher(KGLOBALACCEL, bus, QDBusServiceWatcher::WatchForRegistration, this);
+    connect(wachter, &QDBusServiceWatcher::serviceRegistered, this, aanmelden);
+    if (bus.interface() && bus.interface()->isServiceRegistered(KGLOBALACCEL))
+        aanmelden();
+}
+
+void Schil::sneltoetsIngedrukt(const QString &onderdeel, const QString &actie, qlonglong tijd)
+{
+    Q_UNUSED(tijd)
+    if (onderdeel == STARTMENU_ACTIE.at(0) && actie == STARTMENU_ACTIE.at(1))
+        Q_EMIT startmenu();
+}
+
+QString Schil::hoofdSchermNaam() const
+{
+    const QScreen *s = QGuiApplication::primaryScreen();
+    return s ? s->name() : QString();
 }
 
 bool Schil::aanmelden()
@@ -23,6 +109,7 @@ bool Schil::aanmelden()
     if (!bus.isConnected())
         return false;
     bus.registerObject(QStringLiteral("/PlasmaShell"), this, QDBusConnection::ExportScriptableSlots);
+    sneltoetsenAanmelden();
     if (bus.registerService(QStringLiteral("org.kde.plasmashell")))
         return true;
     // De naam is (nog) van een ander: een Plasma die net stopt, of die er per ongeluk ook is. Zonder die naam doet de

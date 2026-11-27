@@ -36,7 +36,17 @@ Houder {
     // Instellingen > Uiterlijk > Taakbalk bewaart dat in ~/.config/bugos/taakbalkstijl (JSON).
     property var taakbalkStijl: ({ grootte: "normaal", uitlijning: "links" })
     readonly property int paneelHoogte: Math.round(({ klein: 40, normaal: 48, groot: 56 }[taakbalkStijl.grootte] || 48) * schaal)
-    readonly property var hoofdScherm: Qt.application.screens.length > 0 ? Qt.application.screens[0] : null
+    // Het hoofdscherm van KDE (schil.hoofdSchermNaam, uit QGuiApplication::primaryScreen): daar opent de Windows-toets
+    // het startmenu, en daar staan het systeemvak en de bel. Het eerste scherm in de lijst was soms een ander scherm,
+    // en dan ging het startmenu open waar je niet keek (2026-11).
+    readonly property var hoofdScherm: {
+        const naam = schil.hoofdSchermNaam || ""
+        const lijst = schermen || []   // (bij het opstarten kan de lijst er nog niet zijn)
+        for (const s of lijst)
+            if (s.name === naam)
+                return s
+        return lijst.length > 0 ? lijst[0] : null
+    }
     // De schermen voor een taakbalk en een bureaublad: twee schermen op precies dezelfde plek (spiegelen: de laptop en
     // de beamer tonen hetzelfde) krijgen er samen één, anders stonden er taakbalken op elkaar (2026-11).
     readonly property var schermen: {

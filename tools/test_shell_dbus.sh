@@ -71,6 +71,42 @@ echo "$fouten fout(en)."
 [ "$fouten" -eq 0 ]
 '
 
+# De Windows-toets via kglobalaccel (KWin 6.8): de schil meldt 'plasmashell / activate application launcher' aan met de
+# Meta-toets en Alt+F1, en opent het startmenu als kglobalaccel zegt dat hij is ingedrukt (VM-test 2026-11-27).
+NEP="$(dirname "$BIN")/kglobalaccel-nep"
+if [ -x "$NEP" ]; then
+    echo "--- de Windows-toets (kglobalaccel-nep)"
+    export NEP
+    dbus-run-session -- bash -c '
+    fouten=0
+    klopt() { if eval "$1"; then echo "OK    $2"; else echo "FOUT  $2"; fouten=$((fouten + 1)); fi; }
+    S="$TMP/sneltoets"
+    mkdir -p "$S/config" "$S/bin"
+    # Een nep-bugos-start-data: schrijft op wanneer het startmenu zijn gegevens vraagt (zonder argumenten).
+    printf "#!/usr/bin/bash\n[ \$# -eq 0 ] && date +%%s.%%N >> \"%s\"\necho {}\n" "$S/gegevens" >"$S/bin/bugos-start-data"
+    chmod +x "$S/bin/bugos-start-data"
+    export PATH="$S/bin:$PATH" XDG_CONFIG_HOME="$S/config" QT_QPA_PLATFORM=offscreen
+    export BUGOS_ACHTERGROND_PAKKET="$ROOT/system_files/usr/share/wallpapers/bugos"
+    "$NEP" 7000 >"$S/nep" 2>&1 &
+    nep=$!
+    for _ in $(seq 100); do grep -q klaar "$S/nep" && break; sleep 0.05; done
+    timeout 20 "$BIN" --qml "$ROOT/system_files/usr/share/bugos/shell/Shell.qml" --stop-na 6000 >/dev/null 2>"$S/fout"
+    wait "$nep"
+    klopt "grep -q \"aanroep doRegister plasmashell|activate application launcher|plasmashell|Activate Application Launcher\" \"\$S/nep\"" \
+        "Windows-toets: de schil meldt de sneltoets van Plasma aan bij kglobalaccel"
+    klopt "grep -q \"aanroep setShortcutKeys .*\[16777250,0,0,0 150994992,0,0,0\] 2\$\" \"\$S/nep\"" \
+        "Windows-toets: met alleen de Meta-toets en Alt+F1 (actief: SetPresent)"
+    ingedrukt="$(sed -n "s/^ingedrukt //p" "$S/nep")"
+    na="$(awk -v t="$ingedrukt" "\$1 > t { n++ } END { print n + 0 }" "$S/gegevens" 2>/dev/null)"
+    klopt "[ -n \"\$ingedrukt\" ] && [ \"\$na\" -ge 1 ]" "Windows-toets: ingedrukt, dan gaat het startmenu open (het vraagt zijn gegevens: $na keer)"
+    [ "$fouten" -eq 0 ] || { cat "$S/nep"; grep -v "image://icon\|Takenlijst.qml\|taskmanager" "$S/fout" | head -10; }
+    echo "$fouten fout(en)."
+    [ "$fouten" -eq 0 ]
+    ' || exit 1
+else
+    echo "(geen kglobalaccel-nep naast bugos-shell: bouw met cmake -DBUGOS_TESTS=ON)"
+fi
+
 VAK="$(dirname "$BIN")/systeemvak-test"
 if [ -x "$VAK" ]; then
     echo "--- het systeemvak (systeemvak-test)"

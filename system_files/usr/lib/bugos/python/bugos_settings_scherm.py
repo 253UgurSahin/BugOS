@@ -481,6 +481,15 @@ class SchermPagina(Blad):
         self.kies = Wissel(keuzes_voor([], titel_kies, self.kies_scherm))
         self.kies_rij = Rij("computer", titel_kies, "", self.kies)
         self.schermen_kaart.voeg(self.kies_rij)
+        # Er zijn twee schermen, maar kscreen-doctor gaf niets: zeg dat, in plaats van spiegelen en uitbreiden stil weg
+        # te laten (VM-test 2026-11-27).
+        opnieuw = Knop(t("Opnieuw proberen", "Try again"), "gewoon", "lijn:verversen")
+        opnieuw.clicked.connect(lambda _c=False: self.ververs())
+        self.fout_rij = Rij("uitroep", t("Je schermen konden niet gelezen worden", "Your screens could not be read"),
+                            t("Uitbreiden en hetzelfde beeld komen hier zodra dat lukt.",
+                              "Extend and duplicate appear here once that works."), opnieuw)
+        self.schermen_kaart.voeg(self.fout_rij)
+        self.fout_rij.hide()
         self.schermen_kop.hide()
         self.schermen_kaart.hide()
         # Het beeld van (het gekozen) scherm. Zonder gegevens van kscreen-doctor alleen de grootte, zoals vroeger.
@@ -578,8 +587,13 @@ class SchermPagina(Blad):
         """De kaart 'Je schermen': uitbreiden, hetzelfde beeld, of maar één aan; en welk scherm je instelt."""
         lijst = self._schermen or []
         meer = self.meer_schermen()
-        self.schermen_kop.setVisible(meer)
-        self.schermen_kaart.setVisible(meer)
+        from PySide6.QtGui import QGuiApplication
+        niet_gelezen = self._schermen is None and len(QGuiApplication.screens()) >= 2 and not bi.VOORBEELD
+        self.fout_rij.setVisible(niet_gelezen)
+        self.stand_rij.setVisible(not niet_gelezen)
+        self.kies_rij.setVisible(not niet_gelezen)
+        self.schermen_kop.setVisible(meer or niet_gelezen)
+        self.schermen_kaart.setVisible(meer or niet_gelezen)
         if not meer:
             self._gekozen = None
             return

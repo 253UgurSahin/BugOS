@@ -531,10 +531,19 @@ def beeldschermen() -> list[Beeldscherm] | None:
     de grootte, zoals vroeger)."""
     if _c.VOORBEELD:
         return lees_beeldschermen(json.dumps(_c._VB["kscreen"])) or None
-    code, uit = _c.draai("kscreen-doctor", "-j", timeout=8)
-    if code != 0:
-        return None
-    return lees_beeldschermen(uit) or None
+    # Ruim de tijd (het gebeurt op de achtergrond) en één keer opnieuw: net na het inloggen of op een trage computer
+    # duurde kscreen-doctor langer dan de 8 s van vroeger, en dan verdwenen spiegelen en uitbreiden zonder uitleg
+    # (VM-test 2026-11-27: 12 s).
+    for poging in range(2):
+        code, uit = _c.draai("kscreen-doctor", "-j", timeout=20)
+        if code == 127:
+            return None   # kscreen-doctor is er niet
+        lijst = lees_beeldschermen(uit) if code == 0 else []
+        if lijst:
+            return lijst
+        if not poging:
+            time.sleep(1.5)
+    return None
 
 
 def grootste_schaal(s: Beeldscherm) -> float:

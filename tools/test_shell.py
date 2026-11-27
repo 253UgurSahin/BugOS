@@ -113,6 +113,9 @@ class NepSchil(QObject):
     def heeftLagen(self):  # noqa: N802
         return False
 
+    # Het hoofdscherm van KDE (in bugos-shell: QGuiApplication::primaryScreen()).
+    hoofdSchermNaam = Property(str, lambda self: QGuiApplication.primaryScreen().name(), constant=True)
+
     @Slot(QObject, int, int, result=bool)
     def plaats(self, _venster, x, y):
         self.plekken.append((int(x), int(y)))
@@ -648,6 +651,14 @@ wacht(400)
 klopt(paneel.height() == 48 and links.property("x") == 8, "taakbalk: een kapotte instelling = gewoon (48 px, links)")
 klopt("setExclusiveZone(h)" in (ROOT / "shell/src/schil.cpp").read_text(),
       "taakbalk: een andere grootte laat vensters ook meteen zoveel ruimte vrij (layer-shell)")
+
+# De Windows-toets opent het startmenu op het hoofdscherm van KDE, niet op 'het eerste scherm in de lijst' (VM-test
+# 2026-11-27: met twee schermen ging het naar een ander scherm dan dat met het systeemvak).
+_hs = root.property("hoofdScherm")
+_hs_naam = _hs.property("name") if _hs is not None else None
+klopt(_hs_naam == QGuiApplication.primaryScreen().name() and "schil.hoofdSchermNaam" in (SHELL / "Shell.qml").read_text()
+      and "QGuiApplication::primaryScreen()" in (ROOT / "shell/src/schil.cpp").read_text(),
+      f"het hoofdscherm (startmenu, systeemvak, bel) is het hoofdscherm van KDE ({_hs_naam})")
 
 # Drie taakbalken op elkaar en een Windows-toets die niets deed (2026-11): één schil tegelijk, een taakbalk per
 # (ongespiegeld) scherm en vast aan dat scherm, geen Plasma ernaast, en de naam org.kde.plasmashell opnieuw proberen.
