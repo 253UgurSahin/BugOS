@@ -2773,6 +2773,21 @@ function Nieuw-Vinkje($ouder, [double] $x, [double] $y, [double] $b, [string] $t
     return $c
 }
 
+function Kort-Pad([string] $pad, $letter, [int] $breedte) {
+    # Een plek die niet past, zelf korter maken: eerst de schijf en de laatste twee mappen (C:\…\jan\Documenten), dan
+    # alleen de laatste (…\Documenten). PathEllipsis van Windows knipte soms gewoon letters af (gezien op 100%).
+    $vlag = [System.Windows.Forms.TextFormatFlags]'SingleLine, NoPadding'
+    $past = { param($t) [System.Windows.Forms.TextRenderer]::MeasureText($t, $letter, (New-Object System.Drawing.Size(32000, 100)), $vlag).Width -le $breedte }
+    if (& $past $pad) { return $pad }
+    $delen = @($pad.TrimEnd('\') -split '\\' | Where-Object { $_ })   # (-split is een regex: \\ = één \)
+    if ($delen.Count -ge 3) {
+        $poging = $delen[0] + '\…\' + $delen[-2] + '\' + $delen[-1]
+        if (& $past $poging) { return $poging }
+    }
+    if ($delen.Count -ge 2) { return '…\' + $delen[-1] }
+    return $pad
+}
+
 function Teken-Vinkje($c, $e) {
     $g = $e.Graphics
     $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
@@ -2822,8 +2837,8 @@ function Teken-Vinkje($c, $e) {
     if ($c.Tag.Sub) {
         $midden = [int]($c.Height / 2)
         [System.Windows.Forms.TextRenderer]::DrawText($g, $c.Text, $c.Font, (New-Object System.Drawing.Rectangle($links, ($midden - (Px 20)), $breedte, (Px 20))), $kleur, $vlag)
-        $subVlag = if ($c.Tag.Pad) { [System.Windows.Forms.TextFormatFlags]'Left, VerticalCenter, SingleLine, PathEllipsis, NoPadding' } else { $vlag }
-        [System.Windows.Forms.TextRenderer]::DrawText($g, $c.Tag.Sub, $script:LetterNoot, (New-Object System.Drawing.Rectangle($links, ($midden + (Px 1)), $breedte, (Px 18))), $(if ($c.Checked) { $Grijs } else { $Grijs3 }), $subVlag)
+        $sub = if ($c.Tag.Pad) { Kort-Pad $c.Tag.Sub $script:LetterNoot $breedte } else { $c.Tag.Sub }
+        [System.Windows.Forms.TextRenderer]::DrawText($g, $sub, $script:LetterNoot, (New-Object System.Drawing.Rectangle($links, ($midden + (Px 1)), $breedte, (Px 18))), $(if ($c.Checked) { $Grijs } else { $Grijs3 }), $vlag)
     } else {
         [System.Windows.Forms.TextRenderer]::DrawText($g, $c.Text, $c.Font, (New-Object System.Drawing.Rectangle($links, 0, $breedte, $c.Height)), $kleur, $vlag)
     }
@@ -2834,7 +2849,8 @@ function Teken-Vinkje($c, $e) {
 # de balk; alleen het eerste en laatste stuk hebben dus ronde hoeken. Aantal: een rood bolletje met een getal erin.
 function Nieuw-Tab([string] $tab, [string] $tekst, [double] $x, [double] $y, [double] $b, [double] $totaal) {
     $k = New-Object System.Windows.Forms.Button
-    Plaats $k $x $y $b 40
+    # De rechterkant van dit deel is precies de linkerkant van het volgende (anders een witte naad op 150%).
+    $k.SetBounds((Px $x), (Px $y), ((Px ($x + $b)) - (Px $x)), (Px 40))
     $k.Text = $tekst
     $k.Font = $script:LetterKnop
     $k.FlatStyle = 'Flat'
