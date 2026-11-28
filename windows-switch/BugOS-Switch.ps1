@@ -1759,6 +1759,10 @@ try {
     Add-Type -Namespace BugOS -Name Dpi -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();' -ErrorAction Stop
     [void][BugOS.Dpi]::SetProcessDPIAware()
 } catch { Write-Verbose 'Scherp schalen lukt hier niet; het venster wordt dan iets waziger.' }
+# De boom in het info-scherm in de stijl van de Verkenner (pijltjes en zachte kleuren in plaats van plus-hokjes).
+try {
+    Add-Type -Namespace BugOS -Name Thema -MemberDefinition '[DllImport("uxtheme.dll", CharSet = CharSet.Unicode)] public static extern int SetWindowTheme(IntPtr hWnd, string app, string id);' -ErrorAction Stop
+} catch { Write-Verbose 'Geen Verkenner-stijl voor de boom.' }
 
 $script:Schaal = 1.0
 try {
@@ -2743,17 +2747,18 @@ function Tekst-Grootte([int64] $b) {
     return ('{0:0.#} GB' -f ($b / 1GB))
 }
 
-# Een vinkje: een rond hokje (rood met een wit vinkje als het meegaat), de naam, en rechts de grootte. Het is een echte
-# CheckBox (spatiebalk en Tab werken), die we zelf tekenen zoals de knoppen. Aan of uit zet de sleutel in
-# $script:NietMee en telt het totaal bovenaan meteen opnieuw.
-function Nieuw-Vinkje($ouder, [double] $x, [double] $y, [double] $b, [string] $tekst, [string] $rechts, [string] $sleutel, [string] $uitleg = '') {
+# Een vinkje als kaartje (zoals de lijsten in Instellingen van Windows 11): lichtgrijs met ronde hoeken, links een rond
+# hokje (rood met een wit vinkje als het meegaat), de naam met een korte uitleg eronder, en rechts de grootte. Het is
+# een echte CheckBox (spatiebalk en Tab werken), die we zelf tekenen zoals de knoppen. Aan of uit zet de sleutel in
+# $script:NietMee en telt het totaal bovenaan meteen opnieuw. -Pad: de uitleg is een plek (in het midden ingekort).
+function Nieuw-Vinkje($ouder, [double] $x, [double] $y, [double] $b, [string] $tekst, [string] $rechts, [string] $sleutel, [string] $uitleg = '', [string] $sub = '', [switch] $Pad) {
     $c = New-Object System.Windows.Forms.CheckBox
-    Plaats $c $x $y $b 30
+    Plaats $c $x $y $b 46
     $c.Text = $tekst
     $c.Font = $script:LetterGewoon
     $c.Cursor = [System.Windows.Forms.Cursors]::Hand
     $c.Checked = Test-Mee $sleutel
-    $c.Tag = @{ Sleutel = $sleutel; Rechts = $rechts; Boven = $false }
+    $c.Tag = @{ Sleutel = $sleutel; Rechts = $rechts; Boven = $false; Sub = $sub; Pad = [bool]$Pad }
     Zet-Dubbel $c
     $c.Add_MouseEnter({ $this.Tag.Boven = $true; $this.Invalidate() })
     $c.Add_MouseLeave({ $this.Tag.Boven = $false; $this.Invalidate() })
@@ -2772,13 +2777,11 @@ function Teken-Vinkje($c, $e) {
     $g = $e.Graphics
     $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $g.Clear($c.Parent.BackColor)
-    if ($c.Tag.Boven) {
-        $rij = Rond-Pad 0.5 0.5 ($c.Width - 1) ($c.Height - 1) (Fx 8)
-        $kwast = New-Object System.Drawing.SolidBrush($KnopVlak)
-        $g.FillPath($kwast, $rij)
-        $kwast.Dispose(); $rij.Dispose()
-    }
-    $bx = Fx 6; $by = ($c.Height - (Fx 20)) / 2
+    $kaart = Rond-Pad 0.5 0.5 ($c.Width - 1) ($c.Height - 1) (Fx 10)
+    $kwast = New-Object System.Drawing.SolidBrush($(if ($c.Tag.Boven) { $KnopVlak } else { $KaartVlak }))
+    $g.FillPath($kwast, $kaart)
+    $kwast.Dispose(); $kaart.Dispose()
+    $bx = Fx 12; $by = ($c.Height - (Fx 20)) / 2
     $hok = Rond-Pad $bx $by (Fx 20) (Fx 20) (Fx 6)
     if ($c.Checked) {
         $kwast = New-Object System.Drawing.SolidBrush($Rood)
@@ -2801,21 +2804,94 @@ function Teken-Vinkje($c, $e) {
     $hok.Dispose()
     if ($c.Focused -and (Toont-Focus $c)) {
         $pen = New-Object System.Drawing.Pen($Inkt, (Fx 1.5))
-        $ring = Rond-Pad (Fx 1) (Fx 1) ($c.Width - (Fx 2) - 1) ($c.Height - (Fx 2) - 1) (Fx 7)
+        $ring = Rond-Pad (Fx 1) (Fx 1) ($c.Width - (Fx 2) - 1) ($c.Height - (Fx 2) - 1) (Fx 9)
         $g.DrawPath($pen, $ring)
         $pen.Dispose(); $ring.Dispose()
     }
-    # Rechts de grootte (grijs), links de naam: die krijgt wat er overblijft (met ... als het niet past).
+    # Rechts de grootte (grijs), links de naam met de uitleg eronder: die krijgen wat er overblijft (met ...).
     $rechtsB = 0
     if ($c.Tag.Rechts) {
         $rechtsB = [System.Windows.Forms.TextRenderer]::MeasureText($c.Tag.Rechts, $script:LetterKlein).Width
-        $vak = New-Object System.Drawing.Rectangle(($c.Width - (Px 8) - $rechtsB), 0, $rechtsB, $c.Height)
+        $vak = New-Object System.Drawing.Rectangle(($c.Width - (Px 12) - $rechtsB), 0, $rechtsB, $c.Height)
         [System.Windows.Forms.TextRenderer]::DrawText($g, $c.Tag.Rechts, $script:LetterKlein, $vak, $Grijs, [System.Windows.Forms.TextFormatFlags]'Right, VerticalCenter, SingleLine, NoPadding')
     }
-    $links = Px 34
-    $vak = New-Object System.Drawing.Rectangle($links, 0, [math]::Max(10, $c.Width - $links - $rechtsB - (Px 16)), $c.Height)
+    $links = Px 42
+    $breedte = [math]::Max(10, $c.Width - $links - $rechtsB - (Px 22))
     $kleur = if ($c.Checked) { $Inkt } else { $Grijs }
-    [System.Windows.Forms.TextRenderer]::DrawText($g, $c.Text, $c.Font, $vak, $kleur, [System.Windows.Forms.TextFormatFlags]'Left, VerticalCenter, SingleLine, EndEllipsis, NoPadding')
+    $vlag = [System.Windows.Forms.TextFormatFlags]'Left, VerticalCenter, SingleLine, EndEllipsis, NoPadding'
+    if ($c.Tag.Sub) {
+        $midden = [int]($c.Height / 2)
+        [System.Windows.Forms.TextRenderer]::DrawText($g, $c.Text, $c.Font, (New-Object System.Drawing.Rectangle($links, ($midden - (Px 20)), $breedte, (Px 20))), $kleur, $vlag)
+        $subVlag = if ($c.Tag.Pad) { [System.Windows.Forms.TextFormatFlags]'Left, VerticalCenter, SingleLine, PathEllipsis, NoPadding' } else { $vlag }
+        [System.Windows.Forms.TextRenderer]::DrawText($g, $c.Tag.Sub, $script:LetterNoot, (New-Object System.Drawing.Rectangle($links, ($midden + (Px 1)), $breedte, (Px 18))), $(if ($c.Checked) { $Grijs } else { $Grijs3 }), $subVlag)
+    } else {
+        [System.Windows.Forms.TextRenderer]::DrawText($g, $c.Text, $c.Font, (New-Object System.Drawing.Rectangle($links, 0, $breedte, $c.Height)), $kleur, $vlag)
+    }
+}
+
+# Tabbladen als één balk met drie delen (zoals in Windows 11): het gekozen deel is een wit pilletje op een lichtgrijze
+# balk, de rest is rustig grijs. Elk deel is een echte knop (Tab en spatiebalk werken) die zich tekent als een stuk van
+# de balk; alleen het eerste en laatste stuk hebben dus ronde hoeken. Aantal: een rood bolletje met een getal erin.
+function Nieuw-Tab([string] $tab, [string] $tekst, [double] $x, [double] $y, [double] $b, [double] $totaal) {
+    $k = New-Object System.Windows.Forms.Button
+    Plaats $k $x $y $b 40
+    $k.Text = $tekst
+    $k.Font = $script:LetterKnop
+    $k.FlatStyle = 'Flat'
+    $k.FlatAppearance.BorderSize = 0
+    $k.Cursor = [System.Windows.Forms.Cursors]::Hand
+    $k.Tag = @{ Tab = $tab; Actief = $false; Boven = $false; Aantal = 0; Links = $x; Totaal = $totaal }
+    Zet-Dubbel $k
+    $k.Add_MouseEnter({ $this.Tag.Boven = $true; $this.Invalidate() })
+    $k.Add_MouseLeave({ $this.Tag.Boven = $false; $this.Invalidate() })
+    $k.Add_Paint({ param($s, $e) Teken-Tab $s $e })
+    $vlak.Controls.Add($k)
+    return $k
+}
+
+function Teken-Tab($k, $e) {
+    $g = $e.Graphics
+    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g.Clear($k.Parent.BackColor)
+    $t = $k.Tag
+    # De hele balk, verschoven naar waar deze knop zit.
+    $balk = Rond-Pad (0.5 - (Fx $t.Links)) 0.5 ((Fx $t.Totaal) - 1) ($k.Height - 1) (Fx 12)
+    $kwast = New-Object System.Drawing.SolidBrush($KnopVlak)
+    $g.FillPath($kwast, $balk)
+    $kwast.Dispose(); $balk.Dispose()
+    if ($t.Actief -or $t.Boven) {
+        if ($t.Actief) {
+            $schaduw = Rond-Pad (Fx 4) (Fx 5) ($k.Width - (Fx 8)) ($k.Height - (Fx 9)) (Fx 9)
+            $kwast = New-Object System.Drawing.SolidBrush((Kleur '#DDD6D6'))
+            $g.FillPath($kwast, $schaduw)
+            $kwast.Dispose(); $schaduw.Dispose()
+        }
+        $pil = Rond-Pad (Fx 4) (Fx 4) ($k.Width - (Fx 8)) ($k.Height - (Fx 9)) (Fx 9)
+        $kwast = New-Object System.Drawing.SolidBrush($(if ($t.Actief) { $Wit } else { $KnopBoven }))
+        $g.FillPath($kwast, $pil)
+        $kwast.Dispose(); $pil.Dispose()
+    }
+    if ($k.Focused -and (Toont-Focus $k)) {
+        $pen = New-Object System.Drawing.Pen($Inkt, (Fx 1.5))
+        $ring = Rond-Pad (Fx 2) (Fx 2) ($k.Width - (Fx 4)) ($k.Height - (Fx 5)) (Fx 10)
+        $g.DrawPath($pen, $ring)
+        $pen.Dispose(); $ring.Dispose()
+    }
+    $kleur = if ($t.Actief -or $t.Boven) { $Inkt } else { $Grijs }
+    $vlag = [System.Windows.Forms.TextFormatFlags]'Left, VerticalCenter, SingleLine, NoPadding'
+    $tekstB = [System.Windows.Forms.TextRenderer]::MeasureText($k.Text, $k.Font).Width
+    $bolB = 0
+    if ($t.Aantal -gt 0) { $bolB = [math]::Max((Px 20), [System.Windows.Forms.TextRenderer]::MeasureText("$($t.Aantal)", $script:LetterOog).Width + (Px 10)) + (Px 6) }
+    $x = [int](($k.Width - $tekstB - $bolB) / 2)
+    [System.Windows.Forms.TextRenderer]::DrawText($g, $k.Text, $k.Font, (New-Object System.Drawing.Rectangle($x, 0, ($tekstB + 2), ($k.Height - 1))), $kleur, $vlag)
+    if ($bolB -gt 0) {
+        $bx = $x + $tekstB + (Px 6); $bh = Px 20; $by = [int](($k.Height - 1 - $bh) / 2); $bb = $bolB - (Px 6)
+        $bol = Rond-Pad $bx $by $bb $bh ($bh / 2)
+        $kwast = New-Object System.Drawing.SolidBrush($(if ($t.Actief) { $Rood } else { $RoodZacht }))
+        $g.FillPath($kwast, $bol)
+        $kwast.Dispose(); $bol.Dispose()
+        [System.Windows.Forms.TextRenderer]::DrawText($g, "$($t.Aantal)", $script:LetterOog, (New-Object System.Drawing.Rectangle($bx, $by, $bb, $bh)), $(if ($t.Actief) { $Wit } else { $RoodTekst }), [System.Windows.Forms.TextFormatFlags]'HorizontalCenter, VerticalCenter, SingleLine, NoPadding')
+    }
 }
 
 # De kaart bovenaan 'Kies wat meegaat': links hoeveel er meegaat, rechts hoe groot je USB-schijf moet zijn.
@@ -2910,6 +2986,7 @@ function Nieuw-InfoVenster {
     $boom.ItemHeight = Px 26
     $boom.Indent = Px 20
     $boom.ShowNodeToolTips = $true
+    $boom.Add_HandleCreated({ try { [void][BugOS.Thema]::SetWindowTheme($this.Handle, 'Explorer', $null) } catch { Write-Verbose 'Geen Verkenner-stijl.' } })
     $rand.Controls.Add($boom)
     $balk = Nieuw-Balk 32 438 300 $v
     $balk.Visible = $false
@@ -3592,6 +3669,29 @@ function Get-RechtsTekst($d) {
     return (Tekst-Grootte ([int64]$d.Bytes))
 }
 
+function Get-SubTekst($d) {
+    # De korte uitleg onder een kaartje: bij een map de plek, bij de rest wat het is.
+    if (-not $d) { return '' }
+    $s = [string]$d.Sleutel
+    if ($s -like 'map:*' -or $s -like 'extra:*') {
+        if ($d.Regel) { return (T "Gaat niet mee: regel $($d.Regel)" "Not taken: rule $($d.Regel)") }
+        return [string]$d.Uitleg
+    }
+    if ($s -like 'bw:*') { return (T 'Bladwijzers' 'Bookmarks') }
+    switch ($s) {
+        'firefox' { return (T 'Zonder wachtwoorden en cookies' 'Without passwords and cookies') }
+        'thunderbird' { return (T 'Accounts en mappen, geen wachtwoorden' 'Accounts and folders, no passwords') }
+        'outlook' { return [string]$d.Uitleg }
+        'lettertypen' { return (T 'Die jij zelf installeerde' 'The ones you installed') }
+        'achtergrond' { return (T 'Het plaatje op je bureaublad' 'The picture on your desktop') }
+        'instellingen' { return (T 'Taal, toetsenbord, muis, licht of donker' 'Language, keyboard, mouse, light or dark') }
+        'wifi' { return (T 'Alleen de namen, geen wachtwoorden' 'Only the names, no passwords') }
+        'printers' { return (T 'Printers met een kabel komen vanzelf' 'Cable printers come by themselves') }
+        'programmas' { return (T 'BugOS stelt passende apps voor' 'BugOS suggests matching apps') }
+    }
+    return ''
+}
+
 function Get-StapNr([string] $blad) { [array]::IndexOf((Get-Volgorde), $blad) }
 
 function Voeg-UitRegel([string] $tekst, [switch] $Stil) {
@@ -3677,13 +3777,13 @@ function Zet-Samenvatting {
 function Zet-TabNamen {
     # Het tabblad 'Niet mee' noemt hoeveel regels er zijn.
     foreach ($k in @($script:W.tabKnoppen | Where-Object { $_ })) {
-        if ($k.Tag.Tab -eq 'uit') { $k.Text = if ($script:Uitsluiten.Count -gt 0) { T "Niet mee ($($script:Uitsluiten.Count))" "Not taken ($($script:Uitsluiten.Count))" } else { T 'Niet mee' 'Not taken' }; $k.Invalidate() }
+        if ($k.Tag.Tab -eq 'uit') { $k.Tag.Aantal = $script:Uitsluiten.Count; $k.Invalidate() }
     }
 }
 
 function Toon-KiesTab([string] $tab) {
     $script:KiesTab = $tab
-    foreach ($k in @($script:W.tabKnoppen | Where-Object { $_ })) { $k.Tag.Soort = if ($k.Tag.Tab -eq $tab) { 'hoofd' } else { 'gewoon' }; $k.Invalidate() }
+    foreach ($k in @($script:W.tabKnoppen | Where-Object { $_ })) { $k.Tag.Actief = ($k.Tag.Tab -eq $tab); $k.Invalidate() }
     $p = $script:W.tabVlak
     $p.SuspendLayout()
     # (Niet Dispose: je klikte misschien net op een knop in dit tabblad, die is dan nog bezig.)
@@ -3706,18 +3806,20 @@ function Vul-Mappen($p) {
         $d = Get-OverzichtDing $sleutel
         if ($null -ne $script:Overzicht -and -not $d) { continue }   # deze map heeft Windows hier niet
         $uitleg = if ($d) { if ($d.Regel) { $d.Uitleg + "`n" + (T "Gaat niet mee door de regel $($d.Regel) (Niet mee)." "Not taken because of the rule $($d.Regel) (Not taken).") } else { $d.Uitleg } } else { '' }
-        [void](Nieuw-Vinkje $p (($i % 2) * 268) ([math]::Floor($i / 2) * 32) 260 (Get-MapNaam $m.Naam) (Get-RechtsTekst $d) $sleutel $uitleg)
+        [void](Nieuw-Vinkje $p (($i % 2) * 268) ([math]::Floor($i / 2) * 54) 260 (Get-MapNaam $m.Naam) (Get-RechtsTekst $d) $sleutel $uitleg (Get-SubTekst $d) -Pad)
         $i++
     }
-    $y = [math]::Ceiling($i / 2) * 32 + 4
+    $y = [math]::Ceiling($i / 2) * 54
     foreach ($e in @($script:ExtraMappen)) {
         $sleutel = "extra:$e"
-        [void](Nieuw-Vinkje $p 0 $y 440 "$(Split-Path $e -Leaf)   $e" (Get-RechtsTekst (Get-OverzichtDing $sleutel)) $sleutel $e)
+        $d = Get-OverzichtDing $sleutel
+        $sub = if ($d) { Get-SubTekst $d } else { $e }
+        [void](Nieuw-Vinkje $p 0 $y 436 (Split-Path $e -Leaf) (Get-RechtsTekst $d) $sleutel $e $sub -Pad)
         $weg = New-Object System.Windows.Forms.LinkLabel
         $weg.Font = $script:LetterKlein; $weg.LinkColor = $Grijs; $weg.ActiveLinkColor = $RoodTekst
         $weg.Text = (T 'weghalen' 'remove'); $weg.Tag = $e
         $weg.TextAlign = 'MiddleRight'
-        Plaats $weg 442 ($y + 4) 86 22
+        Plaats $weg 442 ($y + 12) 86 22
         $weg.Add_LinkClicked({
             if (Test-Bezig) { return }
             [void]$script:ExtraMappen.Remove($this.Tag)
@@ -3726,10 +3828,10 @@ function Vul-Mappen($p) {
             Toon-KiesTab 'mappen'
         })
         $p.Controls.Add($weg)
-        $y += 32
+        $y += 54
     }
-    $knop = Nieuw-Knop (T 'Map toevoegen…' 'Add folder…') 0 ($y + 6) 200 'gewoon' $p
-    [void](Nieuw-Etiket $p (T 'Ook een andere map mee, bijvoorbeeld op een tweede schijf (D:)? Kies de map, niet de hele schijf.' 'Another folder too, for example on a second drive (D:)? Choose the folder, not the whole drive.') 212 ($y + 6) 316 42 $script:LetterKlein $Grijs)
+    $knop = Nieuw-Knop (T 'Map toevoegen…' 'Add folder…') 0 $y 200 'gewoon' $p
+    [void](Nieuw-Etiket $p (T 'Ook een andere map mee, bijvoorbeeld op een tweede schijf (D:)? Kies de map, niet de hele schijf.' 'Another folder too, for example on a second drive (D:)? Choose the folder, not the whole drive.') 212 $y 316 42 $script:LetterKlein $Grijs)
     $knop.Add_Click({
         if (Test-Bezig) { return }
         $kies = New-Object System.Windows.Forms.FolderBrowserDialog
@@ -3756,8 +3858,8 @@ function Vul-Meer($p) {
             @('meer', (T 'E-MAIL, FIREFOX EN MEER' 'E-MAIL, FIREFOX AND MORE'), (T 'Geen e-mail, Firefox, eigen lettertypen of achtergrond gevonden.' 'No e-mail, Firefox, own fonts or wallpaper found.')),
             @('instellingen', (T 'INSTELLINGEN' 'SETTINGS'), ''))) {
         $dingen = @($script:Overzicht | Where-Object { $_ -and $_.Groep -eq $groep[0] })
-        [void](Nieuw-Etiket $p $groep[1] 4 $y 524 18 $script:LetterOog $Grijs)
-        $y += 20
+        [void](Nieuw-Etiket $p $groep[1] 2 $y 524 18 $script:LetterOog $Grijs)
+        $y += 22
         if ($dingen.Count -eq 0) {
             [void](Nieuw-Etiket $p $groep[2] 4 $y 524 24 $script:LetterKlein $Grijs)
             $y += 30
@@ -3767,9 +3869,9 @@ function Vul-Meer($p) {
             $d = $dingen[$i]
             $naam = if ($d.Aantal -ge 0) { "$($d.Naam) ($($d.Aantal))" } else { $d.Naam }
             $rechts = if ($d.Groep -eq 'instellingen') { '' } else { Get-RechtsTekst $d }
-            [void](Nieuw-Vinkje $p (($i % 2) * 268) ($y + [math]::Floor($i / 2) * 30) 260 $naam $rechts $d.Sleutel $d.Uitleg)
+            [void](Nieuw-Vinkje $p (($i % 2) * 268) ($y + [math]::Floor($i / 2) * 54) 260 $naam $rechts $d.Sleutel $d.Uitleg (Get-SubTekst $d) -Pad:($d.Sleutel -eq 'outlook'))
         }
-        $y += [math]::Ceiling($dingen.Count / 2) * 30 + 10
+        $y += [math]::Ceiling($dingen.Count / 2) * 54 + 6
     }
     [void](Nieuw-Etiket $p (T 'Nooit wachtwoorden: niet van je wifi en niet van je browser.' 'Never passwords: not for your Wi-Fi and not for your browser.') 4 $y 524 22 $script:LetterKlein $Grijs)
 }
@@ -3839,29 +3941,44 @@ function Vul-Uit($p) {
     }
     foreach ($r in @($script:Uitsluiten)) {
         $isPlek = $r.Contains('\')
+        # Een kaartje (lichtgrijs, ronde hoeken) met daarop: soort, de regel en 'weghalen'.
+        $rij = New-Object System.Windows.Forms.Panel
+        Plaats $rij 0 $y 528 36
+        $rij.BackColor = $KaartVlak
+        Zet-Dubbel $rij
+        $rij.Add_Paint({
+            param($s, $e)
+            $e.Graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+            $e.Graphics.Clear($Wit)
+            $vorm = Rond-Pad 0.5 0.5 ($s.Width - 1) ($s.Height - 1) (Fx 10)
+            $kwast = New-Object System.Drawing.SolidBrush($KaartVlak)
+            $e.Graphics.FillPath($kwast, $vorm)
+            $kwast.Dispose(); $vorm.Dispose()
+        })
+        $p.Controls.Add($rij)
         $soort = New-Object System.Windows.Forms.Label
-        $soort.Font = $script:LetterNoot; $soort.ForeColor = $Grijs; $soort.BackColor = $KnopVlak
+        $soort.Font = $script:LetterNoot; $soort.ForeColor = $Grijs; $soort.BackColor = $Wit
         $soort.TextAlign = 'MiddleCenter'
         $soort.Text = if ($isPlek) { T 'plek' 'place' } else { T 'naam' 'name' }
-        Plaats $soort 0 ($y + 5) 50 22
-        $p.Controls.Add($soort)
+        Plaats $soort 10 7 50 22
+        $rij.Controls.Add($soort)
         $tekst = $r
         if ($script:IsoGekozen -and $isPlek -and [string]::Equals($r, [System.IO.Path]::GetFullPath($script:IsoGekozen), [StringComparison]::OrdinalIgnoreCase)) { $tekst += (T '   (BugOS zelf, hoeft niet mee)' '   (BugOS itself, no need to take it)') }
-        $l = Nieuw-Etiket $p $tekst 60 ($y + 3) 376 26 $script:LetterGewoon $Inkt -Afkappen
-        $l.TextAlign = 'MiddleLeft'
+        $l = Nieuw-Etiket $rij $tekst 70 5 360 26 $script:LetterGewoon $Inkt -Afkappen
+        $l.TextAlign = 'MiddleLeft'; $l.BackColor = $KaartVlak
         $script:Tip.SetToolTip($l, $r)
         $weg = New-Object System.Windows.Forms.LinkLabel
         $weg.Font = $script:LetterKlein; $weg.LinkColor = $Grijs; $weg.ActiveLinkColor = $RoodTekst
-        $weg.Text = (T 'weghalen' 'remove'); $weg.Tag = $r; $weg.TextAlign = 'MiddleRight'
-        Plaats $weg 442 ($y + 4) 86 22
+        $weg.Text = (T 'weghalen' 'remove'); $weg.Tag = $r; $weg.TextAlign = 'MiddleRight'; $weg.BackColor = $KaartVlak
+        Plaats $weg 432 7 84 22
         $weg.Add_LinkClicked({
             if (Test-Bezig) { return }
             $welke = [string]$this.Tag
             Set-Uitsluiten @($script:Uitsluiten | Where-Object { $_ -ne $welke })
             Start-Overzicht; Toon-KiesTab 'uit'
         })
-        $p.Controls.Add($weg)
-        $y += 30
+        $rij.Controls.Add($weg)
+        $y += 42
     }
 }
 
@@ -3877,14 +3994,17 @@ $Paginas += {
     $script:W.kaartBalk.Visible = $false
     $script:W.tabKnoppen = @()
     $tabs = @(@('mappen', (T 'Mappen' 'Folders')), @('meer', (T 'Bladwijzers en meer' 'Bookmarks and more')), @('uit', (T 'Niet mee' 'Not taken')))
+    $breedtes = @(183, 183, 182)
+    $x = 0
     for ($i = 0; $i -lt $tabs.Count; $i++) {
-        $knop = Nieuw-Knop $tabs[$i][1] ($i * 186) 86 176
-        $knop.Tag.Tab = $tabs[$i][0]
+        $knop = Nieuw-Tab $tabs[$i][0] $tabs[$i][1] $x 86 $breedtes[$i] $script:Breedte
         $knop.Add_Click({ Toon-KiesTab $this.Tag.Tab })
         $script:W.tabKnoppen += $knop
+        $x += $breedtes[$i]
     }
+    Zet-TabNamen
     $script:W.tabVlak = New-Object System.Windows.Forms.Panel
-    Plaats $script:W.tabVlak 0 138 $script:Breedte 214
+    Plaats $script:W.tabVlak 0 136 $script:Breedte 216
     $script:W.tabVlak.AutoScroll = $true
     $vlak.Controls.Add($script:W.tabVlak)
     Toon-KiesTab $script:KiesTab
