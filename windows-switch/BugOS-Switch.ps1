@@ -2816,7 +2816,7 @@ function Teken-Vinkje($c, $e) {
         [System.Windows.Forms.TextRenderer]::DrawText($g, $c.Tag.Rechts, $script:LetterKlein, $vak, $Grijs, [System.Windows.Forms.TextFormatFlags]'Right, VerticalCenter, SingleLine, NoPadding')
     }
     $links = Px 42
-    $breedte = [math]::Max(10, $c.Width - $links - $rechtsB - (Px 22))
+    $breedte = [math]::Max(10, $c.Width - $links - $rechtsB - (Px 28))
     $kleur = if ($c.Checked) { $Inkt } else { $Grijs }
     $vlag = [System.Windows.Forms.TextFormatFlags]'Left, VerticalCenter, SingleLine, EndEllipsis, NoPadding'
     if ($c.Tag.Sub) {
@@ -2986,7 +2986,8 @@ function Nieuw-InfoVenster {
     $boom.ItemHeight = Px 26
     $boom.Indent = Px 20
     $boom.ShowNodeToolTips = $true
-    $boom.Add_HandleCreated({ try { [void][BugOS.Thema]::SetWindowTheme($this.Handle, 'Explorer', $null) } catch { Write-Verbose 'Geen Verkenner-stijl.' } })
+    # (Met [NullString]::Value: een gewone $null wordt hier een lege tekst, en die zet de stijl van Windows juist uit.)
+    $boom.Add_HandleCreated({ try { [void][BugOS.Thema]::SetWindowTheme($this.Handle, 'Explorer', [NullString]::Value) } catch { Write-Verbose 'Geen Verkenner-stijl.' } })
     $rand.Controls.Add($boom)
     $balk = Nieuw-Balk 32 438 300 $v
     $balk.Visible = $false
@@ -3679,15 +3680,15 @@ function Get-SubTekst($d) {
     }
     if ($s -like 'bw:*') { return (T 'Bladwijzers' 'Bookmarks') }
     switch ($s) {
-        'firefox' { return (T 'Zonder wachtwoorden en cookies' 'Without passwords and cookies') }
-        'thunderbird' { return (T 'Accounts en mappen, geen wachtwoorden' 'Accounts and folders, no passwords') }
+        'firefox' { return (T 'Zonder wachtwoorden' 'Without passwords') }
+        'thunderbird' { return (T 'Zonder wachtwoorden' 'Without passwords') }
         'outlook' { return [string]$d.Uitleg }
-        'lettertypen' { return (T 'Die jij zelf installeerde' 'The ones you installed') }
-        'achtergrond' { return (T 'Het plaatje op je bureaublad' 'The picture on your desktop') }
-        'instellingen' { return (T 'Taal, toetsenbord, muis, licht of donker' 'Language, keyboard, mouse, light or dark') }
-        'wifi' { return (T 'Alleen de namen, geen wachtwoorden' 'Only the names, no passwords') }
-        'printers' { return (T 'Printers met een kabel komen vanzelf' 'Cable printers come by themselves') }
-        'programmas' { return (T 'BugOS stelt passende apps voor' 'BugOS suggests matching apps') }
+        'lettertypen' { return (T 'Die jij installeerde' 'The ones you installed') }
+        'achtergrond' { return (T 'Van je bureaublad' 'From your desktop') }
+        'instellingen' { return (T 'Taal, toetsenbord, muis, thema' 'Language, keyboard, mouse, theme') }
+        'wifi' { return (T 'Alleen de namen' 'Only the names') }
+        'printers' { return (T 'Met een kabel: vanzelf' 'With a cable: automatic') }
+        'programmas' { return (T 'BugOS stelt apps voor' 'BugOS suggests apps') }
     }
     return ''
 }
@@ -3799,17 +3800,26 @@ function Toon-KiesTab([string] $tab) {
 }
 
 function Vul-Mappen($p) {
-    # De vaste zes in twee kolommen, daaronder je extra mappen (met 'weghalen'), en de knop om er een toe te voegen.
+    # Bovenaan een kopje met rechts '+ Map toevoegen…' (zo staat die altijd in beeld), dan de vaste zes in twee kolommen
+    # en daaronder je extra mappen (met 'weghalen').
+    [void](Nieuw-Etiket $p (T 'JE MAPPEN' 'YOUR FOLDERS') 2 0 300 18 $script:LetterOog $Grijs)
+    $toe = New-Object System.Windows.Forms.LinkLabel
+    $toe.Font = $script:LetterKnop; $toe.LinkColor = $RoodTekst; $toe.ActiveLinkColor = $RoodDruk
+    $toe.LinkBehavior = 'HoverUnderline'; $toe.TextAlign = 'MiddleRight'
+    $toe.Text = (T '+ Map toevoegen…' '+ Add folder…')
+    Plaats $toe 308 0 220 20
+    $script:Tip.SetToolTip($toe, (T 'Ook een andere map mee, bijvoorbeeld op een tweede schijf (D:). Kies de map, niet de hele schijf.' 'Another folder too, for example on a second drive (D:). Choose the folder, not the whole drive.'))
+    $p.Controls.Add($toe)
     $i = 0
     foreach ($m in $script:Mappen) {
         $sleutel = "map:$($m.Naam)"
         $d = Get-OverzichtDing $sleutel
         if ($null -ne $script:Overzicht -and -not $d) { continue }   # deze map heeft Windows hier niet
         $uitleg = if ($d) { if ($d.Regel) { $d.Uitleg + "`n" + (T "Gaat niet mee door de regel $($d.Regel) (Niet mee)." "Not taken because of the rule $($d.Regel) (Not taken).") } else { $d.Uitleg } } else { '' }
-        [void](Nieuw-Vinkje $p (($i % 2) * 268) ([math]::Floor($i / 2) * 54) 260 (Get-MapNaam $m.Naam) (Get-RechtsTekst $d) $sleutel $uitleg (Get-SubTekst $d) -Pad)
+        [void](Nieuw-Vinkje $p (($i % 2) * 268) (24 + [math]::Floor($i / 2) * 54) 260 (Get-MapNaam $m.Naam) (Get-RechtsTekst $d) $sleutel $uitleg (Get-SubTekst $d) -Pad)
         $i++
     }
-    $y = [math]::Ceiling($i / 2) * 54
+    $y = 24 + [math]::Ceiling($i / 2) * 54
     foreach ($e in @($script:ExtraMappen)) {
         $sleutel = "extra:$e"
         $d = Get-OverzichtDing $sleutel
@@ -3830,9 +3840,7 @@ function Vul-Mappen($p) {
         $p.Controls.Add($weg)
         $y += 54
     }
-    $knop = Nieuw-Knop (T 'Map toevoegen…' 'Add folder…') 0 $y 200 'gewoon' $p
-    [void](Nieuw-Etiket $p (T 'Ook een andere map mee, bijvoorbeeld op een tweede schijf (D:)? Kies de map, niet de hele schijf.' 'Another folder too, for example on a second drive (D:)? Choose the folder, not the whole drive.') 212 $y 316 42 $script:LetterKlein $Grijs)
-    $knop.Add_Click({
+    $toe.Add_LinkClicked({
         if (Test-Bezig) { return }
         $kies = New-Object System.Windows.Forms.FolderBrowserDialog
         $kies.Description = (T 'Kies een map die ook mee moet naar BugOS' 'Choose a folder that should also go to BugOS')
